@@ -5,7 +5,7 @@ use managym_state::ability::{
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    ManaAbility, PrintedCharacteristics, StaticAbility, StaticScope,
+    ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
 };
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::mana::{Color, Mana, ManaCost};
@@ -14,6 +14,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        angel_of_vitality(),
         cryptic_caves(),
         agent_of_treachery(),
         brought_back(),
@@ -362,6 +363,36 @@ fn twinblade_paladin() -> CardDefinition {
                 vec![Modification::AddKeywords(Keywords::of(&[
                     Keyword::DoubleStrike,
                 ]))],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn angel_of_vitality() -> CardDefinition {
+    let text_box = "Flying\nIf you would gain life, you gain that much life plus 1 instead.\nThis creature gets +2/+2 as long as you have 25 or more life.";
+
+    CardDefinition {
+        key: "m20.angel_of_vitality",
+        scryfall_id: "e2f39777-b80a-4618-9310-a9e5b91bb2a2",
+        printed: PrintedCharacteristics {
+            name: "Angel of Vitality".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            replacement_effects: vec![ReplacementEffect::ModifyLifeGain {
+                who: Actor::You,
+                additional: 1,
+            }],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::LifeAtLeast { amount: 25 }),
+                vec![Modification::pump(2, 2)],
             )],
             text_box: text_box.into(),
             ..Default::default()

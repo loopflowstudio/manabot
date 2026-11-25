@@ -13,9 +13,9 @@ use crate::{
         event::GameEvent,
         game::Game,
         payment::{CostComponent, PaymentProgress},
-        proposed_event::{DiscardCause, 
-            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
-            ZoneEntry,
+        proposed_event::{
+            DiscardCause, EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent,
+            TokenSource, ZoneEntry,
         },
         trigger::{DelayedEffects, DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -429,7 +429,7 @@ impl Game {
                 .layer_views(self.iter_battlefield_permanents(controller))
                 .filter(|(id, view)| {
                     view.is_creature()
-                        && super::layers::matches_view(self, *id, predicate, view, None)
+                        && super::layers::matches_view(self, *id, predicate, view, None, None)
                 })
                 .map(|(_, view)| view.power)
                 .max()
@@ -1165,7 +1165,8 @@ impl Game {
                         // "exile it with a stash counter on it" (CR 122.1).
                         ZoneEntry {
                             counters: counters.clone(),
-                            discard: (from == Some(ZoneType::Hand) && *to == ZoneType::Graveyard).then(|| DiscardCause::effect(frame)),
+                            discard: (from == Some(ZoneType::Hand) && *to == ZoneType::Graveyard)
+                                .then(|| DiscardCause::effect(frame)),
                             ..ZoneEntry::default()
                         }
                     };
@@ -1298,7 +1299,13 @@ impl Game {
             Effect::DrainLife { amount } => {
                 let amount = self.effect_value(amount, frame).max(0);
                 self.change_life(PlayerId(1 - frame.controller.0), -amount);
-                frame.batch = Some(self.event_batch(EventBinding::None, [ProposedEvent::LifeChange { player: frame.controller, delta: amount.max(0) }]));
+                frame.batch = Some(self.event_batch(
+                    EventBinding::None,
+                    [ProposedEvent::LifeChange {
+                        player: frame.controller,
+                        delta: amount.max(0),
+                    }],
+                ));
                 None
             }
             Effect::MillCards {
@@ -1419,8 +1426,16 @@ impl Game {
 
             Effect::DiscardHand { who } => {
                 let players = self.selected_players(who, frame);
-                let hands = players.into_iter().flat_map(|player| self.state.zone_cards(ZoneType::Hand, player).map(|card| self.state.object_of(card)));
-                frame.batch = Some(self.discard_batch(EventBinding::ThisWay, DiscardCause::effect(frame), hands));
+                let hands = players.into_iter().flat_map(|player| {
+                    self.state
+                        .zone_cards(ZoneType::Hand, player)
+                        .map(|card| self.state.object_of(card))
+                });
+                frame.batch = Some(self.discard_batch(
+                    EventBinding::ThisWay,
+                    DiscardCause::effect(frame),
+                    hands,
+                ));
                 None
             }
             Effect::Discard { what, count } => {
@@ -2357,7 +2372,13 @@ impl Game {
             }
             Effect::GainLife { amount } => {
                 let amount = self.effect_value(amount, frame);
-                frame.batch = Some(self.event_batch(EventBinding::None, [ProposedEvent::LifeChange { player: frame.controller, delta: amount.max(0) }]));
+                frame.batch = Some(self.event_batch(
+                    EventBinding::None,
+                    [ProposedEvent::LifeChange {
+                        player: frame.controller,
+                        delta: amount.max(0),
+                    }],
+                ));
                 None
             }
             Effect::OnNthResolutionThisTurn { n, effect } => {

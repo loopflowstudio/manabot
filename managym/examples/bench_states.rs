@@ -48,6 +48,9 @@ const STATES: &[(&str, &str)] = &[
     ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
+    ("angel-life-gain", "Food's gain under N Angels of Vitality, measured through the first replacement-order decision"),
+    ("giada-entry", "Rise of the Dark Realms returns N Angels under four Giadas and Sakashima, measured through the first replacement-order decision"),
+    ("banner-choice", "Banner of Kinship enters beside N Elves and offers every creature type in two decisions"),
     ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
     ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
     ("venom-team", "Venom Connoisseur with N Gray Ogres and two entering Allies; resolve the second ability and grant the whole team deathtouch"),
@@ -246,11 +249,27 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "collector-food" | "mixed-life-gain" => {
+        "giada-entry" => {
+            seats[0].add("Sakashima of a Thousand Faces", 1);
+            seats[0].add("Giada, Font of Hope", 4);
+            seats[0].add("Swamp", 9);
+            seats[0].hand.push("Rise of the Dark Realms".into());
+            seats[0]
+                .graveyard
+                .extend(std::iter::repeat_n("Serra Angel".into(), size));
+        }
+        "banner-choice" => {
+            seats[0].add("Llanowar Elves", size);
+            seats[0].add("Forest", 5);
+            seats[0].hand.push("Banner of Kinship".into());
+        }
+        "collector-food" | "mixed-life-gain" | "angel-life-gain" => {
             let seat = &mut seats[0];
             seat.add("Plains", 2);
             if name == "collector-food" {
                 seat.add("Cat Collector", size);
+            } else if name == "angel-life-gain" {
+                seat.add("Angel of Vitality", size);
             } else {
                 seat.cycle(
                     &[
@@ -561,6 +580,9 @@ fn recipe(name: &str, size: usize) -> Recipe {
         name,
         "collector-food"
             | "mixed-life-gain"
+            | "angel-life-gain"
+            | "giada-entry"
+            | "banner-choice"
             | "fumigate-panda"
             | "venom-team"
             | "blast-discard"
@@ -1025,11 +1047,14 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             }
             return result;
         }
-        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
-        | "blast-discard" | "control-auras" | "militant-mill" => {
+        "angel-life-gain" | "giada-entry" | "banner-choice" | "collector-food"
+        | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+        | "control-auras" | "militant-mill" => {
             let env = match recipe.state.as_str() {
                 "militant-mill" => follow(root, &[("cast", 0), ("choice", 8)]),
-                "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
+                "angel-life-gain" | "collector-food" | "mixed-life-gain" => {
+                    follow(root, &[("activate", 0)])
+                }
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
@@ -1047,6 +1072,9 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             };
             let resolution = before_resolution(env, recipe.state == "venom-team");
             let resolved = follow(&resolution, &[("resolve", 0)]);
+            if recipe.state == "banner-choice" {
+                result.push(("type-group".into(), follow(&resolved, &[("choice", 0)])));
+            }
             result.push(("resolution".into(), resolution));
             result.push(("after-resolution".into(), resolved));
             return result;
@@ -1296,7 +1324,7 @@ fn run(
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),
                                 face_down: false,
- discarded: false,
+                                discarded: false,
                             },
                         );
                     }

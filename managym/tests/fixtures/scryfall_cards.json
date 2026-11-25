@@ -13065,5 +13065,122 @@
       "G",
       "W"
     ]
+  },
+  "Angel of Vitality": {
+    "name": "Angel of Vitality",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Angel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nIf you would gain life, you gain that much life plus 1 instead.\nThis creature gets +2/+2 as long as you have 25 or more life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Banner of Kinship": {
+    "name": "Banner of Kinship",
+    "mana_cost": "{5}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, choose a creature type. This artifact enters with a fellowship counter on it for each creature you control of the chosen type.\nCreatures you control of the chosen type get +1/+1 for each fellowship counter on this artifact.",
+    "colors": []
+  },
+  "Giada, Font of Hope": {
+    "name": "Giada, Font of Hope",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Creature — Angel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying, vigilance\nEach other Angel you control enters with an additional +1/+1 counter on it for each Angel you already control.\n{T}: Add {W}. Spend this mana only to cast an Angel spell.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Heroes' Bane": {
+    "name": "Heroes' Bane",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [],
+    "oracle_text": "This creature enters with four +1/+1 counters on it.\n{2}{G}{G}: Put X +1/+1 counters on this creature, where X is its power.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Mossborn Hydra": {
+    "name": "Mossborn Hydra",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elemental Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [
+      "Trample",
+      "Double",
+      "Landfall"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nThis creature enters with a +1/+1 counter on it.\nLandfall — Whenever a land you control enters, double the number of +1/+1 counters on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Myojin of Night's Reach": {
+    "name": "Myojin of Night's Reach",
+    "mana_cost": "{5}{B}{B}{B}",
+    "type_line": "Legendary Creature — Spirit",
+    "power": "5",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Myojin of Night's Reach enters with a divinity counter on it if you cast it from your hand.\nMyojin of Night's Reach has indestructible as long as it has a divinity counter on it.\nRemove a divinity counter from Myojin of Night's Reach: Each opponent discards their hand.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Prime Speaker Zegana": {
+    "name": "Prime Speaker Zegana",
+    "mana_cost": "{2}{G}{G}{U}{U}",
+    "type_line": "Legendary Creature — Merfolk Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Prime Speaker Zegana enters with X +1/+1 counters on it, where X is the greatest power among other creatures you control.\nWhen Prime Speaker Zegana enters, draw cards equal to its power.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Wildwood Scourge": {
+    "name": "Wildwood Scourge",
+    "mana_cost": "{X}{G}",
+    "type_line": "Creature — Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [],
+    "oracle_text": "This creature enters with X +1/+1 counters on it.\nWhenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Wilt-Leaf Liege": {
+    "name": "Wilt-Leaf Liege",
+    "mana_cost": "{1}{G/W}{G/W}{G/W}",
+    "type_line": "Creature — Elf Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "({G/W} can be paid with either {G} or {W}.)\nOther green creatures you control get +1/+1.\nOther white creatures you control get +1/+1.\nIf a spell or ability an opponent controls causes you to discard this card, put it onto the battlefield instead of putting it into your graveyard.",
+    "colors": [
+      "G",
+      "W"
+    ]
   }
 }

@@ -17081,14 +17081,14 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
                 creature_source: false,
                 source_by: Actor::AnyPlayer,
                 recipient: DamageRecipient::any(Actor::You),
-                    combat: None,
+                combat: None,
                 transform: DamageTransform::Prevent(2),
             },
             ReplacementEffect::ModifyDamage {
                 creature_source: false,
                 source_by: Actor::AnyPlayer,
                 recipient: DamageRecipient::any(Actor::You),
-                    combat: None,
+                combat: None,
                 transform: DamageTransform::Double,
             },
         ];

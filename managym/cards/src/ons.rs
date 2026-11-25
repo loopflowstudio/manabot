@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageRecipient, DamageTransform, Keyword,
-        Keywords, PrintedCharacteristics, ReplacementEffect,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageRecipient,
+        DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,

@@ -168,9 +168,15 @@ impl CardPredicate {
         }
     }
 
+    pub fn reads_chosen_type(&self) -> bool {
+        self.chosen_type_of_source || self.any_of.iter().any(Self::reads_chosen_type)
+    }
+
     /// Whether matching needs the asking ability's source permanent.
     pub fn reads_source(&self) -> bool {
-        self.namesake || self.chosen_type_of_source || self.any_of.iter().any(CardPredicate::reads_source)
+        self.namesake
+            || self.chosen_type_of_source
+            || self.any_of.iter().any(CardPredicate::reads_source)
     }
 
     /// Whether matching compares power, here or in an alternative.
@@ -212,7 +218,8 @@ impl CardPredicate {
         added_types: &[CardType],
     ) -> bool {
         let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
-        if self.chosen_type_of_source || self.namesake
+        if self.chosen_type_of_source
+            || self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped

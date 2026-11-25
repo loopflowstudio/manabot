@@ -549,25 +549,29 @@ pub enum Redirect {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum EntryChoice { CreatureType }
+pub enum EntryChoice {
+    CreatureType,
+}
 
 /// Which prospective permanent receives entry counters (CR 614.12).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EntryScope {
     This,
-    OtherYouControl(CardPredicate),
+    OtherYouControl(Box<CardPredicate>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EntryValue {
     Fixed(i32),
     X,
-    GreatestPower(CardPredicate),
-    ControlledAlready(CardPredicate),
+    GreatestPower(Box<CardPredicate>),
+    ControlledAlready(Box<CardPredicate>),
 }
 
 impl From<i32> for EntryValue {
-    fn from(value: i32) -> Self { Self::Fixed(value) }
+    fn from(value: i32) -> Self {
+        Self::Fixed(value)
+    }
 }
 
 /// A damage recipient, relative to the replacement's source.
@@ -581,7 +585,12 @@ pub struct DamageRecipient {
 
 impl DamageRecipient {
     pub fn any(by: super::ability::Actor) -> Self {
-        Self { by, players: true, permanents: Some(CardPredicate::default()), except_source: false }
+        Self {
+            by,
+            players: true,
+            permanents: Some(CardPredicate::default()),
+            except_source: false,
+        }
     }
 }
 
@@ -598,14 +607,20 @@ pub enum ReplacementEffect {
         to: Redirect,
     },
     AsEntersChoose(EntryChoice),
-    DiscardedInstead { by: super::ability::Actor, to: ZoneType },
+    DiscardedInstead {
+        by: super::ability::Actor,
+        to: ZoneType,
+    },
     EntersPrepared,
     PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is
     /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
     /// record offers it; no definition prints it.
     PreventCombatDamage,
-    ModifyLifeGain { who: super::ability::Actor, additional: i32 },
+    ModifyLifeGain {
+        who: super::ability::Actor,
+        additional: i32,
+    },
     ModifyDamage {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         creature_source: bool,

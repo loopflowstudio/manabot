@@ -103,11 +103,13 @@ mod one;
 mod ons;
 mod ori;
 mod p02;
+mod pjou;
 mod pls;
 mod pm15;
 mod por;
 mod prtr;
 mod psal;
+mod psnc;
 mod ptk;
 mod rav;
 mod rix;
@@ -279,7 +281,9 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     p02::cards,
     pls::cards,
     pm15::cards,
+    pjou::cards,
     prtr::cards,
+    psnc::cards,
     por::cards,
     psal::cards,
     ptk::cards,

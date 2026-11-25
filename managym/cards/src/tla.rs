@@ -2514,8 +2514,12 @@ fn cruel_administrator() -> CardDefinition {
             subtypes: vec!["Human".into(), "Soldier".into()],
             power: Some(5),
             toughness: Some(4),
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 1.into(),
-                condition: Some(Condition::AttackedThisTurn), kind: CounterKind::PlusOnePlusOne, }],
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                count: 1.into(),
+                condition: Some(Condition::AttackedThisTurn),
+                kind: CounterKind::PlusOnePlusOne,
+            }],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
@@ -3586,7 +3590,12 @@ fn fated_firepower() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             keywords: Keywords::of(&[Keyword::Flash]),
             replacement_effects: vec![
-                ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::Fire, count: EntryValue::X, condition: None, },
+                ReplacementEffect::EntersWithCounters {
+                    on: EntryScope::This,
+                    kind: CounterKind::Fire,
+                    count: EntryValue::X,
+                    condition: None,
+                },
                 ReplacementEffect::OpponentDamagePlusCounters {
                     kind: CounterKind::Fire,
                 },

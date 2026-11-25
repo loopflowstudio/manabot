@@ -7,8 +7,16 @@ use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Variant, "ReplacementEffect::EntersWithXCounters", None),
     (Structure, "/ReplacementEffect::EntersWithXCounters", None),
-    (Variant, "ReplacementEffect::EntersWithPlusOneCounters", None),
-    (Structure, "/ReplacementEffect::EntersWithPlusOneCounters", None),
+    (
+        Variant,
+        "ReplacementEffect::EntersWithPlusOneCounters",
+        None,
+    ),
+    (
+        Structure,
+        "/ReplacementEffect::EntersWithPlusOneCounters",
+        None,
+    ),
     (Variant, "ReplacementEffect::ExileInsteadOfGraveyard", None),
     (
         Structure,
@@ -115,6 +123,8 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     ),
     (Field, "abilities", None),
     (Field, "controller_only", None),
+    (Field, "if_cast", None),
+    (Field, "recipient_by", None),
     (Field, "opponent_picks", Some("picks")),
     (Field, "restricted", None),
     (Field, "spells", None),

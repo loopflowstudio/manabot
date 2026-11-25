@@ -967,7 +967,9 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::SelectTargetRequirement { index: 0 },
         Effect::destroy(ObjectSelector::Target(target())),
-        Effect::DiscardHand { who: PlayerSelector::EachOpponent },
+        Effect::DiscardHand {
+            who: PlayerSelector::EachOpponent,
+        },
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
             count: 2,
@@ -6798,6 +6800,49 @@ fn graveyard_replacements_encode_the_mover_destination_and_reveal_instruction() 
         }
         if mover == "This" {
             assert!(tokens.contains(&(TokenKind::Field, name_value("reveal"))));
+        }
+    }
+}
+
+#[test]
+fn foundations_replacement_programs_identify_their_subject_and_amount() {
+    for (name, variants) in [
+        (
+            "Wilt-Leaf Liege",
+            &["ReplacementEffect::DiscardedInstead"][..],
+        ),
+        (
+            "Myojin of Night's Reach",
+            &["Condition::EntryCastFrom", "Effect::DiscardHand"][..],
+        ),
+        (
+            "Giada, Font of Hope",
+            &[
+                "EntryScope::OtherYouControl",
+                "EntryValue::ControlledAlready",
+            ][..],
+        ),
+        ("Prime Speaker Zegana", &["EntryValue::GreatestPower"][..]),
+        (
+            "Banner of Kinship",
+            &[
+                "ReplacementEffect::AsEntersChoose",
+                "EntryChoice::CreatureType",
+            ][..],
+        ),
+        ("Wildwood Scourge", &["EntryValue::X"][..]),
+        (
+            "Angel of Vitality",
+            &["ReplacementEffect::ModifyLifeGain"][..],
+        ),
+        ("Crystal Barricade", &["DamageTransform::PreventAll"][..]),
+    ] {
+        let program = tokens_of(&card_definition(name));
+        for variant in variants {
+            assert!(
+                program.contains(&(TokenKind::Variant, name_value(variant))),
+                "{name}: {variant}"
+            );
         }
     }
 }

@@ -669,7 +669,8 @@ impl Condition {
             Condition::Compare { left, right, .. } => {
                 left.is_resolution_only() || right.is_resolution_only()
             }
-            Condition::EntryCastFrom(_) | Condition::CastFromGraveyard
+            Condition::EntryCastFrom(_)
+            | Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
             | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
@@ -1581,7 +1582,9 @@ pub enum Effect {
         count: usize,
     },
     /// Discard the selected hands as one simultaneous event.
-    DiscardHand { who: PlayerSelector },
+    DiscardHand {
+        who: PlayerSelector,
+    },
     /// Destroy each permanent `what` names (CR 701.7), as one simultaneous
     /// event: leave-the-battlefield abilities look back at the permanents
     /// as they all were before (CR 603.10a).

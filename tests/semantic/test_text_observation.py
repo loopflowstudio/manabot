@@ -2798,3 +2798,28 @@ def test_sampled_opponent_can_finish_a_discard_payment_with_either_spell_type() 
         ]
         discarded.add(exiled.characteristics.name)
     assert discarded == {"Lightning Bolt", "Seize the Spoils"}
+
+
+def test_banner_replays_the_type_group_and_leaf_before_entry() -> None:
+    env = priority_root(("Banner of Kinship",), ("Forest",) * 5 + ("Taurean Mauler",))
+    _choose(env, "Banner of Kinship")
+    for _ in range(4):
+        groups = capture_text_decision(env)
+        if any("Creature types" in action.description for action in groups.actions):
+            break
+        _choose(env, "Pass priority")
+    _assert_policy_input_holds_the_decision(env, groups)
+    for action in groups.actions:
+        leaf = _replay_text_choice(env, action.reference)
+        names = capture_text_decision(leaf)
+        _assert_policy_input_holds_the_decision(leaf, names)
+        for name in names.actions:
+            if name.description.split()[-1] == "Elf":
+                resolved = _replay_text_choice(leaf, name.reference)
+                for viewer in (0, 1):
+                    assert (
+                        "chosen type: Elf"
+                        in resolved.observation_for_player(viewer).toJSON()
+                    )
+                return
+    pytest.fail("Elf was absent from the creature-type choices")

@@ -830,20 +830,28 @@ impl<'a> Projection<'a> {
             use crate::flow::proposed_event::{DiscardCause, EventCause};
             let (kind, controller) = match cause {
                 DiscardCause::Effect { controller, source } => {
-                    if let Some(source) = source { self.object("discard source", source); }
+                    if let Some(source) = source {
+                        self.object("discard source", source);
+                    }
                     (EventCause::Effect, Some(controller))
                 }
                 DiscardCause::Cost(player) => (EventCause::Cost, Some(player)),
                 DiscardCause::Cleanup => (EventCause::TurnAction, None),
             };
             self.field("discard cause", &kind);
-            if let Some(player) = controller { self.field("discard controller", &player); }
+            if let Some(player) = controller {
+                self.field("discard controller", &player);
+            }
         }
         if let Some(reveal) = entry.shuffle_library {
             self.field("shuffle library after move", &reveal);
         }
-        if let Some(name) = entry.chosen_creature_type { self.field("chosen creature type", &name); }
-        if let Some(zone) = entry.cast_from { self.field("entry cast from", &zone); }
+        if let Some(name) = entry.chosen_creature_type {
+            self.field("chosen creature type", &name);
+        }
+        if let Some(zone) = entry.cast_from {
+            self.field("entry cast from", &zone);
+        }
         if entry.tapped {
             self.field("enters tapped", &true);
         }
@@ -1563,15 +1571,25 @@ pub(crate) fn project_decision(
             out.field("last blocker", last);
             out.field("assigned combat damage", assigned);
         }
-        Decision::ChooseCreatureType { object_id, scope, .. } => {
+        Decision::ChooseCreatureType {
+            object_id, scope, ..
+        } => {
             out.object("moving object", *object_id);
-            let names=crate::state::subtype::creature_type_names();
-            for mode in 0..scope.option_count() {
-                let (first, last) = match scope.option(mode).expect("type option") {
-                    crate::cards::names::NameOption::Group(group) => (group.start, group.end-1),
-                    crate::cards::names::NameOption::Name(index) => (index,index),
-                };
-                out.field("creature type choice", &(mode, names[first], names[last]));
+            let names = crate::state::subtype::creature_type_names();
+            if scope.is_leaf() {
+                out.field("creature type choice", &&names[scope.start..scope.end]);
+            } else {
+                let bounds: Vec<_> = (0..scope.option_count())
+                    .map(|mode| {
+                        let Some(crate::cards::names::NameOption::Group(group)) =
+                            scope.option(mode)
+                        else {
+                            unreachable!("non-leaf creature type scope")
+                        };
+                        (names[group.start], names[group.end - 1])
+                    })
+                    .collect();
+                out.field("creature type choice", &bounds);
             }
         }
         Decision::OrderReplacement { candidates, .. } => {

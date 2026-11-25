@@ -1048,7 +1048,13 @@ impl Game {
             }
             self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
             if let Some(name) = entry.chosen_creature_type {
-                self.apply_continuous(Some(object_id), holder, [crate::state::effect::Affected::Object(object_id)], crate::state::effect::Modification::ChosenCreatureType(name.into()), crate::state::effect::EffectDuration::Indefinite);
+                self.apply_continuous(
+                    Some(object_id),
+                    holder,
+                    [crate::state::effect::Affected::Object(object_id)],
+                    crate::state::effect::Modification::ChosenCreatureType(name.into()),
+                    crate::state::effect::EffectDuration::Indefinite,
+                );
             }
             if entry.prepared {
                 self.prepare_inset(object_id);

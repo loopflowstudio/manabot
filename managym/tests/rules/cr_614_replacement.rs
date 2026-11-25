@@ -168,8 +168,12 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     let object = move_card(&mut s, object, ZoneType::Hand);
     s.game_mut().state[object].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 2.into(),
-            condition: None, kind: CounterKind::PlusOnePlusOne, },
+        ReplacementEffect::EntersWithCounters {
+            on: EntryScope::This,
+            count: 2.into(),
+            condition: None,
+            kind: CounterKind::PlusOnePlusOne,
+        },
     ];
     let _ = s.drain_events();
 
@@ -201,7 +205,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
         face_down: false,
- discarded: false,
+        discarded: false,
     }));
 }
 
@@ -215,8 +219,12 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
     let driver = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
     s.game_mut().state[driver].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 2.into(),
-            condition: None, kind: CounterKind::PlusOnePlusOne, },
+        ReplacementEffect::EntersWithCounters {
+            on: EntryScope::This,
+            count: 2.into(),
+            condition: None,
+            kind: CounterKind::PlusOnePlusOne,
+        },
     ];
     let driver = move_card(&mut s, driver, ZoneType::Graveyard);
     assert_eq!(permanent_of(&s, driver), None);

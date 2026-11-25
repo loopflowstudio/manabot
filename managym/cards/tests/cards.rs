@@ -209,6 +209,8 @@ mod ons;
 mod ori;
 #[path = "cards/p02.rs"]
 mod p02;
+#[path = "cards/pjou.rs"]
+mod pjou;
 #[path = "cards/pls.rs"]
 mod pls;
 #[path = "cards/pm15.rs"]
@@ -219,6 +221,8 @@ mod por;
 mod prtr;
 #[path = "cards/psal.rs"]
 mod psal;
+#[path = "cards/psnc.rs"]
+mod psnc;
 #[path = "cards/ptk.rs"]
 mod ptk;
 #[path = "cards/rav.rs"]

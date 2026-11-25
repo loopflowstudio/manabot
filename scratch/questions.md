@@ -31,3 +31,10 @@
   appearance when shuffled. The old reference expires without a move event.
 - The existing benchmark name `graveyard-routes` measures casting permissions.
   The slice 5 milling position is named `militant-mill`.
+- A discard paid during resolution of an opponent's ward ability takes its
+  cause from that ability. A discard paid to announce your own spell takes
+  its cause from your cost. Both keep a single receipt after replacement.
+- The existing mixed-life-gain benchmark orders triggered abilities. The
+  Angel replacement position uses its own name so both measurements remain
+  reproducible. The Giada position uses Sakashima to keep four legendary
+  Giadas on the battlefield.

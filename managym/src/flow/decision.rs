@@ -21,9 +21,9 @@ use crate::{
         game::Game,
         payment::{CostComponent, Payment, PaymentProgress},
         play::CastAuthority,
-        proposed_event::{DiscardCause, 
-            BatchProgress, EntryFace, EventBatch, EventBinding, EventResult, ReplacementCandidate,
-            ZoneEntry,
+        proposed_event::{
+            BatchProgress, DiscardCause, EntryFace, EventBatch, EventBinding, EventResult,
+            ReplacementCandidate, ZoneEntry,
         },
         sba::SbaProgress,
         turn::OnceEachTurnKey,
@@ -532,12 +532,18 @@ pub enum Decision {
         object_id: ObjectId,
         candidates: Vec<PermanentId>,
     },
+    /// Choose a public creature type before this battlefield entry commits.
+    ChooseCreatureType {
+        player: PlayerId,
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        object_id: ObjectId,
+        scope: crate::cards::names::NameScope,
+    },
     /// Choose a name from the immutable installed vocabulary, one ordinary
     /// decision per level: a scope larger than `NAME_BRANCHING` offers its
     /// balanced child groups, and choosing one narrows `scope` without
     /// committing anything. Only choosing a name in a leaf scope materializes
     /// an effect. Clones retain constant-size bookkeeping.
-    ChooseCreatureType { player: PlayerId, #[serde(serialize_with = "crate::state::game_object::exact")] object_id: ObjectId, scope: crate::cards::names::NameScope },
     NameCard {
         player: PlayerId,
         count: usize,
@@ -1527,7 +1533,10 @@ impl Game {
                                     ZoneType::Battlefield,
                                     ZoneEntry {
                                         attached_to: attach_to,
-                                        cast_from: self.spell_on_stack(object).filter(|_| self.state[object].is_card()).map(|spell| spell.cast_from),
+                                        cast_from: self
+                                            .spell_on_stack(object)
+                                            .filter(|_| self.state[object].is_card())
+                                            .map(|spell| spell.cast_from),
                                         face: EntryFace::played_as(profile),
                                         ..ZoneEntry::from_spell(frame.controller, spell)
                                     },
@@ -2205,10 +2214,16 @@ impl Game {
                     focus: self.object_focus(looked),
                 }
             }
-            Decision::NameCard { player, scope, .. } | Decision::ChooseCreatureType { player, scope, .. } => ActionSpace {
+            Decision::NameCard { player, scope, .. }
+            | Decision::ChooseCreatureType { player, scope, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
-                focus: source_focus,
+                focus: match &suspended.decision {
+                    Decision::ChooseCreatureType { object_id, .. } => {
+                        vec![self.state.entry_object(*object_id).id]
+                    }
+                    _ => source_focus,
+                },
                 actions: (0..scope.option_count())
                     .map(|mode| Action::ChooseMode {
                         player: *player,
@@ -2328,11 +2343,19 @@ impl Game {
                     }
                     Some(NameOption::Name(index)) => {
                         let batch = suspended.frame.batch.as_mut().expect("pending entry");
-                        let super::proposed_event::ProposedEvent::ZoneMove { entry, .. } = &mut batch.events[batch.cursor].event else { unreachable!("pending entry") };
-                        entry.chosen_creature_type = Some(crate::state::subtype::creature_type_names()[index]);
+                        let super::proposed_event::ProposedEvent::ZoneMove { entry, .. } =
+                            &mut batch.events[batch.cursor].event
+                        else {
+                            unreachable!("pending entry")
+                        };
+                        entry.chosen_creature_type =
+                            Some(crate::state::subtype::creature_type_names()[index]);
                         self.run_frame(suspended.frame);
                     }
-                    None => { *self.state.suspended_decision_mut() = Some(suspended); return Err(AgentError("creature type option out of range".into())); }
+                    None => {
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Err(AgentError("creature type option out of range".into()));
+                    }
                 }
                 Ok(())
             }
@@ -2837,7 +2860,11 @@ impl Game {
                         player: *player,
                         remaining: *remaining - 1,
                     },
-                    if suspended.frame.source_identity.is_some() { DiscardCause::effect(&suspended.frame) } else { DiscardCause::Cleanup },
+                    if matches!(suspended.frame.completion, FrameCompletion::Continue) {
+                        DiscardCause::Cleanup
+                    } else {
+                        DiscardCause::effect(&suspended.frame)
+                    },
                     [*object_id],
                 ));
                 self.run_frame(suspended.frame);
@@ -3067,8 +3094,11 @@ impl Game {
                         "not a matching card in the revealed hand".into(),
                     ));
                 }
-                suspended.frame.batch =
-                    Some(self.discard_batch(EventBinding::None, DiscardCause::effect(&suspended.frame), [*object_id]));
+                suspended.frame.batch = Some(self.discard_batch(
+                    EventBinding::None,
+                    DiscardCause::effect(&suspended.frame),
+                    [*object_id],
+                ));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3376,7 +3406,11 @@ impl Game {
                     return Err(err);
                 }
                 self.run_frame(EffectFrame {
-                    batch: Some(self.discard_batch(EventBinding::None, DiscardCause::effect(&suspended.frame), [*object_id])),
+                    batch: Some(self.discard_batch(
+                        EventBinding::None,
+                        DiscardCause::effect(&suspended.frame),
+                        [*object_id],
+                    )),
                     completion: FrameCompletion::Frame(Box::new(suspended.frame)),
                     ..EffectFrame::new(player, vec![Effect::DrawCards { count: 1.into() }])
                 });

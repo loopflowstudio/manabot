@@ -567,7 +567,7 @@ impl Game {
         for (_, source) in self.layer_views(self.iter_battlefield_permanents(controller)) {
             for ability in &source.static_abilities {
                 if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
-                    if matches_view(self, id, predicate, view, None) {
+                    if matches_view(self, id, predicate, view, None, None) {
                         total = total.saturating_add(*generic);
                     }
                 }
@@ -1171,7 +1171,16 @@ impl Game {
                 let source_name = source_view.as_ref().map(|view| view.name.as_str());
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name));
+                    .filter(|(id, view)| {
+                        matches_view(
+                            self,
+                            *id,
+                            predicate,
+                            view,
+                            source_name,
+                            self.chosen_type_for(predicate, source_id()),
+                        )
+                    });
                 controlled_threshold(matching, *count, *distinct_names, |(_, view)| {
                     view.name.clone()
                 })
@@ -1189,7 +1198,16 @@ impl Game {
                         .into_iter()
                         .flat_map(|player| self.iter_battlefield_permanents(player)),
                 )
-                .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name))
+                .filter(|(id, view)| {
+                    matches_view(
+                        self,
+                        *id,
+                        predicate,
+                        view,
+                        source_name,
+                        self.chosen_type_for(predicate, source_id()),
+                    )
+                })
                 .take(*count)
                 .count()
                     == *count
@@ -1255,7 +1273,17 @@ impl Game {
             Condition::Not(condition) => {
                 !self.condition_holds(condition, controller, frame, source, triggering)
             }
-            Condition::EntryCastFrom(zone) => source.and_then(|object| self.spell_on_stack(object)).is_some_and(|spell| self.state[spell.object].is_card() && spell.controller == controller && zone.is_none_or(|z| z == spell.cast_from)),
+            Condition::EntryCastFrom(zone) => source
+                .and_then(|object| self.spell_on_stack(object))
+                .is_some_and(|spell| {
+                    self.state[spell.object].is_card()
+                        && spell.controller == controller
+                        && zone.is_none_or(|z| {
+                            z == spell.cast_from
+                                && (z != ZoneType::Hand
+                                    || self.state[spell.object].owner == controller)
+                        })
+                }),
             Condition::CastFromGraveyard => source
                 .and_then(|object| self.spell_on_stack(object))
                 .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
@@ -1374,6 +1402,21 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
+    pub(super) fn chosen_type_for(
+        &self,
+        predicate: &CardPredicate,
+        source: Option<PermanentId>,
+    ) -> Option<&str> {
+        if !predicate.reads_chosen_type() {
+            return None;
+        }
+        self.effects_on(source?)
+            .find_map(|record| match &record.modification {
+                Modification::ChosenCreatureType(name) => Some(name.as_str()),
+                _ => None,
+            })
+    }
+
     pub(super) fn permanent_matches_with_source(
         &self,
         id: PermanentId,
@@ -1381,7 +1424,7 @@ impl Game {
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source = source
+        let source_view = source
             .filter(|_| predicate.reads_source())
             .map(|id| self.layer_view(id));
         matches_view(
@@ -1389,7 +1432,8 @@ impl Game {
             id,
             predicate,
             &view,
-            source.as_ref().map(|s| s.name.as_str()),
+            source_view.as_ref().map(|s| s.name.as_str()),
+            self.chosen_type_for(predicate, source),
         )
     }
 

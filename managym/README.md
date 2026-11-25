@@ -1164,3 +1164,14 @@ library when they would go to a graveyard. A milled Colossus stays in its
 library, and both viewers lose their knowledge of its position when the
 library is shuffled. Its old object reference expires. On the battlefield,
 losing all abilities removes the replacement.
+
+When Myojin of Night's Reach makes an opponent discard their hand, all its
+cards remain in hand until the replacement choices are complete. Wilt-Leaf
+Liege enters from that hand and still counts as discarded. Discarding the
+Liege to pay for your own spell puts it in the graveyard.
+
+Banner of Kinship asks for a creature type before it enters. Choose the
+alphabetical group, then the type. Both players can inspect the chosen type
+after entry. A changeling counts toward the fellowship counters and receives
+the bonus. Giada and Prime Speaker Zegana likewise count creatures already on
+the battlefield before a simultaneous entry.

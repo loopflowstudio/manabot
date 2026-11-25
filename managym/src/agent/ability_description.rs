@@ -634,7 +634,10 @@ fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
             .map(|condition| condition_text_in(triggering, condition))
             .collect::<Vec<_>>()
             .join(" or "),
-        Condition::EntryCastFrom(zone) => zone.map_or_else(|| "you cast it".into(), |zone| format!("you cast it from {zone:?}")),
+        Condition::EntryCastFrom(zone) => zone.map_or_else(
+            || "you cast it".into(),
+            |zone| format!("you cast it from {zone:?}"),
+        ),
         Condition::CastFromGraveyard => "this spell was cast from a graveyard".into(),
         Condition::Not(condition) => match condition.as_ref() {
             Condition::YourTurn => "it's an opponent's turn".into(),
@@ -746,7 +749,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         max_mana_value,
     } = p;
     let mut terms = Vec::new();
-    if *chosen_type_of_source { terms.push("of the chosen creature type".into()); }
+    if *chosen_type_of_source {
+        terms.push("of the chosen creature type".into());
+    }
     if *tapped {
         terms.push("tapped".into());
     }

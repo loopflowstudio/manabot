@@ -24,9 +24,12 @@ fn dark_depths() -> CardDefinition {
             name: "Dark Depths".into(),
             types: CardTypes::new([CardType::Land]),
             supertypes: vec!["Legendary".into(), "Snow".into()],
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, condition: None,
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                condition: None,
                 kind: CounterKind::Ice,
-                count: 10.into(), }],
+                count: 10.into(),
+            }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 effects: vec![Effect::RemoveCounters {

@@ -24,8 +24,8 @@ use crate::{
         ability::ObjectSelector,
         binding::{ObjectBinding, ZoneSelection},
         card::CardDefId,
-        predicate::CardPredicate,
         game_object::{ObjectId, PlayerId},
+        predicate::CardPredicate,
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -453,8 +453,19 @@ impl Game {
             .collect();
         for batch in self.pending_batches() {
             for pending in batch.events.iter().take(batch.cursor + 1) {
-                if let ProposedEvent::ZoneMove { from: Some(ZoneType::Hand), object_id, entry, .. } = &pending.event {
-                    if entry.discard.is_some() && self.hand_replacements(*object_id, entry.discard).iter().any(|candidate| candidate.names_card(*object_id)) {
+                if let ProposedEvent::ZoneMove {
+                    from: Some(ZoneType::Hand),
+                    object_id,
+                    entry,
+                    ..
+                } = &pending.event
+                {
+                    if entry.discard.is_some()
+                        && self
+                            .hand_replacements(*object_id, entry.discard)
+                            .iter()
+                            .any(|candidate| candidate.names_card(*object_id))
+                    {
                         pinned.push(*object_id);
                     }
                 }
@@ -604,23 +615,57 @@ impl Game {
             // members will be evaluated using their newly assigned printing.
             for batch in self.pending_batches() {
                 for (index, pending) in batch.events.iter().enumerate() {
-                    let ProposedEvent::ZoneMove { from: Some(ZoneType::Hand), object_id, entry, .. } = &pending.event else { continue };
-                    if entry.discard.is_none() { continue; }
+                    let ProposedEvent::ZoneMove {
+                        from: Some(ZoneType::Hand),
+                        object_id,
+                        entry,
+                        ..
+                    } = &pending.event
+                    else {
+                        continue;
+                    };
+                    if entry.discard.is_none() {
+                        continue;
+                    }
                     let owner = self.state[*object_id].owner;
-                    if self.shares_information(viewer, owner) || pinned.binary_search(object_id).is_ok() { continue; }
+                    if self.shares_information(viewer, owner)
+                        || pinned.binary_search(object_id).is_ok()
+                    {
+                        continue;
+                    }
                     let predicate = if index <= batch.cursor {
                         let original = self.hand_replacements(*object_id, entry.discard);
+                        let mut tested = std::collections::BTreeSet::new();
                         let mut names = std::collections::BTreeSet::new();
                         for candidate in unseen_objects(self, owner, viewer, &pinned) {
-                            if self.hand_replacements(candidate, entry.discard) == original {
-                                names.insert(self.state[candidate].retained_base().1.name.clone());
+                            let (definition, printing) = self.state[candidate].retained_base();
+                            if tested.insert(definition)
+                                && self.hand_replacements(candidate, entry.discard) == original
+                            {
+                                names.insert(printing.name.clone());
                             }
                         }
-                        CardPredicate { any_of: names.into_iter().map(|name| CardPredicate { named: Some(name), ..Default::default() }).collect(), ..Default::default() }
+                        CardPredicate {
+                            any_of: names
+                                .into_iter()
+                                .map(|name| CardPredicate {
+                                    named: Some(name),
+                                    ..Default::default()
+                                })
+                                .collect(),
+                            ..Default::default()
+                        }
                     } else {
                         CardPredicate::default()
                     };
-                    retain(&Some(ZoneSelection { owner, zone: ZoneType::Hand, predicate }), std::slice::from_ref(object_id));
+                    retain(
+                        &Some(ZoneSelection {
+                            owner,
+                            zone: ZoneType::Hand,
+                            predicate,
+                        }),
+                        std::slice::from_ref(object_id),
+                    );
                 }
             }
             for decision in suspended.decisions() {

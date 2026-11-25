@@ -1,19 +1,21 @@
 //! Gatecrash.
 use super::rtr::guildgate;
 use managym_state::ability::{
-    Ability, Actor, AttackSize, Effect, ObjectSelector, Per, PlayerSelector, Scope, TargetSpec,
-    TriggerCondition, TriggerSubject,
+    Ability, Actor, AttackSize, Effect, EffectValue, ObjectSelector, Per, PlayerSelector, Scope,
+    TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    CardDefinition, CardType, CardTypes, Keyword, Keywords, PowerCda, PrintedCharacteristics,
-    StaticAbility,
+    CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords, PowerCda,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
 use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        prime_speaker_zegana(),
         aurelia_the_warleader(),
         boros_guildgate(),
         consuming_aberration(),
@@ -212,6 +214,38 @@ fn boros_charm() -> CardDefinition {
                     )],
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn prime_speaker_zegana() -> CardDefinition {
+    let text_box = "Prime Speaker Zegana enters with X +1/+1 counters on it, where X is the greatest power among other creatures you control.\nWhen Prime Speaker Zegana enters, draw cards equal to its power.";
+    CardDefinition {
+        key: "gtc.prime_speaker_zegana",
+        scryfall_id: "f30dfb8e-f540-45ab-a4e8-63425099646a",
+        printed: PrintedCharacteristics {
+            name: "Prime Speaker Zegana".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Merfolk".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(1),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: EntryValue::GreatestPower(Box::new(CardPredicate::creature())),
+                condition: None,
+            }],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::DrawCards {
+                    count: EffectValue::SourcePower,
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

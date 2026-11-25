@@ -1,5 +1,4 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
-use managym_state::card::EntryScope;
 use managym_state::ability::{
     Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind, DamageRecipientFilter,
     Effect, EffectValue, EntryCounters, KeywordAction, ObjectProperty, ObjectSelector, PaymentCost,
@@ -8,10 +7,10 @@ use managym_state::ability::{
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
-    CardType, CardTypes, DamageRecipient, DamageTransform, Keyword, Keywords, ManaAbility, PrintedCharacteristics,
-    ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
-    StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
-    TargetCostReduction,
+    CardType, CardTypes, DamageRecipient, DamageTransform, EntryChoice, EntryScope, EntryValue,
+    Keyword, Keywords, ManaAbility, PrintedCharacteristics, PtCount, ReplacementEffect,
+    Restriction, SacrificeCost, SourceQuality, SpellCostReduction, StaticAbility,
+    StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
 };
 use managym_state::effect::{CopyException, Modification};
 use managym_state::mana::{Color, Mana, ManaCost};
@@ -21,6 +20,8 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        banner_of_kinship(),
+        mossborn_hydra(),
         dreadwing_scavenger(),
         crystal_barricade(),
         elenda_saint_of_dusk(),
@@ -1313,8 +1314,12 @@ fn goblin_boarders() -> CardDefinition {
             subtypes: vec!["Goblin".into(), "Pirate".into()],
             power: Some(3),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 1.into(),
-                condition: Some(Condition::AttackedThisTurn), kind: CounterKind::PlusOnePlusOne, }],
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                count: 1.into(),
+                condition: Some(Condition::AttackedThisTurn),
+                kind: CounterKind::PlusOnePlusOne,
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -3532,16 +3537,28 @@ fn tinybones_bauble_burglar() -> CardDefinition {
                     who: Actor::Opponent,
                     any_of: vec![KeywordAction::Discard],
                 },
-                effects: vec![Effect::Move {
-                    unrevealed: false,
-                    library_end: None,
-                    what: ObjectSelector::Triggering,
-                    to: ZoneType::Exile,
-                    tapped: false,
-                    transformed: false,
-                    under: None,
-                    with_counter: Some(CounterKind::Stash.into()),
-                    linked: None,
+                effects: vec![Effect::If {
+                    condition: Condition::compare(
+                        EffectValue::Objects {
+                            of: Box::new(ObjectSelector::Triggering),
+                            predicate: None,
+                            in_zone: Some(ZoneType::Graveyard),
+                        },
+                        CompareOp::Gt,
+                        0,
+                    ),
+                    then: vec![Effect::Move {
+                        unrevealed: false,
+                        library_end: None,
+                        what: ObjectSelector::Triggering,
+                        to: ZoneType::Exile,
+                        tapped: false,
+                        transformed: false,
+                        under: None,
+                        with_counter: Some(CounterKind::Stash.into()),
+                        linked: None,
+                    }],
+                    otherwise: vec![],
                 }],
             }],
             statics: vec![StaticAbility::PlayUnownedExiledWithCounter(
@@ -3818,9 +3835,12 @@ fn nine_lives_familiar() -> CardDefinition {
             subtypes: vec!["Cat".into()],
             power: Some(1),
             toughness: Some(1),
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::Revival,
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::Revival,
                 count: 8.into(),
-                condition: Some(Condition::EntryCastFrom(None)), }],
+                condition: Some(Condition::EntryCastFrom(None)),
+            }],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,
@@ -4110,6 +4130,18 @@ fn crystal_barricade() -> CardDefinition {
             power: Some(0),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Defender]),
+            replacement_effects: vec![ReplacementEffect::ModifyDamage {
+                creature_source: false,
+                source_by: Actor::AnyPlayer,
+                combat: Some(false),
+                recipient: DamageRecipient {
+                    by: Actor::You,
+                    players: false,
+                    permanents: Some(CardPredicate::creature()),
+                    except_source: true,
+                },
+                transform: DamageTransform::PreventAll,
+            }],
             statics: vec![StaticAbility::ControllerHas(Box::new(
                 Modification::Hexproof,
             ))],
@@ -4150,6 +4182,83 @@ fn dreadwing_scavenger() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
                 ],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mossborn_hydra() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nThis creature enters with a +1/+1 counter on it.\nLandfall — Whenever a land you control enters, double the number of +1/+1 counters on this creature.";
+    CardDefinition {
+        key: "fdn.mossborn_hydra",
+        scryfall_id: "7054a0d7-396f-40b4-ab24-db591c3b08f0",
+        printed: PrintedCharacteristics {
+            name: "Mossborn Hydra".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into(), "Hydra".into()],
+            power: Some(0),
+            toughness: Some(0),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: 1.into(),
+                condition: None,
+            }],
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::Property {
+                        of: Box::new(ObjectSelector::This),
+                        property: ObjectProperty::Counters(CounterKind::PlusOnePlusOne),
+                        aggregate: Aggregate::Sum,
+                    },
+                )],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn banner_of_kinship() -> CardDefinition {
+    let text_box = "As this artifact enters, choose a creature type. This artifact enters with a fellowship counter on it for each creature you control of the chosen type.\nCreatures you control of the chosen type get +1/+1 for each fellowship counter on this artifact.";
+    let chosen = CardPredicate {
+        chosen_type_of_source: true,
+        ..CardPredicate::creature()
+    };
+    CardDefinition {
+        key: "fdn.banner_of_kinship",
+        scryfall_id: "a14c16c0-4053-46b0-8fa6-be8b4a7a1c8a",
+        printed: PrintedCharacteristics {
+            name: "Banner of Kinship".into(),
+            mana_cost: Some(ManaCost::parse("{5}")),
+            types: CardTypes::new([CardType::Artifact]),
+            replacement_effects: vec![
+                ReplacementEffect::AsEntersChoose(EntryChoice::CreatureType),
+                ReplacementEffect::EntersWithCounters {
+                    on: EntryScope::This,
+                    kind: CounterKind::Fellowship,
+                    count: EntryValue::ControlledAlready(Box::new(chosen.clone())),
+                    condition: None,
+                },
+            ],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::YouControl(chosen),
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per: Some(PtCount::SourceCounters(CounterKind::Fellowship)),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

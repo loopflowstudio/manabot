@@ -658,7 +658,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 43] = [
+pub const MODIFICATION_NAMES: [&str; 44] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",

@@ -28,16 +28,38 @@ impl Game {
     /// CR 119.9, 120.3f: one gain per source across simultaneous recipients.
     /// Compute these results after damage prevention but before committing any
     /// member, so a gain's replacement choice also suspends the damage.
-    pub(super) fn lifelink_gains(&self, events: &[super::proposed_event::PendingEvent]) -> Vec<LifelinkGain> {
+    pub(super) fn lifelink_gains(
+        &self,
+        events: &[super::proposed_event::PendingEvent],
+    ) -> Vec<LifelinkGain> {
         let mut totals: Vec<LifelinkGain> = Vec::new();
         for event in events {
-            let ProposedEvent::Damage { source: Some(source), amount, target, .. } = event.event else { continue };
-            if amount <= 0 || self.damage_is_prevented(target) || !self.source_keywords(source).has(Keyword::Lifelink) { continue; }
-            let Some(controller) = self.source_controller(source) else { continue };
+            let ProposedEvent::Damage {
+                source: Some(source),
+                amount,
+                target,
+                ..
+            } = event.event
+            else {
+                continue;
+            };
+            if amount <= 0
+                || self.damage_is_prevented(target)
+                || !self.source_keywords(source).has(Keyword::Lifelink)
+            {
+                continue;
+            }
+            let Some(controller) = self.source_controller(source) else {
+                continue;
+            };
             if let Some(total) = totals.iter_mut().find(|total| total.source == source) {
                 total.amount = total.amount.saturating_add(amount);
             } else {
-                totals.push(LifelinkGain { source, controller, amount });
+                totals.push(LifelinkGain {
+                    source,
+                    controller,
+                    amount,
+                });
             }
         }
         totals
@@ -193,8 +215,14 @@ impl Game {
     }
 
     pub(super) fn can_gain_life(&self, player: PlayerId) -> bool {
-        !self.life_total_cant_change(player) && ![PlayerId(0), PlayerId(1)].into_iter().any(|owner|
-            self.layer_views(self.iter_battlefield_permanents(owner)).any(|(_, view)| view.static_abilities.contains(&StaticAbility::PlayersCantGainLife)))
+        !self.life_total_cant_change(player)
+            && ![PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
+                self.layer_views(self.iter_battlefield_permanents(owner))
+                    .any(|(_, view)| {
+                        view.static_abilities
+                            .contains(&StaticAbility::PlayersCantGainLife)
+                    })
+            })
     }
 
     /// Apply the change and return the signed amount that actually occurred.
@@ -202,7 +230,9 @@ impl Game {
         if self.life_total_cant_change(player) {
             return 0;
         }
-        if delta > 0 && !self.can_gain_life(player) { return 0; }
+        if delta > 0 && !self.can_gain_life(player) {
+            return 0;
+        }
         let Some(life) = self.state.life_mut(player) else {
             return 0;
         };

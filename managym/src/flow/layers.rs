@@ -147,7 +147,11 @@ impl ReadSet {
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
             self.fields |= CARD_TYPES;
         }
-        if p.chosen_type_of_source || p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+        if p.chosen_type_of_source
+            || p.subtype.is_some()
+            || !p.subtypes_any.is_empty()
+            || !p.not_subtypes.is_empty()
+        {
             self.fields |= SUBTYPES;
         }
         if p.supertype.is_some() {
@@ -1214,16 +1218,13 @@ impl<'a> Context<'a> {
         predicate: &CardPredicate,
         source: Option<PermanentId>,
     ) -> bool {
-        if predicate.chosen_type_of_source && !source.and_then(|source| self.game.effects_on(source).find_map(|effect| match &effect.modification {
-            Modification::ChosenCreatureType(name) => Some(name.as_str()),
-            _ => None,
-        })).is_some_and(|name| self.objects[&id].view.has_subtype(name)) { return false; }
         matches_view(
             self.game,
             id,
             predicate,
             &self.objects[&id].view,
             source.map(|s| self.objects[&s].view.name.as_str()),
+            self.game.chosen_type_for(predicate, source),
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
@@ -1635,6 +1636,7 @@ pub(super) fn matches_view(
     p: &CardPredicate,
     view: &Characteristics,
     source_name: Option<&str>,
+    chosen_type: Option<&str>,
 ) -> bool {
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
@@ -1661,7 +1663,7 @@ pub(super) fn matches_view(
         },
         counters: &permanent.counters,
     }
-    .matches(p, source_name)
+    .matches(p, source_name, chosen_type)
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,
@@ -1733,7 +1735,7 @@ pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
         derived: DerivedStatus::Departed(facts),
         counters: &lki.counters,
     }
-    .matches(p, None)
+    .matches(p, None, None)
 }
 
 impl CharacteristicView<'_> {
@@ -1742,11 +1744,17 @@ impl CharacteristicView<'_> {
             || (self.all_creature_types && is_creature_type(subtype))
     }
 
-    fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
+    fn matches(
+        &self,
+        p: &CardPredicate,
+        source_name: Option<&str>,
+        chosen_type: Option<&str>,
+    ) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
             && p.accepts_name(self.name)
             && (!p.namesake || source_name == Some(self.name))
+            && (!p.chosen_type_of_source || chosen_type.is_some_and(|name| self.has_subtype(name)))
             && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
             && (!p.flying || self.keywords.has(Keyword::Flying))
             && (!p.not_flying || !self.keywords.has(Keyword::Flying))
@@ -1759,7 +1767,7 @@ impl CharacteristicView<'_> {
             && (p.any_of.is_empty()
                 || p.any_of
                     .iter()
-                    .any(|alternative| self.matches(alternative, source_name)))
+                    .any(|alternative| self.matches(alternative, source_name, chosen_type)))
             && p.supertype.as_ref().is_none_or(|s| {
                 if s.eq_ignore_ascii_case("legendary") {
                     self.is_legendary

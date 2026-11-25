@@ -4,8 +4,9 @@ use managym_state::ability::{
     TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope, EntryValue,
+    Keyword, Keywords, PrintedCharacteristics, ReplacementEffect, StaticAbility,
+    StaticKeywordGrant, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -14,6 +15,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        wildwood_scourge(),
         garruks_uprising(),
         heartfire_immolator(),
         mazemind_tome(),
@@ -212,6 +214,47 @@ fn garruks_uprising() -> CardDefinition {
                 condition: None,
                 keywords: Keywords::of(&[Keyword::Trample]),
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wildwood_scourge() -> CardDefinition {
+    let text_box = "This creature enters with X +1/+1 counters on it.\nWhenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "m21.wildwood_scourge",
+        scryfall_id: "46ff0b33-d153-4b0e-ac48-7e5ed70dea09",
+        printed: PrintedCharacteristics {
+            name: "Wildwood Scourge".into(),
+            mana_cost: Some(ManaCost::parse("{X}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Hydra".into()],
+            power: Some(0),
+            toughness: Some(0),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: EntryValue::X,
+                condition: None,
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::PutsCountersOn {
+                    who: Actor::AnyPlayer,
+                    kind: CounterKind::PlusOnePlusOne,
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        not_subtypes: vec!["Hydra".into()],
+                        ..CardPredicate::creature()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
