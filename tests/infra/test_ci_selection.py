@@ -52,6 +52,8 @@ def selected(
         ("website/app.py", {"python_unit"}),
         ("tests/infra/test_ci_selection.py", {"python_unit"}),
         ("tests/infra/test_external_consumer.py", {"python_unit", "integration"}),
+        ("tests/config/test_load.py", {"integration"}),
+        ("tests/academy/test_qwen_policy.py", {"integration"}),
         ("tests/test_public_api_contract.py", {"integration"}),
         ("tests/public_api.json", {"integration"}),
         ("scripts/public_api.py", {"integration"}),
@@ -180,8 +182,69 @@ def test_workflow_test_files_exist() -> None:
     missing = []
     for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
         for path in re.findall(
-            r"tests/(?:[\w.-]+/)*[\w.-]+\.py\b", workflow.read_text()
+            r"(?<![/\w.-])tests/(?:[\w.-]+/)*[\w.-]+\.py\b", workflow.read_text()
         ):
             if not (ROOT / path).is_file():
                 missing.append(f"{workflow.name}: {path}")
     assert not missing, "\n".join(missing)
+
+
+def _pytest_covered_files(workflow_text: str) -> set[str]:
+    """Return every `tests/**/test_*.py` file selected by a workflow's pytest runs."""
+    # Collapse YAML shell continuations so multi-line pytest commands parse together.
+    normalized = re.sub(r"\\\n[ \t]*", " ", workflow_text)
+    covered: set[str] = set()
+    all_tests = [
+        p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/**/test_*.py")
+    ]
+    for line in normalized.splitlines():
+        if "pytest" not in line or line.lstrip().startswith("#"):
+            continue
+        files: set[str] = set()
+        dirs: set[str] = set()
+        ignored: set[str] = set()
+        for match in re.finditer(
+            r"(?<![/\w.-])(--ignore=)?(tests/(?:[\w.-]+/)*[\w.-]+\.py|tests/(?:[\w.-]+/)+)",
+            line,
+        ):
+            prefix, path = match.group(1), match.group(2)
+            if prefix:
+                ignored.add(path)
+            elif path.endswith(".py"):
+                files.add(path)
+            elif path.endswith("/"):
+                dirs.add(path)
+        covered |= files
+        for test_path in all_tests:
+            if any(test_path.startswith(d) for d in dirs) and test_path not in ignored:
+                covered.add(test_path)
+    return covered
+
+
+def test_all_test_files_are_covered_by_ci_workflows() -> None:
+    """Every Python test file under tests/ must be executed by CI."""
+    all_tests = {
+        p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/**/test_*.py")
+    }
+    pr_workflows = (
+        "ci.yml",
+        "manabot-integration.yml",
+        "academy-integration.yml",
+    )
+    nightly_only = {
+        # Runs in baseline.yml on a release extension (3+ min on debug).
+        "tests/verify/test_learning_regression.py",
+    }
+    pr_covered: set[str] = set()
+    for name in pr_workflows:
+        pr_covered |= _pytest_covered_files(
+            (ROOT / ".github/workflows" / name).read_text()
+        )
+    nightly_covered = _pytest_covered_files(
+        (ROOT / ".github/workflows/baseline.yml").read_text()
+    )
+    assert nightly_only <= nightly_covered, sorted(nightly_only - nightly_covered)
+    uncovered = sorted(all_tests - pr_covered - nightly_only)
+    assert not uncovered, "Test files not covered by any PR CI workflow:\n" + "\n".join(
+        uncovered
+    )
