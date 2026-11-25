@@ -266,6 +266,61 @@ and `ModifyDamage`; no type in the Delete list remains; a new "+N/+N for each
 X", "enters with counters equal to X" or "prevent/increase damage from A to B"
 card needs no engine edit when X, A and B are existing predicates and values.
 
+## Decomposition review at `1f160b09eb`
+
+The composition holds. Tempest Djinn is `continuous` with `LayerValue::count(YouControl)`.
+Banner is `EntersWithCounters { count: EffectValue::BattlefieldMatching }` and
+`continuous` with `SourceCounters`, and the chosen type reaches both readers through one
+`effect_value_with_chosen_type` / `matches_view` path. Crystal Barricade is one
+`ModifyDamage { DamageSource, DamageRecipient, PreventAll }`. Only `token_renames.rs`
+mentions the deleted names, plus the prose in `cards/tests/fixtures/tle-allocation.jsonl`
+(historical allocation, left unchanged). No engine code dispatches on a specific card.
+
+That pass's checks skipped consumers outside the edited sets. Its deletions break four
+of them, and each would fail CI:
+
+1. `managym/tests/conformance_tests.rs:277` does not compile. `def.pt_cda()` now
+   returns `Option<(Option<&LayerValue>, Option<&LayerValue>)>`, and the closure
+   still returns the old bool. Use `toughness.is_some()`. Because of this, the
+   `conformance_tests` target never runs.
+2. `tests/semantic/test_static_ability_tokens.py:29-30` asserts
+   `StaticAbility::PtBuff` (First-Time Flyer) and `StaticAbility::CharacteristicPower`
+   (Suki), which D1 retired. Two of its 17 cases fail. Point each row at the variant
+   token the card emits now (the `continuous` / `cda` variant).
+3. `cards/tests/cards/tla.rs:11355` `printed_trample_first_strike_lifelink_and_menace_affect_combat`
+   panics with "block action should exist" for Callous Inspector (menace). A lone Gray
+   Ogre cannot block a menace creature (CR 702.110b). Since slice 2, native block offers
+   leave out that illegal singleton, so the engine is right and the fixture is stale.
+   For Callous Inspector, skip `declare_block` and assert that no block is offered.
+   The 19-life assertion stays.
+4. `src/flow/decision.rs:5234` `paired_arrivals_preserve_bottom_draw_order_and_following_discard_binding`
+   (from main #593) gets `this_way == []`. Since `b2da13add6`, the `Moved` binding
+   counts a move as a discard only when its entry carries `discard` (CR 701.9). That
+   rule is correct, because a hand-to-graveyard move is not always a discard. The
+   fixture proposes `zone_move_proposal(discard, Graveyard, Default::default())`.
+   Give that proposal a discard entry, as the discard batch builds it.
+
+5. `tests/semantic_conformance_tests.rs`: 15 of 20 tests fail. The content digest
+   (`evidence.content_digest` vs `default_content_pack().content_digest()`) and 14 frozen
+   case traces (elemental-161..164, elemental-world gr/ug, gw/ur, sacrifice, temur, ur/gw)
+   have drifted, because the cohort added definitions and the branch never re-recorded
+   `conformance/semantic-kernel-w17-v6/evidence-battlefield-history-v1.json`. Main
+   re-records with each card batch (`cf73d9778f`, `45ddf3bca7`). Follow
+   `conformance/README.md`: replay the drifted cases from
+   `target/semantic-conformance/semantic-kernel-w17-v6/`, confirm that each drift comes from
+   shifted definition ids or a branch rules change that is intended, then `record`. Check
+   whether the authored-match and parity receipts that bind the current catalog also need
+   regeneration (`scripts/generate_authored_match_receipt.py`,
+   `conformance.authored_match_parity write`).
+
+Debug results at this head. The cards target ran 1401 passed, 1 failed (3). `managym --lib`
+ran 405 passed, 1 failed (4). `semantic_conformance_tests` ran 5 passed, 15 failed (5).
+`conformance_tests` does not compile (1). These targets passed: authored_match, canonical_replay,
+content_pack, elemental_world, engine (13), experience_protocol, learn_setup,
+match_state_hash, possible_worlds, prepared_possible_worlds, rules (205), scenario,
+search_state_contract, search, source_taps and the study protocol targets. After the
+fix for (1), rerun `conformance_tests`. It may expose further drift.
+
 ## Remaining
 
 Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,
