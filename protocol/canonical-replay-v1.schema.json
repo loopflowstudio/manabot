@@ -1032,6 +1032,14 @@
     "KeywordAbilityView": {
       "type": "object",
       "properties": {
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "granted": {
           "type": "boolean"
         },
@@ -1508,6 +1516,20 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/KeywordAbilityView"
+          }
+        },
+        "keyword_grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "keywords": {

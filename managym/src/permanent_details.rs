@@ -107,6 +107,7 @@ impl Game {
                                 self.check_static_condition(condition, controller)
                             })?,
                             granted: i >= own,
+                            effect_timestamp: trigger.effect_timestamp.map(|timestamp| timestamp.0),
                         })
                     })
                     .collect();
@@ -134,6 +135,12 @@ impl Game {
                     PermanentDetails {
                         attacks_despite_defender: self.attacks_despite_defender(&view, controller),
                         keyword_abilities,
+                        keyword_grants: (view.keywords.iter().next().is_some()).then(|| {
+                            view.keyword_grants
+                                .iter()
+                                .map(|(k, t)| (k.name().to_owned(), t.map(|t| t.0)))
+                                .collect()
+                        }),
                         restrictions,
                     },
                 )

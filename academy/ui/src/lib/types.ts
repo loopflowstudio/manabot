@@ -95,6 +95,7 @@ export interface ContinuousEffect {
 }
 
 export interface KeywordAbilityView {
+  effect_timestamp?: number;
   label: string;
   granted?: boolean;
 }
@@ -107,6 +108,8 @@ export type PermanentRestriction =
   | 'must_attack';
 
 export interface PermanentState {
+  /** Effective evergreen grants, keyed by keyword. A record grant names its timestamp. */
+  keyword_grants?: Record<string, number | null>;
   keyword_abilities?: KeywordAbilityView[];
   attacks_despite_defender?: boolean;
   restrictions?: PermanentRestriction[];

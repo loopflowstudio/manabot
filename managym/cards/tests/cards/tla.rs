@@ -17168,29 +17168,35 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
             .remove(&permanent(s, id).id.0)
             .unwrap()
     };
-    let label = |name: &str, granted| KeywordAbilityView {
+    let label = |name: &str, granted, effect_timestamp| KeywordAbilityView {
         label: name.into(),
         granted,
+        effect_timestamp,
     };
+    assert_eq!(
+        details(&s, ally).keyword_grants.unwrap().get("menace"),
+        Some(&None)
+    );
+    assert!(details(&s, bear).keyword_grants.unwrap().is_empty());
     assert!(!details(&s, bear).attacks_despite_defender);
     assert!(details(&s, cadets).keyword_abilities.is_empty());
     plant_in_graveyard(&mut s, 0, "Abandon Attachments");
     assert!(details(&s, bear).attacks_despite_defender);
     assert_eq!(
         details(&s, cadets).keyword_abilities,
-        [label("Firebending 2", false)]
+        [label("Firebending 2", false, None)]
     );
     assert_eq!(
         details(&s, mai).keyword_abilities,
-        [label("Prowess", false)]
+        [label("Prowess", false, None)]
     );
     assert_eq!(
         details(&s, ally).keyword_abilities,
-        [label("Prowess", true)]
+        [label("Prowess", true, None)]
     );
     assert_eq!(
         details(&s, soldier).keyword_abilities,
-        [label("Firebending 1", false)]
+        [label("Firebending 1", false, None)]
     );
     assert!(details(&s, vanilla).keyword_abilities.is_empty());
 
@@ -17202,15 +17208,23 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
     assert_eq!(
         details(&s, sire).keyword_abilities,
         [
-            label("Ward—Pay 7 life", false),
-            label("Ward—Discard a card", true)
+            label("Ward—Pay 7 life", false, None),
+            label(
+                "Ward—Discard a card",
+                true,
+                Some(s.game().effects_on(sire).last().unwrap().timestamp.0)
+            )
         ]
     );
     until_end_of_turn(&mut s, sire, Modification::LoseAllAbilities);
     until_end_of_turn(&mut s, sire, Modification::Firebending(3));
     assert_eq!(
         details(&s, sire).keyword_abilities,
-        [label("Firebending 3", true)]
+        [label(
+            "Firebending 3",
+            true,
+            Some(s.game().effects_on(sire).last().unwrap().timestamp.0)
+        )]
     );
     enchant(&mut s, "Watery Grasp", "U", vanilla);
     assert_eq!(

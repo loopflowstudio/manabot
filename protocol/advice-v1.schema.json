@@ -2274,6 +2274,20 @@
     "KeywordAbilityView": {
       "additionalProperties": false,
       "properties": {
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
         "granted": {
           "default": false,
           "title": "Granted",
@@ -2911,6 +2925,30 @@
           },
           "title": "Keyword Abilities",
           "type": "array"
+        },
+        "keyword_grants": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "maximum": 4294967295,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyword Grants"
         },
         "keywords": {
           "items": {

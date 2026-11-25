@@ -418,6 +418,8 @@ pub struct ContinuousEffectView {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeywordAbilityView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
     pub label: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub granted: bool,
@@ -435,6 +437,8 @@ pub enum PermanentRestriction {
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub struct PermanentDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyword_grants: Option<std::collections::BTreeMap<String, Option<u32>>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keyword_abilities: Vec<KeywordAbilityView>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -414,6 +414,7 @@ class CopyView(ProtocolModel):
 
 
 class KeywordAbilityView(ProtocolModel):
+    effect_timestamp: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     label: str
     granted: bool = Field(default=False, exclude_if=lambda value: not value)
 
@@ -427,6 +428,9 @@ class PermanentRestriction(str, Enum):
 
 
 class LegacyPermanentView(ProtocolModel):
+    keyword_grants: dict[str, UInt32 | None] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     keyword_abilities: list[KeywordAbilityView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )

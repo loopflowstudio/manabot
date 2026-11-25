@@ -142,7 +142,9 @@ incarnation and board display ID; `permanent_details_json` attaches effective
 battlefield details (Layer 6 keyword abilities, overridden Defender and active
 combat/untap restrictions) by public permanent ID. Each keyword ability
 instance has a label and an optional `granted` flag, so a creature can carry
-two different Ward costs. Firebending X keeps its printed X because its trigger
+two different Ward costs. A record-granted trigger names its effect timestamp.
+For evergreen keywords, `keyword_grants` identifies each gain on top of the
+copiable face and its record timestamp, if any. Firebending X keeps its printed X because its trigger
 determines the amount on resolution. The details travel with `decision_surface_view` without altering
 `Observation` or default `serialize_observation()`. These read-only projections
 introduce no legal actions or editable payment transaction. Other viewers

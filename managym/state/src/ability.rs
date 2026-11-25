@@ -3194,6 +3194,9 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectiveTrigger {
+    /// Public effect record that granted this instance, for battlefield inspection.
+    #[serde(skip)]
+    pub effect_timestamp: Option<crate::game_object::PublicId>,
     /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<GrantClock>,

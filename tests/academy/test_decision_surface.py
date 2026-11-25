@@ -293,6 +293,7 @@ def test_permanent_details_in_recovery_after_a_lesson_resolves(tmp_path: Path) -
         session.obs = env.observation_for_player(0)
         initial = _frame(session).projection
         bear, _, cadets = initial.agent.battlefield
+        assert bear.keyword_grants == {}  # Its Defender comes from its own face.
         assert not bear.attacks_despite_defender
         assert not cadets.keyword_abilities
         assert initial.opponent.battlefield[0].keyword_abilities[0].label == "Prowess"

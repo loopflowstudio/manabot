@@ -60,11 +60,12 @@ vocabulary that reads cleanly in light and dark:
 
 `Env.permanent_details_json(viewer)` returns a map keyed by the public permanent
 id. Academy joins it to both battlefield rows in `decision_surface_view`.
-The three optional fields on `LegacyPermanentView` are:
+The optional fields on `LegacyPermanentView` are:
 
 - `keyword_abilities` is an ordered list of `{label, granted?}`, one per live
   trigger instance. Multiple Ward costs and repeated Prowess remain separate.
   Firebending X keeps its X because the amount is evaluated on resolution.
+- A browser with no card faces cannot infer whether effective Menace is printed or granted. When a permanent has evergreen keywords, `keyword_grants` identifies the granted ones and their record timestamps (null for static or counter grants). Granted trigger instances carry `effect_timestamp` when a record supplies them. Inspect joins those timestamps to the permanent’s own effects.
 - `attacks_despite_defender` is true while the native Defender exception applies.
 - `restrictions` lists the active `cant_be_blocked`, `cant_block`,
   `cant_attack_or_block`, `doesnt_untap` and `must_attack` rules.

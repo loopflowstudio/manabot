@@ -83,6 +83,8 @@ pub struct Characteristics {
     pub is_animated: bool,
     /// Layer 6 keywords.
     pub keywords: Keywords,
+    /// Layer 6 gains still present, with the resolved record timestamp when applicable.
+    pub keyword_grants: Vec<(Keyword, Option<crate::state::game_object::PublicId>)>,
     /// Firebending N granted by records after any ability loss, summed.
     pub firebending: u8,
     /// Whether it has lost all abilities (a record, or a characteristic-
