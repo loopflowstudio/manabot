@@ -115,7 +115,10 @@ export class GameStore {
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
     this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
-    const named = sanitizeDeckSelection({hero:draft.hero_deck, villain:draft.villain_deck});
+    const named = sanitizeDeckSelection({
+      hero: draft.hero_deck_pool ?? draft.hero_deck,
+      villain: draft.villain_deck_pool ?? draft.villain_deck,
+    });
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
     this.searchConfig = parseSearchConfigs([draft.mirror ?? null, null])[0];
@@ -163,8 +166,8 @@ export class GameStore {
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
   deckImport = $state<{
-    hero: { source: string; filename: string };
-    villain: { source: string; filename: string };
+    hero: { source: string; filename: string; name?: string };
+    villain: { source: string; filename: string; name?: string };
   } | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.

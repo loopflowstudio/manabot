@@ -76,12 +76,24 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
         )
     if config.hero_source is not None and config.villain_source is not None:
         draft["deck_import"] = {
-            side: {"source": source["source"], "filename": source["filename"]}
-            for side, source in (
-                ("hero", config.hero_source),
-                ("villain", config.villain_source),
+            side: {
+                "source": source["source"],
+                "filename": source["filename"],
+                **(
+                    {"name": deck_name}
+                    if deck_name not in ("imported", "custom")
+                    else {}
+                ),
+            }
+            for side, source, deck_name in (
+                ("hero", config.hero_source, config.hero_deck_name),
+                ("villain", config.villain_source, config.villain_deck_name),
             )
         }
+    if config.hero_deck_pool is not None:
+        draft["hero_deck_pool"] = config.hero_deck_pool
+    if config.villain_deck_pool is not None:
+        draft["villain_deck_pool"] = config.villain_deck_pool
     return draft
 
 
@@ -96,6 +108,8 @@ def continuation_config(
         resolved["human_seat"] = 1 - draft.get("human_seat", 0)
     if "hero_deck" in overrides or "villain_deck" in overrides:
         resolved.pop("deck_import", None)
+        resolved.pop("hero_deck_pool", None)
+        resolved.pop("villain_deck_pool", None)
     resolved.update(overrides)
     return resolved
 

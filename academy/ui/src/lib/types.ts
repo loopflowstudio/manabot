@@ -938,7 +938,7 @@ export interface LaunchSetup {
   villain_sims?: number;
   opponent_sha256?: string;
   decklists: Decklists;
-  deck_import?: { hero: { source: string; filename: string }; villain: { source: string; filename: string } };
+  deck_import?: { hero: { source: string; filename: string; name?: string }; villain: { source: string; filename: string; name?: string } };
 }
 
 export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
