@@ -299,6 +299,9 @@ impl ManaClass {
 pub struct SpendingObject {
     /// Sorted and deduplicated.
     pub subtypes: Vec<String>,
+    /// It has all creature types (CR 205.3m) beyond those listed.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub all_creature_types: bool,
     /// A hash of `subtypes`, computed once: payment search hashes costs in
     /// every visited state.
     #[serde(skip)]
@@ -307,7 +310,9 @@ pub struct SpendingObject {
 
 impl PartialEq for SpendingObject {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest && self.subtypes == other.subtypes
+        self.digest == other.digest
+            && self.all_creature_types == other.all_creature_types
+            && self.subtypes == other.subtypes
     }
 }
 
@@ -320,15 +325,20 @@ impl std::hash::Hash for SpendingObject {
 }
 
 impl SpendingObject {
-    pub fn new<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Arc<Self> {
+    pub fn new<'a>(
+        subtypes: impl IntoIterator<Item = &'a str>,
+        all_creature_types: bool,
+    ) -> Arc<Self> {
         use std::hash::{Hash, Hasher};
         let mut subtypes = subtypes.into_iter().map(String::from).collect::<Vec<_>>();
         subtypes.sort_unstable();
         subtypes.dedup();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         subtypes.hash(&mut hasher);
+        all_creature_types.hash(&mut hasher);
         Arc::new(Self {
             subtypes,
+            all_creature_types,
             digest: hasher.finish(),
         })
     }
@@ -337,17 +347,22 @@ impl SpendingObject {
         self.subtypes
             .binary_search_by(|subtype| subtype.as_str().cmp(name))
             .is_ok()
+            || (self.all_creature_types && crate::subtype::is_creature_type(name))
     }
 
     /// Whether this snapshot names exactly these subtypes (in any order, with
     /// repeats), so a rebuilt view can keep sharing it without allocating.
-    pub fn describes(&self, subtypes: &[String]) -> bool {
+    pub fn describes(&self, subtypes: &[String], all_creature_types: bool) -> bool {
         let distinct = subtypes
             .iter()
             .enumerate()
             .filter(|(i, name)| !subtypes[..*i].contains(name))
             .count();
-        distinct == self.subtypes.len() && subtypes.iter().all(|name| self.has_subtype(name))
+        all_creature_types == self.all_creature_types
+            && distinct == self.subtypes.len()
+            && subtypes
+                .iter()
+                .all(|name| self.subtypes.binary_search(name).is_ok())
     }
 }
 
@@ -422,7 +437,7 @@ impl SpendingContext {
     pub fn ability<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Self {
         Self::Activate {
             zone: ZoneType::Battlefield,
-            source: SpendingObject::new(subtypes),
+            source: SpendingObject::new(subtypes, false),
         }
     }
 

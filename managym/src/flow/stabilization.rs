@@ -57,6 +57,7 @@ impl Game {
                 }
                 continue;
             }
+            self.state.release_resolved_forms();
             self.state.priority_mut().sba_done = true;
             return None;
         }

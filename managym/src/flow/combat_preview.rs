@@ -240,17 +240,14 @@ impl Game {
     }
 
     fn render_id(&self, permanent: PermanentId) -> ObjectRenderId {
-        let event = self
-            .permanent_event_ref(permanent)
-            .expect("declared creature is on the battlefield");
-        ObjectRenderId {
-            entity: event.entity.0,
-            incarnation: event.incarnation,
-        }
+        self.permanent_event_ref(permanent)
+            .expect("declared creature is on the battlefield")
+            .into()
     }
 
     fn label(&self, permanent: PermanentId) -> String {
-        self.characteristics(permanent).name.clone()
+        self.permanent_object(permanent)
+            .map_or_else(String::new, |object| self.observed_object_name(object))
     }
 
     fn declarable(
@@ -452,26 +449,19 @@ impl Game {
                 {
                     preview.declared_attackers = attackers
                         .iter()
-                        .map(|event| ObjectRenderId {
-                            entity: event.entity.0,
-                            incarnation: event.incarnation,
-                        })
+                        .map(|event| ObjectRenderId::from(*event))
                         .collect();
                     return;
                 }
                 GameEvent::BlockersDeclared { assignments }
                     if preview.kind == DeclarationKind::Blockers =>
                 {
-                    let id = |event: &crate::flow::event::ObjectEventRef| ObjectRenderId {
-                        entity: event.entity.0,
-                        incarnation: event.incarnation,
-                    };
                     preview.declared_blocks = assignments
                         .iter()
                         .flat_map(|(attacker, blockers)| {
                             blockers.iter().map(move |blocker| PlannedBlock {
-                                blocker: id(blocker),
-                                attacker: id(attacker),
+                                blocker: (*blocker).into(),
+                                attacker: (*attacker).into(),
                             })
                         })
                         .collect();

@@ -316,6 +316,33 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
 
+def test_a_cast_grant_names_its_source_permanent_by_its_viewer_id() -> None:
+    """Azula's grant on the card she exiled names her battlefield row: the
+    permission's source is her permanent's viewer id, as on every other row."""
+    env = priority_root(
+        ("Azula, Cunning Usurper",),
+        ("Swamp", "Swamp", "Swamp", "Island", "Island"),
+        opponent=("Gray Ogre",),
+    )
+    for _ in range(12):
+        decision = capture_text_decision(env)
+        if "while they control" in decision.text:
+            break
+        action = next(
+            (a for a in decision.actions if "Pass" not in a.description),
+            decision.actions[0],
+        )
+        submit_response(env, decision, action.reference)
+    else:
+        raise AssertionError("Azula's grant never appeared")
+    grant = re.search(r"while they control (P\d+) \(([^)]*)\)", decision.text)
+    assert grant is not None, decision.text
+    assert grant[2] == "Azula, Cunning Usurper"
+    assert re.search(
+        rf"^{grant[1]} \(Azula, Cunning Usurper\)", decision.text, re.MULTILINE
+    )
+
+
 def test_flameshape_cards_show_face_down_with_their_condition() -> None:
     """With a Wizard in play, Flameshape's caster sees the exiled cards as face
     down (not foretold) with the grant's condition; the opponent sees neither."""
@@ -345,7 +372,10 @@ def test_flameshape_cards_show_face_down_with_their_condition() -> None:
     submit_response(env, decision, pass_priority.reference)
     opponent = capture_text_decision(env)
     observation = _viewer_observation(opponent)
-    assert observation.agent.player_index != _viewer_observation(decision).agent.player_index
+    assert (
+        observation.agent.player_index
+        != _viewer_observation(decision).agent.player_index
+    )
     assert "face down" not in opponent.text
 
 
@@ -504,6 +534,33 @@ def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
     return stack.split("\n", 1)[0], continuation.splitlines()
 
 
+def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
+    env = priority_root(("Esper Origins",), ("Forest",) * 6)
+    for from_graveyard in (False, True):
+        _choose(env, "Cast ")
+        if not from_graveyard:
+            _choose(env, "Pay the offered cost")
+        stack, _ = _stack_and_continuation(env)
+        assert ("; cast from graveyard" in stack) == from_graveyard
+        assert ("; cast with flashback" in stack) == from_graveyard
+        _choose(env, "Pass priority")
+        _choose(env, "Pass priority")
+        _choose(env, "Decline / finish")
+        # Surveil kept both cards. Choose their order before resolution resumes.
+        for _ in range(2):
+            decision = capture_text_decision(env)
+            assert decision.actions[0].description.startswith("Select ")
+            submit_response(env, decision, decision.actions[0].reference)
+
+    saga = next(
+        line
+        for line in capture_text_decision(env).text.splitlines()
+        if "(Summon: Esper Maduin)" in line and "summoning sick" in line
+    )
+    assert "mana value 2;" in saga
+    assert "finality counters 1; lore counters 1;" in saga
+
+
 def test_steel_hellkite_announces_x_and_shows_its_combat_hit_on_the_stack() -> None:
     env = priority_root((), ("Steel Hellkite", "Mountain"))
     for _ in range(20):
@@ -629,6 +686,56 @@ def test_face_down_card_text_appears_only_when_present() -> None:
         if old != new
     ]
     assert len(changed) == 1 and "face down" in changed[0][1]
+
+
+def test_a_transformed_cecil_token_copy_is_named_by_its_shown_face() -> None:
+    """Ember Island Production copies Cecil; the token attacks and transforms."""
+    env = priority_root(
+        ("Ember Island Production",), ("Island",) * 5 + ("Cecil, Dark Knight",)
+    )
+    owner = env.current_agent_index()
+    env.scenario_set_life(owner, 12)
+    env.scenario_refresh()
+    for pattern in (r"Cast .*Ember Island", "mode 1", r"Target P\d+ \(Cecil"):
+        decision = capture_text_decision(env)
+        action = next(a for a in decision.actions if re.search(pattern, a.description))
+        submit_response(env, decision, action.reference)
+    original = re.search(r"Target (P\d+)", action.description)
+    assert original is not None
+    # Next turn the token (not the original) attacks; its 4 damage drops the
+    # controller to 8, at most half of 20, so the token transforms.
+    for _ in range(120):
+        decision = capture_text_decision(env)
+        if "Cecil, Redeemed Paladin" in decision.text:
+            break
+        preferred = (
+            rf"Attack with (?!{original[1]}\b)P\d+",
+            "Do not attack",
+            "Pass priority",
+        )
+        action = next(
+            (
+                a
+                for pattern in preferred
+                for a in decision.actions
+                if re.search(pattern, a.description)
+            ),
+            decision.actions[0],
+        )
+        submit_response(env, decision, action.reference)
+    else:
+        pytest.fail("the token copy never transformed")
+
+    token = next(
+        line
+        for line in decision.text.splitlines()
+        if "(Cecil, Redeemed Paladin) [D" in line
+    )
+    assert "power/toughness 4/4" in token and "transformed 1" in token
+    assert "token yes" in token
+    assert "expired object" not in decision.text
+    for name in ("Cecil, Dark Knight", "Cecil, Redeemed Paladin"):
+        assert re.search(rf"^D\d+ — {re.escape(name)}\.", decision.text, re.M)
 
 
 def _card_line(text: str, alias: str) -> str:
@@ -888,6 +995,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "kicker_cost": "kicker mana value or the definition's kicker rule",
     },
     managym.Permanent: {
+        "mana_value": "the battlefield form’s mana value",
         "characteristics": "effective name, P/T, types, keywords, cost, ward and Rules",
         "object_id": "the permanent's exact object alias",
         "owner_id": "owner",
@@ -930,6 +1038,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "granted_firebending": "firebending",
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
+        "face_down": "face down",
         "ability_resolutions": "ability N resolved",
         "combat_damage_to_players": "seats dealt combat damage by the source this turn",
         "damaged_permanents": "dealt damage to each named permanent this turn",
@@ -966,6 +1075,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "counters": "stash counters",
     },
     managym.StackObject: {
+        "cast_from_graveyard": "cast from graveyard",
         "combat_damage_to_players": "seats dealt combat damage by the source this turn",
         "mana_spent": "mana spent to cast",
         "source_power": "source power in the ability description",
@@ -1168,7 +1278,9 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
-            "life_gains": 2, "life_gained": 5, "creatures_died": 1,
+            "life_gains": 2,
+            "life_gained": 5,
+            "creatures_died": 1,
             "life_lost": 3,
         },
         "restricted_mana": [
@@ -1186,7 +1298,9 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     ]
     assert "A creature died this turn." in decision.text
     assert serialize_observation(observation)["turn"]["creature_died_this_turn"]
-    turn_state = encode_observation(ObservationSpace(), observation)["player_turn_state"]
+    turn_state = encode_observation(ObservationSpace(), observation)[
+        "player_turn_state"
+    ]
     assert turn_state[0, column("player_turn_state", "creatures_died")] == 1
     counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
     assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
@@ -1207,8 +1321,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
         "their control; drew 1 card; gained life 2 times; gained 5 life; had 1 "
-            "creature they controlled die; lost 3 life; cast 2 spells."
-        in text
+        "creature they controlled die; lost 3 life; cast 2 spells." in text
     )
     assert "Restricted mana for anything but nonartifact spells: C 2." in text
 
@@ -1692,6 +1805,7 @@ def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
     }
     payload["frames"] = [
         frame | {"x": 6, "source_transforms": 1, "inherited_from": source},
+        frame | {"trigger_damage": 3},
         frame | {"kind": 6, "decision": 24, "can_decline": True},
         frame | {"kind": 6, "decision": 25, "mode": 2, "can_decline": True},
         frame | {"kind": 10, "decision": 7, "delayed_frequency": 1},
@@ -1701,6 +1815,7 @@ def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
     text = render_decision(_redigest(payload)).text
     for meaning in (
         "X = 6",
+        "triggering event dealt 3 damage",
         "transformed 2 times",
         "source inherits abilities from",
         "choose optional payment X",
@@ -2493,7 +2608,12 @@ def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
         caster = obs.agent if viewer == payer else obs.opponent
         assert caster.turn_history.mana_spent_casting == 5
         turn_state = encode_observation(ObservationSpace(), obs)["player_turn_state"]
-        assert turn_state[int(viewer != payer), column("player_turn_state", "mana_spent_casting")] == 5
+        assert (
+            turn_state[
+                int(viewer != payer), column("player_turn_state", "mana_spent_casting")
+            ]
+            == 5
+        )
         assert "spent 5 mana casting spells" in capture_text_decision(env).text
 
 
@@ -2524,7 +2644,10 @@ def test_second_draw_triggers_share_public_history_in_text_and_policy_input() ->
 
 
 def test_attack_batch_both_choosers_see_gain_amount_and_occurrences() -> None:
-    env = priority_root(("Koala-Sheep",), ("Ancestor Dragon", "Gray Ogre", "Midnight Snack") + ("Plains",) * 3)
+    env = priority_root(
+        ("Koala-Sheep",),
+        ("Ancestor Dragon", "Gray Ogre", "Midnight Snack") + ("Plains",) * 3,
+    )
     caster = env.current_agent_index()
     _choose(env, "Cast")
     viewers: set[int] = set()
@@ -2541,10 +2664,16 @@ def test_attack_batch_both_choosers_see_gain_amount_and_occurrences() -> None:
             viewers.add(viewer)
             if len(viewers) == 2:
                 return
-        action = next(action for action in decision.actions
-                      if action.description.startswith("Attack with") or action.description == "Pass priority")
+        action = next(
+            action
+            for action in decision.actions
+            if action.description.startswith("Attack with")
+            or action.description == "Pass priority"
+        )
         submit_response(env, decision, action.reference)
     pytest.fail(f"turn gain total reached viewers {viewers}")
+
+
 def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() -> None:
     arahbo = "Arahbo, the First Fang"
     hunter = "Helpful Hunter"

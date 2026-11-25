@@ -614,8 +614,8 @@ fn toph_put_onto_the_battlefield_earthbends_zero() {
     assert!(s.game().state.permanents[permanent]
         .as_ref()
         .unwrap()
-        .cast_spent
-        .is_empty());
+        .spell_entry
+        .is_none());
     assert!(s
         .game()
         .state
@@ -797,8 +797,8 @@ fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     assert!(s.game().state.permanents[returned]
         .as_ref()
         .unwrap()
-        .cast_spent
-        .is_empty());
+        .spell_entry
+        .is_none());
 }
 
 /// Until-end-of-combat mana keeps its class: Attendant mana in the combat
@@ -1040,8 +1040,8 @@ fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
         assert!(s.game().state.permanents[permanent]
             .as_ref()
             .unwrap()
-            .cast_spent
-            .is_empty());
+            .spell_entry
+            .is_none());
         assert!(s
             .game()
             .state

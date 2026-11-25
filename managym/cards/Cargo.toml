@@ -1,6 +1,6 @@
 [package]
 name = "managym-cards"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 license = "MIT"
 description = "Card set definitions for the managym engine, one module per printed set"
@@ -9,5 +9,5 @@ description = "Card set definitions for the managym engine, one module per print
 managym-state = { path = "../state" }
 
 [dev-dependencies]
-managym = { path = ".." }
+managym = { path = "..", features = ["fixtures"] }
 serde_json = "1"

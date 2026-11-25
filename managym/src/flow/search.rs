@@ -72,7 +72,7 @@ impl Game {
     /// Pending instructions retain exact objects. A search over a library
     /// also retains the entire order presented to its chooser.
     fn pending_library_objects(&self) -> BTreeSet<ObjectId> {
-        let mut fixed: BTreeSet<_> = self.pending_public_entries().into_iter().collect();
+        let mut fixed: BTreeSet<_> = self.pending_movers().into_iter().collect();
         fixed.extend(self.captured_bindings().map(|binding| binding.object));
         if let Some(suspended) = &self.state.suspended_decision {
             for part in suspended.continuation() {
@@ -127,6 +127,7 @@ impl Game {
     ///   refilled from their owner's unseen pool, foretold slots by its
     ///   first foretell-bearing cards, as possible-world materialization
     ///   fills them.
+    ///   Hidden manifests draw from the same pool after reserving foretold cards.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) -> Result<(), AgentError> {
@@ -182,12 +183,34 @@ impl Game {
                 self.shuffle_known_library(opponent, perspective, commitments, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                let reserved = self
+                let mut reserved = self
                     .reserve_library_facts(opponent, perspective, &mut residual, commitments)
                     .expect("known hand and library have distinct witnesses");
-                residual.extend(self.hidden_face_down_exile(opponent, perspective));
-                residual.sort_unstable_by_key(|object| object.slot());
+                if self
+                    .hidden_manifests(opponent, perspective)
+                    .next()
+                    .is_some()
+                {
+                    // A previous private deal can assign different printings to
+                    // the same slots. Equal pools must start the shuffle alike.
+                    residual.sort_unstable_by_key(|object| {
+                        (self.state[*object].retained_base().0, object.slot())
+                    });
+                } else {
+                    residual.sort_unstable_by_key(|object| object.slot());
+                }
                 residual.shuffle(&mut rng);
+                let manifests = self
+                    .draw_manifests(opponent, perspective, &mut residual, &mut rng)
+                    .expect("hidden slots draw from their own pool");
+                self.fill_manifest_slots(
+                    opponent,
+                    perspective,
+                    manifests,
+                    &mut residual,
+                    &mut known,
+                    &mut reserved,
+                );
                 assert!(
                     self.refill_hidden_exile_slots(opponent, perspective, &mut residual),
                     "face-down cards are in their own pool"
@@ -227,6 +250,7 @@ impl Game {
                             suspended.decision,
                             Decision::SelectCards { .. }
                                 | Decision::Scry { .. }
+                                | Decision::ManifestDread { .. }
                                 | Decision::Surveil { .. }
                                 | Decision::LookAndSelect { .. }
                                 | Decision::OrderLibrary { .. }
@@ -299,6 +323,8 @@ impl Game {
                         .contains(*object, ZoneType::Library, player)
             })
             .collect();
+        pool.extend(self.hidden_manifests(player, commitments.viewer));
+        pool.extend(self.hidden_face_down_exile(player, commitments.viewer));
         pool.sort_unstable_by_key(|object| object.slot());
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
@@ -317,7 +343,7 @@ impl Game {
             }
         });
         for object in pool {
-            if let Some(count) = counts.get_mut(&self.state[object].definition_id) {
+            if let Some(count) = counts.get_mut(&self.state[object].retained_base().0) {
                 if *count > 0 {
                     known.push(object);
                     *count -= 1;
@@ -338,8 +364,6 @@ impl Game {
     }
 
     pub(crate) fn refresh_priority_actions(&mut self, player: PlayerId) {
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
         self.publish_action_space(self.priority_action_space(player));
     }
 

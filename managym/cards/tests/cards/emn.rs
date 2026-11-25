@@ -2,6 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup},
+    inspect::observed,
     play::{cast, settle, target_opponent},
 };
 use managym::state::{card::CardType, game_object::Target};
@@ -20,12 +21,46 @@ fn imprisoned_in_the_moon_makes_a_colorless_land_that_taps_for_colorless() {
     assert!(view.colors.is_empty());
     assert!(view.subtypes.is_empty());
     assert!(view.triggered_abilities.is_empty());
+    let row = observed(&s, agent);
+    assert_eq!(
+        row.creature_types,
+        Some(vec![]),
+        "its creature types are gone"
+    );
+    assert!(row.temp_subtypes.is_empty());
     let [ability] = view.activated_abilities.as_slice() else {
         panic!("one granted ability: {:?}", view.activated_abilities);
     };
     assert_eq!(
         ability.mana_choices(),
         Some(vec![managym::state::mana::Mana::parse("C")])
+    );
+}
+
+/// A basic land keeps its land subtype, which still corresponds to its one
+/// card type (CR 205.1a, 205.3d), but loses its intrinsic `{T}: Add {G}`
+/// (CR 305.6) with its other abilities: it taps only for `{C}`.
+#[test]
+fn imprisoned_in_the_moon_keeps_a_forest_a_forest_that_taps_only_for_colorless() {
+    let mut s = five_color_setup(&["Imprisoned in the Moon"]);
+    let forest = s.force_permanent_on_battlefield(1, "Forest");
+    cast(&mut s, "Imprisoned in the Moon");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    let view = s.game().characteristics(forest);
+    assert_eq!(view.subtypes, vec!["Forest".to_string()]);
+    let row = observed(&s, forest);
+    assert_eq!(row.creature_types, None, "it had none to replace");
+    assert!(row.temp_subtypes.is_empty(), "Forest is printed");
+    let choices: Vec<_> = view
+        .activated_abilities
+        .iter()
+        .map(|ability| ability.mana_choices())
+        .collect();
+    assert_eq!(
+        choices,
+        vec![Some(vec![managym::state::mana::Mana::parse("C")])],
+        "only the granted colorless ability"
     );
 }
 

@@ -174,9 +174,15 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
-    // A play grant's condition reaches its fact program as rules text.
+    add(TokenKind::Variant, "CostComponent::Discard");
+    // A departed permanent's last known name (a token's, or one an effect
+    // set) and a play grant's condition reach fact programs as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
+        add(TokenKind::Text, &definition.name);
         let json = serde_json::to_value(definition).expect("serializable definition");
+        for name in set_names(&json) {
+            add(TokenKind::Text, &name);
+        }
         for condition in play_grant_conditions(&json) {
             add(TokenKind::Text, &condition_text("permanent", &condition));
         }
@@ -189,6 +195,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "ZoneSelection",
         "CounterProvenance",
         "CastChoices",
+        "CopyEffect",
         "EffectiveTrigger",
         "ManaSpent",
         "Help",
@@ -233,6 +240,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Shuffle",
                 "Bending",
                 "Created",
+                "ExileLinked",
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
@@ -309,6 +317,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "cost",
         "help",
         "waterbend",
+        "actor",
+        "grantee",
+        "source",
         "prepared",
         "face_down",
         "play_lands",
@@ -346,8 +357,8 @@ fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json
     out
 }
 
-/// The names a definition's `SetCharacteristics` give other permanents (a
-/// copy takes a definition's own name).
+/// The names a definition's `SetCharacteristics` or `Modification::SetName`
+/// give other permanents (a copy takes a definition's own name).
 fn set_names(value: &serde_json::Value) -> Vec<String> {
     objects(value)
         .into_iter()
@@ -406,6 +417,7 @@ mod tests {
             flow::{
                 event::GameEvent,
                 game::CastChoices,
+                payment::CostComponent,
                 proposed_event::{CounterProvenance, EventBinding, EventCause},
                 turn::Bending,
             },
@@ -456,6 +468,12 @@ mod tests {
                         kind: Bending::Earth,
                     },
                     EventBinding::Created { attacking: true },
+                    EventBinding::ExileLinked {
+                        actor: PlayerId(0),
+                        grantee: PlayerId(1),
+                        source: None,
+                        grant: crate::state::ability::LinkedGrant::FlashAnyMana,
+                    },
                 ],
                 pack,
             )
@@ -495,6 +513,7 @@ mod tests {
             tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
         }
         tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
+        tokens.extend(rules_tokens(&CostComponent::Discard, pack).unwrap());
         for (kind, value) in tokens {
             assert!(
                 matches!(kind, 4 | 5) || known.contains(&(kind, value)),

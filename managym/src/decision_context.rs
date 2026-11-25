@@ -14,8 +14,8 @@ use crate::{
         observation::spell_profile_code,
     },
     experience::{
-        DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
-        OfferSubjectView, PaidView, RequiredNullable, SubjectRef,
+        DecisionContextView, DecisionObjectView, DecisionTargetView, OfferSubjectView, PaidView,
+        RequiredNullable, SubjectRef,
     },
     flow::{
         action::cost_label,
@@ -33,23 +33,15 @@ use crate::{
 impl Game {
     fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         self.state.live(object)?;
-        let display_id = self
-            .state
-            .object_to_permanent
-            .get(object.slot())
-            .and_then(|permanent| *permanent)
-            .and_then(|permanent| self.state.permanents[permanent].as_ref())
-            .map_or(self.state[object].id.0, |permanent| permanent.id.0);
+        let identity = self.observed_identity(object)?;
+        let display_id = identity.reference.entity.0;
         Some(DecisionObjectView {
-            entity_id: object.slot() as u32,
+            entity_id: identity.visible_slot.unwrap_or(display_id),
             subject: SubjectRef::Object {
-                id: ObjectRenderId {
-                    entity: display_id,
-                    incarnation: object.generation(),
-                },
+                id: identity.reference.into(),
             },
             display_id,
-            label: self.state[object].name.clone(),
+            label: self.observed_object_name(object),
         })
     }
 
@@ -77,27 +69,12 @@ impl Game {
                 label: format!("Seat {}", player.0 + 1),
             }),
             Target::Permanent(permanent) => {
-                let permanent = self.state.permanents[*permanent].as_ref()?;
-                let mut view = self.decision_object(permanent.object)?;
-                view.display_id = permanent.id.0;
-                if let SubjectRef::Object { ref mut id } = view.subject {
-                    id.entity = permanent.id.0;
-                }
-                Some(view)
+                self.decision_object(self.permanent_object(*permanent)?)
             }
-            Target::StackSpell(object) => self.decision_object(*object),
+            Target::StackSpell(object) | Target::GraveyardCard(object) => {
+                self.decision_object(*object)
+            }
             Target::StackAbility(id) => self.decision_object(self.stack_ability_source(*id)?),
-            Target::GraveyardCard(reference) => {
-                let mut view = self.decision_object(*reference)?;
-                // Keep the announced incarnation even if the card later moved.
-                view.subject = SubjectRef::Object {
-                    id: ObjectRenderId {
-                        entity: view.display_id,
-                        incarnation: reference.generation(),
-                    },
-                };
-                Some(view)
-            }
         }
     }
 
@@ -157,6 +134,7 @@ impl Game {
                             | Action::CastSpell { .. }
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
+                            | Action::TurnFaceUp { .. }
                             | Action::Foretell { .. }
                             // The creature an attack declaration sends in acts;
                             // its decline names the same creature as a choice.
@@ -191,21 +169,14 @@ impl Game {
                 },
             );
         }
-        for (index, permanent) in self.state.permanents.iter().enumerate() {
-            if let Some(permanent) = permanent {
-                if let Some(reference) =
-                    self.permanent_object(crate::state::game_object::PermanentId(index))
-                {
-                    subjects.insert(
-                        format!("permanent:{index}"),
-                        SubjectRef::Object {
-                            id: ObjectRenderId {
-                                entity: permanent.id.0,
-                                incarnation: reference.generation(),
-                            },
-                        },
-                    );
-                }
+        for index in 0..self.state.permanents.len() {
+            if let Some(event) =
+                self.permanent_event_ref(crate::state::game_object::PermanentId(index))
+            {
+                subjects.insert(
+                    format!("permanent:{index}"),
+                    SubjectRef::Object { id: event.into() },
+                );
             }
         }
         for (index, _) in self.state.players.iter().enumerate() {
@@ -215,8 +186,15 @@ impl Game {
                 crate::state::zone::ZoneType::Graveyard,
             ] {
                 for object in self.state.zones.zone_objects(zone, player).iter() {
-                    if let Some(view) = self.decision_object(*object) {
-                        subjects.insert(format!("object:{}", object.slot()), view.subject);
+                    if let Some(identity) = self.observed_identity(*object) {
+                        if let Some(slot) = identity.visible_slot {
+                            subjects.insert(
+                                format!("object:{slot}"),
+                                SubjectRef::Object {
+                                    id: identity.reference.into(),
+                                },
+                            );
+                        }
                     }
                 }
             }
@@ -244,7 +222,7 @@ impl Game {
                     } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state.source_base(*object).1.name
+                        self.observed_object_name(*object)
                     )),
                     GameEvent::SpellCast {
                         object_id: object, ..
@@ -264,7 +242,7 @@ impl Game {
                     )),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state.source_base(*source_object).1.name
+                        self.observed_object_name(*source_object)
                     )),
                     _ => None,
                 }
@@ -519,7 +497,9 @@ impl Game {
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
                 Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
+                Decision::ManifestDread { .. } => ("manifest_dread", "Choose a card to manifest. Put the other into your graveyard."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::OrderMeldedCards { .. } => ("order_melded_cards", "Choose the relative order of the two cards leaving the battlefield."),
                 Decision::AssignCombatDamage { .. } => ("assign_combat_damage", "Assign combat damage from the attacker."),
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
@@ -553,7 +533,7 @@ impl Game {
             let choosing_mode = placement
                 .placing
                 .as_ref()
-                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+                .is_some_and(|trigger| self.pending_mode_rule(trigger).is_some());
             view.stage = if choosing_mode {
                 "trigger_mode"
             } else if placement.placing.is_some() {
@@ -563,7 +543,8 @@ impl Game {
             }
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
-                let description = self.pending_trigger_description(trigger)?;
+                let description =
+                    crate::agent::ability_description::pending_trigger_description(self, trigger)?;
                 if choosing_mode {
                     format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
                 } else {

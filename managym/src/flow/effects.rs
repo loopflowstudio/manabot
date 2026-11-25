@@ -57,7 +57,7 @@ impl Game {
     ) {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
-        let source: Option<CardDefId> = source.map(|object| self.state.source_base(object).0);
+        let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
@@ -83,7 +83,7 @@ impl Game {
             return;
         };
         let timestamp = self.state.id_gen_mut().next_id();
-        let source: Option<CardDefId> = source.map(|object_id| self.state.source_base(object_id).0);
+        let source = source.and_then(|object| self.observed_source_definition(object));
         let modifications = [
             Modification::BecomeCreature,
             Modification::SetBasePt {
@@ -111,9 +111,6 @@ impl Game {
             return;
         }
         self.state.effects.extend(records);
-        // Characteristics can change which mana abilities exist.
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
     }
 
     /// The `Affected` of a battlefield permanent's current incarnation.
@@ -394,7 +391,5 @@ impl Game {
             return;
         }
         self.state.effects.retain(|effect| !ends(effect));
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
     }
 }

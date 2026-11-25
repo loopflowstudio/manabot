@@ -18,6 +18,7 @@ use crate::{
             SuspendedResolution,
         },
         game::{Game, GameState},
+        proposed_event::EventBatch,
     },
     state::{
         ability::ObjectSelector,
@@ -31,7 +32,7 @@ use crate::{
 
 /// What a sampled world must honor for one viewer, read from the root once.
 pub(crate) struct HiddenCommitments {
-    viewer: PlayerId,
+    pub(super) viewer: PlayerId,
     /// Exact objects no sampler may exchange for a same-definition copy:
     /// prospective public entrants, captures this viewer knows and library
     /// cards it inspects. Sorted and deduplicated.
@@ -59,13 +60,13 @@ struct InspectionSlot {
     definition: Option<CardDefId>,
 }
 
-/// One name allocation to the hidden face-down slots, foretold (`counts`) and
-/// otherwise (`face_down`), with its ordered physical-copy count. Retained
+/// One name allocation to the hidden non-hand slots, foretold exile and
+/// face-down manifests, and its ordered physical-copy count. Retained
 /// selections condition this measure by feasibility, not by the number of
 /// ways a player could have chosen the private subset.
-struct ForetoldAllocation {
-    counts: BTreeMap<String, u32>,
-    face_down: BTreeMap<String, u32>,
+struct HiddenAllocation {
+    foretold: BTreeMap<String, u32>,
+    unrestricted: BTreeMap<String, u32>,
     ways: u128,
 }
 
@@ -74,6 +75,8 @@ fn hidden_from(game: &Game, source: &ZoneSelection, viewer: PlayerId) -> bool {
         && !game.shares_information(viewer, source.owner)
 }
 
+/// A hidden slot is judged by the printing its card retains, so a face-down
+/// manifest standing for a name in the pool answers as that name.
 fn matches_slot(
     game: &Game,
     source: &ZoneSelection,
@@ -83,7 +86,7 @@ fn matches_slot(
 ) -> bool {
     source.owner == owner
         && source.zone == zone
-        && game.object_matches_predicate(object, &source.predicate)
+        && game.printing_matches_predicate(object, &source.predicate)
 }
 
 impl HiddenCommitments {
@@ -139,6 +142,7 @@ fn unseen_objects(
         .filter(|object| !pinned_library.contains(object))
         .collect();
     objects.extend(game.hidden_face_down_exile(owner, viewer));
+    objects.extend(game.hidden_manifests(owner, viewer));
     objects
 }
 
@@ -195,6 +199,107 @@ impl GameState {
 }
 
 impl Game {
+    pub(super) fn hidden_manifests(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+    ) -> impl Iterator<Item = ObjectId> + '_ {
+        (0..self.state.players.len()).flat_map(move |seat| {
+            self.iter_battlefield_including_phased_out(PlayerId(seat))
+                .filter_map(move |id| {
+                    let permanent = self.state.permanents[id].as_ref()?;
+                    let object = permanent.object;
+                    (self.state[object].is_face_down()
+                        && self.state[object].owner == owner
+                        && self
+                            .observed_permanent_definition(viewer, permanent)
+                            .is_none())
+                    .then_some(object)
+                })
+        })
+    }
+
+    /// Draw the cards whose printings back `owner`'s hidden manifests from
+    /// the shuffled deal `pool`, removing them from it. The first foretell
+    /// cards that the exile refill will take are set aside, then the
+    /// manifests are a uniform draw from the rest: taking the rest's first
+    /// cards would favor non-foretell cards, which precede the set-aside ones.
+    /// `None` when too few cards remain.
+    pub(crate) fn draw_manifests(
+        &self,
+        owner: PlayerId,
+        viewer: PlayerId,
+        pool: &mut Vec<ObjectId>,
+        rng: &mut ChaCha8Rng,
+    ) -> Option<Vec<ObjectId>> {
+        let count = self.hidden_manifests(owner, viewer).count();
+        // Without manifests the deal consumes no rng draw here, so manifest-free
+        // worlds keep their seeded deals.
+        if count == 0 {
+            return Some(Vec::new());
+        }
+        let mut foretold = self.hidden_face_down_counts(owner, viewer).0 as usize;
+        let rest: Vec<_> = pool
+            .iter()
+            .copied()
+            .filter(|object| {
+                let set_aside =
+                    foretold > 0 && self.state[*object].retained_base().1.foretell().is_some();
+                foretold -= usize::from(set_aside);
+                !set_aside
+            })
+            .collect();
+        if foretold > 0 || rest.len() < count {
+            return None;
+        }
+        let drawn: Vec<_> = rest.choose_multiple(rng, count).copied().collect();
+        pool.retain(|object| !drawn.contains(object));
+        Some(drawn)
+    }
+
+    /// Back `owner`'s hidden battlefield slots with the printings of `chosen`,
+    /// one per slot in order, already removed from the deal. Only the backing
+    /// changes underneath a target.
+    pub(crate) fn fill_manifest_slots(
+        &mut self,
+        owner: PlayerId,
+        viewer: PlayerId,
+        chosen: Vec<ObjectId>,
+        pool: &mut [ObjectId],
+        hand: &mut [ObjectId],
+        reserved: &mut [(usize, ObjectId)],
+    ) {
+        let slots: Vec<_> = self.hidden_manifests(owner, viewer).collect();
+        assert_eq!(chosen.len(), slots.len(), "one printing per hidden slot");
+
+        // Complete the permutation: displaced printings go into the vacated
+        // hidden slots. Every reference in the pending deal follows its printing.
+        let displaced = slots.iter().filter(|slot| !chosen.contains(slot)).copied();
+        let vacated = chosen.iter().filter(|slot| !slots.contains(slot)).copied();
+        let mapping: BTreeMap<_, _> = displaced.zip(vacated).collect();
+        let assignments: Vec<_> = chosen
+            .iter()
+            .zip(&slots)
+            .chain(mapping.iter())
+            .filter(|(from, to)| from != to)
+            .map(|(from, to)| {
+                let (id, row) = self.state[*from].retained_definition();
+                (*to, id, row.clone())
+            })
+            .collect();
+        for (to, id, row) in assignments {
+            let card = self.state.card_of(to).expect("sampled physical card");
+            self.state.cards.assign_printing(card, id);
+            self.state.objects[to.slot()].assign_hidden_printing(id, row);
+        }
+        rebind(
+            pool.iter_mut()
+                .chain(hand)
+                .chain(reserved.iter_mut().map(|(_, o)| o)),
+            &mapping,
+        );
+    }
+
     /// Capture current membership once. Re-capturing Remembered preserves its
     /// original knowledge, while Moved starts from the new incarnation/zone.
     pub(crate) fn capture_bindings(
@@ -309,7 +414,7 @@ impl Game {
         }
         inspection
             .definition
-            .is_none_or(|definition| self.state[object].definition_id == definition)
+            .is_none_or(|definition| self.state[object].retained_base().0 == definition)
     }
 
     /// Every retained capture: trigger occurrences first, then the frames of
@@ -330,7 +435,21 @@ impl Game {
     /// Exact objects already known to this viewer must not be exchanged for a
     /// same-definition copy. Departed incarnations impose no current-zone slot.
     pub(crate) fn pinned_objects(&self, viewer: PlayerId) -> Vec<ObjectId> {
-        let mut pinned = self.pending_public_entries();
+        // A face-down entry's controller may look at it (CR 708.5).
+        let mut pinned: Vec<_> = self
+            .pending_batches()
+            .flat_map(EventBatch::pending_movers)
+            .filter(|(object, to, entry)| {
+                *to == ZoneType::Battlefield
+                    && self.state.live(*object).is_some()
+                    && (!entry.is_face_down()
+                        || self.shares_information(
+                            viewer,
+                            entry.controller.unwrap_or(self.state[*object].owner),
+                        ))
+            })
+            .map(|(object, ..)| object)
+            .collect();
         pinned.extend(
             self.captured_bindings()
                 .filter(|binding| {
@@ -361,28 +480,47 @@ impl Game {
     /// `owner`'s cards that `viewer` cannot see: the library, face-down
     /// exile hidden from `viewer`, and for an opponent also the hand. For an opponent
     /// this is exactly the possible-world pool, including any publicly known
-    /// hand cards. Pinned library cards are excluded; they never move.
+    /// hand cards. Pinned library cards stay in place. Read retained printings for face-down objects.
     pub fn unseen_objects(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
         unseen_objects(self, owner, viewer, &self.pinned_objects(viewer))
     }
 
-    /// Prospective battlefield entries are public even while their move awaits
-    /// replacement choices. Neither sampler may exchange their exact objects.
+    /// The event batches of the suspended continuation, outermost first.
+    fn pending_batches(&self) -> impl Iterator<Item = &EventBatch> {
+        self.state
+            .suspended_decision
+            .iter()
+            .flat_map(|suspended| suspended.continuation())
+            .filter_map(|part| match part {
+                ResolutionRef::Frame(frame) => frame.batch.as_ref(),
+                ResolutionRef::Decision(_) => None,
+            })
+    }
+
+    /// Prospective face-up battlefield entries are public even while their
+    /// move awaits replacement choices. Neither sampler may exchange their
+    /// exact objects.
     pub(crate) fn pending_public_entries(&self) -> Vec<ObjectId> {
-        let mut entries = Vec::new();
-        if let Some(suspended) = &self.state.suspended_decision {
-            for part in suspended.continuation() {
-                if let ResolutionRef::Frame(frame) = part {
-                    if let Some(batch) = &frame.batch {
-                        batch.public_entries(&mut entries);
-                    }
-                }
-            }
-        }
-        entries.retain(|object| self.state.live(*object).is_some());
-        entries.sort_unstable();
-        entries.dedup();
-        entries
+        let entries = self.pending_batches().flat_map(EventBatch::public_entries);
+        self.live_sorted(entries)
+    }
+
+    /// Every object a pending move holds, hidden or not: the authoritative
+    /// game must keep each in place until its batch commits.
+    pub(crate) fn pending_movers(&self) -> Vec<ObjectId> {
+        let movers = self
+            .pending_batches()
+            .flat_map(|batch| batch.pending_movers().map(|(object, ..)| object));
+        self.live_sorted(movers)
+    }
+
+    fn live_sorted(&self, objects: impl Iterator<Item = ObjectId>) -> Vec<ObjectId> {
+        let mut objects: Vec<_> = objects
+            .filter(|object| self.state.live(*object).is_some())
+            .collect();
+        objects.sort_unstable();
+        objects.dedup();
+        objects
     }
 
     /// Read every retained commitment for `viewer` from this root. Slots are
@@ -507,33 +645,36 @@ impl Game {
         }
     }
 
-    /// Exact ordered foretold fills that leave the selected subsets realizable.
-    /// Unlike a feasibility-only filter, this removes the mass of impossible
-    /// foretold assignments within an otherwise compatible hand-count world.
-    pub(crate) fn selection_foretold_weight(
+    /// Exact ordered foretold and manifest fills that leave the selected
+    /// subsets realizable. Unlike a feasibility-only filter, this removes the
+    /// mass of impossible hidden-slot assignments within an otherwise
+    /// compatible hand-count world. With manifests the measure also counts
+    /// their ordered fills, a factor shared by every world of one space.
+    pub(crate) fn selection_hidden_weight(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
     ) -> u128 {
-        self.selection_foretold_allocations(commitments, hand)
+        self.selection_hidden_allocations(commitments, hand)
             .iter()
             .map(|allocation| allocation.ways)
             .sum()
     }
 
-    /// Order one compatible foretold fill before the remaining shuffled pool.
-    /// The existing slot mover still owns grants and exact exile membership.
-    pub(crate) fn prepare_selection_foretell(
+    /// Draw a compatible ordered fill for hidden exile slots and manifests.
+    /// The pool starts with the assigned exile cards, foretold first. The
+    /// returned manifest cards are in battlefield slot order.
+    pub(crate) fn prepare_selection_hidden_slots(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
         pool: &mut Vec<ObjectId>,
         rng: &mut ChaCha8Rng,
-    ) -> bool {
-        let allocations = self.selection_foretold_allocations(commitments, hand);
+    ) -> Option<Vec<ObjectId>> {
+        let allocations = self.selection_hidden_allocations(commitments, hand);
         let total: u128 = allocations.iter().map(|allocation| allocation.ways).sum();
         if total == 0 {
-            return false;
+            return None;
         }
         let mut draw = rng.gen_range(0..total);
         let allocation = allocations
@@ -547,36 +688,43 @@ impl Game {
                 }
             })
             .expect("draw is within the compatible measure");
-        // Foretold picks lead, then the other face-down picks, so the slot
-        // refill takes exactly this allocation from the front of the pool.
-        let mut chosen = Vec::new();
-        for mut counts in [allocation.counts, allocation.face_down] {
-            let mut picked = Vec::new();
+        // The pool is shuffled, so each name's first copies are a uniform
+        // choice of its physical cards.
+        let mut take = |mut counts: BTreeMap<String, u32>, pool: &mut Vec<ObjectId>| {
+            let mut chosen = Vec::new();
             pool.retain(|object| {
-                let Some(count) = counts.get_mut(&self.state[*object].name) else {
+                let Some(count) = counts.get_mut(&self.state[*object].retained_base().1.name)
+                else {
                     return true;
                 };
                 if *count == 0 {
                     return true;
                 }
                 *count -= 1;
-                picked.push(*object);
+                chosen.push(*object);
                 false
             });
             debug_assert!(counts.values().all(|count| *count == 0));
-            picked.shuffle(rng);
-            chosen.append(&mut picked);
-        }
-        chosen.append(pool);
-        *pool = chosen;
-        true
+            chosen.shuffle(rng);
+            chosen
+        };
+        let mut foretold = take(allocation.foretold, pool);
+        let unrestricted = take(allocation.unrestricted, pool);
+        let manifest_count = self
+            .hidden_manifests(PlayerId(1 - commitments.viewer.0), commitments.viewer)
+            .count();
+        let (manifests, exiled) = unrestricted.split_at(manifest_count);
+        foretold.extend_from_slice(exiled);
+        foretold.append(pool);
+        *pool = foretold;
+        Some(manifests.to_vec())
     }
 
-    fn selection_foretold_allocations(
+    fn selection_hidden_allocations(
         &self,
         commitments: &HiddenCommitments,
         hand: &BTreeMap<String, u32>,
-    ) -> Vec<ForetoldAllocation> {
+    ) -> Vec<HiddenAllocation> {
         let owner = PlayerId(1 - commitments.viewer.0);
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
         let mut unseen = commitments.unseen_objects(self, owner);
@@ -588,7 +736,7 @@ impl Game {
         };
         let inspections = self.inspection_slots(commitments.viewer);
         for object in unseen {
-            pool.entry(self.state[object].name.clone())
+            pool.entry(self.state[object].retained_base().1.name.clone())
                 .or_default()
                 .push(object);
         }
@@ -600,7 +748,13 @@ impl Game {
         }
         let bearers: Vec<_> = pool
             .iter()
-            .filter(|(_, objects)| self.state[objects[0]].foretell().is_some())
+            .filter(|(_, objects)| {
+                self.state[objects[0]]
+                    .retained_base()
+                    .1
+                    .foretell()
+                    .is_some()
+            })
             .map(|(name, objects)| {
                 (
                     name.clone(),
@@ -608,49 +762,51 @@ impl Game {
                 )
             })
             .collect();
-        let (foretold, face_down) = self.hidden_face_down_counts(owner, commitments.viewer);
+        let (foretold, exiled) = self.hidden_face_down_counts(owner, commitments.viewer);
+        let manifests = self.hidden_manifests(owner, commitments.viewer).count() as u32;
         let mut foretold_fills = Vec::new();
-        enumerate_foretold(
+        enumerate_names(
             &bearers,
             foretold,
             1,
             &mut BTreeMap::new(),
             &mut foretold_fills,
         );
+        // Other hidden exile slots and manifests take any remaining printing.
         let mut allocations = Vec::new();
-        for fill in foretold_fills {
-            let rest: Vec<_> = pool
+        for (foretold, ways) in foretold_fills {
+            let residual: Vec<_> = pool
                 .iter()
                 .map(|(name, objects)| {
-                    let taken = hand.get(name).copied().unwrap_or(0)
-                        + fill.counts.get(name).copied().unwrap_or(0);
-                    (name.clone(), objects.len() as u32 - taken)
+                    let used = hand.get(name).copied().unwrap_or(0)
+                        + foretold.get(name).copied().unwrap_or(0);
+                    (name.clone(), objects.len() as u32 - used)
                 })
                 .collect();
-            let mut face_down_fills = Vec::new();
-            enumerate_foretold(
-                &rest,
-                face_down,
-                fill.ways,
+            let mut unrestricted_fills = Vec::new();
+            enumerate_names(
+                &residual,
+                exiled + manifests,
+                ways,
                 &mut BTreeMap::new(),
-                &mut face_down_fills,
+                &mut unrestricted_fills,
             );
-            allocations.extend(face_down_fills.into_iter().map(|other| ForetoldAllocation {
-                counts: fill.counts.clone(),
-                face_down: other.counts,
-                ways: other.ways,
+            allocations.extend(unrestricted_fills.into_iter().map(|(unrestricted, ways)| {
+                HiddenAllocation {
+                    foretold: foretold.clone(),
+                    unrestricted,
+                    ways,
+                }
             }));
         }
-        let orders: u128 = (1..=foretold)
-            .chain(1..=face_down)
-            .map(u128::from)
-            .product();
+        let factorial = |n: u32| (1..=n).map(u128::from).product::<u128>();
+        let orders = factorial(foretold) * factorial(exiled + manifests);
         allocations.retain_mut(|allocation| {
             let mut slots = Vec::new();
             for (name, objects) in &pool {
                 let in_hand = hand.get(name).copied().unwrap_or(0) as usize;
-                let exiled = (allocation.counts.get(name).copied().unwrap_or(0)
-                    + allocation.face_down.get(name).copied().unwrap_or(0))
+                let hidden_fill = (allocation.foretold.get(name).copied().unwrap_or(0)
+                    + allocation.unrestricted.get(name).copied().unwrap_or(0))
                     as usize;
                 let pinned_hand = objects
                     .iter()
@@ -659,7 +815,7 @@ impl Game {
                             && commitments.pins(**object)
                     })
                     .count();
-                for index in pinned_hand..objects.len() - exiled {
+                for index in pinned_hand..objects.len() - hidden_fill {
                     slots.push((
                         if index < in_hand {
                             ZoneType::Hand
@@ -711,7 +867,7 @@ impl Game {
                     .enumerate()
                     .filter(|(_, (zone, object, _))| {
                         source.zone == *zone
-                            && self.object_matches_predicate(*object, &source.predicate)
+                            && self.printing_matches_predicate(*object, &source.predicate)
                     })
                     .map(|(index, _)| index)
                     .collect();
@@ -887,7 +1043,9 @@ impl Game {
                 rebind(looked.iter_mut(), &rebinding.objects);
                 rebind(graveyard.iter_mut(), &rebinding.objects);
             }
-            Decision::LookAndSelect { looked, .. } => rebind(looked.iter_mut(), &rebinding.objects),
+            Decision::ManifestDread { looked, .. } | Decision::LookAndSelect { looked, .. } => {
+                rebind(looked.iter_mut(), &rebinding.objects)
+            }
             Decision::OrderLibrary { object_ids, .. } => {
                 rebind(object_ids.iter_mut(), &rebinding.objects)
             }
@@ -972,22 +1130,19 @@ fn assign<T: Copy + Ord>(
     false
 }
 
-/// Enumerate name allocations, counting physical subsets without enumerating
-/// their permutations. Slot order contributes the factorial once, at the caller.
-fn enumerate_foretold(
+/// Enumerate name allocations of `remaining` slots, counting physical subsets
+/// without enumerating their permutations. Slot order contributes the
+/// factorial once, at the caller.
+fn enumerate_names(
     names: &[(String, u32)],
     remaining: u32,
     ways: u128,
     counts: &mut BTreeMap<String, u32>,
-    out: &mut Vec<ForetoldAllocation>,
+    out: &mut Vec<(BTreeMap<String, u32>, u128)>,
 ) {
     let Some(((name, available), rest)) = names.split_first() else {
         if remaining == 0 {
-            out.push(ForetoldAllocation {
-                counts: counts.clone(),
-                face_down: BTreeMap::new(),
-                ways,
-            });
+            out.push((counts.clone(), ways));
         }
         return;
     };
@@ -995,7 +1150,7 @@ fn enumerate_foretold(
         if count > 0 {
             counts.insert(name.clone(), count);
         }
-        enumerate_foretold(
+        enumerate_names(
             rest,
             remaining - count,
             ways * crate::possible_worlds::binom(*available, count),

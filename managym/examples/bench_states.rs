@@ -44,6 +44,7 @@ const STATES: &[(&str, &str)] = &[
     ("joraga-blocks", "Joraga Invocation on a mixed flying and ground attack against reach and ground blockers"),
     ("quality-targets", "Eight targeting spells against a battlefield of Knights, Elenda and ordinary creatures"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
+    ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
     ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
@@ -147,6 +148,8 @@ struct Seat {
     hand: Vec<String>,
     graveyard: Vec<String>,
     tokens: Vec<String>,
+    /// Library cards manifested face down after the named permanents enter.
+    manifests: usize,
     /// Moved from hand to the battlefield through the zone move, so entry
     /// replacements ("enters prepared") apply.
     entered: Vec<String>,
@@ -454,6 +457,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "diverse-statics"
         | "control-auras"
         | "attachments"
+        | "face-down"
         | "triggers"
         | "entry-cascade"
         | "zones"
@@ -499,6 +503,10 @@ fn recipe(name: &str, size: usize) -> Recipe {
                             .extend(std::iter::repeat_n("Pillar Launch".into(), size));
                         seat.graveyard
                             .extend(std::iter::repeat_n("Gray Ogre".into(), size));
+                    }
+                    "face-down" => {
+                        seat.add("Gray Ogre", size);
+                        seat.manifests = size;
                     }
                     _ => seat.add("Gray Ogre", size),
                 }
@@ -588,7 +596,7 @@ fn build(recipe: &Recipe) -> Env {
         }
         for name in &seat.graveyard {
             env.scenario_force_card_in_hand(i, name).unwrap();
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let card = *game
                 .state
                 .zones
@@ -602,7 +610,7 @@ fn build(recipe: &Recipe) -> Env {
         }
         for name in &seat.entered {
             env.scenario_force_card_in_hand(i, name).unwrap();
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let card = *game
                 .state
                 .zones
@@ -612,14 +620,26 @@ fn build(recipe: &Recipe) -> Env {
             game.move_object(card, ZoneType::Battlefield);
         }
         for token in &seat.tokens {
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let id = game.create_token(token, PlayerId(i), false).unwrap();
+            game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+        }
+        for _ in 0..seat.manifests {
+            let game = env.fixture_game_mut();
+            let top = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, PlayerId(i))
+                .last()
+                .expect("library card to manifest");
+            let manifested = game.manifest(top, PlayerId(i));
+            let id = game.lookup_current_permanent(manifested).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
     if matches!(recipe.state.as_str(), "attachments" | "control-auras") {
         let swap = recipe.state == "control-auras";
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         for i in 0..2 {
             let creatures: Vec<_> = game
                 .state
@@ -668,7 +688,7 @@ fn build(recipe: &Recipe) -> Env {
         }
     }
     if recipe.state == "names" {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let id = game
             .state
             .permanents
@@ -686,13 +706,13 @@ fn build(recipe: &Recipe) -> Env {
             .change_counters(CounterKind::Lore, 1);
     }
     if recipe.state == "herald-statics" {
-        env.benchmark_game_mut().state.players[0].life = 0;
+        env.fixture_game_mut().state.players[0].life = 0;
     }
     env.scenario_refresh().unwrap();
     env
 }
 fn actions(env: &mut Env) -> Vec<Action> {
-    env.benchmark_game_mut()
+    env.fixture_game_mut()
         .current_action_space
         .as_ref()
         .unwrap()
@@ -751,7 +771,7 @@ fn float_everything(root: &Env) -> Env {
     for _ in 0..256 {
         let index = if env.action_space_kind() == Some(ActionSpaceKind::Priority) {
             let offered = actions(&mut env);
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let source = offered.iter().position(|a| match a {
                 Action::TapForMana { .. } => true,
                 Action::ActivateAbility {
@@ -785,7 +805,7 @@ fn granted(root: &Env) -> Env {
     env.step(index as i64).unwrap();
     for _ in 0..16 {
         if env.action_space_kind() == Some(ActionSpaceKind::Priority)
-            && env.benchmark_game_mut().state.stack_objects.is_empty()
+            && env.fixture_game_mut().state.stack_objects.is_empty()
         {
             return env;
         }
@@ -826,7 +846,7 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
                 .position(|a| matches!(a, Action::PassPriority { .. }))
         };
         env.step(index? as i64).unwrap();
-        if env.is_game_over() || env.benchmark_game_mut().state.turn.turn_number > 1 {
+        if env.is_game_over() || env.fixture_game_mut().state.turn.turn_number > 1 {
             return None;
         }
     }
@@ -872,14 +892,14 @@ fn damage(root: &Env) -> Option<Env> {
     if env.action_space_kind() != Some(ActionSpaceKind::Priority) {
         return None;
     }
-    if env.benchmark_game_mut().state.priority.consecutive_passes == 0 {
+    if env.fixture_game_mut().state.priority.consecutive_passes == 0 {
         let index = first_action(&mut env, "damage").unwrap();
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
         }
     }
-    (env.benchmark_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
+    (env.fixture_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
         .then_some(env)
 }
 
@@ -889,7 +909,7 @@ fn reach(root: &Env, label: &str) -> Env {
     use managym::flow::decision::Decision;
     let mut env = root.fork().unwrap();
     for _ in 0..256 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let decision = game.state.suspended_decision.as_ref().map(|p| &p.decision);
         let reached = match label {
             "name" => matches!(decision, Some(Decision::NameCard { .. })),
@@ -919,9 +939,9 @@ fn reach(root: &Env, label: &str) -> Env {
 /// Stop at the real response to a single stack object. In the Connoisseur
 /// position its first resolution must already have recorded the ordinal.
 fn before_resolution(mut env: Env, after_first: bool) -> Env {
-    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    let turn = env.fixture_game_mut().state.turn.turn_number;
     for _ in 0..32 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
         let ready = game.state.stack_objects.len() == 1
             && game.state.priority.consecutive_passes == 1
@@ -967,7 +987,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 let Action::CastSpell { object, .. } = action else {
                     continue;
                 };
-                let name = priority.benchmark_game_mut().state[*object].name.clone();
+                let name = priority.fixture_game_mut().state[*object].name.clone();
                 let mut cast = root.fork().unwrap();
                 cast.step(index as i64).unwrap();
                 if cast.action_space_kind() == Some(ActionSpaceKind::ChooseTarget) {
@@ -983,7 +1003,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
-                        env.benchmark_game_mut()
+                        env.fixture_game_mut()
                             .create_token("token.ally", PlayerId(0), false)
                             .unwrap();
                     }
@@ -1029,7 +1049,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     } {
         let mut entered = root.fork().unwrap();
         entered
-            .benchmark_game_mut()
+            .fixture_game_mut()
             .create_token(token, PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
@@ -1195,12 +1215,12 @@ fn run(
             // Cold characteristics attribution: a conservative state write
             // invalidates the cloned caches, without changing any value.
             if layer == "characteristics" {
-                let _ = &mut *env.benchmark_game_mut().state;
+                let _ = &mut *env.fixture_game_mut().state;
             }
             // Cold payment attribution: preparation already answered these
             // questions, and the fork carries their cached answers.
             if layer == "actions" {
-                benchmark_payments::clear_cache(env.benchmark_game_mut());
+                benchmark_payments::clear_cache(env.fixture_game_mut());
             }
             benchmark_layers::reset();
             benchmark_payments::reset();
@@ -1211,16 +1231,16 @@ fn run(
             let output = match layer {
                 "actions" => Output::Actions {
                     actions: if cast_targets {
-                        benchmark_layers::cast_targets(env.benchmark_game_mut())
+                        benchmark_layers::cast_targets(env.fixture_game_mut())
                     } else {
-                        benchmark_layers::actions(env.benchmark_game_mut(), PlayerId(actor))
+                        benchmark_layers::actions(env.fixture_game_mut(), PlayerId(actor))
                     },
                 },
                 "characteristics" => Output::Views {
-                    views: benchmark_layers::characteristics(env.benchmark_game_mut()),
+                    views: benchmark_layers::characteristics(env.fixture_game_mut()),
                 },
                 "triggers" => {
-                    let game = env.benchmark_game_mut();
+                    let game = env.fixture_game_mut();
                     // Feed one controlled entry event to the ordinary indexed
                     // matcher. On the trigger recipe every Ascension sees it.
                     let source = game

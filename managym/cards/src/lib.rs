@@ -49,6 +49,8 @@ mod emn;
 mod eoe;
 mod fdn;
 mod fin;
+pub use fin::ragnarok;
+mod dsk;
 mod fra;
 mod frf;
 mod fut;
@@ -92,6 +94,7 @@ mod mom;
 mod mor;
 mod mrd;
 mod msh;
+mod ncc;
 mod nec;
 mod ody;
 mod ogw;
@@ -211,6 +214,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     dmu::cards,
     dom::cards,
     drk::cards,
+    dsk::cards,
     dtk::cards,
     ecl::cards,
     eld::cards,
@@ -261,6 +265,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     mor::cards,
     mrd::cards,
     msh::cards,
+    ncc::cards,
     nec::cards,
     ody::cards,
     ogw::cards,

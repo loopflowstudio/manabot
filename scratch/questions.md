@@ -18,3 +18,7 @@
   blocker choices can form an illegal group under menace or competing requirements.
 - Protection supplies a `PreventAll` damage replacement now. Slice 8 can use the
   same transform. Numeric prevention remains meaningful for smaller shields.
+- The main sync keeps `face_down` at its published v11 column and appends the
+  branch's control and blocked columns. Source quality reads main's battlefield
+  LKI and exact graveyard arrivals. Academy opening fixtures use main's recorded
+  Commands replayed through the combined engine.

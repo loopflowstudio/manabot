@@ -8,6 +8,31 @@
 #[path = "../../tests/support/mod.rs"]
 mod support;
 
+use managym::{agent::env::GameSnapshot, state::game_object::ObjectId};
+use support::game::{deck, Scenario};
+
+// Constructed card positions use the `fixtures` access this crate enables.
+impl Scenario {
+    /// Capture this constructed decision for exact native forks.
+    pub fn snapshot(&self) -> GameSnapshot {
+        use managym::{state::player::PlayerConfig, Env};
+        let mut env = Env::new(1, false, false, false);
+        env.reset(
+            ["a", "b"]
+                .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))
+                .to_vec(),
+        )
+        .unwrap();
+        *env.fixture_game_mut() = self.game().clone();
+        env.snapshot().unwrap()
+    }
+
+    fn restore(&mut self, snapshot: &GameSnapshot) {
+        let mut env = snapshot.restore(Default::default()).unwrap();
+        *self.game_mut() = env.fixture_game_mut().clone();
+    }
+}
+
 #[path = "cards/aer.rs"]
 mod aer;
 #[path = "cards/afr.rs"]
@@ -68,6 +93,8 @@ mod dmu;
 mod dom;
 #[path = "cards/drk.rs"]
 mod drk;
+#[path = "cards/dsk.rs"]
+mod dsk;
 #[path = "cards/dtk.rs"]
 mod dtk;
 #[path = "cards/ecl.rs"]
@@ -80,6 +107,8 @@ mod emn;
 mod eoe;
 #[path = "cards/fdn.rs"]
 mod fdn;
+#[path = "cards/fin.rs"]
+mod fin;
 #[path = "cards/fra.rs"]
 mod fra;
 #[path = "cards/frf.rs"]
@@ -325,7 +354,7 @@ fn assert_creature_tokens(
         );
         let face = s.game().characteristics(id);
         assert_eq!(face.pt(), pt);
-        assert_eq!(face.creature_types, subtypes);
+        assert_eq!(face.creature_types.listed(), subtypes);
         assert_eq!(face.colors, Colors::from_iter(colors.iter().copied()));
         assert_eq!(face.keywords, Keywords::of(keywords));
     }
@@ -986,4 +1015,168 @@ fn assert_damage_exiles_creature_or_planeswalker(name: &str, damage: i32) {
         Some(ZoneType::Graveyard),
         "{name}: expired"
     );
+}
+
+/// Both Clerics share a graveyard and a competing restricted spend. Only
+/// their second legal target and their kicker price differ.
+fn check_kicked_return(name: &str, mana: &str, second_target: &str, excluded: &str) {
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        state::{
+            game_object::{PlayerId, Target},
+            mana::{Color, Mana, ManaRestriction},
+            zone::ZoneType,
+        },
+    };
+    use support::{
+        game::{five_color_unfunded_setup, move_card, move_from_library},
+        inspect::{offered_targets, permanent_of, top_spell, zone_of},
+        play::{
+            cast, cast_card, command, pass_until, resolve_top, settle, spend_colorless, spend_named,
+        },
+    };
+
+    let mut s = five_color_unfunded_setup(&[
+        name,
+        "Llanowar Elves",
+        "Sol Ring",
+        "Gray Ogre",
+        "Lightning Bolt",
+    ]);
+    let elves = move_from_library(&mut s, 0, "Llanowar Elves", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, second_target, ZoneType::Graveyard);
+    for excluded in ["Forest", "Lightning Bolt", excluded] {
+        move_from_library(&mut s, 0, excluded, ZoneType::Graveyard);
+    }
+    move_from_library(&mut s, 1, "Llanowar Elves", ZoneType::Graveyard);
+    let bolt = move_from_library(&mut s, 1, "Lightning Bolt", ZoneType::Hand);
+    s.set_player_mana_pool(1, "R");
+    s.set_player_mana_pool(0, mana);
+    s.game_mut().state.players[0].mana_pool.add(
+        &Mana::restricted_to(ManaRestriction::spell(["Cleric"]), [0, 0, 0, 0, 1, 0]),
+        None,
+    );
+
+    let card = cast(&mut s, name);
+    let kicker = s.snapshot();
+    command(&mut s, |a| matches!(a, Action::Decline { .. }));
+    spend_colorless(&mut s);
+    assert_eq!(top_spell(&s).spent.total(), 2);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(s.game().state.stack_objects.is_empty());
+
+    s.restore(&kicker);
+    command(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    spend_named(&mut s, |label| label.contains("{G}"));
+    spend_colorless(&mut s);
+    let spent = top_spell(&s).spent.clone();
+    assert_eq!(spent.total(), Mana::parse(mana).total());
+    assert_eq!(spent.amounts()[Color::Green as usize], 1);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let targets = offered_targets(&s);
+    assert_eq!(targets.len(), 2);
+    let source = permanent_of(&s, card).unwrap();
+    let entry = s.game().state.permanents[source]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .as_deref()
+        .unwrap();
+    assert!(entry.kicked);
+    assert_eq!(entry.payment.as_ref(), Some(&spent));
+    let chooser = Observation::for_player(s.game(), PlayerId(0));
+    assert!(chooser.continuation.iter().any(|frame| frame.kicked));
+    let targeting = s.snapshot();
+    for (chosen, stays) in [(elves, other), (other, elves)] {
+        s.restore(&targeting);
+        let target = Target::GraveyardCard(chosen);
+        assert!(targets.contains(&target));
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseTarget { target: t, .. } if *t == target),
+        );
+        s.pass_priority();
+        cast_card(&mut s, bolt);
+        assert!(s.choose_target(Target::Permanent(source)));
+        resolve_top(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&s, chosen), Some(ZoneType::Graveyard));
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = Observation::for_player(s.game(), viewer);
+            assert_eq!(obs.stack_objects.len(), 1);
+            assert!(obs.stack_objects[0].kicked);
+            assert!(obs.continuation[0].kicked);
+        }
+        settle(&mut s);
+        assert_eq!(zone_of(&s, chosen), Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, stays), Some(ZoneType::Graveyard));
+    }
+
+    // Blink the kicked incarnation while its original trigger waits.
+    s.restore(&targeting);
+    command(
+        &mut s,
+        |a| matches!(a, Action::ChooseTarget {target: Target::GraveyardCard(id), ..} if *id == elves),
+    );
+    let exile = move_card(&mut s, card, ZoneType::Exile);
+    let returned = move_card(&mut s, exile, ZoneType::Battlefield);
+    let id = permanent_of(&s, returned).unwrap();
+    assert!(s.game().state.permanents[id]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .is_none());
+    assert!(s.game().state.pending_triggers.is_empty());
+    settle(&mut s);
+    assert_eq!(zone_of(&s, elves), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, other), Some(ZoneType::Graveyard));
+}
+
+/// The objects in both graveyards after a mass return resolves, followed to
+/// their current appearances.
+struct GraveyardReturn {
+    momo: ObjectId,
+    sailor: ObjectId,
+    drake: ObjectId,
+    bolt: ObjectId,
+    their_sailor: ObjectId,
+}
+
+/// Cast `spell` over two graveyards: the caster's Momo, Spectral Sailor
+/// (mana value 1, flying), Wind Drake (mana value 3, flying) and Lightning
+/// Bolt, and the opponent's Spectral Sailor. Momo triggers once for each
+/// other flier entering under its controller's control together with it.
+fn return_from_two_graveyards(spell: &str) -> (Scenario, GraveyardReturn) {
+    use support::{
+        game::{five_color_setup, plant_in_graveyard},
+        inspect::now,
+        play::{cast, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&[
+        spell,
+        "Momo, Friendly Flier",
+        "Spectral Sailor",
+        "Wind Drake",
+        "Lightning Bolt",
+    ]);
+    let momo = plant_in_graveyard(&mut s, 0, "Momo, Friendly Flier");
+    let sailor = plant_in_graveyard(&mut s, 0, "Spectral Sailor");
+    let drake = plant_in_graveyard(&mut s, 0, "Wind Drake");
+    let bolt = plant_in_graveyard(&mut s, 0, "Lightning Bolt");
+    let their_sailor = plant_in_graveyard(&mut s, 1, "Spectral Sailor");
+    cast(&mut s, spell);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let moved = GraveyardReturn {
+        momo: now(&s, momo),
+        sailor: now(&s, sailor),
+        drake: now(&s, drake),
+        bolt: now(&s, bolt),
+        their_sailor: now(&s, their_sailor),
+    };
+    (s, moved)
 }

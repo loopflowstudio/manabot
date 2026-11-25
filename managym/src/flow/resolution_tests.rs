@@ -16,7 +16,7 @@ use crate::{
             TargetRequirement, TargetSpec,
         },
         card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
-        effect::{EffectDuration, Modification},
+        effect::{CopyException, EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         player::PlayerConfig,
@@ -110,6 +110,7 @@ fn stack(
                 source_object,
                 ability_index: 0,
                 targets,
+                attached: None,
                 target_req_indices: Vec::new(),
                 x: 0,
                 granted_by: None,
@@ -117,6 +118,8 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            source_face: Some(game.state[source_object].copiable_definition()),
+            kicked: false,
             triggering_amount: 0,
             program: false,
             remembered: Vec::new(),
@@ -696,6 +699,8 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        source_face: Some(game.state[source_object].copiable_definition()),
+        kicked: false,
         triggering_amount: 0,
         program: false,
         remembered: Vec::new(),
@@ -1293,7 +1298,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
     let viewer = PlayerId(0);
     let mut root = completed_private_capture(player);
     for trigger in &mut root.state.delayed_triggers {
-        trigger.effects = vec![Effect::SelectCards {
+        trigger.effects = crate::flow::trigger::DelayedEffects::new(vec![Effect::SelectCards {
             from: ObjectSelector::Remembered,
             predicate: CardPredicate::default(),
             min: 1,
@@ -1306,7 +1311,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                 },
                 Effect::exile(ObjectSelector::Selected),
             ],
-        }];
+        }]);
     }
     root.emit(GameEvent::StepStarted {
         step: StepKind::End,
@@ -3796,8 +3801,9 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         player,
         vec![
             Effect::CreateTokenCopy {
+                count: 1.into(),
                 of: ObjectSelector::This,
-                exceptions: vec![Modification::SetBasePt {
+                exceptions: vec![CopyException::SetBasePt {
                     power: Some(EffectValue::Fixed(4)),
                     toughness: Some(EffectValue::Fixed(5)),
                 }],
@@ -4066,7 +4072,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 }
                 "counter_cause" => {
                     frame.batch = Some(game.event_batch(
-                        EventBinding::None,
+                        crate::flow::proposed_event::EventBinding::None,
                         [ProposedEvent::CounterChange {
                             provenance: CounterProvenance::new(if choice == 0 {
                                 EventCause::Effect
@@ -5060,6 +5066,504 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
 
+/// CR 608.2h, 707.8a: a token copy of a departed creature uses the copiable
+/// values it last had. A front-face-up transforming card leaves no snapshot,
+/// yet its copy is a transforming token; a single-faced copy of that face
+/// (CR 712.9) leaves one that cannot transform.
+#[test]
+fn departed_copy_source_keeps_catalog_faces_only_on_a_transforming_card() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Cecil, Dark Knight".into(), 4),
+        ("Gray Ogre".into(), 4),
+        ("Mountain".into(), 32),
+    ]);
+    let token_after = |copy_cecil: bool| {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck.clone()),
+            ],
+            608_2027,
+            false,
+        );
+        game.keep_opening_hands();
+        let cecil = game
+            .scenario_force_battlefield(player, "Cecil, Dark Knight", true)
+            .unwrap();
+        let mut source = cecil;
+        if copy_cecil {
+            source = game
+                .scenario_force_battlefield(player, "Gray Ogre", true)
+                .unwrap();
+            let template = game.state[game.permanent_object(cecil).unwrap()].clone();
+            let object = game.permanent_object(source).unwrap();
+            game.state[object].become_copy_of(&template, &[]);
+        }
+        let object = game.permanent_object(source).unwrap();
+        let mut frame = EffectFrame::new(
+            player,
+            vec![Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::This,
+                exceptions: Vec::new(),
+            }],
+        );
+        frame.bind_source(Some(object), Some(object));
+        frame.completion = FrameCompletion::Continue;
+        game.move_object(object, ZoneType::Graveyard);
+        game.run_frame(frame);
+        let (token, _) = game
+            .state
+            .latest_objects()
+            .find(|(_, object)| object.kind() == ObjectKind::Token)
+            .expect("token copy");
+        let token = game.state.permanent_of(game.state.now(token)).unwrap();
+        assert_eq!(game.characteristics(token).name, "Cecil, Dark Knight");
+        game.transform_permanent(token);
+        game.characteristics(token).name.clone()
+    };
+    assert_eq!(token_after(false), "Cecil, Redeemed Paladin");
+    assert_eq!(token_after(true), "Cecil, Dark Knight");
+}
+
+/// A root whose `player` has moved every card to the graveyard, so tests can
+/// place exactly the hidden cards they need.
+fn emptied_root(player: PlayerId) -> (Game, Vec<ObjectId>) {
+    let (mut root, _, _) = fixture(player);
+    let objects: Vec<_> = root
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.owner == player)
+        .map(|(id, _)| id)
+        .collect();
+    for object in &objects {
+        root.move_object(*object, ZoneType::Graveyard);
+    }
+    let objects = objects
+        .iter()
+        .map(|object| root.state.now(*object))
+        .collect();
+    (root, objects)
+}
+
+fn named(root: &Game, objects: &[ObjectId], name: &str, count: usize) -> Vec<ObjectId> {
+    objects
+        .iter()
+        .copied()
+        .filter(|object| root.state[*object].name == name)
+        .take(count)
+        .collect()
+}
+
+/// The printing behind `owner`'s one face-down manifest.
+fn manifest_printing(game: &Game, owner: PlayerId) -> String {
+    let mut printings = game
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .filter_map(|permanent| {
+            let object = &game.state[permanent.object];
+            (object.is_face_down() && object.owner == owner)
+                .then(|| object.retained_base().1.name.clone())
+        });
+    let printing = printings.next().expect("one manifest");
+    assert!(printings.next().is_none());
+    printing
+}
+
+/// A pending library selection holds one creature and still needs another,
+/// so both of the opponent's creatures must stay in their library. The space
+/// counts only manifest fills that leave them there, and every sampler
+/// realizes such a world on its first draw.
+#[test]
+fn hidden_selection_manifest_fill_leaves_the_committed_library_cards() {
+    use crate::{
+        flow::decision::{Decision, EffectFrame},
+        possible_worlds::{MaterializeMode, PossibleWorldSpace},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, objects) = emptied_root(player);
+    let ogres = named(&root, &objects, "Gray Ogre", 2);
+    let mountains = named(&root, &objects, "Mountain", 2);
+    for object in ogres.iter().chain(&mountains) {
+        root.move_object(*object, ZoneType::Library);
+    }
+    root.state.players[player.0].known_library.forget_order();
+    let library = root.state.now(mountains[0]);
+    root.manifest(library, player);
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+            min: 2,
+            max: EffectValue::Fixed(2),
+            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            if_declined: vec![],
+        }],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let ogre = root.state.now(ogres[0]);
+    checked_command(
+        &mut root,
+        Action::SelectCard {
+            player,
+            object: ogre,
+        },
+    );
+
+    let space = PossibleWorldSpace::for_viewer(&root, viewer);
+    assert_eq!(space.worlds().len(), 1);
+    // Either Mountain may back the manifest; neither Ogre can.
+    assert_eq!(space.total_weight(), 2);
+    for seed in 0..8 {
+        let exact = space
+            .materialize_index(&root, 0, seed, MaterializeMode::RefreshOpponentCommitment)
+            .expect("a positive-weight world materializes on the first draw");
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, seed).unwrap();
+        for branch in [exact, sampled] {
+            assert_eq!(manifest_printing(&branch, player), "Mountain");
+            let Decision::SelectCards { selected, .. } =
+                &branch.state.suspended_decision.as_ref().unwrap().decision
+            else {
+                panic!("selection remains pending");
+            };
+            assert_eq!(selected.len(), 1);
+            assert_eq!(branch.state[selected[0]].name, "Gray Ogre");
+            assert!(branch
+                .state
+                .zones
+                .contains(selected[0], ZoneType::Library, player));
+        }
+    }
+}
+
+/// `player` holds `library` (in hidden order) after manifesting its sole
+/// Forest, then selects two cards of `card_type` from it and has picked one
+/// `picked` so far.
+fn sole_forest_manifest_selecting(card_type: CardType, library: &[&str], picked: &str) -> Game {
+    use crate::flow::decision::EffectFrame;
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Gray Ogre".into(), 12),
+        ("Forest".into(), 4),
+        ("Mountain".into(), 24),
+    ]);
+    let mut root = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        608_2028,
+        false,
+    );
+    root.keep_opening_hands();
+    let objects: Vec<_> = root
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.owner == player)
+        .map(|(id, _)| id)
+        .collect();
+    let objects: Vec<_> = objects
+        .into_iter()
+        .map(|object| root.move_object(object, ZoneType::Graveyard))
+        .collect();
+    let mut taken = Vec::new();
+    for name in library.iter().copied().chain(["Forest"]) {
+        let object = objects
+            .iter()
+            .copied()
+            .find(|object| root.state[*object].name == name && !taken.contains(object))
+            .unwrap();
+        taken.push(object);
+    }
+    let moved: Vec<_> = taken
+        .iter()
+        .map(|object| root.move_object(*object, ZoneType::Library))
+        .collect();
+    root.manifest(*moved.last().unwrap(), player);
+    root.state.players[player.0].known_library.forget_order();
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate: CardPredicate {
+                card_type: Some(card_type),
+                ..Default::default()
+            },
+            min: 2,
+            max: EffectValue::Fixed(2),
+            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            if_declined: vec![],
+        }],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let object = moved[library.iter().position(|name| *name == picked).unwrap()];
+    checked_command(&mut root, Action::SelectCard { player, object });
+    root
+}
+
+/// Every printing that backs the manifest in some sampled branch. Each draw
+/// must realize its world on the first attempt.
+fn sampled_manifest_printings(root: &Game) -> std::collections::BTreeSet<String> {
+    use crate::possible_worlds::{MaterializeMode, PossibleWorldSpace};
+    let viewer = PlayerId(1);
+    let space = PossibleWorldSpace::for_viewer(root, viewer);
+    let mut printings = std::collections::BTreeSet::new();
+    for seed in 0..24 {
+        let exact = space
+            .materialize_index(root, 0, seed, MaterializeMode::RefreshOpponentCommitment)
+            .expect("a positive-weight world materializes on the first draw");
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, seed).unwrap();
+        for branch in [exact, sampled] {
+            printings.insert(manifest_printing(&branch, PlayerId(0)));
+        }
+    }
+    printings
+}
+
+/// A hidden slot is judged by its card's printing, not by the face-down 2/2
+/// the sole Forest currently is: an Ogre cannot back the manifest while the
+/// selection still needs a second library creature.
+#[test]
+fn a_manifested_forest_slot_is_not_a_library_creature() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    let root = sole_forest_manifest_selecting(
+        CardType::Creature,
+        &["Gray Ogre", "Gray Ogre", "Mountain"],
+        "Gray Ogre",
+    );
+    // The Forest or the Mountain backs the manifest; an Ogre fill would
+    // leave only the Forest and Mountain beside the picked Ogre.
+    let space = PossibleWorldSpace::for_viewer(&root, PlayerId(1));
+    assert_eq!(space.total_weight(), 2);
+    assert_eq!(
+        sampled_manifest_printings(&root),
+        ["Forest", "Mountain"].map(String::from).into()
+    );
+}
+
+/// The same slot is a land: a Mountain may back the manifest because the
+/// Forest's slot still offers the second library land.
+#[test]
+fn a_manifested_forest_slot_is_a_library_land() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    let root = sole_forest_manifest_selecting(
+        CardType::Land,
+        &["Mountain", "Mountain", "Gray Ogre"],
+        "Mountain",
+    );
+    // Forest 1, Ogre 1, and either Mountain copy 2: every fill is feasible.
+    let space = PossibleWorldSpace::for_viewer(&root, PlayerId(1));
+    assert_eq!(space.total_weight(), 4);
+    assert_eq!(
+        sampled_manifest_printings(&root),
+        ["Forest", "Gray Ogre", "Mountain"].map(String::from).into()
+    );
+}
+
+/// With one foretold slot over two foretell cards and one manifest, the
+/// manifest is a uniform draw from the cards foretell left: the Ogre backs it
+/// half the time, never the two thirds a shared shuffled prefix gives it.
+#[test]
+fn foretold_and_manifest_slots_fill_without_prefix_bias() {
+    use crate::{
+        flow::cast_permission::PlayGrant,
+        state::{card::StaticAbility, mana::ManaCost},
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let (mut root, objects) = emptied_root(player);
+    let bolts = named(&root, &objects, "Lightning Bolt", 2);
+    for (bolt, zone) in bolts.iter().zip([ZoneType::Exile, ZoneType::Hand]) {
+        root.state[*bolt]
+            .statics
+            .push(StaticAbility::Foretell(ManaCost::parse("{1}")));
+        root.move_object(*bolt, zone);
+    }
+    let foretold = root.state.now(bolts[0]);
+    let foretold = root.state.live(foretold).unwrap();
+    root.state.cast_permissions.grants.push(PlayGrant {
+        foretold: true,
+        ..PlayGrant::new(foretold, player)
+    });
+    let ogre = named(&root, &objects, "Gray Ogre", 1)[0];
+    let ogre = root.move_object(ogre, ZoneType::Library);
+    root.manifest(ogre, player);
+    root.state.players[player.0].known_library.forget_order();
+    root.state.players[player.0].known_hand.clear();
+
+    let samples = 400;
+    let ogre_manifests = (0..samples)
+        .filter(|seed| {
+            let mut sampled = root.clone();
+            sampled.determinize(viewer, *seed).unwrap();
+            assert_eq!(sampled.hidden_face_down_counts(player, viewer).0, 1);
+            manifest_printing(&sampled, player) == "Gray Ogre"
+        })
+        .count();
+    let share = ogre_manifests as f64 / samples as f64;
+    assert!((share - 0.5).abs() < 0.08, "Ogre manifest share {share}");
+}
+
+/// A departed face-down manifest's token copy pauses on two token-creation
+/// replacements. The suspended creation frame holds the manifest's anonymous last
+/// known information and the nameless copy; every pause captures and encodes
+/// for both players, and the token enters as the public 2/2 (CR 708.2, 707.2).
+#[test]
+fn a_departed_manifests_token_copy_captures_through_replacement_pauses() {
+    use crate::flow::decision::{EffectFrame, FrameCompletion};
+    use crate::state::card::ReplacementEffect;
+    let player = PlayerId(0);
+    let (mut game, _, _) = fixture(player);
+    for multiplier in [2, 3] {
+        let id = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let object = game.state.permanents[id].as_ref().unwrap().object;
+        game.state[object].replacement_effects =
+            vec![ReplacementEffect::MultiplyTokens { multiplier }];
+    }
+    let card = *game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .iter()
+        .find(|object| game.state[**object].name == "Gray Ogre")
+        .unwrap();
+    let manifest = game.manifest(card, player);
+    let mut frame = EffectFrame::new(
+        player,
+        vec![
+            Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::This,
+                exceptions: Vec::new(),
+            },
+            Effect::gain_life(3),
+        ],
+    );
+    frame.bind_source(Some(manifest), Some(manifest));
+    frame.completion = FrameCompletion::Continue;
+    game.move_object(manifest, ZoneType::Graveyard);
+    assert_eq!(
+        game.object_lki(manifest).unwrap().definition_id,
+        crate::state::card::CardDefId::ANONYMOUS
+    );
+    game.run_frame(frame);
+    let check = |game: &Game| {
+        use crate::agent::observation::Observation;
+        use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        game.capture_decision(player, 8).expect("captures");
+        for viewer in [player, PlayerId(1)] {
+            encode(
+                &Observation::for_player(game, viewer),
+                &ObservationEncoderConfig::default(),
+            )
+            .expect("encodes");
+        }
+    };
+    let mut pauses = 0;
+    while game.state.suspended_decision.is_some() {
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        check(&game);
+        checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
+        pauses += 1;
+    }
+    assert_eq!(pauses, 1, "the creation order pauses");
+    assert_eq!(game.state.players[0].life, 23);
+    let tokens: Vec<_> = game
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.kind() == ObjectKind::Token)
+        .map(|(id, _)| game.state.permanent_of(game.state.now(id)).unwrap())
+        .collect();
+    assert_eq!(tokens.len(), 6);
+    for token in tokens {
+        let characteristics = game.characteristics(token);
+        assert!(characteristics.name.is_empty());
+        assert_eq!((characteristics.power, characteristics.toughness), (2, 2));
+    }
+}
+
+/// Two roots differ only in which library card a retained manifest entry
+/// holds while two counter replacements suspend it on `OrderReplacement`.
+/// The opponent's observation and unseen pool cannot tell them apart; the
+/// owner sees its own entering card (CR 708.2, 616.1).
+#[test]
+fn a_pending_manifest_entry_stays_hidden_while_replacements_are_ordered() {
+    use crate::{
+        agent::observation::Observation,
+        flow::{
+            decision::{Decision, EffectFrame},
+            proposed_event::{EntryFace, ZoneEntry},
+        },
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let root = |hidden: &str| {
+        let (mut game, _, _) = fixture(player);
+        counter_replacement_drivers(&mut game, player);
+        let library = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, player)
+            .to_vec();
+        let ogre = *library
+            .iter()
+            .find(|object| game.state[**object].name == "Gray Ogre")
+            .unwrap();
+        let bolt = *library
+            .iter()
+            .find(|object| game.state[**object].name == "Lightning Bolt")
+            .unwrap();
+        let entering = if hidden == "Gray Ogre" { ogre } else { bolt };
+        let mut counters = crate::state::permanent::Counters::default();
+        counters.change(CounterKind::PlusOnePlusOne, 1);
+        let entry = ZoneEntry {
+            face: EntryFace::Manifested,
+            controller: Some(player),
+            counters,
+            ..Default::default()
+        };
+        let mut frame = EffectFrame::new(player, vec![Effect::gain_life(3)]);
+        frame.batch = Some(game.event_batch(
+            crate::flow::proposed_event::EventBinding::None,
+            [game.zone_move_proposal(entering, ZoneType::Battlefield, entry)],
+        ));
+        game.run_frame(frame);
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderReplacement { .. }
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let opponent = Observation::for_player(&game, viewer);
+        assert!(opponent
+            .opponent_cards
+            .iter()
+            .all(|card| card.id != game.state[entering].id.0 as i32));
+        assert!(game.pending_public_entries().is_empty());
+        assert_eq!(game.pending_movers(), vec![entering]);
+        assert!(game.pinned_objects(player).contains(&entering));
+        assert!(!game.pinned_objects(viewer).contains(&entering));
+        (
+            opponent.to_json(),
+            serde_json::to_value(&opponent.opponent.unseen_counts).unwrap(),
+            game.unseen_objects(player, viewer).len(),
+        )
+    };
+    assert_eq!(root("Gray Ogre"), root("Lightning Bolt"));
+}
+
 #[test]
 fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
     use super::{AbilitySource, EffectFrame, ResolutionTarget};
@@ -5291,8 +5795,8 @@ fn departed_copy_matches_predicates_as_the_copied_face() {
     game.state[clone].become_copy_of(&copied, &[]);
     game.move_object(clone, ZoneType::Graveyard);
     let lki = game.object_lki(clone).expect("departed copy").clone();
-    assert_eq!(lki.renamed, None);
-    assert_eq!(game.lki_face_printing(&lki).name, "Gray Ogre");
+    assert_eq!(lki.battlefield.name, "Gray Ogre");
+    assert_eq!(lki.copiable.as_ref().unwrap().definition.name, "Gray Ogre");
     let mana_value = |min: u8, max: u8| CardPredicate {
         min_mana_value: Some(min),
         max_mana_value: Some(max),
@@ -5319,13 +5823,8 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
         .find(|(_, o)| o.owner == owner && o.name == "Counterspell")
         .unwrap()
         .0;
-    game.exile_linked(
-        fixed_spell,
-        owner,
-        Some(sources[0]),
-        LinkedGrant::FlashAnyMana,
-    );
-    let fixed_spell = game.state.now(fixed_spell);
+    let fixed_spell = game.move_object(fixed_spell, ZoneType::Exile);
+    game.grant_exile_linked(fixed_spell, owner, sources[0], LinkedGrant::FlashAnyMana);
     assert!(game.live_grants(owner, fixed_spell).next().is_some());
     for viewer in [owner, caster] {
         let obs = crate::agent::observation::Observation::for_player(&game, viewer);

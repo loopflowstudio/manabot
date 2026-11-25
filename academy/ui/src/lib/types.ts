@@ -138,6 +138,8 @@ export interface PermanentState {
   abilities_lost?: boolean;
   protection_from?: string[];
   hexproof_from?: string[];
+  /** Face down (CR 708.2). */
+  face_down?: boolean;
   /** Keywords it has after continuous effects; absent when it has none. */
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */

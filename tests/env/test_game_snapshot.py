@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Literal
@@ -11,7 +12,7 @@ from blake3 import blake3
 import pytest
 
 from manabot.env.observation import ObservationSpace, column, encode_observation
-from manabot.semantic.text_observation import capture_text_decision
+from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.sim import sim
 from manabot.verify.text_observation import reset_to_first_main
 import managym
@@ -1151,6 +1152,100 @@ def test_simulation_rejects_unknown_terminal_result(info: dict[str, object]) -> 
         sim.determine_outcome(True, info)
 
 
+# Natural games that reach a private or owner-only choice from their seed. The
+# shared script prefers these offers, in order, for whichever seat acts.
+CHOICE_SCRIPT = (
+    "Keep hand",
+    "Play land",
+    r"Cast .*(Manifest Dread|Lost Days|Sun-Blessed Healer|Llanowar Elves)",
+    r"Target .*Llanowar",
+    "Pay the offered cost",
+    "Do not attack",
+    "Pass priority",
+)
+CHOICES: dict[str, tuple[dict[str, int], dict[str, int], str]] = {
+    "manifest selection": (
+        {"Forest": 32, "Manifest Dread": 4, "Llanowar Elves": 4},
+        {"Plains": 40},
+        "Native description: Manifest",
+    ),
+    "kicker payment": (
+        {"Plains": 28, "Sun-Blessed Healer": 12},
+        {"Forest": 40},
+        r"Decline / finish the offered choice .*Sun-Blessed Healer",
+    ),
+    "owner's library position": (
+        {"Island": 28, "Lost Days": 12},
+        {"Forest": 28, "Llanowar Elves": 12},
+        "Native description: On the bottom",
+    ),
+}
+
+
+def play_to_choice(choice: str) -> managym.Env:
+    hero, villain, offered = CHOICES[choice]
+    env = managym.Env(seed=4)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("hero", hero),
+                managym.PlayerConfig("villain", villain),
+            ]
+        )
+    )
+    for _ in range(300):
+        decision = capture_text_decision(env)
+        if any(re.search(offered, a.description) for a in decision.actions):
+            return env
+        action = next(
+            (
+                a
+                for pattern in CHOICE_SCRIPT
+                for a in decision.actions
+                if re.search(pattern, a.description)
+            ),
+            decision.actions[0],
+        )
+        submit_response(env, decision, action.reference)
+    pytest.fail(f"{choice} was never offered")
+
+
+@pytest.mark.parametrize("choice", CHOICES)
+def test_private_choices_fork_commit_once_and_replay_from_the_seed(choice: str) -> None:
+    env = play_to_choice(choice)
+    actor = env.current_agent_index()
+    assert actor is not None
+    # Only the chooser is offered the choice.
+    assert len(env.observation_for_player(1 - actor).action_space.actions) == 0
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    assert len(frame.offers) >= 2
+    root = env.snapshot()
+    pending = managym.GameSnapshot.from_replay_json(root.to_replay_json()).restore()
+    assert pending.state_digest() == env.state_digest()
+    assert pending.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+
+    consequences = set()
+    for offer in frame.offers:
+        branch = root.restore()
+        command = Command(f"{choice}.{offer['id']}", frame.revision, offer["id"])
+        branch.execute_semantic_command_json(command.to_json())
+        committed = branch.state_digest()
+        with pytest.raises(managym.AgentError):
+            branch.execute_semantic_command_json(command.to_json())
+        assert branch.state_digest() == committed
+        replay = managym.GameSnapshot.from_replay_json(
+            branch.snapshot().to_replay_json()
+        ).restore()
+        assert replay.state_digest() == committed
+        assert (
+            replay.semantic_decision_frame_json()
+            == branch.semantic_decision_frame_json()
+        )
+        consequences.add(committed)
+    assert len(consequences) == len(frame.offers)
+    assert env.state_digest() == root.state_digest
+
+
 def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
     waypoint = "Skycoach Waypoint"
     creature = "Stingerquill Voxmancer"
@@ -1169,7 +1264,9 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
     for _ in range(350):
         frame = decision_frame(env)
         obs = env.observation_for_player(frame.actor)
-        lands = {p.id for p in obs.agent_permanents if p.characteristics.name == waypoint}
+        lands = {
+            p.id for p in obs.agent_permanents if p.characteristics.name == waypoint
+        }
         linked = {
             grant.source_permanent_id
             for card in obs.agent_cards
@@ -1185,9 +1282,7 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
                 i
                 for i, offer in enumerate(frame.offers)
                 if offer["verb"] == "activate_ability"
-                and lands.intersection(
-                    obs.action_space.actions[i].focus
-                )
+                and lands.intersection(obs.action_space.actions[i].focus)
             ),
             None,
         )

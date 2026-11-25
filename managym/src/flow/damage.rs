@@ -1,7 +1,6 @@
 // damage.rs
 // Damage application, life changes, and cleanup.
 
-use crate::state::card::{Keyword, Keywords};
 use crate::{
     flow::{
         event::{CombatPlayerHit, DamageTarget, EventSubject, GameEvent},
@@ -10,7 +9,7 @@ use crate::{
     },
     state::{
         ability::DelayedExpiry,
-        card::StaticAbility,
+        card::{Keyword, Keywords, StaticAbility},
         game_object::{ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
     },
@@ -258,7 +257,7 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;
         }
-        if let Some(spell) = self.stack_spell(source) {
+        if let Some(spell) = self.spell_on_stack(source) {
             return self.spell_keywords(source, spell.controller);
         }
         self.state.source_base(source).1.keywords
@@ -279,7 +278,7 @@ impl Game {
             ));
         }
         if let Some(controller) = self
-            .stack_spell(source)
+            .spell_on_stack(source)
             .map(|spell| spell.controller)
             .or_else(|| {
                 self.state

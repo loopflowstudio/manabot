@@ -486,6 +486,9 @@ pub struct LegacyPermanentView {
     pub hexproof_from: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub protection_from: Vec<String>,
+    /// Face down (CR 708.2).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
     /// Keywords it has after continuous effects, in keyword declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,

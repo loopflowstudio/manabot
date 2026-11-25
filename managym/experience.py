@@ -468,6 +468,7 @@ class LegacyPermanentView(ProtocolModel):
         default_factory=list, exclude_if=lambda value: not value
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
     keywords: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )

@@ -433,8 +433,9 @@ columns! { permanent {
     53: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
-    56: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
-    57: BLOCKED => ("blocked", ValueLayout::FLAG),
+    56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
+    57: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
+    58: BLOCKED => ("blocked", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -487,6 +488,7 @@ columns! { stack {
     43: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     44: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
     45: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
+    46: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
 } }
 
 columns! { action {
@@ -1249,13 +1251,13 @@ mod tests {
                 (
                     "agent_player",
                     config.player_dim(),
-                    if one_token { 75 } else { 74 },
+                    if one_token { 76 } else { 74 },
                 ),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 56 } else { 38 },
+                    if one_token { 59 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1285,7 +1287,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 46);
+                assert_eq!(stack::WIDTH, 47);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

@@ -83,6 +83,11 @@ pub enum Action {
         #[serde(rename = "card")]
         object: ObjectId,
     },
+    /// CR 701. Manifest permits a creature card to be turned face up for its mana cost.
+    TurnFaceUp {
+        player: PlayerId,
+        object: ObjectId,
+    },
     PassPriority {
         player: PlayerId,
     },
@@ -167,6 +172,7 @@ impl Action {
             | Action::CastSpell { player, .. }
             | Action::ActivateAbility { player, .. }
             | Action::ActivateCardAbility { player, .. }
+            | Action::TurnFaceUp { player, .. }
             | Action::Foretell { player, .. }
             | Action::PassPriority { player, .. }
             | Action::DeclareAttacker { player, .. }
@@ -191,6 +197,7 @@ impl Action {
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
             Action::ActivateAbility { .. }
             | Action::ActivateCardAbility { .. }
+            | Action::TurnFaceUp { .. }
             | Action::Foretell { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,

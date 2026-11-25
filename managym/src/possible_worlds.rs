@@ -414,7 +414,9 @@ pub struct HiddenHandConstraints {
 fn name_counts(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
     for object in objects {
-        *counts.entry(game.state[object].name.clone()).or_insert(0) += 1;
+        *counts
+            .entry(game.state[object].retained_base().1.name.clone())
+            .or_insert(0) += 1;
     }
     counts
 }
@@ -434,8 +436,8 @@ impl HiddenHandConstraints {
         let unseen = commitments.unseen_objects(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|object| game.state[**object].foretell().is_some())
-            .map(|object| game.state[*object].name.clone())
+            .filter(|object| game.state[**object].retained_base().1.foretell().is_some())
+            .map(|object| game.state[*object].retained_base().1.name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let (foretold, face_down_exile) = game.hidden_face_down_counts(opponent, viewer);
@@ -577,13 +579,13 @@ impl HiddenHandConstraints {
             // Group the opponent's unseen ObjectIds by name, sorted ascending so
             // the lowest ObjectIds of each name go to the hand deterministically.
             let mut pool = commitments.unseen_objects(&branch, opponent);
-            let reserved = branch
+            let mut reserved = branch
                 .reserve_library_facts(opponent, self.viewer, &mut pool, &commitments)
                 .ok_or(MaterializeError::InconsistentWorld)?;
             let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for object in pool {
                 by_name
-                    .entry(branch.state[object].name.clone())
+                    .entry(branch.state[object].retained_base().1.name.clone())
                     .or_default()
                     .push(object);
             }
@@ -608,16 +610,25 @@ impl HiddenHandConstraints {
             new_hand.sort_unstable_by_key(|c| c.slot());
             new_library.shuffle(&mut rng);
 
-            if commitments.constrains()
-                && !source.prepare_selection_foretell(
+            let manifests = if commitments.constrains() {
+                source.prepare_selection_hidden_slots(
                     &commitments,
                     &world.hand,
                     &mut new_library,
                     &mut rng,
                 )
-            {
-                return Err(MaterializeError::InconsistentWorld);
+            } else {
+                source.draw_manifests(opponent, self.viewer, &mut new_library, &mut rng)
             }
+            .ok_or(MaterializeError::InconsistentWorld)?;
+            branch.fill_manifest_slots(
+                opponent,
+                self.viewer,
+                manifests,
+                &mut new_library,
+                &mut new_hand,
+                &mut reserved,
+            );
             if !branch.refill_hidden_exile_slots(opponent, self.viewer, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
@@ -954,7 +965,7 @@ impl PossibleWorldSpace {
                 // The prior measure includes every face-down fill; replace
                 // only that factor, preserving the exact hand-subset multiplicity.
                 world.weight = world.weight / falling(bearers, space.foretold) / face_down_fills
-                    * game.selection_foretold_weight(&commitments, &world.hand);
+                    * game.selection_hidden_weight(&commitments, &world.hand);
             }
             space.worlds.retain(|world| world.weight > 0);
             space.total_weight = space.worlds.iter().map(|world| world.weight).sum();

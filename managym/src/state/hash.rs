@@ -65,6 +65,13 @@ struct CanonicalCard {
     copy: Option<super::effect::CopyEffect>,
     object_id: PublicId,
     definition_id: CardDefId,
+    /// The printing behind a face-down, melded or entry-copy form, which the
+    /// shown `definition_id` does not name. Omitted on ordinary objects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backing_definition_id: Option<CardDefId>,
+    /// A transformed object's front face (CR 712.8). Omitted on its front.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    front_definition_id: Option<CardDefId>,
     owner: PlayerId,
 }
 
@@ -206,7 +213,6 @@ struct CanonicalMatchState<'a> {
     priority: &'a crate::flow::priority::PriorityState,
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,
-    mana_cache: &'a [Option<crate::state::mana::Mana>; 2],
     events: &'a crate::flow::event::EventLedger,
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
@@ -252,7 +258,6 @@ impl<'a> CanonicalMatchState<'a> {
             priority,
             stack_objects,
             combat,
-            mana_cache,
             events,
             pending_events,
             observation_events,
@@ -274,9 +279,14 @@ impl<'a> CanonicalMatchState<'a> {
             .iter()
             .map(|object| CanonicalCard {
                 copied_characteristics: (!object.is_card()).then(|| content.object_row(object)),
-                copy: object.copy.clone(),
+                copy: object.copy().cloned(),
                 object_id: object.id,
                 definition_id: object.definition_id,
+                backing_definition_id: object.backing().map(|(id, _)| *id),
+                front_definition_id: object
+                    .form_faces()
+                    .filter(|faces| faces.back_up)
+                    .map(|faces| faces.front.0),
                 owner: object.owner,
             })
             .collect();
@@ -312,7 +322,6 @@ impl<'a> CanonicalMatchState<'a> {
             priority,
             stack_objects,
             combat: combat.as_deref().map(CanonicalCombat::from),
-            mana_cache,
             events,
             pending_events,
             observation_events,
@@ -347,7 +356,7 @@ impl GameState {
     ///
     /// Canonicalization uses fixed struct field order, semantic vector order,
     /// and sorted entries from ordered maps. It never observes allocations,
-    /// copied card definitions, compatibility card names, or formatting output.
+    /// definition allocation identity or formatting output.
     pub fn deterministic_hash(&self) -> MatchStateHash {
         self.deterministic_hash_over(default_content_pack())
     }
