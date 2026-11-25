@@ -9,12 +9,12 @@
                 - implement            # one cohort slice; updates scratch/plan.md and decides: next slice or review
             - card-review              # concepts, composability, simplifications and behavior; decides: fix pass or advance
         - xor:
-            router: card-perf          # new-card bench_states scaling + base no-regression check
+            router: card-perf          # fast check: new-card bench_states scaling + base no-regression check
             paths:
               clean:
                 description: New cards scale linearly and branch does not regress bench_steps or bench_search
               optimize:
-                graph: card-perf-fix
+                graph: engine-optimization
                 description: Branch regressed bench_steps/bench_search or a new card's stress state scales superlinearly
         - compress
         - pr-publish

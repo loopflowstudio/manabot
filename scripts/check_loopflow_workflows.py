@@ -109,44 +109,35 @@ def _compile_graphs(root: Path) -> dict[str, list[Step]]:
 
 
 def _phase(steps: list[Step], start: int, plan: str, review: str) -> int:
-    """Check one phase shaped like builtin build; return the index after it.
+    """Check one sliced build/review phase; return the index after it.
 
-    The plan step cuts the work into slices. Realign decides the inner loop
-    (another slice, or on), so a slice costs implement and realign only;
-    compress and the phase's review run once per pass over the whole batch,
-    and the review decides whether the phase goes back to implementation.
+    The plan step cuts the work into slices. Sync runs before implement so
+    implement decides the slice loop directly, and the phase's review decides
+    whether to return to implementation or advance.
     """
     end = [step.label for step in steps].index(review, start)
     phase = steps[start : end + 1]
-    head = [step.label for step in phase[:5]]
-    assert head == [plan, "implement", "sync", "realign", "compress"], head
-    implement = phase[1]
-    assert phase[3].returns_to == implement.key, "realign decides the slice loop"
-    assert phase[-1].returns_to == implement.key, f"{review} decides the phase"
+    assert [step.label for step in phase] == [plan, "sync", "implement", review], phase
+    sync, implement, decider = phase[1], phase[2], phase[3]
+    assert implement.returns_to == sync.key, "implement decides the slice loop"
+    assert decider.returns_to == sync.key, f"{review} decides the phase"
     assert not any(step.interactive for step in phase), f"{plan} phase is headless"
     return end + 1
 
 
 def _coverage(coverage: list[Step]) -> None:
     """Check the two-pass coverage graph: sliced build/review, then card-perf xor."""
-    head = [step.label for step in coverage[:5]]
-    assert head == ["card-batch", "sync", "implement", "card-review", "card-perf"], head
-    sync, implement, review, perf = coverage[1:5]
-    assert implement.returns_to == sync.key, "implement decides the slice loop"
-    assert review.returns_to == sync.key, "card-review decides the build/review loop"
-    assert perf.kind == "xor", f"Expected xor router card-perf, got {perf.kind}"
+    position = _phase(coverage, 0, "card-batch", "card-review")
+    perf = coverage[position]
+    assert perf.label == "card-perf" and perf.kind == "xor", perf
     routes = {path.name: path.steps for path in perf.paths}
     assert set(routes) == {"clean", "optimize"}, routes.keys()
-    assert routes["clean"] == [], "clean path exits directly to pr-publish"
+    assert routes["clean"] == [], "clean path exits directly to compress"
     opt = routes["optimize"]
-    assert [step.label for step in opt] == ["sync", "implement", "card-perf-review"], opt
-    assert opt[-1].returns_to == opt[0].key, "card-perf-review decides the optimize loop"
-    assert not any(
-        step.interactive for step in [*coverage[:5], *opt]
-    ), "build, review and perf phases are headless"
-    assert coverage[5].label == "compress"
-    assert coverage[6].label == "pr-publish"
-    assert coverage[7].label == "ship-review"
+    assert _phase(opt, 0, "engine-measure", "engine-performance-review") == len(opt)
+    assert coverage[position + 1].label == "compress"
+    assert coverage[position + 2].label == "pr-publish"
+    assert coverage[position + 3].label == "ship-review"
     _delivery(coverage, coverage[0].key, review="ship-review")
 
 
@@ -166,10 +157,12 @@ def _experiment(experiment: list[Step]) -> None:
 
 
 def _performance(steps: list[Step], measure: str, review: str) -> None:
-    """Check the optimization loop and its single software delivery boundary."""
+    """Check the optimization loop, final compress, and ship-review delivery."""
     position = _phase(steps, 0, measure, review)
-    assert steps[position].label == "pr-publish"
-    _delivery(steps, _one(steps, measure).key)
+    assert steps[position].label == "compress"
+    assert steps[position + 1].label == "pr-publish"
+    assert steps[position + 2].label == "ship-review"
+    _delivery(steps, _one(steps, measure).key, review="ship-review")
 
 
 def main() -> None:

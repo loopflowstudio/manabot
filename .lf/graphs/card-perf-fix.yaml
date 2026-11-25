@@ -1,4 +1,0 @@
-- loop:
-    - cmd: sync
-    - implement                        # fix only the branch regression or new-card stress blowup
-    - card-perf-review                 # verify digests, debug invariants and scaling; decides: iterate or advance

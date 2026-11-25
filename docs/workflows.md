@@ -29,18 +29,20 @@ lf graph experiment-performance
 ```
 
 The workflow measures the update and plans each improvement as a slice. It
-implements slice after slice, syncing and realigning after each, then
-compresses and lets the performance review decide whether another bottleneck
-is worth a pass.
-It retains the publish, demo, delivery and verification boundaries of
-`engine-performance`. Its result is a software change with supported timing
-evidence, or a documented reason to stop when no useful improvement is supported.
+syncs and implements slice after slice (`implement` decides whether more slices
+remain), then lets the performance review decide whether another bottleneck is
+worth a pass. Once optimization finishes, a single `compress` pass simplifies
+the settled diff before `pr-publish`, interactive `ship-review`, `deliver` and
+`verify`. Its result is a software change with supported timing evidence, or a
+documented reason to stop when no useful improvement is supported.
 
 Use `experiment-performance` when the question spans collection, policy inference,
 learner work or evaluation matches, including how these costs change with model
 size. Use `engine-performance` for a bottleneck within the native engine, such as
-state copying or search. Coverage runs a targeted `card-perf` regression and
-new-card stress check instead of composing `engine-optimization`.
+state copying or search. Coverage gates `engine-optimization` behind `card-perf`
+so clean card batches skip optimization while regressions and superlinear
+new-card stress shapes reuse the shared `engine-measure` → `implement` →
+`engine-performance-review` loop.
 The performance workflow does not change Wave defaults or replace a Task's
 captured graph.
 
@@ -140,9 +142,10 @@ handoff:
    stress shapes for superlinear scaling and checks uninstrumented release
    `bench_steps`/`bench_search` retired instructions against base. Clean runs
    exit directly to `compress` with no extra steps; regressions or superlinear
-   new-card paths enter `card-perf-fix` (`sync` → `implement` →
-   `card-perf-review`). Pre-existing global engine hotspots belong in
-   `engine-performance` Tasks rather than parallel card branches.
+   new-card paths enter `engine-optimization` (`engine-measure` → `sync` →
+   `implement` → `engine-performance-review`) scoped to this branch's diff.
+   Pre-existing global engine hotspots belong in `engine-performance` Tasks
+   rather than parallel card branches.
 
 After `card-perf`, a single `compress` pass simplifies the settled diff before
 `pr-publish` and interactive `ship-review`, followed by `deliver` and
