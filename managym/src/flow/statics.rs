@@ -23,7 +23,11 @@ use crate::{
         zone::ZoneType,
     },
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 /// Stop as soon as the threshold is met. Ordinary counts never read a name.
 pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
     matching: impl Iterator<Item = T>,
@@ -45,11 +49,11 @@ pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
     }
 }
 
-/// A battlefield permanent's characteristics with every static ability and
-/// continuous-effect record applied (CR 613). A permanent that has left the
-/// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
+/// CoW-shared heap fields of [`Characteristics`] (identity, types, subtypes,
+/// colors, and ability lists). Kept behind an `Arc` so frequent layer 6/7
+/// keyword, counter, and P/T updates clone only the small flat outer struct.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Characteristics {
+pub struct CharacteristicDetails {
     pub mana_abilities: Vec<crate::state::card::ManaAbility>,
     pub triggered_mana_abilities: Vec<crate::state::card::TriggeredManaAbility>,
     pub colors: crate::state::mana::Colors,
@@ -57,13 +61,6 @@ pub struct Characteristics {
     pub triggered_abilities: Vec<crate::state::ability::EffectiveTrigger>,
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
     pub name: String,
-    /// Whether a layer 3 effect set its name.
-    pub name_set: bool,
-    /// Whether a layer 4 effect replaced its creature types (Kellan's
-    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
-    /// later grant of all creature types clears it, so it never accompanies
-    /// `CreatureTypes::All`.
-    pub creature_types_set: bool,
     /// Every subtype it has: printed or set, then added by records.
     pub subtypes: Vec<String>,
     /// Subtypes added on top of its printed or set ones (layer 4), in record
@@ -74,6 +71,30 @@ pub struct Characteristics {
     /// Layer 4 card types: printed, added by static type grants, and
     /// Creature when animated.
     pub types: CardTypes,
+    /// Its printed ward cost (layer 6), unless it has lost its abilities.
+    pub ward: Option<PaymentCost>,
+    /// Effective activations in layer/timestamp order, with current costs.
+    /// Its index binds offers and payments; stacking captures the chosen effects.
+    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+}
+
+fn empty_details() -> Arc<CharacteristicDetails> {
+    static EMPTY: OnceLock<Arc<CharacteristicDetails>> = OnceLock::new();
+    Arc::clone(EMPTY.get_or_init(|| Arc::new(CharacteristicDetails::default())))
+}
+
+/// A battlefield permanent's characteristics with every static ability and
+/// continuous-effect record applied (CR 613). A permanent that has left the
+/// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Characteristics {
+    /// Whether a layer 3 effect set its name.
+    pub name_set: bool,
+    /// Whether a layer 4 effect replaced its creature types (Kellan's
+    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
+    /// later grant of all creature types clears it, so it never accompanies
+    /// `CreatureTypes::All`.
+    pub creature_types_set: bool,
     /// Layer 4 supertype: its copiable values' legendary supertype, unless a
     /// `Modification::Nonlegendary` record removes it. The legend rule and
     /// the card row read this.
@@ -90,16 +111,44 @@ pub struct Characteristics {
     /// Whether it has lost all abilities (a record, or a characteristic-
     /// setting Aura); grants with later timestamps still apply.
     pub abilities_lost: bool,
-    /// Its printed ward cost (layer 6), unless it has lost its abilities.
-    pub ward: Option<PaymentCost>,
     pub power: i32,
     pub toughness: i32,
-    /// Effective activations in layer/timestamp order, with current costs.
-    /// Its index binds offers and payments; stacking captures the chosen effects.
-    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub(super) details: Arc<CharacteristicDetails>,
+}
+
+impl Default for Characteristics {
+    fn default() -> Self {
+        Self {
+            name_set: false,
+            creature_types_set: false,
+            is_legendary: false,
+            is_animated: false,
+            keywords: Keywords::default(),
+            keyword_grants: Vec::new(),
+            firebending: 0,
+            abilities_lost: false,
+            power: 0,
+            toughness: 0,
+            details: empty_details(),
+        }
+    }
+}
+
+impl Deref for Characteristics {
+    type Target = CharacteristicDetails;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.details
+    }
 }
 
 impl Characteristics {
+    #[inline]
+    pub(super) fn details_mut(&mut self) -> &mut CharacteristicDetails {
+        Arc::make_mut(&mut self.details)
+    }
+
     /// Dynamic outputs and reductions can change without changing source plans.
     fn has_dynamic_activations(&self) -> bool {
         self.activated_abilities.iter().any(|ability| {
@@ -334,7 +383,7 @@ impl Game {
                     }
                 }
             }
-            objects[id.0] = Some(object.view.clone());
+            objects[id.0] = Some(object.view);
         }
         for permissions in &mut play_permissions {
             permissions.extra_land_plays += land_plays_each_player;
@@ -477,7 +526,7 @@ impl Game {
         }
 
         let power = view.power.clamp(0, u8::MAX.into()) as u8;
-        for ability in &mut Arc::make_mut(&mut view).activated_abilities {
+        for ability in &mut Arc::make_mut(&mut view).details_mut().activated_abilities {
             if ability.has_dynamic_mana_output() {
                 if let Some(output) =
                     self.current_mana_output(&ability.effects[0], permanent.controller)
