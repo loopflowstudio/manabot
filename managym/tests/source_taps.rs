@@ -20,6 +20,10 @@ fn game(lands: &[&str]) -> Game {
 }
 
 fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
+    position(lands, deck, "Gray Ogre")
+}
+
+fn position(lands: &[&str], deck: &[(&str, usize)], spell: &str) -> Game {
     let deck: BTreeMap<String, usize> = deck
         .iter()
         .copied()
@@ -38,8 +42,7 @@ fn game_with(lands: &[&str], deck: &[(&str, usize)]) -> Game {
     }
     let player = PlayerId(0);
     game.scenario_clear_hand(player);
-    game.scenario_force_card_in_hand(player, "Gray Ogre")
-        .unwrap();
+    game.scenario_force_card_in_hand(player, spell).unwrap();
     for land in lands {
         game.scenario_force_battlefield(player, land, true).unwrap();
     }
@@ -53,7 +56,7 @@ fn cast(game: &mut Game) {
         .actions
         .iter()
         .position(|action| action.action_type() == ActionType::PriorityCastSpell)
-        .expect("Gray Ogre is castable");
+        .expect("the spell is castable");
     game.step(index).unwrap();
 }
 
@@ -134,6 +137,300 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .unwrap();
     automatic.step(pay).unwrap();
     assert_eq!(untapped(&automatic), ["Forest"]);
+}
+
+fn payment_position(spell: &str, sources: &[&str]) -> Game {
+    let mut deck = vec![("Mountain", 20), (spell, 8)];
+    for source in sources {
+        if !deck.iter().any(|(name, _)| name == source) {
+            deck.push((source, 8));
+        }
+    }
+    position(sources, &deck, spell)
+}
+
+fn payment_labels(game: &Game) -> Vec<String> {
+    game.semantic_decision_frame()
+        .unwrap()
+        .offers
+        .into_iter()
+        .map(|offer| offer.label)
+        .collect()
+}
+
+#[test]
+fn exact_dual_land_payments_cast_without_a_source_or_color_prompt() {
+    for lands in [
+        ["Gruul Guildgate", "Forest", "Forest"],
+        ["Gruul Guildgate", "Mountain", "Forest"],
+        ["Gruul Guildgate"; 3],
+    ] {
+        let mut game = payment_position("Gray Ogre", &lands);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none(), "{lands:?}");
+        assert!(untapped(&game).is_empty(), "{lands:?}");
+        assert_eq!(spell_receipt(&game, "Gray Ogre").total(), 3);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn a_spare_source_keeps_every_payment_offer_including_the_dual() {
+    let mut game = payment_position(
+        "Gray Ogre",
+        &["Gruul Guildgate", "Mountain", "Mountain", "Forest"],
+    );
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    assert_eq!(labels.len(), 5, "{labels:?}");
+    assert_eq!(labels[0], "Tap Gruul Guildgate for {R}/{G}");
+    assert_eq!(taps(&game).len(), 3);
+    game.step(0).unwrap();
+    // Red leaves two generic pips, green leaves a red pip and a generic.
+    assert_eq!(payment_labels(&game), ["Add {R}", "Add {G}"]);
+}
+
+#[test]
+fn automatic_payment_with_a_dual_leaves_a_surplus_plains_untapped() {
+    let mut game = payment_position("Badgermole Cub", &["Plains", "Plains", "Kyoshi Village"]);
+    cast(&mut game);
+    pay_cost(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    assert_eq!(
+        untapped(&game)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        1
+    );
+    assert!(!untapped(&game).contains(&"Kyoshi Village".to_string()));
+}
+
+#[test]
+fn a_dual_paying_generic_mana_skips_only_equivalent_colors() {
+    let mut game = payment_position(
+        "Gray Ogre",
+        &["Kyoshi Village", "Plains", "Mountain", "Island"],
+    );
+    cast(&mut game);
+    tap(&mut game, "Mountain");
+    let labels = payment_labels(&game);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(owed(&game), "{1}");
+    assert_eq!(taps(&game).len(), 2);
+    assert_eq!(committed(&game).len(), 2);
+}
+
+#[test]
+fn two_forced_completions_tapping_different_lands_keep_the_color_modal() {
+    let mut game = payment_position(
+        "Anthem of Champions",
+        &["Kyoshi Village", "Forest", "Plains"],
+    );
+    cast(&mut game);
+    let dual = payment_labels(&game)
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(payment_labels(&game), ["Add {G}", "Add {W}"]);
+    for (mode, kept) in [(0, "Forest"), (1, "Plains")] {
+        let mut branch = game.clone();
+        branch.step(mode).unwrap();
+        assert!(branch.pending_choice.is_none());
+        assert!(untapped(&branch).contains(&kept.to_string()));
+        assert_eq!(branch.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn mana_abilities_on_one_permanent_only_fund_one_tap() {
+    for source in ["Jasmine Dragon Tea Shop", "Kyoshi Village"] {
+        let mut game = payment_position("Compassionate Healer", &[source, "Plains"]);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none());
+        for permanent in game.state.permanents.iter().flatten() {
+            if [source, "Plains"].contains(&game.state[permanent.object].name.as_str()) {
+                assert!(permanent.tapped);
+            }
+        }
+    }
+    let mut game = payment_position("Badgermole Cub", &["Animal Attendant", "Plains"]);
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    // The spend effect is part of the receipt whichever color was chosen.
+    assert_eq!(spell_receipt(&game, "Badgermole Cub").entry_counters(), 1);
+}
+
+#[test]
+fn turning_a_manifest_face_up_pays_with_a_dual_and_a_basic() {
+    let player = PlayerId(0);
+    let mut game = payment_position("Compassionate Healer", &["Kyoshi Village", "Plains"]);
+    let card = game
+        .state
+        .zones
+        .zone_objects(managym::state::zone::ZoneType::Hand, player)
+        .iter()
+        .copied()
+        .next()
+        .unwrap();
+    let face_down = game.manifest(card, player);
+    game.scenario_refresh_priority().unwrap();
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+        .unwrap();
+    game.step(index).unwrap();
+    assert!(!game.state[face_down].is_face_down());
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    assert_eq!(untapped(&game), ["Compassionate Healer"]);
+}
+
+#[test]
+fn ward_keeps_pay_or_decline_and_keeps_source_choices_when_they_matter() {
+    let player = PlayerId(0);
+    let deck = [
+        ("Mountain", 20),
+        ("Lightning Bolt", 8),
+        ("Kyoshi Village", 4),
+        ("Plains", 8),
+        ("Waterfall Aerialist", 4),
+        ("Sol Ring", 4),
+    ];
+    for other in ["Plains", "Sol Ring"] {
+        let mut game = position(&["Kyoshi Village", other], &deck, "Lightning Bolt");
+        let target = game
+            .scenario_force_battlefield(PlayerId(1), "Waterfall Aerialist", true)
+            .unwrap();
+        game.state.players[0].mana_pool = Mana::parse("R").into();
+        game.scenario_refresh_priority().unwrap();
+        cast(&mut game);
+        let index = game.action_space().unwrap().actions.iter().position(|a| matches!(a, Action::ChooseTarget { target: managym::state::game_object::Target::Permanent(p), .. } if *p == target)).unwrap();
+        game.step(index).unwrap();
+        let actions = &game.action_space().unwrap().actions;
+        if other == "Sol Ring" {
+            assert!(actions
+                .iter()
+                .any(|a| matches!(a, Action::ActivateAbility { .. })));
+        } else {
+            assert_eq!(
+                actions,
+                &[Action::PayCost { player }, Action::Decline { player }]
+            );
+            let mut decline = game.clone();
+            decline.step(1).unwrap();
+            assert!(untapped(&decline).contains(&"Kyoshi Village".into()));
+            game.step(0).unwrap();
+            assert!(!untapped(&game).contains(&"Kyoshi Village".into()));
+        }
+    }
+}
+
+#[test]
+fn granted_mana_does_not_double_count_a_forest_and_treasure_stays_explicit() {
+    let deck = [
+        ("Forest", 20),
+        ("Great Divide Guide", 4),
+        ("Firebrand Archer", 8),
+    ];
+    let mut game = position(&["Forest", "Forest"], &deck, "Firebrand Archer");
+    game.scenario_force_battlefield(PlayerId(0), "Great Divide Guide", false)
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    let mut with_treasure = game.clone();
+    let treasure = with_treasure
+        .create_token("token.treasure", PlayerId(0), false)
+        .unwrap();
+    with_treasure.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    cast(&mut with_treasure);
+    assert!(with_treasure
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == treasure)));
+}
+
+#[test]
+fn fourteen_lands_with_granted_color_choices_stay_under_the_policy_action_capacity() {
+    let deck = [
+        ("Forest", 24),
+        ("Great Divide Guide", 4),
+        ("Firebrand Archer", 8),
+    ];
+    let mut game = position(&["Forest"; 14], &deck, "Firebrand Archer");
+    game.scenario_force_battlefield(PlayerId(0), "Great Divide Guide", false)
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|s| s.as_str() == "Tap Forest for any color")
+            .count(),
+        14
+    );
+    assert_eq!(taps(&game).len(), 14);
+    assert_eq!(labels.len(), 29);
+}
+
+#[test]
+fn paying_a_convoke_spell_entirely_in_mana_charges_its_generic_cost_once() {
+    let mut game = payment_position("Guardian of Vitu-Ghazi", &["Kyoshi Village", "Forest"]);
+    game.state.players[0].mana_pool = Mana::parse("6").into();
+    game.scenario_refresh_priority().unwrap();
+    cast(&mut game);
+    assert!(game.pending_choice.is_none());
+    assert_eq!(spell_receipt(&game, "Guardian of Vitu-Ghazi").total(), 8);
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn lesson_mana_uses_two_units_only_when_the_cost_needs_both() {
+    let mut exact = payment_position("Energybending", &["Hermitic Herbalist"]);
+    cast(&mut exact);
+    assert!(exact.pending_choice.is_none());
+    assert_eq!(exact.state.players[0].mana_pool.total(), 0);
+    assert!(!untapped(&exact).contains(&"Hermitic Herbalist".into()));
+
+    let mut spare = payment_position("Boomerang Basics", &["Hermitic Herbalist"]);
+    cast(&mut spare);
+    let labels = payment_labels(&spare);
+    assert!(
+        labels.contains(&"Tap Hermitic Herbalist for any color".into()),
+        "{labels:?}"
+    );
+    assert!(
+        labels.contains(&"Tap Hermitic Herbalist for 2 mana (Lesson spells only)".into()),
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn converge_keeps_a_color_choice_with_exact_sources() {
+    let mut game = payment_position(
+        "Uncle's Musings",
+        &["Kyoshi Village", "Forest", "Forest", "Forest"],
+    );
+    cast(&mut game);
+    let labels = payment_labels(&game);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    game.step(dual).unwrap();
+    assert_eq!(payment_labels(&game), ["Add {G}", "Add {W}"]);
 }
 
 #[test]
@@ -283,7 +580,7 @@ fn mana_made_while_paying_commits_to_the_cost() {
         let mut fork = game.clone();
         tap(&mut fork, last);
         assert!(fork.pending_choice.is_none());
-        let receipt = ogre_receipt(&fork);
+        let receipt = spell_receipt(&fork, "Gray Ogre");
         let colors: Vec<u8> = receipt.mana().iter().map(|unit| unit.color).collect();
         let third = if last == "Forest" { GREEN } else { RED };
         assert_eq!(colors, [GREEN, RED, third]);
@@ -315,7 +612,10 @@ fn surplus_of_mana_made_while_paying_floats() {
     tap(&mut game, "Sol Ring");
     assert!(game.pending_choice.is_none());
     assert_eq!(untapped(&game), ["Mountain"]);
-    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 1, 1]);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre").amounts(),
+        [0, 0, 0, 1, 1, 1]
+    );
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("C"));
 }
 
@@ -337,7 +637,10 @@ fn mana_made_while_paying_that_cannot_pay_floats() {
     assert_eq!(committed(&game).len(), 2);
     tap(&mut game, "Mountain");
     assert!(game.pending_choice.is_none());
-    assert_eq!(ogre_receipt(&game).amounts(), [0, 0, 0, 1, 2, 0]);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre").amounts(),
+        [0, 0, 0, 1, 2, 0]
+    );
     assert_eq!(game.state.players[0].mana_pool, Mana::parse("G"));
 }
 
@@ -388,7 +691,13 @@ fn a_payment_ends_when_its_last_unit_comes_from_a_mana_ability() {
     }
     assert!(game.pending_choice.is_none());
     assert_eq!(untapped(&game), ["Forest", "Meteorite", "Mountain"]);
-    assert_eq!(ogre_receipt(&game).amounts().iter().sum::<u8>(), 3);
+    assert_eq!(
+        spell_receipt(&game, "Gray Ogre")
+            .amounts()
+            .iter()
+            .sum::<u8>(),
+        3
+    );
     assert_eq!(game.state.players[0].mana_pool.total(), 0);
 }
 
@@ -462,9 +771,9 @@ fn usable_priority_requires_a_spend_or_a_trigger_on_that_source() {
     assert_eq!(game.state.players[0].life, 21);
 }
 
-/// The receipt of the Ogre's payment: on the spell while it is on the stack,
+/// The receipt on a spell while it is on the stack,
 /// then on the permanent it became.
-fn ogre_receipt(game: &Game) -> PaymentReceipt {
+fn spell_receipt(game: &Game, name: &str) -> PaymentReceipt {
     let cast = game
         .state
         .stack_objects
@@ -478,8 +787,8 @@ fn ogre_receipt(game: &Game) -> PaymentReceipt {
             .permanents
             .iter()
             .flatten()
-            .find(|permanent| game.state[permanent.object].name == "Gray Ogre")
-            .expect("the Ogre was cast")
+            .find(|permanent| game.state[permanent.object].name == name)
+            .expect("the spell was cast")
             .spell_entry
             .as_deref()
             .unwrap()
@@ -535,7 +844,10 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
         let tap = taps(&by_hand)[0].0;
         by_hand.step(tap).unwrap();
     }
-    assert_eq!(paid_by(&by_hand, &ogre_receipt(&by_hand)), expected);
+    assert_eq!(
+        paid_by(&by_hand, &spell_receipt(&by_hand, "Gray Ogre")),
+        expected
+    );
 
     // Auto: the payer taps Mountains first; the receipt names exactly those.
     let mut automatic = game(&lands);
@@ -543,7 +855,7 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
     cast(&mut automatic);
     assert!(automatic.pending_choice.is_none());
     assert_eq!(
-        paid_by(&automatic, &ogre_receipt(&automatic)),
+        paid_by(&automatic, &spell_receipt(&automatic, "Gray Ogre")),
         [RED; 3].map(|color| ("Mountain".to_string(), color))
     );
     assert_eq!(untapped(&automatic), ["Forest"]);
@@ -574,13 +886,16 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
     if floated.pending_choice.is_some() {
         pay_cost(&mut floated);
     }
-    assert_eq!(paid_by(&floated, &ogre_receipt(&floated)), expected);
+    assert_eq!(
+        paid_by(&floated, &spell_receipt(&floated, "Gray Ogre")),
+        expected
+    );
     assert_eq!(untapped(&floated), ["Mountain"]);
     assert_eq!(floated.state.players[0].mana_pool, Mana::default());
 
     // Whole object ids, so a later appearance of a land is never mistaken
     // for the one that paid.
-    let json = serde_json::to_value(ogre_receipt(&floated)).unwrap();
+    let json = serde_json::to_value(spell_receipt(&floated, "Gray Ogre")).unwrap();
     let source = &json["mana"][0]["source"];
     assert!(source["object"]["entity"].is_u64() && source["object"]["incarnation"].is_u64());
     assert!(source["definition"].is_u64());
@@ -596,7 +911,7 @@ fn receipt_separates_sourceless_mana_from_a_lands() {
     game.scenario_refresh_priority().unwrap();
     cast(&mut game);
     assert!(game.pending_choice.is_none());
-    let receipt = ogre_receipt(&game);
+    let receipt = spell_receipt(&game, "Gray Ogre");
     assert_eq!(receipt.total(), 3);
     assert_eq!(receipt.amounts(), [0, 0, 0, 1, 0, 2]);
     let sources = receipt.mana_sources();

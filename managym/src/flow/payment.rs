@@ -19,7 +19,7 @@ use crate::{
         ability::{Effect, PaymentCost},
         card::{ActivatedAbilityDefinition, CardType, SacrificeCost, TapCost},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
-        mana::{Color, ManaCost},
+        mana::{Color, Mana, ManaCost},
         payment::{How, PaymentReceipt, Toward},
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -757,8 +757,11 @@ impl Game {
         let finishes = paid
             || waterbent
             || !chooses && {
-                let _payments = self.payment_scan();
-                !self.has_mana_payment_choices(player) && self.help_actions(player).is_empty()
+                matches!(
+                    self.announced_mana_actions(player, self.pending_payment(player)?)
+                        .as_slice(),
+                    [Action::PayCost { .. }]
+                )
             };
         if finishes {
             return self.finish_mana_payment(player);
@@ -1088,31 +1091,24 @@ impl Game {
     pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
         let mut index = start;
         loop {
-            let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
+            let Some((payer, payment, CostComponent::Mana { cost, .. })) = self.paying() else {
                 return;
             };
-            let waterbend = payment.mana().1;
             let pool = &self.state.players[player.0].mana_pool;
             if payer != player || index >= pool.unit_count() || cost.mana_value == 0 {
                 return;
             }
             let unit = pool.unit(index);
-            let help = *help;
-            let rest = if unit.spendable_units(cost) == 0 {
-                None
-            } else {
-                let mut left = self.pooled_mana(player);
-                left.spend(&unit);
-                cost.paid_with(pool.unit_color(index))
-                    .into_iter()
-                    .find(|rest| self.payable_with_help(player, &left, rest, help, waterbend, None))
-                    // Pooled mana of another class or color could pay this
-                    // pip instead, with other consequences (a rider applied
-                    // or kept, a restriction used up, the colors spent and
-                    // left floating): the spend choice at "Pay the cost"
-                    // stays the payer's (CR 601.2h).
-                    .filter(|rest| left.other_than(&unit).spendable_units(&cost.less(rest)) == 0)
-            };
+            let mut left = self.pooled_mana(player);
+            left.spend(&unit);
+            let rest = self.cost_after_produced_unit(
+                player,
+                cost,
+                payment,
+                &left,
+                &unit,
+                pool.unit_color(index),
+            );
             let Some(rest) = rest else {
                 index += 1;
                 continue;
@@ -1131,6 +1127,28 @@ impl Game {
             *cost = rest;
             receipt.record_mana([spent]);
         }
+    }
+
+    /// Which pip a newly produced unit commits to. An alternative pooled
+    /// unit that could pay that pip leaves the decision with the payer.
+    pub(super) fn cost_after_produced_unit(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        payment: &Payment,
+        left: &Mana,
+        unit: &Mana,
+        color: u8,
+    ) -> Option<ManaCost> {
+        if unit.spendable_units(cost) == 0 {
+            return None;
+        }
+        cost.paid_with(color)
+            .into_iter()
+            .find(|rest| {
+                self.payable_with_help(player, left, rest, payment.help(), payment.mana().1, None)
+            })
+            .filter(|rest| left.other_than(unit).spendable_units(&cost.less(rest)) == 0)
     }
 
     /// `PayCost` while a cost is being paid: take a sacrifice cost's mana

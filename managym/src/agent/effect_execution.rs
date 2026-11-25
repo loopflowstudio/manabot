@@ -1151,7 +1151,6 @@ pub(crate) fn receipt_matters(
     definition: Option<CardDefId>,
     source: Option<ObjectId>,
 ) -> bool {
-    static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
     if spent.is_empty() {
         return false;
     }
@@ -1161,17 +1160,9 @@ pub(crate) fn receipt_matters(
     {
         return true;
     }
-    let reads = READS.get_or_init(|| {
-        // The catalog iterates definitions in CardDefId order.
-        default_content_pack()
-            .definitions()
-            .map(|definition| {
-                let json = serde_json::to_string(definition).expect("serializable definition");
-                json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast")
-            })
-            .collect()
-    });
-    definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
+    definition
+        .and_then(crate::cards::content_pack::spent_mana_read)
+        .is_some()
 }
 
 /// Project the payment in progress onto its announcement frame: how many

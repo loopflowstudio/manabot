@@ -971,10 +971,10 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   `skip_trivial` enabled, `Decision::ManaChoice` skips automatically when
   every legal mode leaves the same remaining state or the same determined
   completion with no floating surplus; deliberate floats at priority always
-  keep the color choice. Resolution payments (`TurnFaceUp`, `Ward`) omit
-  simple choice taps alongside fixed taps when automatic payment can fund the
-  cost and floats are off, so mandatory costs skip and optional costs offer
-  only pay or decline.
+  keep the color choice. With floats off, turning a creature face up pays an
+  exact cost from a dual and a basic immediately. Ward offers pay or decline
+  for the same sources. If paying ward with a dual can leave a different
+  source untapped or mana floating, its tap remains available.
 
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat

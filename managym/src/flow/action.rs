@@ -2,7 +2,8 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, effects_description, mana_description, pending_trigger_description,
+    counter_description, effects_description, mana_choices_description, mana_description,
+    pending_trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -132,6 +133,13 @@ impl Game {
             } => {
                 let view = self.characteristics(*permanent);
                 let ability = view.activated_abilities.get(*ability_index)?;
+                if ability.is_simple_mana_tap() {
+                    let name = self.observed_object_name(self.permanent_object(*permanent)?);
+                    return Some(format!(
+                        "Tap {name} for {}",
+                        mana_choices_description(&ability.mana_choices()?)
+                    ));
+                }
                 if !ability.has_grantor_cost() {
                     return None;
                 }
@@ -1131,14 +1139,7 @@ impl Game {
                 (ActionSpaceKind::LookAndSelect, actions, Vec::new())
             }
             CostComponent::Mana { .. } => {
-                let owed = payment.mana().0;
-                let mut actions = self.mana_ability_actions(player);
-                actions.extend(self.useful_payment_taps(player));
-                actions.extend(self.help_actions(player));
-                if self.can_pay_mana_cost(player, owed) {
-                    actions.push(Action::PayCost { player });
-                }
-                self.append_mana_floats(player, &mut actions);
+                let actions = self.announced_mana_actions(player, payment);
                 if payment.waterbends() {
                     (ActionSpaceKind::Waterbend, actions, source_focus())
                 } else {

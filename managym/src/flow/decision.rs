@@ -1763,7 +1763,7 @@ impl Game {
                         self.mana_tap_cost_actions(*player),
                     )
                 } else {
-                    let mut actions = self.mana_ability_actions(*player);
+                    let mut actions = self.mana_ability_actions(*player, true);
                     if self.offers_extra_payment_taps(*player) && self.can_pay_mana_upfront(*player)
                     {
                         actions.push(Action::PayCost { player: *player });
@@ -1828,7 +1828,8 @@ impl Game {
                         focus: source_focus,
                     });
                 }
-                let mut actions = self.mana_ability_actions(player);
+                let can_pay = self.can_pay_mana_cost(player, cost);
+                let mut actions = self.resolution_mana_abilities(player, cost, help, can_pay);
                 actions.extend(
                     self.help_taps(
                         player,
@@ -1841,7 +1842,7 @@ impl Game {
                     .into_iter()
                     .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
                 );
-                if self.can_pay_mana_cost(player, cost) {
+                if can_pay {
                     actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
