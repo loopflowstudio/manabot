@@ -234,7 +234,12 @@
     const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
     untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
   });
-  const deckLabel = (key: unknown): string => DECK_CHOICES.find(deck => deck.key === key)?.label ?? 'Imported deck';
+  const deckLabel = (key: unknown): string => {
+    const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
+    if (found) return found;
+    if (typeof key === 'string' && key && key !== 'imported' && key !== 'custom') return key;
+    return 'Imported deck';
+  };
   const homeMatchup = $derived(lastMatchup ?? {
     config: gameStore.setupConfig(),
     opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
@@ -430,7 +435,12 @@
       {#if demoName}
         <button data-testid="game-result-action" class="btn btn-primary" onclick={startNewGame}>Play again</button>
       {:else}
-        <button data-testid="game-result-action" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
+        {@const heroPool = typeof gameStore.playSession?.draft.hero_deck_pool === 'string' ? gameStore.playSession.draft.hero_deck_pool : null}
+        {@const villainPool = typeof gameStore.playSession?.draft.villain_deck_pool === 'string' ? gameStore.playSession.draft.villain_deck_pool : null}
+        {#if heroPool || villainPool}
+          <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch', { hero_deck: heroPool ?? gameStore.playSession?.draft.hero_deck, villain_deck: villainPool ?? gameStore.playSession?.draft.villain_deck, seed: null })}>Deal new decks</button>
+        {/if}
+        <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
         <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap sides</button>
         <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
       {/if}

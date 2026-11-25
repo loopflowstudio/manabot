@@ -48,6 +48,29 @@ def test_missing_site_names_checkout_launcher(
     record = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))
     assert record["code"] == "site.missing"
     assert "./scripts/play" in record["message"]
+    assert "ACADEMY_FRONTEND_BUILD" in record["message"]
+
+
+def test_frontend_directory_falls_back_to_checkout_build(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from managym.academy import site
+
+    fake_site_py = tmp_path / "managym" / "academy" / "site.py"
+    fake_site_py.parent.mkdir(parents=True)
+    fake_site_py.write_text("")
+    checkout_build = tmp_path / "academy" / "ui" / "build"
+    checkout_build.mkdir(parents=True)
+    (checkout_build / "index.html").write_text("Academy")
+
+    monkeypatch.delenv("ACADEMY_FRONTEND_BUILD", raising=False)
+    monkeypatch.setattr(site, "__file__", str(fake_site_py))
+    assert site.frontend_directory() == checkout_build
+
+    packaged = fake_site_py.parent / "site"
+    packaged.mkdir()
+    (packaged / "index.html").write_text("Packaged")
+    assert site.frontend_directory() == packaged
 
 
 @pytest.mark.parametrize("collision", ["file", "directory"])
