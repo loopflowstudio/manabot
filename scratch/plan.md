@@ -1,317 +1,313 @@
-# MTG-431 — Foundations stack copies, choices, costs and procedure tail
+# MTG-483 — One chunked-submission runner for drafted Academy decisions, and the audit of what to draft next
 
-All 56 of the 56 scoped Foundations rows have directed implementation evidence.
-Slices 1–16 are complete. Demonic Pact and Maze’s End already had working
-definitions.
+This file replaces MTG-431's plan, which arrived through the stack sync (see
+Base). `scratch/concept-review.html` and `scratch/tour.yaml` are MTG-431's
+notes, not this Task's; they are left untouched so later syncs do not conflict
+on them. On a sync conflict in `scratch/plan.md` or `scratch/questions.md`,
+this Task's version stays.
 
-Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
-`blocked_by` is cleared. Slice 11's four concept defects, Slice 12's three
-behavior-review defects, Performance Slices 13–16, and Academy's holistic
-Curator of Destinies pile-partition UI (`cfa110e6d8`) are built and verified.
+## Outcome
 
-**Next: Slice 17 — Mana architecture & feasibility projection refinements (plus PR #605 CI fix), then `pr-publish` → `demo`.**
+A person playing live in Academy drafts a multi-part decision whole and
+confirms once. Today two decisions do that (combat declarations, Curator of
+Destinies' pile split) through two hand-copied send loops in `Board.svelte`.
+After this change there is one runner, one draft store and one stop/recovery
+behavior, the pile split behaves exactly like combat when a step is refused or
+the connection drops, and `docs/academy.md` says which other native decisions
+are worth drafting and what each needs.
 
-### Planned Slice 17 — Adapt three mana ideas from `phase-rs` (keep grouped `ManaPool` and exact DFS witness solver)
+No engine, server or protocol change. No new drafted decision ships here.
 
-Do **not** replace our grouped `[u8; 6]`-per-`ManaClass` `ManaPool` with per-unit `ManaUnit` storage, and do **not** replace our exact DFS witness solver with heuristic auto-tap. Adapt these three targeted improvements into `managym/state/src/mana.rs` and `managym/src/flow/mana.rs`, preserving all digests, learning tokens, checkpoint compatibility, and `bench_steps`/`bench_search` gains:
+## Base (choices made for review)
 
-1. **Feasibility-only `ProjectedClass` stripping (profile-backed on `mixed-pools`):**
-   - **Profile:** `mixed-pools --sizes 16` (`/usr/bin/sample`, 1,740 samples) spends **53.62%** in `PaymentModel::witness` and **17.76%** in `PaymentSearch::insert` (`visited` `HashMap::insert` `13.91%`, `[(ManaClass, [u8; 6])]::hash_slice` `8.33%`, `CardPredicate::hash` inside `SpendEffect` `4.89%`), with `SearchEquivalence::insert_projected` at **`0.00%`** because `state_has_restriction` only projects classes where `restriction.is_some()`, plus `7.59%` in `Mana::spending_choices` iteration across 5 uncollapsed `{R}` classes.
-   - **Hypothesis:** In pure feasibility searches (`PaymentModel::witness` / `SearchEquivalence` — never `ManaSpend`, live pools, or `SourceClassCache` for player-visible `mana_ability_actions`/`useful_payment_taps`), strip `expiry` and `effect` (`SpendEffect`) from `ProjectedClass` so unrestricted non-ordinary classes merge straight into `ProjectedMana.mana`, activate feasibility projection whenever a search state/model carries any non-ordinary `ManaClass` (`!classes().is_empty()`), and deduplicate feasibility-only `spending_choices` inside `witness` when two classes differ only in `expiry`/`effect`. That eliminates `CardPredicate::hash` and `ManaClass` hashing from `PaymentSearch::visited` and collapses mixed Ventmaw / Firebending / ordinary / spend-effect pools into fewer search states without changing any first-in-source-order witness or player choice.
-   - **Deletes:** `expiry: ManaExpiry` and `effect: Option<SpendEffect>` fields on feasibility `ProjectedClass` (and `state_has_restriction` / `model_has_restriction` restriction-only guards in `PaymentSearch`, replaced by non-ordinary class checks while keeping `SourceClassCache` exact on `expiry`/`effect`).
-   - **Focused check:** debug `nextest` (`flow::mana::`), debug `bench_states mixed-pools --sizes 2,3`, `entry-choices --sizes 4,8`, `changeling-anthems --sizes 4,8` (debug search oracle), release `bench_states mixed-pools --sizes 2,3,4` and `--sizes 4,8,16` (fewer states & instructions, identical witness/action surface), plus `ventmaw-pools`, `entry-choices`, `changeling-anthems`, `float-origins`.
-2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying (architectural cleanup; `< 0.1%` in curated profiles):**
-   - Refactor `clear_mana_pools` (`managym/src/flow/mana.rs`) into a small per-class emptying disposition pass (`Drop | Keep | Recolor(Color)`) over `ManaPool` that deletes the dual `split_expiring` (`combat_expiring` + `regular_expiring`) / `unspent_mana_retained` branching cleanly while preserving identical Firebending, Savage Ventmaw, and Ozai semantics (and zero new `Player` fields).
-   - **Focused check:** debug `nextest` (`flow::mana::`, `tla::fire_lord_azula`, `ozai`, `ventmaw`), identical `bench_steps`/`bench_search` digests and retired instructions `≤ 45.71B` / `≤ 972.65B`.
-3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle (architectural cleanup; `Mana::can_pay` is `0.32%` in `bench_search`, `< 0.1%` in `bench_steps`):**
-   - Replace ad-hoc hybrid/single-pip branching in `ManaCost` / `flow/mana.rs` where a 6-bit `ManaTypeSet(u8)` pip mask and a small `Copy` payment-permission bundle simplify legality/payment code and delete parallel branches — keeping `ManaCost` serialization, learning tokens (`tests/model/test_pinned_pilot.py`), and `bench_steps`/`bench_search` retired instructions `≤ 45.71B` / `≤ 972.65B`.
-   - **Focused check:** debug `nextest` (`flow::mana::`, `managym_state`), rebuilt release extension + `tests/model/test_pinned_pilot.py`, uninstrumented release `bench_steps` and `bench_search`.
-4. **PR #605 CI fix before `pr-publish`:** Fix `tests/env/test_named_observation_layout.py::test_named_layout_describes_tagged_rows_and_history` (extra set items `{17, 18, 19}` in CI `Integration (model)`), and check why the 4 Playwright tests in `Academy UI` (`choice-navigation.spec.ts` ×2, `decision-surface.spec.ts` ×2) timed out on `getByTestId('game')`.
+- **Stacked on MTG-431** (`lf sync jack/mtg-431-close-foundations-stack-copies-choices-costs`,
+  merge `2647b11c85`). `partition.ts`, the partition loop in `Board.svelte`,
+  and `Decision::PartitionPiles` / `ChoosePile` / `KeepPermanents` /
+  `OrderEntryChoices` / `target_shares` exist only on that branch (PR #605,
+  open). Without it there is one loop and nothing to unify.
+  Passed over: basing on main + MTG-441 and porting the pile split later; that
+  leaves the duplication the brief names for another Task. Undo with
+  `lf sync main`.
+- **MTG-441 (PR #613) must be underneath before `Board.svelte` or
+  `Rail.svelte` is touched.** It rewrites the combat loop, adds the `pending`
+  and `interaction` props, `drag.ts`, `addAttackers`/`setBlock`, the rail's
+  collapsed disclosure and `e2e/fixtures/combat.ts`. It conflicts with
+  MTG-431 in `Board.svelte`, `Lines.svelte` and `Plate.svelte`
+  (`git merge-tree` of this branch with it, 2026-11-25), and that conflict
+  belongs to MTG-431's sync with main, not to this Task ("Never `git merge` a
+  Task's branch"). Pass 1 touches none of those files. Pass 2 starts with
+  `lf sync` and checks that `Board.svelte` declares `interaction:` and
+  `pending?:`. If it does not, pass 2 has not got its input: the build stops
+  there and says MTG-431 has not yet absorbed main with #613.
 
-## Engine measure pass 4 (pre-Slice-17 baseline at `ff0f872c3e`, Apple M4 Max, contended host)
+Direction received for this plan, verbatim:
 
-No Rust files changed between `04a8f55e6d` (Pass 3) and `ff0f872c3e`. Fresh
-uninstrumented release measurements (`/usr/bin/time -l`, host load `67–110`)
-and `/usr/bin/sample` CPU profiles confirm Pass 3's base comparison against
-`fcc96be003` and establish the pre-Slice-17 profile:
+> check out MTG-441 (PR #613 ...) before finalizing the plan and building.
+> ... Apply this same pattern to standardized chunked drafts rather than
+> regressing it. ... the runner must wait until the board is answerable
+> (`live && !pending`) instead of stopping after step 1. ... Keep draft state
+> visible through pending Command, server work, and priority-stop updates
+> (disable edits/Confirm until live). ... On same-revision refusal at step 0
+> (`sending.at === 0`), preserve the draft so the user can edit and retry; on
+> refusal after committed steps (`sending.at > 0`), clear the draft and
+> surface exact partial progress. ... Account for MTG-441 landing on main
+> (sync/merge cleanly and preserve all drag + combat draft behavior).
 
-- **Curated benchmarks (uninstrumented release, all digests & counts match `fcc96be003` and `managym/perf/baseline.json`):**
-  - `bench_steps`: `512` games, `0` capped, `118,559` steps, digest
-    `10601622128491155944`; **45.961B** instructions retired (vs base
-    `fcc96be003` `46.731B`, **-1.65%**; Pass 3 C/R/R/C mean `45.707B`,
-    **-2.19%**), `14.708B` cycles, wall `35.00s` (sample run `22.11s`, 15,700
-    involuntary ctx switches).
-  - `bench_search`: seeds 1–3 digests `13638875039089371439`
-    (`score_digest_blake3` `2f29dd10...`), `5466143068363283977`
-    (`09de41e9...`), `9998925852575961750` (`9692421a...`), `0` cap hits,
-    `7,680 / 8,064 / 7,424` simulations; **975.339B** instructions retired
-    (vs base `fcc96be003` `1,027.552B`, **-5.08%**; Pass 3 C/R/R/C mean
-    `972.648B`, **-5.34%**), `275.306B` cycles, wall `130.03s` (`worst_overall_s`
-    `4.975s`).
-  - **CPU profiles (`/usr/bin/sample`, 1ms):**
-    - `bench_steps` (6,493 samples): `Observation::new` `39.32%`
-      (`populate_permanents` `13.86%`, `populate_cards` `8.13%`, `player_data`
-      `7.67%`), `layer_board` `18.44%` (`layers::Context::evaluate` `15.22%`),
-      `drain_pending_events` `18.37%` (`indexed_sources` `17.83%`),
-      `priority_action_space` `13.09%`, `finish_mana_payment` `5.71%`,
-      `payment_model` `5.16%`. `PaymentModel::witness`, `Mana::can_pay`,
-      `Mana::spending_choices`, `clear_mana_pools`, and hybrid branching are
-      all `< 0.1%`.
-    - `bench_search` (12,158 samples): `layer_board` `35.24%`
-      (`layers::Context::evaluate` `28.97%`, `layers::Context::apply` `9.89%`),
-      `indexed_sources`/`drain_pending_events` `31.31%`
-      (`collect_waiting_triggers` `17.97%`), `priority_action_space` `25.70%`,
-      `advance_event_batch` `21.39%`, `payment_model` `8.75%`
-      (`Vec<ManaSource>` `5.80%`), `finish_mana_payment` `8.41%`
-      (`advance_mana_spend` `6.05%`), `PaymentModel::payable` `1.78%`
-      (`direct_payable` `1.20%`), `Mana::can_pay` `0.32%`.
-      `PaymentModel::witness`, `ProjectedClass`, `clear_mana_pools`, and hybrid
-      branching are all `< 0.15%`.
-- **Stress states (`bench_states --features benchmark`, release):**
-  - Existing MTG-431 / mana shapes reproduce Pass 3: `ventmaw-pools --sizes 4,8,16`
-    (**0.244B** inst, **0** payment search calls — fixed sources + single
-    `EndOfTurn` class), `entry-choices --sizes 4,8,16` (**10.099B** inst,
-    `cast-choice search` `38,123` states), `changeling-anthems --sizes 4,8,16`
-    (**9.363B** inst, `cast-choice search` `14,233` states), `storm-copies --sizes 2,4,8`
-    (**1.665B**), `genesis-wave --sizes 4,8,16` (**0.492B**), `diverse-mana --sizes 4,8,16`
-    (**3.724B**), `restricted-filter` + `distinct-restrictions` (**3.994B**),
-    `float-origins --sizes 4,8,16` (**8.439B** inst, `cast-choice search`
-    `81,566` states; 529-sample profile: `witness` `65.22%`,
-    `PaymentSearch::insert` `21.36%`, `insert_projected` `8.32%`).
-  - **Added `mixed-pools` stress state (`managym/examples/bench_states.rs`):**
-    Because `ventmaw-pools` makes 0 payment search calls and no existing state
-    combined multiple `ManaExpiry` (`Step`, `EndOfCombat`, `EndOfTurn`) and
-    `SpendEffect` (`CopySpell`, `SpellGainsKeyword`,
-    `CreatureEntersWithPlusOneCounter`) classes inside `PaymentSearch`, added
-    `mixed-pools` (`Savage Ventmaw`, `Firebending Student`, `Mountain`,
-    `Pyromancer's Goggles`, `Carnelian Orb of Dragonkind`, `Animal Attendant`,
-    `N` `Prophetic Prism`s, casting `Arcane Epiphany` / `Claws Out` /
-    `Abandon Attachments` / `Pillar Launch` at `priority` and `pooled`).
-    - Default `--sizes 2,3,4`: **1.328B** inst, `pooled search`
-      `calls 4,645 → 7,302 → 9,553`, `states 2,977 → 4,818 → 6,362`
-      (`maxc 24 → 28 → 32`), digest
-      `3ad67dc77c5de7823e0ed48a3c73e523fc6c5c677a388ff11996558dea4ecb79`.
-    - `--sizes 4,8,16`: **4.497B** inst, `pooled actions`
-      `states 42 → 66 → 114` (`maxc 32 → 48 → 80`), `pooled search`
-      `plans 680 → 710 → 879`, `calls 9,553 → 16,110 → 35,239`,
-      `states 6,362 → 11,192 → 25,196`.
-    - CPU profile (`mixed-pools --sizes 16`, 1,740 samples): `PaymentModel::witness`
-      `53.62%`, `PaymentSearch::insert` `17.76%` (`visited` `HashMap::insert`
-      `13.91%`, `Arc<SearchState>::hash` `11.03%`,
-      `[(ManaClass, [u8; 6])]::hash_slice` `8.33%`, `CardPredicate::hash`
-      inside `SpendEffect` `4.89%`), `SearchEquivalence::insert_projected`
-      `0.00%`, `Mana::spending_choices` + iteration `7.59%`.
-- **No additional slices planned beyond Slice 17:** curated-deck profiles show
-  no new MTG-431 bottleneck; Slice 17 item 1 directly targets the measured
-  `mixed-pools` feasibility-projection bottleneck, while items 2–3 are tracked
-  as non-bottleneck architectural cleanups guarded against regression.
-- **Deferred unavailable hardware (no x86_64 speed claim):** Ubuntu `x86_64`
-  Engine Budget runner — verify on CI via PR #605 or:
-  `gh workflow run ci.yml --ref jack/mtg-431-close-foundations-stack-copies-choices-costs -f measure=<commit>`.
+## What was found
 
-## Performance outcome (Slices 13–16 + compress, Apple M4 Max, contended host)
+Runner, as it stands on this base (`academy/ui/src/lib/board/Board.svelte`
+289–313 combat, 367–391 partition):
 
-Engine performance review pass 3 at `04a8f55e6d` (post-`7c75706ef1` compress),
-uninstrumented release C/R/R/C via `/usr/bin/time -l`, vs checkout base
-`fcc96be003` (and CI reference `7d3ac1eb1c`). Earlier notes at `5600d6b8a6`
-predated `7c75706ef1` and lacked post-Slice-16 CPU profiles and `fcc96be003`
-comparison. All counts, digests, `score_digest_blake3` and `action_counts`
-match base and `managym/perf/baseline.json` identically (`bench_steps`: 512
-games, 118,559 steps, digest `10601622128491155944`; `bench_search`: seeds 1–3
-`13638875039089371439`, `5466143068363283977`, `9998925852575961750`, 0 cap
-hits; no `benchmark`-feature instrumentation keys):
+- The two loops are the same code with different step types and words.
+- Neither sees a refusal. `onact` returns nothing; `sendAction` returns
+  `false` when a Command is pending, a resume is pending or server work is
+  running (`socket.svelte.ts:379`), and a rejection only sets
+  `gameStore.lastCommandRejection`. A refused or rejected step leaves
+  "Declaring 2 of 5…" on screen until Escape.
+- MTG-441 fixes this for combat only: `answerable = live && !pending`, a
+  same-revision frame once answerable means the step was refused; at step 0
+  the draft is kept, later it is cleared with "Stopped after k of n. The next
+  declaration was not accepted." (`origin/jack/mtg-441…:Board.svelte`
+  308–338). The partition loop would keep the old behavior after both land.
+- Neither loop reacts to a disconnect. After a reconnect the recovered frame
+  either has the sent revision (reads as a refusal) or a later one, in which
+  case the loop keeps sending without the person having seen the board.
+- A reload mid-send drops the run silently: the next frame is a new decision
+  with no saved draft and no word about how far the plan got.
+- MTG-441's rail folds the raw offers under `<details class="raw"
+  data-testid="per-creature-choices">` with the words "Each creature's choice"
+  whenever any draft snippet is passed. After both land, the pile split gets
+  that combat wording.
+- Rail's stop line is `data-testid="combat-stopped"` and the pile split
+  already reuses it (`e2e/partition-piles.spec.ts:255`).
+- Two storage keys, same shape: `academy.table.combat-draft`,
+  `academy.table.partition-draft`, each `{match_id, frame_hash, …}`.
 
-- **Supported gains (`bench_steps` / `bench_search`):**
-  - `bench_steps`: `45.711B, 45.703B` (mean **45.707B** instructions) vs base
-    `46.735B, 46.727B` (mean **46.731B**, **-2.19%**); cycles `10.752B, 10.772B`
-    (mean **10.762B**) vs base `11.079B, 11.080B` (mean **11.080B**, **-2.87%**);
-    wall `3.09s / 2.93s` vs base `3.33s / 3.09s`. Beats Slice 16 target
-    (`≤ 45.9B`) and pre-Slice-15 (`45.868B`).
-  - `bench_search`: `972.394B, 972.902B` (mean **972.648B** instructions) vs
-    base `1,027.349B, 1,027.755B` (mean **1,027.552B**, **-5.34%**); cycles
-    `228.787B, 240.468B` (mean **234.628B**) vs base `234.971B, 245.433B`
-    (mean **240.202B**, **-2.32%**). Beats Slice 16 target (`≤ 977B`) and
-    pre-Slice-15 (`977.34B`); `7c75706ef1` compress + fresh build recovered an
-    extra -8.3B instructions over pre-compress `082e16fb37` (`980.95B`).
-  - Paired `/usr/bin/sample` (`cand-search` 10,071 vs `base-search` 9,228
-    samples) confirms layer gains (`layer_board` `39.03% → 35.13%`,
-    `layers::Context::evaluate` `32.95% → 27.86%`) with no new hot path
-    regressing curated decks.
-- **Supported gains (`bench_states`, MTG-431 shapes):**
-  - `entry-choices --sizes 4,8,16`: `29.93B` (pre-15) → `16.92B` (Slice 15) →
-    **10.091B** instructions (**3.0× faster**). Pass 2's three hotspots in
-    `entry16` (`/usr/bin/sample`, 3,206 samples) dropped sharply:
-    `useful_payment_taps` `19.10% → 8.42%`, `finalize_characteristics`
-    `10.83% → 1.56%`, `SourceClassCache`/`sources_equivalent` `9.59% → 1.47%`.
-    All single-step layers (`actions`, `step:activate`, `vector`) are linear
-    (`0.04–0.22 ms`, `priority step:activate` states `34→68→141`); `priority`
-    and `block` search are linear (`2.0–2.1×` for `2×` size).
-  - `changeling-anthems --sizes 4,8,16`: `80.55B` (pre-15) → `19.96B` (Slice
-    15) → **9.348B** instructions (**8.6× faster**). All single-step layers
-    have zero payment search and `< 0.5 ms`; `changeling16` (`/usr/bin/sample`,
-    3,436 samples) shows `PaymentModel::witness` down `58.61% → 15.54%`,
-    `mana_ability_actions` `23.64% → 7.89%`, `mana_choice_completes_payment`
-    `21.93% → 1.83%`.
-  - `storm-copies --sizes 2,4,8` (**1.662B**), `genesis-wave --sizes 4,8,16`
-    (**0.489B**), `ventmaw-pools --sizes 4,8,16` (**0.225B**): 0 payment search
-    calls, linear/flat scaling. Pre-existing shapes (`diverse-mana`,
-    `restricted-filter`, `distinct-restrictions`, `lathril-elves`,
-    `convoke-diverse`, `mixed`) match their documented residuals.
-- **Open bottlenecks & ruled-out further iteration:**
-  - `changeling-anthems` `cast-choice search` (`8.92→31.76→67.33 ms`,
-    `plans 152→302→441`, `states 998→4,455→14,233`, `3.19×` for `2×` size,
-    down 10× from Slice 15's `142,189` states): `66.5%` of `changeling16` is
-    now inherent 32-changeling × 8-anthem `layer_board` + 16×16
-    `blocker_can_block_attacker` (`29.8%`); `automatic_upfront_path`
-    (`SourcePolicy::AutomaticPrefix`) accounts for `18.8%` (`~1.7B`
-    instructions) because iterative-deepening prefix search runs before
-    `GROWTH = 16` triggers equivalence pruning. Ruled out for MTG-431: 0%
-    curated-deck impact and not worth adding more complexity to `mana.rs`.
-  - `entry-choices` `cast-choice search` (`7.54→28.09→78.13 ms`,
-    `plans 1,119→2,298→3,534`, `states 4,571→13,644→38,123`, `2.79×` for `2×`
-    size, `maxc 27→41→49`): bounded polynomial cost from `N` pairwise-distinct
-    chosen creature-type restrictions (`plans 1.54×` × `maxc 1.20×`); residual
-    `entry16` CPU (`mana_ability_actions` `39.4%`, `payment_model` `19.5%`)
-    requires cross-step payment-model/answer reuse (separate architectural
-    design, matching `mixed`/`counted-tap`).
-  - No negative curated-deck results remain; deferred to gate/CI: Ubuntu
-    `x86_64` Engine Budget (`engine-budget.yml`), full workspace debug
-    `nextest`, extension rebuild / Academy fixture refresh, and Python
-    admission + pinned-pilot checks.
-- **Debug invariants at `04a8f55e6d`:** `286/286` focused debug `nextest` tests
-  (`flow::mana::`, `flow::layers`, `flow::statics`, `fdn::`, `entry_choice`,
-  `changeling`, `retarget`, `storm`), `2/2` debug `bench_states` self-tests,
-  and debug `bench_states` runs on `entry-choices --sizes 4,8` and
-  `changeling-anthems --sizes 4,8` (exercising `fixed_sufficient`,
-  `useful_payment_taps`, `mana_ability_actions`, and layer dirty-bit debug
-  oracles) all pass.
-- **Pre-publish validation:** full workspace debug `nextest` (`2,179/2,179`,
-  0 failures), `cargo fmt --all --check`, rebuilt release `_managym` extension,
-  fixed `tests/verify/test_native_observation_contract.py` (`card::VALID` vs
-  appended column 56), `197 passed` across native observation contract,
-  `test_pinned_pilot.py`, Elemental/evaluation/mirror/monitor/separability
-  admission and `test_text_observation.py`, `52 passed` Academy protocol &
-  launcher tests, `56 passed` package boundaries & public API contract,
-  `scripts/public_api.py check`, `scripts/check_loopflow_workflows.py`, and
-  `academy/ui` (`660/660` Vitest + `svelte-check` 0 errors/warnings).
+Native audit (`managym/src/flow/decision.rs` = D, `decision_context.rs` = C):
 
-Review note for gate: Slice 16 + compress (`7c75706ef1`) grew
-`managym/src/flow/mana.rs` by ~720 net lines (`fixed_sufficient` constructive
-checks with a debug search oracle, `SourceClassCache` dedup oracle, sibling
-pruning, `ProjectedClasses`). Gate's readability pass should check each fast
-path still earns its place against the measurements above, deleting any that
-the numbers do not support.
+- `skip_trivial` answers any one-action space and loops
+  (`flow/tick.rs:110-122`), so the last step of a sequence is often never
+  asked: the last card of `OrderLibrary`, the last target's share, the
+  `Decline` after every card is picked. A plan lists only the steps that will
+  be asked; the runner finishes when its steps run out and never waits for a
+  closing frame.
+- Scry is not a cursor: every remaining card is offered with both sides each
+  step and pick order is the final order (D:2218-2234, 3015-3027).
+- `KeepCreatures` does not exist; it is `KeepPermanents{TotalCreaturePower}`.
+  Cast-time shares are `PendingChoice::DivideAmongTargets`, and trigger
+  ordering is `state.trigger_placement` with its own `ORDER_TRIGGERS` space;
+  neither is a `Decision` variant.
+- `combat_preview` (`flow/combat_preview.rs:104-199`) clones the game, steps
+  the clone and returns `revision`, `fingerprint`, `action_index` per asked
+  step. The clone-and-step core is not combat-specific; a general preview
+  needs a per-decision plan matcher, a stop rule, and a rule that it stops
+  before any step whose next frame depends on a shuffle, draw or opponent
+  choice.
+- The `discard` instruction says "or decline when offered" (C:516); no
+  decline is ever offered (D:2166).
 
-Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
-at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two
-LLM-text field failures are fixed; after the compress commits,
-`tla::fire_lord_azula*` (2 passed) and `tests/semantic/test_text_observation.py`
-(103 passed) still pass. Remaining nits, not blocking: Academy shows Retarget
-as "Choose a target for …" and `KeepPermanents` as "Choose from the revealed
-cards".
+Classification the doc will carry (A = draft from the frame alone, B = needs
+a read-only native preview, C = leave sequential):
 
-## Coverage decomposition at `47e21050c2`: no further slices
+| Decision (stage) | Class | Why |
+|---|---|---|
+| Scry (`scry`) | A, N≥2 | all looked cards in `inspected`; nothing commits until the last step |
+| Surveil (`surveil`) then `order_library_top` | A, two phases | graveyard picks commit as one batch before ordering |
+| OrderLibrary (`order_library_top`/`_bottom`) | A | N−1 asked steps; bottom shows only `cards[next..]` |
+| SelectCards (`select_cards`, `private_search`) with max > 1 | A | candidates fixed, nothing moves until finish |
+| SearchDistinctNames (`private_search`) | A | draft enforces distinct names; only picked and candidate cards are shown |
+| OpponentSplitsRevealed (`split_revealed`) | A | each pick moves at once; all revealed cards visible |
+| Discard (`discard`), 2+ cards | A | each discard commits and is public; cleanup discard is asked one card at a time and never states a total |
+| DistributeCounters (`distribute_counters`) | A | one counter per step, repeats allowed, each commits |
+| DivideAmongTargets (`target_shares`) | A | arithmetic; total = first frame's largest share + targets − 1; mode value is the share, offer index is offset by the minimum |
+| KeepPermanents `AllBut` (`keep_permanents`) | A | public board, count limit |
+| PartitionPiles (`partition_piles`) | A | shipped |
+| AssignCombatDamage (`assign_combat_damage`) | B | asking order and lethal minimums are engine rules (`combat_actions.rs:176-262`); frame shows one pair |
+| KeepPermanents by total power | B | layered power sums; may end without a decline |
+| Trigger ordering (`order_triggers`) | B | modes and targets are asked between picks; pure only when no trigger has either |
+| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | C | later options are legality- or planner-filtered, or answers interleave with other questions; usually one or two steps |
+| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | C | one step (all `LookAndSelect` users have `max_select: 1`) |
 
-Review criterion: the representative cards compose from small orthogonal
-primitives, with no card-specific engine logic, multi-axis special variant or
-duplicate state. The batch meets it, so no refactoring slice is planned.
+Also multi-step and unlisted in the brief: `SearchNamed`, opening-hand
+bottoming, `PendingChoice::Pay` (crew, convoke, waterbend), one-per-step
+targets. Each commits per step; class C unless a later Task says otherwise.
 
-- Stack copies: Thousand-Year Storm is `Repeat { count:
-  SpellsCastBeforeTriggering, effect: CopyTriggeringObject }`; Teach by Example
-  is a delayed trigger over the same copy verb; Bolt Bend is the existing
-  `ChangeTarget`. One copy owner (`CopiableSpell`), one retarget owner
-  (`flow/retarget.rs`).
-- Targets: `TargetRelation` on the clause, `ObjectSelector::ClauseTarget(n)`,
-  `Simultaneously` and `Fight { first, second }` carry Drakuseth, Fiery
-  Annihilation, Run Away Together, Indrik and Primal Might.
-- Library and selection: `LibraryTop`, `Unselected`, `SelectCards.max_mana_value`
-  and `GrantPlay { what, until }` carry Genesis Wave, Plunderer and Raider and
-  replaced `ExileTopCardsToPlay` and `GrantGraveyardCastThisTurn`.
-- Entry choices: one `Permanent.chosen: EntryChoice` read by predicates, mana
-  output and the type layer. A second chosen-type land (cast-only) is
-  `creature_purposes: [Cast]` with no engine change.
-- Costs and values: `PaymentCost::All`, `ManaExpiry`, `CardPredicate.keyword`,
-  `EachPlayerSacrifices { predicate }`.
-- The engine diff names no card (checked by grep over added lines).
+ChoosePile: one step, so nothing to draft. The companion check is whether the
+chooser sees the face-up cards and the face-down count; the prompt line exists
+(`prompt.ts:72`) but no UI test or e2e covers the frame. Pass 1 reads a real
+`choose_pile` frame (Curator of Destinies through the engine in a Python
+session) and the doc records what it shows; a gap is a row in the follow-up
+list, not a fix here.
 
-Single-consumer variants left as they are, because splitting them now would
-guess at a second card. Split each when that card arrives:
+## Design
 
-- `Effect::SeparatePiles { look }` (Curator). The shape then is `SelectCards`
-  over `LibraryTop` with `Selected`/`Unselected` as the piles and a `ForPlayer`
-  pile choice.
-- `TargetRequirement.up_to_if_kicked` (Divine Resilience).
-- `ReplacementEffect::AsEntersChoose.look_at_opponent_hand` (Spyglass).
-- `PrintedCharacteristics.division` (Biogenic Upgrade); it moves onto the
-  divided clause when a spell divides among one clause of several.
+Source of truth: the authority frame and its offers. A plan is an ordered
+list of steps plus a function that finds, in a given frame, the frame's own
+offer answering a step, or nothing. A plan comes from the frame (pile split)
+or from a native preview (combat); the runner does not care which.
 
-## Follow-ups outside MTG-431 (separate Tasks)
+`academy/ui/src/lib/board/chunked.ts`, pure, no Svelte:
 
-- Retire `Effect::TargetCreaturesDealPowerDamageToLastTarget` (Felling Blow,
-  Bite Down, Rocky Rebuke, Allies at Last) onto
-  `DealDamage { by }` over `ClauseTarget`. Not done here: Allies at Last needs
-  a per-source amount read, two TLA definitions change their learning tokens
-  (pinned-pilot rollover), and `agent/heuristic/knowledge.rs` matches the
-  variant by name.
+```ts
+export interface ChunkedPlan<Step> {
+  steps: readonly Step[];
+  offerFor(frame: ExperienceFrame, step: Step): InteractionOffer | null;
+}
+/** Step `at` was sent at frame revision `sentAt`. */
+export interface Run { total: number; at: number; sentAt: number }
+export type Stop =
+  | { why: 'refused'; sent: number }      // same revision once answerable
+  | { why: 'unpredicted'; sent: number }  // next frame is not the planned step
+  | { why: 'disconnected'; sent: number } // connection left 'connected' mid-run
+  | { why: 'stopped'; sent: number }      // Escape / Stop sending
+  | { why: 'reloaded'; sent: number; total: number };
+export type Advance =
+  | { kind: 'wait' }
+  | { kind: 'send'; run: Run; offer: InteractionOffer }
+  | { kind: 'done' }
+  | { kind: 'stop'; stop: Stop; keepDraft: boolean };
 
-- Semantic candidate-token encoding for `Decision::ChooseEntryValue` (Color and
-  367 creature types): generalize `NameCandidateEncoder` to
-  `RecordNamespace::Token` vocabularies across `managym`,
-  `manabot/policy/prepare.py`, Torch and MLX.
-- Retire `Effect::LookAndSelect` onto `SelectCards { from: LibraryTop }`, and
-  replace `Effect::AddMana.until_end_of_combat` with `ManaExpiry` on
-  definitions (pinned-pilot rollover).
+export function begin<S>(plan: ChunkedPlan<S>, frame: ExperienceFrame): { run: Run; offer: InteractionOffer } | null;
+export function advance<S>(run: Run, plan: ChunkedPlan<S>, frame: ExperienceFrame, table: { answerable: boolean; connected: boolean }): Advance;
+export function stopWords(stop: Stop, total: number, words: DraftNouns): string;
+```
 
-## Finished slices (detail in git and the ledger)
+Rules, each a unit test:
 
-1. Entry choices on one battlefield incarnation (Banner, Haven, Mare, Automaton, Courtyard, Spyglass) — `47e0e34eda`, `9e1bd7c4a8`, `1635633a40`.
-2. Curator's opponent-chosen piles — `49417f76ad`, `cb84b1c0fe`.
-3. Biogenic Upgrade's cast-time counter shares — `49417f76ad`, `cb84b1c0fe`.
-4. `TargetRelation` and whole-assignment `Decision::Retarget` (Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience, Charming Prince, Affectionate Indrik) — `4e481dc0a1`.
-5. Stack copies and retargeting (Thousand-Year Storm, Bolt Bend, Teach by Example) — `d73b18db4a`; stress `bench_states storm-copies --sizes 8`.
-6. `LibraryTop`/`Unselected` selectors, `SelectCards.max_mana_value`, `Effect::GrantPlay` (Gutless Plunderer, Strongbox Raider, Genesis Wave) — `460fe18685`.
-7. Last-known values and shared sacrifice (Tribute to Hunger, Deadly Brew) — `30fd60f499`.
-8. Kicked entries, composite ward, `ManaExpiry`, Changeling, `CardPredicate.keyword`, `CounterKind::Wish` (Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush) — `460fe18685`.
-9. 23 compose-only cards (`token.raccoon_3_3_g`, `token.cat_beast_2_2_w`, `Effect::double_counters`, graveyard trigger `intervening_if` and `source_present` fixes for Flamewake Phoenix and Gate Colossus) — `1eb342e57b`.
-10. Abyssal Harvester (`TurnState::graveyard_arrivals`, `CardPredicate.put_into_graveyard_this_turn`, `Except::CreatedThisWay`, `CardData.put_into_graveyard_this_turn`, v11 `card::PUT_INTO_GRAVEYARD_THIS_TURN` column 56) — `1eb342e57b`; `blocked_by` cleared on its ledger row.
+- Not answerable: wait. The draft stays drawn and its controls disabled.
+- Disconnected while running: stop, `keepDraft: false`, "Stopped after k of
+  n: the connection dropped. The board shows where the game stands."
+- Same revision, answerable: refused. `at === 0` keeps the draft and says
+  nothing beyond the table's own rejection message; `at > 0` clears it and
+  reports `sent = at`.
+- New revision, steps exhausted: done.
+- New revision, `offerFor` finds nothing: unpredicted, `sent = at + 1`.
+- New revision, offer found: send it, `at + 1`, `sentAt = revision`.
+- Escape or Stop sending: `sent = at + 1`, "the rest was not sent".
 
-11. Concept alignment: Retarget projects chosen `"new target"`s; one `Player.mana_pool` with `ManaExpiry` (combat pool deleted, additive `expiry` beside derived `combat`, `MATCH_STATE_HASH_VERSION` 33); group clicks skipped in decision memory; `PartitionPiles`/`ChoosePile` are `Modal`; `keep_permanents` stage (`keep_creatures` still read); Academy prompt lines — `e1f42473b0`.
-12. Behavior-review defects: Azula fixture preserves firebending `EndOfCombat` mana alongside step `{R}`; `text_observation._cards_lines` renders `put_into_graveyard_this_turn` and `_TEXT_FIELDS` covers `Card.put_into_graveyard_this_turn` and `PooledManaClass.expiry`; verified all 14 frozen semantic-kernel traces match base `3be5a0cfb2` identically on Commands and event boundaries (only `state_hash` `v31`→`v33`, `pending_choice_digest`, and `content_digest` moved), re-recorded `evidence-battlefield-history-v1.json`, rebuilt the release extension, and regenerated the authored-match authority and parity receipts (all 174 commands, presentation events, and terminal board identical; event diffs are pure `card_def_id` renumbering).
-13. Layer performance: per-object dirty bits (`FINISH_TYPES` / `FINISH_ACTIVATIONS` / `FINISH_STATICS`) skip unchanged `finish_object` work (uncached debug oracle still forces `FINISH_ALL`); `PredicateSource` guarded by `reads_source()` in `layers::Context` and `Game::object_matches_with_source`; O(1) `This`/`Attached` targets and single-pass `objects.iter()` in `Context::targets` — `1811194e41`.
-14. Payment-search performance: allocation-free `PaymentResources::cmp_source` + bit-packed `PaymentResources::hash`, `Arc<SpendPredicates>` precomputed hash digest on `ManaRestriction::Only` (byte-identical serde) and `ManaChoices` digest on `Obligation::Output`, single-pass `optimistic_supply` and per-`SpendingContext` `PurposeSupply` memo in `PaymentSearch` — `a17915a437`. Engine Budget beats CI reference `7d3ac1eb1c` (`bench_steps` -1.74% instructions, `bench_search` -4.85% instructions) with identical digests; `entry-choices` (`size=16`) `step:activate` 8.0× faster (`7.80`→`0.98 ms`) and `search` 3.43× faster (`789.64`→`230.19 ms`); `changeling-anthems` (`size=16`) `step:choice` 2.20× faster (`6.00`→`2.73 ms`) and `search` 1.89× faster (`2,080.77`→`1,098.88 ms`).
-15. Payment-search equivalence: purpose-projected dedup in `Game::mana_ability_actions` and `PaymentSearch::groups_for`/`CanonicalState`, `PaymentResources` bitmasks, `FastHasher` — `e8ed428d2c`.
-16. Entry-choice layer mana resolution, `useful_payment_taps` dedup/cache, `fixed_sufficient` feasibility fast-path, DFS sibling pruning & lean `PurposeProjection` / boxed `SearchEquivalence` — `entry-choices` `-40.1%` (`16.92B→10.14B`, linear `priority step:activate`), `changeling-anthems` `-53.0%` (`19.96B→9.39B`, 0-search `damage actions` / `step:choice`), `bench_steps`/`bench_search` digests identical (`45.97B` / `980.95B`).
+`sent` counts steps the game accepted, except Escape and a disconnect, where
+the last sent step's outcome is unknown; those two sentences say "sent", not
+"accepted".
 
-## Integrated validation
+`academy/ui/src/lib/board/draft-store.ts`: one `sessionStorage` key,
+`academy.table.draft`, holding `{ kind, match_id, frame_hash, value }` and,
+while a run is sending, `{ kind, match_id, sent, total }`.
+`saveDraft(kind, frame, value)`, `loadDraft(kind, frame, parse)` where `parse`
+narrows unknown JSON to the consumer's draft type or null, `markRun`,
+`takeInterruptedRun(match_id)`. A draft loads only for the same match, frame
+hash and kind. A run marker found on mount for the same match becomes the
+`reloaded` stop line once, then is removed. Storage failures lose the draft
+and nothing else.
 
-- Rust: `CARGO_BUILD_JOBS=2 cargo nextest run --profile ci --test-threads 2 --manifest-path managym/Cargo.toml`
-  in debug before landing; `cargo fmt --all`.
-- Rebuild the extension and refresh Academy fixtures
-  (`scripts/refresh_academy_fixtures.py`).
-- Current-world admission:
-  `uv run --extra dev --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`,
-  plus `tests/model/test_pinned_pilot.py`.
-- Stress states through `bench_states`; Engine Budget stays within 10%:
-  8–16 Courtyards with distinct mana restrictions and eight differently
-  chosen Banners or Automatons (payment and layers); `storm-copies --sizes 8`;
-  Genesis Wave X = 16; eight Ventmaw-style pools; Changelings under eight
-  chosen-type anthems.
-- Synergies to exercise together:
-  - Thousand-Year Storm with Teach by Example (a Teach copy is not cast, so
-    it never raises Storm's count).
-  - Bolt Bend redirecting a Drakuseth trigger's single-target copy is not
-    legal; it is legal on Fiery Annihilation only if that spell has one
-    target.
-  - Three Tree Mascot with Adaptive Automaton, Secluded Courtyard and
-    Ballyrush Banneret.
-  - Sorcerous Spyglass naming Three Tree Mascot leaves its mana ability
-    working; naming Wishclaw Talisman stops it.
-  - Genesis Wave putting Heraldic Banner and Uncharted Haven onto the
-    battlefield simultaneously: each asks its entry choice.
-  - Deadly Brew against Desecration Demon.
-  - Gate Colossus with Maze's End.
-- Hash version 33 moves match-state digests: expect Engine Budget digest and
-  retained-fixture changes; adopt with `scripts/engine_budget.py record --reason`.
-- Pinned pilot: v11 card column 56 (`put_into_graveyard_this_turn`) is an
-  appended input column; `tests/model/test_pinned_pilot.py` must pass or the
-  change must be declared with `scripts/pinned_pilot.py record --reason`.
+`Board.svelte` holds one `run`, one active plan, one effect calling `advance`,
+one `stopSending`, one Escape branch, one "Stop sending" button and one
+progress line built from the active draft's words ("Declaring 2 of 5…",
+"Placing 2 of 5…"). `combat.ts` and `partition.ts` keep their draft types,
+words and `stepOffer` / `partitionOffer`, and each exports the
+`ChunkedPlan` for its steps.
+
+`Rail.svelte`: the `draft` prop becomes `{ controls: Snippet; raw: { summary:
+string; note: string } }`; the disclosure and the stop line take generic test
+ids `draft-raw-choices` and `draft-stopped`. Combat passes "Each creature's
+choice" / "Confirming the draft sends these one creature at a time."; the pile
+split passes "Each card's choice" / "Confirming the split sends these one card
+at a time." Replay and Study pass no draft and keep the full list with
+recorded probabilities. Choice made for review: one pair of test ids for all
+drafts rather than keeping `per-creature-choices` and `combat-stopped`;
+MTG-441's and MTG-431's specs are updated in the same pass.
+
+Invariants held (CLAUDE.md, "Academy's shared decision surface"): every step
+sent is the current frame's own offer bound to that frame's revision; nothing
+is sent before Confirm; raw offers stay reachable in "All legal choices" under
+the disclosure; a sent step is never taken back; Escape, Space and the
+disclosure work from the keyboard; drafts are offered only when
+`interaction === 'play'`.
+
+## Acceptance check at gate
+
+```
+cd academy/ui && npm run check && npm test \
+  && npx playwright test e2e/chunked-drafts.spec.ts e2e/combat-presentation.spec.ts e2e/partition-piles.spec.ts e2e/drag-play.spec.ts e2e/keyboard-play.spec.ts
+```
+
+All pass. `chunked-drafts.spec.ts` drives the pile split (the consumer that
+lacks MTG-441's fixes today) through a mocked socket:
+
+1. Confirm a 5-card split; the server answers step 3 with a rejection at the
+   same revision. The rail reads "Stopped after 2 of 5…", the panel shows the
+   3 cards left, exactly 3 Commands were sent.
+2. Confirm; the first Command is rejected. The drafted split is still on
+   screen and Confirm works again.
+3. Confirm; the socket closes after step 2 and reconnects with a later
+   revision. No further Command is sent and the rail names the disconnect.
+4. Confirm; reload after step 2. The rail reads "Stopped after 2 of 5: the
+   page reloaded…" once.
+5. While the split is open, `draft-raw-choices` is collapsed, reads "Each
+   card's choice", and opening it lists both per-card offers.
+
+## Absent and error states
+
+- No preview answer (combat): no draft; the board keeps one creature at a
+  time, as now.
+- Frame is not a recognised draftable decision: no draft, raw offers only.
+- Storage unavailable or malformed: empty draft, no run marker, no error.
+- Recording, Replay, Study, read-only: no draft, no runner.
+- Run stopped for any reason: the board shows the authority's current frame;
+  a new draft starts from it.
+
+## Exclusions
+
+- Any new drafted decision (Scry, Surveil, library order, damage assignment,
+  shares, …). The doc's table and a follow-up list in `scratch/questions.md`
+  are what ship-review turns into Tasks.
+- A general native preview; `combat_preview` is unchanged.
+- `partition.ts` finding its two offers by label text (`FACE_UP_RE`); a
+  structured pile field on the offer is a native change.
+- The wrong `discard` instruction text (C:516).
+- Drag gestures, the marquee and target lines from MTG-441.
+
+## What goes
+
+- Both send-loop effects, `stopSending` / `stopPartitionSending`, `running` /
+  `partitionRunning`, and the two Escape branches in `Board.svelte`.
+- `saveDraft` / `loadDraft` and `DRAFT_KEY` in `combat.ts`;
+  `savePartitionDraft` / `loadPartitionDraft` and `DRAFT_KEY` in
+  `partition.ts`; storage keys `academy.table.combat-draft` and
+  `academy.table.partition-draft` (tab-scoped presentation; no migration).
+- Test ids `combat-stopped`, `per-creature-choices`, `combat-stop`,
+  `partition-stop` (one `draft-stop`).
+- The three differently worded stop sentences per consumer.
+
+Survives unchanged: combat and pile-split drafting, their words and panels,
+`/combat-preview`, MTG-441's drag and draft behavior, reload-keeps-draft,
+`stepOffer` and `partitionOffer` verification.
+
+## Passes
+
+1. **Runner, store and audit, with no shared-file edits.** `chunked.ts`,
+   `chunked.test.ts`, `draft-store.ts`, `draft-store.test.ts`; the "Drafted
+   decisions" section of `docs/academy.md` (contract, the table above, what a
+   class B preview must guarantee, the ChoosePile reading); follow-up list in
+   `scratch/questions.md`. This is the pass that can prove the plan wrong: if
+   MTG-441's loop cannot be written as `advance` without a combat-only input,
+   the interface changes here before anything depends on it. Shows:
+   `npm test` green with every rule above as a case, including the MTG-441
+   double `command_outcome` (not answerable, then answerable, new revision).
+2. **Both consumers on the runner.** Needs MTG-441 underneath (see Base).
+   `Board.svelte`, `Rail.svelte`, `combat.ts`, `partition.ts`, their tests and
+   specs, `e2e/chunked-drafts.spec.ts`, the combat and Curator paragraphs of
+   `docs/academy.md`. Removes everything under What goes. Shows: the
+   acceptance command.
+
+## Done when
+
+- A refused, rejected, disconnected, reloaded or Escaped pile split stops with
+  the same sentence shape and partial count as combat, and a first-step
+  refusal keeps the split.
+- `Board.svelte` has one send loop; `grep -c "sentAt" Board.svelte` finds one
+  run, not two.
+- One `sessionStorage` key holds drafts.
+- `docs/academy.md` classifies every multi-step native decision and names
+  which need a native preview.
+- Combat click and drag drafting, and the pile split, pass their existing
+  specs.
