@@ -1745,6 +1745,7 @@ fn wardens_of_the_cycle() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::CreatureDiedThisTurn),
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     modes: vec![
                         vec![Effect::gain_life(2)],
                         vec![
@@ -3317,6 +3318,7 @@ fn apothecary_stomper() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: false,
                     modes: vec![
@@ -3361,6 +3363,7 @@ fn spinner_of_souls() -> CardDefinition {
                     modes: vec![
                         vec![Effect::RevealUntilToHand {
                             predicate: CardPredicate::creature(),
+                            to_battlefield: false,
                         }],
                         vec![],
                     ],
@@ -3997,6 +4000,7 @@ fn kykar_zephyr_awakener() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     unchosen: false,
                     up_to: None,
                     modes: vec![

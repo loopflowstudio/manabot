@@ -990,6 +990,7 @@ fn allies_at_last() -> CardDefinition {
 fn appa_loyal_sky_bison() -> CardDefinition {
     let text_box = "Flying\nWhenever Appa enters or attacks, choose one —\n• Target creature you control gains flying until end of turn.\n• Airbend another target nonland permanent you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
     let modes = || Effect::TriggerModes {
+        min: 0,
         up_to: None,
         unchosen: false,
         modes: vec![
@@ -2035,6 +2036,7 @@ fn bumi_king_of_three_trials() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: Some(EffectValue::GraveyardMatching {
                         base: 0,
                         predicate: CardPredicate::subtype("Lesson"),
@@ -6662,6 +6664,7 @@ fn momo_playful_pet() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: false,
                     modes: vec![
@@ -11425,6 +11428,7 @@ fn zuko_conflicted() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::FirstMain, Actor::You),
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: true,
                     modes: vec![

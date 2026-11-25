@@ -889,6 +889,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
+        Effect::Fight { .. } => "Effect::Fight",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
         Effect::GrantPlay { .. } => "Effect::GrantPlay",
         Effect::Remember { .. } => "Effect::Remember",
@@ -896,7 +897,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 102;
+const EFFECT_VARIANTS: usize = 103;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -991,6 +992,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RevealUntilToHand {
             predicate: CardPredicate::creature(),
+            to_battlefield: false,
         },
         Effect::If {
             condition: Condition::YourTurn,
@@ -1155,9 +1157,14 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::CastLibraryTopFree,
         Effect::WhenYouDo { effects: draw() },
         Effect::TriggerModes {
+            min: 0,
             up_to: None,
             unchosen: false,
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
+        },
+        Effect::Fight {
+            first: ObjectSelector::This,
+            second: ObjectSelector::Target(target()),
         },
         Effect::AttachSourceTo {
             what: ObjectSelector::Target(TargetSpec::CreatureYouControl),

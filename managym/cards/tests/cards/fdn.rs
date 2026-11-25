@@ -2835,6 +2835,7 @@ fn modal_trigger_rechecks_its_intervening_if_on_resolution() {
             }),
             effects: vec![Effect::TriggerModes {
                 modes: vec![vec![Effect::gain_life(2)], vec![Effect::gain_life(5)]],
+                min: 0,
                 up_to: None,
                 unchosen: false,
             }],
@@ -8461,6 +8462,7 @@ fn source_power_limits_trigger_modes_and_is_rechecked_after_savor() {
                 vec![return_creature(None)],
                 vec![Effect::gain_life(1)],
             ],
+            min: 0,
             up_to: None,
             unchosen: false,
         }],

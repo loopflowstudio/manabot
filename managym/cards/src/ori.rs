@@ -116,6 +116,7 @@ fn demonic_pact() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: true,
                     modes: vec![

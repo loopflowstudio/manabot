@@ -1016,6 +1016,7 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
             2,
             ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 0 }),
         )]],
+        min: 0,
         up_to: None,
         unchosen: false,
     }];

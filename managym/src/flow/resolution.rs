@@ -1712,8 +1712,14 @@ impl Game {
                 frame.selected_revealed |= *what == ObjectSelector::Selected;
                 None
             }
-            Effect::RevealUntilToHand { predicate } => {
-                self.reveal_until_to_hand(frame.controller, predicate);
+            Effect::RevealUntilToHand {
+                predicate,
+                to_battlefield,
+            } => {
+                if let Some(event) = self.reveal_until(frame.controller, predicate, *to_battlefield)
+                {
+                    frame.batch = Some(self.event_batch(EventBinding::None, [event]));
+                }
                 None
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
@@ -1956,45 +1962,27 @@ impl Game {
                 None
             }
             Effect::FightLastTarget => {
-                // CR 701.14b: if either creature is an illegal target, has
-                // left the battlefield or is no longer a creature, neither
-                // deals damage.
                 let [first, .., last] = frame.targets.as_slice() else {
                     return None;
                 };
-                let (Target::Permanent(first), Target::Permanent(last)) =
-                    (first.target, last.target)
-                else {
-                    return None;
-                };
-                if !frame.targets.iter().all(|slot| slot.legal)
-                    || !self.permanent_is_battlefield_creature(first)
-                    || !self.permanent_is_battlefield_creature(last)
-                {
+                if !frame.targets.iter().all(|slot| slot.legal) {
                     return None;
                 }
-                let first_ref = self.permanent_object(first)?;
-                let last_ref = self.permanent_object(last)?;
-                // Each deals damage equal to its power at once (CR 701.14a).
-                let first_power = self.characteristics(first).power;
-                let last_power = self.characteristics(last).power;
-                frame.batch = Some(self.event_batch(
-                    EventBinding::Damage { result: Some(0) },
-                    [
-                        ProposedEvent::Damage {
-                            source: Some(first_ref),
-                            target: ProposedDamageTarget::Object(last_ref),
-                            amount: first_power,
-                            combat: false,
-                        },
-                        ProposedEvent::Damage {
-                            source: Some(last_ref),
-                            target: ProposedDamageTarget::Object(first_ref),
-                            amount: last_power,
-                            combat: false,
-                        },
-                    ],
-                ));
+                if let (Target::Permanent(first), Target::Permanent(last)) =
+                    (first.target, last.target)
+                {
+                    self.fight_permanents(first, last, frame);
+                }
+                None
+            }
+            Effect::Fight { first, second } => {
+                let Some(&first) = self.selected_permanents(first, frame).first() else {
+                    return None;
+                };
+                let Some(&second) = self.selected_permanents(second, frame).first() else {
+                    return None;
+                };
+                self.fight_permanents(first, second, frame);
                 None
             }
             Effect::ShuffleLibrary => {
@@ -2958,6 +2946,46 @@ impl Game {
     pub(super) fn permanent_mana_value(&self, id: PermanentId) -> i32 {
         self.permanent_object(id)
             .map_or(0, |object| i32::from(self.object_mana_value(object)))
+    }
+
+    /// CR 701.14: two battlefield creatures deal damage equal to their powers
+    /// to each other simultaneously; if either is absent or not a creature,
+    /// neither deals damage.
+    fn fight_permanents(
+        &mut self,
+        first: PermanentId,
+        second: PermanentId,
+        frame: &mut EffectFrame,
+    ) {
+        if !self.permanent_is_battlefield_creature(first)
+            || !self.permanent_is_battlefield_creature(second)
+        {
+            return;
+        }
+        let (Some(first_ref), Some(second_ref)) =
+            (self.permanent_object(first), self.permanent_object(second))
+        else {
+            return;
+        };
+        let first_power = self.characteristics(first).power;
+        let second_power = self.characteristics(second).power;
+        frame.batch = Some(self.event_batch(
+            EventBinding::Damage { result: Some(0) },
+            [
+                ProposedEvent::Damage {
+                    source: Some(first_ref),
+                    target: ProposedDamageTarget::Object(second_ref),
+                    amount: first_power,
+                    combat: false,
+                },
+                ProposedEvent::Damage {
+                    source: Some(second_ref),
+                    target: ProposedDamageTarget::Object(first_ref),
+                    amount: second_power,
+                    combat: false,
+                },
+            ],
+        ));
     }
 
     /// The battlefield permanents a selector names.

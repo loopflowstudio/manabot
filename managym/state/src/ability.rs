@@ -1805,12 +1805,15 @@ pub enum Effect {
         what: ObjectSelector,
     },
     /// "Reveal cards from the top of your library until you reveal a
-    /// [predicate] card. Put that card into your hand and the rest on the
-    /// bottom of your library in a random order." The cards stay in the
-    /// library while revealed; with no match, every card is revealed and the
-    /// library is put back in a random order.
+    /// [predicate] card. Put that card into your hand [or onto the battlefield]
+    /// and the rest on the bottom of your library in a random order." The cards
+    /// stay in the library while revealed; with no match, every card is revealed
+    /// and the library is put back in a random order.
     RevealUntilToHand {
         predicate: CardPredicate,
+        /// Put the revealed matching card onto the battlefield instead of into hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
     },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
@@ -2042,6 +2045,10 @@ pub enum Effect {
     /// effect.
     TriggerModes {
         modes: Vec<Vec<Effect>>,
+        /// Minimum distinct modes required when `up_to` is set ("choose two"
+        /// uses `min: 2, up_to: Some(2)`).
+        #[serde(skip_serializing_if = "crate::is_zero")]
+        min: usize,
         /// "Choose up to [value] —": that many distinct modes or fewer,
         /// read as the ability is put on the stack; their effects run in
         /// printed order (CR 700.2d).
@@ -2102,6 +2109,12 @@ pub enum Effect {
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
     FightLastTarget,
+    /// `first` fights `second` (CR 701.14); records the excess damage dealt to
+    /// `second`. Neither deals damage if either is absent or not a creature.
+    Fight {
+        first: ObjectSelector,
+        second: ObjectSelector,
+    },
     /// Shuffle the resolving player's library (CR 701.20).
     ShuffleLibrary,
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
@@ -2541,6 +2554,7 @@ impl Effect {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().find_map(f),
             Effect::PutCountersFrom { from, on } => f(from).or_else(|| f(on)),
+            Effect::Fight { first, second } => f(first).or_else(|| f(second)),
             Effect::DealDamage { what, by, .. } => f(what).or_else(|| by.as_ref().and_then(f)),
             Effect::SelectCards { from: selector, .. }
             | Effect::PutCounters { on: selector, .. }
@@ -2769,6 +2783,7 @@ impl Effect {
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
+            | Effect::Fight { .. }
             | Effect::Scry { .. }
             | Effect::ManifestDread
             | Effect::Surveil { .. }

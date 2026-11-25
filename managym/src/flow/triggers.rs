@@ -465,19 +465,24 @@ impl Game {
             // mode that has legal targets it is removed (CR 700.2a).
             if let Some(Effect::TriggerModes {
                 modes,
+                min,
                 up_to,
                 unchosen,
             }) = self.pending_mode_rule(&trigger)
             {
                 let legal = self.legal_trigger_modes(&trigger, modes, *unchosen);
-                let optional = up_to.is_some();
+                let min_required = if up_to.is_some() { *min } else { 1 };
+                let optional = up_to.is_some() && trigger.chosen_modes.len() >= *min;
                 if up_to.as_ref().is_some_and(|limit| {
                     let limit = usize::try_from(self.controller_value(limit, trigger.controller))
                         .unwrap_or(0);
-                    legal.is_empty() || trigger.chosen_modes.len() >= limit
+                    trigger.chosen_modes.len() >= limit
+                        || (legal.is_empty() && trigger.chosen_modes.len() >= min_required)
                 }) {
                     trigger.modes_chosen = true;
-                } else if legal.is_empty() {
+                } else if legal.is_empty()
+                    || trigger.chosen_modes.len() + legal.len() < min_required
+                {
                     continue;
                 } else {
                     let controller = trigger.controller;
@@ -605,6 +610,7 @@ impl Game {
             modes,
             up_to,
             unchosen,
+            ..
         }) = self.pending_mode_rule(trigger)
         else {
             return Err(AgentError("no pending trigger mode".into()));
@@ -648,9 +654,14 @@ impl Game {
         let trigger = self
             .placing_trigger()
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        if let Some(Effect::TriggerModes { up_to: Some(_), .. }) = self.pending_mode_rule(trigger) {
-            if trigger.controller != player {
-                return Err(AgentError("not the trigger's controller".into()));
+        if let Some(Effect::TriggerModes {
+            up_to: Some(_),
+            min,
+            ..
+        }) = self.pending_mode_rule(trigger)
+        {
+            if trigger.controller != player || trigger.chosen_modes.len() < *min {
+                return Err(AgentError("trigger cannot decline mode".into()));
             }
             self.state
                 .trigger_placement

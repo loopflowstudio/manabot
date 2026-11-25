@@ -1519,12 +1519,15 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         ExileEachLibraryTopCastFree => "Exile the top card of each library. You may cast any number of spells from among those cards without paying their mana costs".into(),
         Cascade => "Cascade: exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order".into(),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(triggering, below)),
-        TriggerModes { modes, up_to, unchosen } => format!(
+        TriggerModes { modes, min, up_to, unchosen } => format!(
             "Choose {} — {}",
-            match (up_to, unchosen) {
-                (Some(value), _) => format!("up to {}", value_description(triggering, value)),
-                (None, true) => "one that hasn't been chosen".into(),
-                (None, false) => "one".into(),
+            match (min, up_to, unchosen) {
+                (min, Some(EffectValue::Fixed(max)), _) if *min > 0 && *min == *max as usize => {
+                    format!("{min}")
+                }
+                (_, Some(value), _) => format!("up to {}", value_description(triggering, value)),
+                (_, None, true) => "one that hasn't been chosen".into(),
+                (_, None, false) => "one".into(),
             },
             modes.iter().map(|mode| effects_description_in(triggering, mode)).collect::<Vec<_>>().join("; or ")
         ),
@@ -1617,7 +1620,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
         Reveal { what } => format!("Reveal {}", selector_description(triggering, what)),
-        RevealUntilToHand { predicate } => format!("Reveal cards from the top of your library until you reveal a {} card. Put that card into your hand and the rest on the bottom of your library in a random order", predicate_description(predicate, "card")),
+        RevealUntilToHand { predicate, to_battlefield } => format!("Reveal cards from the top of your library until you reveal a {} card. Put that card {} and the rest on the bottom of your library in a random order", predicate_description(predicate, "card"), if *to_battlefield { "onto the battlefield" } else { "into your hand" }),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
         SearchDistinctNames { predicate, count, end } => {
             let search = format!("Search your library for up to {count} {} with different names and reveal them", predicate_description(predicate, "card"));
@@ -1651,6 +1654,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(triggering, amount)),
         FightLastTarget => "The first target fights the last target".into(),
+        Fight { first, second } => format!("{} fights {}", selector_description(triggering, first), selector_description(triggering, second)),
         ShuffleLibrary => "Shuffle your library".into(),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
