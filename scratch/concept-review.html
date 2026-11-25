@@ -178,7 +178,7 @@
     margin: 16px 0 20px;
     box-shadow: var(--shadow);
   }
-  .callout.danger { border-left-color: var(--no-ink); background: var(--no-bg); border-color: var(--no-border); }
+  .callout.ok { border-left-color: var(--yes-ink); background: var(--yes-bg); border-color: var(--yes-border); }
   .callout.proposed { border-left-color: var(--prop-ink); background: var(--prop-bg); border-color: var(--prop-border); }
   .callout.warn { border-left-color: var(--warn-ink); background: var(--warn-bg); border-color: var(--warn-border); }
   .callout-title {
@@ -232,7 +232,7 @@
     padding: 14px 16px;
     box-shadow: var(--shadow);
   }
-  .panel.existing { border-top: 3px solid var(--exist-border); }
+  .panel.existing { border-top: 3px solid var(--yes-ink); }
   .panel.proposed { border-top: 3px solid var(--prop-ink); }
   .panel-head {
     display: flex;
@@ -273,8 +273,8 @@
     font-size: 12px;
     margin: 2px 4px 2px 0;
   }
-  .pill.bad { border-color: var(--no-border); background: var(--no-bg); color: var(--no-ink); }
   .pill.good { border-color: var(--yes-border); background: var(--yes-bg); color: var(--yes-ink); }
+  .pill.warn { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-ink); }
 
   .flow {
     display: flex;
@@ -290,15 +290,10 @@
     border-radius: 6px;
     padding: 5px 9px;
   }
-  .step.broken {
-    background: var(--no-bg);
-    border-color: var(--no-border);
-    color: var(--no-ink);
-  }
-  .step.fixed {
-    background: var(--prop-bg);
-    border-color: var(--prop-border);
-    color: var(--prop-ink);
+  .step.good {
+    background: var(--yes-bg);
+    border-color: var(--yes-border);
+    color: var(--yes-ink);
   }
   .arrow { color: var(--ink-3); font-weight: 700; }
 
@@ -319,28 +314,28 @@
 <main>
 
 <header>
-  <div class="eyebrow">Concept Review · MTG-431 · Headless Graph Pass</div>
+  <div class="eyebrow">Concept Review · MTG-431 · Post-Build Pass</div>
   <h1>Foundations stack copies, entry choices, target relations, pile splits, composite costs &amp; mana expiry</h1>
   <p class="lead">
-    <strong>Area taken:</strong> the full rules-state, decision-continuation, observation-encoding, text-play and Academy projection surface added across MTG-431 Slices 1–10 (compared against <code>main</code> at <code>53cebd13db</code>). That is the whole shared decision contract touched by the 56 Foundations cards — not only the last slice or card definitions.
+    <strong>Area taken:</strong> the complete rules-state, decision-continuation, observation-encoding, decision-memory, text-play and Academy projection surface built across MTG-431 Slices 1–11 (<code>3be5a0cfb..de0dc66630</code>). That is the whole shared decision contract touched by the 56 Foundations cards — evaluated end to end after the Slice 11 concept-alignment pass and compression.
   </p>
   <div class="meta">
-    <span><strong>Verdict:</strong> Plan updated with a focused Concept-Alignment Pass (Slice 11) before Gate</span>
-    <span><strong>Markers:</strong> <span class="badge exist">Existing (HEAD)</span> <span class="badge prop">Proposed (Slice 11)</span></span>
+    <span><strong>Verdict:</strong> Nothing to change in MTG-431; ready for Gate / Integrated validation</span>
+    <span><strong>Markers:</strong> <span class="badge exist">Existing (HEAD)</span> <span class="badge prop">Proposed Follow-up (Outside MTG-431)</span></span>
   </div>
 </header>
 
-<div class="callout">
-  <div class="callout-title">Core question: do the product's concepts and the code's concepts line up?</div>
+<div class="callout ok">
+  <div class="callout-title">Core question: do the product's concepts and the code's concepts line up at <code>HEAD</code>?</div>
   <p>
-    Most of MTG-431's rules machinery is genuinely strong and made the engine smaller: <code>TargetRelation</code>, <code>Effect::GrantPlay</code> (deleting two monolithic effects), <code>CardPredicate.keyword</code> (deleting two one-off booleans), <code>Effect::Repeat</code>, <code>EffectFrame.moved_from</code>, <code>CopiableSpell</code> on <code>SpellLki</code>, and <code>TurnState::graveyard_arrivals</code> each give one CR concept one clean owner.
+    <strong>Yes across every in-scope MTG-431 boundary.</strong> Slice 11 (<code>e1f42473b0</code>, compressed in <code>4a0fb4136c</code>) resolved all four mismatches found in the pre-gate review: <code>Decision::Retarget</code> now projects every already-chosen <code>"new target"</code> in order; <code>Player.mana_pool</code> is the single pool carrying <code>ManaExpiry</code> with additive <code>expiry</code> on observations, previews, text play and Academy; <code>ChooseEntryValue</code> skips non-game group-navigation clicks in <code>decision_memory</code> and records the canonical leaf row; and <code>PartitionPiles</code>/<code>ChoosePile</code>, <code>keep_permanents</code>, and Academy <code>promptLine</code> all match their underlying actions and domains.
   </p>
   <p style="margin-bottom:0">
-    Four concrete mismatches remain at the boundary between <strong>rules state</strong> and <strong>what policies, text play, decision memory and Academy actually see</strong>: (1) <code>Decision::Retarget</code> hides its already-chosen new targets; (2) <code>ManaExpiry</code> still lives beside a duplicate <code>combat_mana_pool</code> and a boolean <code>combat</code> view that actively mislabels Savage Ventmaw's end-of-turn mana as <em>"expires at step end"</em>; (3) <code>Decision::ChooseEntryValue</code> records non-game group-navigation clicks in public <code>decision_memory</code> (and lacks semantic token joins for the 367 creature types); and (4) minor offer/stage naming drifts (<code>PartitionPiles</code>/<code>ChoosePile</code> on <code>LookAndSelect</code>, <code>KeepPermanents</code> emitting <code>"keep_creatures"</code>, and missing Academy <code>promptLine</code> cases).
+    The one remaining gap — giving <code>Decision::ChooseEntryValue</code> semantic <code>RecordNamespace::Token</code> candidate embeddings during selection rather than raw slice offsets — spans <code>managym</code>, <code>manabot/policy/prepare.py</code>, Torch and MLX and is already carved out as its own follow-up Task in <code>scratch/plan.md</code>.
   </p>
 </div>
 
-<h2>1. Concept Alignment Matrix</h2>
+<h2>1. Concept Alignment Matrix (<code>HEAD</code> vs <code>main</code>)</h2>
 
 <table>
   <thead>
@@ -353,40 +348,40 @@
   </thead>
   <tbody>
     <tr>
-      <td><strong>Whole-assignment retargeting</strong> (CR 115.7e)<br><span class="muted">Pick new targets slot by slot; stack keeps originals until the last slot commits so swaps and ward work atomically.</span></td>
-      <td><code>Decision::Retarget { player, object, chosen: Vec&lt;Target&gt;, may_keep }</code><br><code>retarget.rs</code> + <code>effect_execution.rs:1793</code></td>
-      <td class="status"><span class="badge no">No</span></td>
-      <td><strong>Hidden in-progress state (Biggest Mismatch).</strong> <code>project_decision</code> emits only <code>(chosen.len(), may_keep)</code> and drops <code>chosen</code>. Because the stack object keeps its original targets until the final slot, neither the policy nor Academy/text play can see which new targets were chosen for earlier slots.</td>
+      <td><strong>Whole-assignment retargeting</strong> (CR 115.7e)<br><span class="muted">Pick new targets slot by slot; stack keeps originals until the last slot commits so swaps and ward fire atomically.</span></td>
+      <td><code>Decision::Retarget { player, object, chosen, may_keep }</code><br><code>retarget.rs</code> + <code>effect_execution.rs:1794</code></td>
+      <td class="status"><span class="badge yes">Yes</span></td>
+      <td>Stack keeps original targets until atomic <code>publish_targets</code>, while <code>project_decision</code> emits each chosen slot as <code>"new target"</code> plus <code>"New targets chosen so far: ..."</code> (rendered in text play under stage <code>retarget</code>). Policy, search forks, and reconnect all see earlier slot picks.</td>
     </tr>
     <tr>
       <td><strong>Mana expiry duration</strong> (CR 106.4)<br><span class="muted">Pooled mana empties at step end, end of combat (firebending), or end of turn (Savage Ventmaw).</span></td>
-      <td><code>ManaClass.expiry: ManaExpiry</code> + <code>Player.combat_mana_pool</code> + <code>PooledManaClassData.combat: bool</code> + <code>mana.ts:18</code> + <code>text_observation.py:918</code></td>
-      <td class="status"><span class="badge no">No</span></td>
-      <td><strong>One concept under two pools &amp; a broken boolean projection.</strong> Firebending still goes into a separate <code>combat_mana_pool</code> while <code>EndOfTurn</code> goes into <code>mana_pool</code>. Worse, <code>PooledManaClassData</code> / <code>PooledManaView</code> only carry <code>combat: bool</code>, so Savage Ventmaw's <code>EndOfTurn</code> mana is displayed as <em>"expires at step end"</em> in text play, Academy, and payment preview, and <code>ManaSpend</code> prints the same blank suffix for <code>EndOfCombat</code> and <code>EndOfTurn</code>.</td>
+      <td>Single <code>Player.mana_pool</code> + <code>ManaClass.expiry: ManaExpiry</code> + <code>PooledManaClassData.expiry</code> (derived <code>combat</code>) + <code>MATCH_STATE_HASH_VERSION = 33</code></td>
+      <td class="status"><span class="badge yes">Yes</span></td>
+      <td><code>combat_mana_pool</code> and <code>clear_combat_mana_pools</code> are deleted. <code>clear_mana_pools(step)</code> partitions expiring units once while keeping Ozai retention and <code>combat_expired</code> accounting intact. Text play, Academy <code>Plate</code>, payment preview, and <code>ManaSpend</code> labels all distinguish all three durations.</td>
     </tr>
     <tr>
       <td><strong>As-enters permanent choice</strong> (CR 614.12a)<br><span class="muted">Choose a color, creature type (367), or card name on entry; simultaneous entrants order in APNAP with Spyglass look deferred to Spyglass's pick.</span></td>
-      <td><code>EntryChoice</code> on <code>Permanent.chosen</code> + <code>OrderEntryChoices</code> + <code>ChooseEntryValue</code> + <code>NameCard { after: Entry }</code> + <code>FactKind::Chosen*</code></td>
-      <td class="status"><span class="badge no">No</span></td>
-      <td><strong>Split choice contract &amp; memory leak.</strong> Once chosen, <code>FactKind::ChosenSubtype</code> binds to <code>RecordNamespace::Token</code>. While choosing, <code>CardName</code> uses <code>NameCard</code> (semantic <code>NameCandidateEncoder</code>; group clicks skipped in <code>decision_memory</code>), whereas <code>ChooseEntryValue</code> uses raw <code>mode_index</code> + raw array slice offsets <code>(start, end)</code> AND records non-game group-navigation clicks in public <code>decision_memory.rs:1028</code>.</td>
+      <td><code>Permanent.chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> + <code>OrderEntryChoices</code> + <code>ChooseEntryValue</code> + <code>NameCard { after: Entry }</code> + <code>FactKind::Chosen*</code></td>
+      <td class="status"><span class="badge no">No*</span></td>
+      <td><strong>*Deferred outside MTG-431 (Biggest remaining mismatch).</strong> Rules, viewer-safety, 168-byte permanent budget, <code>FactKind::Chosen*</code> post-entry tokens, Academy pile splitting, and <code>decision_memory</code> (group clicks skipped, canonical leaf row recorded) are aligned. However, <em>during selection</em>, <code>ChooseEntryValue</code> still exposes raw <code>mode_index</code> + slice offsets <code>(start, end)</code> instead of semantic <code>RecordNamespace::Token</code> candidate embeddings.</td>
     </tr>
     <tr>
       <td><strong>Private pile split &amp; opponent choice</strong> (Curator of Destinies)<br><span class="muted">Controller looks at top 5, assigns each card face-up or face-down; opponent sees face-up cards + face-down count and picks a pile.</span></td>
-      <td><code>Effect::SeparatePiles</code> → <code>Decision::PartitionPiles</code> → <code>Decision::ChoosePile</code> + <code>ActionSpaceKind::LookAndSelect</code> + <code>Action::ChooseMode</code></td>
-      <td class="status"><span class="badge no">No</span></td>
-      <td><strong>Offer-kind / verb mismatch &amp; generic Academy prompt.</strong> Viewer-safety and library knowledge are exact, but both decisions use <code>ActionSpaceKind::LookAndSelect</code> while emitting <code>Action::ChooseMode { 0 | 1 }</code> (every other <code>ChooseMode</code> uses <code>Modal</code>). Academy falls through to <em>"Choose from the revealed cards"</em> even when the opponent is picking between two piles.</td>
+      <td><code>Effect::SeparatePiles</code> → <code>Decision::PartitionPiles</code> → <code>Decision::ChoosePile</code> + <code>ActionSpaceKind::Modal</code> + <code>Action::ChooseMode</code></td>
+      <td class="status"><span class="badge yes">Yes</span></td>
+      <td>Both decisions emit <code>ActionSpaceKind::Modal</code> (matching every other <code>ChooseMode</code> prompt). <code>PartitionPiles</code> gates <code>inspected</code>/<code>face-up pile</code>/<code>ordered prefix</code> behind <code>shares_information</code>; <code>ChoosePile</code> exposes face-up cards + face-down count publicly; Academy renders explicit pile prompts.</td>
     </tr>
     <tr>
       <td><strong>Shared permanent sacrifice</strong> (Deadly Brew / KeepPermanents)<br><span class="muted">APNAP players choose which eligible permanents to keep, then unkept permanents sacrifice simultaneously.</span></td>
-      <td><code>Effect::EachPlayerSacrifices { predicate, count }</code> → <code>Decision::KeepPermanents { limit: KeepLimit, kept }</code> + stage <code>"keep_creatures"</code></td>
-      <td class="status"><span class="badge no">No</span></td>
-      <td><strong>Stale stage name.</strong> The Rust type and execution labels generalized cleanly from creatures to permanents, but <code>decision_context.rs:527</code> still emits stage <code>"keep_creatures"</code> even when Deadly Brew asks a player to keep a planeswalker.</td>
+      <td><code>Effect::EachPlayerSacrifices { predicate, count }</code> → <code>Decision::KeepPermanents { limit: KeepLimit, kept }</code> + stage <code>"keep_permanents"</code></td>
+      <td class="status"><span class="badge yes">Yes</span></td>
+      <td>Rust types, execution text (with <code>token_renames.rs</code> mapping), and stage name all say permanent rather than creature; <code>recording.py</code> and <code>text_observation.py</code> still accept <code>"keep_creatures"</code> for older recordings.</td>
     </tr>
     <tr>
       <td><strong>Cast-time target division</strong> (CR 601.2d)<br><span class="muted">Announce counter shares among 1–3 targets before payment; copies keep slot shares through retargeting.</span></td>
       <td><code>PrintedCharacteristics.division</code> + <code>AnnouncedSpell.target_shares</code> + <code>PendingChoice::DivideAmongTargets</code> + <code>EffectValue::TargetShare</code></td>
       <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Exact CR 601.2d lifecycle; sole-option steps skip natively via <code>skip_trivial</code>. Minor UI polish: Academy <code>prompt.ts</code> currently shows <em>"Choose a mode for Biogenic Upgrade"</em> instead of a division prompt line.</td>
+      <td>Exact CR 601.2d lifecycle; sole-option steps skip natively via <code>skip_trivial</code>; Academy <code>prompt.ts</code> renders <em>"Divide among targets for …"</em>.</td>
     </tr>
     <tr>
       <td><strong>Cross-clause target relations</strong> (CR 115.3 / 608.2b)<br><span class="muted">"Other targets", "attached to that creature", "controlled by different players".</span></td>
@@ -404,7 +399,7 @@
       <td><strong>Library-top selection &amp; play grants</strong><br><span class="muted">Select from top N with optional mana-value cap; act on selected and unselected separately; grant play from exile/graveyard.</span></td>
       <td><code>ObjectSelector::LibraryTop</code> + <code>Unselected</code> + <code>SelectCards.max_mana_value</code> + <code>Effect::GrantPlay</code></td>
       <td class="status"><span class="badge yes">Yes</span></td>
-      <td><code>GrantPlay</code> retired both <code>ExileTopCardsToPlay</code> and <code>GrantGraveyardCastThisTurn</code>. Legacy <code>Effect::LookAndSelect</code> stays untouched outside MTG-431 to avoid pinned-pilot churn.</td>
+      <td><code>GrantPlay</code> retired both <code>ExileTopCardsToPlay</code> and <code>GrantGraveyardCastThisTurn</code>. Legacy <code>Effect::LookAndSelect</code> retirement is tracked outside MTG-431 to avoid pinned-pilot churn.</td>
     </tr>
     <tr>
       <td><strong>Composite resolution costs &amp; ward</strong><br><span class="muted">Multi-component costs like "Ward—{3}, Pay 3 life" checked as a whole before committing, then paid in order.</span></td>
@@ -416,7 +411,7 @@
       <td><strong>Graveyard arrivals &amp; LKI departures</strong><br><span class="muted">"Put into a graveyard [from the battlefield] this turn"; sacrificed creature's pre-departure toughness.</span></td>
       <td><code>TurnState::graveyard_arrivals: Vec&lt;(ObjectId, bool)&gt;</code> + <code>EffectFrame.moved_from</code> + v11 card col 56</td>
       <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Single authority for both Brought Back and Abyssal Harvester; v11 appends col 56 while Legacy stays at 56 for checkpoint compatibility.</td>
+      <td>Single authority for both Brought Back and Abyssal Harvester; v11 appends col 56 while Legacy stays at 56 for saved checkpoints.</td>
     </tr>
     <tr>
       <td><strong>Keywords, Changeling &amp; Spyglass lock</strong><br><span class="muted">Keyword predicates, all creature types in all zones, nonmana activation ban by chosen name.</span></td>
@@ -427,215 +422,134 @@
   </tbody>
 </table>
 
-<h2>2. Biggest Mismatch: <code>Decision::Retarget</code> Erases Earlier Slot Choices</h2>
+<h2>2. Verified Alignments Built in Slice 11</h2>
 
-<div class="callout danger">
-  <div class="callout-title">Concrete failure &amp; counterexample (Biogenic Upgrade / Drakuseth copy on a 4-creature board)</div>
-  <p>
-    Walk one concrete interaction: cast <strong>Biogenic Upgrade</strong> targeting <code>Gray Ogre</code> (slot 0: share <strong>2</strong>) and <code>Hill Giant</code> (slot 1: share <strong>1</strong>) on a battlefield with four creatures <code>{Ogre, Giant, Lions, Bear}</code>. <strong>Teach by Example</strong> copies it. You now choose new targets for the copy via <code>Decision::Retarget</code>.
-  </p>
-  <div class="flow">
-    <span class="step">Slot 0: choose <strong>Lions</strong> (gets 2 counters)</span>
-    <span class="arrow">→</span>
-    <span class="step broken">Slot 1 prompt: stack still shows <code>[Ogre, Giant]</code>; continuation emits only <code>retarget = (1, true)</code></span>
-    <span class="arrow">→</span>
-    <span class="step broken">Policy, text play &amp; reconnect cannot tell whether slot 0 is <strong>Lions</strong> or <strong>Bear</strong></span>
-  </div>
-  <p style="margin-bottom:0">
-    On <strong>Drakuseth</strong> (4 damage to slot 0, 3 damage to slots 1–2), choosing slot 0 = <code>Player 1</code> vs slot 0 = <code>Creature A</code> changes who is taking 4 damage, yet when deciding slot 1 the observation only shows <code>retarget = (1, true)</code> while the stack still displays the original targets! This directly violates <code>managym/PRINCIPLES.md</code> #4 (<em>"A model cannot learn a distinction its input erases"</em>) and Academy's shared-surface contract on reconnect.
-  </p>
+<h3>A. Whole-assignment Retargeting (<code>Decision::Retarget</code>)</h3>
+<div class="flow">
+  <span class="step">Slot 0: choose <strong>Lions</strong> (share 2)</span>
+  <span class="arrow">→</span>
+  <span class="step good">Slot 1 prompt: stack keeps <code>[Ogre, Giant]</code>; continuation emits <code>new target = Lions#9</code> + summary</span>
+  <span class="arrow">→</span>
+  <span class="step good">Last slot: <code>publish_targets</code> commits atomically &amp; fires ward once</span>
 </div>
-
-<div class="compare">
-  <div class="panel existing">
-    <div class="panel-head">
-      <span>Before: <code>effect_execution.rs:1793–1801</code></span>
-      <span class="badge exist">Existing (HEAD)</span>
-    </div>
-<pre>Decision::Retarget {
-    object,
-    chosen,
-    may_keep,
-    ..
-} =&gt; {
+<div class="panel existing">
+  <div class="panel-head">
+    <span><code>managym/src/agent/effect_execution.rs:1794–1814</code></span>
+    <span class="badge exist">Existing (HEAD)</span>
+  </div>
+<pre>Decision::Retarget { object, chosen, may_keep, .. } =&gt; {
     out.target("retargeted stack object", *object);
     out.field("retarget", &amp;(chosen.len(), may_keep));
-}</pre>
-    <div class="screen">
-      <div class="screen-bar"><span>Observation at Slot 1 (after picking Lions for Slot 0)</span><span>Text / Policy</span></div>
-      <div>Stack top: <code>Biogenic Upgrade — 2 assigned to Ogre, 1 assigned to Giant</code></div>
-      <div>Continuation: <span class="pill">retargeted stack object = copy#14</span> <span class="pill bad">retarget = (1, true)</span></div>
-      <div class="muted" style="margin-top:6px">No fact names <code>Lions</code>. Reconnecting here or running a stateless policy loses slot 0's choice.</div>
-    </div>
-  </div>
-
-  <div class="panel proposed">
-    <div class="panel-head">
-      <span>After: project every target in <code>chosen</code></span>
-      <span class="badge prop">Proposed (Slice 11)</span>
-    </div>
-<pre>Decision::Retarget {
-    object,
-    chosen,
-    may_keep,
-    ..
-} =&gt; {
-    out.target("retargeted stack object", *object);
     for target in chosen {
         out.target("new target", *target);
     }
-    out.field("retarget", &amp;(chosen.len(), may_keep));
+    if !chosen.is_empty() {
+        out.summary(|| {
+            let labels: Vec&lt;_&gt; = chosen
+                .iter()
+                .map(|target| Projection::label(game.target_reference(*target, viewer)))
+                .collect();
+            format!("New targets chosen so far: {}.", labels.join(", "))
+        });
+    }
 }</pre>
-    <div class="screen">
-      <div class="screen-bar"><span>Observation at Slot 1 (after picking Lions for Slot 0)</span><span>Text / Policy</span></div>
-      <div>Stack top: <code>Biogenic Upgrade — 2 assigned to Ogre, 1 assigned to Giant</code></div>
-      <div>Continuation: <span class="pill">retargeted stack object = copy#14</span> <span class="pill good">new target = Lions#9</span> <span class="pill">retarget = (1, true)</span></div>
-      <div class="muted" style="margin-top:6px">Slot 0's chosen target survives policy encoding, search forks, text play, and Academy reconnect. Original stack targets remain intact until <code>publish_targets</code> commits atomically.</div>
-    </div>
-  </div>
+  <p class="muted" style="margin-bottom:0">
+    <strong>Failure &amp; recovery check:</strong> Original stack targets survive until commit (preserving target swaps and atomic ward triggers); additive <code>EXECUTION_TEXT</code> entry <code>"new target"</code> preserves checkpoint compatibility; every <code>Target</code> variant uses viewer-safe references.
+  </p>
 </div>
 
-<p class="muted">
-  <strong>Failure &amp; recovery check:</strong> What must survive? Original targets on the stack object (so target swaps remain legal and ward fires atomically on commit), plus zero checkpoint breakage (additive <code>EXECUTION_TEXT</code> entry <code>"new target"</code>). What counterexample breaks it? None — every <code>Target</code> variant (Permanent, Player, StackSpell, GraveyardCard) already goes through <code>out.target</code> with viewer-safe references.
-</p>
+<h3>B. Single <code>Player.mana_pool</code> with <code>ManaExpiry</code></h3>
+<div class="panel existing">
+  <div class="panel-head">
+    <span><code>managym/src/state/player.rs</code> + <code>flow/mana.rs</code> + <code>agent/observation.rs</code> + <code>academy/ui/src/lib/mana.ts</code></span>
+    <span class="badge exist">Existing (HEAD)</span>
+  </div>
+  <div class="screen">
+    <div class="screen-bar"><span>Savage Ventmaw attacks (+RRRGGG until end of turn)</span><span>Rendered at HEAD</span></div>
+    <div><strong>Text play</strong> (<code>text_observation.py:903</code>): <span class="pill good">Of the mana above: R 3, G 3; expires at end of turn.</span></div>
+    <div style="margin-top:6px"><strong>Academy Plate &amp; PaymentPreview</strong> (<code>mana.ts:18</code>): <span class="pill good">{R}{R}{R}{G}{G}{G} normally expires at end of turn</span></div>
+    <div style="margin-top:6px"><strong>ManaSpend action label</strong> (<code>action.rs:480</code> + <code>ability_description.rs:1342</code>): <span class="pill good">Spend {R} (expires at step end)</span> vs <span class="pill good">Spend {R} (expires at end of combat)</span> vs <span class="pill good">Spend {R} (expires at end of turn)</span></div>
+  </div>
+  <p class="muted" style="margin-bottom:0">
+    <strong>Failure &amp; recovery check:</strong> <code>Player.combat_mana_pool</code> is gone; <code>clear_mana_pools(step)</code> partitions <code>EndOfCombat</code> only at <code>EndOfCombat | Cleanup</code> and preserves both Ozai retention (<code>unspent_mana_retained</code>) and <code>combat_expired</code> capture accounting. <code>PooledManaClassData.combat</code> and <code>PlayerData.combat_mana</code> stay derived for patch-clean 0.2.x compatibility alongside additive <code>expiry</code>, and <code>MATCH_STATE_HASH_VERSION</code> is 33.
+  </p>
+</div>
 
-<h2>3. Second Mismatch: One Mana Expiry Concept, Two Pools &amp; a Lying Boolean</h2>
+<h2>3. Remaining Mismatch Outside MTG-431: Semantic Candidate Encoding for <code>ChooseEntryValue</code></h2>
 
 <p>
-  Slice 8 introduced <code>ManaExpiry { Step, EndOfCombat, EndOfTurn }</code> on <code>ManaClass</code> for Savage Ventmaw, but left <code>Player.combat_mana_pool</code> beside <code>Player.mana_pool</code> and kept <code>PooledManaClassData.combat: bool</code> as the only expiry field seen by Python, text play, payment preview, and Academy.
+  With Slice 11 built, the single biggest conceptual mismatch left anywhere in this area is the asymmetry between how <code>ChooseEntryValue</code> represents a choice <em>after</em> it is made versus <em>while</em> it is being chosen.
 </p>
 
 <div class="compare">
   <div class="panel existing">
     <div class="panel-head">
-      <span>Before: Dual pools + boolean <code>combat</code></span>
+      <span>Current (<code>HEAD</code>): positional slice offsets during selection</span>
       <span class="badge exist">Existing (HEAD)</span>
     </div>
-    <div class="screen">
-      <div class="screen-bar"><span>Savage Ventmaw attacks (+RRRGGG until end of turn)</span><span>Rendered today</span></div>
-      <div><strong>Text play</strong> (<code>text_observation.py:918</code>):<br>
-        <span class="pill bad">Of the mana above: R 3, G 3; expires at step end.</span>
-      </div>
-      <div style="margin-top:6px"><strong>Academy Plate &amp; PaymentPreview</strong> (<code>mana.ts:18</code>):<br>
-        <span class="pill bad">{R}{R}{R}{G}{G}{G} normally expires at step end</span>
-      </div>
-      <div style="margin-top:6px"><strong>ManaSpend action label</strong> (<code>action.rs:483</code>):<br>
-        Firebending <code>{R}</code> and Ventmaw <code>{R}</code> both render empty expiry suffix <code>""</code> — indistinguishable in text.
-      </div>
-    </div>
-    <pre>Player {
-  mana_pool: ManaPool,        // Step + EndOfTurn
-  combat_mana_pool: ManaPool, // EndOfCombat (stored as Step!)
-}
-// spend_mana_unit strips EndOfCombat → Step,
-// checks combat.contains(), else falls back to regular!</pre>
+<pre>// Post-entry fact (semantic token join):
+FactKind::ChosenSubtype → RecordNamespace::Token("Subtype::Goblin")
+
+// Mid-choice observation (positional offsets):
+out.field("entry choice", &amp;(question.kind, scope.start, scope.end));
+// Actions: Action::ChooseMode { mode: 0..64 }
+// Decision memory: group clicks skipped; leaf records canonical row (0..366)</pre>
+    <p class="muted" style="margin-bottom:0">
+      Works for rules, human play, Academy, and decision memory, and stays well inside <code>max_facts = 512</code>. However, a neural policy has no shared token embedding linking option <code>mode = 17</code> in range <code>(128, 192)</code> to <code>Subtype::Goblin</code>, and any future CR 205.3m insertion shifts downstream indices.
+    </p>
   </div>
 
   <div class="panel proposed">
     <div class="panel-head">
-      <span>After: Single <code>mana_pool</code> + additive <code>expiry</code></span>
-      <span class="badge prop">Proposed (Slice 11)</span>
+      <span>Follow-up Task: token-vocabulary candidate channel</span>
+      <span class="badge prop">Proposed Follow-up (Outside MTG-431)</span>
     </div>
-    <div class="screen">
-      <div class="screen-bar"><span>Savage Ventmaw attacks (+RRRGGG until end of turn)</span><span>Proposed</span></div>
-      <div><strong>Text play</strong>:<br>
-        <span class="pill good">Of the mana above: R 3, G 3; expires at end of turn.</span>
-      </div>
-      <div style="margin-top:6px"><strong>Academy Plate &amp; PaymentPreview</strong>:<br>
-        <span class="pill good">{R}{R}{R}{G}{G}{G} normally expires at end of turn</span>
-      </div>
-      <div style="margin-top:6px"><strong>ManaSpend action label</strong>:<br>
-        <code>{R} (expires at step end)</code> vs <code>{R} (expires at end of combat)</code> vs <code>{R} (expires at end of turn)</code>.
-      </div>
-    </div>
-    <pre>Player {
-  mana_pool: ManaPool, // Step, EndOfCombat, EndOfTurn
-}
-// PlayerData.combat_mana derived by summing EndOfCombat units
-// PooledManaClassData / PooledManaView:
-//   keep `combat: bool` (patch-clean 0.2.x)
-//   add  `expiry: ManaExpiry` (default Step when omitted)</pre>
+<pre>// Generalize NameCandidateEncoder to RecordNamespace::Token vocabularies:
+//   - Leaf option → token embedding of Color / Subtype directly
+//   - Group option → prefix-sum / pooled embedding over [start..end)
+// Across managym, manabot/policy/prepare.py, Torch, and MLX.</pre>
+    <p class="muted" style="margin-bottom:0">
+      Requires a cross-stack encoder change (Rust transport + host preparation + Torch/MLX modules) and checkpoint-input validation, so it is explicitly tracked as a separate Task rather than expanding MTG-431.
+    </p>
   </div>
 </div>
 
-<p class="muted">
-  <strong>Compatibility &amp; Ozai/retention check:</strong> Leaving <code>Effect::AddMana.until_end_of_combat</code> untouched on serialized card definitions preserves all TLA pinned-pilot tokens; at resolution it simply adds <code>mana.with_expiry(ManaExpiry::EndOfCombat)</code> into <code>mana_pool</code> and calls <code>record_bending(Fire)</code>. At step end, <code>clear_mana_pools(step)</code> already splits <code>Step</code>, <code>EndOfCombat</code> (emptying at <code>EndOfCombat | Cleanup</code>), and <code>EndOfTurn</code> (emptying at <code>Cleanup</code>) in one place, feeding expiring units into <code>unspent_mana_retained</code> (Ozai) cleanly — deleting <code>combat_mana_pool</code>, <code>clear_combat_mana_pools()</code>, and the strip-and-fallback hack in <code>spend_mana_unit</code>.
-</p>
-
-<h2>4. Third &amp; Fourth Mismatches: Decision Memory, Offer Shapes &amp; Academy Prompts</h2>
-
-<div class="compare">
-  <div class="panel existing">
-    <div class="panel-head">
-      <span>Before: Asymmetric entry memory &amp; mismatched offers</span>
-      <span class="badge exist">Existing (HEAD)</span>
-    </div>
-    <ul>
-      <li><code>decision_memory.rs:1028</code> records <strong>group-narrowing clicks</strong> on <code>Decision::ChooseEntryValue</code> (e.g. clicking <em>"Types Eye through Homunculus"</em>) as public game choices with bare <code>mode = Some(2)</code>, unlike <code>Decision::NameCard</code> which skips non-leaf group steps.</li>
-      <li><code>PartitionPiles</code> and <code>ChoosePile</code> emit <code>ActionSpaceKind::LookAndSelect</code> while offering <code>Action::ChooseMode { 0 | 1 }</code>.</li>
-      <li><code>Decision::KeepPermanents</code> still emits stage <code>"keep_creatures"</code> (Deadly Brew can ask to keep a planeswalker).</li>
-      <li><code>academy/ui/src/lib/board/prompt.ts</code> has no cases for <code>target_shares</code>, <code>entry_choice</code>, <code>order_entry_choices</code>, <code>partition_piles</code>, or <code>choose_pile</code>, showing <em>"Choose a mode"</em> or <em>"Choose from the revealed cards"</em>.</li>
-    </ul>
-  </div>
-
-  <div class="panel proposed">
-    <div class="panel-head">
-      <span>After: Consistent memory, verbs &amp; Academy prompts</span>
-      <span class="badge prop">Proposed (Slice 11)</span>
-    </div>
-    <ul>
-      <li>In <code>decision_memory.rs</code>, return <code>false</code> for <code>NameOption::Group(_)</code> on <code>Decision::ChooseEntryValue</code> (matching <code>NameCard</code>); only leaf answers record a public choice.</li>
-      <li>Emit <code>ActionSpaceKind::Modal</code> for <code>PartitionPiles</code> and <code>ChoosePile</code>, aligning every <code>Action::ChooseMode</code> prompt on one space kind.</li>
-      <li>Emit stage <code>"keep_permanents"</code> for <code>Decision::KeepPermanents</code> (retaining <code>"keep_creatures"</code> in <code>recording.py</code> and <code>text_observation.py</code> so older recordings still load).</li>
-      <li>Add explicit <code>promptLine</code> cases in <code>prompt.ts</code> for <code>target_shares</code>, <code>entry_choice</code>, <code>order_entry_choices</code>, <code>partition_piles</code>, and <code>choose_pile</code>.</li>
-    </ul>
-  </div>
-</div>
-
-<h2>5. Choices Made for Review &amp; Work Outside MTG-431</h2>
+<h2>4. Choices Made for Review &amp; Separate Follow-ups</h2>
 
 <div class="callout warn">
-  <div class="callout-title">Choices made for review (headless Graph)</div>
+  <div class="callout-title">Choices made for review (already built in <code>HEAD</code>)</div>
   <ol style="margin-bottom:0">
-    <li><strong>Unify <code>Player.combat_mana_pool</code> into <code>Player.mana_pool</code> inside MTG-431, but keep <code>Effect::AddMana.until_end_of_combat</code> on card definitions.</strong> Passed over: leaving the duplicate <code>combat_mana_pool</code> in place (keeps dead complexity and two clearing paths) OR rewriting <code>Effect::AddMana</code>'s serialized field (would needlessly churn TLA pinned-pilot definition tokens).</li>
-    <li><strong>Keep <code>PooledManaClassData.combat: bool</code> alongside additive <code>expiry</code>.</strong> Passed over: deleting <code>combat</code> (would break 0.2.x patch-clean external/Academy consumers before 0.3.0).</li>
-    <li><strong>Defer semantic token candidate encoding for <code>ChooseEntryValue</code> outside MTG-431.</strong> Passed over: pushing 64 subtype tokens per step into <code>effect_execution</code> (would risk overflowing <code>max_facts = 512</code> on busy boards) OR expanding MTG-431 into a cross-stack Torch/MLX policy architecture change.</li>
+    <li><strong>Unified <code>Player.mana_pool</code> with additive <code>expiry</code>, keeping <code>combat: bool</code> and <code>Effect::AddMana.until_end_of_combat</code>.</strong> Passed over: leaving two pools (duplicate clearing and spend hacks) or renaming the serialized card-definition field inside MTG-431 (needless TLA pinned-pilot churn).</li>
+    <li><strong>Skipped non-leaf group clicks in <code>decision_memory</code> for <code>ChooseEntryValue</code> (returning <code>None</code>) and recorded the canonical leaf row.</strong> Passed over: emitting empty <code>Modal</code> records for UI tree splits.</li>
+    <li><strong>Moved <code>PartitionPiles</code> and <code>ChoosePile</code> onto <code>ActionSpaceKind::Modal</code> and stage <code>"keep_permanents"</code> (retaining <code>"keep_creatures"</code> for old recordings).</strong></li>
+    <li><strong>Deferred semantic candidate encoding for <code>ChooseEntryValue</code> and legacy definition retirement (<code>Effect::LookAndSelect</code>, <code>Effect::AddMana.until_end_of_combat</code>) to separate Tasks in <code>scratch/plan.md</code>.</strong></li>
   </ol>
 </div>
 
 <div class="callout proposed">
   <div class="callout-title">Explicitly outside MTG-431 (separate outcomes)</div>
   <ul style="margin-bottom:0">
-    <li><strong>Semantic candidate encoding for <code>ChooseEntryValue</code> (Color &amp; 367 Creature Types):</strong> Currently the policy sees <code>ChooseEntryValue</code> options as positional <code>mode_index</code> (1..64) + raw <code>NameScope</code> offsets <code>(start, end)</code>, with no shared embedding connecting a choice option to <code>RecordNamespace::Token</code> / <code>FactKind::ChosenSubtype</code> (and any future CR 205.3m insertion shifts every downstream offset). Fixing this properly means generalizing <code>NameCandidateEncoder</code> (or adding a sibling token-vocabulary candidate channel with prefix-sum group embeddings) across <code>managym</code>, <code>manabot/policy/prepare.py</code>, Torch, and MLX.</li>
-    <li><strong>Retire legacy <code>Effect::LookAndSelect</code> &amp; <code>Effect::AddMana.until_end_of_combat</code>:</strong> Both now have cleaner composable replacements (<code>SelectCards { from: LibraryTop }</code> + <code>Unselected</code>, and <code>ManaExpiry</code>), but migrating existing TLA definitions changes catalog tokens and belongs in a dedicated cleanup/pinned-pilot rollover pass.</li>
-    <li><strong>Multi-choice permanents:</strong> <code>Permanent.chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> holds one entry choice to stay within the 168-byte permanent budget. Exact for all current cards; widen to <code>Box&lt;[EntryChoice]&gt;</code> only when a card makes two independent entry choices.</li>
+    <li><strong>Semantic candidate encoding for <code>ChooseEntryValue</code> (Color &amp; 367 Creature Types):</strong> Generalize <code>NameCandidateEncoder</code> to <code>RecordNamespace::Token</code> vocabularies across <code>managym</code>, <code>manabot/policy/prepare.py</code>, Torch, and MLX.</li>
+    <li><strong>Retire legacy <code>Effect::LookAndSelect</code> &amp; <code>Effect::AddMana.until_end_of_combat</code>:</strong> Migrate existing TLA definitions onto <code>SelectCards { from: LibraryTop }</code> + <code>Unselected</code> and <code>ManaExpiry</code> in a dedicated pinned-pilot rollover pass.</li>
+    <li><strong>Multi-choice permanents:</strong> <code>Permanent.chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> fits the 168-byte permanent budget for all current cards; widen to <code>Box&lt;[EntryChoice]&gt;</code> only when a card makes two independent entry choices.</li>
   </ul>
 </div>
 
-<h2>6. Questions for Review</h2>
+<h2>5. Questions for Review</h2>
 
 <div class="q-card">
-  <strong>1. Mana pool unification inside MTG-431 vs. observation-only fix?</strong>
+  <strong>1. Unified <code>Player.mana_pool</code> + additive <code>expiry</code> while keeping <code>Effect::AddMana.until_end_of_combat</code> until a rollover Task?</strong>
   <ol>
-    <li><strong>(Chosen for review)</strong> Unify <code>Player.combat_mana_pool</code> into <code>Player.mana_pool</code> (deriving <code>PlayerData.combat_mana</code>) AND add <code>expiry</code> to <code>PooledManaClassData</code>/<code>PooledManaView</code> while keeping <code>combat: bool</code> and <code>Effect::AddMana.until_end_of_combat</code>.</li>
-    <li>Keep <code>Player.combat_mana_pool</code> as-is for MTG-431 and only add <code>expiry</code> to observations, text play, Academy, and <code>ManaSpend</code> labels.</li>
-    <li>Also replace <code>Effect::AddMana.until_end_of_combat</code> with <code>ManaExpiry</code> now and re-record the pinned pilot.</li>
+    <li><strong>(Built in <code>HEAD</code>)</strong> Keep the unified pool + additive <code>expiry</code> (derived <code>combat</code>) as built, and retire <code>until_end_of_combat</code> on card definitions in the separate pinned-pilot rollover Task.</li>
+    <li>Also replace <code>Effect::AddMana.until_end_of_combat</code> with <code>ManaExpiry</code> inside MTG-431 and re-record the pinned pilot now.</li>
   </ol>
 </div>
 
 <div class="q-card">
-  <strong>2. Semantic candidate embeddings for <code>ChooseEntryValue</code> (367 creature types &amp; 5 colors)?</strong>
+  <strong>2. Semantic candidate embeddings for <code>ChooseEntryValue</code> (Color &amp; 367 Creature Types)?</strong>
   <ol>
-    <li><strong>(Chosen for review)</strong> Defer to a dedicated policy-input Task (generalize <code>NameCandidateEncoder</code> to token vocabularies across Torch/MLX); in MTG-431 only fix the <code>decision_memory.rs</code> group-step leak.</li>
-    <li>Block MTG-431 until <code>ChooseEntryValue</code> exposes semantic <code>RecordNamespace::Token</code> candidate embeddings to the policy.</li>
-  </ol>
-</div>
-
-<div class="q-card">
-  <strong>3. <code>PartitionPiles</code> / <code>ChoosePile</code> action space &amp; <code>KeepPermanents</code> stage naming?</strong>
-  <ol>
-    <li><strong>(Chosen for review)</strong> Move <code>PartitionPiles</code>/<code>ChoosePile</code> to <code>ActionSpaceKind::Modal</code>, emit stage <code>"keep_permanents"</code> (keeping <code>"keep_creatures"</code> accepted for old recordings), and add Academy <code>promptLine</code> cases for all five new stages.</li>
-    <li>Keep <code>LookAndSelect</code> and <code>"keep_creatures"</code> unchanged and only add the missing Academy <code>promptLine</code> cases.</li>
+    <li><strong>(Built in <code>HEAD</code>)</strong> Ship MTG-431 with the clean <code>decision_memory</code> leaf recording and handle token-vocabulary candidate embeddings in the dedicated cross-stack policy-input Task.</li>
+    <li>Hold MTG-431 until Torch/MLX/<code>managym</code> support token-vocabulary candidate embeddings for <code>ChooseEntryValue</code>.</li>
   </ol>
 </div>
 
