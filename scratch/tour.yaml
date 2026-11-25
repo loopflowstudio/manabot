@@ -1,11 +1,11 @@
-at: 86c6a5f792f203daefb589a91abfb7e08dc903f2
+at: 5cad3a2c14152d5c698b86a5fa9502fd65eca400
 first:
   - path: docs/academy.md
     why: Play, block, target and draft attackers by pointer
   - path: academy/ui/src/lib/board/drag.ts
-    why: Gesture lifetime and what releasing can do
+    why: Gesture lifecycle, discriminated connections and release outcomes
   - path: academy/ui/src/lib/board/combat.ts
-    why: Add attackers and place individual blockers
+    why: Add swept attackers and place individual blockers
   - path: academy/ui/src/lib/board/Board.svelte
     why: Hit testing, live highlights and revision-bound drops
   - path: academy/ui/src/lib/board/Lines.svelte
