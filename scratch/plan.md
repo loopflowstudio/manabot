@@ -4,9 +4,20 @@ Eleven of the 56 scoped Foundations rows have directed implementation evidence.
 Slice 1 delivered the six entry-choice cards and Slice 5 delivered the three
 stack-copy cards. Demonic Pact and Maze's End already had working definitions.
 
-**Next: Slice 2, Curator of Destinies.** Its controller partitions five cards
-privately and the opponent chooses a pile. The visibility of each pile is the
-first point to exercise.
+**Next pass: Slices 2 and 3, the two new decision shapes** (Curator of
+Destinies, Biogenic Upgrade). Curator's controller partitions five cards
+privately and the opponent chooses a pile; pile visibility is the first point
+to exercise. Biogenic Upgrade announces per-target shares at cast.
+
+Remaining passes (ledger checked 2026-11-24: 11 implemented, 45 pending):
+
+1. Slices 2 + 3 — new decision shapes (2 cards).
+2. Slices 4 + 7 — target relations, `Fight`, LKI of moved objects, shared
+   sacrifice (8 cards).
+3. Slices 6 + 8 — library-top selection, kicked entries, composite ward,
+   mana expiry, Changeling, keyword predicate (11 cards).
+4. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
+   integrated validation below.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
 
