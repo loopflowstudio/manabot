@@ -192,7 +192,7 @@ and feeds `BoardCard.svelte`, `Inspect.svelte`, `BoardCard.svelte`'s
 - **Drop Attacking and Blocking chips; keep `"Struck first"`; keep `CardFace`
   unchanged; spiral mark for summoning sickness only**.
 
-## Docs to update in Pass 3
+## Docs updated in Pass 3
 
 - `docs/academy.md` — Inspect naming static grant/Aura sources (Sokka, freeze
   Auras), compact board labels on narrow cards, `+N` tooltip.
@@ -207,19 +207,13 @@ and feeds `BoardCard.svelte`, `Inspect.svelte`, `BoardCard.svelte`'s
    restriction helpers, `decision_surface_view` join, protocol schemas.
 2. **Done (63583fc3ff).** `badges.ts`, `BoardCard.svelte`, `Inspect.svelte`,
    `view.ts:pileKey`, Vitest, Playwright light/dark e2e, live-game QA.
-3. **Done.** Unified Layer 6 & restriction provenance (`AbilitySource`,
-   `AbilityGrantView`, `KeywordAbilityView.source`, `RestrictionView`, regenerated
-   all 6 `protocol/*.schema.json`, `managym/experience.py`, `types.ts`) and
-   real-game board badge fitting (`badges.ts` exact provenance, width-triggered
-   `shortLabel` fallbacks, overflow-aware multi-row packing, `+N` tooltips;
-   `BoardCard.svelte` bottom row beside P/T yielding to Watch `.policy`; 1280×800
-   real-board & Watch e2e tests; updated `docs/academy.md`, `academy/ui/DESIGN.md`,
-   and `managym/academy/README.md`).
-   - *What it taught*: Avatar Kyoshi grants keywords to lands (`source: "Avatar Kyoshi"`),
-     while self-scoped `StaticScope::This` conditional grants (e.g. Foggy Swamp Hunters)
-     stay `AbilitySource::Own`; Playwright's `locator.evaluateAll` can race with webfont
-     refit between query and evaluation, so `wholeChips` awaits `document.fonts.ready`
-     and evaluates atomically in one `page.evaluate`.
+3. **Done (e41607db14).** `AbilitySource` provenance on grants, triggers and
+   static restrictions; real-board fitter (bottom row beside P/T, `shortLabel`
+   fallbacks, overflow-aware packing, `+N` tooltip); 1280×800 and Watch e2e; docs.
+   Avatar Kyoshi's land grants name `source: "Avatar Kyoshi"`; self-scoped
+   `StaticScope::This` grants stay `Own`. `wholeChips` awaits `document.fonts.ready`
+   and measures in one `page.evaluate` (webfont refit raced `evaluateAll`).
+   Implement recorded no test-run results for this pass; the gate runs them.
 4. **Next — Gate.** Full targeted Rust, Python, protocol conformance,
    `scripts/public_api.py check`, Vitest, Svelte check, and Playwright e2e in
    both themes.
