@@ -18,11 +18,15 @@ use crate::{
 };
 
 impl Game {
-    pub(crate) fn cant_attack_or_block(&self, id: PermanentId, view: &Characteristics) -> bool {
+    pub(crate) fn cant_attack_or_block(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
         self.has_restriction(id, Restriction::CantAttackOrBlock)
             || view.static_abilities.iter().any(|ability| match ability {
                 StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => {
-                    let controller = self.state.permanents[id].as_ref().unwrap().controller;
                     !self.iter_battlefield_permanents(controller).any(|other| {
                         other != id && self.permanent_matches_predicate(other, predicate)
                     })
@@ -349,7 +353,7 @@ impl Game {
         view.is_creature()
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
-            && !self.cant_attack_or_block(permanent_id, &view)
+            && !self.cant_attack_or_block(permanent_id, &view, permanent.controller)
             && self
                 .state
                 .turn
@@ -375,7 +379,7 @@ impl Game {
         let view = self.characteristics(id);
         !permanent.tapped
             && view.is_creature()
-            && !self.cant_attack_or_block(id, &view)
+            && !self.cant_attack_or_block(id, &view, permanent.controller)
             && !self.cant_block_unconditionally(id, &view)
     }
 

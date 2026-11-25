@@ -120,6 +120,7 @@
   let artHeight = $state(0);
   let chipFont = $state('12px system-ui');
   onMount(() => {
+    if (!field) return;
     // Refit after the webfont swaps in, even when the card has not resized.
     void document.fonts.ready.then(() => {
       chipFont = `12px ${getComputedStyle(document.documentElement).getPropertyValue('--font-sans')}`;
@@ -127,6 +128,7 @@
   });
   const rows = $derived(Math.max(0, Math.floor((artHeight - below + 2) / 18)));
   const chips = $derived(fitBadges(badges, boxWidth - 8, rows, text => chipWidth(text, chipFont)));
+  const titleOverflow = $derived(field && !rows && chips.hidden > 0);
 
   // The name bar's colour: one colour's tint, several blended left to right
   // (each holds its side, blended across the middle), colourless grey.
@@ -220,8 +222,8 @@
     onblur={() => onpreview?.(null)}
   >
     <span class="bar" aria-hidden="true" style={barStyle} style:--slice={slice === null ? undefined : `${slice - 10}px`}>
-      <span class="title" class:with-overflow={field && !rows && chips.hidden > 0}>
-        {#if field && !rows && chips.hidden}<i class="chip overflow">+{chips.hidden}</i>{/if}
+      <span class="title" class:with-overflow={titleOverflow}>
+        {#if titleOverflow}<i class="chip overflow">+{chips.hidden}</i>{/if}
         {#if slice !== null && face?.cost && !showType}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
       </span>

@@ -40,7 +40,7 @@ export function ptProvenance(permanent: PermanentState, face: CardFace | null): 
     parts.push({ label: permanent.copy_of ? `Printed (copy of ${permanent.copy_of.name})` : 'Printed', power: face.power, toughness: face.toughness, base: true });
   }
   const counters = permanent.plus1_counters;
-  if (counters) parts.push({ label: `${counters} +1/+1 counter${counters === 1 ? '' : 's'}`, power: counters, toughness: counters, base: false });
+  if (counters) parts.push({ label: counterTerm('+1/+1', counters), power: counters, toughness: counters, base: false });
   for (const effect of effects) {
     if (effect.modification !== 'ModifyPt') continue;
     parts.push({ label: effectLabel(effect), power: effect.power ?? 0, toughness: effect.toughness ?? 0, base: false });

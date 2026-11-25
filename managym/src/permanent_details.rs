@@ -10,6 +10,7 @@ use crate::{
             Ability, Condition, Effect, EffectValue, PaymentCost, Per, TriggerCondition,
             TriggerSubject,
         },
+        card::Keywords,
         game_object::PlayerId,
         mana::Color,
     },
@@ -122,7 +123,7 @@ impl Game {
                     ),
                     (
                         PermanentRestriction::CantAttackOrBlock,
-                        self.cant_attack_or_block(id, &view),
+                        self.cant_attack_or_block(id, &view, controller),
                     ),
                     (PermanentRestriction::DoesntUntap, self.doesnt_untap(id)),
                     (PermanentRestriction::MustAttack, self.must_attack(id)),
@@ -135,7 +136,7 @@ impl Game {
                     PermanentDetails {
                         attacks_despite_defender: self.attacks_despite_defender(&view, controller),
                         keyword_abilities,
-                        keyword_grants: (view.keywords.iter().next().is_some()).then(|| {
+                        keyword_grants: (view.keywords != Keywords::default()).then(|| {
                             view.keyword_grants
                                 .iter()
                                 .map(|(k, t)| (k.name().to_owned(), t.map(|t| t.0)))
