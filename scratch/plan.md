@@ -112,53 +112,24 @@ ambiguous menace attackers. Release `bench_states joraga-blocks`: 9.79–67.04 �
 decision at 8-on-8 and 16-on-16. The slice-1 attachments spike (296.4 µs at 100
 permanents) did not recur in fourteen runs (medians 94–102 µs); no cause isolated.
 
-**4 · Built** (`e8f5bd548a`). All eight cards in the table above are playable. Changeling uses the printed
-face in every zone and the layer-4 creature types on the battlefield.
-`StaticPtBuff.per` counts from one `PtCount`. The three existing card
-programs retain their serialized field names. New Horizons’ enchanted Forest
-paid both white pips of Leonin Skyhunter. Both viewers see changeling as a
-named v11 keyword fact. The FDN ledger links each card to its play fixture.
+**4 · Built** (`e8f5bd548a`): the eight changeling and counted-bonus cards;
+`StaticPtBuff.per` is one `PtCount`, old serialized field names kept for checkpoints.
 
-The directed Rust checks passed, including the three migrated TLA cards.
-The pinned v9 and v11 pilots replayed on the rebuilt CPython 3.13 extension.
-The optional frontier checkpoint was unavailable. Academy replayed 192 demo
-Commands and refreshed all five retained navigation positions.
+**5 · Built** (`dac0dd6d57`): `ReplacementEffect::GraveyardInstead` (replacing
+`ExileInsteadOfGraveyard`, token rename recorded) from every origin; payment,
+decision and resolution continue across the CR 616.1 ordering choice (the two-Militant
+discard-cost and fizzle panics are fixed); a milled Colossus reveals and shuffles in
+place with a fresh identity (CR 701.20d). Progenitus, Darksteel Colossus, Dryad Militant.
 
-Scryfall conformance passed. The release `bench_states` characteristics
-measurement took 12.25 µs at priority with 8 counted buffs over 16 lands
-and 21.46 µs with 16 buffs. Across priority, attack and block the respective
-ranges were 11.17–14.62 and 21.38–51.13 µs (median of three per position).
-`diverse-statics` took 9.42–10.21 and 23.25–28.08 µs at the same sizes.
+Finding for slice 6: search determinization (opposing seat, seed 0) moved a private
+discard payment out of hand without a receipt. `selection_sampling.rs` now keeps the
+announced spell and binds the discard to a matching hand card. Whole-hand discard
+batches must get the same sampling coverage.
 
-**5 · Built** (`dac0dd6d57`). Graveyard replacements apply from every origin.
-
-Two Dryad Militants reproduced the immediate-batch panic when paying a discard
-cost and when resolving a spell with no legal targets. Both paths now keep
-their caller while the affected player chooses. The card stays in its original
-zone until the batch commits. Both orders pay the discard cost exactly once.
-
-Progenitus, Darksteel Colossus and Dryad Militant use the same graveyard
-replacement from every origin. Flashback, Adventure, finality and continuous
-exile effects participate in ordering. A milled Colossus reveals and shuffles
-in its current library. CR 701.20d gives it a fresh identity without a
-zone-change event and the shuffle clears known positions for both viewers.
-
-Directed card, ordering and observability checks passed, including ward's
-discard and decline paths, finality against Progenitus, flashback, Adventure,
-cleanup and the existing discard decisions. Scryfall conformance passed.
-Academy replayed 192 recorded Commands and all five retained navigation
-positions. The pinned v9 and v11 games replayed. The optional frontier
-checkpoint was unavailable.
-
-A separate search reproduction determinized the discard from the opposing
-seat with seed 0. It moved the discarded card out of hand and left the payment
-without a receipt. The sampler now keeps the announced spell and binds the
-private discard to a matching hand card. Both compatible hand-count worlds
-paid successfully, one with an instant and the other with a sorcery.
-
-Release `bench_states militant-mill --sizes 8,16 --layers step:resolve`
-took 106.58 µs and 142.58 µs respectively to step Dread Summons at X=8
-(median of three, eight cards per library).
+Slices 4–5 passed directed, pinned v9/v11 pilot, Scryfall, Academy (192 Commands, five
+navigation positions) checks; the optional frontier checkpoint was unavailable. Release
+`bench_states`: counted buffs 11.17–51.13 µs per decision at 8/16 buffs;
+`militant-mill` step:resolve 106.58 / 142.58 µs at 8 / 16.
 
 ### 6 · Discards know their cause; whole-hand discard (Wilt-Leaf Liege, Myojin's discard)
 
