@@ -33,7 +33,7 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
 )
-AUTHORITY_SHA256 = "228daa6571c4a9299368bc995ac7994761c505bdb31cabf5c4bf1657d7441385"
+AUTHORITY_SHA256 = "7cf76a67448579c74ec7a16703260762617ed78c22b1f5047797ad60d9d9f44c"
 TERMINAL_STATE = "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876"
 
 COMMAND_COUNT = 174
