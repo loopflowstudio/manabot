@@ -9,7 +9,7 @@ import torch
 from manabot.backends.torch.rl import selected_rows
 from manabot.env.observation import ObservationSpace
 from manabot.policy.prepare import reference_distribution
-from manabot.policy.spans import ObservationSelection
+from manabot.policy.spans import ObservationSelection, observation_spans
 from manabot.training.learning import DampedPolicyLearning
 from manabot.verify.text_observation import priority_root
 import managym
@@ -59,6 +59,8 @@ def test_reference_mass_on_native_offers_in_selected_order(kind: str) -> None:
                 len(types) if kind == "uniform" else len(set(types)) * types.count(tag)
             )
     np.testing.assert_allclose(reference_distribution(batch, kind), expected)
+    bucketed = observation_spans(batch, space, bucketed=True, objects=True)
+    np.testing.assert_allclose(reference_distribution(bucketed, kind), expected)
     selected = ObservationSelection(space, ((batch, 1), (batch, 0), (batch, 1)))
     np.testing.assert_allclose(
         reference_distribution(selected, kind), expected[[1, 0, 1]]

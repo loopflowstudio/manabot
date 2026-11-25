@@ -445,8 +445,7 @@ def check_memory_contract(obs: ObservationBuffers, spec: Spec) -> None:
     if not retained:
         return
     if (
-        prefixes is None
-        and not spec.space.config.decision_memory_include_own
+        not spec.space.config.decision_memory_include_own
         and (
             obs["decision_records"][..., column("decision_records", "chooser_role")]
             == 1

@@ -1464,7 +1464,11 @@ def reference_distribution(
         capacity = shape[0]
     elif isinstance(obs, ObservationSpans):
         actions = obs.tables["actions"]
-        capacity = obs.capacities["actions"]
+        capacity = (
+            obs.buckets.capacities["actions"]
+            if obs.buckets
+            else obs.capacities["actions"]
+        )
     else:
         # v9/v10 dense inputs may have non-prefix masks until retirement in 0.3.0.
         valid = np.asarray(obs["actions_valid"]) > 0
