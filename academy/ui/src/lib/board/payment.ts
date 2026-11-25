@@ -67,11 +67,11 @@ function counted(names: readonly string[]): string {
   return [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name)).join(', ');
 }
 
-/** The primary button for a payment: the cost, then what pays it. */
+/** The primary button for a payment: auto pay the cost, then what pays it. */
 export function payLabel(cost: string | null, plan: PaymentPlan | null, preview: PaymentPreview | null): string | null {
   const price = cost ?? plan?.cost ?? null;
   if (!price) return null;
-  if (!plan) return `Pay ${price}`;
-  if (plan.names.length) return `Pay ${price} · ${counted(plan.names)}`;
-  return emptyPool(preview?.pool_after_production ?? null) ? `Pay ${price}` : `Pay ${price} · floating mana`;
+  if (!plan) return `Auto pay ${price}`;
+  if (plan.names.length) return `Auto pay ${price} · ${counted(plan.names)}`;
+  return emptyPool(preview?.pool_after_production ?? null) ? `Auto pay ${price}` : `Auto pay ${price} · floating mana`;
 }

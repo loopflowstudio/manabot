@@ -669,6 +669,10 @@ pub struct StackEntryView {
     pub ability_index: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chosen_mode: Option<u32>,
+    /// What the spell or ability targets, in the order chosen. A target the
+    /// viewer cannot name as a public object, stack entry or player is left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<SubjectRef>,
     /// The announced value of X, when one was announced above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,

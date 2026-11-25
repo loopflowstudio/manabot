@@ -23,9 +23,11 @@
     side: 'you' | 'opponent';
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
+    ondeck?: () => void;
+    deckOpen?: boolean;
   }
 
-  let { player, name, definitionNames, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, definitionNames, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -75,6 +77,12 @@
         {#if zone.cards && zone.cards.length}
           <button type="button" class="zone-open" onclick={event => onzone(zone.key, zone.cards!, event.currentTarget)}
             aria-label={`${zone.key}: ${zone.count}. Show cards`}>
+            <span>{zone.key}</span><b>{zone.count}</b>
+          </button>
+        {:else if zone.key === 'Library' && ondeck}
+          <button type="button" class="zone-open" aria-pressed={deckOpen} onclick={ondeck}
+            data-testid={`plate-deck-toggle-${side}`}
+            aria-label={`${zone.key}: ${zone.count}. Toggle deck tracker`}>
             <span>{zone.key}</span><b>{zone.count}</b>
           </button>
         {:else}

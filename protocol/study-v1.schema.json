@@ -2618,6 +2618,13 @@
           "format": "uint32",
           "minimum": 0
         },
+        "targets": {
+          "description": "What the spell or ability targets, in the order chosen. A target the\nviewer cannot name as a public object, stack entry or player is left out.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
+        },
         "x": {
           "description": "The announced value of X, when one was announced above zero.",
           "type": [
