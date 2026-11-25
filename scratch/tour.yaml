@@ -1,7 +1,7 @@
-at: 4b9fecb4d9f18df10825fcbc6b16f792fee15176
+at: 2f2af0354cf529ffc4a8da638e1bec910f65d6ee
 first:
   - path: scratch/plan.md
-    why: Completed retirement and remaining dense transport work
+    why: v11-only transport design, completed passes and merge checks
   - path: docs/training-loop.md
     why: Inspect selected decisions and their behavior probabilities
   - path: docs/engine.md
@@ -28,6 +28,8 @@ first:
     why: Retain each viewer's history across sampled rows
   - path: manabot/training/rollout/collection.py
     why: Align trajectory indexes, behavior logs and retained memory
+  - path: manabot/policy/admission.py
+    why: Admit native batches, vocabularies, memory and belief rows
   - path: manabot/policy/prepare.py
     why: Prepare native rows with saved readings
   - path: manabot/training/combat_probe.py
