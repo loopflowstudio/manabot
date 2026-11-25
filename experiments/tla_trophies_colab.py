@@ -9,6 +9,7 @@ is roughly 500k games per model.
 
 from collections.abc import Sequence
 from decimal import Decimal
+from itertools import zip_longest
 from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRecord
@@ -36,6 +37,9 @@ SEED = 40902
 # ~257 complete games per update at 256 streams × 64-decision floor ≈ 514k games.
 TARGET_UPDATES = 2_000
 HELD_OUT = "tla-trophies-colab-held-out-32"
+HELD_OUT_EXTRA = "tla-trophies-colab-held-out-extra-128"
+HELD_OUT_EXTRA_AFTER_UPDATES = 400
+HELD_OUT_EXTRA_PAIRS = range(32, 160)
 HALF_TRAINING = "tla-trophies-colab-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Colab half-training deal {i + 1}" for i in range(32))
 LARGE_VS_SMALL = "tla-trophies-colab-w160l8-vs-w64-32"
@@ -215,6 +219,50 @@ def size_evaluations(
     ]
     half = Fraction(clock="updates", value=0.5, trained=True)
     jobs = [against(f"{HELD_OUT}-{size}", shared.checkpoints)]
+    post_400 = sorted(
+        (
+            c
+            for c in shared.checkpoints
+            if c.at.get("updates", 0) > HELD_OUT_EXTRA_AFTER_UPDATES
+        ),
+        key=lambda c: c.at["updates"],
+        reverse=True,
+    )
+    if post_400:
+        extra_seatings = tuple(
+            benchmark.seatings[0].model_copy(
+                update={
+                    "name": f"Held-out pair {i + 1}",
+                    "config": trophies.Deal(
+                        first=i * 2, second=i * 2 + 1, seed=40900 + i
+                    ),
+                    "games": 1,
+                    "seeds": "one",
+                    "tags": (f"{HELD_OUT_EXTRA}-{size}",),
+                }
+            )
+            for i in HELD_OUT_EXTRA_PAIRS
+        )
+        for ckpt in post_400:
+            update = int(ckpt.at["updates"])
+            name = f"{HELD_OUT_EXTRA}-{size}-u{update}"
+            jobs.append(
+                shared.model_copy(
+                    update={
+                        "name": name,
+                        "tournament": benchmark.model_copy(
+                            update={
+                                "name": name,
+                                "environment": env,
+                                "seatings": extra_seatings,
+                                "rollups": CARD_ROLLUPS,
+                            }
+                        ),
+                        "checkpoints": (ckpt,),
+                        "max_hours": 2,
+                    }
+                )
+            )
     if half_checkpoints:
         jobs.append(
             against(
@@ -260,19 +308,43 @@ def size_evaluations(
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     small_runs = [run for run in state.runs if run.launch == "w64"]
-    return [
-        job
-        for size in SIZES
-        for job in size_evaluations(
+    by_size = {
+        size: size_evaluations(
             [run for run in state.runs if run.launch == size],
             size,
             small_runs=small_runs,
         )
+        for size in SIZES
+    }
+    base = [
+        job
+        for size in SIZES
+        for job in by_size[size]
+        if not job.name.startswith(f"{HELD_OUT_EXTRA}-")
     ]
+    # Interleave extra post-400 heuristic jobs latest-first across sizes.
+    extras_by_size = [
+        [job for job in by_size[size] if job.name.startswith(f"{HELD_OUT_EXTRA}-")]
+        for size in ("w160l8", "w64")
+    ]
+    extras = [
+        job
+        for group in zip_longest(*extras_by_size)
+        for job in group
+        if job is not None
+    ]
+    return [*base, *extras]
 
 
 def report() -> Report:
-    held_out = tuple(Matches(tournament=f"{HELD_OUT}-{size}") for size in SIZES)
+    held_out = tuple(
+        selection
+        for size in SIZES
+        for selection in (
+            Matches(tournament=f"{HELD_OUT}-{size}"),
+            Matches(tag=f"{HELD_OUT_EXTRA}-{size}"),
+        )
+    )
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
