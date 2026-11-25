@@ -36,7 +36,7 @@
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
-    setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
+    setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
@@ -180,12 +180,13 @@
   let armed = $state<number | null>(null);
   let previewed = $state.raw<{ frameHash: string; plan: string; preview: CombatPreview } | null>(null);
   /** Confirmed steps being sent: `at` was sent at frame `sentAt`. */
-  let running = $state.raw<{ kind: CombatPreview['kind']; steps: DeclarationStep[]; at: number; sentAt: number } | null>(null);
+  let running = $state.raw<{ preview: CombatPreview; at: number; sentAt: number } | null>(null);
   let stopNote = $state<string | null>(null);
   let draftFrame = '';
-  const declaring = $derived(live && combatPreview !== undefined && isDeclaration(frame));
-  const preview = $derived(previewed && previewed.frameHash === frame.frame_hash ? previewed.preview : null);
+  const declaring = $derived(combatPreview !== undefined && isDeclaration(frame));
+  const preview = $derived(running?.preview ?? (previewed?.frameHash === frame.frame_hash ? previewed.preview : null));
   const drafting = $derived(declaring && !running && preview !== null && preview.declarable.length > 0);
+  const joint = $derived(drafting || running !== null);
   const plan = $derived(preview ? planOf(draft, preview) : null);
   /** The preview answers this very draft, not an earlier one. */
   const exact = $derived(preview !== null && plan !== null && previewed?.plan === planKey(plan) ? preview : null);
@@ -232,7 +233,7 @@
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
-    if (!drafting || !preview) return null;
+    if (!joint || !preview) return null;
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     if (preview.kind === 'attackers') {
@@ -271,7 +272,7 @@
   });
 
   function onDraft(id: number): boolean {
-    if (!drafting || !preview) return false;
+    if (!live || !drafting || !preview) return false;
     stopNote = null;
     if (preview.kind === 'attackers') {
       if (!declarable.has(id)) return false;
@@ -295,10 +296,10 @@
 
   function confirmDraft(): void {
     const ready = exact;
-    if (!ready || ready.refused || !ready.steps.length) return;
+    if (!live || !drafting || !ready || ready.refused || !ready.steps.length) return;
     const offer = stepOffer(frame, ready.kind, ready.steps[0]);
     if (!offer) { stopNote = 'The board changed before the plan was sent; draft again.'; return; }
-    running = { kind: ready.kind, steps: ready.steps, at: 0, sentAt: frame.revision };
+    running = { preview: ready, at: 0, sentAt: frame.revision };
     send(offer);
   }
 
@@ -307,18 +308,29 @@
   // judging a frame no one may answer yet.
   $effect(() => {
     const revision = frame.revision;
-    const answerable = live;
+    const sending = running;
+    if (!sending) return;
+    if (!combatPreview) { running = null; draft = EMPTY_DRAFT; return; }
+    const answerable = live && !pending;
+    const { steps, kind } = sending.preview;
     untrack(() => {
-      const sending = running;
-      if (!sending || revision === sending.sentAt) return;
+      if (revision === sending.sentAt) {
+        if (!answerable) return;
+        running = null;
+        if (sending.at > 0) {
+          draft = EMPTY_DRAFT;
+          stopNote = `Stopped after ${sending.at} of ${steps.length}. The next declaration was not accepted. Draft again from here.`;
+        }
+        return;
+      }
       const next = sending.at + 1;
-      if (next >= sending.steps.length) { running = null; draft = EMPTY_DRAFT; return; }
+      if (next >= steps.length) { running = null; draft = EMPTY_DRAFT; return; }
       if (!answerable) return;
-      const offer = stepOffer(frame, sending.kind, sending.steps[next]);
+      const offer = stepOffer(frame, kind, steps[next]);
       if (!offer) {
         running = null;
         draft = EMPTY_DRAFT;
-        stopNote = `Stopped after ${next} of ${sending.steps.length}: the game asked something the preview did not predict. The board shows where it stands; draft again from here.`;
+        stopNote = `Stopped after ${next} of ${steps.length}: the game asked something the preview did not predict. The board shows where it stands; draft again from here.`;
         return;
       }
       running = { ...sending, at: next, sentAt: revision };
@@ -327,20 +339,20 @@
   });
   function stopSending(): void {
     if (!running) return;
-    stopNote = `Stopped after ${running.at + 1} of ${running.steps.length}; the rest was not sent.`;
+    stopNote = `Stopped after ${running.at + 1} of ${running.preview.steps.length}; the rest was not sent.`;
     running = null;
     draft = EMPTY_DRAFT;
   }
 
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
-  const drafted = $derived(drafting || running ? drawDraft(frame, draft) : frame);
+  const drafted = $derived(joint ? drawDraft(frame, draft) : frame);
   const view = $derived(boardView(drafted, players));
   const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
         ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${possessive(you.name)} decision`
         : `${possessive(said)} decision`));
-  const targeting = $derived(canDrag && !drafting && !running && (frame.action_space === 'CHOOSE_TARGET'
+  const targeting = $derived(canDrag && !joint && (frame.action_space === 'CHOOSE_TARGET'
     || frame.action_space === 'DECLARE_BLOCKER' || frame.offers.some(offer => offer.subjects?.some(s => s.role === 'target'))));
   const fieldSources = $derived.by(() => {
     if (canDrag && drafting && preview?.kind === 'blockers') return new Set(declarable.keys());
@@ -405,9 +417,9 @@
   const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
-    : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
+    : running ? `Declaring ${running.at + 1} of ${running.preview.steps.length}…`
       : promptLine(frame, view));
-  const hint = $derived(drafting || running ? null : promptHint(frame, view));
+  const hint = $derived(joint ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -487,6 +499,7 @@
   const boardProjection = $derived(drawn.projection);
   const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
+  const asked = $derived(joint ? new Set<number>() : board.asked);
   const owners = $derived(turnOwners(frame, presentation.events));
   // The turn the top bar and stop bar name: the beat's own while one plays. A
   // beat's board may be a later turn's (one engine step can run from an attack
@@ -723,7 +736,7 @@
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
-    if (drafting || running) return;
+    if (joint) return;
     activate(item.permanent.name ?? 'Permanent', item.offers, element);
   }
   function previewPermanent(item: PermanentItem | null, element: HTMLElement | null): void {
@@ -815,7 +828,7 @@
   // its slot steps back, and releasing it over the battlefield is a click on
   // it. Released anywhere else, or on Escape, it settles back with nothing sent.
   function pressHand(event: PointerEvent, item: HandItem): void {
-    if (!canDrag || readingOut || drafting || running || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
+    if (!canDrag || readingOut || joint || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
     const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
     if (!opener) return;
     const rect = opener.getBoundingClientRect();
@@ -1032,12 +1045,12 @@
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
-    if (event.key === 'Escape' && armed !== null) { armed = null; return; }
+    if (event.key === 'Escape' && live && armed !== null) { armed = null; return; }
     if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       // A combat draft declares the whole combat; its per-creature offers are not numbered shortcuts.
-      if (!menuAt && (drafting || running)) return;
+      if (!menuAt && joint) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1086,16 +1099,16 @@
       <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -1162,30 +1175,30 @@
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => point(placed ? [placed] : null)}
       onstack={onStack} {stackSources} drop={snapped?.kind === 'stack-entry' ? snapped.id : undefined} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
-      draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
+      draft={joint ? combatControls : undefined} stopped={stopNote} />
   </div>
 
   {#snippet combatControls()}
-    <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind ?? running?.kind}>
+    <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind}>
       {#if running}
         <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
         <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
+          disabled={!live || !exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
-            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One fewer ${group.name}`} disabled={group.drafted === 0}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One fewer ${group.name}`} disabled={!live || group.drafted === 0}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
-            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One more ${group.name}`} disabled={group.drafted === group.ids.length}
+            <button type="button" class="step" aria-disabled={readingOut || undefined} aria-label={`One more ${group.name}`} disabled={!live || group.drafted === group.ids.length}
               onclick={() => { draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
           </div>
         {/each}
         {#if draft.attackers.length || draft.blocks.length}
-          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
+          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" disabled={!live} aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
         <p class="type-caption text-ink-3">Nothing is declared until you confirm. {preview?.kind === 'blockers' ? BLOCK_INSTRUCTION : ATTACK_INSTRUCTION}.</p>
       {/if}

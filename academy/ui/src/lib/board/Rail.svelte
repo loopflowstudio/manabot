@@ -288,7 +288,7 @@
     </h2>
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <!-- An open combat draft is the way to declare; each creature's own offer stays one click away for inspection. -->
-    {#if draft && live}
+    {#if draft}
       <details class="raw" data-testid="per-creature-choices">
         <summary class="type-caption text-ink-3">Each creature's choice</summary>
         <p class="type-caption text-ink-3">Confirming the draft sends these one creature at a time.</p>

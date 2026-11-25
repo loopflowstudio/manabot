@@ -768,7 +768,11 @@ the game and returns the exact answers that declare it, or the first one it
 refuses and why (a lone blocker of a creature with menace, a creature that
 cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
-where the game stands. Escape stops a confirmed plan between answers. A
+where the game stands. While a priority stop updates, your draft and selected
+blocker stay in place. If the first declaration is refused at the same
+decision, you can edit the draft and confirm again. If a later declaration
+is refused, the board keeps the accepted declarations and lets you draft
+from that decision. Escape stops a confirmed plan between answers. A
 reload keeps the draft for the same decision in that tab. While a draft is
 open in live play it is the only way to declare: each creature's own answers
 stay in the list of legal choices under a closed **Each creature's choice**

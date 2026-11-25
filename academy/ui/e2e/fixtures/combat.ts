@@ -132,13 +132,20 @@ interface Authority {
 
 const id = (entity: number) => ({ entity, incarnation: 0 });
 
+interface CombatScenario {
+  after?: Partial<Record<number, Stage>>;
+  moreTigers?: number;
+  rejectOnceAt?: number;
+  finishWork?: Promise<void>;
+}
+
 /**
  * A combat authority: each Command answers the frame it was made at, and the
  * combat preview answers a drafted plan with the per-creature offers the
  * engine would ask for. `after` replaces the frame that follows a revision,
  * to stand for a decision the preview did not predict.
  */
-async function installCombatAuthority(page: Page, after: Partial<Record<number, Stage>> = {}, moreTigers = 0): Promise<Authority> {
+export async function startCombat(page: Page, { after = {}, moreTigers = 0, rejectOnceAt, finishWork }: CombatScenario = {}): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
   let current = frameAt('otter', moreTigers);
   await page.route('**/api/sessions/*/combat-preview', async route => {
@@ -167,7 +174,7 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
     await route.fulfill({ json: { ...request, viewer: 0, preview } });
   });
   await page.routeWebSocket('**/ws/play', (socket) => {
-    socket.onMessage((raw) => {
+    socket.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
@@ -182,6 +189,15 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
       const command = message.command;
       authority.commands.push(command);
       const revision = command.expected_revision;
+      if (revision === rejectOnceAt) {
+        rejectOnceAt = undefined;
+        socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
+          rejection: { command_id: command.command_id, code: 'stale_revision', message: 'The declaration was refused.',
+            current_revision: revision, current_prompt: current.prompt!.id },
+          recovery: { ...structuredClone(boltFixture.recovery), reason: 'command_rejected', frame: current, presentation_tail: [],
+            presentation_cursor: 0, accepted_commands: [], replay_cursor: revision } }));
+        return;
+      }
       const stage: Stage = after[revision] ?? (revision === 10 ? 'tiger' : revision === 11 ? 'block' : 'priority');
       const next = frameAt(stage);
       const blocked = revision === 12 && command.offer_id === 201;
@@ -193,14 +209,10 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
       const work = (state: 'running' | 'complete') => ({ operation_id: `advance-${revision}`, sequence: revision, kind: 'advance', started_at: 0, state,
         scope: 'match', setup_id: null, loading_seat: null, match_id: next.match_id, revision: next.revision, chooser: null });
       socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('running') }));
-      setTimeout(() => socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('complete') })), 50);
+      await (finishWork ?? new Promise(resolve => setTimeout(resolve, 50)));
+      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('complete') }));
     });
   });
-  return authority;
-}
-
-export async function startCombat(page: Page, after: Partial<Record<number, Stage>> = {}, moreTigers = 0): Promise<Authority> {
-  const authority = await installCombatAuthority(page, after, moreTigers);
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();

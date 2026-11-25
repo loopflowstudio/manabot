@@ -61,8 +61,8 @@ interface Authority { commands: Command[]; previews: number[] }
 
 /** Accepts every Command but `refuse`'s offers, which it rejects at the same revision. */
 async function installAuthority(page: Page, {
-  refuse = [], initial = mainPhase(REVISION), after, study,
-}: { refuse?: number[]; initial?: ExperienceFrame; study?: RestoredReplayDecision; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
+  refuse = [], initial = mainPhase(REVISION), after, study, stopEcho,
+}: { refuse?: number[]; initial?: ExperienceFrame; study?: RestoredReplayDecision; stopEcho?: Promise<void>; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
   let current = initial;
   await page.route('**/api/sessions/*/payment-preview', async route => {
@@ -76,10 +76,15 @@ async function installAuthority(page: Page, {
   await page.routeWebSocket('**/ws/play', socket => {
     const recovery = (frame: ExperienceFrame): RecoveryEnvelope => ({ ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame,
       presentation_tail: [], presentation_cursor: 0, accepted_commands: [], replay_cursor: frame.revision });
-    socket.onMessage(raw => {
-      const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
-      if (message.type === 'new_game' || message.type === 'resume') {
-        socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
+    const table = tableSnapshot();
+    socket.onMessage(async raw => {
+      const message = JSON.parse(String(raw)) as { type?: string; command?: Command; stops?: Pick<ExperienceFrame['stops'], 'my' | 'opponent'> };
+      if (message.type === 'new_game' || message.type === 'resume' || message.type === 'set_stops') {
+        if (message.type === 'set_stops') {
+          await stopEcho;
+          current = { ...current, stops: { ...current.stops, ...message.stops } };
+        }
+        socket.send(JSON.stringify({ type: 'observation', table, data: current.projection, actions: [],
           session_id: 'drag-session', resume_token: 'drag-resume-token', recovery: recovery(current) }));
         if (study) socket.send(JSON.stringify({ type: 'decision_restored', address: study.address, restored: study }));
         return;
@@ -288,6 +293,7 @@ for (const [source, target, id] of [
 function blocks(blocker = otter, revision = REVISION): ExperienceFrame {
   const frame = mainPhase(revision, []);
   frame.action_space = 'DECLARE_BLOCKER';
+  frame.stops.auto_pass = true;
   frame.prompt = { ...frame.prompt!, kind: 'declare_blocker', title: 'Choose a block', instruction: 'Choose a block' };
   frame.projection.turn = { ...frame.projection.turn, active_player_id: 1, phase: 'COMBAT', step: 'DECLARE_BLOCKERS_STEP' };
   frame.projection.agent.battlefield = [creature(otter, 0), creature(tiger, 0)];
@@ -330,7 +336,8 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
       declared_blocks: request.plan.blocks, declarable: blockers.map(object => ({ creature: renderId(object.display_id), label: object.label,
         can_block: [renderId(cub.display_id), renderId(ally.display_id)], must_block: false, must_attack: false })) } } });
   });
-  const authority = await installAuthority(page, { initial: blocks(), after: command => command.expected_revision === REVISION
+  const stopEcho = Promise.withResolvers<void>();
+  const authority = await installAuthority(page, { initial: blocks(), stopEcho: stopEcho.promise, after: command => command.expected_revision === REVISION
     ? blocks(tiger, REVISION + 1) : mainPhase(REVISION + 2, []) });
   await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'blockers');
   const from = permanent(page, otter.display_id);
@@ -343,6 +350,23 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
   await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
   await other.click();
   await expect(other).toHaveAttribute('data-draft', 'armed');
+
+  // Changing a priority stop holds input, including Space, while keeping the plan and the armed blocker.
+  await page.getByTestId('bar-stop-my-upkeep').click();
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'false');
+  await expect(page.getByTestId('primary-action')).toBeDisabled();
+  await expect(page.getByTestId('combat-clear')).toBeDisabled();
+  await expect(page.getByTestId('per-creature-choices').locator('summary')).toBeVisible();
+  await expect(page.getByTestId('action-option').first()).toBeHidden();
+  await first.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(other).toHaveAttribute('data-draft', 'armed');
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
+  stopEcho.resolve();
+  await expect(page.getByTestId('primary-action')).toBeEnabled();
+  await expect(other).toHaveAttribute('data-draft', 'armed');
+  expect(authority.commands).toEqual([]);
 
   await carry(page, from, await center(second));
   await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
@@ -470,7 +494,7 @@ test('attack marquee starts only in the rows and Escape preserves the draft', as
 });
 
 test('an attack marquee can draft one exposed copy in a pile', async ({ page }) => {
-  const authority = await startCombat(page, {}, 2);
+  const authority = await startCombat(page, { moreTigers: 2 });
   const pile = page.getByTestId('pile-count');
   await expect(pile).toHaveAccessibleName('Tiger-Seal: 0 of 3 attacking');
   const copies = page.locator('.rows [data-card-name="Tiger-Seal"]');

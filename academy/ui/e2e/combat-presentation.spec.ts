@@ -60,9 +60,49 @@ for (const mode of ['pointer', 'keyboard'] as const) {
   });
 }
 
+test('a confirmed attack stays drafted while the accepted frame waits for work to complete', async ({ page }) => {
+  const work = Promise.withResolvers<void>();
+  const authority = await startCombat(page, { finishWork: work.promise });
+  await card(page, 85).click();
+  await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+  await page.getByTestId('primary-action').click();
+  await expect(page.locator('main')).toHaveAttribute('data-frame-revision', '11');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'false');
+  await expect(page.getByTestId('per-creature-choices').locator('summary')).toBeVisible();
+  await expect(page.getByTestId('action-option').first()).toBeHidden();
+  await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
+  await expect(page.locator('.rows .asked')).toHaveCount(0);
+  expect(authority.commands.map(c => c.offer_id)).toEqual([102]);
+  work.resolve();
+  await expect.poll(() => authority.commands.map(c => c.offer_id)).toEqual([102, 103]);
+});
+
+for (const revision of [10, 11]) {
+  test(`refusing a declaration at revision ${revision} leaves only uncommitted choices to draft`, async ({ page }) => {
+    const authority = await startCombat(page, { rejectOnceAt: revision });
+    await card(page, 83).click();
+    await card(page, 85).click();
+    const confirm = page.getByTestId('primary-action');
+    await expect(confirm).toHaveAttribute('data-draft-ready', 'true');
+    await confirm.click();
+    await expect.poll(() => authority.commands.length).toBe(revision === 10 ? 1 : 2);
+    if (revision === 10) {
+      await expect(confirm).toHaveText(/Attack with 2/);
+      await expect(card(page, 83)).toHaveAttribute('data-draft', 'in');
+      await expect(card(page, 85)).toHaveAttribute('data-draft', 'in');
+    } else {
+      await expect(page.getByTestId('combat-stopped')).toHaveText(/Stopped after 1 of 2/);
+      await expect(card(page, 83)).toHaveClass(/attacking/);
+      await expect(card(page, 85)).toHaveAttribute('data-draft', 'can');
+    }
+    await confirm.click();
+    await expect.poll(() => authority.commands.map(c => c.offer_id)).toEqual(revision === 10 ? [101, 101, 103] : [101, 103, 104]);
+  });
+}
+
 test('a frame the preview did not predict stops the sequence and redraws the board', async ({ page }) => {
   // After Otter-Penguin's attack the game asks for priority, not about Tiger-Seal.
-  const authority = await startCombat(page, { 10: 'priority' });
+  const authority = await startCombat(page, { after: { 10: 'priority' } });
   await card(page, 83).click();
   await card(page, 85).click();
   await expect(page.getByTestId('primary-action')).toHaveText(/Attack with 2/);
@@ -79,7 +119,7 @@ test('a frame the preview did not predict stops the sequence and redraws the boa
 });
 
 test('a pile of identical creatures takes a count', async ({ page }) => {
-  const authority = await startCombat(page, {}, 2);
+  const authority = await startCombat(page, { moreTigers: 2 });
   const pile = page.getByTestId('pile-count');
   await expect(pile).toHaveAccessibleName('Tiger-Seal: 0 of 3 attacking');
   await pile.getByRole('button', { name: 'One more Tiger-Seal' }).click();
