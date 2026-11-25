@@ -276,7 +276,7 @@ with admitted.minibatches(order, size=16, device=torch.device("cpu")) as batches
         optimizer.step()
 
 checkpoint = Path("policy.safetensors")
-save_checkpoint(agent, space, checkpoint, player_configs=None)
+save_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
 loaded, loaded_space = load_checkpoint(str(checkpoint))
 
 obs, _ = managym.Env(seed=0).reset(match.to_rust())

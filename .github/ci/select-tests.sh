@@ -58,9 +58,10 @@ else
         select_jobs academy_integration clean_machine_play ;;
       manabot/sim/table_bots.py|manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
+      tests/infra/test_external_consumer.py) select_jobs python_unit integration ;;
       tests/infra/*) select_jobs python_unit ;;
       manabot/infra/*) select_jobs python_unit integration ;;
-      manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
+      manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|tests/test_public_api_contract.py|tests/public_api.json|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
         select_jobs integration ;;
       website/*) select_jobs python_unit ;;
       paper/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;
