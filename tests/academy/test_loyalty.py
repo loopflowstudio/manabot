@@ -206,7 +206,9 @@ def test_empowered_token_visible_to_both_seats_and_cold_replay() -> None:
     else:
         raise AssertionError("Mindseeker Oculus never empowered Jace")
     for viewer in (0, 1):
-        board = serialize_observation(env.observation_for_player(viewer))
+        board = serialize_observation(
+            env.observation_for_player(viewer), include_details=True
+        )
         tokens = [
             permanent
             for role in ("agent", "opponent")
@@ -214,6 +216,7 @@ def test_empowered_token_visible_to_both_seats_and_cold_replay() -> None:
             if permanent["name"] == "Jace"
         ]
         assert len(tokens) == 1
+        assert tokens[0]["is_token"] is True
         assert tokens[0]["printed_loyalty"] == 0
         assert tokens[0]["counters"]["loyalty"] == 4
     restored = managym.GameSnapshot.from_replay_json(
