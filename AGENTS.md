@@ -757,6 +757,9 @@ live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Stacked abilities keep an exact source object across zone changes.
+`Game::indexed_sources` and `layers::Node` require a battlefield permanent.
+Command-zone emblems need live source discovery in both evaluators.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

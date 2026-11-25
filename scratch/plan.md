@@ -1,8 +1,8 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
 Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`) and
-later main (`964699a20b`). Slice 3 uses MTG-420's persistent ability-source
-representation.
+later main (`964699a20b`). MTG-420 supplies exact object identity for stacked
+abilities. Slice 3 must extend live ability sources to the command zone.
 
 Done:
 - Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
@@ -28,7 +28,8 @@ Done:
 
 ## Passes remaining
 
-1. Slices 3 and 4 introduce emblems and the empower/Jace token cards.
+1. Slice 3 needs command-zone ability sources for the four emblem cards.
+   The independent empower cohort (slice 4) is implemented.
 2. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
    loyalty activation events and their cards.
 3. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
@@ -105,7 +106,7 @@ targets, `0674982740`, fixtures `5ecb50ceee`) are built; their design is in
 `--reason` if the attack row moved) and Engine Budget (`bench_steps` digest
 expected unchanged; curated decks attack no planeswalker).
 
-### Slice 3 — Emblems in the command zone (primitive; after MTG-420 sync)
+### Slice 3 — Emblems in the command zone (next)
 
 - `EmblemDefinition { key: "emblem.<name>", printed: PrintedCharacteristics }`
   in `managym/cards/src/emblems.rs`, reached through
@@ -113,6 +114,17 @@ expected unchanged; curated decks attack no planeswalker).
   no other characteristics; owned/controlled by its player). Registered as an
   `ObjectDefinition` row with status `Emblem` so learning tokens and the
   observation join one row (shifts definition ids → refresh Academy fixtures).
+- The live source enumeration assumed in the original plan does not exist.
+  `Game::indexed_sources` drops anything that cannot produce a
+  permanent snapshot. `TriggerSourceSnapshot` owns `ObjectLki`, which requires
+  a battlefield slot. `layers::Node` also requires a `PermanentId` for its
+  existence, controller and scope. An emblem has no such slot (CR 114.5).
+  Before registering emblem cards, change the live source identity in both
+  evaluators to the exact object. Read its controller from its zone, and
+  retain battlefield LKI only for triggers whose source occupied that zone.
+  Keep permanent targets and existing serialized battlefield snapshots.
+  The first proof is an emblem with a live static and one with a cast
+  trigger, both still active after the creating planeswalker leaves.
 - `Effect::CreateEmblem { key }` places an emblem object in the player's
   `ZoneType::Command`. Emblem statics join the layer board and emblem triggers
   join `TriggerIndex` as ability sources outside the battlefield, using
@@ -123,8 +135,9 @@ expected unchanged; curated decks attack no planeswalker).
   get +2/+2 …"; Academy shows emblems beside the player. Search clones and
   forks copy them; recording/replay round-trips them.
 
-Cards: Vivien Reid −8 and Kaito −9 (FDN), Ajani Resolute −10, Chandra Torch of
-Defiance −7 (FRA). Chandra, Chill's emblem waits with that card (pending).
+Cards: Vivien Reid −8 and Kaito −9 (FDN), Ajani Resolute −10, Chandra, Torch
+of Defiance −7 (FRA reprint, defined in `kld.rs`). Chandra, Chill's emblem
+waits with that card (pending).
 
 Checks: directed: emblem buff persists after its planeswalker dies; emblem
 trigger (Kaito: any player's spell) fires for both players' casts; two copies
@@ -135,49 +148,26 @@ board scan includes command-zone sources every rebuild).
 
 Deletes: none.
 
-### Slice 4 — Empower and the Jace token (composition; 22 cards)
+### Slice 4 — Empower and the Jace token
 
-Empower N (FRA keyword action): compose, no new verb —
-`Seq[If(Not(Controls(planeswalker token with subtype Jace)),
-CreateTokens("token.jace", 1)), PutCounters { kind: Loyalty, amount: N,
-on: Chosen { predicate: Jace planeswalker token you control } }]`, written
-through one constructor `Effect::empower_jace(amount: EffectValue)` in the
-state crate. Not targeted; a chosen existing Jace (including a copied one)
-is fine; creation and counters are one instruction, so SBA does not see the
-0-loyalty token (release notes). Under Doubling Season the creation doubles
-tokens and the counters double (effect cause); counters go on one chosen
-Jace, not both. `token.jace`: blue Jace planeswalker token, `loyalty:
-Some(0)`, `[−1]: Surveil 1`, `[−3]: Draw a card`.
+Implemented all 22 cards in `4966204033`. The rules program uses `Effect::empower_jace` and
+`token.jace`. Overwrite reads `Objects { of: Moved, in_zone: Exile }`;
+creating Jace preserves that receipt. Theorist’s Proxy binds a continuous
+effect to the next committed spell, and Plan for All Outcomes counts the
+ordinal among matching casts. All 16 FRA cases passed across the focused
+runs, including the four-token decision with two Doubling Seasons and both
+Ways' triggers. The two selector/modification observability guards and
+printed-card conformance passed.
+The rebuilt CPython 3.13 wheel showed Mindseeker Oculus’s Jace at four
+loyalty to both seats and cold-restored the same pending decision. The five
+Academy fixtures (`2327a41b94`) replayed 444 recorded choices and restored
+all nine final positions. All 109 player-only attack frames matched their
+pre-empower bytes.
+The current replacement catalog cannot redirect a battlefield-to-exile move
+to another zone. The Overwrite case covers actual card and token exiles;
+the diverted-exile case remains open until a replacement supplies it.
 
-If the ability text should read "Empower Jace N" rather than the composition,
-the description template recognises the constructor's shape; decide at
-implementation (questions.md).
-
-Cards: Academic Ascent, Arcane Amphisbaena, Campus Crier, Hexhaven Battalion,
-Keeper of the Quiet Hour, Mindseeker Oculus, No Admittance, Protege's
-Awakening, Repurposed Enforcer, Rewrite Regrets, Solve for Disappointment,
-Tam's Resistance, Vraska's Final Mercy, Violent Echoes (`ExcessDamage`,
-planeswalker-aware excess), Overwrite the Multiverse (needs
-`EffectValue::MovedThisWay` — the count of objects the frame's last `Move`
-actually moved; small value, added here), Fatehold Charm (verify `Move` of a
-spell from the stack exists; pending on cast/payment if not), Theorist's
-Proxy (one-shot "next spell you cast this turn can't be countered" — verify a
-delayed cast watcher exists, else add `Duration::UntilNextSpellCast`), Plan
-for All Outcomes, Inspired Tethermage (`PutsCounters` already), Jace's
-Machinations (slice 1 override), plus Way of the Mentor / Necromancer bodies
-(their loyalty triggers compose: "put a loyalty counter on each planeswalker
-you control").
-
-Checks: `cargo test -p managym-cards empower`; Jace created when none; chosen
-when one exists (two Jaces → a choice); Doubling Season: two tokens, counters
-on one; illegal sole target of Academic Ascent → no empower; No Admittance
-target dies → empower still happens; Violent Echoes excess into a planeswalker
-target; Overwrite with a replacement (exile prevented) counts actual exiles.
-Stress state: Doubling Season ×2 + repeated empower (token count growth).
-
-Deletes: none.
-
-### Slice 5 — Granted loyalty abilities and zero-loyalty exception (primitive + 13 cards)
+### Slice 5 — Granted loyalty abilities and zero-loyalty exception
 
 - "Planeswalkers you control have [−N]: …": `StaticAbility::Continuous` over
   `Each { planeswalkers you control }` with `Modification::GrantActivated`
@@ -200,7 +190,7 @@ turn" copy — reuse copy/retarget), Way of the Deathbringer (`if_you_do` Beast)
 Way of the Healer, Way of the Pyromancer (+1 Add {R} on the stack), Way of the
 Warlord, Way of the Wildspeaker, Avatar of Burgeoning Echoes (−10), Kiora of
 Salt and Sand (−8 Leviathan; attack trigger in slice 6), Sanctum Lurker,
-Tomik (static grant from slice 2), Way of the Mentor, Way of the Necromancer,
+Tomik (static grant from slice 2),
 Way of the Mind Sculptor/Paradox bodies (triggers in slice 6).
 
 Checks: granted ability shares the holder's one-per-turn quota with its

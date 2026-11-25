@@ -54,3 +54,10 @@
   generator. At 1679c477fd, the checked-in advice schema already differed
   from that generator in eight definitions, including LegacyPermanentView.
   This slice updates the combat property only.
+
+- CR 701.71a specifies a Jace **planeswalker token**. Use all three
+  properties when creating and choosing. The rules program uses the shared
+  frame's existing chosen-object decision. Spell and trigger text abbreviate
+  the exact pair of instructions to “Empower Jace N”.
+- Use the existing count of moved objects filtered by destination for
+  Overwrite. Token creation writes a separate result and preserves that count.

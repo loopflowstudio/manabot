@@ -1,31 +1,27 @@
-at: 06749827400462c108fd370664ada54ddfda331b
+at: 2327a41b948b4750551be48f7d5af56190697530
 first:
   - path: docs/engine.md
-    why: Describes loyalty, damage to planeswalkers and declaration choices
-  - path: managym/src/flow/combat.rs
-    why: Identifies each attacker’s original and current defender
-  - path: managym/src/flow/tick.rs
-    why: Builds legal offers and records the declared attack batch
-  - path: managym/src/flow/proposed_event.rs
-    why: Collects every entering token’s choice before simultaneous entry
-  - path: managym/src/flow/combat_actions.rs
-    why: Applies declaration restrictions and assigns damage to the chosen defender
+    why: Describes the token choice and its loyalty abilities
+  - path: managym/state/src/ability.rs
+    why: Composes empower from token creation and a controller choice
+  - path: managym/cards/src/tokens.rs
+    why: Defines the blue Jace planeswalker and its abilities
   - path: managym/cards/src/fra.rs
-    why: Composes Tomik’s granted restriction and counter-dependent flying ability
-  - path: managym/src/agent/structured_offer.rs
-    why: Groups independent defender assignments into a compound declaration
-  - path: managym/src/flow/combat_preview.rs
-    why: Replays exact attacker and defender identities to preview the Academy draft
-  - path: academy/ui/src/lib/board/Board.svelte
-    why: Collects defender choices and confirms each native offer
-  - path: managym/tests/rules/attack_targets.rs
-    why: Exercises trample, loss of the defender, doubled tokens and ten attackers
+    why: Shows how each card composes empower with other instructions
+  - path: managym/src/flow/damage.rs
+    why: Measures excess damage against a planeswalker’s remaining loyalty
+  - path: managym/state/src/effect.rs
+    why: Binds Proxy’s protection to the next spell actually cast
+  - path: managym/src/agent/shared_effects.rs
+    why: Shows both players which stack object has protection
+  - path: managym/cards/tests/cards/fra.rs
+    why: Exercises all cards and chooses among four doubled tokens
   - path: tests/academy/test_loyalty.py
-    why: Cold-restores object-bound Commands for both a player and a planeswalker
+    why: Plays Mindseeker Oculus and cold-restores the resulting Jace
   - path: scratch/plan.md
-    why: Records replay evidence and the remaining card cohorts
+    why: Identifies the live source changes needed for emblems
 hide:
   - path: managym/academy/fixtures/
-    why: Opening fixtures refreshed by replaying their recorded choices
+    why: Regenerated from the recorded opening choices
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Oracle characteristics for Tomik
+    why: Oracle characteristics for the empower cohort
