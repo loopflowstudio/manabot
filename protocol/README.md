@@ -70,32 +70,6 @@ represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
 
-## Shared-table control v1
-
-The shared table is where a pilot and a watcher share one game. Its wire schema
-keeps the frozen identifier `testing-house-v1` (`testing-house-v1.schema.json`).
-`managym/academy/shared_table_protocol.py` owns the Game control envelope around the
-unchanged match protocol. It closes the one-pilot/one-watcher request
-vocabulary, server-derived roles and capabilities, participant leases,
-personal-until-shared GAM-6 scenario references, and participant-local Study
-events. It never embeds match legality or strategy evidence; both participants
-remain bound server-side to the same recorded human-seat rules projection.
-Historical Play records default to native seat 0; new Play setup may choose
-seat 1. Watch continues to use its recorded acting viewers.
-
-Regenerate the checked schema after changing the Pydantic authority:
-
-```bash
-uv run --python 3.12 --locked python scripts/export_shared_table_protocol.py
-```
-
-`fixtures/testing-house-control-v1.json` contains pilot/watcher access and one
-example of every control request and event. Python validates the fixture,
-schema, and server dispatch as one closed operation set; TypeScript validates
-the same fixture with AJV and compares its union vocabulary to the schema
-discriminator. This fixture contains no credentials or strategy payload and
-does not alter `fixtures/advice-curated-decision.json`.
-
 ## Canonical replay decision index v1
 
 `managym/src/canonical_replay.rs` owns the safe projection contract and address

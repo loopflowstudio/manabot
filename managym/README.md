@@ -61,14 +61,17 @@ uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
 uv run --no-project managym academy
 ```
 
-This starts a local server and opens `http://127.0.0.1:8000` with a game
-ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
-manabot, Torch, Node or Rust. Finished and unfinished games are listed under
-**Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
-command, and `uv run --no-project managym academy --help` lists the port, host and storage
-options. Cards show their Scryfall art with no extra step: the server fetches
-each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
-`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+This starts a local server and opens `http://127.0.0.1:8000`; Ctrl-C stops it.
+It needs CPython 3.12 or 3.13 and nothing else: no manabot, Torch, Node or
+Rust. Opening `/` resumes your unfinished game at its pending decision, or
+opens setup when none is in progress. Finished and unfinished games are listed
+under **History** (`/games`), with **Replay** on every row and **Resume** on
+unfinished played games. `uv run --no-project python -m managym.academy` is the
+same command, and `uv run --no-project managym academy --help` lists the port,
+host and storage options. Cards show their Scryfall art with no extra step: the
+server fetches each image the first time it is shown and keeps it in
+`~/.cache/managym/card-art`; `ACADEMY_CARD_ART=off` turns that off
+([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
 Installing `manabot` in the same environment adds trained opponents.
 The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
 covers playing, replays, trained bots and launch troubleshooting.
@@ -88,26 +91,25 @@ with the reason before anything opens.
 Bundled names take precedence over same-named files; use `./ur_lessons` to
 select a file named `ur_lessons`.
 
-The same choices are in the browser. Open **New game**, expand **Browse decks
-and cards**, and assign a bundled deck to each native seat. Choose an opponent
-such as **Search 64**, then click **Start game**.
+The same choices are in the browser. On the setup screen (`/` or **New game**
+from a board), expand **Browse decks and cards** and assign a bundled deck to
+each native seat. Choose an opponent such as **Search 64**, then click
+**Start**.
 
 For your own lists, expand **Import decklist files** and check **Use imported
 decks for the next game**. Upload or paste both decks, one `count card name`
 per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
-fix any reported issues, and select **Start game**. Imported decks use the
+fix any reported issues, and select **Start**. Imported decks use the
 development format and supported cards. Registered policies check the complete
 setup, including imported lists, against their own admission requirements. See the
 [play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
 
-For several games against a model, **Rematch**, **Swap sides** and **Change
-opponent** retain unrelated setup and group recordings in one session. See
-[playing a series](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#playing-a-series-against-a-model)
-for deal modes, results and recovery. **Edit next game** opens the session draft:
-**Save next setup** retains it, and **Start next game** starts a continuation.
-Global **New game** opens a separate session setup; **Cancel** discards edits.
-Changing both controllers to bots in the session editor offers **Start new
-watched game**, preserving the Play session.
+When a game finishes, **Rematch**, **Swap sides** and **Deal new decks** (for
+deck pools) carry forward the setup of the game just played. Closing the tab or
+restarting the server never ends an unfinished game: opening `/` or pressing
+**Resume** in **History** rebuilds it from its stored record at the pending
+decision. See
+[rematch, swap sides and resuming](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#rematch-swap-sides-and-resuming).
 
 ### Play against your own policy
 
@@ -152,23 +154,22 @@ result. Each choice shows the probabilities, value and update the chooser
 recorded, and **not retained** for what it did not. `--game` is the game's
 position, counted from 0, or the start of its digest; run the command without
 it to list the games. In the browser, the same is **Open a game file** under
-**Watch** (`/replay?watch=1`).
+**History** (`/games`).
 
 Academy plays the recorded actions through the engine again and checks the
 recorded state digest before every decision, without running the original
 players or loading their checkpoints. A game cut off part-way, or one this
 build does not reproduce, opens up to its last verified decision and says
 where and why it stops. A game from another world is refused with the managym
-version that recorded it. `managym academy replay <recording-id>` reopens a
-game from **Games** in the same browser and address (including port), or when
-it is shared and finished.
+version that recorded it. `managym academy replay <recording-id>` reopens any
+saved game from **History**, finished or unfinished.
 
 Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and games
 exported by `manabot export-game`, both written by earlier releases, still
 open; those two are verified by manabot, installed at the same release
 version. The
 [replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
-covers selection, privacy and troubleshooting.
+covers selection and troubleshooting.
 
 ### Launch from Python
 
@@ -185,9 +186,8 @@ with serve(port=0) as academy:
 ```
 
 `serve` opens no browser; call `academy.open()` to open the bare table.
-`game.url` and imported evaluation replay URLs open in any browser that can
-reach the server; recording ids retain the access rules above. Failures raise
-`AcademyLaunchError` with a `code`. See
+`game.url` and replay URLs open in any browser that can reach the server.
+Failures raise `AcademyLaunchError` with a `code`. See
 [Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):

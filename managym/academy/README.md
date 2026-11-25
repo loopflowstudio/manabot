@@ -31,8 +31,12 @@ pending choice with the same legal offers and permitted information.
 
 ## Modules
 
-- **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
-  authoritative game loop, viewer-safe observation serialization
+- **`server.py`**: FastAPI WebSocket server (`/ws/play`) — live games keyed by
+  game id, authoritative game loop, rebuild-from-record resume, viewer-safe
+  observation serialization
+- **`play_protocol.py`**: Pydantic models for `/ws/play` requests (`resume`,
+  `new_game`, `rematch`, `command`, `action`, `pass_turn`, `retry_mirror`,
+  `set_stops`, `show_analysis`)
 - **`presentation.py`**: per-viewer semantic presentation projection (moves,
   consequences, causes, rules, and viewer-safe per-event labels) derived from
   the engine's unhashed presentation sink
@@ -40,14 +44,14 @@ pending choice with the same legal offers and permitted information.
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
 - **`study_branch.py`**: source-bound historical forks, native structured
   execution, typed failure, and consuming exact-return receipts
-- **`trace.py` / `attempts.py`**: viewer-safe trace projection and SQLite human
-  attempts/feedback (`ACADEMY_TRACES_DIR/play.sqlite`, default `academy/traces/`).
+- **`trace.py` / `attempts.py`**: viewer-safe trace projection and SQLite game
+  store (`ACADEMY_TRACES_DIR/play.sqlite`, default `academy/traces/`).
   New records have one SQLite authority; legacy JSON remains readable.
-  `attempt_players` identifies both seats with stable public IDs, types, recorded
-  names, decks and bot versions. Game resume credentials and browser player credentials
-  remain private authorization values. Shared history applies permissions in SQL
-  before filtering/pagination; only completed shared replays are readable by
-  nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
+  `attempt_players` identifies both seats with public IDs, types, recorded
+  names, decks and bot versions (the human seat is `"You"`, `human:local`).
+  Every saved game in `traces_dir` is readable and every unfinished played game
+  stays resumable across idle eviction and server restarts, with no credentials
+  or privacy gates. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
   A live game is saved when its match, revision or event count changes, not on
   every projection, and each event, decision and presentation event is
@@ -62,7 +66,7 @@ pending choice with the same legal offers and permitted information.
   same reading during play (`LiveAnalysis`).
 - **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
   `managym.statistics` over one re-execution and saved in
-  `attempts.numbers_json`; `wilson_interval` for the My games record.
+  `attempts.numbers_json` (cleared on append when a resumed game moves on).
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -111,7 +115,8 @@ same-origin under `/api/card-art/`; the browser never contacts Scryfall. It
 fetches only names a viewer's frame or deck list already holds and never
 warms the cache from a decklist, so a closed list causes no request. Missing
 art keeps the procedural card treatment, `ACADEMY_CARD_ART=off` disables
-fetching, and artist credits are in the footer. See
+fetching, and artist credits live in the Board's Settings → View and the setup
+screen. See
 [card art](../../docs/academy.md#card-art).
 
 The Learn demo opens `/?demo=learn`: click a Lesson in the tray to take it, an
@@ -189,8 +194,9 @@ evidence. Start game repeats the selected prefix.
 Replay labels recorded actions and automated passes separately. Live, Watch,
 Replay and Study use the same decision renderer. Study executes the exact semantic
 offer on a retained isolated root, then **Return to recorded decision** restores
-its original address/frame/Command; **Return to live** is a separate destination.
-Expired roots remain unavailable rather than being reconstructed from the screen.
+its original address/frame/Command.
+Expired roots remain unavailable rather than being reconstructed from the screen;
+resuming a played game rebuilds its Study roots for every recorded decision.
 
 The rail's **History** lists everything that happened, in order: each move
 with what followed from it indented beneath, and the rule that did it ("died ·
@@ -219,7 +225,7 @@ uv run uvicorn managym.academy.server:app --port 8000
 ```
 
 The [local challenger workflow](../../docs/academy.md#playing-a-trained-challenger)
-covers the built same-origin server, feedback, and read-only SQL.
+covers the built same-origin server and read-only SQL.
 
 Play and both Watch seats use the same registered policy picker and
 `managym.policy` registry/session lifecycle
@@ -277,20 +283,19 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 
 ## Watch and recorded bot decisions
 
-Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed;
-`managym academy watch --player X --player Y` opens it with the seats selected
-(`&seat1=…&seat2=…`) and leaves Start to the person. Trained checkpoints, in
-one seat or both, and the random, greedy, heuristic and search anchors use
-GameSession's normal Command authority. Live production is separate from
-recorded playback. The shared replay viewer walks choices, recorded
-consequences and result/latest-state positions for
-human games, Watch and imported games. At a live Watch's latest position,
-Continue requests one decision and Play can continue production. Browsing
-earlier positions reads saved data without rerunning a policy. Completed games
-open from Games in the same viewer. See the
+Switch to **Watch Bot vs Bot** on the Play setup screen (`/`) to select both
+seats, decks and a deal seed; `managym academy watch --player X --player Y`
+opens setup in Watch mode with the seats selected and leaves Start to the
+person. Trained checkpoints, in one seat or both, and the random, greedy,
+heuristic and search anchors use GameSession's normal Command authority. Live
+production is separate from recorded playback. The shared replay viewer walks
+choices, recorded consequences and result/latest-state positions for human
+games, Watch and imported games. At a live Watch's latest position, Continue
+requests one decision and Play can continue production. Browsing earlier
+positions reads saved data without rerunning a policy. Saved games open from
+**History** (`/games`) in the same viewer. See the
 [replay guide](../../docs/academy.md#inspect-a-replay) for navigation, speed,
-perspective, reload and recovery. Watch credentials stay in the tab's
-`sessionStorage`; saved position URLs carry no credentials.
+perspective, reload and recovery.
 
 Opening card details or reading earlier history pauses replay. Close the details
 when ready, then press **Play** to resume. Returning to **Latest** does not start
@@ -320,25 +325,23 @@ choice time. Traces from the removed compound-decision policies may retain
 conditional root-sequence factors and values; these remain labeled separately
 from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
-private analysis observation supplies **Show both hands**, available explicitly
-for authorized bot spectators, including during active watches. Every read,
-including completed inspection, follows the recording's participant/shared
-access rules; finishing does not make a private recording public. Active Watch
-inspection also requires its watch credential. Choices default to the acting
-bot's view, independently of the stable seat-0 board orientation. Consequence
-and result boards use the authorized recorded seat-0 view where actor-private
-post-action snapshots are absent, with the perspective explicitly labeled.
-Unavailable views stay unavailable. Ordinary trace reads always strip the
-analysis snapshot, and bot inputs, decision evidence and acting-view history
+private analysis observation supplies **Show both hands**, available at Watch
+choices that captured a spectator view (including active watches) and at every
+position of a completed played game (`end_reason == "game_over"`). Choices
+default to the acting bot's view, independently of the stable seat-0 board
+orientation. Consequence and result boards use the recorded seat-0 view where
+actor-private post-action snapshots are absent, with the perspective explicitly
+labeled. Unavailable views stay unavailable. Ordinary trace reads always strip
+the analysis snapshot, and bot inputs, decision evidence and acting-view history
 retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
 one exact semantic Command on an isolated branch, and returns to the recorded
-decision. It does not advance the watched match. Roots and active controllers
-have the ordinary game-session lifetime; saved completed inspection remains
-available after the session expires, while a fresh Study fork requires retained
-roots. Existing structured Study receipts and frozen `erd1` evidence keep their
-original command bindings.
+decision. It does not advance the watched match. Roots and active Watch
+controllers live in server memory; saved inspection remains available after
+idle eviction or a server restart, while a fresh Study fork requires retained
+roots (resuming a played game rebuilds its Study roots). Existing structured
+Study receipts and frozen `erd1` evidence keep their original command bindings.
 
 ## Reading a played game
 
@@ -356,18 +359,17 @@ replayed. A game from another world or card set is not walked. The stored
 boards stay the authority for what the person saw; replayed views are never
 written back. Narration of the opponent's moves reads the stored track.
 
-Access follows the recording. A reading from the person's seat contains
-nothing that seat did not see. The opponent's view, for **Show both hands**,
-exists only for an authoritatively complete game (`end_reason == "game_over"`).
-Each `TraceEvent` records `committed_at`, its commit time in UTC; nothing
-shows it yet.
+A reading from the person's seat contains nothing that seat did not see. The
+opponent's view, for **Show both hands**, exists only for an authoritatively
+complete game (`end_reason == "game_over"`). Each `TraceEvent` records
+`committed_at`, its commit time in UTC; nothing shows it yet.
 
 ### Analysis lifecycle
 
-`POST /api/traces/{id}/analyses {"policy": <Policy ID>}` (participant only)
-loads a fresh `PolicyRunner` in the person's seat and walks the game on a
-daemon thread; `GET` lists the game's analyses with their decisions so far,
-reading only their rows, so Review follows a running analysis with it.
+`POST /api/traces/{id}/analyses {"policy": <Policy ID>}` loads a fresh
+`PolicyRunner` in the person's seat and walks the game on a daemon thread; `GET`
+lists the game's analyses with their decisions so far, reading only their rows,
+so Review follows a running analysis with it.
 `GET /api/traces/{id}/analyses/policies`, read once when Review opens,
 re-executes the game to list the eligible policies, the default (the
 opponent's own policy, else the recommended one), why none may run and the events an analysis of the
@@ -377,8 +379,9 @@ hidden cards. Admission takes seconds with many checkpoints and reads only the
 registered policies and each seat's deck, sideboard and world, so
 `PolicyAdmissions` admits each (registered policies, setups) once per process,
 for every game with those decks, Review and Play alike; loading a runner still
-admits it again. A game still being played is refused (`analysis_game_active`);
-one analysis runs per game per process (`analysis_running`).
+admits it again. Unfinished played games can be analysed on explicit request
+(Review does not start analysis automatically while a game is unfinished); one
+analysis runs per game per process (`analysis_running`).
 
 At each of the seat's deliberate decisions (automation is skipped) the runner
 is called on the walk's observation and Env, its `BotDecision` kept as a
@@ -395,8 +398,8 @@ A runner error or divergence stops the analysis with its reason; saved
 decisions stay. A `running` row whose process is gone reads as stopped.
 
 `POST /api/traces/{id}/analyses/{analysis}/line {"event": <analysed event>}`
-(participant only; `agent_line`) re-executes the game to that decision with a
-fresh runner of the analysing policy in the seat and the game's own opponent
+(`agent_line`) re-executes the game to that decision with a fresh runner of the
+analysing policy in the seat and the game's own opponent
 (`build_villain_policy`) in the other, plays the analysis's first choice on a
 copy and continues with the policy's first choice and the opponent's own
 choice to the end of the next turn (`LINE_TURNS`), the end of the game or
@@ -407,29 +410,33 @@ game. The line is computed per request in the real game's world and never
 saved. Key moments are derived in the client from the analysis
 (`keyMoments`).
 
-### Playing on from a decision
+### Resuming and playing on from a decision
 
-`new_game {"played_from": {"trace_id", "event"}, "player_token"}` starts a
-Play game from one of the person's deliberate decisions (`actor` hero, not
-`auto`) of their own game that is no longer being played; another reader's
-game, an opponent's step or an active game is refused (`played_from_*`). The
-new game takes the source's setup and seed (`setup_draft` plus the seed), and
-`_play_recorded_prefix` replays the first `event` steps through the ordinary
-Command path: the opponent's recorded actions through the offer-policy hook (a
-recurrent opponent is still asked, so it keeps its history) and the person's
-through `hero_command`, with every window surfaced so automated passes replay
-as recorded, now as Commands. Each step must name the recorded action; the
-first that does not stops the start with `played_from_diverged`. The prefix is
-persisted once, like a play demo's, and the game is then an ordinary recorded
-game against a fresh opponent policy. `Trace.played_from` names the source and
-step (written only when set); `GameNumbers.played_from` copies the step so
-`/api/traces/record` leaves the game out, and the recording index returns it
-with the turn it starts on.
+Resuming an unfinished game (`resume {"game": <id>}`) and starting a fork from
+a recorded decision (`new_game {"played_from": {"trace_id", "event"}}`) share
+one engine-stepping prefix player. It drives `env.step` through the stored
+events (checks each step's actor, action and description, feeds the opponent's
+recurrent memory, and clones a Study root at each recorded decision) without
+re-recording frames or presentation. On resume, the server installs the stored
+events, canonical decisions, presentation and revision unchanged, advances
+`_next_prompt_id` past every stored prompt id, and calls `_advance()` (so a
+game stopped during the bot's turn receives its reply now), keeping the same
+game id and a byte-identical stored prefix. Missing policy load refuses without
+marking divergence (leaving the game unfinished); engine divergence refuses
+with `"no longer plays as recorded at step N"` and marks `record_diverged`.
+
+`new_game {"played_from": {"trace_id", "event"}}` starts a new Play game from
+any of the person's deliberate decisions (`actor` hero, not `auto`) of any
+saved played game, finished or unfinished. It takes the source's setup and seed
+(`setup_draft` plus the seed), persists the prefix once, and continues as a new
+recorded game against a fresh opponent policy. `Trace.played_from` names the
+source and step (written only when set); `GameNumbers.played_from` copies the
+step and the recording index returns it with the turn it starts on.
 
 ### Analysis while you play
 
-The pilot's `show_analysis {"shown": true, "policy": <Policy ID or null>}`
-request (`SUBMIT_LIVE_COMMAND`) answers `analysis_state` with the policy shown,
+The `show_analysis {"shown": true, "policy": <Policy ID or null>}` request
+answers `analysis_state` with the policy shown,
 the policies that may read the game (`analysing_policies`, from
 `PolicyAdmissions`) and why none may. The connection admits them off the game
 lock before dispatching the request, so the first Show analysis of a game's
@@ -442,7 +449,7 @@ with `read_decision`. Steps and decisions reach the worker in the game's order
 on one queue; the worker never reads the game's Env, so nothing it does holds
 the game lock or a frame.
 
-Each reading goes to the pilot's sockets as its own
+Each reading goes to the active socket as its own
 `{"type": "analysis", "policy", "event", "revision", "annotation", "semantic",
 "after"}` message (or `{"stopped": reason}`), scheduled on the server loop
 without waiting. The client draws it only while its frame's revision matches.
@@ -451,25 +458,20 @@ Once a send completes the event is `shown`, and committing that decision stores
 so a game played without analysis saves the same row as before. Frames carry
 `analysis: {"policy"}` only while it is shown, so a reload reads the switch.
 `show_analysis {"shown": false}` closes the worker; a new game or a closed
-session closes it too. `GameNumbers.analysis_shown` counts the marked
-decisions, the Review position index exposes `analysis_shown` per choice, and
-`/api/traces/record` counts games with any (`with_analysis`).
+game closes it too. `GameNumbers.analysis_shown` counts the marked decisions
+and the Review position index exposes `analysis_shown` per choice.
 
-### Numbers and record
+### Numbers
 
-When a played game is no longer being played, `game_numbers` walks it once
-with `Behaviour` and `Totals` (`managym.statistics`), checking each step's
-actor and action description as an analysis does, and saves the result in
-`attempts.numbers_json`. A failed count never affects the saved game.
-`GET /api/traces/{id}/numbers` returns it, counting a game saved before
-numbers were on its first read; a game that does not re-execute here, a Watch
-game or a game still being played reads `null`. `GET /api/traces` rows carry
+`game_numbers` walks a played game (finished or unfinished) once with
+`Behaviour` and `Totals` (`managym.statistics`), checking each step's actor and
+action description as an analysis does, and saves the result in
+`attempts.numbers_json`. `AttemptStore.save` clears `numbers_json` whenever new
+events are appended on resume so the next read recounts fresh numbers. A failed
+count never affects the saved game. `GET /api/traces/{id}/numbers` returns it,
+counting a game saved before numbers were on its first read; a game that does
+not re-execute here or a Watch game reads `null`. `GET /api/traces` rows carry
 `numbers` from the column and never re-execute.
-
-`GET /api/traces/record` groups the caller's completed games by opponent
-identity and both decks: games, wins, draws, losses, games with a decision made
-while analysis was shown (`with_analysis`), and a 95% Wilson interval on wins
-over games.
 
 
 ## Elemental roster
@@ -507,14 +509,13 @@ existing server; another worktree's server is not evidence for this source.
 
 ```bash
 ACADEMY_API_PORT=8123 ACADEMY_FRONTEND_PORT=5293 \
-  npm --prefix academy/ui run test:e2e -- testing-house.spec.ts
+  npm --prefix academy/ui run test:e2e -- input-recovery.spec.ts
 ```
 
 For a built SPA, set an absolute `ACADEMY_FRONTEND_BUILD` for build and ASGI,
 a separate `ACADEMY_TRACES_DIR`, and
 `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
-stores and sibling servers untouched. Shared-history proofs use separate
-browser identities and cover private unfinished replays and participant feedback.
+stores and sibling servers untouched.
 For release-config proofs, set an absolute `ACADEMY_RELEASE_PROOF_DIR` per
 subprocess; both browser artifacts and its trace store live below that directory.
 Finish frontend generation and builds before starting the proof servers.
