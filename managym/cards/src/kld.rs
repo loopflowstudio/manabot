@@ -230,7 +230,7 @@ fn chandra_torch_of_defiance() -> CardDefinition {
                 loyalty(
                     1,
                     vec![
-                        Effect::exile(ObjectSelector::LibraryTop),
+                        Effect::exile(ObjectSelector::LibraryTop(1)),
                         Effect::MayCastExiled {
                             what: ObjectSelector::Moved,
                             if_declined: vec![Effect::DealDamageToPlayer {

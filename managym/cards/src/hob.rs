@@ -767,7 +767,6 @@ fn gandalf_goblins_bane() -> CardDefinition {
                 count: 1,
                 predicate: CardPredicate::subtype("Wizard"),
             }),
-            choose: None,
         }],
         text_box: adventure_text.into(),
         ..Default::default()

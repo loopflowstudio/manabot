@@ -1223,8 +1223,8 @@ pub enum ObjectSelector {
     Remembered,
     /// Cards in exile linked to the exact ability source (CR 607.2a).
     ExiledWithSource,
-    /// The top object of the resolving player's library.
-    LibraryTop,
+    /// The top `count` objects of the resolving player's library, top-first.
+    LibraryTop(usize),
     /// Every card in the resolving player's library except its bottom card.
     LibraryExceptBottom,
     /// The object the source Aura or Equipment is attached to.
@@ -1413,7 +1413,7 @@ impl ObjectSelector {
             | Self::Attached
             | Self::CreatedThisWay
             | Self::Remembered
-            | Self::LibraryTop
+            | Self::LibraryTop(_)
             | Self::LibraryExceptBottom
             | Self::ExiledWithSource
             | Self::Grantor
@@ -1734,11 +1734,9 @@ pub enum Effect {
         target: TargetSpec,
     },
     /// "Exile the top `count` cards of your library [face down]. [Choose
-    /// `choose`.] You may play them [`until`] [if `condition`]." A face-down
-    /// card is hidden from everyone, its exiler included, while the condition
-    /// fails (Flameshape). With `choose: Some(k)`, the controller selects `k`
-    /// of the exiled cards to receive the play permission and the rest stay
-    /// exiled.
+    /// "Exile the top `count` cards of your library [face down]. You may play
+    /// them [`until`] [if `condition`]." A face-down card is hidden from
+    /// everyone, its exiler included, while the condition fails (Flameshape).
     ExileTopCardsToPlay {
         count: usize,
         until: PlayWindow,
@@ -1746,8 +1744,6 @@ pub enum Effect {
         face_down: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         condition: Option<Condition>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        choose: Option<usize>,
     },
     /// Grant the resolving player permission to play each exiled object `what`
     /// names [`until`] [if `condition`].
@@ -2874,19 +2870,6 @@ impl Effect {
             until,
             face_down: false,
             condition: None,
-            choose: None,
-        }
-    }
-
-    /// "Exile the top `count` cards of your library. Choose `choose`. You may
-    /// play that card [`until`]."
-    pub fn exile_top_choose_to_play(count: usize, choose: usize, until: PlayWindow) -> Self {
-        Effect::ExileTopCardsToPlay {
-            count,
-            until,
-            face_down: false,
-            condition: None,
-            choose: Some(choose),
         }
     }
 

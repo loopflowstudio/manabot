@@ -989,7 +989,8 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
         ObjectSelector::Triggering => format!("that {}", triggering.noun),
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),
-        ObjectSelector::LibraryTop => "the top card of your library".into(),
+        ObjectSelector::LibraryTop(1) => "the top card of your library".into(),
+        ObjectSelector::LibraryTop(n) => format!("the top {n} cards of your library"),
         ObjectSelector::LibraryExceptBottom => "all but the bottom card of your library".into(),
         ObjectSelector::ExiledWithSource => "the cards exiled with this permanent".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
@@ -1517,8 +1518,8 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
             format!("{} gains flashback at its mana cost until end of turn", target_description(target))
         } else { format!("You may cast {} this turn", target_description(target)) },
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileTopCardsToPlay { count, until, face_down, condition, choose } => {
-            let them = if *count == 1 || *choose == Some(1) { "that card" } else { "those cards" };
+        ExileTopCardsToPlay { count, until, face_down, condition } => {
+            let them = if *count == 1 { "that card" } else { "those cards" };
             let window = match until {
                 crate::state::ability::PlayWindow::ThisTurn => "this turn",
                 crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
@@ -1526,15 +1527,10 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
             };
             let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
             let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text_in(triggering, condition))).unwrap_or_default();
-            let choose_text = match choose {
-                Some(1) => " Choose one.".to_string(),
-                Some(n) => format!(" Choose {n}."),
-                None => String::new(),
-            };
             if *face_down {
-                format!("Look at the top {cards} of your library and exile {} face down.{choose_text} You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
+                format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
             } else {
-                format!("Exile the top {cards} of your library.{choose_text} You may play {them} {window}{condition}")
+                format!("Exile the top {cards} of your library. You may play {them} {window}{condition}")
             }
         }
         GrantPlay { what, until, condition, .. } => {

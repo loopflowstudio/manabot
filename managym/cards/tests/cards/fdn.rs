@@ -8810,11 +8810,25 @@ fn chandra_flameshaper_loyalty_abilities() {
     ]);
     let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
     assert_eq!(counters_of(&s, chandra, CounterKind::Loyalty), 6);
-    let bolt = pin_top(&mut s, &["Lightning Bolt", "Gray Ogre", "Plains"])[0];
+    let pinned = pin_top(
+        &mut s,
+        &["Lightning Bolt", "Gray Ogre", "Plains", "Lightning Bolt"],
+    );
+    let bolt = pinned[0];
+    let fourth_def = s.game().state[pinned[3]].definition_id;
+    s.game_mut().state.players[0]
+        .known_library
+        .public
+        .insert(3, fourth_def);
     s.set_player_mana_pool(0, "0");
     activate(&mut s, chandra, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 3);
+    assert_eq!(
+        s.game().state.players[0].known_library.public.get(&0),
+        Some(&fourth_def),
+        "library_top_departure shifts known library facts beneath the 3 exiled cards"
+    );
     assert_eq!(
         s.action_space().actions.len(),
         3,
@@ -8923,4 +8937,55 @@ fn chandra_flameshaper_loyalty_abilities() {
     for &beast in &beasts {
         assert_eq!(s.game().state.permanents[beast].as_ref().unwrap().damage, 1);
     }
+
+    // +2 with 1 card in library offers the forced 1-card choice (no decline); with 0 cards offers none.
+    let mut s = five_color_setup(&["Chandra, Flameshaper", "Lightning Bolt"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    let lib: Vec<_> = s
+        .game()
+        .state
+        .zones
+        .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
+        .to_vec();
+    let keep = *lib
+        .iter()
+        .find(|&&obj| s.game().state[obj].name == "Lightning Bolt")
+        .unwrap();
+    for obj in lib {
+        if obj != keep {
+            s.game_mut()
+                .state
+                .place_object(obj, PlayerId(0), managym::state::zone::ZoneType::Exile);
+        }
+    }
+    activate(&mut s, chandra, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().actions.len(), 1, "forced 1-card choice");
+    let chosen = match &s.action_space().actions[0] {
+        Action::SelectCard { object, .. } => *object,
+        other => panic!("expected SelectCard, got {other:?}"),
+    };
+    select_card(&mut s, chosen);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(has_action(
+        &s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == chosen)
+    ));
+    // Empty library: +2 resolves straight to priority with no selection prompt.
+    let mut s = five_color_setup(&["Chandra, Flameshaper"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
+    let lib: Vec<_> = s
+        .game()
+        .state
+        .zones
+        .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
+        .to_vec();
+    for obj in lib {
+        s.game_mut()
+            .state
+            .place_object(obj, PlayerId(0), managym::state::zone::ZoneType::Exile);
+    }
+    activate(&mut s, chandra, 0);
+    settle(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }

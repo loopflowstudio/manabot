@@ -578,7 +578,20 @@ fn chandra_flameshaper() -> CardDefinition {
                     2,
                     vec![
                         Effect::add_mana(Mana::parse("RRR")),
-                        Effect::exile_top_choose_to_play(3, 1, PlayWindow::ThisTurn),
+                        Effect::exile(ObjectSelector::LibraryTop(3)),
+                        Effect::SelectCards {
+                            from: ObjectSelector::Moved,
+                            predicate: CardPredicate::default(),
+                            min: 1,
+                            max: 1.into(),
+                            effects: vec![Effect::GrantPlay {
+                                what: ObjectSelector::Selected,
+                                until: PlayWindow::ThisTurn,
+                                face_down: false,
+                                condition: None,
+                            }],
+                            if_declined: Vec::new(),
+                        },
                     ],
                 ),
                 loyalty(

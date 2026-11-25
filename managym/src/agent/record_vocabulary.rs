@@ -325,7 +325,11 @@ fn execution_names(out: &mut Vec<RecordName>) {
 fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
+        .filter_map(|map| {
+            map.get("ExileTopCardsToPlay")
+                .or_else(|| map.get("GrantPlay"))?
+                .get("condition")
+        })
         .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
         .collect()
 }
@@ -393,7 +397,6 @@ mod tests {
                 until: PlayWindow::WhileExiled,
                 face_down: true,
                 condition: Some(wizard.clone()),
-                choose: None,
             }],
             otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
         };

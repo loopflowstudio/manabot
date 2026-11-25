@@ -1067,6 +1067,7 @@ impl Game {
                     {
                         continue;
                     }
+                    let library_top_departure = matches!(what, ObjectSelector::LibraryTop(_));
                     let entry = if *to == ZoneType::Battlefield {
                         ZoneEntry {
                             tapped: *tapped,
@@ -1077,12 +1078,14 @@ impl Game {
                             },
                             counters: counters.clone(),
                             controller,
+                            library_top_departure,
                             ..ZoneEntry::default()
                         }
                     } else {
                         // "exile it with a stash counter on it" (CR 122.1).
                         ZoneEntry {
                             counters: counters.clone(),
+                            library_top_departure,
                             ..ZoneEntry::default()
                         }
                     };
@@ -1798,38 +1801,17 @@ impl Game {
                 until,
                 face_down,
                 condition,
-                choose,
             } => {
-                let exiled = self.exile_top_cards(frame.controller, *count, *face_down);
-                if let Some(choose) = (*choose).filter(|&n| exiled.len() > n) {
-                    Some(Decision::SelectCards {
-                        origin: crate::flow::decision::SelectionOrigin::Other,
-                        player: frame.controller,
-                        from: None,
-                        candidates: exiled,
-                        selected: Vec::new(),
-                        min: choose,
-                        max: choose,
-                        effects: vec![Effect::GrantPlay {
-                            what: ObjectSelector::Selected,
-                            until: *until,
-                            face_down: *face_down,
-                            condition: condition.clone(),
-                        }],
-                        if_declined: Vec::new(),
-                    })
-                } else {
-                    for object in exiled {
-                        self.grant_play_from_exile(
-                            frame.controller,
-                            object,
-                            *until,
-                            *face_down,
-                            condition.as_ref(),
-                        );
-                    }
-                    None
+                for object in self.exile_top_cards(frame.controller, *count, *face_down) {
+                    self.grant_play_from_exile(
+                        frame.controller,
+                        object,
+                        *until,
+                        *face_down,
+                        condition.as_ref(),
+                    );
                 }
+                None
             }
             Effect::GrantPlay {
                 what,
@@ -2738,11 +2720,14 @@ impl Game {
                 }
                 _ => Vec::new(),
             },
-            ObjectSelector::LibraryTop => self
+            ObjectSelector::LibraryTop(count) => self
                 .state
                 .zones
-                .top(ZoneType::Library, frame.controller)
-                .into_iter()
+                .zone_objects(ZoneType::Library, frame.controller)
+                .iter()
+                .rev()
+                .take(*count)
+                .copied()
                 .collect(),
             ObjectSelector::LibraryExceptBottom => {
                 let objects = self
