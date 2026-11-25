@@ -62,6 +62,21 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   nextest, pinned pilot (zero drift), Academy loyalty/choice tests and
   conformance/parity receipts green (`4e4be788f7`).
 
+- Decomposition review at `ac9ea8b330`: delayed watchers (Garruk, Curse
+  Breaker −4 per-batch at opponent; The Theorist −3 per-object at you or your
+  planeswalkers) both resolve through `match_trigger_wrappers` +
+  `collect_occurrences` in `flow/triggers.rs`; legend-rule and zero-loyalty
+  SBAs read one `Characteristics.exempt_sbas`; printed (Garruk, Veiled
+  Butcher) and resolved (Essence Burn) "would die → exile" feed one
+  `ReplacementEffect::ExileIfWouldDie` in `collect_replacements()`;
+  `MayCastExiled.if_declined` follows the existing `if_declined` decline
+  pattern and is resolution-time casting, distinct from `GrantPlay`. Impulse
+  predecessor variants and `LegendRuleDoesntApply` are gone (the latter only
+  in `token_renames.rs`). No card-specific engine dispatch; the
+  `empower_jace` match in `ability_description.rs` names the CR 701.71
+  keyword action. Five legacy `DelayedEvent` variants stay a closed set for
+  0.3.0 (see questions). No findings.
+
 ## Remaining
 
 No slices remain. Deferred to gate/CI: full workspace debug nextest,
