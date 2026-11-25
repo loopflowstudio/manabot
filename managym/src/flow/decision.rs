@@ -945,17 +945,18 @@ impl SuspendedResolution {
             Decision::Payment(progress) => {
                 let f = &self.frame;
                 let target = Target::Permanent(id);
+                let completion_names = match f.completion {
+                    FrameCompletion::Priority | FrameCompletion::Continue => false,
+                    FrameCompletion::TurnFaceUp(o) => o == object,
+                    FrameCompletion::Spell {
+                        object: o,
+                        attach_to,
+                    } => o == object || attach_to == Some(object),
+                    _ => true,
+                };
                 f.batch.is_some()
                     || f.iteration.is_some()
-                    || !matches!(
-                        f.completion,
-                        FrameCompletion::Priority
-                            | FrameCompletion::Continue
-                            | FrameCompletion::TurnFaceUp(_)
-                            | FrameCompletion::Spell { .. }
-                    )
-                    || matches!(f.completion, FrameCompletion::TurnFaceUp(o) if o == object)
-                    || matches!(f.completion, FrameCompletion::Spell { object: o, attach_to } if o == object || attach_to == Some(object))
+                    || completion_names
                     || [f.source(), f.source_ref(), f.chosen, f.attached, f.grantor]
                         .contains(&Some(object))
                     || f.context_target == Some(target)

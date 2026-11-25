@@ -2218,6 +2218,7 @@ impl Game {
             Some(Decision::ManaChoice {
                 choices, resume, ..
             }) if resume.is_some() || self.pending_choice.is_some() => {
+                let model = self.payment_model(player, None);
                 return space
                     .actions
                     .iter()
@@ -2226,7 +2227,7 @@ impl Game {
                             unreachable!()
                         };
                         let (pool, obligations) = self.after_mana_choice(player, &choices[*mode]);
-                        self.payment_model(player, None)
+                        model
                             .plan(pool, obligations, SourcePolicy::All)
                             .map_or(usize::MAX, |remaining| remaining.len())
                     })
@@ -2392,6 +2393,11 @@ impl Game {
         let mut obligations = vec![Obligation::mana(cost.clone())];
         obligations.extend(self.saved_obligations(player));
         let helped = help.keyworded();
+        let extra = self.offers_extra_payment_taps(player);
+        let color_matters = pool.usable_total(cost) > spendable
+            || self
+                .paying()
+                .is_some_and(|(_, payment, _)| self.payment_reads_spent_colors(payment));
         // Moving an already affordable fixed output into the pool preserves
         // aggregate affordability. A choice output can forfeit another color.
         let fixed_only = !helped
@@ -2446,14 +2452,10 @@ impl Game {
                     units = units.max(output.total());
                     let previous = *first.get_or_insert(output);
                     if previous != output {
-                        output_choice |= !same_spend_effects(previous, output)
-                            || self.paying().is_some_and(|(_, payment, _)| {
-                                self.payment_reads_spent_colors(payment)
-                            })
-                            || pool.usable_total(cost) > spendable;
+                        output_choice |= color_matters || !same_spend_effects(previous, output);
                     }
                 }
-                if offered && !self.offers_extra_payment_taps(player) {
+                if offered && !extra {
                     abilities.push(Action::ActivateAbility {
                         player,
                         permanent: source.permanent,
@@ -2475,7 +2477,7 @@ impl Game {
                 && spendable == 0
                 && !self.automatic_mana_payment(player)
                 && obligations.len() == 1
-                && !self.offers_extra_payment_taps(player)
+                && !extra
             {
                 if let Some(taps) = self.determined_source_counts(
                     model,
@@ -2674,6 +2676,7 @@ impl Game {
         {
             return false;
         }
+        let _scan = self.payment_scan();
         let pool = self.pooled_mana(player);
         let mut remainders = Vec::new();
         let mut first_output = None;
@@ -2717,7 +2720,6 @@ impl Game {
         if payment.help() != Help::default() || self.offers_extra_payment_taps(player) {
             return false;
         }
-        let _scan = self.payment_scan();
         let model = self.payment_model(player, None);
         if model
             .sources
@@ -3034,7 +3036,7 @@ impl Game {
             .unwrap_or_else(|| fixed_output(&self.characteristics(permanent)));
         let source = self
             .permanent_object(permanent)
-            .expect("a tapped fixed source is on the battlefield");
+            .expect("an automatic mana source is on the battlefield");
         self.tap_permanent(permanent, true);
         let origin = self.mana_origin(source);
         self.state
@@ -3045,7 +3047,7 @@ impl Game {
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
         assert!(
             resolved.is_none(),
-            "a fixed source's bonuses need no choice"
+            "an automatic tap's bonuses need no choice"
         );
     }
 
@@ -3298,29 +3300,36 @@ impl Game {
             taps.push((index, AutomaticTap { permanent, output }));
         }
 
-        // A search witness may tap a basic for generic mana before finding
+        // A search witness may tap a basic or restricted source before finding
         // the dual needed for a colored pip. Prune its concrete outputs in
         // preference order, retaining the witness's execution order.
-        let mut produced = pool;
-        let output = |index: usize, tap: &AutomaticTap| {
+        fn tap_output<'a>(
+            sources: &'a [ManaSource],
+            index: usize,
+            tap: &'a AutomaticTap,
+        ) -> &'a Mana {
             tap.output
                 .as_ref()
-                .unwrap_or_else(|| model.sources[index].fixed.as_ref().unwrap())
-                .clone()
-        };
-        for (index, tap) in &taps {
-            produced.add(&output(*index, tap));
+                .unwrap_or_else(|| sources[index].fixed.as_ref().unwrap())
         }
-        if produced.usable_total(cost) > u16::from(cost.mana_value) {
+        let mut produced = pool;
+        for (index, tap) in &taps {
+            produced.add(tap_output(&model.sources, *index, tap));
+        }
+        let owed = u16::from(cost.mana_value);
+        if produced.total() > owed {
             let tail = self.saved_obligations(player);
             let reluctance = self.source_reluctance(&model);
             let mut order: Vec<_> = (0..taps.len()).collect();
             order.sort_unstable_by_key(|&i| std::cmp::Reverse((reluctance[taps[i].0], i)));
             let mut keep = vec![true; taps.len()];
             for i in order {
-                let mana = output(taps[i].0, &taps[i].1);
+                if produced.total() <= owed {
+                    break;
+                }
+                let mana = tap_output(&model.sources, taps[i].0, &taps[i].1);
                 let surplus = if tail.is_empty() {
-                    model.is_surplus(&produced, &mana, cost, &[])
+                    model.is_surplus(&produced, mana, cost, &[])
                 } else {
                     model
                         .tapped(
@@ -3329,18 +3338,17 @@ impl Game {
                                 .filter(|(j, _)| *j != i && keep[*j])
                                 .map(|(_, (index, _))| *index),
                         )
-                        .is_surplus(&produced, &mana, cost, &tail)
+                        .is_surplus(&produced, mana, cost, &tail)
                 };
                 if surplus {
                     keep[i] = false;
-                    produced.spend(&mana);
+                    produced.spend(mana);
                 }
             }
             let mut keep = keep.into_iter();
             taps.retain(|_| keep.next().unwrap());
         }
-        let taps = taps.into_iter().map(|(_, tap)| tap).collect();
-        Some(taps)
+        Some(taps.into_iter().map(|(_, tap)| tap).collect())
     }
 
     /// Restrict the model to automatic taps and find their concrete modes.

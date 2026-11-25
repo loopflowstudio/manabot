@@ -20,7 +20,11 @@ impl Game {
         needed: usize,
         taps: Vec<UsefulTap<'a>>,
     ) -> Option<Vec<UsefulTap<'a>>> {
+        if self.state.cast_caller.is_some() {
+            return None;
+        }
         let _scan = self.board_scan();
+        let tap_count = taps.len();
         let mut classes: Vec<Vec<UsefulTap>> = Vec::new();
         // Only unbound permanents can represent a class with multiple members.
         let mut representatives: Vec<usize> = Vec::new();
@@ -36,6 +40,10 @@ impl Game {
                 representatives.push(classes.len());
             }
             classes.push(vec![tap]);
+        }
+        // Spare taps need at least one multi-member interchangeable class.
+        if classes.len() == tap_count {
+            return None;
         }
 
         let mut mandatory = Vec::new();
@@ -55,7 +63,10 @@ impl Game {
         }
         let count = needed.checked_sub(mandatory.len())?;
         let optional = optional?;
-        mandatory.extend_from_slice(optional.get(..count)?);
+        if count == 0 || optional.len() <= count {
+            return None;
+        }
+        mandatory.extend_from_slice(&optional[..count]);
         mandatory.sort_unstable_by_key(|tap| tap.source.permanent);
         Some(mandatory)
     }
@@ -141,7 +152,6 @@ impl Game {
             || self
                 .paying()
                 .is_some_and(|(_, payment, _)| payment.names_mana_source(id, object))
-            || state.cast_caller.is_some()
             || state
                 .suspended_decision
                 .as_ref()
