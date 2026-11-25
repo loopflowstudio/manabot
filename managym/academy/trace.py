@@ -55,7 +55,7 @@ class GameConfig:
     # Historical checkpoint provenance, or a managym-policy-1 descriptor with
     # complete provider/runner/config/artifact identity. Read without a loader.
     opponent_checkpoint: dict[str, Any] | None = None
-    # Priority-stop configuration at game start (MTGO-style auto-pass).
+    # Priority-stop configuration at game start.
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
     # not this record.

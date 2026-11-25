@@ -260,7 +260,7 @@ def _watch_cmd(
     player: list[str] | None = typer.Option(
         None,
         "--player",
-        help="Seat player (repeatable twice): catalog id, ./bot.py:func, or search-N",
+        help="Seat player (repeatable twice): catalog id, ./bot.py:func, policy JSON, or search-N",
     ),
     bot1: str | None = typer.Option(
         None, "--bot1", help="Seat 1 bot (alternative to --player)"

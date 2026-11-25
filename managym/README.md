@@ -109,6 +109,33 @@ Global **New game** opens a separate session setup; **Cancel** discards edits.
 Changing both controllers to bots in the session editor offers **Start new
 watched game**, preserving the Play session.
 
+### Play against your own policy
+
+Academy loads external bots without importing your training framework or Torch.
+Pass a Python file, a saved `PolicySpec` JSON, or a `managym.bots` entry point:
+
+```bash
+# Plain (obs) -> int | probabilities function, or a managym.policy.Policy object
+uv run --no-project managym play --opponent ./my_bot.py:choose --decklists closed
+
+# Saved PolicySpec JSON (e.g. {"provider": "manabot", "artifact": ".../iter-0010.safetensors"})
+uv run --no-project managym play --opponent ./iter-0010.policy.json --decklists closed
+
+# Pit two policies against each other in Watch, or list discovered policies
+uv run --no-project managym watch --bot1 ./my_bot.py:choose --bot2 heuristic
+uv run --no-project managym opponents
+```
+
+When you pass a `.py` file without `:attr`, Academy looks for `policy` or `choose`
+at module scope. For stateful/recurrent bots, probability/value outputs, or
+custom model architectures, implement `managym.policy.Policy`
+(`describe`, `admit`, `load -> PolicySession`) or register a provider under the
+`managym.bots` entry-point group. From Python, pass a live policy directly to
+`managym.academy.launch.serve(policies={"my-bot": policy})` or
+`managym.academy.launch.play(opponent=policy)`. See
+[independent Python policies](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#independent-python-policies)
+for the full contract.
+
 ### Watch a recorded game
 
 ```bash
@@ -986,7 +1013,9 @@ or phase, as any floating mana does. There is no undo.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
   taps and direct taps use the `TapForCost` policy action with the
   permanent as focus, told apart by `pays_directly`.
-  Choice-output abilities use their activation action. Omitting both fields
+  Choice-output abilities use their activation action. Both fixed-source taps
+  and mana-producing activated abilities set `Action.is_mana_ability` to
+  `True`, distinguishing mana abilities from non-mana plays. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
 

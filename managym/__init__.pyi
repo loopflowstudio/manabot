@@ -1252,6 +1252,8 @@ class Action:
     # The tap pays part of the cost itself (convoke, improvise, waterbend)
     # rather than making mana; both are TAP_FOR_COST.
     pays_directly: bool
+    # True for fixed-source mana taps and mana-producing activated abilities.
+    is_mana_ability: bool
     # mode_index is an announced number (X, a replicate count, a payment's X)
     # rather than an option index.
     # The printed spell cast: 0 front face, 1 Adventure, 2 Omen.

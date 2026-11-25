@@ -378,3 +378,18 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `play-session.spec.ts` (release and default configs) fails six tests on
   this branch's base, looking for a "Seat 1 controller" select no GameSetup
   renders; compare against a revert before reading it as a regression.
+- Priority stops in a real combat (MTG-475): `managym academy play --deck
+  <f> --opponent-deck <f> --opponent heuristic --order play --seed 3 --no-open
+  --port <unused> --traces-dir .runs/<dir>` with `24 Plains / 18 Savannah
+  Lions / 18 Razor Rings` on both sides (the `heuristic` alias needs provider
+  discovery: do not pass `--no-discover`). Seed 3 attacks with Rings castable
+  on hero turn 5 and the heuristic attacks on turns 8–14. Each new browser
+  context starts a new game from the same launch URL. Read
+  `game[data-step]`, `[data-turn]`, `[data-turn-owner]` per decision; the
+  StopBar cells are `[data-testid=bar-stop-<my|opponent>-<step>]` with
+  `data-state` off/every/once, and a click cycles off → every → once. Seed
+  legacy storage with an `addInitScript` guarded by a flag key, or reloads
+  reseed it. Escape does not close the top-bar Menu; click
+  `[data-testid=game-menu]` again. Auto passes are `auto: true` events in
+  `attempts.trace_json`. A Once stop must hold the window it arrives at:
+  check the priority offers appear there before the bar turns Off.
