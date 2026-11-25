@@ -27,10 +27,8 @@
   }
 </script>
 
-<aside
+<section
   class="tracker"
-  class:left={side === 'you'}
-  class:right={side === 'opponent'}
   aria-label={`${title} deck tracker`}
   data-testid={`deck-tracker-${side}`}
 >
@@ -115,26 +113,17 @@
       {/if}
     </footer>
   {/if}
-</aside>
+</section>
 
 <style>
   .tracker {
-    position: fixed;
-    top: 52px;
-    bottom: 58px;
-    z-index: 180;
-    width: 264px;
-    max-width: calc(100vw - 24px);
+    min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-md);
     background: var(--bg-surface);
-    box-shadow: var(--shadow-raised);
     overflow: hidden;
   }
-  .tracker.left { left: 10px; }
-  .tracker.right { right: 10px; }
   .head {
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);

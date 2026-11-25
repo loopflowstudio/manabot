@@ -733,6 +733,10 @@
   ]);
   let keysOpen = $state(false);
   let keysButton = $state<HTMLButtonElement | null>(null);
+  const openingHandDecision = $derived(
+    frame.projection.decision_context?.stage === 'opening_hand'
+      || frame.offers.some(offer => offer.label === 'Keep hand' || offer.label === 'Mulligan'),
+  );
   let myDeckOpen = $state(false);
   let oppDeckOpen = $state(false);
   let lastAutoTappedHash = '';
@@ -887,7 +891,7 @@
 <svelte:window onkeydown={onKeydown} onkeyup={onKeyup} onblur={() => { ctrlPending = false; ctrlShift = false; }} onpointermove={onPointerMove}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
-<div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
+<div class="game" class:with-decks={anyTrackerOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
@@ -923,6 +927,17 @@
     </div>
   </header>
 
+  {#if anyTrackerOpen}
+    <aside class="deck-sidebar" class:split={oppDeckOpen && myDeckOpen && selfTracker !== null} aria-label="Deck trackers" data-testid="deck-sidebar">
+      {#if oppDeckOpen}
+        <DeckTracker title={oppTracker.mode === 'opponent-open' ? (opponent.deck ?? `${said}'s deck`) : `${said} · seen`} view={oppTracker} faces={trackerFaces} side="opponent" onclose={() => { oppDeckOpen = false; }} />
+      {/if}
+      {#if myDeckOpen && selfTracker}
+        <DeckTracker title={you.deck ?? 'Your deck'} view={selfTracker} faces={trackerFaces} side="you" onclose={() => { myDeckOpen = false; }} />
+      {/if}
+    </aside>
+  {/if}
+
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
     data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
@@ -949,7 +964,7 @@
         {#each board.hand as item, index (item.card.id)}
           <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * fan.step}px`}>
             <BoardCard name={item.card.name} width={fan.card} slice={fan.covered && index < board.hand.length - 1 ? fan.step : null} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
-              dim={acting && item.offers.length === 0 ? 'hand' : null}
+              dim={acting && !openingHandDecision && item.offers.length === 0 ? 'hand' : null}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
           </div>
@@ -1067,14 +1082,6 @@
   </div>
 {/if}
 
-{#if myDeckOpen && selfTracker}
-  <DeckTracker title={you.deck ?? 'Your deck'} view={selfTracker} faces={trackerFaces} side="you" onclose={() => { myDeckOpen = false; }} />
-{/if}
-
-{#if oppDeckOpen}
-  <DeckTracker title={oppTracker.mode === 'opponent-open' ? (opponent.deck ?? `${said}'s deck`) : `${said} · seen`} view={oppTracker} faces={trackerFaces} side="opponent" onclose={() => { oppDeckOpen = false; }} />
-{/if}
-
 {#if keysOpen}
   <div class="keys" role="dialog" aria-label="Keyboard shortcuts" data-testid="keys-sheet">
     <p class="type-heading text-ink-2">Keys{recording ? ' · Review' : ''}</p>
@@ -1135,6 +1142,25 @@
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
     background: var(--bg); color: var(--text);
   }
+  .game.with-decks {
+    grid-template-columns: 256px minmax(0, 1fr) clamp(250px, 21vw, 300px);
+  }
+  .deck-sidebar {
+    grid-row: 2 / span 2;
+    grid-column: 1;
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    border-right: 1px solid var(--border);
+    background: var(--bg-surface);
+  }
+  .deck-sidebar.split {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .deck-sidebar.split > :global(:first-child) {
+    border-bottom: 1px solid var(--border-strong);
+  }
   .topbar {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
@@ -1143,14 +1169,16 @@
   .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The matchup gives way first: the turn and the controls keep their width. */
   .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
-  .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+  .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px); }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .connection { color: var(--warning-text); }
 
   .board {
+    grid-row: 2; grid-column: 1;
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
+  .game.with-decks .board { grid-column: 2; }
   /* One row the half's own height: a tall plate scrolls inside it rather than growing the rows past the half. */
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
@@ -1208,9 +1236,11 @@
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
+  .game.with-decks .rail-slot { grid-column: 3; }
   .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
   .strip-toggle:hover { color: var(--text); }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
+  .game.with-decks .bottom { grid-column: 2; }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;

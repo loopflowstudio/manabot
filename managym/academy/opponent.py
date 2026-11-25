@@ -26,30 +26,6 @@ from . import advice
 
 BUILTIN_OPPONENTS: tuple[dict[str, Any], ...] = (
     {
-        "id": "search-256",
-        "name": "Search 256",
-        "kind": "search",
-        "group": "Search",
-        "summary": "256 random playouts per legal action",
-        "requires_open_decklists": True,
-    },
-    {
-        "id": "search-64",
-        "name": "Search 64",
-        "kind": "search",
-        "group": "Search",
-        "summary": "64 random playouts per legal action",
-        "requires_open_decklists": True,
-    },
-    {
-        "id": "search-16",
-        "name": "Search 16",
-        "kind": "search",
-        "group": "Search",
-        "summary": "16 random playouts per legal action",
-        "requires_open_decklists": True,
-    },
-    {
         "id": "random",
         "name": "Random",
         "kind": "scripted",
@@ -143,7 +119,7 @@ def opponent_kind(policy: dict[str, Any]) -> str:
 
 
 def default_opponent_id() -> str:
-    """Preferred default opponent: recommended hosted policy -> heuristic -> search-64."""
+    """Preferred default opponent: recommended hosted policy -> heuristic -> random."""
     registry = policy_registry()
     descriptors = registry.descriptors()
     for descriptor in descriptors:
@@ -155,7 +131,7 @@ def default_opponent_id() -> str:
                 return "heuristic"
         except ValueError:
             pass
-    return "search-64"
+    return "random"
 
 
 def policy_settings_fit(
@@ -179,7 +155,7 @@ def opponent_catalog() -> dict[str, Any]:
     entries = []
     error = None
     provider_names: list[str] = []
-    default_id = "search-64"
+    default_id = "random"
     try:
         registry = policy_registry()
         provider_names = sorted(registry.providers)

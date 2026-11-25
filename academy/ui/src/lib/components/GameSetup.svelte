@@ -66,19 +66,26 @@
       return deckPools;
     }).catch(() => [] as DeckPoolSummary[]);
 
-    if (applySmartDefaults) {
-      void Promise.all([oppFetch, poolFetch]).then(([catalog, pools]) => {
+    void Promise.all([oppFetch, poolFetch]).then(([catalog, pools]) => {
+      const preferred = resolveCatalogChoice(catalog?.default_opponent, catalog?.opponents ?? []);
+      const heuristic = resolveCatalogChoice('heuristic', catalog?.opponents ?? []);
+      if (preferred && (applySmartDefaults || (!setup.playSession && setup.opponentChoice === 'random'))) {
+        setup.setOpponentChoice(preferred);
+      }
+      if (!setup.playSession && setup.watchPlayerChoice === 'random') {
+        const watchSeat1 = heuristic ?? preferred;
+        if (watchSeat1) setup.watchPlayerChoice = watchSeat1;
+      }
+      if (applySmartDefaults) {
         const hasHeldOut = pools.some(pool => pool.key === 'pool:held-out');
-        const preferred = resolveCatalogChoice(catalog?.default_opponent, catalog?.opponents ?? []);
-        if (preferred) setup.setOpponentChoice(preferred);
         if (hasHeldOut) {
           setup.setHeroDeck('pool:held-out');
           setup.setVillainDeck('pool:held-out');
           const chosen = setup.opponentChoice;
           if (!chosen.startsWith('search-')) setup.setDecklists('closed');
         }
-      });
-    }
+      }
+    });
 
     // Tally bots' own W-L records from recent recorded games (never personal W-L).
     void fetch('/api/traces?limit=50').then(async response => {

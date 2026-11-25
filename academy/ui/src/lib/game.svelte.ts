@@ -163,7 +163,7 @@ export class GameStore {
   resumeFailed = $state(false);
   recordingId = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
-  opponentChoice = $state<PlayerChoice>('search-64');
+  opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.

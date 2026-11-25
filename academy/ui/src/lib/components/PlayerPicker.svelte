@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { runnerReplacement, rememberPolicy, rememberedPolicy } from '$lib/policy-selection';
-  import type { Decklists, PolicyRuntimeIdentity, SettingsFitReport, TrainedOpponent } from '$lib/types';
+  import type { Decklists, PolicyRuntimeIdentity, TrainedOpponent } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { SearchConfig } from '$lib/search';
   import SearchControl from './SearchControl.svelte';
@@ -24,7 +24,7 @@
     onSearchChange?: (value: SearchConfig | null) => void;
   }
   let {
-    value = 'search-64',
+    value = 'random',
     trained = [],
     extension = undefined,
     catalogError = null,
@@ -62,7 +62,6 @@
   });
 
   let compatibility = $state<string | null>(null);
-  let fitReport = $state<SettingsFitReport | null>(null);
   let checking = $state(false);
   $effect(() => {
     const config = setup;
@@ -71,7 +70,6 @@
     const payment = manaPayment;
     const floats = manaFloats;
     compatibility = null;
-    fitReport = null;
     checking = false;
     if (!mounted || !config || !policy?.available) return;
     const controller = new AbortController();
@@ -90,11 +88,10 @@
         }),
       }).then(async response => {
         if (!response.ok) throw new Error('Setup compatibility could not be checked. Start will check again.');
-        return response.json() as Promise<{ compatible: boolean; reason: string | null; fit?: SettingsFitReport | null }>;
+        return response.json() as Promise<{ compatible: boolean; reason: string | null }>;
       }).then(result => {
         if (!controller.signal.aborted) {
           compatibility = result.compatible ? null : result.reason;
-          fitReport = result.fit ?? null;
         }
       }).catch(error => {
         if (!controller.signal.aborted) compatibility = error instanceof Error ? error.message : 'Setup compatibility could not be checked.';
@@ -104,7 +101,8 @@
   });
 
   const replacement = $derived(prior ? runnerReplacement(prior, trained) : null);
-  const native = ['search-16', 'search-64', 'search-256', 'random', 'passive'];
+  const native = ['random', 'passive'];
+  const legacySearch = $derived(value.startsWith('search-') ? value : null);
   const groupedTrained = $derived.by(() => {
     const groups = new Map<string, TrainedOpponent[]>();
     for (const entry of trained) {
@@ -148,12 +146,15 @@
           onChange?.(next as PlayerChoice);
         }
       }}>
-      {#each native as kind}
-        <option value={kind} disabled={kind.startsWith('search-') && decklists === 'closed'}>
-          {builtinOpponentName(kind as PlayerChoice)}{kind.startsWith('search-') && decklists === 'closed' ? ' — needs open decklists' : ''}
-        </option>
-      {/each}
       <option value="policy">Registered policy</option>
+      {#each native as kind}
+        <option value={kind}>{builtinOpponentName(kind as PlayerChoice)}</option>
+      {/each}
+      {#if legacySearch}
+        <option value={legacySearch} disabled={decklists === 'closed'}>
+          {builtinOpponentName(legacySearch as PlayerChoice)}{decklists === 'closed' ? ' — needs open decklists' : ''}
+        </option>
+      {/if}
     </select>
   </label>
   {#if custom}
@@ -197,13 +198,6 @@
   </p>
   {#if checking || compatibility}
     <p role="status" data-testid="policy-compatibility" class="type-caption w-full text-mountain-ink">{checking ? 'Checking setup compatibility…' : compatibility}</p>
-  {/if}
-  {#if !compatibility && fitReport && fitReport.status === 'mismatch' && fitReport.summary}
-    <p role="status" data-testid="policy-fit" class="type-caption w-full rounded bg-plains-wash px-2.5 py-1.5 text-plains-ink">
-      Trained outside these settings: {fitReport.summary}. Informs only; you can still play.
-    </p>
-  {:else if !compatibility && fitReport && fitReport.status === 'unknown'}
-    <p data-testid="policy-fit" class="type-caption w-full text-ink-3">Training settings unrecorded for this policy.</p>
   {/if}
   {#if replacement}
     <button type="button" {disabled} class="rounded border border-line px-3 py-2"

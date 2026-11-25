@@ -131,7 +131,8 @@ def test_policies_check_returns_informational_fit_and_partial_deck_import_resolv
         client = TestClient(server.app)
         cat = client.get("/api/opponents").json()
         assert cat["default_opponent"] == "tla-closed"
-        assert any(b["id"] == "search-64" for b in cat["builtins"])
+        assert any(b["id"] == "random" for b in cat["builtins"])
+        assert all(not b["id"].startswith("search-") for b in cat["builtins"])
 
         resp = client.post(
             "/api/policies/check",
@@ -173,7 +174,7 @@ def test_top_level_managym_opponents_cli_and_serve_discover_false(
     assert rc == 0
     out = capsys.readouterr().out
     assert '"default_opponent"' in out
-    assert '"search-64"' in out
+    assert '"random"' in out
 
     # serve(discover=False) ignores ambient providers and serves only explicit policies.
     with launch.serve(
