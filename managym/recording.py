@@ -336,7 +336,12 @@ class GameRecord(BaseModel):
     @property
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
-        return self.player_policies or _retained_player_policies(self.opponent_policy)
+        if self.player_policies is not None:
+            return self.player_policies
+        return (
+            "agent",
+            "agent" if self.opponent_policy in (None, "none") else self.opponent_policy,
+        )
 
 
 class GameChange(BaseModel):
@@ -1201,19 +1206,6 @@ _VECTOR_READS = frozenset(
 )
 
 
-def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
-    """Translate retained names; native construction validates the resulting seats."""
-    return (
-        "agent",
-        "agent" if opponent_policy in (None, "none") else opponent_policy,
-    )
-
-
-def resolve_player_policies(player_policies: tuple[str, str] | None) -> tuple[str, str]:
-    """Both seats use external agents when no policies are supplied."""
-    return ("agent", "agent") if player_policies is None else player_policies
-
-
 class _ExposureSummary(BaseModel):
     """Narrow the native per-generation receipt once at the extension boundary."""
 
@@ -1261,7 +1253,9 @@ class RecordedVectorEnv(_Capture):
         self.decision_memory = decision_memory or decision_memory_include_own
         self._branch_roots: list[BranchRoot | None] = [None] * num_envs
         self.skip_trivial = skip_trivial
-        self.player_policies = resolve_player_policies(player_policies)
+        self.player_policies = (
+            ("agent", "agent") if player_policies is None else player_policies
+        )
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             decision_memory=self.decision_memory,

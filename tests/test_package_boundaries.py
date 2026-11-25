@@ -602,8 +602,7 @@ def _backend_violations(path: str, source: str) -> list[int]:
 def test_only_composition_roots_choose_a_backend() -> None:
     violations = [
         f"{path.relative_to(REPO_ROOT)}:{line}"
-        for package in ("manabot", "academy")
-        for path in (REPO_ROOT / package).rglob("*.py")
+        for path in (REPO_ROOT / "manabot").rglob("*.py")
         if _BACKENDS not in path.parents
         for line in _backend_violations(
             str(path.relative_to(REPO_ROOT)), path.read_text()

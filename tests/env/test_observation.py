@@ -127,15 +127,15 @@ class TestEnumParity:
                 StepEnum.COMBAT_DECLARE_BLOCKERS,
                 managym.StepEnum.COMBAT_DECLARE_BLOCKERS,
             ),
+            (
+                StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+                managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+            ),
             (StepEnum.COMBAT_DAMAGE, managym.StepEnum.COMBAT_DAMAGE),
             (StepEnum.COMBAT_END, managym.StepEnum.COMBAT_END),
             (StepEnum.POSTCOMBAT_MAIN_STEP, managym.StepEnum.POSTCOMBAT_MAIN_STEP),
             (StepEnum.ENDING_END, managym.StepEnum.ENDING_END),
             (StepEnum.ENDING_CLEANUP, managym.StepEnum.ENDING_CLEANUP),
-            (
-                StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
-                managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
-            ),
         ],
     )
     def test_step_enum(self, py_enum, cpp_enum):

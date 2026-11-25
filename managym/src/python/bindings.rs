@@ -479,6 +479,8 @@ impl StepEnum {
     #[classattr]
     const COMBAT_DECLARE_BLOCKERS: Self = Self::CombatDeclareBlockers;
     #[classattr]
+    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
+    #[classattr]
     const COMBAT_DAMAGE: Self = Self::CombatDamage;
     #[classattr]
     const COMBAT_END: Self = Self::CombatEnd;
@@ -488,8 +490,6 @@ impl StepEnum {
     const ENDING_END: Self = Self::EndingEnd;
     #[classattr]
     const ENDING_CLEANUP: Self = Self::EndingCleanup;
-    #[classattr]
-    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -511,12 +511,12 @@ impl From<StepKind> for StepEnum {
             StepKind::BeginningOfCombat => Self::CombatBegin,
             StepKind::DeclareAttackers => Self::CombatDeclareAttackers,
             StepKind::DeclareBlockers => Self::CombatDeclareBlockers,
+            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
             StepKind::CombatDamage => Self::CombatDamage,
             StepKind::EndOfCombat => Self::CombatEnd,
             StepKind::PostcombatMain => Self::PostcombatMainStep,
             StepKind::End => Self::EndingEnd,
             StepKind::Cleanup => Self::EndingCleanup,
-            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
         }
     }
 }
@@ -532,12 +532,12 @@ impl From<StepEnum> for StepKind {
             StepEnum::CombatBegin => Self::BeginningOfCombat,
             StepEnum::CombatDeclareAttackers => Self::DeclareAttackers,
             StepEnum::CombatDeclareBlockers => Self::DeclareBlockers,
+            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
             StepEnum::CombatDamage => Self::CombatDamage,
             StepEnum::CombatEnd => Self::EndOfCombat,
             StepEnum::PostcombatMainStep => Self::PostcombatMain,
             StepEnum::EndingEnd => Self::End,
             StepEnum::EndingCleanup => Self::Cleanup,
-            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
         }
     }
 }
@@ -1000,17 +1000,6 @@ fn submission(world: Option<&str>) -> PyResult<bool> {
             "PlayerConfig.world must be None or {:?}; content pack {other:?} is retired \
              (every match runs on the world's one catalog)",
             crate::world::WORLD_POOL
-        ))),
-    }
-}
-
-#[cfg(feature = "python")]
-fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
-    match value {
-        "open" => Ok(DecklistDisclosure::Open),
-        "closed" => Ok(DecklistDisclosure::Closed),
-        other => Err(PyValueError::new_err(format!(
-            "decklist disclosure must be 'open' or 'closed', got {other:?}"
         ))),
     }
 }
@@ -5302,12 +5291,19 @@ pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::pla
         return Ok(GameSetup::from(players));
     }
     let name: String = value.getattr("decklists")?.extract()?;
+    let decklists = match name.as_str() {
+        "open" => DecklistMode::Open,
+        "closed" => DecklistMode::Closed,
+        "mixed" => DecklistMode::Mixed,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "decklists must be 'open', 'closed', or 'mixed', got {other:?}"
+            )));
+        }
+    };
     Ok(GameSetup {
         players,
-        decklists: match name.as_str() {
-            "mixed" => DecklistMode::Mixed,
-            fixed => parse_disclosure(fixed)?.into(),
-        },
+        decklists,
         mana_floats: seat_modes(value, "mana_floats", ManaFloats::from_name)?,
         mana_payment: seat_modes(value, "mana_payment", ManaPayment::from_name)?,
     })
