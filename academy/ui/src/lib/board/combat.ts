@@ -145,6 +145,7 @@ function list(parts: string[]): string {
 }
 
 export const BLOCK_INSTRUCTION = 'Drag a blocker onto an attacker, or click each';
+export const ATTACK_INSTRUCTION = 'Drag across creatures, or click each';
 
 export interface DraftWords {
   /** The primary button: "Attack with 3", "No attack". */
@@ -164,7 +165,7 @@ export function draftWords(
   };
   if (kind === 'attackers') {
     const count = draft.attackers.length;
-    if (count === 0) return { text: 'No attack', plan: 'No attack · click creatures to add them' };
+    if (count === 0) return { text: 'No attack', plan: `No attack · ${ATTACK_INSTRUCTION}` };
     const out = declarable.filter(creature => !draft.attackers.includes(creature.creature.entity)).map(creature => creature.label);
     const one = `Attack with ${name(draft.attackers[0])}`;
     const text = count === 1 && one.length <= PRIMARY_CHARS ? one : `Attack with ${count}`;

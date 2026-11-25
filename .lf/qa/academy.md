@@ -259,3 +259,23 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Board drags and combat drafts in a real game: import `22 Mountain / 30 Raging
+  Goblin / 8 Burst Lightning` against `60 Plains` with Passive and Automatic
+  payment; haste goblins give a multi-creature attack draft by turn 3 and
+  Burst Lightning a stack-to-plate target drag. For blocks and a trigger
+  target from the battlefield, play Elemental GR against Search 16 on
+  Elemental GW (Badgermole Cub's earthbend asks for a land). After each
+  accepted Command the server sends `command_outcome` twice: first with
+  `work.state` `running` (the board is not live; keys and the draft runner
+  wait), then `complete`. Wait for `[data-testid=game][data-live=true]`
+  before the next key. During a live combat draft the per-creature rows sit
+  in the closed `[data-testid=per-creature-choices]` disclosure, so their
+  `innerText` is empty; number keys do nothing there. Drag with
+  `page.mouse` down/move in steps/up; target `.board` cards with
+  `:not(.hand *)`, since `.board` also contains the hand. A long QA session
+  is easiest from one persistent Playwright process (a new browser context
+  loses the tab's resume credentials and starts a new game); Bash background
+  jobs stop after their timeout, so give it `timeout` up to 2 h. The release
+  proof's API server needs `VIRTUAL_ENV=<checkout>/.runs/play-venv` (or another
+  env with uvicorn) for `uv run --active`; targeted specs reuse running dev
+  servers when `ACADEMY_API_PORT`/`ACADEMY_FRONTEND_PORT` name them.

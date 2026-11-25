@@ -207,7 +207,11 @@ No earlier drag attempt exists in the tree.
 
 Pass 3 checks covered 23 drag/combat unit cases and eight focused browser cases, including pointer and keyboard combat, block reassignment and five marquee cases. Svelte reported zero errors or warnings. The 1280×800 screenshots show the selection box and both card outlines in light mode with normal motion and dark mode with reduced motion.
 
-**Next:** Gate runs the acceptance commands above, including the full release proof. All three implementation passes are complete.
+4. **QA in a real game, and the joint-combat steer — built in this pass.** Played two live games against the real server (Elemental GR vs Search 16; goblins vs Passive). Every gesture committed exactly one Command, or none on cancel. Two fixes:
+   - Real servers answer an accepted step twice (`work` running, then complete). The draft runner stopped on the first, so every multi-creature attack or block declared one creature and printed "Stopped after 1 of N". This happened on the base commit too. The runner now waits until the board is live again. The combat fixture now answers the same way, and the old runner fails four combat tests.
+   - Steer (2026-11-24/25, from the Task's comment: "Joint UX only in live play (UI-only, zero engine change)"; "regardless of drag, making the UX for combat only about the select-all-at-once UI rather than mixing individual decisions with click whatever you want"). While a live draft is open, the rail's per-creature offers sit in a closed "Each creature's choice" disclosure without key badges, and number keys do nothing. Replay and Study are unchanged. The attack caption now says "Drag across creatures, or click each". Scripted players in `game-history`, `laptop-comfort` and `experience-proof` open that disclosure through `showEachCreaturesChoice` (`e2e/fixtures/combat.ts`). Release proof: everything passes except `unified-replay`'s verified evaluation import, whose fixture server needs a full manabot environment rather than the play-runtime venv (unchecked locally).
+
+**Next:** Gate runs the acceptance commands above, including the full release proof.
 
 ## Done when
 

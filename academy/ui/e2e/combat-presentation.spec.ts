@@ -19,6 +19,10 @@ for (const mode of ['pointer', 'keyboard'] as const) {
     await expect(card(page, 85)).toHaveAttribute('data-draft', 'can');
     await expect(card(page, 83)).toHaveAccessibleName(/can attack; press to add it to the attack/);
     await expect(page.getByTestId('primary-action')).toHaveText(/No attack/);
+    // The draft is the declaration: each creature's own offer waits, closed, under the legal choices, and is not a numbered key.
+    await expect(page.getByTestId('per-creature-choices')).not.toHaveAttribute('open');
+    await expect(page.getByTestId('action-option').first()).toBeHidden();
+    await page.keyboard.press('1');
 
     // Drafting sends nothing: Otter-Penguin leans in, Tiger-Seal stays home.
     await press(page, mode, 83);
@@ -122,6 +126,7 @@ test('after combat, the block stays drawn and damage shows on the cards it lande
   ]);
   await page.screenshot({ path: testInfo.outputPath('after-combat.png') });
   // Passing is the person's next move: the marks of the last one go.
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
   const sent = authority.commands.length;
   await page.keyboard.press('Space');
   await expect.poll(() => authority.commands.length).toBe(sent + 1);

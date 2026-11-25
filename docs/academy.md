@@ -718,7 +718,8 @@ The rail holds:
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
-  nine.
+  nine. During a live combat draft the per-creature answers fold under a closed
+  disclosure (see combat below).
 - **Moves**: the game's moves grouped by turn, each turn headed by whose turn
   it was. Each move names the player who made it; priority-stop automation is
   marked **auto** and never counts as your move. A run of the opponent's and
@@ -768,8 +769,11 @@ refuses and why (a lone blocker of a creature with menace, a creature that
 cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
 where the game stands. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. Each creature's own
-answers stay in the full list of legal choices. **Pass turn** (F6) passes
+reload keeps the draft for the same decision in that tab. While a draft is
+open in live play it is the only way to declare: each creature's own answers
+stay in the list of legal choices under a closed **Each creature's choice**
+disclosure and are not numbered keys. Replay and Study keep them listed, since
+recorded policy probabilities attach to them. **Pass turn** (F6) passes
 priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button

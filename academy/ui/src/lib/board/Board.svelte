@@ -35,7 +35,7 @@
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
-  import { addAttackers, addressOf, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
+  import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
@@ -302,15 +302,19 @@
     send(offer);
   }
 
-  // Each frame after a sent step must be the decision the preview predicted for the next.
+  // Each frame after a sent step must be the decision the preview predicted for the next. The accepted
+  // step's frame can arrive before the table takes input again; the next step waits for it rather than
+  // judging a frame no one may answer yet.
   $effect(() => {
     const revision = frame.revision;
+    const answerable = live;
     untrack(() => {
       const sending = running;
       if (!sending || revision === sending.sentAt) return;
       const next = sending.at + 1;
       if (next >= sending.steps.length) { running = null; draft = EMPTY_DRAFT; return; }
-      const offer = live ? stepOffer(frame, sending.kind, sending.steps[next]) : null;
+      if (!answerable) return;
+      const offer = stepOffer(frame, sending.kind, sending.steps[next]);
       if (!offer) {
         running = null;
         draft = EMPTY_DRAFT;
@@ -1032,6 +1036,8 @@
     if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
+      // A combat draft declares the whole combat; its per-creature offers are not numbered shortcuts.
+      if (!menuAt && (drafting || running)) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1181,7 +1187,7 @@
         {#if draft.attackers.length || draft.blocks.length}
           <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
-        <p class="type-caption text-ink-3">Nothing is declared until you confirm{preview?.kind === 'blockers' ? '. ' + BLOCK_INSTRUCTION : ''}.</p>
+        <p class="type-caption text-ink-3">Nothing is declared until you confirm. {preview?.kind === 'blockers' ? BLOCK_INSTRUCTION : ATTACK_INSTRUCTION}.</p>
       {/if}
     </div>
   {/snippet}

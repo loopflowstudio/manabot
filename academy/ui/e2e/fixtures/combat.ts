@@ -188,8 +188,12 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
       if (blocked) next.projection.agent.battlefield[0].damage = 1;
       if (blocked) next.projection.opponent.battlefield[0].damage = 2;
       current = next;
-      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted',
-        update: acceptedUpdate(command, next, blocked ? combatEvents(12) : []) }));
+      // As the server does: the accepted frame arrives while the table's work still runs, then again once it completes.
+      const update = acceptedUpdate(command, next, blocked ? combatEvents(12) : []);
+      const work = (state: 'running' | 'complete') => ({ operation_id: `advance-${revision}`, sequence: revision, kind: 'advance', started_at: 0, state,
+        scope: 'match', setup_id: null, loading_seat: null, match_id: next.match_id, revision: next.revision, chooser: null });
+      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('running') }));
+      setTimeout(() => socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('complete') })), 50);
     });
   });
   return authority;
@@ -203,4 +207,17 @@ export async function startCombat(page: Page, after: Partial<Record<number, Stag
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');
   await expect(page.getByTestId('combat-draft')).toBeVisible();
   return authority;
+}
+
+/**
+ * A live combat draft folds each creature's own answer under a closed
+ * disclosure. Scripted players that pick those answers open it once the draft
+ * is drawn; a declaration without a draft (no preview) lists them already.
+ */
+export async function showEachCreaturesChoice(page: Page): Promise<void> {
+  const kind = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');
+  if (kind !== 'DECLARE_ATTACKER' && kind !== 'DECLARE_BLOCKER') return;
+  const raw = page.getByTestId('per-creature-choices');
+  try { await raw.waitFor({ state: 'attached', timeout: 10_000 }); } catch { return; }
+  if (!(await raw.evaluate(details => (details as HTMLDetailsElement).open))) await raw.locator('summary').click();
 }

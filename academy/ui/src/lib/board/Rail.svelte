@@ -287,25 +287,16 @@
       {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
-    <ol class="list" aria-label="Legal choices">
-      {#each view.list as placed (placed.offer.id)}
-        <li>
-          <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
-            data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
-            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
-            onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
-            onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
-            <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
-            {#if recordedP(placed) !== undefined}
-              <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
-            {/if}
-            {#if anchorText(placed)}<span class="type-caption text-ink-3">{anchorText(placed)}</span>{/if}
-          </button>
-        </li>
-      {/each}
-    </ol>
+    <!-- An open combat draft is the way to declare; each creature's own offer stays one click away for inspection. -->
+    {#if draft && live}
+      <details class="raw" data-testid="per-creature-choices">
+        <summary class="type-caption text-ink-3">Each creature's choice</summary>
+        <p class="type-caption text-ink-3">Confirming the draft sends these one creature at a time.</p>
+        {@render choiceList()}
+      </details>
+    {:else}
+      {@render choiceList()}
+    {/if}
   </section>
   {/if}
 
@@ -345,6 +336,27 @@
       <li bind:this={logEnd} aria-hidden="true"></li>
     </ol>
   </section>
+  {#snippet choiceList()}
+    <ol class="list" aria-label="Legal choices">
+      {#each view.list as placed (placed.offer.id)}
+        <li>
+          <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
+            data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
+            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
+            onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
+            onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
+            <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
+            {#if recordedP(placed) !== undefined}
+              <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
+            {/if}
+            {#if anchorText(placed)}<span class="type-caption text-ink-3">{anchorText(placed)}</span>{/if}
+          </button>
+        </li>
+      {/each}
+    </ol>
+  {/snippet}
 </aside>
 
 <style>
@@ -380,7 +392,7 @@
   .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
-  .detail summary { cursor: pointer; width: max-content; }
+  .detail summary, .raw summary { cursor: pointer; width: max-content; }
   .detail p { margin-top: 2px; max-height: 6em; overflow-y: auto; }
   /* One line at any rail width: the full text is the accessible name and the title. */
   .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; text-align: center; }
@@ -399,6 +411,10 @@
   .status { min-height: 16px; }
   .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
+  .raw { min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+  .raw[open] { flex: 1; }
+  /* A draft's per-creature answers are not numbered keys. */
+  .raw kbd { display: none; }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
