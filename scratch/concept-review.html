@@ -3,201 +3,133 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review — MTG-431: Foundations stack copies, choices, costs &amp; procedure tail</title>
+<title>MTG-483 Concept Review — Drafted Multi-Step Decisions in Academy</title>
 <style>
   :root {
-    --bg: #faf8f4;
-    --bg-elev: #ffffff;
-    --bg-muted: #f1ede4;
-    --bg-code: #f4f1ea;
-    --ink: #1e1b18;
-    --ink-2: #575049;
-    --ink-3: #7d746b;
-    --border: #dfd8cc;
-    --border-strong: #c8beb0;
-    --yes-bg: #e7f4ea;
-    --yes-ink: #175c2c;
-    --yes-border: #a7d7b3;
-    --no-bg: #fdecec;
-    --no-ink: #8f1d1d;
-    --no-border: #f2b4b4;
-    --warn-bg: #fef6e4;
-    --warn-ink: #7a4c00;
-    --warn-border: #efd191;
-    --prop-bg: #eaf2fe;
-    --prop-ink: #16488c;
-    --prop-border: #acc9f7;
-    --exist-bg: #f1ede4;
-    --exist-ink: #4a433c;
-    --exist-border: #d5ccbe;
-    --accent: #7a3e1c;
-    --shadow: 0 1px 2px rgba(24, 18, 12, 0.05);
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
-    --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --bg: #f8f6f1;
+    --surface: #ffffff;
+    --surface-2: #f1ede4;
+    --border: #ddd6c7;
+    --border-strong: #bfb5a1;
+    --text: #1f1c17;
+    --text-2: #575045;
+    --text-3: #787063;
+    --ok-bg: #e7f3ea;
+    --ok-border: #8ec19a;
+    --ok-text: #1c5c2e;
+    --no-bg: #fbeaea;
+    --no-border: #dc9a9a;
+    --no-text: #8c2323;
+    --prop-bg: #eaf1fb;
+    --prop-border: #8eb2e0;
+    --prop-text: #1c4a82;
+    --warn-bg: #fcf4e3;
+    --warn-border: #d9b86c;
+    --warn-text: #6e4e0d;
+    --code-bg: #f0ece3;
+    --accent: #7a4c1d;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Times New Roman", serif;
   }
-
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #161412;
-      --bg-elev: #1f1c19;
-      --bg-muted: #292521;
-      --bg-code: #24201c;
-      --ink: #efeae2;
-      --ink-2: #b9b0a4;
-      --ink-3: #8c8276;
-      --border: #38322c;
-      --border-strong: #4e463d;
-      --yes-bg: #152d1d;
-      --yes-ink: #8ce0a2;
-      --yes-border: #285c39;
-      --no-bg: #36191a;
-      --no-ink: #f79d9d;
-      --no-border: #6e2d30;
-      --warn-bg: #332712;
-      --warn-ink: #f4c975;
-      --warn-border: #694e1f;
-      --prop-bg: #172740;
-      --prop-ink: #97c1ff;
-      --prop-border: #2c4f82;
-      --exist-bg: #292521;
-      --exist-ink: #c4bab0;
-      --exist-border: #463f37;
-      --accent: #e09a68;
-      --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      --bg: #151412;
+      --surface: #1e1c19;
+      --surface-2: #272420;
+      --border: #38332c;
+      --border-strong: #534b40;
+      --text: #ede8df;
+      --text-2: #bfb7a9;
+      --text-3: #92897b;
+      --ok-bg: #172b1e;
+      --ok-border: #2f6c43;
+      --ok-text: #8fd4a4;
+      --no-bg: #321818;
+      --no-border: #7d3636;
+      --no-text: #f3a1a1;
+      --prop-bg: #172436;
+      --prop-border: #376194;
+      --prop-text: #9bc4f2;
+      --warn-bg: #2f2514;
+      --warn-border: #785b22;
+      --warn-text: #ecd08b;
+      --code-bg: #2a2621;
+      --accent: #d99b52;
     }
   }
-
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background: var(--bg);
-    color: var(--ink);
-    font-family: var(--font-sans);
-    font-size: 15px;
-    line-height: 1.55;
+    color: var(--text);
+    font: 15px/1.6 var(--sans);
+    padding: 32px 20px 64px;
   }
-  main {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 36px 24px 80px;
-  }
-  header {
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 20px;
-    margin-bottom: 28px;
-  }
-  .eyebrow {
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-  h1 {
-    font-family: var(--font-serif);
-    font-size: 30px;
-    line-height: 1.2;
-    margin: 0 0 10px;
-    font-weight: 600;
-  }
-  h2 {
-    font-family: var(--font-serif);
-    font-size: 22px;
-    margin: 36px 0 12px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-  }
-  h3 {
-    font-size: 16px;
-    margin: 22px 0 8px;
-    font-weight: 600;
-  }
-  p { margin: 0 0 12px; }
-  ul, ol { margin: 0 0 14px; padding-left: 22px; }
-  li { margin-bottom: 6px; }
+  main { max-width: 1040px; margin: 0 auto; }
+  h1 { font: 700 28px/1.2 var(--serif); margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font: 700 20px/1.3 var(--serif); margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font: 600 16px/1.35 var(--sans); margin: 20px 0 8px; }
+  p { margin: 8px 0 12px; }
+  ul, ol { margin: 8px 0 14px; padding-left: 22px; }
+  li { margin: 4px 0; }
   code {
-    font-family: var(--font-mono);
-    font-size: 0.88em;
-    background: var(--bg-code);
+    font: 13px/1.4 var(--mono);
+    background: var(--code-bg);
     padding: 1px 5px;
     border-radius: 4px;
-    border: 1px solid var(--border);
   }
   pre {
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    line-height: 1.48;
-    background: var(--bg-code);
+    font: 12.5px/1.5 var(--mono);
+    background: var(--code-bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 14px;
     overflow-x: auto;
-    margin: 8px 0 14px;
+    margin: 10px 0 14px;
   }
-  .lead {
-    color: var(--ink-2);
-    font-size: 16px;
-    max-width: 82ch;
-  }
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 18px;
-    font-size: 13px;
-    color: var(--ink-2);
-    margin-top: 12px;
-  }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+  .meta { color: var(--text-2); font-size: 13.5px; margin-bottom: 20px; }
+  .pill {
+    display: inline-block;
+    font: 600 11.5px/1 var(--sans);
     text-transform: uppercase;
-    padding: 2px 8px;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
     border-radius: 999px;
     border: 1px solid transparent;
-    white-space: nowrap;
+    vertical-align: middle;
   }
-  .badge.yes { background: var(--yes-bg); color: var(--yes-ink); border-color: var(--yes-border); }
-  .badge.no { background: var(--no-bg); color: var(--no-ink); border-color: var(--no-border); }
-  .badge.exist { background: var(--exist-bg); color: var(--exist-ink); border-color: var(--exist-border); }
-  .badge.prop { background: var(--prop-bg); color: var(--prop-ink); border-color: var(--prop-border); }
-  .badge.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-border); }
-
+  .pill-existing { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-2); }
+  .pill-proposed { background: var(--prop-bg); border-color: var(--prop-border); color: var(--prop-text); }
+  .pill-yes { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-text); }
+  .pill-no { background: var(--no-bg); border-color: var(--no-border); color: var(--no-text); }
+  .pill-warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
   .callout {
-    background: var(--bg-elev);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-left: 4px solid var(--accent);
     border-radius: 8px;
     padding: 14px 16px;
-    margin: 16px 0 20px;
-    box-shadow: var(--shadow);
+    margin: 16px 0;
   }
-  .callout.ok { border-left-color: var(--yes-ink); background: var(--yes-bg); border-color: var(--yes-border); }
-  .callout.proposed { border-left-color: var(--prop-ink); background: var(--prop-bg); border-color: var(--prop-border); }
-  .callout.warn { border-left-color: var(--warn-ink); background: var(--warn-bg); border-color: var(--warn-border); }
-  .callout-title {
-    font-weight: 700;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .callout-no {
+    background: var(--no-bg);
+    border-color: var(--no-border);
+    border-left-color: var(--no-text);
   }
-
+  .callout-prop {
+    background: var(--prop-bg);
+    border-color: var(--prop-border);
+    border-left-color: var(--prop-text);
+  }
   table {
     width: 100%;
     border-collapse: collapse;
-    background: var(--bg-elev);
+    margin: 14px 0 18px;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
-    margin: 14px 0 22px;
-    box-shadow: var(--shadow);
     font-size: 14px;
   }
   th, td {
@@ -206,353 +138,329 @@
     padding: 10px 12px;
     border-bottom: 1px solid var(--border);
   }
-  th {
-    background: var(--bg-muted);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--ink-2);
-  }
+  th { background: var(--surface-2); font-weight: 600; color: var(--text-2); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
   tr:last-child td { border-bottom: none; }
-  td.status { width: 72px; text-align: center; }
-
-  .compare {
+  .grid-2 {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 14px;
-    margin: 14px 0 20px;
+    margin: 14px 0;
   }
-  @media (max-width: 780px) {
-    .compare { grid-template-columns: 1fr; }
-  }
-  .panel {
-    background: var(--bg-elev);
+  .card {
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 14px 16px;
-    box-shadow: var(--shadow);
   }
-  .panel.existing { border-top: 3px solid var(--yes-ink); }
-  .panel.proposed { border-top: 3px solid var(--prop-ink); }
-  .panel-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .card h3 { margin-top: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .trace {
+    display: grid;
     gap: 8px;
-    margin-bottom: 10px;
-    font-weight: 700;
-    font-size: 13.5px;
-  }
-
-  .screen {
-    border: 1px solid var(--border-strong);
-    border-radius: 7px;
-    background: var(--bg);
-    padding: 10px 12px;
-    margin: 8px 0 12px;
-    font-size: 13px;
-  }
-  .screen-bar {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--ink-3);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 5px;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-  }
-  .pill {
-    display: inline-block;
-    padding: 2px 7px;
-    border-radius: 4px;
-    border: 1px solid var(--border-strong);
-    background: var(--bg-elev);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    margin: 2px 4px 2px 0;
-  }
-  .pill.good { border-color: var(--yes-border); background: var(--yes-bg); color: var(--yes-ink); }
-  .pill.warn { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-ink); }
-
-  .flow {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin: 10px 0 14px;
-    font-size: 13px;
+    margin: 12px 0;
   }
   .step {
-    background: var(--bg-elev);
-    border: 1px solid var(--border-strong);
+    display: grid;
+    grid-template-columns: 110px 1fr 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 5px 9px;
+    font-size: 13.5px;
   }
-  .step.good {
-    background: var(--yes-bg);
-    border-color: var(--yes-border);
-    color: var(--yes-ink);
+  @media (max-width: 720px) {
+    .step { grid-template-columns: 1fr; }
   }
-  .arrow { color: var(--ink-3); font-weight: 700; }
-
-  .q-card {
-    background: var(--bg-elev);
+  .step-tag { font-weight: 600; color: var(--text-2); }
+  .bad { color: var(--no-text); }
+  .good { color: var(--ok-text); }
+  .muted { color: var(--text-2); }
+  .ui-mock {
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--surface-2);
+    padding: 12px;
+    font-size: 13px;
+  }
+  .ui-mock .bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .ui-mock .btn {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  .ui-mock .btn.disabled { opacity: 0.45; }
+  .ui-mock .disclosure {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 5px;
+    color: var(--text-2);
+  }
+  .q-list { display: grid; gap: 12px; margin-top: 12px; }
+  .q-item {
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 14px 16px;
-    margin-bottom: 12px;
-    box-shadow: var(--shadow);
+    padding: 12px 16px;
   }
-  .q-card ol { list-style-type: lower-alpha; margin-bottom: 0; }
-  .q-card li { margin-bottom: 4px; }
-  .muted { color: var(--ink-2); font-size: 13.5px; }
+  .q-item p { margin: 0 0 8px; font-weight: 600; }
+  .q-opts { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+  .q-opts li { font-size: 14px; }
 </style>
 </head>
 <body>
 <main>
-
-<header>
-  <div class="eyebrow">Concept Review · MTG-431 · Post-Build Pass</div>
-  <h1>Foundations stack copies, entry choices, target relations, pile splits, composite costs &amp; mana expiry</h1>
-  <p class="lead">
-    <strong>Area taken:</strong> the complete rules-state, decision-continuation, observation-encoding, decision-memory, text-play and Academy projection surface built across MTG-431 Slices 1–11 (<code>3be5a0cfb..de0dc66630</code>). That is the whole shared decision contract touched by the 56 Foundations cards — evaluated end to end after the Slice 11 concept-alignment pass and compression.
+  <h1>Concept Review: Drafted Multi-Step Decisions in Academy</h1>
+  <p class="meta">
+    Task <code>MTG-483</code> · Pre-build review (replaces MTG-431's inherited page) ·
+    <span class="pill pill-existing">Existing</span> = current branch + MTG-441 (PR #613) + kickoff plan ·
+    <span class="pill pill-proposed">Proposed</span> = revised design written into <code>scratch/plan.md</code>
   </p>
-  <div class="meta">
-    <span><strong>Verdict:</strong> Nothing to change in MTG-431; ready for Gate / Integrated validation</span>
-    <span><strong>Markers:</strong> <span class="badge exist">Existing (HEAD)</span> <span class="badge prop">Proposed Follow-up (Outside MTG-431)</span></span>
+
+  <div class="callout">
+    <strong>Area taken and why:</strong> <em>Drafted multi-step decisions in Academy live play</em> — the full lifecycle from drafting a multi-part decision whole (combat declarations, Curator of Destinies pile split, and future multi-step decisions), confirming once to submit sequential <code>Command</code>s, holding visibility across transient waits, recovering from rejections / disconnects / reloads / Escape, and classifying native <code>Decision</code> variants for future drafting. We widened past the two send loops in <code>Board.svelte</code> to include <code>+page.svelte</code>, <code>Rail.svelte</code>, <code>socket.svelte.ts</code>, <code>game.svelte.ts</code>, and <code>effect_execution.rs</code>, because the biggest bugs live at those boundaries.
   </div>
-</header>
 
-<div class="callout ok">
-  <div class="callout-title">Core question: do the product's concepts and the code's concepts line up at <code>HEAD</code>?</div>
-  <p>
-    <strong>Yes across every in-scope MTG-431 boundary.</strong> Slice 11 (<code>e1f42473b0</code>, compressed in <code>4a0fb4136c</code>) resolved all four mismatches found in the pre-gate review: <code>Decision::Retarget</code> now projects every already-chosen <code>"new target"</code> in order; <code>Player.mana_pool</code> is the single pool carrying <code>ManaExpiry</code> with additive <code>expiry</code> on observations, previews, text play and Academy; <code>ChooseEntryValue</code> skips non-game group-navigation clicks in <code>decision_memory</code> and records the canonical leaf row; and <code>PartitionPiles</code>/<code>ChoosePile</code>, <code>keep_permanents</code>, and Academy <code>promptLine</code> all match their underlying actions and domains.
-  </p>
-  <p style="margin-bottom:0">
-    The one remaining gap — giving <code>Decision::ChooseEntryValue</code> semantic <code>RecordNamespace::Token</code> candidate embeddings during selection rather than raw slice offsets — spans <code>managym</code>, <code>manabot/policy/prepare.py</code>, Torch and MLX and is already carved out as its own follow-up Task in <code>scratch/plan.md</code>.
-  </p>
-</div>
+  <h2>1. Do the product's concepts and the code's concepts line up?</h2>
 
-<h2>1. Concept Alignment Matrix (<code>HEAD</code> vs <code>main</code>)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 24%;">Product concept (person)</th>
+        <th style="width: 27%;">Code concept (existing / kickoff plan)</th>
+        <th style="width: 9%;">Match?</th>
+        <th>What is wrong &amp; proposed fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Live piloting table vs transient wait</strong><br><span class="muted">I am piloting this game; while a Command, bot work, or stop-bar sync runs, my draft stays on screen with buttons disabled.</span></td>
+        <td><span class="pill pill-existing">Existing</span> <code>interaction: 'play' | 'study' | 'read-only'</code> collapses role + readiness; MTG-441 sneaks <code>liveTable</code> via <code>combatPreview</code>. Kickoff plan gates drafts on <code>interaction === 'play'</code>.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>One name for two ideas.</strong> The instant <code>commandPending</code>, <code>work.running</code>, or <code>stopsPending</code> is true, <code>interaction</code> becomes <code>'read-only'</code>. Combat survives only via <code>combatPreview</code>; pile split (and every future Class A draft) vanishes mid-send and pops open raw choices.<br><span class="pill pill-proposed">Proposed</span> Add <code>piloting?: boolean</code> (<code>liveTable</code> from <code>+page.svelte</code>, default <code>interaction === 'play'</code>). Drafts stay mounted whenever <code>piloting</code> is true; edits/Confirm disable when <code>!live</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Authority rejects a submitted step</strong><br><span class="muted">Step 0 refused at same board → keep my draft. Later step or moved-on board → clear draft and tell me exact committed count.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Kickoff <code>advance</code> ignores <code>gameStore.lastCommandRejection</code> and guesses refusal from <code>revision === sentAt &amp;&amp; answerable</code>; <code>onact</code> discards <code>sendAction</code>'s boolean.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>No single owner; fragile heuristic.</strong> Fails on <code>stale_revision</code> rejections with a newer <code>recovery</code> frame (treats rejected step as accepted / off-by-one or silent <code>done</code>) and hangs forever in <code>wait</code> on <code>not_actor</code> rejections without recovery.<br><span class="pill pill-proposed">Proposed</span> Pass <code>rejected={gameStore.lastCommandRejection !== null}</code> into <code>Board</code> &amp; <code>advance</code>, and return <code>boolean | void</code> from <code>onact</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Final step accepted; opponent begins thinking</strong><br><span class="muted">Once my last step commits, my declaration is done — don't leave "Declaring 2 of 2…" + "Stop sending" while the bot thinks.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Kickoff plan puts <em>"Not answerable: wait"</em> before checking <code>next &gt;= steps.length</code>.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>Wrong state precedence.</strong> When the last step advances the revision into opponent work (<code>work: 'running'</code>, <code>answerable: false</code>), the runner stays visibly running for seconds with a bogus <code>Stop sending</code> button.<br><span class="pill pill-proposed">Proposed</span> After <code>!connected</code> and <code>rejected</code>, check <code>revision !== sentAt &amp;&amp; at + 1 &gt;= total</code> → return <code>done</code> immediately.</td>
+      </tr>
+      <tr>
+        <td><strong>Connection drops mid-run</strong><br><span class="muted">Stop sending immediately; tell me how many were sent; never silently fire more steps after reconnect.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Neither current loop reacts to disconnect. Kickoff lists <em>"Not answerable: wait"</em> above <em>"Disconnected"</em>, and its disconnect sentence omits the word <em>"sent"</em>.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>Rule shadowed + wording mismatch.</strong> Disconnect also sets <code>answerable = false</code>, so checking <code>!answerable</code> first masks disconnect.<br><span class="pill pill-proposed">Proposed</span> Check <code>!table.connected</code> first in <code>advance</code>, and write <code>"Stopped after k of n sent: the connection dropped…"</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>One active drafted decision</strong><br><span class="muted">Drafting works the same way whether I'm declaring combat, splitting Curator's piles, or (later) scrying.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Two send loops, two Escape/Space branches, two <code>Stop sending</code> snippets, inline 100-line partition overlay in 1,900-line <code>Board.svelte</code>; partition doesn't even block <code>1–9</code> keys.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>One idea under two (soon ten) implementations.</strong> Kickoff only extracts the send loop, leaving every other lifecycle hook copy-pasted in <code>Board.svelte</code>.<br><span class="pill pill-proposed">Proposed</span> One active-draft contract (<code>DraftCopy</code>, shared <code>sendingControls</code>, unified <code>Space</code>/<code>Escape</code>/<code>1–9</code>/auto-tap gate) + extract <code>PartitionPanel.svelte</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Raw legal choices stay inspectable, never racing a run</strong><br><span class="muted">Folded under a clear label for the current decision; opening it shows the underlying offers.</span></td>
+        <td><span class="pill pill-existing">Existing</span> MTG-441 hardcodes <code>"Each creature's choice"</code>, <code>per-creature-choices</code>, <code>combat-stopped</code>; raw rows remain clickable during a run.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>Combat leakage onto all drafts.</strong> After MTG-441 + MTG-431 land, Curator's pile split gets combat wording.<br><span class="pill pill-proposed">Proposed</span> <code>Rail</code> takes <code>draft?: { controls, raw: { summary, note }, sending? }</code>, generic test ids <code>draft-raw-choices</code> / <code>draft-stopped</code> / <code>draft-stop</code>, and disables raw rows when <code>sending</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Reload preserves unconfirmed draft or reports interrupted run</strong><br><span class="muted">Reload mid-draft keeps edits; reload mid-send reports once how many were sent.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Two keys (<code>combat-draft</code>, <code>partition-draft</code>), no run marker. Kickoff puts both in one flat key (run overwrites draft) and formats reload with active consumer copy.</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>Run marker clobbers draft + fails when reloaded frame moved on.</strong><br><span class="pill pill-proposed">Proposed</span> Single key <code>academy.table.draft</code> holding <code>{ draft?, run? }</code>; consumer-agnostic reload message <code>"Stopped after k of n sent: the page reloaded…"</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Audit: what can be drafted from the frame vs what needs native help</strong><br><span class="muted">Know accurately which future decisions need zero engine work vs small frame fields vs clone-and-step previews.</span></td>
+        <td><span class="pill pill-existing">Existing</span> Kickoff groups <code>SelectCards</code>, <code>Discard</code>, <code>DistributeCounters</code>, <code>KeepPermanents AllBut</code>, <code>SearchDistinctNames</code>, <code>OpponentSplitsRevealed</code> into Class A ("from the frame alone").</td>
+        <td><span class="pill pill-no">No</span></td>
+        <td><strong>Hides Rust <code>Debug</code> text scraping.</strong> In <code>effect_execution.rs:276</code>, <code>min</code>/<code>max</code>/<code>remaining</code>/<code>count</code> only exist as <code>"{name}: {value:?}"</code> strings inside <code>decision_context.pending</code>.<br><span class="pill pill-proposed">Proposed</span> Split Class A into <strong>A1</strong> (structured frame today: Scry, Surveil, OrderLibrary) and <strong>A2</strong> (needs small typed fields on <code>DecisionContextView</code>/<code>InteractionOffer</code>, no preview).</td>
+      </tr>
+      <tr>
+        <td><strong>Shared decision surface invariants</strong><br><span class="muted">Every sent step is the current frame's own offer; nothing commits before Confirm; no silent undo.</span></td>
+        <td><span class="pill pill-existing">Existing</span> <code>stepOffer</code> and <code>partitionOffer</code> bind to current frame's offer and revision.</td>
+        <td><span class="pill pill-yes">Yes</span></td>
+        <td>Preserved verbatim by <code>ChunkedPlan.offerFor(frame, step)</code> and authority <code>Command</code> binding.</td>
+      </tr>
+    </tbody>
+  </table>
 
-<table>
-  <thead>
-    <tr>
-      <th style="width:24%">Product / Rules Concept</th>
-      <th style="width:28%">Code Concepts (<code>HEAD</code>)</th>
-      <th class="status">Aligned?</th>
-      <th>Assessment / What is wrong where No</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Whole-assignment retargeting</strong> (CR 115.7e)<br><span class="muted">Pick new targets slot by slot; stack keeps originals until the last slot commits so swaps and ward fire atomically.</span></td>
-      <td><code>Decision::Retarget { player, object, chosen, may_keep }</code><br><code>retarget.rs</code> + <code>effect_execution.rs:1794</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Stack keeps original targets until atomic <code>publish_targets</code>, while <code>project_decision</code> emits each chosen slot as <code>"new target"</code> plus <code>"New targets chosen so far: ..."</code> (rendered in text play under stage <code>retarget</code>). Policy, search forks, and reconnect all see earlier slot picks.</td>
-    </tr>
-    <tr>
-      <td><strong>Mana expiry duration</strong> (CR 106.4)<br><span class="muted">Pooled mana empties at step end, end of combat (firebending), or end of turn (Savage Ventmaw).</span></td>
-      <td>Single <code>Player.mana_pool</code> + <code>ManaClass.expiry: ManaExpiry</code> + <code>PooledManaClassData.expiry</code> (derived <code>combat</code>) + <code>MATCH_STATE_HASH_VERSION = 33</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td><code>combat_mana_pool</code> and <code>clear_combat_mana_pools</code> are deleted. <code>clear_mana_pools(step)</code> partitions expiring units once while keeping Ozai retention and <code>combat_expired</code> accounting intact. Text play, Academy <code>Plate</code>, payment preview, and <code>ManaSpend</code> labels all distinguish all three durations.</td>
-    </tr>
-    <tr>
-      <td><strong>As-enters permanent choice</strong> (CR 614.12a)<br><span class="muted">Choose a color, creature type (367), or card name on entry; simultaneous entrants order in APNAP with Spyglass look deferred to Spyglass's pick.</span></td>
-      <td><code>Permanent.chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> + <code>OrderEntryChoices</code> + <code>ChooseEntryValue</code> + <code>NameCard { after: Entry }</code> + <code>FactKind::Chosen*</code></td>
-      <td class="status"><span class="badge no">No*</span></td>
-      <td><strong>*Deferred outside MTG-431 (Biggest remaining mismatch).</strong> Rules, viewer-safety, 168-byte permanent budget, <code>FactKind::Chosen*</code> post-entry tokens, Academy pile splitting, and <code>decision_memory</code> (group clicks skipped, canonical leaf row recorded) are aligned. However, <em>during selection</em>, <code>ChooseEntryValue</code> still exposes raw <code>mode_index</code> + slice offsets <code>(start, end)</code> instead of semantic <code>RecordNamespace::Token</code> candidate embeddings.</td>
-    </tr>
-    <tr>
-      <td><strong>Private pile split &amp; opponent choice</strong> (Curator of Destinies)<br><span class="muted">Controller looks at top 5, assigns each card face-up or face-down; opponent sees face-up cards + face-down count and picks a pile.</span></td>
-      <td><code>Effect::SeparatePiles</code> → <code>Decision::PartitionPiles</code> → <code>Decision::ChoosePile</code> + <code>ActionSpaceKind::Modal</code> + <code>Action::ChooseMode</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Both decisions emit <code>ActionSpaceKind::Modal</code> (matching every other <code>ChooseMode</code> prompt). <code>PartitionPiles</code> gates <code>inspected</code>/<code>face-up pile</code>/<code>ordered prefix</code> behind <code>shares_information</code>; <code>ChoosePile</code> exposes face-up cards + face-down count publicly; Academy renders explicit pile prompts.</td>
-    </tr>
-    <tr>
-      <td><strong>Shared permanent sacrifice</strong> (Deadly Brew / KeepPermanents)<br><span class="muted">APNAP players choose which eligible permanents to keep, then unkept permanents sacrifice simultaneously.</span></td>
-      <td><code>Effect::EachPlayerSacrifices { predicate, count }</code> → <code>Decision::KeepPermanents { limit: KeepLimit, kept }</code> + stage <code>"keep_permanents"</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Rust types, execution text (with <code>token_renames.rs</code> mapping), and stage name all say permanent rather than creature; <code>recording.py</code> and <code>text_observation.py</code> still accept <code>"keep_creatures"</code> for older recordings.</td>
-    </tr>
-    <tr>
-      <td><strong>Cast-time target division</strong> (CR 601.2d)<br><span class="muted">Announce counter shares among 1–3 targets before payment; copies keep slot shares through retargeting.</span></td>
-      <td><code>PrintedCharacteristics.division</code> + <code>AnnouncedSpell.target_shares</code> + <code>PendingChoice::DivideAmongTargets</code> + <code>EffectValue::TargetShare</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Exact CR 601.2d lifecycle; sole-option steps skip natively via <code>skip_trivial</code>; Academy <code>prompt.ts</code> renders <em>"Divide among targets for …"</em>.</td>
-    </tr>
-    <tr>
-      <td><strong>Cross-clause target relations</strong> (CR 115.3 / 608.2b)<br><span class="muted">"Other targets", "attached to that creature", "controlled by different players".</span></td>
-      <td><code>TargetRelation</code> + <code>ObjectSelector::ClauseTarget</code> + <code>relations_admit</code> / <code>slot_rules_hold</code> / <code>require_target_relations</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>One declarative relation checked uniformly at choosing, retargeting, and resolution. Documented 1-clause lookahead is exact for every authored card.</td>
-    </tr>
-    <tr>
-      <td><strong>Departed-spell stack copying &amp; Storm counts</strong> (CR 707.10)<br><span class="muted">Copy triggering spell's last choices/face if countered; count earlier casts strictly before triggering spell.</span></td>
-      <td><code>SpellLki.copiable: Option&lt;Arc&lt;CopiableSpell&gt;&gt;</code> + <code>Effect::Repeat</code> + <code>EffectValue::SpellsCastBeforeTriggering</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Zero overhead on ordinary spells (captured only while a trigger still references the stack spell); <code>Effect::Repeat</code> also replaces eager Replicate unrolling.</td>
-    </tr>
-    <tr>
-      <td><strong>Library-top selection &amp; play grants</strong><br><span class="muted">Select from top N with optional mana-value cap; act on selected and unselected separately; grant play from exile/graveyard.</span></td>
-      <td><code>ObjectSelector::LibraryTop</code> + <code>Unselected</code> + <code>SelectCards.max_mana_value</code> + <code>Effect::GrantPlay</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td><code>GrantPlay</code> retired both <code>ExileTopCardsToPlay</code> and <code>GrantGraveyardCastThisTurn</code>. Legacy <code>Effect::LookAndSelect</code> retirement is tracked outside MTG-431 to avoid pinned-pilot churn.</td>
-    </tr>
-    <tr>
-      <td><strong>Composite resolution costs &amp; ward</strong><br><span class="muted">Multi-component costs like "Ward—{3}, Pay 3 life" checked as a whole before committing, then paid in order.</span></td>
-      <td><code>PaymentCost::All(Vec&lt;PaymentCost&gt;)</code> + <code>PaymentProgress.owed: Vec&lt;CostComponent&gt;</code> + <code>can_pay_remaining_tail</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>One payment pipeline; unpaid life tail auto-commits once player commits the front cost; unaffordable tail suppresses paying cleanly.</td>
-    </tr>
-    <tr>
-      <td><strong>Graveyard arrivals &amp; LKI departures</strong><br><span class="muted">"Put into a graveyard [from the battlefield] this turn"; sacrificed creature's pre-departure toughness.</span></td>
-      <td><code>TurnState::graveyard_arrivals: Vec&lt;(ObjectId, bool)&gt;</code> + <code>EffectFrame.moved_from</code> + v11 card col 56</td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Single authority for both Brought Back and Abyssal Harvester; v11 appends col 56 while Legacy stays at 56 for saved checkpoints.</td>
-    </tr>
-    <tr>
-      <td><strong>Keywords, Changeling &amp; Spyglass lock</strong><br><span class="muted">Keyword predicates, all creature types in all zones, nonmana activation ban by chosen name.</span></td>
-      <td><code>CardPredicate.keyword</code> + <code>Keyword::Changeling</code> + <code>Restriction::CantActivateNonmanaAbilities</code></td>
-      <td class="status"><span class="badge yes">Yes</span></td>
-      <td>Removed <code>flying</code>/<code>deathtouch</code> booleans; Changeling flows cleanly through <code>has_subtype</code>, layer 4, and <code>SpellSnapshot</code>.</td>
-    </tr>
-  </tbody>
-</table>
+  <h2>2. The biggest mismatch — before and after</h2>
 
-<h2>2. Verified Alignments Built in Slice 11</h2>
-
-<h3>A. Whole-assignment Retargeting (<code>Decision::Retarget</code>)</h3>
-<div class="flow">
-  <span class="step">Slot 0: choose <strong>Lions</strong> (share 2)</span>
-  <span class="arrow">→</span>
-  <span class="step good">Slot 1 prompt: stack keeps <code>[Ogre, Giant]</code>; continuation emits <code>new target = Lions#9</code> + summary</span>
-  <span class="arrow">→</span>
-  <span class="step good">Last slot: <code>publish_targets</code> commits atomically &amp; fires ward once</span>
-</div>
-<div class="panel existing">
-  <div class="panel-head">
-    <span><code>managym/src/agent/effect_execution.rs:1794–1814</code></span>
-    <span class="badge exist">Existing (HEAD)</span>
+  <div class="callout callout-no">
+    <strong>Biggest mismatch:</strong> <code>Board.svelte</code> has <em>no concept of "live piloting table while busy"</em> and <em>no direct signal of authority rejection</em>. Because MTG-441 smuggled table role through <code>combatPreview</code> and guessed refusals from <code>revision === sentAt</code>, the kickoff plan would (1) flash-destroy the Curator pile-split panel on every pending Command, server work tick, or priority-stop update, (2) misreport <code>stale_revision</code> rejections that carry a newer recovery frame, and (3) leave every future drafted decision copy-pasting lifecycle hooks into a 1,900-line <code>Board.svelte</code>.
   </div>
-<pre>Decision::Retarget { object, chosen, may_keep, .. } =&gt; {
-    out.target("retargeted stack object", *object);
-    out.field("retarget", &amp;(chosen.len(), may_keep));
-    for target in chosen {
-        out.target("new target", *target);
-    }
-    if !chosen.is_empty() {
-        out.summary(|| {
-            let labels: Vec&lt;_&gt; = chosen
-                .iter()
-                .map(|target| Projection::label(game.target_reference(*target, viewer)))
-                .collect();
-            format!("New targets chosen so far: {}.", labels.join(", "))
-        });
-    }
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Before <span class="pill pill-existing">Existing + kickoff plan</span></h3>
+      <div class="ui-mock">
+        <div class="bar">
+          <span>Curator pile split — step 1 accepted, <code>work: running</code></span>
+          <span class="pill pill-no">Panel vanishes!</span>
+        </div>
+        <p class="muted" style="margin:0 0 8px;"><code>canSubmitLive = false</code> → <code>interaction = 'read-only'</code> → <code>partitionContext</code> gated on <code>interaction === 'play'</code> turns <code>null</code>.</p>
+        <p style="margin:0;">Raw single-card prompt flashes on screen; disclosure pops open; if step 1 was rejected with a newer recovery frame, <code>advance</code> sees <code>rev !== sentAt</code> and counts the rejected step as accepted.</p>
+      </div>
+      <pre>// Board.svelte (kickoff plan)
+// 1. No piloting prop — only combatPreview stays alive
+const partition = $derived(interaction === 'play' ? ... : null);
+// 2. advance ignores lastCommandRejection
+if (!table.answerable) return { kind: 'wait' }; // blocks disconnect &amp; final done!
+if (!table.connected) return ...;               // unreachable!
+if (rev === run.sentAt) return refused;         // misses newer-rev stale_revision!</pre>
+    </div>
+
+    <div class="card">
+      <h3>After <span class="pill pill-proposed">Proposed</span></h3>
+      <div class="ui-mock">
+        <div class="bar">
+          <span>Curator pile split — step 1 accepted, <code>work: running</code></span>
+          <span class="pill pill-yes">Steady &amp; honest</span>
+        </div>
+        <p style="margin:0 0 8px;"><code>piloting = true</code> keeps <code>PartitionPanel</code> mounted; <code>live = false</code> disables edits/Confirm; rail reads <strong>"Placing 1 of 5…"</strong> with <span class="btn">Esc Stop sending</span>.</p>
+        <div class="disclosure">▸ Each card's choice (collapsed, rows disabled while sending)</div>
+      </div>
+      <pre>// chunked.ts — explicit, ordered table gate
+export function advance(run, plan, frame, table) {
+  if (!table.connected) return stop('disconnected', run.at + 1, false);
+  if (table.rejected)   return stop('refused', run.at,
+                                    run.at === 0 &amp;&amp; frame.revision === run.sentAt);
+  const next = run.at + 1;
+  if (frame.revision !== run.sentAt &amp;&amp; next &gt;= plan.steps.length)
+                        return { kind: 'done' };
+  if (frame.revision === run.sentAt &amp;&amp; table.answerable)
+                        return stop('refused', run.at, run.at === 0);
+  if (!table.answerable) return { kind: 'wait' };
+  const offer = plan.offerFor(frame, plan.steps[next]);
+  return offer ? { kind: 'send', run: { ...run, at: next, sentAt: frame.revision }, offer }
+               : stop('unpredicted', next, false);
 }</pre>
-  <p class="muted" style="margin-bottom:0">
-    <strong>Failure &amp; recovery check:</strong> Original stack targets survive until commit (preserving target swaps and atomic ward triggers); additive <code>EXECUTION_TEXT</code> entry <code>"new target"</code> preserves checkpoint compatibility; every <code>Target</code> variant uses viewer-safe references.
-  </p>
-</div>
-
-<h3>B. Single <code>Player.mana_pool</code> with <code>ManaExpiry</code></h3>
-<div class="panel existing">
-  <div class="panel-head">
-    <span><code>managym/src/state/player.rs</code> + <code>flow/mana.rs</code> + <code>agent/observation.rs</code> + <code>academy/ui/src/lib/mana.ts</code></span>
-    <span class="badge exist">Existing (HEAD)</span>
-  </div>
-  <div class="screen">
-    <div class="screen-bar"><span>Savage Ventmaw attacks (+RRRGGG until end of turn)</span><span>Rendered at HEAD</span></div>
-    <div><strong>Text play</strong> (<code>text_observation.py:903</code>): <span class="pill good">Of the mana above: R 3, G 3; expires at end of turn.</span></div>
-    <div style="margin-top:6px"><strong>Academy Plate &amp; PaymentPreview</strong> (<code>mana.ts:18</code>): <span class="pill good">{R}{R}{R}{G}{G}{G} normally expires at end of turn</span></div>
-    <div style="margin-top:6px"><strong>ManaSpend action label</strong> (<code>action.rs:480</code> + <code>ability_description.rs:1342</code>): <span class="pill good">Spend {R} (expires at step end)</span> vs <span class="pill good">Spend {R} (expires at end of combat)</span> vs <span class="pill good">Spend {R} (expires at end of turn)</span></div>
-  </div>
-  <p class="muted" style="margin-bottom:0">
-    <strong>Failure &amp; recovery check:</strong> <code>Player.combat_mana_pool</code> is gone; <code>clear_mana_pools(step)</code> partitions <code>EndOfCombat</code> only at <code>EndOfCombat | Cleanup</code> and preserves both Ozai retention (<code>unspent_mana_retained</code>) and <code>combat_expired</code> capture accounting. <code>PooledManaClassData.combat</code> and <code>PlayerData.combat_mana</code> stay derived for patch-clean 0.2.x compatibility alongside additive <code>expiry</code>, and <code>MATCH_STATE_HASH_VERSION</code> is 33.
-  </p>
-</div>
-
-<h2>3. Remaining Mismatch Outside MTG-431: Semantic Candidate Encoding for <code>ChooseEntryValue</code></h2>
-
-<p>
-  With Slice 11 built, the single biggest conceptual mismatch left anywhere in this area is the asymmetry between how <code>ChooseEntryValue</code> represents a choice <em>after</em> it is made versus <em>while</em> it is being chosen.
-</p>
-
-<div class="compare">
-  <div class="panel existing">
-    <div class="panel-head">
-      <span>Current (<code>HEAD</code>): positional slice offsets during selection</span>
-      <span class="badge exist">Existing (HEAD)</span>
     </div>
-<pre>// Post-entry fact (semantic token join):
-FactKind::ChosenSubtype → RecordNamespace::Token("Subtype::Goblin")
-
-// Mid-choice observation (positional offsets):
-out.field("entry choice", &amp;(question.kind, scope.start, scope.end));
-// Actions: Action::ChooseMode { mode: 0..64 }
-// Decision memory: group clicks skipped; leaf records canonical row (0..366)</pre>
-    <p class="muted" style="margin-bottom:0">
-      Works for rules, human play, Academy, and decision memory, and stays well inside <code>max_facts = 512</code>. However, a neural policy has no shared token embedding linking option <code>mode = 17</code> in range <code>(128, 192)</code> to <code>Subtype::Goblin</code>, and any future CR 205.3m insertion shifts downstream indices.
-    </p>
   </div>
 
-  <div class="panel proposed">
-    <div class="panel-head">
-      <span>Follow-up Task: token-vocabulary candidate channel</span>
-      <span class="badge prop">Proposed Follow-up (Outside MTG-431)</span>
+  <h2>3. Concrete walkthrough: 5-card Curator pile split (normal, failure, recovery)</h2>
+
+  <div class="trace">
+    <div class="step">
+      <div class="step-tag">Normal + double outcome</div>
+      <div><strong>Draft &amp; confirm:</strong> Move 2 cards face-up (0 Commands sent; pressing <code>1</code> does nothing; <code>draft-raw-choices</code> reads <em>"Each card's choice"</em>). Press <code>Space</code> → step 0 sent at rev 20; <code>academy.table.draft.run = {sent:1, total:5}</code>.</div>
+      <div class="good"><strong>Work wait → done:</strong> Rev 21 arrives with <code>work: running</code> (<code>piloting=true, live=false</code>) → panel stays drawn, runner returns <code>wait</code>. <code>work: complete</code> → sends step 1. After step 4 advances to rev 25 (opponent thinking, <code>live=false</code>) → returns <code>done</code> immediately and clears run marker.</div>
     </div>
-<pre>// Generalize NameCandidateEncoder to RecordNamespace::Token vocabularies:
-//   - Leaf option → token embedding of Color / Subtype directly
-//   - Group option → prefix-sum / pooled embedding over [start..end)
-// Across managym, manabot/policy/prepare.py, Torch, and MLX.</pre>
-    <p class="muted" style="margin-bottom:0">
-      Requires a cross-stack encoder change (Rust transport + host preparation + Torch/MLX modules) and checkpoint-input validation, so it is explicitly tracked as a separate Task rather than expanding MTG-431.
-    </p>
+
+    <div class="step">
+      <div class="step-tag">Failure 1: Step-0 refusal</div>
+      <div><strong>Case A (same rev 20):</strong> Server rejects step 0 with recovery at rev 20 → <code>table.rejected = true</code>, <code>run.at === 0</code>, <code>rev === sentAt</code>.</div>
+      <div class="good"><strong>Recovery:</strong> <code>keepDraft: true</code>. Draft stays on screen intact (run marker didn't clobber it), rejection notice explains why, user edits or presses Confirm again.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-tag">Failure 2: Stale rev or mid-run refusal</div>
+      <div><strong>Case B (newer rev 22, or step 2 of 5 refused):</strong> Server rejects step 2 at rev 22 (same or newer rev) or returns <code>not_actor</code> without recovery (<code>answerable = false</code>).</div>
+      <div class="good"><strong>Recovery:</strong> <code>table.rejected</code> fires immediately (no hang, no off-by-one). Draft clears, board shows the 2 committed cards and 3 remaining, rail reads <em>"Stopped after 2 of 5. The next card placement was not accepted. Split any remaining cards from here."</em></div>
+    </div>
+
+    <div class="step">
+      <div class="step-tag">Failure 3: Disconnect mid-run</div>
+      <div><strong>Socket closes</strong> after step 2 sent (rev 21): both <code>connected</code> and <code>answerable</code> become <code>false</code>.</div>
+      <div class="good"><strong>Recovery:</strong> <code>!connected</code> fires before <code>!answerable</code>. Run stops with <em>"Stopped after 2 of 5 sent: the connection dropped. The board shows where the game stands."</em> When socket later reconnects and reconciles rev 22, nothing is sent behind the player's back.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-tag">Failure 4: Reload mid-run</div>
+      <div><strong>Page reloads</strong> while step 2 of 5 is in flight; server may already have moved on to rev 22 or <code>PRIORITY</code>.</div>
+      <div class="good"><strong>Recovery:</strong> On mount for the same <code>match_id</code>, <code>takeInterruptedRun</code> pops <code>academy.table.draft.run</code> once and surfaces <em>"Stopped after 2 of 5 sent: the page reloaded. The board shows where the game stands."</em> (works regardless of what action space the reloaded frame is in).</div>
+    </div>
   </div>
-</div>
 
-<h2>4. Choices Made for Review &amp; Separate Follow-ups</h2>
+  <h2>4. Native audit refinement: A1 vs A2 vs B vs C</h2>
+  <p>Inspecting <code>managym/src/agent/effect_execution.rs:267–281, 1528–1766</code> showed that most "Class A" limits (<code>min</code>/<code>max</code>, <code>remaining</code>, <code>count</code>) exist only as Rust <code>{:?}</code> strings in <code>decision_context.pending</code>. Splitting Class A keeps follow-up Tasks honest:</p>
 
-<div class="callout warn">
-  <div class="callout-title">Choices made for review (already built in <code>HEAD</code>)</div>
-  <ol style="margin-bottom:0">
-    <li><strong>Unified <code>Player.mana_pool</code> with additive <code>expiry</code>, keeping <code>combat: bool</code> and <code>Effect::AddMana.until_end_of_combat</code>.</strong> Passed over: leaving two pools (duplicate clearing and spend hacks) or renaming the serialized card-definition field inside MTG-431 (needless TLA pinned-pilot churn).</li>
-    <li><strong>Skipped non-leaf group clicks in <code>decision_memory</code> for <code>ChooseEntryValue</code> (returning <code>None</code>) and recorded the canonical leaf row.</strong> Passed over: emitting empty <code>Modal</code> records for UI tree splits.</li>
-    <li><strong>Moved <code>PartitionPiles</code> and <code>ChoosePile</code> onto <code>ActionSpaceKind::Modal</code> and stage <code>"keep_permanents"</code> (retaining <code>"keep_creatures"</code> for old recordings).</strong></li>
-    <li><strong>Deferred semantic candidate encoding for <code>ChooseEntryValue</code> and legacy definition retirement (<code>Effect::LookAndSelect</code>, <code>Effect::AddMana.until_end_of_combat</code>) to separate Tasks in <code>scratch/plan.md</code>.</strong></li>
-  </ol>
-</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 14%;">Class</th>
+        <th style="width: 34%;">Decisions</th>
+        <th>Requirement &amp; boundary</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="pill pill-yes">A1 · Ready</span></td>
+        <td><code>Scry</code> (N≥2), <code>Surveil</code> (+ <code>order_library_top</code>), <code>OrderLibrary</code>, <code>PartitionPiles</code> (shipped)</td>
+        <td>Draftable from typed frame fields (<code>inspected</code> + <code>offers</code>) today with zero native changes. (<code>PartitionPiles</code> can later drop <code>FACE_UP_RE</code> via an A2 offer field.)</td>
+      </tr>
+      <tr>
+        <td><span class="pill pill-proposed">A2 · Typed fields</span></td>
+        <td><code>SelectCards</code> (max&gt;1), <code>SearchDistinctNames</code>, <code>OpponentSplitsRevealed</code>, <code>Discard</code> (2+), <code>DistributeCounters</code>, <code>DivideAmongTargets</code>, <code>KeepPermanents AllBut</code></td>
+        <td>No clone-and-step preview needed — just small structured limit/remaining/share fields on <code>DecisionContextView</code> or <code>InteractionOffer</code> so UI never parses Rust <code>Debug</code> text.</td>
+      </tr>
+      <tr>
+        <td><span class="pill pill-warn">B · Native preview</span></td>
+        <td><code>DeclareAttacker</code>/<code>Blocker</code> (shipped), <code>AssignCombatDamage</code>, <code>KeepPermanents TotalCreaturePower</code>, <code>order_triggers</code></td>
+        <td>Needs read-only clone-and-step native preview (lethal minimums, layered power sums, interleaved trigger modes/targets).</td>
+      </tr>
+      <tr>
+        <td><span class="pill pill-existing">C · Sequential</span></td>
+        <td><code>Retarget</code>, <code>ManaUpfront</code>, <code>ManaSpend</code>, <code>OrderEntryChoices</code>, <code>OrderReplacement</code>, single-step decisions (<code>ChoosePile</code>, <code>LookAndSelect</code>, …)</td>
+        <td>One step, or later options are legality/planner-filtered or interleaved. Leave sequential.</td>
+      </tr>
+    </tbody>
+  </table>
 
-<div class="callout proposed">
-  <div class="callout-title">Explicitly outside MTG-431 (separate outcomes)</div>
-  <ul style="margin-bottom:0">
-    <li><strong>Semantic candidate encoding for <code>ChooseEntryValue</code> (Color &amp; 367 Creature Types):</strong> Generalize <code>NameCandidateEncoder</code> to <code>RecordNamespace::Token</code> vocabularies across <code>managym</code>, <code>manabot/policy/prepare.py</code>, Torch, and MLX.</li>
-    <li><strong>Retire legacy <code>Effect::LookAndSelect</code> &amp; <code>Effect::AddMana.until_end_of_combat</code>:</strong> Migrate existing TLA definitions onto <code>SelectCards { from: LibraryTop }</code> + <code>Unselected</code> and <code>ManaExpiry</code> in a dedicated pinned-pilot rollover pass.</li>
-    <li><strong>Multi-choice permanents:</strong> <code>Permanent.chosen: Option&lt;Arc&lt;EntryChoice&gt;&gt;</code> fits the 168-byte permanent budget for all current cards; widen to <code>Box&lt;[EntryChoice]&gt;</code> only when a card makes two independent entry choices.</li>
-  </ul>
-</div>
+  <h2>5. Choices made for review &amp; questions</h2>
+  <p class="muted">Because this review ran headless before implementation, all reversible choices below are written into <code>scratch/plan.md</code> as the active design. Reply with a question number and letter (for example, <code>2b</code>) to override any of them.</p>
 
-<h2>5. Questions for Review</h2>
+  <div class="q-list">
+    <div class="q-item">
+      <p>1. Separating live-table role from transient readiness in <code>Board.svelte</code></p>
+      <ul class="q-opts">
+        <li><strong>a. (Chosen)</strong> Keep MTG-441's <code>interaction: 'play' | 'study' | 'read-only'</code> + <code>pending</code> unchanged, and add <code>piloting?: boolean</code> (<code>liveTable</code> from <code>+page.svelte</code>) so all drafts stay visible across transient waits with zero Replay churn.</li>
+        <li><strong>b.</strong> Split <code>interaction</code> everywhere into <code>mode: 'play' | 'study' | 'read-only'</code> and <code>ready: boolean</code> (touches Replay and all <code>Board</code> call sites).</li>
+      </ul>
+    </div>
 
-<div class="q-card">
-  <strong>1. Unified <code>Player.mana_pool</code> + additive <code>expiry</code> while keeping <code>Effect::AddMana.until_end_of_combat</code> until a rollover Task?</strong>
-  <ol>
-    <li><strong>(Built in <code>HEAD</code>)</strong> Keep the unified pool + additive <code>expiry</code> (derived <code>combat</code>) as built, and retire <code>until_end_of_combat</code> on card definitions in the separate pinned-pilot rollover Task.</li>
-    <li>Also replace <code>Effect::AddMana.until_end_of_combat</code> with <code>ManaExpiry</code> inside MTG-431 and re-record the pinned pilot now.</li>
-  </ol>
-</div>
+    <div class="q-item">
+      <p>2. Scope of Pass 2 in <code>Board.svelte</code></p>
+      <ul class="q-opts">
+        <li><strong>a. (Chosen)</strong> Extract <code>PartitionPanel.svelte</code> alongside wiring both consumers onto <code>chunked.ts</code> / <code>draft-store.ts</code>, setting the per-decision component pattern before Scry/Select/Distribute arrive.</li>
+        <li><strong>b.</strong> Leave the partition overlay inline in <code>Board.svelte</code> and extract panels only when a third drafted decision is added.</li>
+      </ul>
+    </div>
 
-<div class="q-card">
-  <strong>2. Semantic candidate embeddings for <code>ChooseEntryValue</code> (Color &amp; 367 Creature Types)?</strong>
-  <ol>
-    <li><strong>(Built in <code>HEAD</code>)</strong> Ship MTG-431 with the clean <code>decision_memory</code> leaf recording and handle token-vocabulary candidate embeddings in the dedicated cross-stack policy-input Task.</li>
-    <li>Hold MTG-431 until Torch/MLX/<code>managym</code> support token-vocabulary candidate embeddings for <code>ChooseEntryValue</code>.</li>
-  </ol>
-</div>
+    <div class="q-item">
+      <p>3. Rail test IDs across all drafted decisions</p>
+      <ul class="q-opts">
+        <li><strong>a. (Chosen)</strong> Standardize on generic <code>draft-raw-choices</code>, <code>draft-stopped</code>, <code>draft-stop</code>, and <code>draft-sending</code>, updating MTG-441's and MTG-431's specs in Pass 2.</li>
+        <li><strong>b.</strong> Keep legacy <code>per-creature-choices</code> and <code>combat-stopped</code> for combat and introduce separate test ids for other drafts.</li>
+      </ul>
+    </div>
 
+    <div class="q-item">
+      <p>4. Behavior on disconnect mid-run</p>
+      <ul class="q-opts">
+        <li><strong>a. (Chosen)</strong> Stop immediately on disconnect (<code>"Stopped after k of n sent: the connection dropped…"</code>) and never auto-resume remaining steps after reconnect, so the player sees the recovered board before committing more steps.</li>
+        <li><strong>b.</strong> Pause on disconnect and automatically resume sending remaining planned steps if reconnect lands on the next expected step.</li>
+      </ul>
+    </div>
+  </div>
 </main>
 </body>
 </html>
