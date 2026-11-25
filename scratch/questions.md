@@ -19,3 +19,7 @@
   a complete CR 205.3m vocabulary before its prompt can offer every legal type.
   For repeated copies, compose a counted instruction with the existing copy
   verb so authored single-copy programs retain their serialized form.
+- Creature names use the straight apostrophes found on card type lines.
+  The November 6 CR 205.3m list has 367 entries. Scryfall’s creature-type
+  catalog contained all 367 and ten extra names, including Automaton and Naga.
+  Only the rules list supplies legal choices.

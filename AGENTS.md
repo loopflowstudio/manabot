@@ -628,7 +628,10 @@ checks names, sets and token printings online, never in CI, and skips tokens
 without an id.
 
 Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
-table of their categories. Add a new subtype there (the cards crate's
+table of their categories. Its creature list follows CR 205.3m, including legal
+choices absent from the installed cards. Use the rules list for updates;
+Scryfall’s creature-type catalog also includes names outside that list.
+Add a new subtype there (the cards crate's
 `every_authored_subtype_has_a_category` fails otherwise), and read creature
 types through `is_creature_type`, never by excluding other subtypes.
 
