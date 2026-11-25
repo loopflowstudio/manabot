@@ -28,15 +28,16 @@ Done:
 - Slice 4, empower and `token.jace` with its 22 FRA cards (`4966204033`,
   fixtures `2327a41b94`).
 
-- Slice 3, command-zone emblems and four planeswalkers (`833f67e3ed`). All
-  24 FRA cases passed. The cp313 wheel cold-restored Ajani’s emblem and all
-  nine positions in the five refreshed fixtures (`52b05b2fa8`). All 444
-  choices retained their labels and IDs. All 109 player-only attack frames
-  matched their baseline bytes.
+- Slice 3, command-zone emblems (`EmblemDefinition`, `emblem_catalog()`,
+  `Effect::CreateEmblem`) and Vivien Reid, Kaito, Ajani Resolute, Chandra,
+  Torch of Defiance (`833f67e3ed`, fixtures `52b05b2fa8`, coverage guard
+  `eb842d8d57`). 24 FRA cases; the cp313 wheel cold-restored Ajani's emblem
+  and the five fixtures (444 choices kept labels/IDs, 109 attack frames kept
+  bytes).
 
 ## Passes remaining
 
-1. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
+1. Next: slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
    loyalty activation events and their cards.
 2. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
    debug nextest, Engine Budget and the pinned pilot, recording a reason if
@@ -111,21 +112,6 @@ targets, `0674982740`, fixtures `5ecb50ceee`) are built; their design is in
 `docs/engine.md` with slice 1. Deferred to gate: the pinned pilot (record with
 `--reason` if the attack row moved) and Engine Budget (`bench_steps` digest
 expected unchanged; curated decks attack no planeswalker).
-
-### Slice 3 — Command-zone emblems (built)
-
-Vivien Reid, Kaito, Cunning Infiltrator, Ajani Resolute and Chandra, Torch of
-Defiance each create a public command-zone object. Layers and triggers read its
-own abilities after the walker leaves. Each battlefield trigger retains its
-battlefield LKI. Chandra’s first +1 binds the exact exiled object to the paid
-cast decision and deals damage when the cast is declined or unavailable.
-
-The debug fixture with four of every emblem per seat and 22 creatures passed
-in 0.72 seconds. The battlefield trigger snapshot retained its v16 bytes after
-departure. Both seats saw Ajani’s emblem and its text after a paid −10.
-The effect and selector learning-token guards and the observation column guard
-passed. The guard now attributes the attack-target column to action focus.
-Python protocol shape, older recording import and Svelte checks passed.
 
 ### Slice 4 — Empower (built: `4966204033`, fixtures `2327a41b94`)
 
