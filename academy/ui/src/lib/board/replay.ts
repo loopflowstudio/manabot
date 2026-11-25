@@ -336,19 +336,25 @@ export function analysedMarks(marks: readonly StripMark[], positions: readonly P
 }
 
 /**
- * Each of your analysed moves' mark, by move id: the position key a move
- * jumps to, which is the decision where the move began.
+ * Each of your analysed moves' mark, by move id: every analysed decision from
+ * the position a move jumps to up to the next move counts toward it, so a
+ * cast's target and payment choices are marked with the cast.
  */
 export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+  const ids = new Set(entries.map(entry => entry.id));
+  const hero = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
   const marks = new Map<string, DecisionMark>();
-  const at = new Map(positions.map((position, i) => [position.key, i]));
-  for (const entry of entries) {
-    if (entry.actor !== 'hero') continue;
-    const position = positions[at.get(entry.id) ?? -1];
-    if (position?.event === undefined) continue;
+  let current: string | null = null;
+  for (const position of positions) {
+    if (ids.has(position.key)) current = position.key;
+    if (current === null || !hero.has(current) || position.kind !== 'choice' || position.event === undefined) continue;
     const decision = decisions.get(position.event);
     const mark = decision ? decisionMark(decision) : null;
-    if (mark) marks.set(entry.id, mark);
+    if (!mark) continue;
+    const move = marks.get(current);
+    marks.set(current, move
+      ? { ...move, same: move.same && mark.same, agreed: move.agreed + mark.agreed, of: move.of + mark.of }
+      : mark);
   }
   return marks;
 }

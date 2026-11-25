@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
+import { markText } from '$lib/analysis';
 import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { boardView } from './view';
 
@@ -230,7 +231,23 @@ describe('an analysis read beside your choices', () => {
     const same = { ...decision, event: 5, played: offers - 1 };
     const entries = positions.map(p => ({ id: p.key, actor: 'hero' as const, turn: 1, text: 'Move' }));
     const marks = moveMarks(entries, positions, new Map([[3, decision], [5, same]]));
-    expect(marks.get(positions[0].key)).toEqual({ same: false, yours: 1 / offers, its: (offers - 1) / offers });
+    expect(marks.get(positions[0].key)).toEqual({ same: false, agreed: 0, of: 1, yours: 1 / offers, its: (offers - 1) / offers });
     expect(marks.get(positions[1].key)?.same).toBe(true);
+  });
+
+  it("counts a cast's target choice with the cast, so marks add up to the summary", () => {
+    const positions = [
+      position('choice', { key: 'cast', actor: 0, event: 3, label: 'Cast Shock' }),
+      position('consequences', { key: 'after-cast', actor: 0, event: 3, label: null }),
+      position('choice', { key: 'target', actor: 0, event: 5, label: 'Target Villain' }),
+      position('consequences', { key: 'after-target', actor: 0, event: 5, label: 'Cast Shock, targeting Seat 2' }),
+    ];
+    const log = replayLog(positions, 0, seat => (seat === 0 ? 'You' : 'Reader'));
+    expect(log.map(entry => entry.id)).toEqual(['cast']);
+    const marks = moveMarks(log, positions, new Map([[3, decision], [5, { ...decision, event: 5, played: offers - 1 }]]));
+    const mark = marks.get('cast')!;
+    expect([mark.same, mark.agreed, mark.of]).toEqual([false, 1, 2]);
+    expect(markText(mark)).toBe('1 of 2 same');
+    expect(mark.yours).toBe(1 / offers);
   });
 });

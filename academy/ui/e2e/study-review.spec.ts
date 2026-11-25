@@ -84,7 +84,10 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await page.getByTestId('game-menu').click();
   const agreement = page.getByTestId('agreement');
   await expect(agreement).toContainText(`Decisions with a choice: ${points} ·`);
-  const same = await page.locator('[data-testid=move-mark][data-same=true]').count();
+  // A move's mark counts each of its decisions (a cast, its target, its payment).
+  const tallies = await marks.evaluateAll(nodes => nodes.map(node => [Number(node.getAttribute('data-agreed')), Number(node.getAttribute('data-of'))]));
+  expect(tallies.reduce((sum, [, of]) => sum + of, 0)).toBe(points);
+  const same = tallies.reduce((sum, [agreed]) => sum + agreed, 0);
   await expect(agreement).toContainText(`would: ${same} of ${points}`);
   await expect(page.locator('body')).not.toContainText(/mistake|blunder|inaccura|accuracy|brilliant/i);
   await page.screenshot({ path: shot('study-review') });

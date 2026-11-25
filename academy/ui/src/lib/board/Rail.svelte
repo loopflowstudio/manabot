@@ -12,7 +12,7 @@
   import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
-  import { formatScore, type DecisionMark } from '$lib/analysis';
+  import { formatScore, markText, type DecisionMark } from '$lib/analysis';
   import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
   import { stackName, stackProvenance, type PlacedOffer, type StackItem, type BoardView } from './view';
@@ -333,14 +333,14 @@
                     <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
                     {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}
                       <span class="reading">
-                        <span class="mark type-caption" data-testid="move-mark" data-same={mark.same}>{mark.same ? 'same' : 'differs'}</span>
+                        <span class="mark type-caption" data-testid="move-mark" data-same={mark.same} data-agreed={mark.agreed} data-of={mark.of}>{markText(mark)}</span>
                         <svg class="track" viewBox="0 0 32 8" aria-hidden="true" data-testid="move-track">
                           <line x1="0" x2="32" y1="4" y2="4" />
                           {#if mark.its !== null}<circle class="its" cx={3 + mark.its * 26} cy="4" r="2.5" />{/if}
                           {#if mark.yours !== null}<circle class="yours" cx={3 + mark.yours * 26} cy="4" r="1.75" />{/if}
                         </svg>
                       </span>
-                      <span class="sr-only">{mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
+                      <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
                     {/if}
                     {#if shownMoves.has(move.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
                   </button>
@@ -468,7 +468,7 @@
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
-  .shown { flex: none; font-family: var(--font-sans); color: var(--text-tertiary); font-style: italic; }
+  .shown { flex: none; font-family: var(--font-sans); color: var(--text-tertiary); }
   .mark[data-same='false'] { color: var(--text-secondary); }
   .track { width: 32px; height: 8px; }
   .track line { stroke: var(--border); stroke-width: 1; }

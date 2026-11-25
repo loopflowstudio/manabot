@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>MTG-389 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc;margin:.5em 0}h2{margin-top:2em}code{background:#f3f3f3;padding:0 3px}</style>
+<h1>MTG-389 Study — QA, 2026-11-25</h1>
+<p>The real product throughout: <code>managym academy --policy qa_bot.json play</code> (the CLI, built static client), with a real checkpoint from <code>etude train manabot/recipes/local.py</code> as the opponent and analysing policy, default UR Lessons v GW Allies decks. A headless Chromium drove one persistent profile, as a returning person would. Origin <code>automated_validation</code>; everything under ignored <code>.runs/qa/</code>.</p>
+
+<h2>1. Returning user: games played before this change</h2>
+<p>Two games were played on the base build (<code>3be5a0cfb2</code>, in a detached worktree, same port and profile): one against the trained bot and one against Search 4. Then the new build was started on the same store.</p>
+<ul><li>Games lists both as mine. Turns, duration and the record table are computed on first read (<code>numbers</code> was null before). My record: one row per opponent, with 0–79% Wilson intervals.</li>
+<li>Review of the bot game began the opponent's analysis automatically. Your hand stays yours across the first 8 positions (7, 7, 7, 8, 8, 7, 7, 8 cards). The move list contains no "Opponent decision".</li>
+<li>Review of the Search game says "No analysis yet · Analyse with… in the Menu". <b>Analyse with…</b> the bot ran "Analysing 0 of 31" and finished in about 15 s: 31 points on the chart and "chose as … would: 3 of 31".</li></ul>
+<img src="shots/qa-games-old.png"><img src="shots/qa-review-old-1-step8.png"><img src="shots/qa-search-analysed-menu.png">
+
+<h2>2. Found and fixed: move marks did not add up to the summary</h2>
+<p>The old bot game showed 21 move marks with 1 "same", while the Menu said "chose as … would: 2 of 27" and the chart had 27 points. A move such as "Cast Firebending Lesson, targeting Plains" holds several decisions (the cast, the target, the mana payments), and its mark read only the first one. The matched choice here was the target (event 73), so the move read "differs".</p>
+<p>Fix: <code>moveMarks</code> now counts every analysed decision from a move up to the next. A move whose decisions split reads "1 of 2 same", and each mark carries <code>data-agreed</code>/<code>data-of</code>. On the same game: marks sum to 27 decisions and 2 same, equal to the summary. Unit test: "counts a cast's target choice with the cast" (fails on the old code). The acceptance spec's (f) now sums the marks and also checks that they cover every chart point.</p>
+<img src="shots/qa-marks-mixed.png">
+
+<h2>3. A new game with Show analysis</h2>
+<ul><li>Turned on at decision 5: the first reading arrived in 0.8 s, then about 0 s per decision. Offers read "policy 33.0%, estimate after 30" and "its choice"; nothing was selected.</li>
+<li>Turned off three decisions later. The first click came while the opponent's moves were being read out, and the table swallows that click by design (MTG-384) to end the read-out. A second click turned it off within 0.5 s. Only 4 <code>analysis</code> messages were received.</li>
+<li>Review, the Menu and Games all say "analysis shown at 3 decisions". My record's With analysis column counts the game.</li></ul>
+<img src="shots/qa-live-analysis-on.png"><img src="shots/qa-review-menu.png">
+
+<h2>4. Review: key moment, its line, both hands, play on</h2>
+<ul><li>The Review analysis finished in 5–10 s (27 decisions). The key moment reads "Its expected score moved 66 → 75 by your next decision".</li>
+<li>See its line: 9 moves in 1.3–3.2 s. Escape returned to the game.</li>
+<li>Show both hands: the opponent's hand opens (<code>shown-hand</code>).</li>
+<li>Play on from here at a turn-20 decision opened a live game at turn 20, which was played to the end. Games reads "played on from another game", and My record leaves it out.</li></ul>
+<img src="shots/qa-review-key-moment.png"><img src="shots/qa-review-line.png"><img src="shots/qa-review-both-hands.png"><img src="shots/qa-played-on.png"><img src="shots/qa-games-new.png"><img src="shots/qa-review-dark.png">
+
+<h2>Also fixed</h2>
+<p>The design lint (<code>npm test</code>) failed on the "analysis shown" label's <code>font-style: italic</code> (slice 6). Italic is not in the type system, so it was removed.</p>
+
+<h2>Checks</h2>
+<p><code>npm test</code>: 666 passed after the fix. <code>npm run check</code>: 0 errors. Policy e2e <code>study-review.spec.ts</code>: 2 passed. <code>pytest</code> on played analysis, replay, played-on, numbers and record reducers: 36 passed.</p>
+
+<h2>What is still wrong or unreached, worst first</h2>
+<ol>
+<li>The Review rail is crowded at 1280×800. The Moves list shows two or three rows, and the Analysis panel scrolls inside a short box. Reading the move list against the analysis needs scrolling in two small panes. This is a layout decision, not fixed here.</li>
+<li><b>Try another line</b> (the older Study branch, live for about 15 minutes after a game) sits beside <b>Play on from here</b>, and afterwards it shows as disabled with an explanation of retained rules state. Two affordances for the same idea; product choice.</li>
+<li>Under Show both hands, the top seat still reads "Hand 6": the cards are behind its dialog (the slice 5 design), not face up in the seat.</li>
+<li>Games abandoned by closing the tab list as "In progress" indefinitely. This predates the change.</li>
+<li>Not reached: a strong current-world checkpoint. The local-recipe policy is near uniform (ties of 12.5% or 50%), so the chart is almost flat. Readability with real estimates is untested. Not reached: the 69-decision Elemental branched snapshot (not on this machine), the configured-launch e2e and <code>test:e2e:release</code>.</li>
+</ol>

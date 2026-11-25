@@ -259,3 +259,19 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Study (Review analysis, Show analysis, Games record) as a returning user:
+  games only count as "mine" (and only the participant may start an
+  analysis) in the same browser profile and origin, so drive every game with
+  Playwright `launchPersistentContext(<.runs dir>)` and keep one port for
+  the old and new builds. For games written by an older build, `git worktree
+  add --detach /private/tmp/<x> <base>`, build its SPA there, and run it with
+  this checkout's `.venv/bin/python` from `/tmp` (cwd on `sys.path` otherwise
+  loads this checkout) with `PYTHONPATH=/private/tmp/<x>` and
+  `ACADEMY_FRONTEND_BUILD` pointing at its build; when the Rust diff is only
+  additive, this checkout's `.so` serves (the main checkout's may be stale).
+  Start the CLI as `python -c 'from managym.cli import main; main()' academy
+  ...` (`-m managym.cli` exits silently); stop a `nohup … &` server with
+  SIGTERM. A clicked control during the opponent's read-out only ends the
+  read-out (the click is swallowed by design); click again, as a person
+  would. A real checkpoint from `etude train manabot/recipes/local.py`
+  analysed a 130-event game in about 5–60 s depending on load.

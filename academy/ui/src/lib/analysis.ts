@@ -140,8 +140,18 @@ export function firstChoice(decision: AnalysedDecision): number | null {
   return p.reduce((best, value, i) => (value > p[best] ? i : best), 0);
 }
 
+/**
+ * How your choices in one move sit beside the policy's. A move can hold
+ * several decisions (a cast, its target, its payment): `of` counts the
+ * analysed ones and `agreed` those where you chose its first choice, so the
+ * marks add up to the summary's count. The estimates are the move's first
+ * decision's.
+ */
 export interface DecisionMark {
+  /** Every analysed decision of the move was the policy's first choice. */
   same: boolean;
+  agreed: number;
+  of: number;
   /** Scores after your choice and after the policy's first choice, 0–1. */
   yours: number | null;
   its: number | null;
@@ -151,7 +161,15 @@ export interface DecisionMark {
 export function decisionMark(decision: AnalysedDecision): DecisionMark | null {
   const first = firstChoice(decision);
   if (first === null) return null;
-  return { same: first === decision.played, yours: decision.after[decision.played] ?? null, its: decision.after[first] ?? null };
+  const same = first === decision.played;
+  return { same, agreed: same ? 1 : 0, of: 1, yours: decision.after[decision.played] ?? null, its: decision.after[first] ?? null };
+}
+
+/** The mark's words: "same", "differs", or "1 of 3 same" for a move whose decisions split. */
+export function markText(mark: DecisionMark): string {
+  if (mark.agreed === mark.of) return 'same';
+  if (mark.agreed === 0) return 'differs';
+  return `${mark.agreed} of ${mark.of} same`;
 }
 
 /** "Analysing 34 of 81", "Analysis stopped at decision 12: …", or null once complete. */
