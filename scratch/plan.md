@@ -248,7 +248,7 @@ plus the repository's lint/type configuration, and
    to `managym.replay` (`manabot/env/replay.py` deleted, 213995e159). Torch ↔ MLX
    portable resume, refusal with missing settings/readings and intact
    weights/save bytes, sampler reports, and both replay CLIs passed.
-2. **Implemented (c6fa430a1e, ac40bab096, 737ed04a80).** Removed the remaining shims,
+2. **Done (c6fa430a1e, ac40bab096, 737ed04a80).** Removed the remaining shims,
    aliases and CLI command. Converted checkpoint admission and training tests
    and added the Command trace round trip and refusal to integration CI.
 3. **Gate.** Acceptance check, consumer tests with manabot
@@ -272,7 +272,9 @@ changed and deleted Python modules were loaded from the task base
 fixtures try to refresh Priority at the opening-hand Modal decision. One PUCT
 test compares stored and live decision rows. Five belief tests fail on choice
 deltas, absent priority offers, hand tracking or a pinned receipt digest.
-The full consumer gate remains open on those baseline failures.
+The full consumer gate remains open on those baseline failures: gate must
+record their disposition (outside MTG-435, reproduced on `45ddf3bca7`) rather
+than treat them as regressions.
 
 ## Done when
 
