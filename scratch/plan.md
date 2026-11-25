@@ -112,7 +112,7 @@ ambiguous menace attackers. Release `bench_states joraga-blocks`: 9.79–67.04 �
 decision at 8-on-8 and 16-on-16. The slice-1 attachments spike (296.4 µs at 100
 permanents) did not recur in fourteen runs (medians 94–102 µs); no cause isolated.
 
-**4 · Built.** All eight cards in the table above are playable. Changeling uses the printed
+**4 · Built** (`e8f5bd548a`). All eight cards in the table above are playable. Changeling uses the printed
 face in every zone and the layer-4 creature types on the battlefield.
 `StaticPtBuff.per` counts from one `PtCount`. The three existing card
 programs retain their serialized field names. New Horizons’ enchanted Forest
