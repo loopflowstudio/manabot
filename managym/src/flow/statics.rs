@@ -336,13 +336,14 @@ impl DerivedCache {
 }
 impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
-        let context = Context::evaluate(self, sources);
+        let mut context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
         let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
-        for (id, object) in context.objects {
+        for id in context.live {
+            let object = context.objects[id.0].take().unwrap();
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
             if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
