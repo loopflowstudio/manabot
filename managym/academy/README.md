@@ -138,9 +138,13 @@ skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
-incarnation and board display ID. These read-only projections introduce no legal
-actions or editable payment transaction. Other viewers receive only public
-ownership/kind and committed facts. Retained frames omit these optional fields.
+incarnation and board display ID; `permanent_details_json` attaches effective
+battlefield details (Layer 6 keyword abilities, overridden Defender and active
+combat/untap restrictions) to `decision_surface_view` without altering
+`Observation` or default `serialize_observation()`. These read-only projections
+introduce no legal actions or editable payment transaction. Other viewers
+receive only public ownership/kind and committed facts. Retained frames omit
+these optional fields.
 
 For Precision, click **Start game**, inspect **Deadly Precision**, then explicitly
 choose its cast offer and an Inspector target. In the Treasure demo, reserve that

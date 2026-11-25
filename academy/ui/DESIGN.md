@@ -68,7 +68,8 @@ Components use tokens, never colour literals. The grounds and inks:
 Fixed roles, each meaning one thing everywhere:
 
 - `--damage`: damage, life lost, a target's dashed edge.
-- `--gain`: power or toughness above printed, life gained.
+- `--gain`: power or toughness above printed, life gained, granted battlefield
+  keywords and keyword abilities.
 - `--planned`, `--planned-text`: the automatic payer's planned taps.
 - `--pip-*`: mana symbols; `--card-*` and `--card-*-ink`: a card's name bar
   in its printed colours (pale tints in light, solid bars in dark).
@@ -104,6 +105,30 @@ A 4 px grid (`--space-*`). Related things sit 4–8 px apart, groups 16–24.
 Group with space and one divider, not boxes. Only what changes moves:
 `--motion-fast` (100 ms) for colour, `--motion-move` (180 ms) for movement,
 and reduced motion keeps every state change without the travel.
+
+## Card state
+
+Battlefield cards and the inspection share one effective state vocabulary:
+
+- **Chips**: 12/16 DM Sans on `--bg-surface`, 1 px `--border` ring, `--radius-sm`.
+  Ordered by urgency: damage (`--damage` ink), summoning sickness, active
+  restrictions and statuses, counters, then effective keywords and keyword
+  abilities (`Prowess`, `Ward …`, active `Firebending N`).
+- **Summoning sickness**: a 16×16 chip containing an inline SVG spiral stroked
+  in `--text-secondary` (`title="Summoning sick"`), never a truncated word or
+  extra dimming. Inspect spells it out in words.
+- **Overridden Defender**: remains visible in `--text-tertiary` with
+  `text-decoration: line-through` while the creature can attack anyway; Inspect
+  reads `"Defender · can attack anyway"`.
+- **Granted abilities**: any keyword or keyword ability not printed on the
+  current face carries a 1 px `--gain` ring.
+- **Board vs. Inspect**: `Flash` stays in Inspect only; attacking and blocking
+  are carried by card lean, tilt and the block line on the board and listed in
+  words in Inspect and `aria-label`. `"Struck first"` stays on the card during
+  the first-strike combat-damage window.
+- **Whole-chip fit**: `.chip` never uses `text-overflow: ellipsis` or clips
+  mid-word (`scrollWidth <= clientWidth` at every card width). Chips that do not
+  fit whole in the card's available rows fold into a trailing `+N`.
 
 ## Checks
 
