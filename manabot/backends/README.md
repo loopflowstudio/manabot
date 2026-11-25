@@ -224,15 +224,16 @@ standalone Torch tutorial loop.
 
 ### Inspection and belief
 
-Frozen-choice inspection accepts a `PolicyLoader`. It keeps the observations
-and their offer and object permutations in NumPy and evaluates them through
+Frozen-choice inspection accepts a `PolicyLoader`. It permutes native
+`managym.Observation` offers and objects, encodes them via
+`managym.encode_observation_batch`, and evaluates them through
 `policy.prepare(..., inference=True)`. The MLX reader can inspect a portable
-policy with Torch absent. A collected corpus stores the arrays in
-`observations.npz`, keyed by `<case name>/<buffer name>`. Numerical parity
-also takes a fresh learner and the framework's gradient and parameter mappings.
+policy with Torch absent. Numerical parity also takes a fresh learner and the
+framework's gradient and parameter mappings.
 
-Belief inference uses host observations and the policy's admission and
-evaluation methods. Search receives a hand sampler. Both Torch and MLX expose
+Belief inference passes native observations and explicit
+`BeliefTensorView.rows()` (`belief=`) to `policy.prepare(...)` and
+`policy.evaluate(...)`. Search receives a hand sampler. Both Torch and MLX expose
 `backend.belief` (`SamplerCodec` / `BeliefSampling`, owning sampling arithmetic,
 the random stream and learned state) and lazy `backend.belief_fit`
 (`BeliefTrainer`), and read and write one portable `belief.safetensors`
@@ -505,7 +506,7 @@ loads. Training writes its policy files with the `.safetensors` suffix
 
 The container carries every configuration the torch policy runs: belief
 inputs, policy history, FiLM, either critic, hashed or catalog record ids and
-both policy inputs. Saving never casts or truncates a tensor; a parameter
+policy input v11. Saving never casts or truncates a tensor; a parameter
 that is not float32 fails the save, naming it.
 
 `save_checkpoint` binds the policy to the setups in `player_configs`, or to
@@ -588,7 +589,9 @@ parity: pass (torch, mlx)
 
 The reference is padded Torch CPU float32. Every candidate loads the same
 weights and replays the same learner minibatches and collection calls from
-`manabot.backends.torch.capture`. Both learners compute the production
+`manabot.backends.torch.capture` (persisted as validated
+`ObservationBatch.to_bytes()` / `from_bytes()` payloads plus `MemoryArchive`
+when decision memory is present). Both learners compute the production
 damped objective. After comparing one clipped Adam step, parity reloads the
 checkpoint on each side for the remaining comparisons.
 

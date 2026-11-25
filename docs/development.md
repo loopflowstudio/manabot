@@ -164,12 +164,11 @@ includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
 `tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
-and native frontier encoding, against full evidence and per-branch
-encoding: the same roots and seeds must choose identical Commands and write
-identical tensors. It also checks that v3 receipts and registrations omitting
-`rollout_evidence` still read as full evidence. A change to
-`managym.encode_observations_into` also runs `tests/env/test_observation.py`
-and the debug native suite.
+and native frontier encoding against full evidence: the same roots and seeds
+must choose identical Commands and write identical tensors. It also checks that
+v3 receipts and registrations omitting `rollout_evidence` still read as full
+evidence. A change to `managym.encode_observation_batch` also runs
+`tests/env/test_observation.py` and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
 `open_collector` defaults to `batch_closure="complete-games"`, so even
 `collect(collector, model, 1)` can play a complete game.
@@ -379,21 +378,20 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 
 ## Pinned pilots
 
-Two small trained players are committed under `tests/fixtures/pinned_pilot/`,
-each with one recorded game: its seed and decks, the action taken at every
-decision and the player's action probabilities there. Each pilot received one
-SGD update on an opening decision. `v11` was saved on main at `44f76fe987`.
-`v9` was saved at `ab2b757d9`, the way the frontier checkpoints were: 73 player
-columns and no recorded column names, definition keys or source.
-`tests/model/test_pinned_pilot.py` (Integration) loads each through
-`load_checkpoint`, replays the recorded actions on the current tree and
-compares. A change that would alter what a stored player computes fails, and
-the failure names the layer:
+One small trained `v11` player is committed under
+`tests/fixtures/pinned_pilot/v11/`, with one recorded game: its seed and decks,
+the action taken at every decision and the player's action probabilities there.
+The pilot received one SGD update on an opening decision and was saved on main
+at `44f76fe987`. `tests/model/test_pinned_pilot.py` (Integration) loads it
+through `load_checkpoint`, replays the recorded actions on the current tree and
+compares. Earlier v9/v10 checkpoints (such as frontier Small u1952) are verified
+from `v0.2.5`. A change that would alter what a stored player computes fails,
+and the failure names the layer:
 
 ```text
-FAILED test_pinned_pilot.py::test_recorded_game[v9]
-  the loader refused pilot.pt: unexplained record_name key 5779523629;
-  classify it in managym/src/cards/token_renames.rs; it records no source revision
+FAILED test_pinned_pilot.py::test_recorded_game[v11]
+  the loader refused pilot.safetensors: unexplained record_name key 5779523629;
+  classify it in managym/src/cards/token_renames.rs
 ```
 
 ```text
@@ -413,8 +411,6 @@ prefix the model reads, including columns that were zero throughout this game.
 The save/load regression in `tests/model/test_checkpoint_binding.py` also
 checks that appended card, stack, action, history and decklist columns preserve the
 saved pilot’s logits and value after it is loaded and exported again.
-Set `MANABOT_U1952_CHECKPOINT` to the local frontier Small update-1952
-file to include its recording in the same test and in `record`.
 
 Probabilities agree within 1e-5 and the chosen action keeps its rank; bit
 equality across Linux and macOS is not claimed.

@@ -84,16 +84,17 @@ of rows and `A` for padded legal offers.
 | Piece | What it does |
 | --- | --- |
 | `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`; the required `numerics` session (`backend.collection.CollectionSession(device=..., seed=..., precision=...)`) owns the device, precision and private sampling RNG. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
-| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
+| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` (`ObservationSelection`) for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` returns `ActionRows` pairing the selected `ObservationSelection` with the full behavior distribution. |
 | `AdmittedRollout(agent, batch)` (`backend.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched via shared `AdmittedRows.prefetch_minibatches`. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
 
-In v11 the collector retains immutable native observations. Legal offers,
+The collector retains immutable native `ObservationBatch` spans. Legal offers,
 focus and naming joins live in those spans. Behavior probabilities refer to
 the original legal slots. Learner minibatches gather the selected rows across
 shards in training order, including repeats. At a snapshot horizon the collector
 freezes each contributing seat's view before assigning that stream another
-root. Decision-memory rows share their captured prefixes across the rollout.
-Use `batch.observations(indexes)` for editable NumPy projections.
+root. Decision-memory rows share their captured prefixes (`RetainedMemory`)
+across the rollout. Use `batch.observations(indexes).observation.project(key)`
+to inspect a table as a NumPy array.
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -108,9 +109,9 @@ collector is given a `GameErrorPolicy`
 
 ### The policy and its terms
 
-The policy reads a `Prepared` batch (`manabot.policy.prepare`): NumPy
-observation buffers that the policy's `prepare` has checked and indexed on
-the host, moved to the model's device. `AdmittedRollout.rows` returns one for
+The policy reads a `Prepared` batch (`manabot.policy.prepare`): host arrays
+that the policy's `prepare` has checked and indexed from a native
+`ObservationBatch` or `ObservationSelection`, moved to the model's device. `AdmittedRollout.rows` returns one for
 learner rows; elsewhere build it with `on_device(agent.prepare(obs), device)`
 (`manabot.backends.torch.arrays`). `ActorCritic.forward(prepared)` returns
 logits and a signed expected value `[B]`; `forward_distribution(prepared)`

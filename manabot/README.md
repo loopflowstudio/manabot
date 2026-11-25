@@ -335,27 +335,17 @@ relabels an existing experiment's receipts or registrations.
 
 ### Native frontier encoding
 
-A v11 teacher passes the live branches to
+A teacher passes the live branches to
 `managym.encode_observation_batch(envs, space.layout)`. The returned batch
 owns immutable typed rows and their int32 offsets in frontier order. Both
 backends bind the checkpoint's vocabulary and apply its saved readings to these
 rows through the shared host preparation. The teacher
 reads each branch's legal support from `batch.action_counts`. Search requires
-every legal action to fit the checkpoint's layout. V9 and v10 teachers use
-`managym.encode_observations_into` with reusable dense buffers.
+every legal action to fit the checkpoint's layout.
 
-`LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
-`"native_encoder": false` beside `"config"` in a `make_player` spec, instead
-allocates a fresh batch for each frontier forward and fills its rows with one
-`managym.encode_observation_into` call per branch. The same native encoder
-writes both, so the tensors are identical; the switch selects one batched call
-or one call per row, and its name is kept because saved specs carry it.
-
-A teacher owns its search state, so only one search may use it at a time; give each concurrent search its own teacher. An extension without the
-batch writer, or a buffer whose shape, dtype or writability does not match the
-selected observation space, raises before any inference. Search never falls
-back to per-row encoding: rebuild the extension, or select
-`native_encoder=False` explicitly.
+A teacher owns its search state, so only one search may use it at a time; give
+each concurrent search its own teacher. Recorded search specs that set
+`"native_encoder": false` are refused naming `v0.2.5`.
 
 ### Inference threads
 
@@ -450,8 +440,10 @@ self-play, evaluation, and promotion evidence over the authoritative managym
 world. The cross-package contracts are in the
 [README](../README.md#contracts-the-code-enforces).
 
-1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
-   (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
+1. **`manabot.env`**: Gymnasium-compatible scalar wrapper around managym
+   (`Env`, `ObservationSpace`, `Match`, `Reward`); `Env` returns native
+   `managym.Observation` views directly without encoding tensors until a policy
+   prepares a batch
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the self-play loop and `Learner`
 3. **`manabot.sim`**: players and game runners.
@@ -571,8 +563,8 @@ their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
-identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
-until 0.3.0; see
+identities. Main supports policy input v11 only; earlier v9/v10 checkpoints
+run from `v0.2.5`. See
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-10` renders each native payload once with exact public source and

@@ -664,8 +664,8 @@ source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
 the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
-Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every other restriction is a `pooled_mana_classes` class and a
+Lesson and Shrine spells, Ally spells or sources, and Powerstone
+mana; every other restriction is a `pooled_mana_classes` class and a
 `PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
@@ -697,9 +697,9 @@ mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 
-For a v11 batch, call
+To encode observations into an `ObservationBatch`, call
 `encode_observation_batch(items, layout, action_overflow="error")` with `Env`
-or `Observation` items.
+or `Observation` items (`ObservationLayout` accepts policy input v11 only).
 `RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
 `encode_active_batch()` and `step_active_batch(actions)` to return
 `(active_slots, ObservationBatch)`.
@@ -722,9 +722,12 @@ current decisions. Pass one seat or `None` per stream. The result contains the
 selected slot identities and a batch in that order. Any batch's
 `gather(coordinates)` copies just the selected live spans from compatible
 batches, preserving the requested order and repeated rows.
+`blank_decision_memory()` returns a copy with empty decision-memory spans for
+memory-reliance ablations.
 
-Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
-each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+Each `ObservationBatch` owns its snapshot across later steps and certifies its
+v11 layout, CSR row offsets, capacities and native joins. Its `tables()` maps
+each value table to `(seat_axis, offsets, values)`, with immutable byte
 strings for native-endian int32 row offsets and packed, native-endian records.
 One span belongs to each batch item, or to each (item, seat) if `seat_axis`
 is true. Subtract consecutive offsets for live counts, including all-zero
@@ -732,12 +735,17 @@ live rows. Companion validity masks derive from those counts. Object joins
 retain the layout's coordinates. The default overflow policy rejects excess
 actions. With `"first-legal"`, `action_counts` gives the retained prefix.
 
+For offline parity captures and probes, `batch.to_bytes()` serializes an
+`ObservationBatch` and `ObservationBatch.from_bytes(data)` reloads it after
+validating the layout, CSR offsets, capacities and native joins once in Rust
+(raising `ValueError` on corrupt, truncated, out-of-bounds or non-v11 bytes).
+
 `layout.csr_fields[key]` lists each record field's name, dtype and logical
 column index in byte order. IDs, joins, enums, unscaled counts and full signed
-words use int32. Flags use uint8 and scaled scalars use float32. In a dense
-input a word occupies two 16-bit columns. The packed field takes their common
-name and the first column's index. Both fact payloads use raw integer units.
-Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+words use int32. Flags use uint8 and scaled scalars use float32. A packed word
+field carries the full signed int32 value under its logical name and first
+column index. Both fact payloads use raw integer units. Divide by
+`layout.csr_fact_divisors[kind]` for their logical numeric values.
 Decision memory includes separate presence flags for optional selectors.
 
 ```python
@@ -747,25 +755,16 @@ _, offsets, values = batch.tables()["actions"]
 starts = np.frombuffer(offsets, dtype=np.int32)
 actions = np.frombuffer(values, dtype=dtype)
 first_game_modes = actions["mode"][starts[0]:starts[1]]
+
+reloaded = managym.ObservationBatch.from_bytes(batch.to_bytes())
+assert reloaded.action_counts == batch.action_counts
 ```
 
 For element arrays, the single field describes each element. An action-focus
 row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
-with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
-
-For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
-`encode_observation_into`, `encode_observations_into`,
-`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
-emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
-the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
-`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
-vector per variable axis. Each item includes its occupied rows and rows needed
-by joins. Keep the buffers stable until the scan returns. A key or shape
-mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
-the buffer names and their unbatched row dimensions. For a pair `(key, dim)`,
+with -1 for unused focus slots. For each variable axis, `layout.axis_buffers`
+lists the table names and their unbatched row dimensions; for a pair `(key, dim)`,
 `layout.shapes[key][dim]` is the configured capacity of that axis.
-`layout.object_references` lists each buffer's object-reference columns and
-their index bases. A `None` column means every element is a reference.
 
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.

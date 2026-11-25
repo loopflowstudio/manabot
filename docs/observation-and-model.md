@@ -217,34 +217,32 @@ supports both `stream_norm` and `focus_film` with matching weights and outputs.
 
 ### Bucketed padding
 
-A dense observation mapping reserves the declared capacity of every table.
-A v11 `managym.ObservationBatch` carries each table's typed live rows with int32
-offsets. Its native record fields keep integer joins and full signed words exact
-through vocabulary lookup. Both transports use the same logical object and
-action coordinates and saved numeric readings. Across 300 captured collection batches the median batch needed 59
+A `managym.ObservationBatch` carries each table's typed live rows with int32
+offsets, keeping integer joins and full signed words exact through vocabulary
+lookup while sharing the same logical object and action coordinates and saved
+numeric readings. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
-padded path the network still processes every slot, and skips lookups for an
-axis that is empty in the batch, so tensor shapes change from batch to batch.
+padded path the network still processes every slot up to configured capacity,
+and skips lookups for an axis that is empty in the batch, so tensor shapes
+change from batch to batch.
 
-Bucketed padding is the default for CUDA training. For a native batch the
-host takes per-axis counts from the offsets. For an external mapping it
-measures the last occupied or referenced row on each variable axis, including
-actions, objects and effect spans. It rounds each extent up to a power of two, with a minimum
-of 8 rows and a maximum of the declared capacity. Admission validates these
-prefixes in the original object coordinates. Raw buffers keep those coordinates
-throughout collection and learning. Preparation translates the integer gathers
-into the trimmed object table. Models with belief rows or
-`historical_mean` value aggregation keep the full object table. Logits retain
-the original action slots.
+Bucketed padding is the default for CUDA training. The host reads per-axis
+counts directly from the batch's CSR offsets (for actions, objects and effect
+spans) and rounds each extent up to a power of two, with a minimum of 8 rows
+and a maximum of the declared capacity. Admission validates the batch in
+original object coordinates; raw spans keep those coordinates throughout
+collection and learning. Preparation translates the integer gathers into the
+trimmed object table. Models with belief rows or `historical_mean` value
+aggregation keep the full object table. Logits retain the original action slots.
 
-Torch and MLX prepare v11 decisions from the live spans of each selected
-stream. A masked step can leave several native batches represented in the
-same group. Both backends sample once in original group order, even when
-preparation splits it across execution chunks. The rollout retains the
-collection extents and shares immutable decision-memory prefixes. The learner checks the
-current rollout rows at admission and uses their collection extents as a lower
-bound, since packing keeps only legal actions. Later minibatches take the
-maximum across their admitted rows.
+Torch and MLX prepare decisions from the live spans of each selected stream. A
+masked step can leave several native batches represented in the same group.
+Both backends sample once in original group order, even when preparation splits
+it across execution chunks. The rollout retains the collection extents and
+shares immutable decision-memory prefixes (`RetainedMemory`). The learner
+checks the current rollout rows at admission and uses their collection extents
+as a lower bound, since packing keeps only legal actions. Later minibatches
+take the maximum across their admitted rows.
 
 On CUDA, Torch looks up fact ids at the bucketed fact axis's shape and
 encodes the complete card catalog to keep the recurrent encoder's schedule
@@ -398,8 +396,8 @@ value pooling.
 Column compaction composes with `bucketed_shapes=True` (further shrinking or
 collapsing the trimmed object table when fewer columns are used),
 `historical_mean`, `value_token` (which appends one token after column
-gathering, preserving the small shape count), `attention_readout` and dense
-`belief` rows. When `attention_on` is false, no object columns are selected;
+gathering, preserving the small shape count), `attention_readout` and explicit
+`BeliefRows`. When `attention_on` is false, no object columns are selected;
 when `live_tokens=True` and `attention_on` is true, live-token packing takes
 precedence.
 
@@ -413,34 +411,29 @@ up to floating-point summation order.
 
 ## Running a checkpoint on a later revision
 
-A checkpoint keeps loading as cards are added, Rust types are renamed and
-input columns are appended. The frontier Small player was written at
-[`ab2b757d9`](https://github.com/loopflowstudio/manabot/tree/ab2b757d9) with
-policy input v9, before about 100 of today's names and several hundred of
-today's card tokens existed.
-It loads from its original file:
+A v11 checkpoint keeps loading as cards are added, Rust types are renamed and
+input columns are appended:
 
 ```python
 from manabot.backends.torch.checkpoint import load_checkpoint
 
-model, observation_space = load_checkpoint("final.pt")
+model, observation_space = load_checkpoint("policy.safetensors")
 ```
 
-The bound `PolicyCheckpoint.report` holds the catalog binding counts.
-The loader logs them at INFO level. On the unmodified u1952 file,
-both player rows read 73 of the running engine's 74 columns. The model uses
-360 stored card programs, of which 136 serialize differently in this engine.
-All 348 learned names still resolve. The loader initializes
-396 new token rows and 103 new name rows at their respective table means.
-One missing field was renamed, 45 token or record names were retired, and
-zero keys were unexplained.
+The bound `PolicyCheckpoint.report` holds the catalog binding counts (bound
+stored card programs, renamed or retired token/record keys, new token and name
+rows initialized at their table means, and matched saved column prefixes), and
+the loader logs them at INFO level.
 
 Academy checks the same tensor binding when it lists a checkpoint. A missing
-learned key appears on the bot’s catalog row with the loader’s reason.
+learned key or an unsupported policy-input version appears on the bot’s catalog
+row with the loader’s reason.
 
 Nothing in the file is rewritten. `model` then plays any deck the pool admits,
 including cards it never saw. Evaluate its strength on those decks through
-[local evaluation](evaluation.md#quick-local-evaluation).
+[local evaluation](evaluation.md#quick-local-evaluation). Earlier v9 and v10
+checkpoints (such as the historical frontier Small u1952) are refused with
+`UnsupportedPolicyInput` naming `v0.2.5`; run them from the `v0.2.5` tag.
 
 ### What a checkpoint is bound to
 
@@ -460,7 +453,7 @@ can use an expanded card set on a later revision.
 | A decision kind, the naming representation or naming branching changed | Refused, naming the field. |
 | The token kinds or roles changed (`learning_schema_sha256`) | Refused. |
 | The model architecture differs from the saved configuration | Refused, as before. |
-| The policy input version is v1–v8 | `UnsupportedPolicyInput`, naming the revision to run it from. |
+| The policy input version is not v11 | `UnsupportedPolicyInput`, naming `v0.2.5` for v9–v10 and `ac601834d` for v1–v8. |
 | The possible-world version changed | Refused only for a model with belief inputs; no other model reads it. |
 | Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
@@ -566,19 +559,29 @@ that historical checkout, with its native extension built, run
 
 ## Policy inputs
 
-Main carries policy input v11, the fresh default, and the deprecated inputs v9
-and v10 that earlier checkpoints read
-([below](#deprecated-inputs-v9-and-v10)).
-`ObservationConfig.policy_input_version` is always serialized. A checkpoint,
-replay or saved configuration bound to any other version, or omitting it,
-raises `UnsupportedPolicyInput`, which names the revision to run it from
-([`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is the
-last revision supporting v1–v8). Load saved configurations through
-`ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
-reshape its weights to get past the error.
+Main supports policy input v11 only (`ObservationConfig.policy_input_version == 11`,
+always serialized). A configuration, checkpoint, replay or saved regime bound to
+any other version, or omitting it, raises `UnsupportedPolicyInput`, naming the
+tag or revision to run it from (`v0.2.5` is the last release supporting v9–v10,
+and [`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is
+the last revision supporting v1–v8):
+
+```python
+from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
+
+try:
+    ObservationConfig(policy_input_version=10)
+except UnsupportedPolicyInput as error:
+    print(error)
+# policy input v10 is unsupported; v0.2.5 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8
+```
+
+Load saved configurations through `ObservationConfig.from_checkpoint` (where an
+omitted version still means v1); do not edit a checkpoint's version or reshape
+its weights to get past the error.
 
 A layout change on main does not bump the version. A column is appended to
-its array and named in `managym.observation_layout`; a checkpoint trained
+its table and named in `managym.observation_layout`; a checkpoint trained
 before it keeps reading the columns it knows
 ([running a checkpoint on a later revision](#running-a-checkpoint-on-a-later-revision)).
 Removing, renaming or reordering a column refuses every checkpoint that reads
@@ -641,100 +644,45 @@ Academy's retained `base_power`/`base_toughness` fields still mean effective
 P/T, matching their existing serialized meaning.
 
 The object table is players, agent cards, opponent cards, agent permanents,
-opponent permanents, then the stack. The encoders index a battlefield object's
+opponent permanents, then the stack. The encoder indexes a battlefield object's
 `object_id` and a spell's `object_id` to its permanent or stack row. Selection,
 payment, a spell's costs and modes, and history contexts reach the row that
-holds the object's state. V11 carries v10's turn state (`player_turn_state`,
-`card_turn_state`) and refuses nothing a v10 encoder holds. Unambiguous
-historical JSON is normalized to this observation shape before encoding.
+holds the object's state. Unambiguous historical JSON is normalized to this
+observation shape before encoding.
 
-### Deprecated inputs v9 and v10
-
-Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
-stack spell was also a card row, permanent rows (38 columns) had no
-characteristics and stack abilities had no row. Selecting v9 or v10 warns
-(`DeprecationWarning`). They are removed once a v11 player is at least as
-strong as the strongest v9 one, and not before 0.3.0. Their rows are rebuilt from
-the same observation by `agent/legacy_input.rs` and
-`manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
-byte; the model reads them through the same `ActorCritic`, without a stack
-segment. Nothing else depends on those modules.
-
-### Input v10: turn history and Powerstone mana
-
-Three TLE bonus-sheet cards read state v9 has no place for:
-
-| Card | State v10 adds |
-| --- | --- |
-| Bloodchief Ascension | Life each player has lost this turn |
-| Brought Back | Which graveyard cards were put there from the battlefield this turn |
-| Cityscape Leveler | Mana that can't be spent to cast nonartifact spells (its Powerstone tokens) |
-
-V10 adds this state to v9, and v11 keeps it. To train on v10 rows, select v10
-explicitly before constructing the collector and model:
-
-```python
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
-from manabot.recipes.builders import gray_ogre_self_play
-
-settings = gray_ogre_self_play(horizon=1).model_copy(
-    update={"observation": ObservationConfig(policy_input_version=10)}
-)
-space = ObservationSpace(settings.observation)
-```
-
-Use that `space` for `open_collector` and `ActorCritic(space, settings.model)`;
-the run's saved settings keep the selection. V10 is v9 plus this state,
-in the native encoder, the LLM text observation and the learning tokens.
-
-V10 adds two buffers to the v9 layout, required when `ObservationLayout` is
-built for input v10 (and carried into v11):
-
-| Key | Shape | Holds |
-| --- | --- | --- |
-| `player_turn_state` | 2 × 8 | Per seat, agent first: life lost this turn / 20, spells cast this turn / 10, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
-| `card_turn_state` | 2 × 60 | Per seat card row (aligned with `semantic_cards`): 1 for a graveyard card put there from the battlefield this turn |
-
-The model appends each seat's row to its player row and each card value to its
-card row before embedding them.
-
-V9 and its checkpoints are unchanged: w17 checkpoints keep loading. A v9 encoder refuses a position that needs v10 state:
-a card visible to the viewer reads life lost this turn or graveyard cards put
-there from the battlefield and that state is present, or a pool holds mana
-that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
-names the needed state. Encoding raises `ValueError`
-(`policy input v10 required: …`, with that state) before writing any buffer;
-`UnsupportedPolicyInput` is for a configuration or checkpoint bound to an
-unsupported version, not for a position. A v9 run over decks with these cards
-stops at the first such position, so train on them with v10.
-A game, replay or Academy session needs no policy input and plays these cards
-under any configuration. A v9 checkpoint cannot be widened to v10; train a new
-one.
+Turn-level state is always present in `player_turn_state` and
+`card_turn_state` (including life lost this turn, spells cast, mana spent
+casting, life-gain/creature-death/departure counts, Powerstone mana that can't
+be spent on nonartifact spells, and graveyard cards put there from the
+battlefield this turn). The model appends each seat's `player_turn_state` row
+to its player row and each `card_turn_state` value to its card row before
+embedding them.
 
 ### Layout
 
-A fresh `ObservationConfig` (input v11) gives these float32 buffers.
-Capacities are configuration; widths are the layout.
+An `ObservationConfig` (input v11) encodes into a typed
+`managym.ObservationBatch` with these logical tables. Capacities are
+configuration; widths are the layout (`managym.observation_layout()` publishes
+logical column names and kinds, and `ObservationLayout.csr_fields` publishes
+packed CSR record dtypes).
 
 | Key | Shape | Holds |
 | --- | --- | --- |
 | `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
 | `agent_permanents`, `opponent_permanents` | 40 × 56 | Permanents with their characteristics |
-| `stack`, `stack_valid` | 32 × 46 (`max_stack_objects`), 32 | Spells and abilities, top first |
-| `player_turn_state`, `card_turn_state` | 2 × 15, 2 × 60 | Turn state (above) |
+| `stack` | 32 × 46 (`max_stack_objects`) | Spells and abilities, top first |
+| `player_turn_state`, `card_turn_state` | 2 × 15, 2 × 60 | Per-seat and per-card turn state (above) |
 | `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
-| `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1; zero padding |
+| `known_library` | 2 × 20 × 2 | Exact library facts: definition + 1, position from top + 1 |
 | `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
-| `actions`, `action_focus`, `name_candidates` | 512 × 30 (v11), 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `actions`, `action_focus`, `name_candidates` | 512 × 30, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
 | `events` | 32 × 7, or 32 × 12 with recent events | Public events |
 
-Policy inputs v9 and v10 keep 22 action columns and 49 relation columns. In v11, column 22
-(`pays_directly`, zero-based) marks taps that directly pay a cost through
-convoke, improvise or waterbend.
+In `actions`, column 22 (`pays_directly`, zero-based) marks taps that directly
+pay a cost through convoke, improvise or waterbend.
 When such a tap could pay more than one thing, the next choice's `mode`
 column names what it pays, the same in every decision: the selector 0-4 is
 one {W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise
@@ -742,7 +690,7 @@ and 7 {1} of the waterbend part (the column holds selector + 1). Only payable
 modes are offered, and the choice's focus is the permanent just tapped.
 
 The same `mode` column carries every indexed choice: a mode of a modal spell,
-a mana-spend option, a replacement order and a value of X. In v11, columns 23
+a mana-spend option, a replacement order and a value of X. Columns 23
 and 24 say when the index is a number. `has_x` is 1 on an offer that chooses a
 value for X (for a spell, an activation or a payment, or a replicate count)
 or an amount of combat damage an attacker assigns to a blocker, and `x` is
@@ -751,10 +699,17 @@ are, so amounts past the mode's one-hot range stay distinct. A combat damage
 offer's focus is the attacker and then the blocker. The native `Action.announces_x` says the same of an offer:
 
 ```python
-# arrays = game.encode_observation(observation), at a decision that chooses X
-columns = managym.observation_layout()["actions"]["columns"]
-rows = arrays["actions"][arrays["actions_valid"].astype(bool)]
-print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]["index"]]])
+import numpy as np
+import managym
+
+# At a decision that chooses X:
+layout = managym.ObservationLayout()
+batch = managym.encode_observation_batch([observation], layout)
+dtype = np.dtype([(name, dt) for name, dt, _ in layout.csr_fields["actions"]])
+_, offsets, values = batch.tables()["actions"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+rows = np.frombuffer(values, dtype=dtype)[starts[0]:starts[1]]
+print(np.column_stack([rows["mode"], rows["has_x"], rows["x"]]))
 # choosing X for a spell with three mana left after its other costs
 # [[1.  1.  0. ]
 #  [2.  1.  0.1]
@@ -763,8 +718,7 @@ print(rows[:, [columns["mode"]["index"], columns["has_x"]["index"], columns["x"]
 ```
 
 `mode` keeps its stored value on these rows. Both columns are appended, so a
-checkpoint trained before them does not read them. Inputs v9 and v10 have
-neither; their X offers differ only in `mode`.
+v11 checkpoint trained before them does not read them.
 
 When several permissions apply to one play, its action row gives the selected
 base mana value (`has_route_cost`, `route_mana_value`) and the permanent
@@ -790,16 +744,15 @@ Closed opponent list rows remain zero, while public reveals still update
 checkpoint trained without it does not read it, and plays closed-list games
 out of distribution.
 
-Allocate and collect every key from the supplied `ObservationSpace`, on both
-the scalar and vector paths. Fact, relation, effect and action overflow is a
-typed Capacity error, never truncation; the one declared exception is the TLA
-pilot's first-64 action prefix.
-`agent/continuation.rs` projects the relation frames and
+Encode every policy observation through the supplied `ObservationSpace`'s native
+`space.layout`, on both scalar and vector paths. Fact, relation, effect and
+action overflow is a typed `managym.ObservationCapacity` error, never
+truncation; the one declared exception is the TLA pilot's first-64 action
+prefix. `agent/continuation.rs` projects the relation frames and
 `agent/observation_encoder.rs` the fact rows once per observation;
-`manabot/env/observation.py` describes their layout and writes nothing. A buffer that
-is missing or has the wrong shape fails before any write. Column names and
-value encodings for every buffer come from `managym.observation_layout()`
-([reading arrays by name](engine.md#reading-arrays-by-name)).
+`manabot/env/observation.py` describes their layout and writes nothing. Column names and
+value encodings for every table come from `managym.observation_layout()`
+([reading batch tables by name](engine.md#reading-batch-tables-by-name)).
 
 ### How the network reads a column
 
@@ -952,8 +905,7 @@ under the id `PooledMana`, one program per class, in the tokens the producing
 card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
 an execution occurrence of its stack or resolution frame (`mana spent`, a
 kind-14 continuation program) when a rule still reads it: the definition
-counts that mana (Toph, converge) or a spend effect applied. These programs
-use the same representation in v9 and v10. Combat mana also has a pool
+counts that mana (Toph, converge) or a spend effect applied. Combat mana also has a pool
 program, including ordinary combat mana; its class records combat expiry.
 Regular and combat units never merge during payment search. Academy shows each
 rider, restriction and expiry alongside the public amounts in
@@ -1050,16 +1002,13 @@ Magic's rules, and does not broaden deck admission.
 
 The native observation's `known_library` maps a zero-based library position
 from the top to a card definition. The owner sees the union of public and
-private facts; an opponent sees public facts only. The current policy input
-carries twenty rows per seat (ten public plus ten private, with coinciding
-positions represented once). Deprecated inputs v9/v10 omit these facts and preserve their frozen layout,
-so their checkpoints never read them.
+private facts; an opponent sees public facts only. The current policy input carries twenty rows per seat (ten public plus ten
+private, with coinciding positions represented once).
 
 The encoder writes definition joins and one-based positions. Prepared resolves definitions once and weights each by the
 reciprocal of its one-based position. Both Torch and MLX project this separate
 pooled vector, divided by 60, before adding it to hand and decklist knowledge,
-so a known top card and a known hand card have distinct representations;
-these rows do not extend the deprecated v9/v10 layout. It is a minimal live
+so a known top card and a known hand card have distinct representations. It is a minimal live
 read, with no measured claim about learning or an ability to infer joint
 constraints. The text observation states each exact position in words.
 
@@ -1102,8 +1051,9 @@ issued prefixes retain their exact version. Unbranched new suffixes run in one
 packed GRU call, whose intermediate outputs supply the per-record states. Native
 game generation and prefix identity bound cache reuse, and scope exit discards the
 cache before a parameter update. These tensors never become observations,
-replays, checkpoints or search-fork state. Dense stateless encoding remains the
-reference, and arbitrary imported prefixes still undergo complete admission.
+replays, checkpoints or search-fork state. Stateless native encoding
+(`encode_observation_batch`) remains the reference, and arbitrary imported
+prefixes still undergo complete admission.
 The transformer keeps its full-sequence encoder. Raw storage and recovery keep
 content-addressed immutable chunks and full changed-chunk admission; this cache
 cut does not remove that retention cost.

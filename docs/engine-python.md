@@ -507,14 +507,13 @@ import numpy as np
 import managym
 
 layout = managym.ObservationLayout()
-buffers = {
-    **layout.allocate(2),
+state = {
     "rewards": np.zeros(2, dtype=np.float64),
     "terminated": np.zeros(2, dtype=np.uint8),
     "truncated": np.zeros(2, dtype=np.uint8),
 }
 games = managym.VectorEnv(num_envs=2, seed=42)
-games.set_buffers(buffers, layout=layout)
+games.set_observation_layout(state, layout)
 players = [
     managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
     for seat in (0, 1)

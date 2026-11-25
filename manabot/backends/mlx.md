@@ -67,7 +67,7 @@ hashed record vocabularies (`world="world"` and `world=None`), scalar and
 off (`attention_on`), stream normalization, focus and policy FiLM,
 `recent_events`, belief rows (`BeliefPolicy.admit_belief`), and whole-game
 `decision_memory` (`gru` and `transformer`, 1 or 4 summaries, including
-`pretrained_memory_branch` warm starts). Inputs v9 through v11 use the same
+`pretrained_memory_branch` warm starts). Policy input v11 uses the same
 saved column readings as Torch. Collection and learning support both updates
 (`damped_policy` and `ppo`), bucketed shapes, bounded execution chunks, and
 `live_tokens=True` on both `mps` and `cpu`. All five shipped recipes (`local`,
