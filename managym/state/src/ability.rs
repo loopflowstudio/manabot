@@ -2333,8 +2333,8 @@ impl Effect {
             }
             _ => false,
         };
-        if let Some(amount) = self.amount() {
-            return amount.reads(read);
+        if self.amount().is_some_and(|amount| amount.reads(read)) {
+            return true;
         }
         match self {
             Self::MayExileTriggeringWithSource
