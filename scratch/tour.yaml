@@ -1,32 +1,39 @@
-at: d83da6e53b50049232b42f28a8d09cd1cb9ffa09
+at: a256b00666
 first:
-  - path: docs/engine.md
-    why: How Way grants, Sanctum Lurker and activation triggers play
-  - path: managym/cards/src/fra.rs
-    why: The Way cycle and the cards that read activations
-  - path: managym/state/src/card.rs
-    why: Zero-loyalty exception; activation clauses without positional indices
   - path: managym/state/src/ability.rs
-    why: ActivatesLoyaltyAbility trigger and the per-turn activation count
-  - path: managym/src/flow/game.rs
-    why: Records each chosen target's clause
+    why: TargetRequirement.division, Effect::Remember/GrantPlay, Except::Remembered/Matching, DelayedEvent::Attacks and UntilYourNextTurn
+  - path: managym/state/src/card.rs
+    why: CardType::PERMANENT_TYPES and ReplacementEffect::ExileIfWouldDie
   - path: managym/src/flow/play.rs
-  - path: managym/src/flow/payment.rs
-  - path: managym/src/flow/decision.rs
-    why: Emits the loyalty activation event once the ability is stacked
+    why: Sequential linear DivideAmount offers during spell/activation announcement
+  - path: managym/src/flow/resolution.rs
+    why: Divided DealDamage, Remember/Except::Remembered/Matching, choose-from-exiled-top, LibraryExceptBottom
   - path: managym/src/flow/triggers.rs
-  - path: managym/src/flow/sba.rs
-    why: Exempts scoped planeswalkers from the 0-loyalty action
-  - path: managym/src/agent/observation_encoder.rs
-    why: Appended player_turn_state column
+    why: DelayedTriggerEvent::Attacks matching per-object and per-batch attack targets
+  - path: managym/src/flow/proposed_event.rs
+    why: ReplacementEffect::ExileIfWouldDie and EventBinding::SacrificedBy
+  - path: managym/src/agent/continuation.rs
+    why: Appended v11 relation columns until_next_turn and division; DivideAmount frame
+  - path: managym/cards/src/fdn.rs
+    why: Chandra, Flameshaper
+  - path: managym/cards/src/m13.rs
+    why: Ajani, Caller of the Pride
+  - path: managym/cards/src/war.rs
+    why: Liliana, Dreadhorde General
+  - path: managym/cards/src/fra.rs
+    why: Ajani Unrelenting, Garruk Curse Breaker, Garruk Veiled Butcher, Jace Reality Sculptor
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Directed loyalty tests for Ajani, Chandra (including divided damage), and Liliana (30-permanent -9)
   - path: managym/cards/tests/cards/fra.rs
-    why: Quota sharing, Warlord clauses, Lurker, activation triggers
+    why: Directed loyalty tests for Ajani Unrelenting, both Garruks, and Jace Reality Sculptor
+  - path: managym/examples/bench_states.rs
+    why: Stress states for way-grants, divided-damage, and keep-one-each-type
 hide:
-  - path: managym/academy/fixtures/
-    why: Regenerated from the recorded opening choices
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Oracle characteristics for the new cards
-  - path: protocol/
-    why: Generated schema entries for the new history field
+    why: Oracle characteristics for the seven new planeswalkers
+  - path: tests/public_api.json
+    why: Recorded ClauseTarget.division and ContinuationFrame.until_next_turn additions
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Ledger status for implemented FDN planeswalkers
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fra.jsonl
-    why: Ledger status for implemented rows
+    why: Ledger status for implemented FRA planeswalkers

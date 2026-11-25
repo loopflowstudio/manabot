@@ -57,6 +57,31 @@ Done:
   remaining pass. `AttachedHas` stays (see questions.md).
   Lesson: a declined up-to clause made the next clause's target count as
   clause 0, so Warlord re-asked for its player. Positions never name clauses.
+- Slice 7 (`580ff7d36e`, cards/tests/stress `a256b00666`): divided damage
+  (`TargetRequirement.division`, sequential `PendingChoice::DivideAmount`
+  offers >= 1 per target, CR 601.2d/602.2b/608.2b, `target_divisions` on stack
+  objects), keep-one-of-each-type (`CardType::PERMANENT_TYPES`,
+  `Effect::Remember`, `Except::Remembered`), controller-scoped exception
+  (`Except::Matching`), until-your-next-turn delayed attack triggers
+  (`DelayedEvent::Attacks`, `DelayedTriggerEvent::Attacks`,
+  `DelayedExpiry::UntilYourNextTurn`), choose-from-exiled-top
+  (`ExileTopCardsToPlay.choose`, `Effect::GrantPlay`), opponent death-exile
+  replacement (`ReplacementEffect::ExileIfWouldDie`, `EventBinding::SacrificedBy`),
+  and `ObjectSelector::LibraryExceptBottom`. Appended v11 relation columns
+  `until_next_turn` and `division` (`tests/public_api.json` recorded).
+  Cards: `Ajani, Caller of the Pride` (`m13`, + `token.cat_2_2_w`), `Chandra,
+  Flameshaper` (`fdn`), `Liliana, Dreadhorde General` (`war`), `Ajani
+  Unrelenting`, `Garruk, Curse Breaker`, `Garruk, Veiled Butcher`, and `Jace,
+  Reality Sculptor` (`fra`). Verified: all 7 directed loyalty tests + 3
+  observability/subtype guards (`cards` debug), `conformance_tests` (2/2),
+  `scripts/public_api.py check`, `cargo fmt --check`, and `bench_states` stress
+  states (`way-grants`: 25 actions / 1 board; `divided-damage`: 10 target
+  offers -> 7 division offers; `keep-one-each-type`: 15 linear artifact picks
+  on 30 mixed/multi-type permanents).
+  Lesson: sequential `DivideAmount` auto-assigns 0/1 targets and `total <= N`
+  targets, keeping offers strictly linear (at most `remaining - tail_targets`
+  per step); keep-one-of-each-type composes via per-type `Remember` +
+  `Except::Remembered` with linear `N` offers and matches CR multi-type rulings.
 
 Already red on CI at `d1ef91d814` (run 45568225341), before slices 5–6, and
 left for gate: `observability::` legacy card-row parity (four tests,
@@ -68,13 +93,7 @@ semantic-conformance cases.
 
 ## Passes remaining
 
-1. Slice 7: the seven remaining planeswalkers (four FDN, Ajani Unrelenting,
-   both Garruks, Jace Reality Sculptor) with divided damage and keep-one-of-
-   each-type. Ajani Unrelenting's −3 "except for tokens you control" needs a
-   controller-scoped exception; Garruk, Curse Breaker's −4 an
-   until-your-next-turn attack trigger. Also the Way stress state left over
-   from slice 5. Teaches whether division offers stay linear.
-2. Slice 8's remaining ~30 adjacent cards plus the integrated interaction
+1. Slice 8's remaining ~30 adjacent cards plus the integrated interaction
    checks, then close the ledger. At gate run debug nextest, Engine Budget and
    the pinned pilot, recording a reason if its output moves. Keep main’s
    MTG-420 receipts at their original revision.
@@ -152,36 +171,7 @@ expected unchanged; curated decks attack no planeswalker).
 Open defect (slice 4): no replacement can divert a battlefield-to-exile move,
 so Overwrite's diverted-exile case stays untested until one exists.
 
-### Slice 7 — Remaining planeswalker cards and two primitives
-
-FDN: Ajani, Caller of the Pride (−8 X = life total via `LifeTotal`), Chandra,
-Flameshaper, Liliana, Dreadhorde General. FRA: Ajani Unrelenting, Garruk,
-Curse Breaker, Garruk, Veiled Butcher, Jace, Reality Sculptor.
-
-Small primitives this slice owns:
-- Divided damage (Chandra, Flameshaper −4: 8 among any number of target
-  creatures/planeswalkers): `TargetRequirement.division: Option<EffectValue>`
-  announced during activation/casting (CR 601.2d, 602.2b), each target ≥ 1.
-  Offer it sequentially (choose targets, then assign amounts one target at a
-  time with remaining-total bounds) so offers stay linear, never an
-  enumeration of partitions. Stress state: 8 damage across 8 legal targets.
-- Keep one of each permanent type (Liliana −9, CR 205.2a types): each
-  opponent chooses, per type in order, up to one permanent of that type into a
-  frame binding (`Chosen` into a named binding), then `Sacrifice` over `Each`
-  of their permanents `except` that binding. A multi-type permanent chosen for
-  one type also satisfies the others (it is kept once). Stress state: 30
-  permanents of mixed and multi-type permanents (artifact creature lands).
-
-Composing pieces to verify per card: Chandra Flameshaper +2 (`ExileTopCardsToPlay` choose one of three) and +1
-(`CreateTokenCopy` with haste and end-step sacrifice), Garruk Veiled Butcher's opponent death-exile replacement and
-discard-receipt draw, Jace Reality Sculptor 0 (aggregate Jace loyalty
-condition via `BattlefieldMatching` sum — add `EffectValue::CountersAmong`
-if absent). The Theorist’s draw trigger and optional opposing permanent
-target are in slice 1.
-
-Checks: one directed test per planeswalker covering each loyalty ability, in
-`cards/tests/cards/{fdn,fra,kld}.rs` (Chandra, Torch of Defiance's first
-printing is KLD — her definition goes in `kld.rs`, not `fra.rs`).
+Slices 1–7 are built (see `Done:` above). Remaining work is Slice 8 below.
 
 ### Slice 8 — Adjacent planeswalker-aware composition
 
