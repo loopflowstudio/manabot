@@ -486,3 +486,13 @@ Survives unchanged: combat and pile-split drafting, their words and panels,
 - `docs/academy.md` classifies every multi-step native decision into A1 / A2 /
   B / C and records the `ChoosePile` opponent-view verification.
 - Combat click and drag drafting, and the pile split, pass all specs.
+
+## Docs written
+
+- `docs/academy.md` — updated `Playing on the board` (combat + pile-split
+  drafting, wait/stop/reload behavior, `1`–`9` / `Space` / `Escape` keys) and
+  added `## Drafted decisions` (Curator of Destinies example, unified lifecycle
+  and stop-message table, `academy.table.draft` persistence, A1/A2/B/C
+  classification table, A2/Class B requirements, and `ChoosePile` opponent-view
+  contract). Pass 1 will verify the `ChoosePile` opponent-view note against a
+  live Python `GameSession` frame and record any UI gap in `scratch/questions.md`.
