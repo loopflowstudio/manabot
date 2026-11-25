@@ -166,6 +166,56 @@ class ObservationSelection(Mapping[str, np.ndarray]):
     coordinates: tuple[BatchRow, ...]
     memory: PrefixObservation | None = None
 
+    def __reduce__(
+        self,
+    ) -> tuple[
+        type, tuple[ObservationSpace, tuple[BatchRow, ...], PrefixObservation | None]
+    ]:
+        return ObservationSelection, (self.space, self.coordinates, self.memory)
+
+    @classmethod
+    def concatenate(
+        cls, parts: Sequence["ObservationSelection"]
+    ) -> "ObservationSelection":
+        """Append native coordinates and retained prefixes without projecting a table."""
+        if not parts:
+            raise ValueError("cannot concatenate empty observation selections")
+        first = parts[0]
+        capacities = (
+            first.memory.memory_capacities if first.memory is not None else None
+        )
+        for part in parts:
+            if (
+                part.space is not first.space
+                and part.space.config != first.space.config
+            ):
+                raise ValueError("native observation configs differ")
+            memory = part.memory
+            if (memory.memory_capacities if memory is not None else None) != capacities:
+                raise ValueError("native observation memory capacities differ")
+            if memory is not None and len(memory.prefixes) != len(part.coordinates):
+                raise ValueError(
+                    "native observation memory count differs from coordinates"
+                )
+        if len(parts) == 1:
+            return first
+        return cls(
+            first.space,
+            tuple(coord for part in parts for coord in part.coordinates),
+            PrefixObservation(
+                {},
+                [
+                    prefix
+                    for part in parts
+                    if part.memory is not None
+                    for prefix in part.memory.prefixes
+                ],
+                capacities,
+            )
+            if capacities is not None
+            else None,
+        )
+
     @cached_property
     def batch(self) -> managym.ObservationBatch:
         if not self.coordinates:

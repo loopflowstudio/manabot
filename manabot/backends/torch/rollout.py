@@ -24,6 +24,10 @@ from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.admission import AdmittedRows
 
+__all__ = [
+    "AdmittedRollout",
+]
+
 
 class AdmittedRollout(AdmittedRows):
     """A rollout batch whose observations are admitted once for one policy.
