@@ -141,6 +141,17 @@ class PolicyEvaluation:
 
 
 class PolicySession(Protocol):
+    """Per-seat policy instance.
+
+    ``observe(view)`` is called once after every committed state transition
+    (initial reset, each committed command by either seat, and terminal
+    ``game_over``), with ``view.choices`` populated only when this seat is
+    acting and ``view.observation.recent_events`` carrying the last step's
+    public events. ``choose(view)`` proposes an action for the already-observed
+    pending decision and may be retried without another ``observe()`` call;
+    recurrent policies should update state in ``observe()`` only.
+    """
+
     def observe(self, view: PolicyView) -> None: ...
     def choose(self, view: PolicyView) -> PolicyDecision: ...
     def close(self) -> None: ...
@@ -203,12 +214,40 @@ class PolicyRegistry:
     def register(
         self, policy: PolicyFactory | PolicySpec, *, name: str | None = None
     ) -> str:
+        from_spec = isinstance(policy, PolicySpec)
         if isinstance(policy, PolicySpec):
             policy = self._provider(policy.provider).policy(policy)
+        return self._register_factory(policy, name=name, from_provider=from_spec)
+
+    def _register_factory(
+        self,
+        policy: PolicyFactory,
+        *,
+        name: str | None = None,
+        from_provider: bool = False,
+    ) -> str:
         descriptor = deepcopy(policy.describe())
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
         key = descriptor.id
+        existing = self._factories.get(key)
+        if existing is not None:
+            same_factory = existing is policy or existing == policy
+            same_provider_artifact = (
+                from_provider
+                and type(existing) is type(policy)
+                and bool(descriptor.artifacts)
+                and self._descriptors[key].artifacts == descriptor.artifacts
+            )
+            if not (same_factory or same_provider_artifact):
+                existing_name = self._descriptors[key].name
+                raise ValueError(
+                    f"Policy {descriptor.name!r} shares Policy ID {key[:10]} with "
+                    f"already-registered {existing_name!r}; PolicyDescriptor.id hashes "
+                    "(provider, runner, artifacts, config, contract_version) rather than "
+                    "name or alias. Distinguish distinct factories via artifacts, config, "
+                    "or runner."
+                )
         name = name if name is not None else descriptor.alias
         if name is not None:
             if name in self.aliases and self.aliases[name] != key:
@@ -232,7 +271,7 @@ class PolicyRegistry:
                     try:
                         for policy in discover(None):
                             try:
-                                self.register(policy)
+                                self._register_factory(policy, from_provider=True)
                             except (ImportError, OSError, ValueError) as exc:
                                 # One unusable entry must not hide later policies.
                                 self.discovery_errors.append(f"{name}: {exc}")
@@ -246,7 +285,7 @@ class PolicyRegistry:
                     f"Policy provider {source.provider!r} has no discovery method."
                 )
             for policy in discover(source.config):
-                self.register(policy)
+                self._register_factory(policy, from_provider=True)
 
     def _provider(self, name: str) -> PolicyProvider:
         provider = self.providers.get(name)
