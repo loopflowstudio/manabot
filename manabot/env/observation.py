@@ -21,7 +21,7 @@ before writing, so every buffer is derived from the space the caller supplies,
 never a native default.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, ItemsView, KeysView, ValuesView
 import warnings
 
@@ -233,6 +233,20 @@ class ObservationSpace(gym.spaces.Space):
             }
         )
 
+    def __reduce__(self) -> tuple[type, tuple[ObservationConfig]]:
+        return ObservationSpace, (self.config,)
+
+    def __getattr__(self, name: str) -> int | tuple[int, ...]:
+        shortcut = ENCODER_SHORTCUTS.get(name)
+        if shortcut is None or not {"config", "shapes"} <= self.__dict__.keys():
+            raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
+        warnings.warn(
+            f"ObservationSpace.{name} is deprecated and removed in {REMOVAL_RELEASE}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return shortcut(self)
+
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed dense buffers for this space, with `leading_dims` before each shape.
 
@@ -290,6 +304,31 @@ class ObservationSpace(gym.spaces.Space):
             and self.keys() == other.keys()
             and all(space == other[name] for name, space in self.items())
         )
+
+
+# ObservationEncoder shortcuts removed in 0.3.0.
+ENCODER_SHORTCUTS: dict[str, Callable[[ObservationSpace], int | tuple[int, ...]]] = {
+    "max_actions": lambda s: s.config.max_actions,
+    "cards_per_player": lambda s: s.config.max_cards_per_player,
+    "perms_per_player": lambda s: s.config.max_permanents_per_player,
+    "max_events": lambda s: s.config.max_events,
+    "max_focus_objects": lambda s: s.config.max_focus_objects,
+    "max_stack_objects": lambda s: s.config.max_stack_objects if s.one_token else 0,
+    "player_dim": lambda s: s.shapes["agent_player"][-1],
+    "card_dim": lambda s: s.shapes["agent_cards"][-1],
+    "permanent_dim": lambda s: s.shapes["agent_permanents"][-1],
+    "action_dim": lambda s: s.shapes["actions"][-1],
+    "event_dim": lambda s: s.shapes["events"][-1],
+    "relation_dim": lambda s: s.shapes["relations"][-1],
+    "name_dim": lambda s: s.shapes["name_candidates"][-1],
+    "library_shape": lambda _: tuple(V11_LAYOUT["known_library"]["shape"]),
+    "num_phases": lambda _: len(PhaseEnum.__members__),
+    "num_steps": lambda _: len(StepEnum.__members__),
+    "num_zones": lambda _: len(ZoneEnum.__members__),
+    "num_actions": lambda _: len(ActionEnum.__members__),
+    "num_event_types": lambda _: len(EventTypeEnum.__members__),
+    "num_event_entity_kinds": lambda _: len(EventEntityKindEnum.__members__),
+}
 
 
 def allocate_vector_buffers(
