@@ -4,7 +4,7 @@
    * toggle sits in the stop bar's row (`Board`), so a folded strip costs the
    * board no height. Where a chooser's value was recorded it is a point on that
    * chooser's line; turns are ruled and numbered. With an analysis the strip is
-   * a chart: taller, a 0–100 axis with gridlines, and hovering names the
+   * a chart: taller, a 0–100% axis with gridlines, and hovering names the
    * nearest point (its turn, where it was, its score). In a recording the open strip is the
    * recording's one navigable line (`onjump`): a slider over it, so a click,
    * a drag or the arrow keys move to a position. Live play has no past
@@ -56,7 +56,7 @@
     hover = { mark, left: (mark.at / span) * 100 };
   }
   const readout = (mark: StripMark): string => scale !== null
-    ? `${mark.label} · ${Math.round(mark.value! * 100)}`
+    ? `${mark.label} · ${Math.round(mark.value! * 100)}%`
     : `${mark.label} · ${mark.value!.toFixed(2)}`;
 </script>
 
@@ -67,7 +67,7 @@
   <div class="plot" class:chart={scale !== null}>
   {#if scale !== null}
     <div class="axis type-caption text-ink-3" aria-hidden="true" style:height={`${HEIGHT}px`}>
-      {#each [1, 0.5, 0] as tick (tick)}<span style:top={`${y(tick)}px`}>{tick * 100}</span>{/each}
+      {#each [1, 0.5, 0] as tick (tick)}<span style:top={`${y(tick)}px`}>{tick * 100}%</span>{/each}
     </div>
   {/if}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -116,7 +116,7 @@
   .lane:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
   .plot { display: flex; gap: 6px; }
   .plot > .lane { flex: 1; min-width: 0; }
-  .axis { position: relative; width: 22px; flex: none; }
+  .axis { position: relative; width: 34px; flex: none; }
   .axis span { position: absolute; right: 0; transform: translateY(-50%); font-variant-numeric: tabular-nums; line-height: 1; }
   .line { display: block; width: 100%; background: var(--bg-field); border-radius: var(--radius-sm); }
   .grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: .7; }
@@ -125,7 +125,7 @@
   .readout { position: absolute; bottom: calc(100% + 4px); transform: translateX(-6px); margin: 0; padding: 2px 8px; white-space: nowrap; pointer-events: none;
     background: var(--bg-surface, var(--bg-field)); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); z-index: 2; }
   .readout.flip { transform: translateX(calc(-100% + 6px)); }
-  .turns.chart { margin-left: 28px; }
+  .turns.chart { margin-left: 40px; }
   /* The slider is the line's input: invisible, the full lane, a hairline thumb so
      a click lands on the position drawn under it. */
   .seek { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }

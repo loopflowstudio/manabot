@@ -138,7 +138,7 @@
   const analysisScale = $derived.by(() => {
     const name = scoreName(analysis?.decisions[0]?.semantic ?? null);
     if (!analysis || !name) return null;
-    return `${analysisName}'s ${name.toLowerCase()} from your seat · ${analysis.decisions.length} of ${analysis.total} decisions`;
+    return `${analysisName}'s ${name.toLowerCase()} (%) from your seat · ${analysis.decisions.length} of ${analysis.total} decisions`;
   });
   const analysedHere = $derived(current?.kind === 'choice' && current.event !== undefined ? analysed.get(current.event) ?? null : null);
   const evidence = $derived(!branched && current?.decision && recorded
