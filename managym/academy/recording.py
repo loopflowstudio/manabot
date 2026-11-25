@@ -187,14 +187,25 @@ def record_of(attempt: RetainedAttempt) -> GameRecord:
     )
 
 
+# What re-executing a played game raises where this build cannot: a row
+# without the inputs, another world or card set, a refused step.
+REEXECUTION_ERRORS = (KeyError, TypeError, ValueError, managym.AgentError)
+
+
+def acting_seat(event: dict[str, Any], human_seat: int) -> int:
+    """The native seat that took a stored step."""
+    return human_seat if event["actor"] == "hero" else 1 - human_seat
+
+
 def step_matches(
     observation: managym.Observation, event: dict[str, Any], human_seat: int
 ) -> bool:
     """Whether a re-executed position is the stored step's: the same seat acts
     and the stored action has the stored description. A cheap check for walks
-    that read no boards (analysis, numbers); `ReplayedViews` checks boards."""
-    actor = human_seat if event["actor"] == "hero" else 1 - human_seat
-    if observation.game_over or int(observation.agent.player_index) != actor:
+    that read no boards (analysis, numbers); `ReplayedViews` also checks boards."""
+    if observation.game_over or int(observation.agent.player_index) != acting_seat(
+        event, human_seat
+    ):
         return False
     actions = academy_actions(observation, human_seat)
     return (
@@ -237,7 +248,7 @@ class ReplayedViews:
         self._lock = RLock()
         try:
             self._walker = walk(record_of(attempt))
-        except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+        except REEXECUTION_ERRORS as error:
             self._diverge(type(error).__name__)
         else:
             self._decisions = iter(self._walker)
@@ -270,25 +281,21 @@ class ReplayedViews:
                 return False
             event = self.events[index]
             observation = self._walker.observation
-            actor = self.human_seat if event["actor"] == "hero" else 1 - self.human_seat
+            actor = acting_seat(event, self.human_seat)
             if observation.game_over or int(observation.agent.player_index) != actor:
                 return self._diverge("another player acts")
             acting = decision_surface_view(env, actor)
             if acting != event["observation"]:
                 return self._diverge("the board differs")
+            # The board before this step is verified whatever its action does.
             self._keep(acting if actor == self.human_seat else None, acting, env)
-            actions = academy_actions(observation, self.human_seat)
-            action = event["action"]
-            if (
-                not 0 <= action < len(actions)
-                or actions[action]["description"] != event["action_description"]
-            ):
+            if not step_matches(observation, event, self.human_seat):
                 return self._diverge("the action differs")
             if next(self._decisions, None) is None:
                 stop = self._walker.stop
                 return self._diverge(stop.reason if stop and stop.reason else "stopped")
             return True
-        except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+        except REEXECUTION_ERRORS as error:
             # Native errors may name private cards: keep only the kind.
             return self._diverge(type(error).__name__)
 

@@ -341,16 +341,16 @@
                     <span class="gutter" aria-hidden="true" title={at === 0 && turn.owner ? `Turn ${turn.turn ?? ''}, ${turn.owner}` : undefined}>{at === 0 ? turn.turn ?? '·' : ''}</span>
                     <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
                     <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
-                    {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}
+                    {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}{@const same = mark.agreed === mark.of}
                       <span class="reading">
-                        <span class="mark type-caption" data-testid="move-mark" data-same={mark.same} data-agreed={mark.agreed} data-of={mark.of}>{markText(mark)}</span>
+                        <span class="mark type-caption" data-testid="move-mark" data-same={same} data-agreed={mark.agreed} data-of={mark.of}>{markText(mark)}</span>
                         <svg class="track" viewBox="0 0 32 8" aria-hidden="true" data-testid="move-track">
                           <line x1="0" x2="32" y1="4" y2="4" />
                           {#if mark.its !== null}<circle class="its" cx={3 + mark.its * 26} cy="4" r="2.5" />{/if}
                           {#if mark.yours !== null}<circle class="yours" cx={3 + mark.yours * 26} cy="4" r="1.75" />{/if}
                         </svg>
                       </span>
-                      <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
+                      <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
                     {/if}
                     {#if shownMoves.has(move.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
                   </button>

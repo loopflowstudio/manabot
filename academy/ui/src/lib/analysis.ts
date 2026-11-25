@@ -32,10 +32,12 @@ export interface Analysis {
   decisions: AnalysedDecision[];
 }
 
+/** A policy that may read a game, by registered id. */
+export interface AnalysisPolicy { sha256: string; name: string }
+
 /** Who may analyse a game (`/analyses/policies`), read once when Review opens. */
 export interface AnalysisChoices {
-  /** Policies that may analyse this game, by registered id. */
-  policies: { sha256: string; name: string }[];
+  policies: AnalysisPolicy[];
   /** The opponent's own policy, when it may analyse the game. */
   default: string | null;
   /** Why no policy may analyse this game. */
@@ -45,9 +47,6 @@ export interface AnalysisChoices {
 }
 
 // ———————————————————————————————————————— Analysis while you play
-
-/** A policy that may read a game, by registered id. */
-export interface AnalysisPolicy { sha256: string; name: string }
 
 /**
  * The server's answer to Show analysis (`analysis_state`): whether it is
@@ -148,8 +147,6 @@ export function firstChoice(decision: AnalysedDecision): number | null {
  * decision's.
  */
 export interface DecisionMark {
-  /** Every analysed decision of the move was the policy's first choice. */
-  same: boolean;
   agreed: number;
   of: number;
   /** Scores after your choice and after the policy's first choice, 0–1. */
@@ -161,8 +158,7 @@ export interface DecisionMark {
 export function decisionMark(decision: AnalysedDecision): DecisionMark | null {
   const first = firstChoice(decision);
   if (first === null) return null;
-  const same = first === decision.played;
-  return { same, agreed: same ? 1 : 0, of: 1, yours: decision.after[decision.played] ?? null, its: decision.after[first] ?? null };
+  return { agreed: first === decision.played ? 1 : 0, of: 1, yours: decision.after[decision.played] ?? null, its: decision.after[first] ?? null };
 }
 
 /** The mark's words: "same", "differs", or "1 of 3 same" for a move whose decisions split. */
@@ -190,7 +186,7 @@ export interface KeyMoment {
 }
 
 /** Up to this many of each kind of key moment. */
-export const KEY_MOMENTS = { differs: 5, moved: 3 };
+const KEY_MOMENTS = { differs: 5, moved: 3 };
 /** Smaller differences and movements are no key moment (an untrained policy's flat 50/50). */
 const LEAST = 0.05;
 

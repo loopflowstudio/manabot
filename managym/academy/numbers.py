@@ -14,9 +14,8 @@ import math
 
 from pydantic import BaseModel, ConfigDict
 
-import managym
 from managym.academy.attempts import RetainedAttempt
-from managym.academy.recording import record_of, step_matches
+from managym.academy.recording import REEXECUTION_ERRORS, record_of, step_matches
 from managym.replay import walk
 from managym.statistics import Behaviour, BehaviourRow, Reduction, Totals, TotalsRow
 
@@ -60,7 +59,7 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     human = trace["config"].get("human_seat", 0)
     try:
         walker = walk(record_of(attempt), capture_cards=True)
-    except (KeyError, TypeError, ValueError, managym.AgentError):
+    except REEXECUTION_ERRORS:
         return None
     reduction = Reduction([Behaviour(), Totals()])
     reduction.start(walker.game.players)

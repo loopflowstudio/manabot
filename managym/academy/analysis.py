@@ -42,16 +42,18 @@ from pydantic import BaseModel, ConfigDict
 import managym
 from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import Opponent, policy_registry
-from managym.academy.recording import record_of, recorded_build, step_matches
+from managym.academy.recording import (
+    REEXECUTION_ERRORS,
+    record_of,
+    recorded_build,
+    step_matches,
+)
 from managym.academy.trace import GameConfig, academy_actions
 from managym.bots import BotPolicy, choose_bot
 from managym.experience_projection import decision_surface_view
 from managym.policy import PolicyDescriptor, PolicyRegistry, PolicyRunner
 from managym.recording import DecisionAnnotation
 from managym.replay import RecordWalker, walk
-
-# What each scored value semantic is called on the 0–100 chart.
-SCORED_SEMANTICS = {"signed_outcome": "Expected score", "win_logit": "Win chance"}
 
 
 class AnalysedDecision(BaseModel):
@@ -96,7 +98,7 @@ def open_walk(attempt: RetainedAttempt) -> RecordWalker:
     """A walk of the played game; AnalysisStop if this build cannot re-execute it."""
     try:
         return walk(record_of(attempt))
-    except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+    except REEXECUTION_ERRORS as error:
         raise AnalysisStop(f"This game cannot be re-executed here: {error}") from None
 
 

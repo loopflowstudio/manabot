@@ -339,20 +339,13 @@ export function analysedMarks(marks: readonly StripMark[], positions: readonly P
  * cast's target and payment choices are marked with the cast.
  */
 export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
-  const ids = new Set(entries.map(entry => entry.id));
-  const hero = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
   const marks = new Map<string, DecisionMark>();
-  let current: string | null = null;
-  for (const position of positions) {
-    if (ids.has(position.key)) current = position.key;
-    if (current === null || !hero.has(current) || position.kind !== 'choice' || position.event === undefined) continue;
-    const decision = decisions.get(position.event);
+  for (const [move, choice] of yourMoveChoices(entries, positions)) {
+    const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
     const mark = decision ? decisionMark(decision) : null;
     if (!mark) continue;
-    const move = marks.get(current);
-    marks.set(current, move
-      ? { ...move, same: move.same && mark.same, agreed: move.agreed + mark.agreed, of: move.of + mark.of }
-      : mark);
+    const marked = marks.get(move);
+    marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
   }
   return marks;
 }
@@ -364,15 +357,20 @@ export function moveMarks(entries: readonly GameLogEntry[], positions: readonly 
  * whether or not an analysis is open.
  */
 export function analysisShownMoves(entries: readonly GameLogEntry[], positions: readonly Position[]): Set<string> {
+  return new Set(yourMoveChoices(entries, positions).filter(([, choice]) => choice.analysis_shown).map(([move]) => move));
+}
+
+/** Each of your choice positions with the id of the move entry it belongs to: the last entry at or before it. */
+function yourMoveChoices(entries: readonly GameLogEntry[], positions: readonly Position[]): [string, Position][] {
   const ids = new Set(entries.map(entry => entry.id));
-  const hero = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
-  const shown = new Set<string>();
-  let current: string | null = null;
+  const yours = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
+  const choices: [string, Position][] = [];
+  let move: string | null = null;
   for (const position of positions) {
-    if (ids.has(position.key)) current = position.key;
-    if (current !== null && hero.has(current) && position.kind === 'choice' && position.analysis_shown) shown.add(current);
+    if (ids.has(position.key)) move = position.key;
+    if (move !== null && yours.has(move) && position.kind === 'choice') choices.push([move, position]);
   }
-  return shown;
+  return choices;
 }
 
 /** Turn starts far enough apart to number without overlap, as indices into `marks`. */

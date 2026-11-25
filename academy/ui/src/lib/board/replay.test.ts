@@ -231,8 +231,8 @@ describe('an analysis read beside your choices', () => {
     const same = { ...decision, event: 5, played: offers - 1 };
     const entries = positions.map(p => ({ id: p.key, actor: 'hero' as const, turn: 1, text: 'Move' }));
     const marks = moveMarks(entries, positions, new Map([[3, decision], [5, same]]));
-    expect(marks.get(positions[0].key)).toEqual({ same: false, agreed: 0, of: 1, yours: 1 / offers, its: (offers - 1) / offers });
-    expect(marks.get(positions[1].key)?.same).toBe(true);
+    expect(marks.get(positions[0].key)).toEqual({ agreed: 0, of: 1, yours: 1 / offers, its: (offers - 1) / offers });
+    expect(marks.get(positions[1].key)).toMatchObject({ agreed: 1, of: 1 });
   });
 
   it("counts a cast's target choice with the cast, so marks add up to the summary", () => {
@@ -246,7 +246,7 @@ describe('an analysis read beside your choices', () => {
     expect(log.map(entry => entry.id)).toEqual(['cast']);
     const marks = moveMarks(log, positions, new Map([[3, decision], [5, { ...decision, event: 5, played: offers - 1 }]]));
     const mark = marks.get('cast')!;
-    expect([mark.same, mark.agreed, mark.of]).toEqual([false, 1, 2]);
+    expect([mark.agreed, mark.of]).toEqual([1, 2]);
     expect(markText(mark)).toBe('1 of 2 same');
     expect(mark.yours).toBe(1 / offers);
   });
