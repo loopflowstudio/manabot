@@ -980,6 +980,7 @@ _KEYWORDS = (
 _TEXT_FIELDS: dict[type, dict[str, str]] = {
     managym.ObservationCharacteristics: {
         "name": "the object's alias and definition line",
+        "printed_loyalty": "printed loyalty N",
         "text_box": "Rules:",
         "power": "power/toughness",
         "toughness": "power/toughness",
@@ -996,6 +997,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
     },
     managym.Permanent: {
         "mana_value": "the battlefield form’s mana value",
+        "attacked_permanent": "attacking <defender alias>",
+        "loyalty_activated_this_turn": "activated a loyalty ability this turn",
         "characteristics": "effective name, P/T, types, keywords, cost, ward and Rules",
         "object_id": "the permanent's exact object alias",
         "owner_id": "owner",

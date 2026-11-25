@@ -2849,6 +2849,9 @@
           "power": {
             "kind": "attribute"
           },
+          "printed_loyalty": {
+            "kind": "attribute"
+          },
           "text_box": {
             "kind": "attribute"
           },
@@ -2992,6 +2995,9 @@
           "attached_to": {
             "kind": "attribute"
           },
+          "attacked_permanent": {
+            "kind": "attribute"
+          },
           "attacked_this_turn": {
             "kind": "attribute"
           },
@@ -3081,6 +3087,9 @@
             "kind": "attribute"
           },
           "keywords": {
+            "kind": "attribute"
+          },
+          "loyalty_activated_this_turn": {
             "kind": "attribute"
           },
           "mana_value": {

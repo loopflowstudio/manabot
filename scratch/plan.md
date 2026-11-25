@@ -51,6 +51,14 @@ Done:
   Lesson: a declined up-to clause made the next clause's target count as
   clause 0, so Warlord re-asked for its player. Positions never name clauses.
 
+Already red on CI at `d1ef91d814` (run 45568225341), before slices 5–6, and
+left for gate: `observability::` legacy card-row parity (four tests,
+card column 8 vs permanent column 6),
+`observation_layout::named_layout_matches_every_encoder_width`
+(agent_permanents), `content_pack_contract_covers_env_roots_siblings_and_rollout_slots`,
+`definitions::every_authored_subtype_has_a_category` and the frozen
+semantic-conformance cases.
+
 ## Passes remaining
 
 1. Slice 7 and the rest of slice 8 close the planeswalker cohort. Slice 7

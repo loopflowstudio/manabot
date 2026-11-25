@@ -2106,6 +2106,7 @@
           "minimum": 0
         },
         "loyalty_abilities_activated": {
+          "description": "Loyalty abilities this player activated (CR 606), wherever their\nsources are now.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0

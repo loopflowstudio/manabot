@@ -229,6 +229,7 @@ _OBLIGATIONS = (
     "order melded cards",
     "manifest dread",
     "assign combat damage",
+    "choose what an entering attacker attacks",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
