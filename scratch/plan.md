@@ -101,8 +101,11 @@ dense dictionary:
    - `RolloutBatch` owns `recorded: RecordedObservations` (`rows: ObservationSelection`,
      no duplicate `memory`/`memory_capacities`), `next_obs: ObservationSelection`,
      and `action_data: PackedActions` (no `.fields` dict, non-optional
-     `.selection: ObservationSelection`). `ActionRows.observation` is typed
-     `ObservationSelection`.
+     `.selection: ObservationSelection`). `ActionRows.observation` holds
+     `ObservationSelection` on rollout rows (widened to include a 1-key
+     `{"actions_valid": mask}` mapping only for `PackedActions.behavior`;
+     narrowing that seam and dropping `ObservationSpace`'s unused Gym dict
+     methods are noted in `scratch/concept-review.html` for pre-0.3.0 cleanup).
    - `TargetPracticeVector` implements `set_observation_layout` +
      `observation_rows()` via `encode_observation_batch`, so `open_collector`
      has one buffer path (`RecordedSpans` + `step_buffers`).
