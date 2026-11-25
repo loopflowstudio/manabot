@@ -932,6 +932,47 @@ pub(crate) enum ResolutionRef<'a> {
 }
 
 impl SuspendedResolution {
+    /// A simple output choice resumes an empty root frame. Other continuations
+    /// can still use their selected objects, batches and callers after payment.
+    pub(super) fn may_name_mana_source(&self, id: PermanentId, object: ObjectId) -> bool {
+        match &self.decision {
+            Decision::ManaChoice {
+                player,
+                production: ManaProduction::Output { source, .. },
+                resume: None,
+                ..
+            } => *source == Some(object) || self.frame != EffectFrame::new(*player, Vec::new()),
+            Decision::Payment(progress) => {
+                let f = &self.frame;
+                let target = Target::Permanent(id);
+                f.batch.is_some()
+                    || f.iteration.is_some()
+                    || !matches!(
+                        f.completion,
+                        FrameCompletion::Priority
+                            | FrameCompletion::Continue
+                            | FrameCompletion::TurnFaceUp(_)
+                            | FrameCompletion::Spell { .. }
+                    )
+                    || matches!(f.completion, FrameCompletion::TurnFaceUp(o) if o == object)
+                    || matches!(f.completion, FrameCompletion::Spell { object: o, attach_to } if o == object || attach_to == Some(object))
+                    || [f.source(), f.source_ref(), f.chosen, f.attached, f.grantor]
+                        .contains(&Some(object))
+                    || f.context_target == Some(target)
+                    || f.targets.iter().any(|t| t.target == target)
+                    || f.remembered.iter().any(|b| b.object == object)
+                    || [&f.selected, &f.moved, &f.created, &f.this_way]
+                        .iter()
+                        .any(|v| v.contains(&object))
+                    || f.spent.names_object(object)
+                    || progress.receipt.names_object(object)
+                    || progress.spends.is_some_and(|key| key.0 == object)
+                    || progress.counters_on_decline == Some(target)
+            }
+            _ => true,
+        }
+    }
+
     /// Walk the complete caller chain, outermost first. Projection and private
     /// inspection use this same order across both child scopes and mana costs.
     pub(crate) fn continuation(&self) -> Vec<ResolutionRef<'_>> {

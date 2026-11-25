@@ -18,6 +18,7 @@
 
 mod autotapper;
 mod help;
+mod interchangeable;
 mod preview;
 pub use preview::PaymentPreview;
 
@@ -111,6 +112,13 @@ struct ManaSource {
 }
 
 impl ManaSource {
+    fn same_payment_profile(&self, other: &Self) -> bool {
+        self.fixed == other.fixed
+            && self.abilities == other.abilities
+            && self.waterbend == other.waterbend
+            && self.keyword == other.keyword
+    }
+
     /// Whether tapping this source may pay {1} of an obligation that `taps`
     /// may pay.
     fn pays_by_tap(&self, taps: Taps) -> bool {
@@ -118,6 +126,29 @@ impl ManaSource {
             Taps::None => false,
             Taps::Keyword => self.keyword,
             Taps::Any => self.waterbend,
+        }
+    }
+}
+
+/// One representative output of a useful tap. A determined payment keeps
+/// the first members of each interchangeable class in battlefield order so
+/// two residual costs can compare counts and spend effects directly.
+#[derive(Clone, Copy)]
+struct UsefulTap<'a> {
+    source: &'a ManaSource,
+    output: &'a Mana,
+}
+
+enum PaymentTaps<'a> {
+    Determined(Vec<UsefulTap<'a>>),
+    Choose(Vec<Action>),
+}
+
+impl PaymentTaps<'_> {
+    fn offers(self) -> Vec<Action> {
+        match self {
+            Self::Determined(_) => Vec::new(),
+            Self::Choose(actions) => actions,
         }
     }
 }
@@ -354,10 +385,7 @@ impl PaymentSearch {
         for (index, source) in model.sources.iter().enumerate() {
             let equivalent = representatives.iter_mut().find(|(representative, _)| {
                 let other = &model.sources[*representative];
-                source.fixed == other.fixed
-                    && source.abilities == other.abilities
-                    && source.waterbend == other.waterbend
-                    && source.keyword == other.keyword
+                source.same_payment_profile(other)
                     && candidates.iter().all(|set| {
                         set.contains(&source.permanent) == set.contains(&other.permanent)
                     })
@@ -2294,13 +2322,15 @@ impl Game {
         let help = self.help_actions(player);
         let can_pay = self.can_pay_mana_cost(player, cost);
         if !payment.waterbends() {
-            let mut taps = self.useful_payment_taps(
+            let model = self.payment_model(player, None);
+            let taps = self.useful_payment_taps(
+                &model,
                 player,
                 cost,
                 payment.help(),
                 !actions.is_empty() || !help.is_empty() || !can_pay,
             );
-            actions.append(&mut taps);
+            actions.extend(taps.offers());
         }
         actions.extend(help);
         if can_pay {
@@ -2326,15 +2356,16 @@ impl Game {
             return self.mana_ability_actions(player, true);
         }
         let mut actions = self.mana_ability_actions(player, false);
-        if self
-            .payment_model(player, None)
+        let model = self.payment_model(player, None);
+        if model
             .sources
             .iter()
             .any(|source| source.abilities.iter().any(|a| a.automatic))
         {
-            let taps = self.useful_payment_taps(player, cost, help, !actions.is_empty());
+            let taps = self.useful_payment_taps(&model, player, cost, help, !actions.is_empty());
             actions.extend(
-                taps.into_iter()
+                taps.offers()
+                    .into_iter()
                     .filter(|a| matches!(a, Action::ActivateAbility { .. })),
             );
         }
@@ -2344,20 +2375,20 @@ impl Game {
     /// Count a permanent's best useful output once, even if it has several
     /// abilities. If all units are required there is no source decision,
     /// unless the choice of output can change the receipt or floating pool.
-    fn useful_payment_taps(
+    fn useful_payment_taps<'a>(
         &self,
+        model: &'a PaymentModel,
         player: PlayerId,
         cost: &ManaCost,
         help: Help,
         other_choice: bool,
-    ) -> Vec<Action> {
+    ) -> PaymentTaps<'a> {
         let pool = self.pooled_mana(player);
         let spendable = pool.spendable_units(cost);
         let missing = u16::from(cost.mana_value).saturating_sub(spendable);
         if missing == 0 {
-            return Vec::new();
+            return PaymentTaps::Determined(Vec::new());
         }
-        let model = self.payment_model(player, None);
         let mut obligations = vec![Obligation::mana(cost.clone())];
         obligations.extend(self.saved_obligations(player));
         let helped = help.keyworded();
@@ -2367,6 +2398,8 @@ impl Game {
             && obligations.len() == 1
             && model.payable(pool.clone(), obligations.clone(), SourcePolicy::FixedOnly);
         let mut offered_units = 0_u16;
+        let mut useful_taps = Vec::new();
+        let mut single_units = true;
         let mut output_choice = false;
         let mut abilities = Vec::new();
         let mut fixed = Vec::new();
@@ -2428,13 +2461,35 @@ impl Game {
                     });
                 }
             }
-            offered_units = offered_units.saturating_add(units);
+            if let Some(output) = first {
+                useful_taps.push(UsefulTap { source, output });
+                single_units &= units == 1;
+                offered_units = offered_units.saturating_add(units);
+            }
         }
-        if offered_units <= missing && !other_choice && !output_choice {
-            return Vec::new();
+        if !other_choice && !output_choice {
+            if offered_units <= missing {
+                return PaymentTaps::Determined(useful_taps);
+            }
+            if single_units
+                && spendable == 0
+                && !self.automatic_mana_payment(player)
+                && obligations.len() == 1
+                && !self.offers_extra_payment_taps(player)
+            {
+                if let Some(taps) = self.determined_source_counts(
+                    model,
+                    &pool,
+                    &obligations,
+                    usize::from(missing),
+                    useful_taps,
+                ) {
+                    return PaymentTaps::Determined(taps);
+                }
+            }
         }
         abilities.extend(fixed);
-        abilities
+        PaymentTaps::Choose(abilities)
     }
 
     /// Tap one offered fixed source; an announced payment then advances
@@ -2620,7 +2675,8 @@ impl Game {
             return false;
         }
         let pool = self.pooled_mana(player);
-        let mut first = None;
+        let mut remainders = Vec::new();
+        let mut first_output = None;
         for action in &space.actions {
             let Action::ChooseMode { mode, .. } = action else {
                 return false;
@@ -2645,12 +2701,52 @@ impl Game {
                 };
                 rest = next;
             }
-            if let Some((previous, owed)) = &first {
-                if !same_spend_effects(previous, output) || owed != &rest {
+            if !same_spend_effects(*first_output.get_or_insert(output), output) {
+                return false;
+            }
+            if !remainders.contains(&rest) {
+                remainders.push(rest);
+            }
+        }
+        if remainders.len() == 1 {
+            return true;
+        }
+
+        // Compare only completed payments. A residual help action, spend
+        // choice or activation outside the simple payer still needs input.
+        if payment.help() != Help::default() || self.offers_extra_payment_taps(player) {
+            return false;
+        }
+        let _scan = self.payment_scan();
+        let model = self.payment_model(player, None);
+        if model
+            .sources
+            .iter()
+            .any(|s| s.abilities.iter().any(|a| !a.automatic))
+        {
+            return false;
+        }
+        let mut first: Option<Vec<UsefulTap>> = None;
+        for rest in remainders {
+            if pool.spendable_units(&rest) != 0 || !self.can_pay_mana_cost(player, &rest) {
+                return false;
+            }
+            let PaymentTaps::Determined(taps) =
+                self.useful_payment_taps(&model, player, &rest, Help::default(), false)
+            else {
+                return false;
+            };
+            if let Some(previous) = &first {
+                if previous.len() != taps.len()
+                    || !previous.iter().zip(taps).all(|(a, b)| {
+                        a.source.permanent == b.source.permanent
+                            && same_spend_effects(a.output, b.output)
+                    })
+                {
                     return false;
                 }
             } else {
-                first = Some((output.clone(), rest));
+                first = Some(taps);
             }
         }
         true

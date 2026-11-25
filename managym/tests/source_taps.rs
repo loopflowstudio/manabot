@@ -110,20 +110,41 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .iter()
         .any(|action| matches!(action, Action::PayCost { .. })));
 
-    // Tap the Forest: two Mountains are still needed, and which one stays
-    // is still a choice. The Forest is gone from the offers.
+    // Choosing the Forest leaves only interchangeable Mountains to pay.
     let forest = offers.iter().find(|(_, land)| land == "Forest").unwrap().0;
     by_hand.step(forest).unwrap();
-    let offers = taps(&by_hand);
-    assert_eq!(offers.len(), 3);
-    assert!(offers.iter().all(|(_, land)| land == "Mountain"));
-    by_hand.step(offers[0].0).unwrap();
-    assert_eq!(taps(&by_hand).len(), 2);
-    // The last needed tap completes the payment without a further decision.
-    let last = taps(&by_hand)[0].0;
-    by_hand.step(last).unwrap();
     assert!(by_hand.pending_choice.is_none());
     assert_eq!(untapped(&by_hand), ["Mountain"]);
+
+    // With two Mountains and two Forests, tapping a Forest leaves {1}{R} and
+    // tapping a Mountain leaves {1}, keeping the Mountain-vs-Forest choice
+    // until the final tap finishes the payment.
+    let mut multi_step = game(&["Mountain", "Mountain", "Forest", "Forest"]);
+    cast(&mut multi_step);
+    let forest = taps(&multi_step)
+        .into_iter()
+        .find(|(_, land)| land == "Forest")
+        .unwrap()
+        .0;
+    multi_step.step(forest).unwrap();
+    let offers = taps(&multi_step);
+    assert_eq!(offers.len(), 3);
+    let mountain = offers
+        .iter()
+        .find(|(_, land)| land == "Mountain")
+        .unwrap()
+        .0;
+    multi_step.step(mountain).unwrap();
+    let offers = taps(&multi_step);
+    assert_eq!(offers.len(), 2);
+    let mountain = offers
+        .iter()
+        .find(|(_, land)| land == "Mountain")
+        .unwrap()
+        .0;
+    multi_step.step(mountain).unwrap();
+    assert!(multi_step.pending_choice.is_none());
+    assert_eq!(untapped(&multi_step), ["Forest"]);
 
     // PayCost at once is the automatic payer: Mountains first, in order.
     let mut automatic = game(&lands);
@@ -191,10 +212,9 @@ fn a_spare_source_keeps_every_payment_offer_including_the_dual() {
 }
 
 #[test]
-fn automatic_payment_with_a_dual_leaves_a_surplus_plains_untapped() {
+fn required_dual_pays_with_one_of_two_interchangeable_plains() {
     let mut game = payment_position("Badgermole Cub", &["Plains", "Plains", "Kyoshi Village"]);
     cast(&mut game);
-    pay_cost(&mut game);
     assert!(game.pending_choice.is_none());
     assert_eq!(game.state.players[0].mana_pool.total(), 0);
     assert_eq!(
@@ -205,6 +225,138 @@ fn automatic_payment_with_a_dual_leaves_a_surplus_plains_untapped() {
         1
     );
     assert!(!untapped(&game).contains(&"Kyoshi Village".to_string()));
+}
+
+#[test]
+fn interchangeable_single_unit_sources_pay_and_leave_the_spare_untapped() {
+    for (spell, land, count, owed) in [
+        ("Gray Ogre", "Mountain", 4, 3),
+        ("Leonin Skyhunter", "Plains", 3, 2),
+        ("Firebrand Archer", "Gruul Guildgate", 3, 2),
+    ] {
+        let mut game = payment_position(spell, &vec![land; count]);
+        cast(&mut game);
+        assert!(game.pending_choice.is_none(), "{spell}");
+        assert_eq!(untapped(&game).iter().filter(|s| *s == land).count(), 1);
+        assert_eq!(spell_receipt(&game, spell).total(), owed);
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+    }
+}
+
+#[test]
+fn choosing_village_keeps_two_plains_and_skips_the_color_choice() {
+    let mut game = payment_position(
+        "Youthful Knight",
+        &["Kyoshi Village", "Plains", "Plains", "Plains"],
+    );
+    cast(&mut game);
+    assert_eq!(
+        payment_labels(&game),
+        [
+            "Tap Kyoshi Village for {G}/{W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "PayCost",
+        ]
+    );
+    assert!(game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .any(|action| matches!(action, Action::PayCost { .. })));
+    game.step(0).unwrap();
+    assert!(game.pending_choice.is_none());
+    assert_eq!(untapped(&game).iter().filter(|s| *s == "Plains").count(), 2);
+    assert!(!untapped(&game).iter().any(|s| s == "Kyoshi Village"));
+    assert_eq!(spell_receipt(&game, "Youthful Knight").total(), 2);
+    assert_eq!(game.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn a_targeted_plains_keeps_its_tap_offer_in_response() {
+    use managym::state::game_object::Target;
+
+    let player = PlayerId(0);
+    let deck = [
+        ("Plains", 24),
+        ("Imprisoned in the Moon", 8),
+        ("Teferi's Protection", 8),
+    ];
+    let mut game = position(&["Plains"; 4], &deck, "Imprisoned in the Moon");
+    game.skip_trivial = false;
+    game.scenario_force_card_in_hand(player, "Teferi's Protection")
+        .unwrap();
+    game.state.players[0].mana_pool = Mana::parse("2U").into();
+    game.scenario_refresh_priority().unwrap();
+    let aura = game.action_space().unwrap().actions.iter().position(|action|
+        matches!(action, Action::CastSpell { object, .. } if game.state[*object].name == "Imprisoned in the Moon")
+    ).unwrap();
+    game.step(aura).unwrap();
+    let target = Target::Permanent(PermanentId(0));
+    let index = game
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target))
+        .unwrap();
+    game.step(index).unwrap();
+    assert_eq!(
+        game.state.stack_objects.last().unwrap().targets(),
+        &[target]
+    );
+    game.skip_trivial = true;
+    cast(&mut game);
+    assert_eq!(taps(&game).len(), 4);
+}
+
+#[test]
+fn enchanted_and_animated_plains_keep_the_source_choice() {
+    use managym::state::effect::{Affected, ContinuousEffect, EffectDuration, Modification};
+    let player = PlayerId(0);
+    let deck = [
+        ("Plains", 24),
+        ("Imprisoned in the Moon", 8),
+        ("Youthful Knight", 8),
+    ];
+    let base = position(&["Plains"; 3], &deck, "Youthful Knight");
+    let plains = base.state.permanents[PermanentId(0)].as_ref().unwrap();
+    let mut enchanted = base.clone();
+    let aura = enchanted
+        .scenario_force_battlefield(player, "Imprisoned in the Moon", true)
+        .unwrap();
+    enchanted.state.permanents[aura]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(plains.object);
+    enchanted.scenario_refresh_priority().unwrap();
+    cast(&mut enchanted);
+    assert_eq!(payment_labels(&enchanted).len(), 4);
+    assert!(payment_labels(&enchanted).contains(&"Tap Plains for {C}".into()));
+
+    let mut animated = base.clone();
+    for modification in [
+        Modification::BecomeCreature,
+        Modification::SetBasePt {
+            power: Some(2),
+            toughness: Some(2),
+        },
+    ] {
+        animated.state.effects.push(ContinuousEffect {
+            timestamp: plains.timestamp,
+            source: None,
+            controller: player,
+            affected: Affected::Object(plains.object),
+            modification,
+            duration: EffectDuration::EndOfTurn,
+            source_object: None,
+        });
+    }
+    animated.scenario_refresh_priority().unwrap();
+    cast(&mut animated);
+    assert_eq!(taps(&animated).len(), 3);
 }
 
 #[test]
@@ -369,6 +521,11 @@ fn fourteen_lands_with_granted_color_choices_stay_under_the_policy_action_capaci
         ("Firebrand Archer", 8),
     ];
     let mut game = position(&["Forest"; 14], &deck, "Firebrand Archer");
+    // One Forest has its own state, so choosing which lands to keep matters.
+    game.state.permanents[PermanentId(0)]
+        .as_mut()
+        .unwrap()
+        .change_counters(managym::state::permanent::CounterKind::PlusOnePlusOne, 1);
     game.scenario_force_battlefield(PlayerId(0), "Great Divide Guide", false)
         .unwrap();
     game.scenario_refresh_priority().unwrap();
@@ -854,7 +1011,7 @@ fn receipt_names_the_source_of_each_unit_under_manual_auto_and_floated_payment()
         ("Mountain".to_string(), RED),
     ];
 
-    // Manual: the Forest and two Mountains, tapped one at a time.
+    // Choosing the Forest determines the two remaining Mountain taps.
     let mut by_hand = game(&lands);
     cast(&mut by_hand);
     let forest = taps(&by_hand)

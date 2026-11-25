@@ -69,6 +69,14 @@ modal skip, exact resolution payments (Ward {2} with Village + Sol Ring still
 offers the Village). 25 `source_taps` tests passed in debug; fourteen Forests
 under Great Divide Guide gave 29 payment actions for Firebrand Archer.
 
+Pass 2: interchangeable-source classification (`managym/src/flow/mana/interchangeable.rs`,
+plus reference checks in `decision.rs`, `payment.rs`, `state/src/payment.rs`),
+single-unit determined-source skip in `useful_payment_taps`, and
+determined-completion color-modal skip in `equivalent_mana_choices`. All 30
+`source_taps` tests pass in debug, including Sol Ring and Anthem guards,
+identical basics/Guildgates, `Plains × 2 + Kyoshi Village` for `{1}{G}`,
+`Village + 3 Plains` for `{1}{W}`, and targeted/enchanted/animated Plains.
+
 ## Remaining determinism rule
 
 ### Pass 2 — interchangeable sources (steer `5d5904ae` (b))
@@ -201,30 +209,10 @@ Drafted in place before implementation (recheck wording against final implementa
 ## Passes
 
 1. Done — `72a12fa277` (see Built).
-2. **Next — interchangeable sources and determined-completion modal skip**
-   (rule above). Files: `managym/src/flow/mana.rs`, `payment.rs`,
-   `decision.rs`, `managym/tests/source_taps.rs`.
-   - Guards already in `source_taps.rs` that must stay green:
-     `required_sol_ring_can_leave_a_mountain_or_floating_mana` (Gray Ogre,
-     Sol Ring + 2 Mountains: Ring is mandatory, Mountains are the one optional
-     class, yet tapping both Mountains first floats `{C}` — why rule 3 requires
-     one unit per useful tap from *every* participating source) and
-     `two_forced_completions_tapping_different_lands_keep_the_color_modal`
-     (Anthem of Champions `{G}{W}`, Village + Forest + Plains: green forces
-     Plains, white forces Forest — why modal completions compare tap counts
-     per class, not in total).
-   - New proofs: `Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`,
-     `3 Guildgates` for `{1}{R}` skip; `Plains + Plains + Kyoshi Village` for
-     `{1}{G}` skips and leaves 1 Plains untapped; a land targeted on the stack
-     or an enchanted/animated Plains restores the prompt; `Village + 3 Plains`
-     for `{1}{W}` stops with 4 source offers + `PayCost`, and tapping the
-     Village there skips its color modal.
-   - Update `per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes`
-     (Forest tapped with 3 identical Mountains left now completes; move the
-     multi-step coverage to `Mountain × 2, Forest × 2` if needed).
-3. **Records & Academy tests.**
+2. Done — interchangeable sources and determined-completion modal skip (see Built).
+3. **Next — Records & Academy tests.**
    - `tests/academy/test_dual_land_payment.py` (exact-cost two-drop with Village + Plains skips; Village + 3 Plains shows `"Tap Kyoshi Village for {G}/{W}"`, three `"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`).
-   - `managym/README.md` "Manual mana sources" section.
+   - Recheck `managym/README.md` ("Manual mana sources") and `docs/academy.md`.
    - `scripts/engine_budget.py record --reason`, `scripts/refresh_academy_fixtures.py` and state-hash pin only if they move, `tests/model/test_pinned_pilot.py` checked (and declared only if it fails).
 
 ## Tests

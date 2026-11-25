@@ -10,6 +10,8 @@ first:
     why: What makes a mana tap simple.
   - path: managym/src/flow/mana.rs
     why: Source offers, color equivalence, and automatic tap selection.
+  - path: managym/src/flow/mana/interchangeable.rs
+    why: Game-indistinguishable source classes and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
     why: How new mana commits to an announced cost.
   - path: managym/src/flow/decision.rs
