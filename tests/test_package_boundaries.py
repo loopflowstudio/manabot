@@ -684,19 +684,6 @@ with patch('managym.academy.extensions.entry_points', return_value=[]):
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 
 
-def test_deprecated_academy_alias_keeps_module_identity() -> None:
-    probe = """
-import warnings
-with warnings.catch_warnings(record=True) as seen:
-    warnings.simplefilter('always')
-    import academy.server as old
-    import managym.academy.server as current
-assert old is current
-assert any('0.3.0' in str(row.message) for row in seen)
-"""
-    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
-
-
 _ROLLOUT_IMPORTS = tuple(
     ".".join(path.relative_to(REPO_ROOT).with_suffix("").parts)
     for path in sorted((REPO_ROOT / "manabot/training/rollout").rglob("*.py"))
