@@ -1386,6 +1386,9 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
+        if self.state.delayed_triggers.is_empty() {
+            return;
+        }
         let dead_creature = match event {
             GameEvent::CardMoved {
                 from: Some(ZoneType::Battlefield),

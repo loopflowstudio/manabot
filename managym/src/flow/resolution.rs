@@ -260,10 +260,7 @@ impl Game {
                     _ => None,
                 };
                 let object = match of.as_ref() {
-                    ObjectSelector::Target(_) => frame
-                        .active_targets()
-                        .next()
-                        .and_then(|t| stack_spell(t.target)),
+                    ObjectSelector::Target(_) => frame.primary_target().and_then(stack_spell),
                     ObjectSelector::Triggering => frame.context.and_then(stack_spell),
                     _ => self.select(of, frame).first().copied(),
                 };

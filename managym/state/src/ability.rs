@@ -1981,9 +1981,10 @@ pub enum Effect {
         modes: Vec<Vec<Effect>>,
     },
     /// "Counter [the spell or ability] unless its controller pays [cost]."
-    /// It is the frame's primary target: either a chosen `TargetSpec::Spell`
-    /// target (It'll Quench Ya!) or the trigger-context spell or ability
-    /// (ward).
+    /// Acts on the frame's chosen `TargetSpec::Spell` target (It'll Quench
+    /// Ya!) or, when no targets were declared, the trigger-context spell or
+    /// ability (ward). No triggered ability with an optional spell target may
+    /// use it.
     /// Reports no target spec of its own — targeting is declared on the
     /// card (`PrintedCharacteristics::targeting`) when a choice is required.
     CounterUnlessPays {
@@ -2320,6 +2321,7 @@ impl Effect {
             || self
                 .find_selector(|s| s.reads(read).then_some(()))
                 .is_some()
+            || self.amount().is_some_and(|amount| amount.reads(read))
         {
             return true;
         }
@@ -2333,9 +2335,6 @@ impl Effect {
             }
             _ => false,
         };
-        if self.amount().is_some_and(|amount| amount.reads(read)) {
-            return true;
-        }
         match self {
             Self::MayExileTriggeringWithSource
             | Self::CopyTriggeringObject

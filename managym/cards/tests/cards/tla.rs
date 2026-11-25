@@ -13408,43 +13408,35 @@ fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_
 /// untouched, exiles nothing, and makes no Clue.
 #[test]
 fn raven_eagle_without_a_chosen_target_leaves_itself_alone() {
-    // Both graveyards empty: neither trigger offers a target.
-    let mut s = five_color_setup(&["Raven Eagle"]);
-    enter_battlefield(&mut s, "Raven Eagle");
-    settle(&mut s);
-    let eagle = permanent_named(&s, "Raven Eagle");
-    let eagle_card = card_of(&s, eagle);
-    assert_eq!(zone_of(&s, eagle_card), Some(ZoneType::Battlefield));
-    attack_and_settle(&mut s, &[eagle], None);
-    assert_eq!(zone_of(&s, eagle_card), Some(ZoneType::Battlefield));
-    assert_eq!(
-        s.battlefield_permanents_named(0, "Raven Eagle"),
-        vec![eagle]
-    );
-    s.assert_zone_size(0, ZoneType::Exile, 0);
-    s.assert_zone_size(1, ZoneType::Exile, 0);
-    assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
-
-    // Legal creature card in a graveyard, declined on both triggers.
-    let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre"]);
-    let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
-    enter_battlefield(&mut s, "Raven Eagle");
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    settle(&mut s);
-    let eagle = permanent_named(&s, "Raven Eagle");
-    let eagle_card = card_of(&s, eagle);
-    clear_summoning_sickness(&mut s, eagle);
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(&mut s, eagle);
-    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-    assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    settle(&mut s);
-    assert_eq!(zone_of(&s, eagle_card), Some(ZoneType::Battlefield));
-    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
-    s.assert_zone_size(0, ZoneType::Exile, 0);
-    s.assert_zone_size(1, ZoneType::Exile, 0);
-    assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+    for with_graveyard_card in [false, true] {
+        let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre"]);
+        let ogre = with_graveyard_card.then(|| plant_in_graveyard(&mut s, 1, "Gray Ogre"));
+        enter_battlefield(&mut s, "Raven Eagle");
+        if with_graveyard_card {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        settle(&mut s);
+        let eagle = permanent_named(&s, "Raven Eagle");
+        clear_summoning_sickness(&mut s, eagle);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, eagle);
+        if with_graveyard_card {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Raven Eagle"),
+            vec![eagle]
+        );
+        if let Some(ogre) = ogre {
+            assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+        }
+        s.assert_zone_size(0, ZoneType::Exile, 0);
+        s.assert_zone_size(1, ZoneType::Exile, 0);
+        assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+    }
 }
 
 /// From the graveyard, your second draw offers {B} to return it with a

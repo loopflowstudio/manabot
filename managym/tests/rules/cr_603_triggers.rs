@@ -453,7 +453,6 @@ fn attack_trigger_with_no_chosen_target_does_not_fall_back_to_attacker() {
         }
         settle(&mut s);
 
-        assert_eq!(zone_of(&s, giant_card), Some(ZoneType::Battlefield));
         assert_eq!(s.battlefield_permanents_named(0, "Hill Giant"), vec![giant]);
         s.assert_life(0, 20);
         s.assert_life(1, 20);

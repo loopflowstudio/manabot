@@ -62,19 +62,17 @@ fn cityscape_leveler_cast_trigger_destroys_and_pays_the_controller_a_tapped_powe
 
 #[test]
 fn cityscape_leveler_attack_trigger_declined_leaves_itself_and_makes_no_powerstone() {
-    use crate::support::{game::clear_summoning_sickness, inspect::card_of, play::settle};
+    use crate::support::{game::clear_summoning_sickness, play::settle};
     use managym::agent::action::ActionType;
 
     let mut s = five_color_setup(&["Cityscape Leveler"]);
     let leveler = s.force_permanent_on_battlefield(0, "Cityscape Leveler");
-    let leveler_card = card_of(&s, leveler);
     clear_summoning_sickness(&mut s, leveler);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, leveler);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     settle(&mut s);
-    assert_eq!(zone_of(&s, leveler_card), Some(ZoneType::Battlefield));
     assert_eq!(
         s.battlefield_permanents_named(0, "Cityscape Leveler"),
         vec![leveler]
