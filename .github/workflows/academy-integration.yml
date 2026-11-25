@@ -66,7 +66,8 @@ jobs:
             tests/academy/test_policy_search_play.py tests/academy/test_search_baseline.py \
             tests/academy/test_checkpoint_catalog.py \
             tests/academy/test_configured_launch.py \
-            tests/academy/test_packaged_launcher.py
+            tests/academy/test_packaged_launcher.py \
+            tests/academy/test_game_records.py tests/academy/test_card_art.py
 
       - name: Frozen-policy search fixtures
         run: |

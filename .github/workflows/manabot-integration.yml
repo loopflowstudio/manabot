@@ -106,7 +106,8 @@ jobs:
             tests/verify/test_choice_corpus.py tests/semantic/test_ward_life_input.py \
             tests/verify/test_decision_memory_probe.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
-            tests/verify/test_native_observation_contract.py
+            tests/verify/test_native_observation_contract.py \
+            tests/training/test_game_errors.py tests/training/test_training_game_journals.py
 
       - name: Two-seat, Elemental and Etude evaluation integration
         if: matrix.group == 'evaluation'
