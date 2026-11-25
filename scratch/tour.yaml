@@ -1,13 +1,15 @@
-at: 67edf49fb17ad6b2313d94f7ae264624de3e3b5c
+at: abf4f1c93ba991fd1fcbe9b0a725c2a6bf48c764
 first:
   - path: docs/engine.md
-    why: Public turn order, observation JSON and chooser policies
+    why: Rules order, named turn fields and historical integer decoding
   - path: docs/observation-and-model.md
     why: Where to read characteristics and object identity
+  - path: docs/academy.md
+    why: Public fields for selecting a recorded game
   - path: managym/__init__.pyi
-    why: Python signatures and observation types after removal
+    why: Engine signatures and observation types after removal
   - path: managym/src/flow/turn.rs
-    why: Rules order, public names and historical integer codes
+    why: Step order, public names and historical integer codes
   - path: managym/src/agent/observation_json.rs
     why: Canonical writer, decoder and frozen capture checks
   - path: managym/src/agent/observation_encoder.rs
@@ -15,15 +17,23 @@ first:
   - path: managym/src/agent/decision_memory.rs
     why: Committed decisions use the same stored indices
   - path: managym/src/python/bindings.rs
-    why: Observation accessors and game setup at the Python boundary
+    why: Observation accessors and game setup
   - path: managym/src/python/vector_env_bindings.rs
-    why: Scalar and vector environments share seat policy validation
+    why: Seat policy validation
   - path: managym/recording.py
-    why: Current constructor and historical policy reader
-  - path: tests/env/test_captured_vector_bookkeeping.py
-    why: Replay of both current and historical policy records
-  - path: tests/verify/test_native_observation_contract.py
-    why: Modified wire keywords reach card and permanent tensors
+    why: Current recording API and historical policy reader
+  - path: managym/academy/launch.py
+    why: Public game listings retain their original replay records
+  - path: scripts/release/prepare.py
+    why: Stage Academy inside the engine package
+  - path: scripts/release/validate.py
+    why: Both engine archives enforce the package boundary
+  - path: conformance/authored_match_parity.py
+    why: Verify current viewer hashes against the fixed command tape
   - path: tests/verify/test_opponent_decision_memory.py
-    why: Live double strike through cleanup and policy admission
-hide: []
+    why: Double strike through cleanup and policy admission
+  - path: tests/infra/test_release.py
+    why: Detect the old shim in either release archive
+hide:
+  - path: conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-named-turns.json
+    why: Generated parity receipt verified across all 174 commands

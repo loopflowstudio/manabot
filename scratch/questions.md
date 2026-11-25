@@ -44,3 +44,10 @@ Ideas outside this Task:
   Erroring on our own `DeprecationWarning`s would catch stragglers before the
   next removal release.
 - MTG-294 is superseded by this Task and can be closed when it merges.
+
+Pass 3 corrections:
+
+- Test the top-level import in the installed distribution. The checkout retains the frontend under `academy/ui` and Python treats that directory tree as a namespace.
+- Hosted play copied `academy/__init__.py` explicitly in its Dockerfile. Remove that copy with the shim.
+- The historical spelling in `learning_schema.json` is part of `LearningSchema.schema_hash`; preserve the schema bytes.
+- Comparing the authored-match parity receipt to a fresh run showed exactly 350 changed viewer-state hashes and 350 changed semantic-observation hashes on each of live, headless and replay, plus source identity. The 174 Commands, all state witnesses, ordered events, presentation and stale rejection matched. Follow the existing separate-receipt convention for this wire change.

@@ -21,16 +21,11 @@ rules order; `Observation.toJSON()` writes step and phase names.
 
 - Pass 1 (0605ac68f7) put turn steps in rules order, wrote public enum names to Observation JSON, and kept the 0.2.x capture reader and the frozen 12-step policy and decision-memory index. All 11 captures and both committed pilots passed.
 - Pass 2 removed the native observation, policy, behavior-tracking and disclosure aliases across Rust, PyO3, stubs and Python wrappers. The CPython 3.13 extension built and 34 focused tests passed, including retained policy replay, keyword round trips and Temur mana encoding.
-- The docs commit daffa5c394 describes all three passes. Re-read each named doc against the code at the end of pass 3.
-
-## Findings for the remaining work
-
-- `RecordedGame.deal_seed` uses the same deprecation helper as `leg`, `game_trace_sha256` and `decks`. Remove all four and keep `_record`, which launch passes to `import_game`.
-- The release preparer also stages the top-level `academy` directory. Remove it from the staging tree alongside the package and obsolete source exclusions.
+- Pass 3 removed the Python catalog, recording and Academy aliases. The release smoke validated two sdists and two wheels. The documentation from daffa5c394 was checked against the final APIs and the engine guide example ran successfully.
 
 ## Design
 
-### Remaining removals
+### Pass 3 removals
 
 | Goes | Where | Callers to convert |
 |---|---|---|
@@ -72,7 +67,7 @@ rules order; `Observation.toJSON()` writes step and phase names.
   argument. No custom message; the release notes carry the migration.
 - `villain_type: "checkpoint"`: the existing "villain_type must be one of"
   `ValueError`.
-- `import academy`: `ModuleNotFoundError`.
+- In a clean wheel installation, `import academy` raises `ModuleNotFoundError`. The source checkout contains `academy/ui`, so its directory is discoverable as a Python namespace package.
 
 ## Docs
 
@@ -106,9 +101,39 @@ Updated in place for `write-docs`:
    printed `PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP` and `7 8`; optional u1952
    checkpoint was absent, both committed pilots replayed.
 2. **Done — native removals.** The rebuilt extension exposes characteristics and object identity directly. The player-control test still checks single-grant wire data; that field belongs to the projection.
-3. **Next — Python removals, shim, packaging, docs.** The remaining table (including
-   `RecordedGame.deal_seed`, `prepare.py`, `pyproject.toml`, `validate.py`),
-   docs. Ends with the acceptance check.
+3. **Done (b4e54bfd19, 64152a8760)** — Python catalog, recording and launch aliases, the checkpoint opponent spelling and the top-level Academy shim. Both source archives and both local wheels passed release validation. An isolated CPython 3.13 wheel install rejected the old import.
+4. **Done (4ddd16655d, 73f8ffb25b)** — Verified a separate parity receipt for the 174-command tape. Across all three surfaces, the two receipts differ only in source identity and the two viewer hashes at each checkpoint. The LLM text field inventory now lists the remaining native accessors. All four focused regression cases passed.
+
+## Pass 3 verification
+
+- The Python acceptance run covered 1,619 cases across two invocations. Before corrections, 1,568 passed, 43 failed and eight skipped. Five cases passed after their fixes: the checked parity receipt, the three LLM text field inventories, and a recorded-game test that had assumed an empty global session registry. The corrected cases were rerun individually, including the recorded-game case immediately after a session-creating test.
+- The other 38 failed at the same assertions or errors using a CPython 3.13 extension built from the branch base (`45ddf3bca7`). These were isolated reruns of failing cases. Affected test modules and counts follow.
+
+  - `tests/academy/test_advice.py` (2)
+  - `tests/academy/test_decision_surface.py` (1)
+  - `tests/academy/test_learn_evidence.py` (1)
+  - `tests/academy/test_merchant_payment_recovery.py` (1)
+  - `tests/academy/test_move_presentation.py` (1)
+  - `tests/academy/test_payment_preview.py` (5)
+  - `tests/academy/test_play_modes.py` (2)
+  - `tests/academy/test_presentation.py` (3)
+  - `tests/academy/test_public_commitment_parity.py` (3)
+  - `tests/academy/test_shared_table.py` (1)
+  - `tests/academy/test_shared_table_protocol.py` (1)
+  - `tests/academy/test_stops.py` (2)
+  - `tests/academy/test_table_projection.py` (1)
+  - `tests/academy/test_ur_lessons_increment.py` (3)
+  - `tests/belief/test_belief_agent.py` (1)
+  - `tests/belief/test_learning.py` (1)
+  - `tests/belief/test_player.py` (2)
+  - `tests/belief/test_state.py` (1)
+  - `tests/semantic/test_current_content.py` (1)
+  - `tests/semantic/test_elemental.py` (1)
+  - `tests/semantic/test_player_control.py` (2)
+  - `tests/verify/test_seat_balance.py` (2)
+
+- All 18 focused pass 3 checks passed. The engine-guide example and the demo passed, including the 0.2.x integer round trip. Both locally built source archives and wheels passed the release inventory checker. A fresh CPython 3.13 wheel install imported `managym.academy.launch` and rejected `import academy`.
+- Next at gate/CI: debug nextest, Engine Budget, the Academy UI checks and the rest of the release platform/interpreter matrix. The broad Python run remains red on the 38 base failures above.
 
 ## Acceptance check at gate
 
@@ -122,12 +147,12 @@ uv run --extra dev --extra artifacts --extra reports pytest \
   tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py \
   tests/model/test_choice_separability.py -q
 (cd academy/ui && npm run check && npm test)
-uv run python scripts/release/prepare.py   # then scripts/release/validate.py on its output
+# Build the paired release artifacts as in .github/workflows/release.yml, then:
+uv run --no-project python scripts/release/validate.py dist
 git grep -n -i -E 'deprecat.*0\.3\.0|removed? in 0\.3\.0|removal in 0\.3\.0' -- managym academy docs AGENTS.md WORLDS.md
 ```
 
-All green; the last command lists only dense-transport and v9/v10 lines
-(MTG-433). Engine Budget passes on the PR with unchanged digests.
+The warning scan may list dense transport and v9/v10 (MTG-433) and documentation for manabot-owned shims (MTG-435). Engine Budget still needs to confirm the pinned digests on the PR.
 
 ## Demo
 
@@ -145,7 +170,8 @@ print(int(managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE), int(managym.StepEnum.COM
 for name in ("learning_catalog", "WORLD_VERSION"):
     print(name, hasattr(managym, name))                      # False False
 PY
-uv run python -c 'import academy'                            # ModuleNotFoundError
+# From outside the checkout, with only the built engine wheel installed:
+uv run --no-project --no-sync python -I -c 'import academy'  # ModuleNotFoundError
 ```
 
 ## Done when
@@ -155,7 +181,6 @@ uv run python -c 'import academy'                            # ModuleNotFoundErr
   `"step": 12` for first strike); a stored decision-memory checkpoint reads the
   exact same `0..=11` step cell as before (`FirstStrike`/`CombatDamage` = 7,
   `Cleanup` = 11).
-- No managym, Academy or docs line promises a 0.3.0 removal except the
-  dense-transport and v9/v10 ones owned by MTG-433.
+- The only remaining engine removal notices belong to MTG-433. Documentation for live manabot shims remains under MTG-435.
 - The built managym wheel and staged sdist pass `validate.py` with no `academy/`
   entry.
