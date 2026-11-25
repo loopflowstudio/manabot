@@ -315,3 +315,21 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   comparison. Compare legal logits and values within float32 tolerance and
   check that masked logits retain the illegal-action sentinel. Measure latency
   with alternating, warmed collection calls on a quiet machine.
+- Downstream worker-process consumers (rollout pickling, `RolloutBatch.concatenate`,
+  encoder shortcuts): extract `RyanSaxe/jace` at its audited commit outside the
+  checkout, `uv sync --locked` it, then `uv pip install --reinstall --no-deps
+  <built managym wheel> "manabot @ <checkout>"` (plus manabot's required
+  `etude-sdk` if jace's lock is older) and `uv pip check`. Run `uv run --no-sync
+  pytest tests/test_forks.py tests/test_fork_batch.py tests/test_rl.py
+  tests/test_manabot_levers.py tests/test_full_data.py -q` (about 30 s). jace's own
+  tests cover only worker startup failure; for a real queue transfer, call
+  `MultiProcessCollector(WorkerPoolConfig(num_workers=2, envs_per_worker=1,
+  steps_per_env=4, hidden_dim=16, attention_layers=1, seed=7,
+  decision_memory="gru", enable_snapshots=True)).collect(...)` from a driver
+  under `if __name__ == "__main__":` (spawn workers re-import it). To compare
+  merges on the same worker output, wrap `jace.collect.pool.merge_rollout_batches`
+  in the driver: the parent receives the unpacked worker batches there. At
+  `1cfb00fe18` this gave 332 (stateless) and 285 (GRU, 669 prefixes) learner rows,
+  identical `policy_rows` log probabilities from jace's dense merge and
+  `RolloutBatch.concatenate`, about 60x faster. A one-env worker's native rows
+  pickle to about 7 KB each.

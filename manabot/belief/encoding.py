@@ -396,15 +396,3 @@ def encode_belief(
         effective_support=belief.effective_range_size,
         encoding_receipt=digest.hexdigest(),
     )
-
-
-__all__ = [
-    "BeliefEncodingSchema",
-    "BeliefRow",
-    "BeliefTensorView",
-    "HAND_ZONE_ID",
-    "LIBRARY_ZONE_ID",
-    "OPPONENT_OWNER_ROLE_ID",
-    "belief_schema_from_engine",
-    "encode_belief",
-]
