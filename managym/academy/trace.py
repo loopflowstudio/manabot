@@ -54,10 +54,10 @@ class GameConfig:
     # Historical checkpoint provenance, or a managym-policy-1 descriptor with
     # complete provider/runner/config/artifact identity. Read without a loader.
     opponent_checkpoint: dict[str, Any] | None = None
-    # Priority-stop configuration at game start.
+    # Priority-stop configuration, as last set in the game (`set_stops`), so a
+    # game continued from its record stops where the person asked.
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
-    # None means the server defaults. set_stops updates the live session,
-    # not this record.
+    # None means the server defaults.
     stops: dict[str, list[str]] | None = None
     stop_on_stack: bool = True  # always surface when the stack is non-empty
     auto_pass: bool = True  # master switch; False = surface every window
@@ -340,6 +340,22 @@ def event_record(event: TraceEvent) -> dict[str, Any]:
     if not event.analysis_shown:
         del record["analysis_shown"]
     return record
+
+
+def stored_event(record: dict[str, Any]) -> TraceEvent:
+    """A stored event record as the event a live game holds, for a game
+    continued from its record. Payloads stay the stored JSON values (a bot
+    decision's factors and belief are dicts); fields this build does not know
+    are dropped."""
+    names = {item.name for item in fields(TraceEvent)}
+    values = {key: value for key, value in record.items() if key in names}
+    decision = values.get("bot_decision")
+    if decision is not None:
+        known = {item.name for item in fields(BotDecision)}
+        values["bot_decision"] = BotDecision(
+            **{key: value for key, value in decision.items() if key in known}
+        )
+    return TraceEvent(**values)
 
 
 def utc_now_iso() -> str:

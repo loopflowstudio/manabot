@@ -509,7 +509,9 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
     store = AttemptStore(academy.traces_dir / "play.sqlite")
     retained = store.load(trace_id)
     assert retained is not None
-    assert retained["end_reason"] == "server_restart"
+    # Shutting down ends nothing: the game is unfinished and resumable.
+    assert retained["end_reason"] == "active"
+    assert store.unfinished(trace_id)
     assert retained["winner"] is None
 
 

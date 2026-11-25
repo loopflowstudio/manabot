@@ -201,7 +201,7 @@ def test_migration_preserves_old_private_trace_and_unknown_provenance(tmp_path):
     store = AttemptStore(path)
     assert store.summaries(set(), scope="all") == []
     rows = store.summaries({participant_id("old-secret")})
-    assert rows[0]["status"] == "interrupted"
+    assert rows[0]["status"] == "active"
     assert rows[0]["record_version"] == 1 and rows[0]["origin"] == "unknown"
     assert len(rows[0]["players"]) == 2
     with store.connect() as db:
@@ -230,7 +230,7 @@ def test_browser_identity_survives_tables_and_rename_without_changing_game(histo
         row = next(r for r in records if r["id"] == identifier)
         assert row["players"][0]["player_id"] == alice.player_id
         assert row["players"][0]["name"] == "Jack"
-        assert row["status"] == "stopped" and row["winner"] is None
+        assert row["status"] in {"active", "stopped"} and row["winner"] is None
     assert (
         client.put("/api/player", json={"name": " "}, headers=headers).status_code
         == 400

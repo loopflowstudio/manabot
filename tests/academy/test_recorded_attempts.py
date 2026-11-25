@@ -42,8 +42,9 @@ def test_replacement_preserves_authority_and_records_prefix(tmp_path):
     assert game.match_id != match
     assert game.trace.config.seed != seed
     saved = rows(tmp_path)
-    assert saved[0]["status"] == "stopped"
-    assert saved[0]["ending_reason"] == "new_game"
+    # Starting another game ends nothing: the first stays unfinished.
+    assert saved[0]["status"] == "active"
+    assert saved[0]["ending_reason"] is None
     assert saved[0]["winner"] is None
     assert saved[1]["status"] == "active"
     assert not list(tmp_path.glob("*.json"))
@@ -79,9 +80,11 @@ def test_private_replay_and_idempotent_feedback_survive_restart(tmp_path, monkey
         assert db.execute("SELECT count(*) FROM feedback").fetchone()[0] == 1
         db.execute("UPDATE attempts SET process_id='old-process'")
     restarted = AttemptStore(tmp_path / "play.sqlite")
-    assert restarted.load(attempt)["end_reason"] == "server_restart"
+    # Another process opening the store ends nothing either.
+    assert restarted.load(attempt)["end_reason"] == "active"
+    assert restarted.unfinished(attempt)
     saved = rows(tmp_path)[0]
-    assert saved["status"] == "interrupted"
+    assert saved["status"] == "active"
     assert saved["winner"] is None and saved["ended_at"] is None
     assert json.loads(saved["trace_json"])["canonical_replay"]
 

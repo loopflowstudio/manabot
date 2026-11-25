@@ -30,6 +30,15 @@ ORIGINS = {
 }
 # Endings of a record import that stopped before game over (`watch.import_record`).
 CLOSED_RECORD_ENDINGS = frozenset({"record_interrupted", "record_diverged"})
+# A played game is unfinished until the rules end it or its record breaks.
+# Closing the tab, idling out and stopping the server end nothing, so rows an
+# earlier build closed for those reasons are unfinished too; they are read
+# through this predicate and never rewritten. A watched game has no seat to
+# take up again, so it is never unfinished. Over `attempts AS a`.
+UNFINISHED_SQL = """(
+    EXISTS(SELECT 1 FROM attempt_players h WHERE h.attempt_id=a.id AND h.kind='human')
+    AND (a.status IN ('active', 'interrupted') OR (a.status='stopped' AND a.ending_reason IN
+        ('server_restart', 'server_shutdown', 'session_expired', 'new_game'))))"""
 
 
 def participant_id(token: str) -> str:
@@ -127,8 +136,8 @@ class AttemptStore:
                     visibility TEXT NOT NULL DEFAULT 'shared',
                     origin TEXT NOT NULL DEFAULT 'unknown',
                     num_events INTEGER NOT NULL DEFAULT 0,
-                    -- The game's numbers (`numbers.GameNumbers`), saved once it
-                    -- is no longer being played; NULL until first computed.
+                    -- The game's numbers so far (`numbers.GameNumbers`); NULL
+                    -- until first computed and again whenever a step is added.
                     numbers_json TEXT
                 );
                 CREATE TABLE IF NOT EXISTS players (
@@ -194,9 +203,13 @@ class AttemptStore:
                 );
             """)
             self._migrate(db)
+            # A watched game cannot be rebuilt from its record, so one another
+            # process left active is over. A played game stays unfinished.
             db.execute(
                 """UPDATE attempts SET status='interrupted',
-                ending_reason='server_restart' WHERE status='active' AND process_id<>?""",
+                ending_reason='server_restart' WHERE status='active' AND process_id<>?
+                AND NOT EXISTS(SELECT 1 FROM attempt_players h
+                    WHERE h.attempt_id=attempts.id AND h.kind='human')""",
                 (PROCESS_ID,),
             )
 
@@ -360,7 +373,10 @@ class AttemptStore:
                 ON CONFLICT(id) DO UPDATE SET
                 ended_at=excluded.ended_at, status=excluded.status, ending_reason=excluded.ending_reason,
                 winner=excluded.winner, revision=excluded.revision, trace_json=excluded.trace_json,
-                num_events=excluded.num_events WHERE attempts.status='active'""",
+                num_events=excluded.num_events,
+                numbers_json=CASE WHEN excluded.num_events=attempts.num_events
+                    THEN attempts.numbers_json END
+                WHERE attempts.status='active'""",
                 (
                     attempt,
                     owner,
@@ -591,15 +607,48 @@ class AttemptStore:
         """Read the private trace and its world from the same database snapshot."""
         with self.connect() as db:
             row = db.execute(
-                "SELECT trace_json, world_json, status FROM attempts WHERE id=?",
+                "SELECT trace_json, world_json, ending_reason FROM attempts WHERE id=?",
                 (attempt,),
             ).fetchone()
         if row is None:
             return None
         trace = json.loads(row["trace_json"])
-        if row["status"] == "interrupted":
-            trace["end_reason"] = "server_restart"
+        # A row closed without its trace being rewritten (a legacy restart, a
+        # record that stopped replaying) reads with the row's ending.
+        if trace["end_reason"] == "active" and row["ending_reason"]:
+            trace["end_reason"] = row["ending_reason"]
         return RetainedAttempt(trace, row["world_json"])
+
+    def unfinished(self, attempt: str) -> bool:
+        """Whether this is a played game nothing has ended (`UNFINISHED_SQL`)."""
+        with self.connect() as db:
+            return (
+                db.execute(
+                    f"SELECT 1 FROM attempts a WHERE a.id=? AND {UNFINISHED_SQL}",
+                    (attempt,),
+                ).fetchone()
+                is not None
+            )
+
+    def reopen(self, attempt: str) -> None:
+        """Make an unfinished game this process's active one, so `save` appends
+        to it. The only write that changes a row an earlier build closed."""
+        with self.connect() as db:
+            db.execute(
+                f"""UPDATE attempts AS a SET status='active', ending_reason=NULL,
+                ended_at=NULL, process_id=? WHERE a.id=? AND {UNFINISHED_SQL}""",
+                (PROCESS_ID, attempt),
+            )
+
+    def diverge(self, attempt: str) -> None:
+        """End an unfinished game whose record no longer replays. Its stored
+        steps stay as they are and stay replayable."""
+        with self.connect() as db:
+            db.execute(
+                f"""UPDATE attempts AS a SET status='stopped',
+                ending_reason='record_diverged', ended_at=? WHERE a.id=? AND {UNFINISHED_SQL}""",
+                (datetime.now(timezone.utc).isoformat(), attempt),
+            )
 
     def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:
@@ -855,12 +904,13 @@ class AttemptStore:
             ).fetchone()
         return None if row is None else (row["status"], row["numbers_json"])
 
-    def save_numbers(self, attempt: str, numbers_json: str) -> None:
-        """Save a game's numbers once, after it is no longer being played."""
+    def save_numbers(self, attempt: str, numbers_json: str, num_events: int) -> None:
+        """Save the numbers of a game's first `num_events` steps, unless it has
+        moved on since they were read; `save` clears them when it appends."""
         with self.connect() as db:
             db.execute(
-                "UPDATE attempts SET numbers_json=? WHERE id=? AND status<>'active' AND numbers_json IS NULL",
-                (numbers_json, attempt),
+                "UPDATE attempts SET numbers_json=? WHERE id=? AND num_events=? AND numbers_json IS NULL",
+                (numbers_json, attempt, num_events),
             )
 
     def record(

@@ -610,7 +610,8 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
     trace_files = _recorded_traces(tmp_path)
     assert len(trace_files) == 1
     trace_payload = trace_files[0][1]
-    assert trace_payload["end_reason"] == server.SESSION_EXPIRED_END_REASON
+    # Idling out frees the game from memory and ends nothing.
+    assert trace_payload["end_reason"] == "active"
 
 
 def test_wire_message_omits_legacy_action_log(monkeypatch):

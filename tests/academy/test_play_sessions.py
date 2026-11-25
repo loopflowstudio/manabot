@@ -310,7 +310,7 @@ def test_existing_store_upgrade_and_restart_receipt(
             "UPDATE attempts SET process_id=? WHERE id=?", ("old-process", identifier)
         )
     restarted = AttemptStore(tmp_path / "play.sqlite")
-    assert restarted.load(identifier)["end_reason"] == "server_restart"
+    assert restarted.load(identifier)["end_reason"] == "active"
     assert (
         restarted.continuation_receipt(
             game.attempt_owner,
@@ -319,73 +319,6 @@ def test_existing_store_upgrade_and_restart_receipt(
         )
         == identifier
     )
-
-
-def test_restart_recovers_only_setup_then_explicit_continuation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
-    with TestClient(server.app) as client:
-        with client.websocket_connect("/ws/play") as ws:
-            ws.send_json(
-                {
-                    "type": "new_game",
-                    "config": {
-                        **CONFIG,
-                        "player_token": "r" * 36,
-                        "player_name": "Researcher",
-                    },
-                }
-            )
-            original = settled_message(ws)
-        identifier = original["table"]["attempt_id"]
-        # Simulate the only state lost by process death, without stopping a
-        # real host or claiming the old native authority can be reconstructed.
-        server.SESSION_REGISTRY.clear()
-        store = AttemptStore(tmp_path / "play.sqlite")
-        with store.connect() as db:
-            db.execute(
-                "UPDATE attempts SET process_id='previous-process' WHERE id=?",
-                (identifier,),
-            )
-        with client.websocket_connect("/ws/play") as ws:
-            ws.send_json(
-                {
-                    "type": "resume",
-                    "session_id": original["session_id"],
-                    "resume_token": original["resume_token"],
-                    "play_session_id": original["play_session"]["id"],
-                }
-            )
-            recovered = settled_message(ws)
-            assert recovered["type"] == "table_snapshot"
-            assert recovered["session_interrupted"] is True
-            assert "frame" not in recovered and "recovery" not in recovered
-            assert store.load(identifier)["end_reason"] == "server_restart"
-            ws.send_json(
-                {
-                    "type": "rematch",
-                    "grant_revision": recovered["table"]["access"]["grant_revision"],
-                    "request_id": "after-restart",
-                    "attempt_id": identifier,
-                    "setup_revision": recovered["play_session"]["revision"],
-                }
-            )
-            next_game = settled_message(ws)
-            assert next_game["play_session"]["game_number"] == 2
-            assert next_game["table"]["attempt_id"] != identifier
-            assert next_game["session_interrupted"] is False
-            old_human = next(
-                p for p in store.metadata(identifier)["players"] if p["kind"] == "human"
-            )
-            new_human = next(
-                p
-                for p in store.metadata(next_game["table"]["attempt_id"])["players"]
-                if p["kind"] == "human"
-            )
-            assert new_human["player_id"] == old_human["player_id"]
-            assert new_human["name"] == "Researcher"
 
 
 def test_saved_draft_is_versioned_without_changing_live_record(

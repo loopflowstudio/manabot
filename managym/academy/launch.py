@@ -331,7 +331,7 @@ class Academy:
         from managym.academy import server
 
         for session_id in list(server.SESSION_REGISTRY):
-            server._drop_session(session_id, "server_shutdown")
+            server.evict_session(session_id, "server_shutdown")
         server.LAUNCH_CONFIGS.clear()
         self._listener.close()
         self._closed = True

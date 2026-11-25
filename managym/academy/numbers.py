@@ -3,9 +3,10 @@
 `game_numbers` re-executes a played game (`record_of`) once and reduces it
 with the engine's own reducers (`managym.statistics.Behaviour` and `Totals`),
 checking each step against the stored track as an analysis does. The result,
-a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) once the
-game is no longer being played, so lists never re-execute; an older game gets
-its numbers the first time they are read (`GET /api/traces/{id}/numbers`).
+a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) when it
+ends, so lists never re-execute; an unfinished or older game gets its numbers
+the first time they are read (`GET /api/traces/{id}/numbers`), and a step added
+to the game clears them.
 
 `wilson_interval` bounds a win rate for the My games record table.
 """
@@ -54,8 +55,6 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     """The game's numbers, or None where it does not re-execute as stored
     (another build or card set, or a divergence)."""
     trace = attempt.trace
-    if trace["end_reason"] == "active":
-        raise ValueError("A game still being played has no numbers yet.")
     human = trace["config"].get("human_seat", 0)
     try:
         walker = walk(record_of(attempt), capture_cards=True)
