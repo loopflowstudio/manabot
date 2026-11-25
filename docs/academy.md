@@ -928,7 +928,8 @@ then turns itself off; the moves list says so ("Stopped once at Upkeep on the
 opponent's turn; that stop is now off"), marked as automation like the passes
 Academy makes for you. The Menu shows a once stop as checked. The stops are one
 Tab stop: arrow keys move between them, up and down between the two turns, and
-Space or Enter presses one. A recording's bar shows its stops read-only.
+Space or Enter presses one. Stops are a setting of live play: a recording's
+bar shows only the steps of the turn, with the current one marked.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless
@@ -1085,7 +1086,10 @@ tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It is
 open in Replay and folded in live play, where it counts decisions but past
 positions open only in Review after the game. Moves in the rail jump to their
-positions too. Keys never act while you type in a field.
+positions too; there each move is one line, numbered by turn, with the whole
+move in its tooltip, and the moves take the rail's remaining height. The rail
+draws the stack only while something is on it, and the answers only in the
+choices list. Keys never act while you type in a field.
 
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
@@ -1149,7 +1153,8 @@ the measure: **Expected score** for a policy whose values are signed outcomes
 (a draw counts half), **Win chance** for one whose values are win logits.
 Dots mark where you and the policy chose differently.
 
-**Next key moment** jumps to the next of up to eight decisions worth a look,
+**Next key moment**, beside the replay's step buttons, jumps to the next of up
+to eight decisions worth a look,
 in game order: the five where the policy's first choice had the most
 probability over yours, and the three where its estimate moved most by your
 next decision. At one of them a line names why, such as **Key moment ·
@@ -1273,8 +1278,10 @@ At an eligible choice, **Try another line** pauses playback and live production
 and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
-A fresh branch requires the server's retained Study state. If that state has
-expired, recorded playback remains available.
+A fresh branch requires the server's retained Study state, so the button
+appears only while that state exists; once it has expired, recorded playback
+remains available, and in your own games **Play on from here** starts a new
+game from the decision instead.
 
 Older recordings use the same viewer with the frames they retained. Missing
 legal offers, Study support, consequences or policy outputs are explicitly

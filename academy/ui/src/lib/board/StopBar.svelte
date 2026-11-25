@@ -7,7 +7,8 @@
    * (`nextStopState`); the Menu's checkboxes edit the same `StopsConfig` and
    * stay the full-size control. The stops are one toolbar: Tab reaches it
    * once, arrow keys move between them. Without `oncycle` (a recording) the
-   * bar is read-only.
+   * bar is only the step track: where in the turn this is, with no stops,
+   * since stops are a setting of live play.
    */
   import type { Snippet } from 'svelte';
   import type { StopSide } from '$lib/types';
@@ -24,7 +25,8 @@
 
   const sides: StopSide[] = ['my', 'opponent'];
   const SIDE_WORDS: Record<StopSide, string> = { my: 'your turn', opponent: "the opponent's turn" };
-  const editable = $derived(oncycle !== undefined && !track.every);
+  const playing = $derived(oncycle !== undefined);
+  const editable = $derived(playing && !track.every);
 
   // Roving focus: one stop is in the Tab order; arrows move it.
   let focusAt = $state({ side: 0, step: 0 });
@@ -65,17 +67,19 @@
               data-side={side} data-step={mark.key} aria-label={words(side, mark.label, state)} title={words(side, mark.label, state)}
               tabindex={focusAt.side === row && focusAt.step === step ? 0 : -1}
               onfocus={() => (focusAt = { side: row, step })} onclick={() => oncycle?.(side, mark.key)}><i aria-hidden="true"></i></button>
-          {:else}
+          {:else if playing}
             <span class={`stop ${state}`} class:below={row === 1} data-testid={`bar-stop-${side}-${mark.key}`} data-state={state} title={words(side, mark.label, state)}>
               <i aria-hidden="true"></i><span class="sr-only">{state === 'off' ? '' : `, stops on ${SIDE_WORDS[side]}`}</span>
             </span>
           {/if}
+          {#if !playing}<span aria-hidden="true"></span>{/if}
           {#if row === 0}<span class="name" aria-hidden={editable}>{mark.short}</span>{/if}
         {/each}
       </div>
     {/each}
   </div>
   <div class="side">
+    {#if playing}
     <p class="legend">
       {#if track.every}
         Stops off: every step stops
@@ -85,6 +89,7 @@
         <span><i class="stop once" aria-hidden="true"><i></i></i>Once</span>
       {/if}
     </p>
+    {/if}
     {@render aside?.()}
   </div>
 </div>

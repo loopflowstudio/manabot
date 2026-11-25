@@ -220,3 +220,19 @@ Concept review of the built Study (2026-11-25, headless; `scratch/concept-review
 - Review's rail height goes to Moves and the Analysis list (3a).
 - Unchanged, open: Show both hands behind the Hand dialog (4a); "This game"
   in Review's Menu (5a).
+
+Rail pass (2026-11-25, headless):
+
+- Freeing items 1 and 2 was not enough for eight moves at 1280×800. Also
+  taken: Next key moment moved to the transport; Review's disabled answer
+  buttons (a repeat of the choices list) dropped; "Space to pass" and the
+  payment hint dropped in recordings (Space plays the transport there).
+- Review's move text is one line with an ellipsis; the whole move is the
+  row's tooltip and accessible name. Your marked moves truncate early
+  ("Cast Light…") because the mark and track share a 268 px rail. Two-line
+  rows showed seven moves.
+- Turn numbers sit in a gutter on each turn's first row in Review; the turn
+  heading (with the turn's owner) is screen-reader only. Live play keeps its
+  heading rows.
+- Who chose an option ("you", "its choice") follows the label on the same
+  line instead of its own line.

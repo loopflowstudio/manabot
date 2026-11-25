@@ -572,7 +572,7 @@
     {#if studyStore.errorMessage}<p role="alert" class="notice error">{studyStore.errorMessage}</p>{/if}
     {#if current.description}<p class="type-caption text-ink-2" data-testid="position-description">After · {current.description}</p>{/if}
     {#if momentHere}<p class="type-caption text-ink-2" data-testid="key-moment">Key moment · {momentHere.reason}</p>{/if}
-    {#if moments.length || (analysedHere && index?.can_feedback) || playOnHref}
+    {#if (analysedHere && index?.can_feedback) || playOnHref || (current.decision && index?.can_study)}
       <p class="analysis-actions">
         {#if analysedHere && index?.can_feedback && analysis}
           <button class="btn btn-secondary btn-sm" data-testid="see-line" disabled={lineBusy || replayStore.busy} onclick={() => void seeLine()}>{lineBusy ? 'Playing its line…' : 'See its line'}</button>
@@ -580,16 +580,13 @@
         {#if playOnHref}
           <a class="btn btn-secondary btn-sm" data-testid="play-on" href={playOnHref}>Play on from here</a>
         {/if}
-        {#if moments.length}
-          <button class="btn btn-ghost btn-sm" data-testid="next-key-moment" disabled={nextMoment === null || replayStore.busy} onclick={() => { if (nextMoment !== null) seek(nextMoment); }}>Next key moment</button>
+        {#if current.decision && index?.can_study}
+          <button class="btn btn-secondary btn-sm" data-testid="study-open" disabled={studyStore.busy || replayStore.busy || !!index.mirror_retry}
+            onclick={() => void openStudyDecision()} bind:this={studyButton}>Try another line</button>
         {/if}
       </p>
     {/if}
-    {#if current.decision}
-      <button class="btn btn-secondary btn-sm study" data-testid="study-open" disabled={!index?.can_study || studyStore.busy || replayStore.busy || !!index?.mirror_retry}
-        onclick={() => void openStudyDecision()} bind:this={studyButton}>Try another line</button>
-      {#if !index?.can_study}<p class="type-caption text-ink-3">Trying another line needs the retained rules state and this game's participant credential.</p>{/if}
-    {:else if current.kind === 'choice'}
+    {#if !current.decision && current.kind === 'choice'}
       <p class="type-caption text-ink-3">Legal offers and Study not recorded.</p>
     {/if}
     {#if !current.consequences_recorded}<p class="type-caption text-ink-3">Consequences not recorded.</p>{/if}
@@ -712,7 +709,8 @@
     <Transport selected={replayStore.selected} total={positions.length} {marks} playing={replayStore.playing} speed={replayStore.speed}
       disabled={locked} producing={replayStore.producing} busy={replayStore.busy} canProduce={index.can_produce && !replayStore.headUncertain} {retrySearch}
       retryBot={!!index.mirror_retry && !retrySearch} line={!stripOpen} onPrevious={() => seek(replayStore.selected - 1)} onNext={next} onDecision={decision}
-      onTogglePlaying={togglePlaying} onScrub={seek} onSpeedChange={speed => (replayStore.speed = speed)} />
+      onTogglePlaying={togglePlaying} onScrub={seek} onSpeedChange={speed => (replayStore.speed = speed)}
+      onKeyMoment={!moments.length ? undefined : nextMoment === null ? null : () => seek(nextMoment!)} />
   {/if}
 {/snippet}
 
@@ -782,7 +780,6 @@
 <style>
   .notice { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-field); font-size: 13px; }
   .notice.error { border-color: color-mix(in srgb, var(--error) 50%, transparent); background: var(--error-wash); color: var(--error-text); }
-  .study { justify-self: start; }
   .perspective select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 220px; }
   .reveal { display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); white-space: nowrap; }
   .result { display: grid; gap: 6px; justify-items: start; }

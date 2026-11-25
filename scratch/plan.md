@@ -789,6 +789,19 @@ questions 1a, 2a, 3a):
    analysis, showing at least eight move rows and three option rows; the
    policy e2e spec and `npm test` (design lint) still pass.
 
+**Built (2026-11-25).** Try another line is drawn only with `can_study`, in
+the same row as See its line and Play on; Next key moment moved into the
+transport beside ⇥. A recording's step bar draws the steps without stops or
+legend; its rail draws the Stack block only with something on it (or a recap),
+and no disabled answer buttons above the list; its prompt drops "Space to …"
+and the payment hint (Space plays the transport there). Review's move rows are
+one line with a turn-number gutter (no separate turn heading rows; the
+heading stays for screen readers), full move in the title; Moves take the
+remaining height and the choices list at most 26%. `study-review.spec.ts`
+asserts no stops, no empty Stack, and ≥8 moves and ≥3 options visible at
+1280×800; shots `scratch/shots/study-review-rail-{light,dark}.png` (9 moves,
+3 of 4 options).
+
 Larger than this Task (on the page, not planned): a Study branch rooted in a
 re-executed position, which would make Try another line work on every game;
 readability of the chart with a strong current-world checkpoint.

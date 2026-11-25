@@ -175,7 +175,6 @@ export function analysedEvidence(frame: ExperienceFrame, decision: AnalysedDecis
   if (here !== null) summary.push(`${policy}'s estimate here: ${Math.round(here * 100)}`);
   else if (decision.annotation.value !== null) summary.push(`${policy}'s value here: ${decision.annotation.value.toFixed(3)} · ${decision.semantic ?? 'undeclared'}`);
   if (firstId !== null) summary.push(firstId === chosen ? `You chose as ${policy} would.` : `${policy} would choose ${frame.offers[first!].label}.`);
-  if (estimate.size) summary.push('Estimates after each choice read the next decision, in a world re-dealt from what you knew.');
   return { probability, chosen, summary, search: null, provenance: [], estimate, first: firstId, heading: `Analysis by ${policy}` };
 }
 

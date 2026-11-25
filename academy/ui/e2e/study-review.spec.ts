@@ -4,7 +4,7 @@
  * its decisions; and a game with analysis shown at one decision, marked so in
  * Review and Games. Served by `tests/fixtures/policy_runtime_server.py`.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +40,17 @@ async function playToEnd(page: Page, before: (decision: number) => Promise<void>
   throw new Error('The game did not end within 400 decisions.');
 }
 
+/** How many of `rows` inside the scrolling `list` are wholly in its visible box. */
+async function shownIn(list: Locator, rows: string): Promise<number> {
+  return list.evaluate((element, selector) => {
+    const box = element.getBoundingClientRect();
+    return [...element.querySelectorAll(selector)].filter(row => {
+      const at = row.getBoundingClientRect();
+      return at.height > 0 && at.top >= box.top - 1 && at.bottom <= box.bottom + 1;
+    }).length;
+  }, rows);
+}
+
 const carriesAnalysis = (message: Record<string, unknown>): boolean =>
   message.type === 'analysis' || 'analysis' in message || 'analysis' in ((message.update ?? {}) as object);
 
@@ -72,6 +83,25 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await page.locator('[data-testid=log-entry]', { has: marks }).first().getByRole('button').click();
   await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader');
   await expect(page.getByTestId('offer-choosers').filter({ hasText: 'you' })).toHaveCount(1);
+  // Review's rail is read-only: no stop settings, no empty stack, and its height goes to the two lists.
+  await expect(page.getByTestId('stop-bar')).not.toContainText('Every time');
+  await expect(page.locator('[data-testid^=bar-stop-]')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Stack' }).getByText('Empty')).toHaveCount(0);
+  // At 1280×800, a marked decision with at least three options shows eight moves and three options at once.
+  const marked = page.locator('[data-testid=log-entry]', { has: marks });
+  for (let at = 0, count = await marked.count(); at < count; at++) {
+    await marked.nth(at).getByRole('button').click();
+    await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader');
+    if (await page.getByTestId('action-option').count() >= 3) break;
+  }
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.screenshot({ path: shot(`study-review-rail-${theme}`), animations: 'disabled' });
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  const options = await page.getByTestId('action-option').count();
+  expect(await shownIn(page.getByTestId('game-log'), '[data-testid=log-entry], [data-testid=pass-run]')).toBeGreaterThanOrEqual(8);
+  expect(await shownIn(page.getByRole('list', { name: 'Legal choices' }), '[data-testid=action-option]')).toBeGreaterThanOrEqual(Math.min(3, options));
 
   // (d) One line on a fixed 0–100 scale, a point per analysed decision.
   const value = page.getByTestId('strip-value');

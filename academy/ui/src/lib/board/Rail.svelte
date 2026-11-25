@@ -95,6 +95,8 @@
   const context = $derived(frame.projection.decision_context);
   const paid = $derived(committed(frame));
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
+  /** A recording (moves jump to positions): read-only, so no empty stack and no answer buttons beside the list. */
+  const recording = $derived(onjump !== undefined);
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
   const resolved = $derived(new Map(recent.resolved.map(spell => [spell.id, spell])));
@@ -147,16 +149,19 @@
   }
 </script>
 
-<aside class="rail" aria-label="Stack, decision and legal choices">
+<aside class="rail" class:recording aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
 
   {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
+  <!-- A recording draws the stack only while something is on it. -->
+  {#if !recording || view.stack.length || recent.facts.length}
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
-    <h2><span class="type-heading text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
-    {#if view.stack.length === 0}
+    {#if view.stack.length === 0 && !recording}
+      <h2><span class="type-heading text-ink-2">Stack</span></h2>
       <p class="type-caption text-ink-3">Empty</p>
-    {:else}
+    {:else if view.stack.length}
+      <h2><span class="type-heading text-ink-2">Stack · {view.stack.length}</span></h2>
       <ol>
         {#each view.stack as item, index (item.entry.id)}
           {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
@@ -206,6 +211,7 @@
       </div>
     {/if}
   </section>
+  {/if}
 
   <section use:region={{ across: !onjump }} class="block prompt" class:reading-out={readingOut} aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     {#if reading}{@render reading()}{/if}
@@ -254,7 +260,8 @@
       {#if stopped}<p class="type-caption text-ink-2" data-testid="combat-stopped" role="status">{stopped}</p>{/if}
       {#if draft}
         {@render draft()}
-      {:else}
+      {:else if !recording}
+      <!-- A recording's answers are the list below; buttons here would repeat them, disabled. -->
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
@@ -304,7 +311,7 @@
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
             <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} />{#if evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
-            {#if estimateOf(placed) !== undefined}<span class="estimate" aria-hidden="true" data-testid="offer-estimate" title="Estimate after this choice, 0–100 from your seat">{formatScore(estimateOf(placed)!)}</span>{/if}
+            {#if estimateOf(placed) !== undefined}<span class="estimate" aria-hidden="true" data-testid="offer-estimate" title="Estimate after this choice, 0–100 from your seat: the next decision's reading, in a world re-dealt from what you knew">{formatScore(estimateOf(placed)!)}</span>{/if}
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}
@@ -321,14 +328,17 @@
     <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each moves as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
-          <p class="turn-head type-label"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
+          <!-- A recording numbers the turn in its first row's gutter; the heading stays for screen readers. -->
+          <p class="turn-head type-label" class:sr-only={recording}><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
             {#each turn.moves as move, at (move.id)}
               {#if onjump}
                 <!-- A recording's move jumps to its position. -->
                 <li class="move type-caption jump" class:quiet={move.passes !== null} class:auto={move.actor === 'auto'} class:you={move.actor === 'you'}
                   data-testid={move.passes ? 'pass-run' : 'log-entry'} data-actor={move.actor}>
-                  <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}>
+                  <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}
+                    title={move.passes ? undefined : move.segments.map(segment => segment.text).join('')}>
+                    <span class="gutter" aria-hidden="true" title={at === 0 && turn.owner ? `Turn ${turn.turn ?? ''}, ${turn.owner}` : undefined}>{at === 0 ? turn.turn ?? '·' : ''}</span>
                     <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
                     <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
                     {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}
@@ -432,6 +442,9 @@
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
   .log { flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
+  /* Reviewing, the moves are what you read: they take the remaining height, and the choices list keeps a bounded share. */
+  .recording .log { flex: 1 1 0; min-height: 200px; }
+  .recording .choices { flex: 0 1 auto; min-height: 0; max-height: 26%; }
   .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, var(--text) 14px); display: grid; align-content: start; gap: 4px; }
   .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
@@ -465,6 +478,14 @@
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
   .move.jump { padding-left: 0; }
+  /* A recording's row also carries its mark, so its words keep one line, as a score's move list does; the whole
+     move is the button's title and its accessible name. */
+  .move.jump .who { width: 44px; }
+  .recording .turn + .turn { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: 2px; }
+  .recording .turns { gap: 0; }
+  .recording .turn { min-width: 0; }
+  .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
+  .move.jump .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
@@ -474,9 +495,11 @@
   .track line { stroke: var(--border); stroke-width: 1; }
   .track .its { fill: none; stroke: var(--text-tertiary); stroke-width: 1; }
   .track .yours { fill: var(--text-secondary); }
-  .who-chose { display: block; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
+  /* Who chose it follows the choice on its line, wrapping under it only when the line is full. */
+  .who-chose { margin-left: 6px; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
-  .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  /* Dense rows: a 24 px target (WCAG 2.5.8) rather than the 32 px control height. */
+  .move.jump button { width: 100%; min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 2px 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 </style>
