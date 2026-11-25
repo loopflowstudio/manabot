@@ -8,31 +8,42 @@ Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
 `blocked_by` is cleared. Slice 11's four concept defects, Slice 12's three
 behavior-review defects, and Performance Slices 13–15 are built and verified.
 
-**Next: Gate / Integrated validation** (below).
+**Next: Performance Slice 16 (fixed entry-choice layer resolution, `useful_payment_taps` dedup/cache, `FixedOnly` feasibility fast-path and DFS sibling/projection cleanup), then Gate / Integrated validation** (below).
 
-## Engine performance (Slices 13–15, Apple M4 Max, uninstrumented release vs base `3be5a0cfb2`)
+## Engine performance review pass 2 at `578fa0dd3e` (Apple M4 Max, 16 cores, contended host load ~8.7–28.3)
 
-- `bench_steps` and `bench_search` keep identical digests to base and CI
-  reference `7d3ac1eb1c`. After Slice 15: `bench_steps` 46.07–46.24B
-  instructions vs base 46.744B (-1.1 to -1.4%); `bench_search` 981.12B vs
-  base 1,027.69B (-4.53%). Before Slice 15 (at `7aed946d0d`) they were
-  45.868B / 977.34B, so Slice 15 cost ~+0.5% on curated decks while staying
-  below base.
-- `bench_states --sizes 4,8,16`: `changeling-anthems` 80.55B → 20.65B
-  instructions (`step:choice` calls now linear 40→72→136); `entry-choices`
-  29.93B → 17.91B (`search` plans linear). `storm-copies`, `genesis-wave`,
-  `ventmaw-pools` were already linear. The `bench_states` digest moves only
-  because `payment.witness_digest` hashes fewer deduplicated plan calls;
-  legal actions, choices and state digests are unchanged.
-- Debug oracles pass: `flow::mana::` 58/58, `bench_states` self-tests 2/2,
-  `fdn::` cards 192/192; the deduplicated sources are checked against the
-  full feasibility check by `debug_assert_eq!` in `Game::mana_ability_actions`.
-- Post-Slice-15 compress: unified `Choices<T>`, `Obligation<C>` and
-  `SearchState<M, C>`, dropped `PaymentResources::used_overflow` (asserting
-  `< 64` mana abilities per permanent), shared `tap_candidate_sets` and
-  `PurposeProjection` helpers between `mana_ability_actions` and
-  `PaymentSearch`, and kept restriction-free searches in `VisitedStates::Exact`
-  with zero-copy `canonicalize_resources` when sorted.
+Earlier post-compress notes (`63d66a8417`) were missing post-compress `bench_steps`/`bench_search` retired instructions, a paired `cand-search` vs `base-search` CPU profile, and post-Slice-15 `bench_states` CPU profiles. Fresh measurements at `578fa0dd3e` vs checkout base `6203fff202` (identical Rust to `3be5a0cfb2`) and CI reference `7d3ac1eb1c` (`managym/perf/baseline.json`):
+
+### Supported gains (uninstrumented release, C/R/R/C via `/usr/bin/time -l`)
+
+- Identical counts and digests to both base `6203fff202` and CI reference `7d3ac1eb1c`:
+  - `bench_steps` (512 games, 118,559 steps, digest `10601622128491155944`): instructions retired `45.944B, 45.927B` (mean **45.936B**) vs base `46.738B, 46.771B` (mean **46.754B**, **-1.75%**); cycles `11.165B, 11.226B` (mean **11.196B**) vs base `11.085B, 11.605B` (mean **11.345B**, **-1.31%**); wall `5.69s / 3.36s` (`22,291 / 35,294` steps/s) vs base `3.98s / 3.11s`. `63d66a8417` recovered most of `e8ed428d2c`'s `46.07–46.24B` regression (now within +0.15% of pre-Slice-15 `45.868B`).
+  - `bench_search` (seeds 1–3 digests `13638875039089371439`, `5466143068363283977`, `9998925852575961750`, 0 cap hits, identical `score_digest_blake3` and `action_counts`): instructions retired `980.717B, 981.687B` (mean **981.202B**) vs base `1,027.621B, 1,027.567B` (mean **1,027.594B**, **-4.51%**); cycles `234.07B / 250.49B` (contended spike) vs base `236.35B / 239.56B`. Remains +3.86B (+0.39%) above pre-Slice-15 `977.34B`.
+- Paired `/usr/bin/sample` (`cand-search` 5,675 vs `base-search` 5,872 samples) confirms Slice 13's layer gains (`layers::Context::evaluate` `32.99% → 26.01%`, `Game::layer_board` `38.49% → 32.05%`, `layers::Context::finish_object` `6.20% → 0.70%`, `subtype_category` `3.05% → 0.56%`, `is_creature_type` `3.00% → 0.56%`, `_platform_memcmp` `2.55% → 0.70%`). `mana_ability_actions` is flat (`2.01% → 2.04%`); `payment_model` shifted `7.58% → 8.90%` (+1.32pp, mostly inside `payment_sources` `4.99% → 5.97%`).
+- `bench_states --sizes 4,8,16` gains from Slice 15 + `63d66a8417`:
+  - `changeling-anthems`: `80.55B → 20.65B →` **19.96B** instructions retired (`5.26B` cycles, **-75.2%** vs pre-Slice-15); `cast-choice step:choice` is now linear (`plans 4→4→4`, `calls 40→72→136`, `states 29→53→101`, `0.11→0.24→0.42 ms`; digest `a24fca0e…161f5`).
+  - `entry-choices`: `29.93B → 17.91B →` **16.92B** instructions retired (`3.97B` cycles, **-43.5%** vs pre-Slice-15); `cast-choice search` plans `21,280 → 9,800`, states `120,859 → 68,722` (digest `f8fb94da…970ab`).
+- Debug invariants verified at `578fa0dd3e`: `bench_states` debug self-tests **2/2 passed**; debug `cargo nextest` across `flow::mana`, `flow::layers`, `fdn::`, `payment`, `changeling`, `courtyard`, `automaton`, `banner`, `mascot`, `spyglass`, `retarget`, `storm`, `genesis_wave`, `ventmaw` **312/312 passed** (including uncached layer oracle, `mana_ability_actions` dedup `debug_assert_eq!`, `PaymentCache`, `PaymentModel::direct` and `PaymentScan` checks).
+- Ruled out / flat touched shapes: `storm-copies` (`n=4,8`, `step:choice ≤ 0.049 ms`, `search ≤ 5.38 ms`), `genesis-wave` (`n=4,8,16`, `step:* ≤ 0.033 ms`, `search ≤ 3.81 ms`), `ventmaw-pools` (`n=4,8`, `step:* ≤ 0.018 ms`, `search ≤ 0.82 ms`), `characteristics` on `entry-choices` (`≤ 0.059 ms`) and `changeling-anthems` (`≤ 0.158 ms`), plus existing mana/payment shapes (`restricted-filter`, `distinct-restrictions`, `diverse-mana`, `convoke-diverse`, `improvise-artifacts`, `mixed`).
+
+### Negative results and open bottlenecks (profiled at `578fa0dd3e`)
+
+- `entry-choices --sizes 4,8,16` (**16.92B** instructions) still has superlinear state growth on `priority step:activate` (`plans 17→23→33`, `calls 119→232→552`, `states 60→146→420` [2.43× / 2.88×; **7.0×** over 4× size], `0.16→0.31→1.13 ms`) and `block search` (`sims=48` constant at `n=8→16`, `plans 1,676→2,260`, `calls 14,952→36,651`, `states 9,232→27,682` [**3.00×** for 2× size]). Direct-PID `/usr/bin/sample` (`entry16.sample`, 49,738 samples) isolates three concrete hotspots (~40% of total CPU):
+  - **`Game::useful_payment_taps` = 19.10%** (`managym/src/flow/mana.rs:3269-3346`): when `!fixed_only`, calls `model.payable_after_tap` for every untapped fixed source (`Heraldic Banner`, etc.) with `after_tap` dropping `cache: None` and zero source-equivalence deduplication.
+  - **`Game::finalize_characteristics` = 10.83%** inside `payment_model` (`17.54%`; `current_mana_output` `4.31%`, `Arc<Characteristics>::clone_from_ref_in` `4.23%`): fixed-amount `Effect::AddOneColorManaValue` (`Secluded Courtyard`, `Heraldic Banner`, `Uncharted Haven`) is flagged dynamic (`has_dynamic_mana_output`), cloning `Characteristics` and rebuilding `ManaRestriction` on every read instead of resolving once from `permanent.chosen` in layer evaluation.
+  - **`PurposeProjection::sources_equivalent` = 9.59%** (`7.26%` in `PaymentSearch::insert` / `classify_sources`, `2.23%` in `mana_ability_actions`; `project_choices` `8.72%`, `project_mana` `4.66%`): re-projects and heap-allocates `ProjectedMana`/`ProjectedChoices` per color mode from scratch on every search hitting `GROWTH` and every `mana_ability_actions` call.
+- `changeling-anthems --sizes 4,8,16` (**19.96B** instructions — still ~43% of all 512 games of `bench_steps`) still scales linearly **per single plan** (`damage actions`: `1 plan`, `calls 20→36→68` [`4N+4`], `states 15→27→51` [`3N+3`]; `cast-choice search`: `5,074 plans`, `192,077 calls`, `142,189 states`) because `PaymentModel::payable` disables `direct_payable` whenever any source has activated abilities, so DFS chains all `N` `Three Tree Mascot` filters (listed before `Forest` on the board) even when untapped fixed sources already pay the cost. Profile (`changeling16.sample`, 935 samples): `PaymentModel::witness` **58.61%**, `mana_ability_actions` **23.64%**, `activate_mana_ability` **22.25%** (`can_activate_mana_ability` `9.95%`, `pay_mana_upfront` `12.19%`), `mana_choice_completes_payment` **21.93%**, `PaymentSearch::insert` **20.96%** (`canonicalize_projected` `9.30%`, `canonicalize_resources` `6.63%`).
+
+### Planned performance Slice 16 (`managym/src/flow/layers.rs`, `managym/src/flow/statics.rs`, `managym/src/flow/mana.rs`, `managym/state/src/card.rs`)
+
+16. **Resolve fixed-amount `AddOneColorManaValue` in layers, deduplicate/cache `useful_payment_taps`, add a `FixedOnly` fast-path for boolean `payable`, and prune symmetric DFS siblings / projection allocations.**
+    - *Targets:*
+      (a) Resolve `Effect::AddOneColorManaValue` with `EffectValue::Fixed(_)` once from `permanent.chosen` during `layers::Context::finish_object` so `has_dynamic_mana_output()` stays `false` for `Secluded Courtyard`, `Heraldic Banner` and `Uncharted Haven` (eliminating `Arc::make_mut` + `current_mana_output` on every `characteristics()` read).
+      (b) Deduplicate `Game::useful_payment_taps` by fixed-source equivalence class (debug-asserting against exact `payable_after_tap`) and retain `self.cache` in `PaymentModel::after_tap` (already keyed by `sources`/`pool`/`obligations`/`life`/`policy`/`tap`).
+      (c) In `PaymentModel::payable` (and boolean feasibility checks in `mana_ability_actions` / `mana_choice_completes_payment` when applicable), short-circuit `SourcePolicy::All` to `true` whenever `self.direct(&obligations, SourcePolicy::FixedOnly)` succeeds with `direct_payable == true` (O(N) arithmetic, zero DFS calls, preserving all witness order since only `bool` is returned).
+      (d) In `PaymentModel::witness`, once `visited.groups` is active, skip trying a later source in the same equivalence group with identical `(present, untapped, used_mask)` after an earlier sibling in that node failed (preserving first concrete witness in source order), and fast-path uniform-restriction `PurposeProjection::project_choices` / restriction-free states in `canonicalize_projected`.
+    - *Expected result & checks:* Keep identical `bench_steps` and `bench_search` digests with `bench_search` back ≤ `977B` instructions (recovering the +0.39% vs `7aed946d0d`) and `bench_steps` ≤ `45.9B`; slash `entry-choices` (`16.92B`) and `changeling-anthems` (`19.96B`) retired instructions and eliminate the superlinear `entry-choices` `priority step:activate` / `block search` growth; preserve legal actions, choices, state digests, and pass debug layer/mana/payment/card invariant oracles.
+    - *Deferred to gate/CI:* Ubuntu `x86_64` CI Engine Budget (`engine-budget.yml`, no cross-architecture wall-time claim) and full workspace debug `nextest` / Python admission checks.
 
 Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
 at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two
