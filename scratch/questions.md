@@ -244,3 +244,28 @@ Second concept review (2026-11-25, headless):
 
 - No change before gate. `analysis_shown` stays a bool; recording which policy
   was shown (page question 6) is additive and left open.
+
+# Assumptions and open items — MTG-482 (swap sides mid-game)
+
+Kickoff, 2026-11-25 (headless). Choices made for review; the plan is
+`scratch/plan.md`.
+
+1. A swap starts a new recorded game replayed from the live one with the seats
+   exchanged; the live game ends `swapped_sides`. Passed over: one game with a
+   seat change written into it (instant, but every reader of a record assumes
+   one human seat).
+2. The shadow player is built at the swap by showing the bot the whole game
+   from the person's old seat. Passed over: a second policy kept running in
+   every game.
+3. Games and session tallies leave out the game that ended by swapping.
+   Passed over: listing it as a stopped game.
+4. Native mana modes stay with their seats, so a person who set up auto
+   payment plays the other seat with manual payment. Passed over: changing
+   modes mid-game (a native change; its own Task if wanted).
+5. A swapped game counts in My record by its result; a game played on from a
+   finished one is still left out.
+6. Analysis of "your decisions" in a swapped game starts at the swap.
+7. The control reads **Swap sides now**, one press, no confirmation.
+
+Not answered: whether a swap should take 1–3 s. The measured cost is about
+56 ms per replayed move.
