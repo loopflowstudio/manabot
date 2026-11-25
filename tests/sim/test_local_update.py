@@ -10,8 +10,9 @@ import torch
 from manabot.backends import resolve
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.belief.checkpoint import save_belief_sampler
 from manabot.belief.sampling_data import collect_frozen_policy
-from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
+from manabot.belief.sampling_fit import fit_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env.env import Env
@@ -59,7 +60,7 @@ def make_teacher(
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace(observation)
-    history = space.encoder.config.policy_history_version == 1
+    history = space.config.policy_history_version == 1
     agent = ActorCritic(
         space,
         ModelConfig(
@@ -94,7 +95,7 @@ def make_teacher(
 @pytest.mark.parametrize(
     "owner",
     [
-        "manabot/backends/torch/_facts.py",
+        "manabot/backends/torch/facts.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/local_update_receipt.py",
@@ -314,7 +315,7 @@ def attach_learned_sampler(
         games=3,
         seed=719,
         max_steps=1000,
-        backend=resolve("torch"),
+        backend=TORCH_BACKEND,
     )
     result = fit_belief_sampler(
         dataset,
@@ -323,12 +324,10 @@ def attach_learned_sampler(
         hidden_size=8,
         evaluation_samples=2,
         seed=18,
-        backend=resolve("torch").belief_fit,
+        backend=TORCH_BACKEND.belief_fit,
     )
-    path = tmp_path / "sampler.pt"
-    digest = save_belief_sampler(
-        path, result, dataset, codec=resolve("torch").belief_fit
-    )
+    path = tmp_path / "belief.safetensors"
+    digest = save_belief_sampler(path, result, dataset, codec=TORCH_BACKEND.belief)
     return LocalUpdateTeacher(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
@@ -341,7 +340,7 @@ def attach_learned_sampler(
             policy_identity=dataset.policy_identity,
             world_identity=dataset.world_identity,
         ),
-        backend=resolve("torch"),
+        backend=TORCH_BACKEND,
     )
 
 
@@ -497,30 +496,41 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
     teacher, env = make_teacher(tmp_path, native_encoder=False)
     roots = _searched_roots(env, 6)
     rows, counts = teacher._encode_rows(roots)
-    buffers = teacher.space.encoder.allocate(len(roots) + 2)
+    buffers = teacher.space.allocate(len(roots) + 2)
     for value in buffers.values():
         value.fill(7)
-    assert managym.encode_observations_into(roots, buffers, len(roots) + 2) == counts
+    assert (
+        managym.encode_observations_into(
+            roots, teacher.space.layout, buffers, len(roots) + 2
+        )
+        == counts
+    )
     for key, expected in rows.items():
         np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
         assert (buffers[key][len(roots) :] == 7).all(), key
     # A smaller frontier rewrites only its own rows of a reused buffer.
     assert (
-        managym.encode_observations_into(roots[:1], buffers, len(roots) + 2)
+        managym.encode_observations_into(
+            roots[:1], teacher.space.layout, buffers, len(roots) + 2
+        )
         == (counts[:1])
     )
     for key, expected in rows.items():
         np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
     with pytest.raises(ValueError, match="capacity"):
-        managym.encode_observations_into(roots, buffers, 1)
-    narrow = teacher.space.encoder.allocate(len(roots))
+        managym.encode_observations_into(roots, teacher.space.layout, buffers, 1)
+    narrow = teacher.space.allocate(len(roots))
     narrow["actions"] = narrow["actions"][..., :-1].copy()
     with pytest.raises(ValueError):
-        managym.encode_observations_into(roots, narrow, len(roots))
-    frozen = teacher.space.encoder.allocate(len(roots))
+        managym.encode_observations_into(
+            roots, teacher.space.layout, narrow, len(roots)
+        )
+    frozen = teacher.space.allocate(len(roots))
     frozen["agent_cards"].flags.writeable = False
     with pytest.raises(ValueError, match="writable"):
-        managym.encode_observations_into(roots, frozen, len(roots))
+        managym.encode_observations_into(
+            roots, teacher.space.layout, frozen, len(roots)
+        )
 
     native = LocalUpdateTeacher(
         teacher.likelihood.checkpoint,

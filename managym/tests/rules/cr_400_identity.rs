@@ -206,10 +206,12 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     let template = s.game().state[s.game().state.object_of(card)].clone();
     let mut objects = ObjectVec(vec![
         template.clone(),
-        managym::state::game_object::Object::token_copy(
-            template.clone(),
+        managym::state::game_object::Object::from_definition(
             template.id,
             template.owner,
+            template.definition_id,
+            template.copiable_definition(),
+            true,
         ),
         managym::state::game_object::Object::spell_copy(
             template.clone(),
@@ -340,10 +342,12 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
         s.game().state[s.game().state.object_of(s.game().state.players[0].deck[0])].clone();
     let objects = ObjectVec(vec![
         template.clone(),
-        managym::state::game_object::Object::token_copy(
-            template.clone(),
+        managym::state::game_object::Object::from_definition(
             template.id,
             template.owner,
+            template.definition_id,
+            template.copiable_definition(),
+            true,
         ),
         template.clone(),
         managym::state::game_object::Object::spell_copy(
@@ -418,6 +422,40 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     assert_eq!(zones.zone_of(moved), Some(ZoneType::Graveyard));
     assert_eq!(zones.successor(ids[0]), Some(moved));
     assert_eq!(zones.generations().collect::<Vec<_>>(), [1, 0, 0, 0]);
+}
+
+/// A card taken out of exile and later placed in a library has crossed two
+/// boundaries. Neither its old id nor a link to its successor may find it.
+#[test]
+fn cr_400_7_separated_card_cannot_revive_its_exile_appearance() {
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 39), ("Gray Ogre", 1)]),
+        deck(&[("Island", 40)]),
+        420,
+    );
+    let initial = owned_card(&s, 0, "Mountain");
+    let card = s.game().state.card_of(initial).unwrap();
+    let exile = s.game_mut().move_object(initial, ZoneType::Exile);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let battlefield = s.game().state.permanents[first].as_ref().unwrap().object;
+    s.game_mut().state.zones.join_melded_card(battlefield, card);
+    assert_eq!(s.game().state.object_of(card), battlefield);
+    assert_eq!(s.game().state.zones.melded_card(battlefield), Some(card));
+    let parked = s
+        .game_mut()
+        .state
+        .zones
+        .separate_melded_card(battlefield)
+        .unwrap();
+    assert_ne!(parked, exile);
+    let arrival = s.game_mut().move_object(parked, ZoneType::Library);
+    assert_eq!(s.game().state.object_of(card), arrival);
+    assert_eq!(s.game().state.zones.successor(exile), None);
+    assert_eq!(s.game().state.zones.zone_of(exile), None);
+    assert_eq!(
+        s.game().state.zones.zone_of(arrival),
+        Some(ZoneType::Library)
+    );
 }
 
 /// A physical card retains its identity and printing while its appearances
@@ -526,7 +564,7 @@ fn cr_400_7_non_battlefield_move_discards_old_copy_values() {
     let new_object = s.game().state.object(current).unwrap();
     assert_eq!(new_object.name, "Gray Ogre");
     assert_eq!(new_object.power, Some(5));
-    assert!(new_object.copy.is_none());
+    assert!(new_object.copy().is_none());
     assert_eq!(
         new_object.definition_id,
         s.game().state.cards[card].definition
@@ -583,6 +621,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         if let StackObject::Spell(spell) = stack {
             if spell.object == original {
                 spell.x = 7;
+                spell.kicked = true;
             }
         }
     }
@@ -594,7 +633,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         .stack_objects
         .iter()
         .find_map(|stack| match stack {
-            StackObject::Spell(spell) if spell.object == original => Some(spell.spent),
+            StackObject::Spell(spell) if spell.object == original => Some(spell.spent.clone()),
             _ => None,
         })
         .unwrap();
@@ -630,6 +669,16 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         s.game().state.object(token_appearance).unwrap().kind(),
         ObjectKind::Token
     );
+    let token = s.game().lookup_current_permanent(token_appearance).unwrap();
+    let copied = s.game().state.permanents[token]
+        .as_ref()
+        .unwrap()
+        .spell_entry
+        .as_deref()
+        .unwrap();
+    assert!(copied.kicked);
+    assert_eq!(copied.x, 7);
+    assert!(copied.payment.is_none());
     assert_eq!(s.game().state.card_of(token_appearance), None);
     assert_eq!(s.game().state.cards.len(), roster_size);
 
@@ -645,9 +694,9 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
         .lookup_current_permanent(permanent_appearance)
         .unwrap();
     let entered = s.game().state.permanents[permanent].as_ref().unwrap();
-    assert!(entered.was_cast);
-    assert_eq!(entered.cast_x, 7);
-    assert_eq!(entered.cast_spent, spent);
+    let spell = entered.spell_entry.as_deref().unwrap();
+    assert_eq!(spell.x, 7);
+    assert_eq!(spell.payment.as_ref(), Some(&spent));
 
     let dead = s
         .game_mut()
@@ -655,9 +704,7 @@ fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
     let returned = s.game_mut().move_object(dead, ZoneType::Battlefield);
     let returned = s.game().lookup_current_permanent(returned).unwrap();
     let returned = s.game().state.permanents[returned].as_ref().unwrap();
-    assert!(!returned.was_cast);
-    assert_eq!(returned.cast_x, 0);
-    assert!(returned.cast_spent.is_empty());
+    assert!(returned.spell_entry.is_none());
 }
 
 #[test]

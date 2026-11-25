@@ -57,6 +57,15 @@ class DefinitionTypes(CaptureModel):
     types: list[str]
 
 
+class CastOption(CaptureModel):
+    """The words for a card's optional cast cost that is not kicker."""
+
+    # A spell cast with the cost taken: "bargained".
+    taken: str
+    # The cost itself: "bargain".
+    cost: str
+
+
 class Definition(CaptureModel):
     name: str
     text_box: str
@@ -69,6 +78,13 @@ class Definition(CaptureModel):
     toughness: int | None
     kicker: ManaCost | None
     ward: ManaCost | None
+    # The life a ward costs ("Ward—Pay 7 life."); absent for any other ward.
+    ward_life: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    # The cost a `kicked` flag on this card's spell stands for when it is not
+    # kicker (bargain, an alternative cost); absent otherwise.
+    cast_option: CastOption | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     is_token: bool
 
 
@@ -94,6 +110,15 @@ class DecisionTarget(CaptureModel):
     object: DecisionObject
 
 
+class Paid(CaptureModel):
+    """One object's payment toward the pending cost, and what remains of it."""
+
+    phrase: str
+    object: DecisionObject | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
 class Continuation(CaptureModel):
     recent_facts: list[Literal["unsupported"]]
     actor: int
@@ -110,6 +135,8 @@ class Continuation(CaptureModel):
     announcing: Literal["spell", "activated_ability"] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # What objects have already paid toward the cost being paid, in paid order.
+    paid: list[Paid] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class ObjectLink(CaptureModel):
@@ -128,7 +155,7 @@ class PlayerReference(CaptureModel):
 
 class CardReference(CaptureModel):
     kind: Literal["card"]
-    definition: int
+    definition: int | None
     owner: int
     zone: int | None
     context_id: int | None
@@ -155,8 +182,10 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[3, 4, 5]
-    world_version: str
+    capture_version: Literal[3, 4, 5, 6]
+    # Captures through v5 carry a world label inside their digest; nothing
+    # reads it, and v6 has none.
+    world_version: str | None = None
     content_digest: str
     observation: SkipValidation[Observation]
     frames: SkipValidation[list[managym.ContinuationFrame]]

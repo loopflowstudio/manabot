@@ -50,7 +50,6 @@ def run_census(out: Path, max_decisions: int = 2000) -> None:
         max_decision_members=131072,
     )
     space = ObservationSpace(config)
-    buffers = space.encoder.allocate()
     keys = managym.authored_deck_keys("elemental-world-v2")
     if len(keys) != 10:
         raise ValueError("census requires ten Elemental decks")
@@ -85,19 +84,23 @@ def run_census(out: Path, max_decisions: int = 2000) -> None:
         counts: list[dict[str, int]] = []
         error_text = None
         try:
+            batch = managym.encode_observation_batch(
+                [env.observation_for_player(viewer) for viewer in range(2)],
+                space.layout,
+            )
+            tables = batch.tables()
             for viewer in range(2):
-                env.encode_observation_into(env.observation_for_player(viewer), buffers)
                 counts.append(
                     {
-                        key: int(np.count_nonzero(np.any(buffers[key] != 0, axis=1)))
+                        key: int(
+                            np.diff(np.frombuffer(tables[key][1], dtype=np.int32))[
+                                viewer
+                            ]
+                        )
                         for key in MEMORY_FIELDS
                     }
                 )
-        except (managym.AgentError, ValueError) as error:
-            if "Capacity" not in str(error) and not str(error).startswith(
-                "observation capacity exceeded:"
-            ):
-                raise
+        except managym.ObservationCapacity as error:
             status, error_text = "capacity", str(error)
         if status != "complete":
             failures += 1

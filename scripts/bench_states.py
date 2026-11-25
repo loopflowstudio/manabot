@@ -1,8 +1,8 @@
-"""Time Python consumers of the native stress-state corpus.
+"""Time the LLM text renderer on the native stress-state corpus.
 
-The Rust harness exports recipes together with their exact acting-player
-observation and decision capture. Decoding and encoder allocation are outside
-three individually timed samples; no Python board builder can drift from Rust.
+The Rust harness exports each recipe's exact decision capture, so no Python
+board builder can drift from Rust; each row is the median of three timed
+renders. Policy-input encoding is native and timed by the Rust harness itself.
 Run from the repository root with ``uv run --extra play python scripts/bench_states.py``.
 """
 
@@ -18,10 +18,7 @@ from typing import Callable
 
 from pydantic import BaseModel
 
-from manabot.env.observation import ObservationEncoder
-from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import render_decision
-import managym
 
 
 class Recipe(BaseModel):
@@ -32,8 +29,6 @@ class Recipe(BaseModel):
 class Checkpoint(BaseModel):
     recipe: Recipe
     checkpoint: str
-    observation: str
-    continuation: str
     capture: str
 
 
@@ -50,12 +45,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("states", nargs="*")
     parser.add_argument("--sizes", help="comma-separated; default: each state's own")
-    parser.add_argument("--layers", default="encode-py,text")
     parser.add_argument("--recipes-file", type=Path)
     args = parser.parse_args()
-    layers = args.layers.split(",")
-    if unknown := set(layers) - {"encode-py", "text"}:
-        parser.error(f"unknown layers: {sorted(unknown)}")
     if args.recipes_file:
         corpus = args.recipes_file.read_text()
     else:
@@ -87,37 +78,16 @@ def main() -> None:
         point = Checkpoint.model_validate_json(line)
         if args.states and point.recipe.state not in args.states:
             continue
-        obs = managym.Observation.from_json(
-            point.observation, continuation_json=point.continuation
-        )
-        encoder = ObservationEncoder(
-            ObservationConfig(
-                policy_input_version=11,
-                max_cards_per_player=max(
-                    60, len(obs.agent_cards), len(obs.opponent_cards)
-                ),
-                max_permanents_per_player=max(
-                    40, len(obs.agent_permanents), len(obs.opponent_permanents)
-                ),
-                max_stack_objects=max(32, len(obs.stack_objects)),
-                max_actions=max(512, len(obs.action_space.actions)),
-                max_facts=4096,
-                max_events=max(32, len(obs.recent_events)),
-            )
-        )
-        consumers: dict[str, Callable[[], object]] = {
-            "encode-py": lambda: encoder.encode(obs),
-            "text": lambda: render_decision(point.capture, max_bytes=4 * 1024 * 1024),
+        row = {
+            "state": point.recipe.state,
+            "size": point.recipe.size,
+            "checkpoint": point.checkpoint,
+            "layer": "text",
+            "ms": _measure(
+                lambda: render_decision(point.capture, max_bytes=4 * 1024 * 1024)
+            ),
         }
-        for layer in layers:
-            row = {
-                "state": point.recipe.state,
-                "size": point.recipe.size,
-                "checkpoint": point.checkpoint,
-                "layer": layer,
-                "ms": _measure(consumers[layer]),
-            }
-            print(json.dumps(row), flush=True)
+        print(json.dumps(row), flush=True)
 
 
 if __name__ == "__main__":

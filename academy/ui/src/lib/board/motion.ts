@@ -34,6 +34,8 @@ interface Seen {
 
 const MOVE_MS = 240;
 const ARRIVE_MS = 320;
+/** Longest card travel after a frame, in ms: what a line drawn to a travelling card must follow. */
+export const LONGEST_TRAVEL_MS = Math.max(MOVE_MS, ARRIVE_MS);
 const EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 /** Names this module's animations, so cancelling travel leaves CSS transitions alone. */
 const TRAVEL = 'travel';

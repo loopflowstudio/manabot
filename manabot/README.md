@@ -14,7 +14,7 @@ interface, including encoder selection, replay and checkpoint compatibility.
 ## Quickstart
 
 Start in the [checkout environment](../docs/development.md#environment-and-commands)
-with Etude SDK 0.4.1 or newer.
+with Etude SDK 0.4.7 or newer.
 
 ```bash
 uv run etude train manabot/recipes/local.py      # local production-path smoke
@@ -46,19 +46,20 @@ It uses the baseline model and horizon-scaled damped policy objective, records
 actual counts through Etude and publishes admitted checkpoints. This is a
 software smoke, not playing-strength evidence.
 
-A recipe's device is a config field: local defaults to CPU, and baseline
-defaults to CUDA and rejects CPU. Apple MPS is used only on explicit request
-(`--config '{"device": "mps"}'`). MPS self-play uses float32 and requires
-Torch 2.15 or newer; evaluation
-and search run on CPU. Belief inputs and frozen opponents
-are unsupported on MPS. This makes no speed or strength claim.
+Local and Elemental default to Torch on CPU. Baseline defaults to Torch on
+CUDA. All five shipped recipes (`local`, `baseline`, `elemental`,
+`belief_policy` and `belief_sampler`) accept `backend="mlx"` on Apple Silicon
+(with `device="mps"` or `"cpu"` for self-play).
+[MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
-The self-play loop logs an update clock and cumulative transition counts to
-the run, publishes each milestone checkpoint there and registers its learner,
-Adam, EMA and counts with the run, which saves them under `out/state/` and
-loads them into the next attempt
-([recovery](../docs/training.md#recovery)). Remote storage, rentals and
-scientific runs require explicit allocation.
+Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
+on CPU. The device guide covers precision, belief inputs and frozen opponents.
+[Training devices](../docs/training.md#run-training)
+
+The loop logs completed updates and cumulative transitions, publishes raw
+and configured EMA policies, and saves the learner, Adam, EMA and counts under
+`out/state/` for the next attempt. Remote storage, rentals and scientific runs
+require explicit allocation. [Training recovery](../docs/training.md#recovery)
 
 Saved `TrainingRegime` files and their run records are not read or run
 here; the guide names the revision that does both
@@ -110,8 +111,8 @@ source.match_config().decklists                     # 'closed'
 A fixed match and an `elemental-uniform` match take it from
 `MatchConfig.decklists`; a deck source takes it from `UniformDecks.decklists`
 (`"open"` by default). In a closed run the policy's `decklists` rows for the
-opponent are zero in every game, including games started by auto-reset and
-games regathered after a [game failure](../docs/training.md#game-failures), and
+opponent are zero in every game, including reloaded games and games regathered
+after a [game failure](../docs/training.md#game-failures), and
 the retained record of each game says closed. What the opponent shows during
 play still arrives: a revealed card appears in `known_hand` while it stays in
 that hand.
@@ -122,7 +123,7 @@ whole game. It is a read-only seat sequence; slicing and re-wrapping with
 A plain list of seats uses the open default.
 `MatchConfig.from_players(first, second, decklists="closed")`
 records native seats and rejects differing worlds. The old
-`PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
+`PlayerConfig.disclosure` alias warns and will be removed in 0.3.0; disagreeing
 legacy seat values or hints conflicting with the game setting raise when
 creating a game. Evaluation matchups take
 `MatchConfig.decklists`, open or closed, never mixed; an
@@ -131,11 +132,12 @@ its legs.
 
 A sampled source can also use `decklists="mixed"`: each game draws open or
 closed with equal probability from its reset seed, separately from deck and
-shuffle RNG. Auto-reset and recovery reproduce that draw; retained matchups,
-attempts and replays record the resolved setting. Both seats see the public
-`decklists_closed` observation flag, stated in the text observation. Its inverse
+shuffle RNG. Explicit slot reloads and recovery reproduce that draw; retained
+matchups, attempts and replays record the resolved setting. Both seats see the
+public `decklists_closed` observation flag, stated in the text observation. Its
+inverse
 (1 open, 0 closed) accompanies the other game facts on the player tokens.
-Older checkpoints with a different player-buffer shape fail normal world binding.
+A checkpoint trained before that column does not read it.
 
 An open source serializes without a `decklists` key, so earlier source
 digests are unchanged; closed and mixed sources have their own digests, so a run
@@ -190,8 +192,8 @@ The earlier trophy pilots execute from their pinned source; see the
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
-contract. Stable population entry IDs distinguish events even when lists match;
-checkpoints still bind the world, never the population.
+contract. Stable population entry IDs distinguish events even when lists match.
+A checkpoint can also play newly admitted decks.
 
 Run its local evaluation from the training run's pinned source and native world.
 Local Etude evaluation needs an explicit directory for its replay evidence
@@ -333,27 +335,26 @@ relabels an existing experiment's receipts or registrations.
 
 ### Native frontier encoding
 
-Each teacher keeps frontier buffers from
-`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
-every live branch's acting-player observation into these buffers with one call,
-`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
-row's legal-action count. The buffers grow only when a frontier exceeds their
-capacity, and rows past the live frontier are left untouched. The tensor layout
-is the checkpoint's own, and every legal action is still required. The encoder
-leaves inference threads, rollout depth, legal support and the search config
-unchanged, and is not recorded in the receipt, so registered evaluation players
-use it without changing their identity.
+A v11 teacher passes the live branches to
+`managym.encode_observation_batch(envs, space.layout)`. The returned batch
+owns immutable typed rows and their int32 offsets in frontier order. Both
+backends bind the checkpoint's vocabulary and apply its saved readings to these
+rows through the shared host preparation. The teacher
+reads each branch's legal support from `batch.action_counts`. Search requires
+every legal action to fit the checkpoint's layout. V9 and v10 teachers use
+`managym.encode_observations_into` with reusable dense buffers.
 
 `LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
 `"native_encoder": false` beside `"config"` in a `make_player` spec, instead
-allocates a fresh batch for each frontier forward and fills its rows one branch
-at a time in Python. Use it to compare encoders; both write identical tensors.
+allocates a fresh batch for each frontier forward and fills its rows with one
+`managym.encode_observation_into` call per branch. The same native encoder
+writes both, so the tensors are identical; the switch selects one batched call
+or one call per row, and its name is kept because saved specs carry it.
 
-A teacher reuses its buffers between calls, so only one search may use it at a
-time; give each concurrent search its own teacher. An extension without the
+A teacher owns its search state, so only one search may use it at a time; give each concurrent search its own teacher. An extension without the
 batch writer, or a buffer whose shape, dtype or writability does not match the
 selected observation space, raises before any inference. Search never falls
-back to the Python encoder: rebuild the extension, or select
+back to per-row encoding: rebuild the extension, or select
 `native_encoder=False` explicitly.
 
 ### Inference threads
@@ -386,11 +387,14 @@ including the unresolved near-singleton latency target.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Deck-source runs bind the world itself
-(`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+When the binding records exact decks and sideboards, every binding field except
+the input schema must match exactly, including the content manifest. As with
+any checkpoint, the runtime input columns may extend the saved column prefixes.
+Without exact decks, the model can play any admitted deck. The card digest
+describes the cards of the writing revision.
+Loading compares input columns, token names and action kinds by name
+([compatibility](../docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+A missing binding or a mismatch fails before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -399,8 +403,8 @@ model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. `known_library` carries exact
-viewer-known definitions and library positions; Torch reads its
-position-weighted pool. MLX continues to refuse input v11. The `decklists` rows hold
+viewer-known definitions and library positions; both Torch and MLX read its
+position-weighted pool. The `decklists` rows hold
 each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
@@ -410,14 +414,22 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. The local and baseline recipes enable it; the
 ordinary baseline recipe is `baseline-v3`.
+
+`ModelConfig(focus_film=True)` scales each action's features by the objects it
+names, so two offers on one creature differ by a function of that creature
+from the first update
+([scoring an offer on its focus](../docs/observation-and-model.md#scoring-an-offer-on-its-focus)).
+`ModelConfig(stream_norm=True)` normalizes every stream summed into an object
+token and uses pre-normalization attention
+([one scale for every stream](../docs/observation-and-model.md#one-scale-for-every-stream)).
+The baseline and Elemental self-play recipes enable both. Each is omitted from
+a serialized configuration when off, and neither can be changed on a trained
+model.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
-An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
-and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w14 artifacts, are not compatible with w15. Elemental combat,
+Elemental combat,
 [sacrifice/landfall](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-sacrifice.md) and [Temur](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -503,7 +515,7 @@ and steps through it with no policy, checkpoint or manabot. A loop of your own
 passes `games_path=` to its collector. Games cut off when the run stopped open
 as interrupted. A fresh game between current policies is an evaluation game,
 not a training game; evaluation records those the same way. `record_games(...)`
-and `manabot export-game` warn and are removed in 0.4.0. The
+and `manabot export-game` warn and are removed in 0.3.0. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 
@@ -560,7 +572,7 @@ keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
 identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
-until 0.4.0; see
+until 0.3.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-10` renders each native payload once with exact public source and
@@ -587,6 +599,60 @@ Collector/game close and vector
 reseeding flush exact totals, including zero-overflow runs. The approximation
 and its evaluation limits are specified in the
 [TLA v10 protocol](../experiments/protocols/tla-trophy-213-v10.md).
+
+## Mana taps at priority and during payment
+
+A policy can be trained with fixed- and choice-output mana abilities offered
+as actions at priority and during cast, activation and resolution payments
+([what the seat is offered](../managym/README.md#mana-taps-at-priority-and-during-payment)). The
+option belongs to the policy's observation configuration, beside its action
+capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+off = ObservationConfig(max_actions=64, action_overflow="first-legal")
+all_floats = off.model_copy(update={"mana_floats": "all"})
+
+"mana_floats" in off.model_dump()   # False
+all_floats.model_dump()["mana_floats"]  # "all"
+```
+
+Set `mana_floats="usable"` to limit priority floats to windows with a mana spend
+or to activations with side effects, such as sacrificing a Treasure or firing a tap trigger. Set `mana_payment="auto"` to let the engine fund accepted payments, including color selection and spending. The default `"manual"` exposes useful taps. With `"usable"` or `"all"` it also offers extra payment taps. Both fields follow the checkpoint independently.
+
+The default, `"off"`, is omitted from the dump, so existing
+configurations, checkpoints and digests keep their identity. It changes no
+buffer shape: a checkpoint trained with it and one trained without it are
+admitted to the same game.
+
+Self-play with `SelfPlay.observation = all_floats` offers the taps to both learning
+seats. The checkpoint saves the configuration, and evaluation seats each
+player in the space it trained in:
+
+| Seat holds | Receives the additional tap offers |
+| --- | --- |
+| a checkpoint saved with `mana_floats="all"` or `"usable"` | in its saved mode |
+| any other checkpoint | no |
+| heuristic, random, search or LLM player | no |
+
+The evaluation runner applies the saved settings to the checkpoint's seat
+and manual/off to its heuristic opponent. Swapping seats swaps the settings.
+Replay checks the recorded player settings against the evaluation record.
+
+A portable checkpoint records the levels in force at export for both native seats in
+`hypers.training_setup.mana_payment` and `hypers.training_setup.mana_floats`,
+including manual/off defaults, beside `skip_trivial`. Evaluation game
+metadata records both actual seats in `match_hypers`. Academy traces record
+the corresponding arrays in native seat order. These settings describe how
+the agent trained and played and do not participate in checkpoint admission.
+Earlier checkpoints without training setup metadata must be interpreted at
+their writer revision. Before the corrected default, choice-output mana
+abilities could appear at priority even with fixed-source floats disabled.
+
+An update is a fixed number of decisions. Enabling taps can change both the
+number of decisions in a turn and the length of a game. Compare runs by games
+and training hours as well as by updates.
 
 ## Research program
 
@@ -688,7 +754,7 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. World checkpoints
+ordinals are numbers. An id outside the vocabulary fails. Checkpoints with `world="world"`
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
 learned rows per id column, which held 80% of a w64 L2 model (1,958,402
@@ -792,7 +858,7 @@ with those packages blocked.
 - `training/state/`: game-failure ledgers and numerical incidents.
 - `belief/`: viewer histories, world distributions and belief models;
   `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`
-  fits and persists hand samplers.
+  scores hand samplers and `checkpoint.py` persists them.
 - `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
   baseline) and the settings builders they share.
 - `experiment/`: what an experiment file runs on its machine: setup of the

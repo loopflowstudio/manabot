@@ -13,6 +13,7 @@ from manabot.managym.experience import ExperienceFrame, InteractionOffer
 import managym
 from managym.academy import server, trace as trace_store
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.recorded_commands import preferred_action
 
 HERO = "56 Island\n4 Secret of Bloodbending"
 VILLAIN = "56 Island\n4 Accumulate Wisdom"
@@ -165,17 +166,52 @@ def test_submitted_tla_decks_play_through_the_training_environment() -> None:
                 managym.ActionEnum.PRIORITY_PASS_PRIORITY,
             )
         )
-        preferred = next(
-            (
-                i
-                for kind in preferences
-                for i, action in enumerate(actions)
-                if action.action_type == kind
-            ),
-            0,
-        )
-        _, _, done, truncated, _ = env.step(preferred)
+        _, _, done, truncated, _ = env.step(preferred_action(actions, *preferences))
         assert not done and not truncated
     else:
         raise AssertionError("training consumer never reached delegated control")
     env.close()
+
+
+def test_resume_preserves_private_opening_bottom_offers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as socket:
+            socket.send_json({"type": "new_game", "config": _request()})
+            initial = settled_message(socket)
+            frame = ExperienceFrame.model_validate(initial["frame"])
+            mulligan = next(
+                offer for offer in frame.offers if offer.label == "Mulligan"
+            )
+            socket.send_json(
+                {"type": "command", "command": _command(frame, mulligan, 0)}
+            )
+            pending = settled_message(socket)["update"]["frame"]
+            bottom = ExperienceFrame.model_validate(pending)
+            assert len(bottom.offers) == 7
+            assert all("deepest first" in offer.label for offer in bottom.offers)
+            assert not bottom.projection.opponent.hand
+        with client.websocket_connect("/ws/play") as resumed:
+            resumed.send_json(
+                {
+                    "type": "resume",
+                    "session_id": initial["session_id"],
+                    "resume_token": initial["resume_token"],
+                }
+            )
+            recovery = settled_message(resumed)["recovery"]["frame"]
+            assert recovery["frame_hash"] == pending["frame_hash"]
+            assert recovery["offers"] == pending["offers"]
+            resumed.send_json(
+                {"type": "command", "command": _command(bottom, bottom.offers[2], 1)}
+            )
+            result = settled_message(resumed)
+            assert result["status"] == "accepted"
+            assert [
+                offer["label"] for offer in result["update"]["frame"]["offers"]
+            ] == ["Keep hand", "Mulligan"]
+    next(iter(server.SESSION_REGISTRY.values())).game.close(end_reason="test_complete")
+    server.SESSION_REGISTRY.clear()

@@ -1,9 +1,9 @@
 """MPS admission, unchanged CPU arithmetic, and one production self-play update."""
 
 from copy import deepcopy
+from dataclasses import replace
 import math
 import time
-from types import ModuleType
 from typing import Literal
 
 import numpy as np
@@ -13,21 +13,20 @@ import torch
 from experiments import tla_frontier
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import (
-    _facts as fact_encoder,
-    _shared_effects as shared_effects,
+    facts as fact_encoder,
+    shared_effects,
 )
-from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._semantic_cards import (
-    SemanticCardEncoder,
-)
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
-from manabot.backends.torch.rollout import AdmittedRollout
+from manabot.backends.torch.semantic_cards import (
+    SemanticCardEncoder,
+)
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
@@ -41,13 +40,14 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import RewardConfig
-from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.learning import Learning
 from manabot.training.rollout.collection import (
     close_collector,
     collect,
     open_collector,
 )
 from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.objective import damped_policy_loss
 import managym
 from tests.model.prepared_routes import effect_rows, fact_rows
 
@@ -67,6 +67,36 @@ def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
     actual_grad = torch.autograd.grad(actual.sum(), logs)[0]
     expected_grad = torch.autograd.grad(expected.sum(), logs)[0]
     assert torch.equal(actual_grad, expected_grad)
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_damped_loss_preserves_extended_ratios_and_mps_gradients() -> None:
+    # The ratio exceeds float32 range. The adverse advantage keeps this branch
+    # unclipped, and scales its derivative back into the MPS gradient range.
+    logits = torch.zeros((1, 2), device="mps", requires_grad=True)
+    loss = damped_policy_loss(
+        torch_backend.rl,
+        logits,
+        torch.tensor([1], device="mps"),
+        torch.tensor([-1e-12], device="mps"),
+        torch.tensor([[0.0, -100.0]], device="mps"),
+        torch.full_like(logits, 0.5),
+        torch.ones_like(logits, dtype=torch.bool),
+        clip=0.2,
+        collection_kl=0.1,
+        tau=0.05,
+        reference_forward_kl=0.002,
+    )
+    expected = math.exp(100) * 0.5e-12
+    assert loss.item() == pytest.approx(expected, rel=1e-5)
+    loss.sum().backward()
+    assert logits.grad is not None
+    torch.testing.assert_close(
+        logits.grad.cpu(),
+        torch.tensor([[-expected / 2, expected / 2]]),
+        rtol=1e-5,
+        atol=0,
+    )
 
 
 def _assert_finite(value: object) -> None:
@@ -106,7 +136,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
                 continue
             word = managym.catalog_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
-    encoder = FactEncoder(4, vocabulary="catalog")
+    encoder = FactEncoder(4, numeric=6, vocabulary="catalog")
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(4))
     original = torch.nn.ModuleList([cards, encoder])
@@ -180,9 +210,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
-def test_mps_w64_single_selected_row_without_program_facts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_mps_w64_single_selected_row_without_program_facts() -> None:
     """Two real decisions, original w64 model/inputs, one selected update row.
 
     Missing program facts reproduced EmbeddingBackward0's empty-placeholder
@@ -215,24 +243,14 @@ def test_mps_w64_single_selected_row_without_program_facts(
     finally:
         close_collector(collector)
     assert batch.actions.shape == (1, 2)
-    original = damped_policy.compute_targets
-
-    def singleton(
-        backend: ModuleType,
-        learner: Learner,
-        batch: AdmittedRollout,
-        learning: DampedPolicyLearning,
-        bootstrap_agent: ActorCritic | None = None,
-    ) -> damped_policy.DampedTargets:
-        targets = original(backend, learner, batch, learning, bootstrap_agent)
-        selected = torch.zeros_like(targets.selected)
-        selected.flatten()[0] = True
-        return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
-
-    monkeypatch.setattr(damped_policy, "compute_targets", singleton)
     learner = Learner(agent, "mps", minibatch_rows=256)
+    first_row = replace(batch, sample_weight=np.array([[1, 0]], np.float32))
     result = damped_policy.update_damped_iteration(
-        torch_backend, learner, batch, learning, 1
+        torch_backend,
+        learner,
+        first_row,
+        learning.model_copy(update={"min_advantage": 0}),
+        1,
     )
     assert result["retained"] == result["optimizer_exposures"] == 1
     assert result["numerical"]["optimizer_steps"] == 1
@@ -281,7 +299,7 @@ def test_empty_shared_effect_details_backward(
     values["effects"][0, 0, 16:18] = 1  # One member, live header.
     values["effect_members"][0, 0] = 1  # Object 1, ordinal 1.
     objects = torch.ones(1, 2, 4, device=device)
-    encoder = SharedEffectEncoder(4).to(device)
+    encoder = SharedEffectEncoder(4, numeric=8).to(device)
     before = deepcopy(encoder)
     loss = (
         encoder(

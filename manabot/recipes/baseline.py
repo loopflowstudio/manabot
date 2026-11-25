@@ -5,24 +5,27 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
+from etude.report import Report
 from etude.train.tracking import track
 from pydantic import Field
 
 from manabot.infra.config import ModelConfig
-from manabot.infra.run_settings import RunSettings
-from manabot.recipes.builders import PACK
+from manabot.recipes.builders import PACK, SelfPlayRecipe
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
-from manabot.verify.learning_regression import BaselineReport, report_recipe
+from manabot.training.panels import self_play_report
+
+if TYPE_CHECKING:
+    from manabot.verify.learning_regression import BaselineReport
 
 BASELINE_STEPS = 128
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 
 
-class BaselineConfig(RunSettings):
+class BaselineConfig(SelfPlayRecipe):
     updates: int = Field(default=BASELINE_STEPS, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
@@ -41,6 +44,8 @@ def settings(config: BaselineConfig) -> SelfPlay:
             value_kind="scalar",
             value_aggregation="masked_mean",
             policy_film=True,
+            focus_film=True,
+            stream_norm=True,
         ),
         streams=4,
         transitions=64,
@@ -48,6 +53,9 @@ def settings(config: BaselineConfig) -> SelfPlay:
         run_settings=config.run_settings,
         learning=DampedPolicyLearning(
             gradient="damped_policy",
+            # Twice the rule's default tau keeps combat choices from locking
+            # (experiments/reports/tla_trophies_floor.md).
+            tau_scale=0.1,
             iteration_schedule=IterationSchedule(steps=config.updates),
         ),
         device=config.device,
@@ -57,16 +65,32 @@ def settings(config: BaselineConfig) -> SelfPlay:
     )
 
 
+def report() -> Report:
+    return self_play_report()
+
+
 def train(config: BaselineConfig) -> None:
+    from manabot.backends import resolve
+
+    # Resolve before opening the run: a missing framework leaves no failed run.
+    backend = resolve(config.backend)
+    inputs = settings(config)
+    backend.runtime.admit_execution(inputs.device, live_tokens=inputs.live_tokens)
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(settings(config), run, updates=config.updates)
+        self_play(
+            inputs,
+            run,
+            updates=config.updates,
+            backend=backend,
+        )
 
 
 def evaluate(
     config: BaselineConfig, directory: Path, *, seed: int, seconds: float = 1680
-) -> BaselineReport:
+) -> "BaselineReport":
     """Evaluate the initial and endpoint policies on the nightly paired-deal cohort."""
     from manabot.backends import resolve
+    from manabot.verify.learning_regression import report_recipe
 
     return report_recipe(
         directory,
@@ -75,5 +99,5 @@ def evaluate(
         updates=config.updates,
         deals=BASELINE_DEALS,
         seconds=seconds,
-        backend=resolve("torch"),
+        backend=resolve(config.backend, precision="float32"),
     )

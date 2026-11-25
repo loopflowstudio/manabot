@@ -116,9 +116,9 @@ def test_forward_pass_shapes(
     # Check output shapes
     assert logits.shape == (
         batch_size,
-        observation_space.encoder.max_actions,
+        observation_space.config.max_actions,
     ), (
-        f"Expected logits shape {(batch_size, observation_space.encoder.max_actions)}, got {logits.shape}"
+        f"Expected logits shape {(batch_size, observation_space.config.max_actions)}, got {logits.shape}"
     )
     assert value.shape == (batch_size,), (
         f"Expected value shape {(batch_size,)}, got {value.shape}"
@@ -174,9 +174,10 @@ def test_object_embeddings(
 
     expected_objects = (
         2  # Two players
-        + observation_space.encoder.cards_per_player * 2  # Cards for both players
-        + observation_space.encoder.perms_per_player * 2  # Permanents for both players
-        + observation_space.encoder.max_stack_objects  # One shared stack (v11)
+        + observation_space.config.max_cards_per_player * 2  # Cards for both players
+        + observation_space.config.max_permanents_per_player
+        * 2  # Permanents for both players
+        + observation_space.config.max_stack_objects  # One shared stack (v11)
     )
     batch_size = obs.batch
     assert objects.shape == (

@@ -81,6 +81,7 @@ def selected(
         (".github/workflows/manabot-integration.yml", {"integration"}),
         (".github/workflows/engine-budget.yml", {"python_unit", "engine_budget"}),
         ("managym/examples/bench_search.rs", {"rust", "engine_budget"}),
+        ("managym/examples/bench_footprint.rs", {"rust"}),
         ("managym/examples/bench_steps.rs", {"engine_budget"}),
         ("managym/examples/curated/mod.rs", {"engine_budget"}),
         ("managym/perf/baseline.json", {"engine_budget"}),

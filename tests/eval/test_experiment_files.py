@@ -8,14 +8,17 @@ need; move one out of it, into the checks below, when it runs.
 """
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import replace
+from decimal import Decimal
+from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 
 from etude.checkpoints import CheckpointRecord
 from etude.controller.declarations import asked, read_experiment, read_training_jobs
 from etude.errors import EtudeError
-from etude.eval.records import Match
+from etude.eval.records import Match, Tournament
 from etude.experiment_file import defined_functions
 from etude.jobs import (
     Checkpoints,
@@ -27,7 +30,7 @@ from etude.jobs import (
 )
 from etude.page import experiment_files
 from etude.records import ArtifactRef
-from etude.report import Curve, Matches, Ranking
+from etude.report import Curve, Matches, Ranking, Series
 import pytest
 
 from experiments import (
@@ -35,12 +38,18 @@ from experiments import (
     belief,
     elemental,
     llm_claude,
+    mana_taps,
     opponent_memory,
     seat_comparison,
     tla_frontier,
+    tla_frontier_snapshots,
+    tla_trophies,
+    tla_trophies_colab,
+    tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
 from experiments.elemental_long import heuristic_games, pair_design, rated_updates
+from manabot.eval.card_metrics import CARD_ROLLUPS
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
@@ -59,6 +68,28 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
         {"seat-comparison-one": 4, "seat-comparison-both": 4},
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
+    (
+        tla_frontier_snapshots,
+        (),
+        {"plr-vine-rloo": 2, "warm-h20": 1, "warm-h60": 1, "warm-full": 1},
+    ),
+    (tla_trophies, (), {"trophy-w64-raw": 3}),
+    (tla_trophies_colab, (), {"w64": 1, "w160l8": 1}),
+    (
+        tla_trophies_floor,
+        (),
+        {
+            "control": 3,
+            "floor-0.002": 3,
+            "floor-0.01": 3,
+            "pullback-0": 1,
+            "pullback-0.01": 1,
+            "tau-x2": 2,
+            "tau-x4": 2,
+            "tau-x2-floor-0.002": 2,
+        },
+    ),
+    (mana_taps, (), {"mana-taps-w64-off": 3, "mana-taps-w64-usable": 3}),
 ]
 
 
@@ -81,11 +112,87 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
+        "mana_taps",
         "opponent_memory",
         "seat_comparison",
         "tla_frontier",
+        "tla_frontier_snapshots",
+        "tla_trophies",
+        "tla_trophies_colab",
+        "tla_trophies_floor",
     }
     assert NOT_YET_RUNNABLE <= found
+
+
+@pytest.mark.parametrize(
+    ("experiment", "matches"),
+    [
+        (elemental, Matches(tag="heuristic")),
+        (seat_comparison, None),
+        (tla_trophies, Matches(tournament="tla-trophies-held-out-32")),
+    ],
+)
+def test_checkpoint_report_shows_behaviour_next_to_strength(
+    experiment: ModuleType, matches: Matches | None
+) -> None:
+    strength, *rest = experiment.report().evals
+    assert strength.title == "Score against the heuristic" and strength.score is None
+    curves = rest[:11]
+    assert all(
+        isinstance(c, Curve) and c.matches == matches and c.score.table == "behaviour"
+        for c in curves
+    )
+    assert {c.score.value: c.score.per for c in curves} == {
+        "lands_played": "land_turns",
+        "casts_made": "cast_turns",
+        "mana_use_early": "mana_turns_early",
+        "mana_use_mid": "mana_turns_mid",
+        "mana_use_late": "mana_turns_late",
+        "attackers_declared": "attackers_offered",
+        "blockers_declared": "blockers_offered",
+        "chump_attacks": "attackers_committed",
+        "chump_blocks": "blockers_committed",
+        "casts_off_turn": "casts",
+        "turns": "games",
+    }
+
+
+def test_self_play_experiments_and_recipes_report_the_combat_probe() -> None:
+    files = [
+        path
+        for path in experiment_files(EXPERIMENTS)
+        if "training_jobs" in defined_functions(path)
+    ]
+    files.extend(
+        ROOT / "manabot/recipes" / f"{name}.py"
+        for name in ("baseline", "belief_policy", "elemental", "local")
+    )
+    for path in files:
+        assert "report" in defined_functions(path), path
+        module = import_module(".".join(path.relative_to(ROOT).with_suffix("").parts))
+        report = module.report()
+        ml = {
+            panel.title: panel.keys for panel in report.ml if isinstance(panel, Series)
+        }
+        assert ml["Attack and block log-odds"] == (
+            "combat/attack/gap",
+            "combat/block/gap",
+        )
+        for kind in ("attack", "block"):
+            assert set(ml[f"{kind.title()} gap shift under board edits"]) == {
+                f"combat/{kind}/shift/{edit}"
+                for edit in (
+                    "my_creatures_0_1",
+                    "my_creatures_9_9",
+                    "their_creatures_0_1_tapped",
+                    "their_creatures_9_9_untapped",
+                )
+            }
+        (update_time,) = (
+            p for p in report.perf if isinstance(p, Series) and p.title == "Update time"
+        )
+        assert "time/combat_probe" in update_time.keys
+    assert belief.report().other_metrics
 
 
 def test_no_experiment_file_keeps_a_retired_declaration() -> None:
@@ -160,7 +267,12 @@ def _checkpoint(
 
 
 def _finished_run(
-    tmp_path: Path, updates: range, *, name: str = "seed-1", job: str = "seed-1"
+    tmp_path: Path,
+    updates: Sequence[int],
+    *,
+    name: str = "seed-1",
+    job: str = "seed-1",
+    seed: int = 0,
 ) -> TrainingRunSummary:
     return TrainingRunSummary(
         name=name,
@@ -173,8 +285,168 @@ def _finished_run(
             _checkpoint(tmp_path, name, ordinal, update)
             for ordinal, update in enumerate(updates, start=1)
         ),
-        seed=0,
+        seed=seed,
     )
+
+
+def test_trophy_calibration_job_and_held_out_deals(tmp_path: Path) -> None:
+    (train,) = tla_trophies.training_jobs()
+    assert train.config == tla_trophies.Config(
+        updates=400, threads=2, streams=256, rows=512, checkpoint_every=100
+    )
+    assert {v.name: v.value for v in train.plain().environment} == {
+        "OMP_NUM_THREADS": "2",
+        "MKL_NUM_THREADS": "2",
+    }
+    assert train.max_attempts == 1
+    assert train.max_hours == 10.75
+    assert train.max_usd * len(train.seeds) == Decimal("7.80")
+    pilot = _finished_run(tmp_path, range(2), job="trophy-w64")
+    raw = _finished_run(tmp_path, range(0, 201, 100), name="raw", job=train.name)
+    second = _finished_run(
+        tmp_path,
+        range(0, 201, 100),
+        name="raw-2",
+        job=train.name,
+        seed=1,
+    )
+    state = ExperimentState(experiment="fixture", runs=(pilot, raw, second))
+    (evaluation,) = tla_trophies.eval_jobs(state)
+    assert evaluation.max_usd == Decimal("1.30")
+    assert evaluation.max_attempts == 1
+    assert list(evaluation.checkpoints) == [*raw.checkpoints, *second.checkpoints]
+    tournament, gaps = Tournament(
+        definition=evaluation.tournament,
+        checkpoints=evaluation.recorded().checkpoints,
+    ).resolve(state.lines)
+    assert not gaps
+    assert Counter(m.checkpoint for m in tournament.schedule()) == {
+        checkpoint.key: 32 for checkpoint in evaluation.checkpoints
+    }
+    assert tla_trophies.report().evals[0].matches == Matches(tournament=evaluation.name)
+    assert [
+        tla_trophies.Deal.model_validate(s.config)
+        for s in evaluation.tournament.seatings
+    ] == [
+        tla_trophies.Deal(first=2 * i, second=2 * i + 1, seed=40900 + i)
+        for i in range(32)
+    ]
+
+
+def test_floor_resume_only_serializes_an_explicit_tau_scale() -> None:
+    for job in tla_trophies_floor.training_jobs(attempts=2):
+        assert job.smoke is not None
+        for config in (job.config, job.smoke):
+            fields = config.model_dump()
+            if job.name.startswith("tau-"):
+                assert fields["tau_scale"] == (0.2 if job.name == "tau-x4" else 0.1)
+            else:
+                assert "tau_scale" not in fields
+
+
+def test_floor_arms_play_each_held_out_deal_once_per_checkpoint(tmp_path: Path) -> None:
+    runs = tuple(
+        _finished_run(tmp_path, [100], name=f"{job}@{seed}", job=job, seed=seed)
+        for job, seeds in (
+            ("control", (1, 2, 3)),
+            ("floor-0.01", (1, 2, 3)),
+            ("tau-x2", (1, 2)),
+            ("pullback-0", (2,)),
+        )
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    counts = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HELD_OUT):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            counts.update(
+                (m.checkpoint, tla_trophies.Deal.model_validate(m.match.config).seed)
+                for m in tournament.schedule()
+            )
+    assert counts == {
+        (run.checkpoints[0].key, deal): 1
+        for run in runs
+        if run.launch != "pullback-0"
+        for deal in range(40900, 40932)
+    }
+
+
+def test_floor_arms_meet_their_own_line_at_half_their_updates(tmp_path: Path) -> None:
+    runs = tuple(
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
+        )
+        for job, seed in (("tau-x2", 1), ("tau-x2", 2), ("pullback-0", 2))
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    _, half, *_ = tla_trophies_floor.eval_jobs(state)
+    assert half.tournament.name == f"{tla_trophies_floor.HALF_TRAINING}-tau-x2"
+    tournament, gaps = Tournament(
+        definition=half.tournament, checkpoints=half.recorded().checkpoints
+    ).resolve(state.lines)
+    assert gaps
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter(
+        (by_key[m.checkpoint], by_key[m.match.players[1].checkpoint.key])
+        for m in tournament.schedule()
+    )
+    # Every pairing stays within one line, at exactly half, once per deal.
+    assert pairs == {
+        ((run, update), (run, update // 2)): 32
+        for run in ("tau-x2@1", "tau-x2@2")
+        for update in (200, 400)
+    }
+    curve = tla_trophies_floor.report().evals[1]
+    assert curve.title == "Against itself at half its updates"
+
+
+def test_treated_floor_arms_meet_each_control_seed_at_matched_updates(
+    tmp_path: Path,
+) -> None:
+    runs = tuple(
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
+        )
+        for job, seeds in (
+            ("control", (1, 2, 3)),
+            ("floor-0.01", (1, 2, 3)),
+            ("tau-x2", (1, 2)),
+        )
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.HEAD_TO_HEAD):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((run.name, update), (f"control@{control}", update), deal): 1
+        for run in runs
+        if run.launch != "control"
+        for update in (200, 400)
+        for control in (1, 2, 3)
+        for deal in range(40900, 40932)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +655,9 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     )
     assert len(jobs) == 1
     seatings = jobs[0].tournament.seatings
+    assert jobs[0].tournament.environment.identity == (
+        "6d8bfa592ede2a97a25660b028a8bd2af8bbd3a82c835535b7a9595dc4b2ead2"
+    )
     assert len(seatings) == 168
     assert jobs[0].max_hours == 3 and jobs[0].max_usd == 4
     curves = [
@@ -455,3 +730,67 @@ def test_opponent_memory_evaluation_draws_every_declared_seating(
     # 36 head-to-heads plus the 84 heuristic-curve seatings.
     assert len(interiors) == 36 + 84
     assert all("final" not in seating.name for seating in interiors)
+
+
+def test_combined_arm_meets_every_tau_x4_seed_at_matched_updates(
+    tmp_path: Path,
+) -> None:
+    runs = tuple(
+        _finished_run(
+            tmp_path, range(0, 401, 100), name=f"{job}@{seed}", job=job, seed=seed
+        )
+        for job, seeds in (("tau-x2-floor-0.002", (1, 2)), ("tau-x4", (1, 2)))
+        for seed in seeds
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    by_key = {
+        c.key: (run.name, c.at["updates"]) for run in runs for c in run.checkpoints
+    }
+    pairs = Counter()
+    for job in tla_trophies_floor.eval_jobs(state):
+        if job.name.startswith(tla_trophies_floor.TREATED_HEAD_TO_HEAD):
+            tournament, gaps = Tournament(
+                definition=job.tournament, checkpoints=job.recorded().checkpoints
+            ).resolve(state.lines)
+            assert not gaps
+            pairs.update(
+                (
+                    by_key[m.checkpoint],
+                    by_key[m.match.players[1].checkpoint.key],
+                    tla_trophies.Deal.model_validate(m.match.config).seed,
+                )
+                for m in tournament.schedule()
+            )
+    assert pairs == {
+        ((f"tau-x2-floor-0.002@{seed}", update), (f"tau-x4@{rival}", update), deal): 1
+        for seed in (1, 2)
+        for update in (200, 400)
+        for rival in (1, 2)
+        for deal in range(40900, 40932)
+    }
+
+
+def test_floor_seed_plays_128_more_deals_on_fresh_pools(tmp_path: Path) -> None:
+    runs = (
+        _finished_run(
+            tmp_path, range(0, 1001, 100), name="tau-x2@2", job="tau-x2", seed=2
+        ),
+    )
+    state = ExperimentState(experiment="fixture", runs=runs)
+    jobs = {job.name: job for job in tla_trophies_floor.eval_jobs(state)}
+    first = jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].tournament.seatings
+    more = jobs[
+        f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
+    ].tournament.seatings
+    deals = [tla_trophies.Deal.model_validate(s.config) for s in first + more]
+    pools = [p for d in deals for p in (d.first, d.second)]
+    assert len(deals) == 160
+    assert sorted(pools) == list(range(320))
+    assert len({d.seed for d in deals}) == 160
+    assert {s.seeds for s in more} == {"one"}
+    more_job = jobs[
+        f"{tla_trophies_floor.SEED_HEURISTIC}-{tla_trophies_floor.SEED_MORE}-tau-x2"
+    ]
+    assert more_job.play is tla_trophies.play
+    assert more_job.tournament.rollups == CARD_ROLLUPS
+    assert jobs[f"{tla_trophies_floor.SEED_HEURISTIC}-tau-x2"].play is tla_trophies.play

@@ -18,7 +18,7 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -113,7 +113,7 @@ def test_real_history_reaches_both_heads_and_reloads(
         agent, agent.observation_space, path, player_configs=_match().to_rust()
     )
     loaded, space = load_checkpoint(str(path))
-    assert space.encoder.config.policy_history_version == 1
+    assert space.config.policy_history_version == 1
     assert loaded.architecture_receipt() == agent.architecture_receipt()
     assert agent.architecture_receipt().components["recent_events"].total > 0
     for expected, actual in zip(
@@ -161,7 +161,14 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
-    baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16, world=PACK))
+    baseline_space = ObservationSpace()
+    baseline = ActorCritic(baseline_space, ModelConfig(hidden_dim=16, world=PACK))
+    # The baseline reads events in its own (history-free) layout.
+    unrecorded = {
+        **obs,
+        "events": torch.empty(1, 0, baseline_space.shapes["events"][-1]),
+        "events_valid": torch.empty(1, 0),
+    }
     baseline.load_state_dict(
         {
             key: value
@@ -170,7 +177,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         }
     )
     for left, right in zip(
-        baseline(device_input(baseline, empty)),
+        baseline(device_input(baseline, unrecorded)),
         agent(device_input(agent, empty)),
         strict=True,
     ):
@@ -210,14 +217,18 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     for _ in range(32):
         previous = obs["events"][obs["events_valid"].astype(bool)].copy()
         actor = env._engine.current_agent_index()
-        fixed = loaded_space.encode(env._engine.observation_for_player(actor))
+        fixed = encode_observation(
+            loaded_space, env._engine.observation_for_player(actor)
+        )
         np.testing.assert_array_equal(obs["events"], fixed["events"])
         if obs["events_valid"].any():
             nonempty_calls += 1
             for seed in (17, 91):
                 hidden = env._engine.clone_env()
                 hidden.determinize(seed, perspective=actor)
-                variant = loaded_space.encode(hidden.observation_for_player(actor))
+                variant = encode_observation(
+                    loaded_space, hidden.observation_for_player(actor)
+                )
                 for key in ("events", "events_valid"):
                     np.testing.assert_array_equal(obs[key], variant[key])
         action = player.act(env, obs)
@@ -236,7 +247,7 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     assert nonempty_calls > 2 and retained
     fresh, _ = env.reset(seed=112)
     assert not fresh["events_valid"].any()
-    assert not loaded_space.encode(env._engine.observation_for_player(1))[
+    assert not encode_observation(loaded_space, env._engine.observation_for_player(1))[
         "events_valid"
     ].any()
 
@@ -252,8 +263,7 @@ def test_history_off_preserves_model_identity_and_outputs() -> None:
     assert baseline.config.model_dump() == explicit.config.model_dump()
     assert "recent_events" not in explicit.config.model_dump()
     assert (
-        "policy_history_version"
-        not in explicit.observation_space.encoder.config.model_dump()
+        "policy_history_version" not in explicit.observation_space.config.model_dump()
     )
     assert baseline.architecture_receipt() == explicit.architecture_receipt()
     for name, weights in baseline.state_dict().items():

@@ -58,3 +58,9 @@ fn shattering_spree_unreplicated_destroys_one_artifact() {
         vec![second]
     );
 }
+
+#[test]
+fn foundations_spell_mortify() {
+    use managym::state::zone::ZoneType;
+    crate::check_targeted_removal("Mortify", "Gray Ogre", "Sol Ring", ZoneType::Graveyard);
+}

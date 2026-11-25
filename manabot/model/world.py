@@ -22,13 +22,16 @@ import os
 import subprocess
 from typing import Any
 
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.observation import ObservationSpace
 from manabot.infra.source import source_commit, source_dirty
+from manabot.model.writer_catalog import naming_entries
+from manabot.policy.readings import published_columns
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
-WORLD = managym.WORLD_VERSION
 # The authored setup whose decks form the Elemental roster (`elemental-world-v1`
 # names the same decks).
 _ROSTER_SETUP = "optional_payments"
@@ -82,8 +85,6 @@ def validate_setup_binding(
     if _binds_world(binding):
         if len(player_configs) != 2:
             raise ValueError("execution requires two decks")
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError("execution deck is not submitted to the world")
         admit_world_decks(player_configs)
         return
     actual = _setups(player_configs)
@@ -101,15 +102,13 @@ def validate_agent_decks(
 ) -> None:
     """Check that a checkpoint may play every one of these decks, in any pairing.
 
-    A world binding admits each deck the world admits natively; a setup binding
-    admits only the decks of its setups.
+    Exact decks in the binding restrict play to that roster. Otherwise native
+    admission checks each submitted deck.
     """
     binding = getattr(agent, "world_binding", None)
     if binding is None:
         return
     if _binds_world(binding):
-        if any(p.world != managym.WORLD_SETUP for p in player_configs):
-            raise ValueError("execution deck is not submitted to the world")
         admit_world_decks(player_configs)
         return
     if any(setup not in binding["setups"] for setup in _setups(player_configs)):
@@ -118,37 +117,33 @@ def validate_agent_decks(
 
 def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
     """Admit every deck by the world's native validation; membership grants nothing."""
+    if any(p.world != managym.WORLD_SETUP for p in player_configs):
+        raise ValueError(
+            "Supply a DeckMatchup with submitted decks for this checkpoint."
+        )
     checked = managym.check_decks([player.deck for player in player_configs])
     for player, issues in zip(player_configs, checked, strict=True):
         if issues:
             raise ValueError(
-                f"deck {player.name} is not admitted by world {WORLD}: "
+                f"deck {player.name} is not admitted: "
                 + "; ".join(issue.message for issue in issues)
             )
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
-    """A world-bound policy reads the world's complete semantic program input."""
+    """Check the semantic program input required by the recorded binding."""
     if _binds_world(binding) and agent.config.world != managym.WORLD_SETUP:
-        raise ValueError(
-            "world checkpoint requires its complete semantic program input"
-        )
+        raise ValueError("checkpoint requires the complete semantic program input")
 
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "world": WORLD,
-        "policy_input_version": observation_space.encoder.config.policy_input_version,
+        "policy_input_version": observation_space.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
         "naming_branching": managym.NAME_BRANCHING,
-        "naming_vocabulary": _digest(
-            [
-                {"name": candidate.name, "definition": candidate.definition}
-                for candidate in managym.naming_catalog()
-            ]
-        ),
+        "naming_vocabulary": _digest(naming_entries()),
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,
@@ -156,7 +151,7 @@ def _input_binding(observation_space: Any) -> dict:
         "input_schema": {
             key: {
                 "shape": list(shape),
-                "dtype": str(observation_space.encoder.dtypes[key]),
+                "dtype": str(observation_space.dtypes[key]),
             }
             for key, shape in observation_space.shapes.items()
         },
@@ -239,35 +234,117 @@ def expected_world(
 def current_binding_form(binding: Mapping[str, Any]) -> dict:
     """A retained binding in the form this runtime writes.
 
+    Earlier revisions recorded a world label (`world`, and `world_version` in
+    the content manifest); nothing compares it now, so an earlier-world
+    checkpoint is refused by its input version or by the fields that differ.
     Bindings of the world's catalog recorded `pack_key: None` in their content
     manifest before the catalog was the only pack; that field carries nothing
-    now. An authored pack's non-null key stays, so its binding never matches.
+    either. An authored pack's non-null key stays, so its binding never matches.
     """
-    manifest = binding.get("content_manifest")
-    if isinstance(manifest, Mapping) and manifest.get("pack_key", "") is None:
-        manifest = {key: value for key, value in manifest.items() if key != "pack_key"}
-        return {**binding, "content_manifest": manifest}
-    return dict(binding)
+    current = {key: value for key, value in binding.items() if key != "world"}
+    manifest = current.get("content_manifest")
+    if isinstance(manifest, Mapping):
+        current["content_manifest"] = {
+            key: value
+            for key, value in manifest.items()
+            if key != "world_version" and not (key == "pack_key" and value is None)
+        }
+    return current
+
+
+def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
+    return {
+        key: [column.name for column in columns]
+        for key, columns in published_columns(space).items()
+    }
+
+
+def validate_saved_columns(
+    checkpoint: Mapping[str, Any],
+    expected_schema: Mapping[str, Any],
+    space: ObservationSpace,
+    location: str,
+) -> None:
+    """Check each saved array against the runtime's.
+
+    Columns are only appended, so a checkpoint reads the runtime's first N
+    columns; recorded names, when present, must equal that prefix."""
+    schema = checkpoint["world_binding"].get("input_schema")
+    if not isinstance(schema, dict) or schema.keys() != expected_schema.keys():
+        raise ValueError(f"checkpoint input buffers differ; {location}")
+    columns = input_columns(space)
+    recorded = checkpoint.get("input_columns")
+    # Historical memory checkpoints stored exact buffer shapes but omitted
+    # column declarations for all four separately prepared memory buffers.
+    if isinstance(recorded, dict) and recorded.keys() == columns.keys() - set(
+        MEMORY_FIELDS
+    ):
+        columns = {
+            key: names for key, names in columns.items() if key not in MEMORY_FIELDS
+        }
+    if recorded is not None and (
+        not isinstance(recorded, dict) or recorded.keys() != columns.keys()
+    ):
+        raise ValueError(f"checkpoint input column declarations differ; {location}")
+    widths: dict[str, int] = {}
+    for key, actual in expected_schema.items():
+        entry = schema[key]
+        if not isinstance(entry, dict) or entry.get("dtype") != actual["dtype"]:
+            raise ValueError(f"incompatible {key} dtype; {location}")
+        shape = entry.get("shape")
+        current_shape = actual["shape"]
+        if key in columns:
+            if (
+                not isinstance(shape, list)
+                or shape[:-1] != current_shape[:-1]
+                or not shape
+                or type(shape[-1]) is not int
+                or not 0 < shape[-1] <= current_shape[-1]
+            ):
+                raise ValueError(f"incompatible {key} columns {shape}; {location}")
+            width = shape[-1]
+            wanted = columns[key][:width]
+            if recorded is not None and recorded[key] != wanted:
+                raise ValueError(
+                    f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
+                )
+            widths[key] = width
+        elif shape != current_shape:
+            raise ValueError(f"incompatible {key} shape {shape}; {location}")
+    for group in ("player", "cards", "permanents"):
+        if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
+            raise ValueError(f"{group} column counts differ between seats; {location}")
 
 
 def validate_checkpoint_world(
-    checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
-) -> dict:
+    checkpoint: Mapping[str, Any],
+    observation_space: ObservationSpace,
+    player_configs: Sequence[managym.PlayerConfig] | None = None,
+) -> dict[str, Any]:
     binding = checkpoint.get("world_binding")
-    if not isinstance(binding, dict) or binding.get("world") != WORLD:
-        raise ValueError(
-            f"checkpoint requires an explicit compatible {WORLD} world binding"
-        )
+    if not isinstance(binding, dict):
+        raise ValueError("checkpoint requires an explicit world binding")
     try:
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
     current = current_binding_form(binding)
+    current.pop("input_schema", None)
+    expected_schema = expected.pop("input_schema")
     if _digest(current) != _digest(expected):
+        manifest = current.get("content_manifest")
+        if isinstance(manifest, dict) and manifest != expected.get("content_manifest"):
+            raise ValueError(
+                "checkpoint content binding differs: trained on content "
+                f"{str(manifest.get('content_digest', 'unknown'))[:12]}; {written_at(checkpoint)}"
+            )
         raise ValueError(
             "checkpoint world/setup/input binding differs from this runtime in "
             f"{binding_difference(current, expected)}; {written_at(checkpoint)}"
         )
+    validate_saved_columns(
+        checkpoint, expected_schema, observation_space, written_at(checkpoint)
+    )
     return binding
 
 
@@ -278,7 +355,12 @@ def checkpoint_source() -> dict[str, str | bool | None]:
         dirty: bool | None = source_dirty()
     except (OSError, subprocess.SubprocessError, ValueError):
         commit, dirty = None, None
-    return {"commit": commit, "dirty": dirty, "etude_run": os.environ.get("ETUDE_RUN")}
+    return {
+        "commit": commit,
+        "dirty": dirty,
+        "etude_experiment": os.environ.get("ETUDE_EXPERIMENT"),
+        "etude_run": os.environ.get("ETUDE_RUN"),
+    }
 
 
 def written_at(checkpoint: Mapping[str, Any]) -> str:
@@ -293,28 +375,9 @@ def written_at(checkpoint: Mapping[str, Any]) -> str:
 
 
 def binding_difference(binding: Mapping[str, Any], expected: Mapping[str, Any]) -> str:
-    """Name the binding fields, and the input buffers, that differ."""
-    names: list[str] = []
-    for key in sorted(set(binding) | set(expected)):
-        if binding.get(key) == expected.get(key):
-            continue
-        saved, now = binding.get(key), expected.get(key)
-        if (
-            key == "input_schema"
-            and isinstance(saved, Mapping)
-            and isinstance(now, Mapping)
-        ):
-            for name in sorted(set(saved) | set(now)):
-                if saved.get(name) != now.get(name):
-                    names.append(
-                        f"{name} {_shape(saved.get(name))} -> {_shape(now.get(name))}"
-                    )
-        else:
-            names.append(key)
-    return ", ".join(names)
-
-
-def _shape(entry: Any) -> str:
-    if not isinstance(entry, Mapping):
-        return "absent"
-    return "x".join(str(size) for size in entry.get("shape", []))
+    """Name differing fields outside the input schema."""
+    return ", ".join(
+        key
+        for key in sorted(binding.keys() | expected.keys())
+        if key not in binding or key not in expected or binding[key] != expected[key]
+    )

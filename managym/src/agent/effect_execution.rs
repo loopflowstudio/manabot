@@ -20,16 +20,20 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game, Payment},
+        game::{ActivationSource, CastChoices, Game},
+        payment::{CostComponent, Operation, Payment},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
+            ZoneEntry,
         },
     },
     state::{
-        ability::Effect,
+        ability::{Ability, Effect},
         card::CardDefId,
-        game_object::{ObjectId, ObjectLki, PlayerId, Target},
-        mana::{Mana, ManaSpent},
+        game_object::{CopiableValues, ObjectId, ObjectLki, PlayerId, Target},
+        mana::Mana,
+        payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
+        stack_object::SpellLki,
     },
 };
 
@@ -42,16 +46,20 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "after selection",
     "applied replacements",
     "attach to",
-    "attached at activation",
     "batch",
     "bind moved",
     "bind result",
     "caller frame",
     "captured activation",
     "cascade exiled",
+    "cascade mana value limit",
+    "spell mana value limit",
     "cast choices",
+    "quota type",
     "cast from exile",
     "cast from hand",
+    "cast from graveyard",
+    "exile instants and sorceries",
     "cast from library",
     "cast predicate",
     "choice",
@@ -59,6 +67,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "chosen object",
     "chosen to exile",
     "commit completion event",
+    "contribution",
     "controller",
     "copy definition",
     "copy exceptions",
@@ -79,8 +88,10 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "distinct name search",
     "effect execution",
     "end batch",
+    "end the turn",
     "entering card",
     "entering definition",
+    "enters back face up",
     "enters face down",
     "enters tapped",
     "enters transformed",
@@ -90,6 +101,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "event",
     "event ordinal",
     "excess damage",
+    "DamageEvent::Amount",
     "excluded",
     "execution holder",
     "exile choice",
@@ -108,20 +120,32 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
+    "last known attacking",
     "last known characteristics",
+    "last known creature",
+    "last known in combat",
+    "last known land",
+    "last known tapped",
+    "last known attachment",
     "last known definition",
+    "last known spell",
+    "last known spell profile",
     "legend group",
     "legends kept",
     "library end",
     "library order",
     "life change",
+    "life lost this way",
+    "life paid",
     "linked exile",
     "linked return",
     "linked source",
+    "meld component",
     "mana spent",
     "spending option",
     "cost sacrifice",
     "maximum total power",
+    "creatures each player sacrifices",
     "may copy",
     "mode",
     "moved",
@@ -133,13 +157,21 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "paid by",
     "paid source",
+    "turn face up",
     "paid spell",
     "pay casting costs",
     "payer",
     "placed on bottom",
     "placement",
     "pre-event object",
+    "combat damage source",
+    "another damage step",
+    "first-strike participant",
+    "minimum assignment",
+    "last blocker",
+    "assigned combat damage",
     "remaining",
     "remaining instructions",
     "remaining iteration subjects",
@@ -173,7 +205,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "token definition",
     "triggering player",
     "turn action",
-    "waterbend contributions",
     "zone move",
 ];
 
@@ -285,11 +316,59 @@ impl<'a> Projection<'a> {
     }
 
     fn retained_target(&mut self, target: Target) {
-        if let Target::Permanent(id) = target {
-            if let Some(lki) = self.game.departed_permanent_lki(id) {
-                self.lki(lki);
+        match target {
+            Target::Permanent(id) => {
+                if let Some(lki) = self.game.departed_permanent_lki(id) {
+                    self.lki(lki);
+                }
             }
+            // A live spell's stack row already carries these facts.
+            Target::StackSpell(object) => {
+                if let Some(spell) = self.game.state.spell_lki.get(&object) {
+                    self.spell_lki(spell);
+                }
+            }
+            _ => {}
         }
+    }
+
+    /// A departed spell as it last existed on the stack (CR 608.2h): what a
+    /// trigger reading "that spell" will see after it is countered.
+    fn spell_lki(&mut self, spell: &SpellLki) {
+        if self.last_known.contains(&spell.object) {
+            return;
+        }
+        self.last_known.push(spell.object);
+        let definition = VisibleReference {
+            definition: Some(spell.definition_id.0),
+            ..Default::default()
+        };
+        self.reference("pre-event object", definition);
+        self.field("last known definition", &spell.definition_id);
+        self.field(
+            "last known spell",
+            &(spell.mana_value, &spell.colors, spell.spent),
+        );
+        if !spell.profile.is_front() {
+            self.field("last known spell profile", &spell.profile);
+        }
+        let game = self.game;
+        self.summary(|| {
+            let name = if spell.profile.is_front() {
+                Self::label(definition)
+            } else {
+                game.recorded_spell_printing(spell.object, spell.profile)
+                    .name
+                    .clone()
+            };
+            format!(
+                "Last known spell {}: mana value {}, {} color(s), {} mana spent.",
+                name,
+                spell.mana_value,
+                spell.colors.len(),
+                spell.spent
+            )
+        });
     }
 
     fn object_id(&mut self, name: &str, object_id: ObjectId) {
@@ -386,10 +465,13 @@ impl<'a> Projection<'a> {
         // retains nothing; every other destination is a fact.
         match completion {
             FrameCompletion::Priority => {}
+            FrameCompletion::TurnFaceUp(object) => self.object_id("turn face up", *object),
             FrameCompletion::Continue => self.field("return", &"turn action"),
-            FrameCompletion::CombatNormal => {
-                self.summary(|| "Normal combat damage follows these choices.".into());
-                self.field("return", &"normal combat damage");
+            FrameCompletion::EndTurn => {
+                self.summary(|| {
+                    "The turn is ending. Cleanup follows the state-based actions.".into()
+                });
+                self.field("return", &"end the turn");
             }
             FrameCompletion::StateBased { next } => {
                 self.summary(|| "Finish the pending state-based actions before priority.".into());
@@ -427,14 +509,11 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid {
-                player,
-                payment,
-                spent,
-            } => {
+            FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
-                if !spent.is_empty() {
-                    self.receipt(spent);
+                // Unfinished: the source's own printed cost is paid last.
+                if !payment.receipt.is_empty() {
+                    self.receipt(&payment.receipt, None);
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
@@ -456,9 +535,6 @@ impl<'a> Projection<'a> {
                 for target in &ability.targets {
                     self.target("target", *target);
                 }
-                if let Some(object) = ability.attached {
-                    self.object("attached at activation", object);
-                }
                 if let Some(grant) = ability.granted_by {
                     self.object("grantor", grant.grantor);
                     self.field("grant index", &grant.index);
@@ -471,8 +547,8 @@ impl<'a> Projection<'a> {
     }
 
     fn payment(&mut self, payment: &Payment) {
-        match payment {
-            Payment::Spell {
+        match &payment.operation {
+            Operation::Spell {
                 object,
                 cast,
                 mode,
@@ -480,14 +556,32 @@ impl<'a> Projection<'a> {
                 target_req_indices,
             } => {
                 self.object_id("paid spell", *object);
-                self.field("cast choices", cast);
+                // Storage keys identify the chosen permission only within the game.
+                // The payment already gives its cost. Project a quota source as a
+                // viewer-safe object reference, including when it left to pay a cost.
+                self.field(
+                    "cast choices",
+                    &CastChoices {
+                        route: None,
+                        ..*cast
+                    },
+                );
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    kind,
+                    ..
+                }) = cast.route
+                {
+                    self.object("grantor", source);
+                    self.field("quota type", &kind);
+                }
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
                 for target in targets {
                     self.target("target", *target);
                 }
             }
-            Payment::Activation {
+            Operation::Activation {
                 source,
                 ability_index,
                 targets,
@@ -510,21 +604,73 @@ impl<'a> Projection<'a> {
         }
     }
 
-    /// The mana actually spent to cast (CR 601.2h) and the entry counters
-    /// its spend effects add.
-    fn receipt(&mut self, spent: &ManaSpent) {
-        self.field("mana spent", spent);
+    /// What a payment took, less what the frame of `source` already says.
+    /// Its mana is the amounts actually spent to cast (CR 601.2h) and the
+    /// entry counters its spend effects add, the two mana facts a rule reads;
+    /// which object produced each unit is in the text only and adds no policy
+    /// tokens. Life paid is an amount. Each object that paid otherwise is a
+    /// reference, with what was done to it and the part of the cost it paid
+    /// (`shown_contributions`).
+    fn receipt(&mut self, spent: &PaymentReceipt, source: Option<ObjectId>) {
+        if !spent.mana().is_empty() {
+            self.mana_spent(spent);
+        }
+        if spent.life() > 0 {
+            self.field("life paid", &spent.life());
+            self.summary(|| format!("Life paid: {}.", spent.life()));
+        }
+        let shown: Vec<Contribution> = shown_contributions(spent, source).copied().collect();
+        if shown.is_empty() {
+            return;
+        }
+        for paid in &shown {
+            self.field("contribution", &(paid.how, paid.toward));
+            self.object("paid by", paid.object);
+        }
+        let (game, viewer) = (self.game, self.viewer);
+        self.summary(|| {
+            let paid: Vec<_> = shown
+                .iter()
+                .map(|paid| contribution_phrase(game, viewer, paid))
+                .collect();
+            format!("Paid with: {}.", paid.join("; "))
+        });
+    }
+
+    fn mana_spent(&mut self, spent: &PaymentReceipt) {
+        let facts = ManaSpent::of(spent);
+        self.field("mana spent", &facts);
         self.summary(|| {
             let mana = mana_description(&Mana {
-                mana: spent.amounts,
+                mana: facts.amounts,
                 ..Default::default()
             });
-            match spent.entry_counters {
-                0 => format!("Mana spent to cast: {mana}."),
-                counters => format!(
-                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
-                ),
+            let sources = spent
+                .mana_sources()
+                .iter()
+                .filter_map(|origin| default_content_pack().definition(origin.definition))
+                .map(|definition| definition.printed.name.as_str())
+                .collect::<Vec<_>>();
+            let mut text = format!("Mana spent to cast: {mana}");
+            if !sources.is_empty() {
+                text.push_str(&format!(" (from {})", sources.join(", ")));
             }
+            if facts.entry_counters > 0 {
+                text.push_str(&format!(
+                    "; it enters with {} additional +1/+1 counter(s)",
+                    facts.entry_counters
+                ));
+            }
+            for keyword in &facts.gains {
+                text.push_str(&format!(
+                    "; it gains {} until end of turn",
+                    keyword.printed()
+                ));
+            }
+            if facts.copies > 0 {
+                text.push_str(&format!("; that mana copies it {} time(s)", facts.copies));
+            }
+            text + "."
         });
     }
 
@@ -553,21 +699,31 @@ impl<'a> Projection<'a> {
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}, toughness {}; counters {:?}.",
+                "Last known {}{}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object, viewer)),
+                if lki.battlefield.attacking {
+                    ", attacking"
+                } else if lki.battlefield.in_combat {
+                    ", blocking"
+                } else {
+                    ""
+                },
                 lki.power,
                 lki.toughness,
                 lki.counters
             )
         });
         let ObjectLki {
+            copiable,
             transforms,
             inherited_from,
             granted_abilities,
             keywords,
-            creature_types,
             permanent: _,
-            animated_creature,
+            creature_types,
+            battlefield,
+            attached_to,
+            meld_partner: _, // Physical components have their own viewer references on arrival.
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -580,7 +736,35 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if lki.was_land() {
+            self.field("last known land", &true);
+        }
+        if lki.was_creature() {
+            self.field("last known creature", &true);
+        }
+        if battlefield.attacking {
+            self.field("last known attacking", &true);
+        }
+        if battlefield.in_combat {
+            self.field("last known in combat", &true);
+        }
+        if battlefield.tapped {
+            self.field("last known tapped", &true);
+        }
+        if let Some(attached) = attached_to {
+            self.reference(
+                "last known attachment",
+                game.visible_reference(*attached, viewer),
+            );
+        }
         self.field("last known definition", definition_id);
+        if let Some(values) = copiable {
+            self.tokens
+                .append_definition(&values.definition)
+                .expect("last copiable definition tokens");
+            self.field("copy exceptions", &values.copy);
+            self.note(|| format!("Last copiable form: {}.", values.definition.name));
+        }
         let counter_values: Vec<_> = counters.iter().collect();
         self.field(
             "last known characteristics",
@@ -593,7 +777,21 @@ impl<'a> Projection<'a> {
                     creature_types,
                 ),
                 (
-                    animated_creature,
+                    // A tuple, not the struct: field names would be
+                    // unregistered execution tokens.
+                    (
+                        &battlefield.types,
+                        &battlefield.subtypes,
+                        &battlefield.supertypes,
+                        &battlefield.colors,
+                        &battlefield.name,
+                        battlefield.mana_value,
+                        battlefield.is_legendary,
+                        battlefield.token,
+                        battlefield.attacking,
+                        battlefield.in_combat,
+                        battlefield.tapped,
+                    ),
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,
@@ -618,17 +816,22 @@ impl<'a> Projection<'a> {
             let counters: Vec<_> = entry.counters.iter().collect();
             self.field("entry counters", &counters);
         }
-        if entry.x != 0 {
-            self.field("entry X", &entry.x);
+        if let Some(spell) = entry.spell.as_ref().filter(|spell| spell.x != 0) {
+            self.field("entry X", &spell.x);
         }
         if let Some(controller) = entry.controller {
             self.field("entry controller", &controller);
         }
-        if entry.face_down {
+        if entry.is_face_down() {
             self.field("enters face down", &true);
         }
-        if entry.transformed {
-            self.field("enters transformed", &true);
+        match entry.face {
+            EntryFace::Transformed => self.field("enters transformed", &true),
+            EntryFace::ModalBack => self.field("enters back face up", &true),
+            EntryFace::Front | EntryFace::Manifested | EntryFace::Melded { .. } => {}
+        }
+        if let Some(object) = entry.attached_to {
+            self.object("enters attached to", object);
         }
     }
 
@@ -703,9 +906,13 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(
-                                    self.game.state.entry_object(*object_id).definition_id.0,
-                                ),
+                                definition: self
+                                    .game
+                                    .state
+                                    .entry_object(*object_id)
+                                    .definition_id
+                                    .catalog_id()
+                                    .map(|id| id.0),
                                 ..Default::default()
                             },
                         );
@@ -740,24 +947,28 @@ impl<'a> Projection<'a> {
                             let name = content.token_name(key);
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
-                        TokenSource::Copy {
-                            definition_id,
-                            definition,
-                            front,
-                            copy,
-                            exceptions,
-                        } => {
+                        TokenSource::Copy { values, exceptions } => {
+                            let CopiableValues {
+                                definition_id,
+                                definition,
+                                faces,
+                                copy,
+                            } = values;
                             self.reference(
                                 "copy definition",
                                 VisibleReference {
-                                    definition: Some(definition_id.0),
+                                    definition: definition_id.map(|id| id.0),
                                     ..Default::default()
                                 },
                             );
                             self.tokens
                                 .append_definition(definition)
                                 .expect("copiable definition tokens");
-                            if let Some((front, _)) = front {
+                            if let Some((front, _)) = faces
+                                .as_ref()
+                                .filter(|faces| faces.back_up)
+                                .map(|faces| &faces.front)
+                            {
                                 self.reference(
                                     "copy front face",
                                     VisibleReference {
@@ -813,6 +1024,23 @@ impl<'a> Projection<'a> {
                     self.field("linked return", returns);
                 }
             }
+            EventBinding::ExileLinked {
+                actor,
+                grantee,
+                source,
+                grant,
+            } => {
+                let rules = EventBinding::ExileLinked {
+                    actor: *actor,
+                    grantee: *grantee,
+                    source: None,
+                    grant: *grant,
+                };
+                self.field("bind result", &rules);
+                if let Some(source) = source {
+                    self.object("linked source", *source);
+                }
+            }
             // These variants contain only rules values and player identities.
             binding => self.field("bind result", binding),
         }
@@ -820,16 +1048,117 @@ impl<'a> Projection<'a> {
     }
 }
 
-/// Whether a rule still reads `spent`, the mana spent to cast the spell that
-/// is, or became the source of, the object defined by `definition`: its
-/// definition counts that mana (Toph, converge), or a spend effect applied
-/// (Animal Attendant's counter). Other receipts are not projected.
-pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+/// A receipt's rule-read mana facts, under the names their tokens have: the
+/// amounts by color and what the units' spend riders did. Which object
+/// produced each unit is text only and adds no policy tokens.
+#[derive(Debug, Serialize)]
+struct ManaSpent {
+    amounts: [u8; 6],
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    entry_counters: u8,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    gains: Vec<crate::state::card::Keyword>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    copies: u8,
+}
+
+impl ManaSpent {
+    fn of(spent: &PaymentReceipt) -> Self {
+        Self {
+            amounts: spent.amounts(),
+            entry_counters: spent.entry_counters(),
+            gains: spent.keywords_gained().iter().collect(),
+            copies: spent.copy_triggers().count() as u8,
+        }
+    }
+}
+
+/// What one object did toward a cost, as `viewer` may name it: "tapped Gray
+/// Ogre to crew". A departed object is named by what it last was. A chosen
+/// sacrifice is carried out as the payment completes (CR 601.2h), so while
+/// its object is still where it was the phrase says so, not "sacrificed X".
+pub(crate) fn contribution_phrase(game: &Game, viewer: PlayerId, paid: &Contribution) -> String {
+    let how = match paid.how {
+        How::Tapped => "tapped",
+        How::Sacrificed => "sacrificed",
+        How::Exiled => "exiled",
+        How::Discarded => "discarded",
+        How::Returned => "returned",
+    };
+    let toward = match paid.toward {
+        Toward::Printed => "",
+        Toward::Waterbend => " to waterbend",
+        Toward::Crew => " to crew",
+        Toward::Saddle => " to saddle",
+        Toward::Alternative => " instead of paying mana",
+        Toward::Convoke => " to convoke",
+        Toward::Improvise => " to improvise",
+        Toward::Delve => " to delve",
+        Toward::Bargain => " to bargain",
+        Toward::Forage => " to forage",
+        Toward::Station => " to station",
+    };
+    let object = Projection::label(game.visible_reference(paid.object, viewer));
+    if paid.how == How::Sacrificed && game.state.live(paid.object).is_some() {
+        format!("{object}, sacrificed{toward} when the payment completes")
+    } else {
+        format!("{how} {object}{toward}")
+    }
+}
+
+/// One unit of mana spent toward a cost, as `viewer` may name its source:
+/// "{G} from Forest". A unit no object produced has no source to name.
+pub(crate) fn spent_mana_phrase(game: &Game, viewer: PlayerId, unit: &SpentMana) -> String {
+    let mut amounts = [0; 6];
+    amounts[unit.color as usize] = 1;
+    let mana = mana_description(&Mana {
+        mana: amounts,
+        ..Default::default()
+    });
+    match unit.source {
+        Some(origin) => format!(
+            "{mana} from {}",
+            Projection::label(game.visible_reference(origin.object, viewer))
+        ),
+        None => mana,
+    }
+}
+
+/// The contributions a frame of `source` shows. The receipt keeps everything
+/// paid; the frame omits its own source paying its own printed cost (its
+/// {T}, "sacrifice this", "discard this"), which the frame's ability already
+/// states. Every other object is shown, and so is the source when it paid
+/// under a keyword.
+fn shown_contributions(
+    spent: &PaymentReceipt,
+    source: Option<ObjectId>,
+) -> impl Iterator<Item = &Contribution> {
+    spent
+        .contributions()
+        .iter()
+        .filter(move |paid| !(paid.toward == Toward::Printed && Some(paid.object) == source))
+}
+
+/// Whether the frame of `source`, an object defined by `definition`, shows
+/// anything of `spent`, what was paid for it or for the spell that became
+/// it. It does when the payment says something the frame does not: another
+/// object contributed (`shown_contributions`), life was paid, a spend effect
+/// applied (Animal Attendant's counter), or the definition counts the mana
+/// spent (Toph, converge). Mana that no rule reads, and the source's own
+/// printed cost, stay on the receipt and out of the observation.
+pub(crate) fn receipt_matters(
+    spent: &PaymentReceipt,
+    definition: Option<CardDefId>,
+    source: Option<ObjectId>,
+) -> bool {
     static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
     if spent.is_empty() {
         return false;
     }
-    if spent.entry_counters > 0 {
+    if spent.mana().iter().any(|unit| unit.effect.is_some())
+        || shown_contributions(spent, source).next().is_some()
+        || spent.life() > 0
+    {
         return true;
     }
     let reads = READS.get_or_init(|| {
@@ -845,17 +1174,135 @@ pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) 
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the cast receipt of a stack spell, or of the stack ability an
-/// entering permanent's own trigger became.
-pub(crate) fn project_receipt(
+/// Project the payment in progress onto its announcement frame: how many
+/// counters a removal cost still owes (Quilled Greatwurm), then what the
+/// payment has already committed. Writes nothing when neither applies.
+pub(crate) fn project_pending_payment(
     game: &Game,
-    spent: &ManaSpent,
+    payment: &Payment,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
+    let remaining = match payment.owed.first() {
+        Some(CostComponent::RemoveCounters { remaining, .. }) => Some(*remaining),
+        _ => None,
+    };
+    if remaining.is_none() && payment.receipt.is_empty() {
+        return;
+    }
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent);
+    if let Some(remaining) = remaining {
+        out.field("counters remaining", &remaining);
+        out.summary(|| match remaining {
+            1 => "1 counter left to remove.".into(),
+            n => format!("{n} counters left to remove."),
+        });
+    }
+    out.receipt(&payment.receipt, None);
+    out.finish(frame);
+}
+
+fn trigger_reads<'a>(
+    face: impl FnOnce() -> Option<&'a crate::state::card::PrintedCharacteristics>,
+    index: usize,
+    inline: Option<&[Effect]>,
+    effect_reads: fn(&Effect) -> bool,
+    ability_reads: fn(&Ability) -> bool,
+) -> bool {
+    match inline {
+        Some(effects) => effects.iter().any(effect_reads),
+        None => face()
+            .and_then(|face| face.abilities.get(index))
+            .is_some_and(ability_reads),
+    }
+}
+
+impl Game {
+    pub(super) fn stack_object_reads(
+        &self,
+        object: &crate::state::stack_object::StackObject,
+        effect_reads: fn(&Effect) -> bool,
+        ability_reads: fn(&Ability) -> bool,
+    ) -> bool {
+        use crate::state::stack_object::StackObject;
+        match object {
+            StackObject::ActivatedAbility(ability) => ability.effects.iter().any(effect_reads),
+            StackObject::TriggeredAbility(ability) => trigger_reads(
+                || Some(crate::flow::resolution::stacked_trigger_face(ability)),
+                ability.ability_index,
+                ability.inline_effects.as_deref(),
+                effect_reads,
+                ability_reads,
+            ),
+            StackObject::Spell(_) => false,
+        }
+    }
+}
+
+/// Project the payment and any departed object the trigger reads.
+/// Both text and policy read these same public facts.
+pub(crate) fn project_stack_object(
+    game: &Game,
+    object: &crate::state::stack_object::StackObject,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    use crate::state::stack_object::StackObject;
+    let mut out = Projection::new(game, viewer, text);
+    // "The number of soul counters on this artifact" after it was sacrificed
+    // to pay the cost: the source's last known information (CR 608.2h).
+    if game.stack_object_reads(object, Effect::reads_source_lki, Ability::reads_source_lki) {
+        out.retained_object(object.source_object());
+    }
+    if let StackObject::TriggeredAbility(ability) = object {
+        if let Some(target) = ability.context.filter(|_| {
+            game.stack_object_reads(
+                object,
+                Effect::reads_triggering_object,
+                Ability::reads_triggering_object,
+            )
+        }) {
+            out.retained_target(target);
+        }
+    }
+    if let Some(spent) = super::continuation::stack_receipt(object) {
+        out.receipt(spent, Some(object.source_object()));
+    }
+    out.finish(frame);
+}
+
+/// Project a pending trigger's departed triggering object, as its
+/// stacked ability will (`project_stack_object`).
+pub(crate) fn project_pending_trigger(
+    game: &Game,
+    trigger: &crate::flow::trigger::PendingTrigger,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+) {
+    let mut out = Projection::new(game, viewer, false);
+    if frame.trigger_damage > 0 {
+        out.field("DamageEvent::Amount", &frame.trigger_damage);
+    }
+    if let Some(target) = trigger.context.filter(|_| {
+        trigger_reads(
+            || game.pending_trigger_face(trigger),
+            trigger.ability_index,
+            trigger.inline_effects.as_deref(),
+            Effect::reads_triggering_object,
+            Ability::reads_triggering_object,
+        )
+    }) {
+        out.retained_target(target);
+    }
+    out.finish(frame);
+}
+
+/// The damage occurrence remains visible while its trigger is stacked.
+pub(crate) fn project_trigger_damage(game: &Game, viewer: PlayerId, frame: &mut ContinuationFrame) {
+    let mut out = Projection::new(game, viewer, false);
+    out.field("DamageEvent::Amount", &frame.trigger_damage);
     out.finish(frame);
 }
 
@@ -877,6 +1324,9 @@ pub(crate) fn project_frame(
     }
     if let Some(target) = effect.context_target {
         out.retained_target(target);
+    }
+    if let Some(attached) = effect.attached {
+        out.retained_object(attached);
     }
     for target in &effect.targets {
         out.retained_target(target.target);
@@ -901,14 +1351,20 @@ pub(crate) fn project_frame(
     if let Some(source) = &effect.selected_from {
         out.field("selection domain", source);
     }
+    if effect.triggering_amount != 0 {
+        out.field("DamageEvent::Amount", &effect.triggering_amount);
+    }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
     }
+    if effect.life_lost != 0 {
+        out.field("life lost this way", &effect.life_lost);
+    }
     let source_definition = effect
         .source()
-        .map(|object| game.state.source_base(object).0);
-    if receipt_matters(&effect.spent, source_definition) {
-        out.receipt(&effect.spent);
+        .and_then(|object| game.observed_source_definition(object));
+    if receipt_matters(&effect.spent, source_definition, effect.source()) {
+        out.receipt(&effect.spent, effect.source());
     }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);
@@ -954,12 +1410,12 @@ pub(crate) fn project_decision(
             spent,
             completion,
         } => {
-            out.field("mana spent", spent);
+            out.field("mana spent", &ManaSpent::of(spent));
             out.summary(|| {
                 format!(
                     "Mana already spent in this payment: {}.",
                     mana_description(&crate::state::mana::Mana {
-                        mana: spent.amounts,
+                        mana: spent.amounts(),
                         ..Default::default()
                     })
                 )
@@ -969,25 +1425,28 @@ pub(crate) fn project_decision(
                 out.field("spending option", &choice.unit);
             }
             match completion.as_ref() {
-                SpendCompletion::Announced {
-                    payment, sacrifice, ..
-                } => {
+                SpendCompletion::Announced(payment) => {
                     out.payment(payment);
-                    if let Some(permanent) = sacrifice {
+                    for permanent in payment
+                        .receipt
+                        .paid_as(How::Sacrificed)
+                        .filter_map(|object| game.state.permanent_of(object))
+                    {
                         out.target(
                             "cost sacrifice",
-                            crate::state::game_object::Target::Permanent(*permanent),
+                            crate::state::game_object::Target::Permanent(permanent),
                         );
                     }
                 }
                 SpendCompletion::Resolution(payment) => {
                     out.effects("if paid", &payment.if_paid);
-                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    out.receipt(&payment.receipt, None);
                     if let Some(key) = payment.spends {
                         out.object("once each turn source", key.0);
-                        out.field("once each turn ability", &key.1);
+                        out.field("once each turn ability", &key.2);
                     }
                 }
+
                 SpendCompletion::Foretell(card) => {
                     out.object_id("cast from hand", game.state.object_of(*card))
                 }
@@ -1013,6 +1472,56 @@ pub(crate) fn project_decision(
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
         }
+        Decision::OrderMeldedCards { cards, .. } => {
+            for (mode, card) in cards.iter().enumerate() {
+                let definition = game.state.cards[*card].definition;
+                out.reference(
+                    "meld component",
+                    VisibleReference {
+                        definition: Some(definition.0),
+                        ..Default::default()
+                    },
+                );
+                out.note(|| {
+                    format!(
+                        "Order option {} places {} first.",
+                        mode + 1,
+                        default_content_pack()
+                            .definition(definition)
+                            .expect("physical card definition")
+                            .name
+                    )
+                });
+            }
+        }
+        Decision::AssignCombatDamage {
+            attacker,
+            blocker,
+            pass,
+            minimum,
+            remaining,
+            last,
+            assigned,
+            ..
+        } => {
+            out.object("combat damage source", *attacker);
+            out.object("target", *blocker);
+            out.field(
+                "another damage step",
+                &matches!(pass, crate::flow::game::CombatDamagePass::FirstStrike),
+            );
+            if let Some(combat) = &game.state.combat {
+                for &id in &combat.first_strikers {
+                    if let Some(object) = game.permanent_object(id) {
+                        out.object("first-strike participant", object);
+                    }
+                }
+            }
+            out.field("minimum assignment", minimum);
+            out.field("remaining", remaining);
+            out.field("last blocker", last);
+            out.field("assigned combat damage", assigned);
+        }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {
                 out.field("replacement option", &index);
@@ -1033,6 +1542,7 @@ pub(crate) fn project_decision(
             out.object_ids("kept on top", top);
             out.object_ids("placed on bottom", bottom);
         }
+        Decision::ManifestDread { looked, .. } => out.object_ids("inspected", looked),
         Decision::Surveil {
             looked, graveyard, ..
         } => {
@@ -1065,13 +1575,13 @@ pub(crate) fn project_decision(
             out.field("placement", &(random_order, reveal, to_battlefield));
         }
         Decision::Payment(progress) => {
-            out.field("remaining payment", &progress.remaining);
-            out.objects("waterbend contributions", &progress.waterbend_paid);
+            out.field("remaining payment", &progress.owed);
+            out.receipt(&progress.receipt, None);
             out.effects("if paid", &progress.if_paid);
             out.effects("if declined", &progress.if_declined);
             if let Some(key) = &progress.spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
             if let Some(target) = progress.counters_on_decline {
                 out.target("counter on decline", target);
@@ -1131,10 +1641,14 @@ pub(crate) fn project_decision(
         Decision::Discard { remaining, .. } => out.field("discards remaining", remaining),
         Decision::KeepCreatures {
             max_total_power,
+            sacrifice,
             kept,
             ..
         } => {
-            out.field("maximum total power", max_total_power);
+            match sacrifice {
+                Some(count) => out.field("creatures each player sacrifices", count),
+                None => out.field("maximum total power", max_total_power),
+            }
             for id in kept {
                 out.target("kept creature", Target::Permanent(*id));
             }
@@ -1202,14 +1716,32 @@ pub(crate) fn project_decision(
             use crate::flow::decision::ResolutionCastOffer;
             out.field("pay casting costs", paid);
             match offer {
+                ResolutionCastOffer::Graveyard {
+                    predicate,
+                    exile_instants_and_sorceries,
+                } => {
+                    out.field("cast from graveyard", predicate);
+                    out.field("exile instants and sorceries", exile_instants_and_sorceries);
+                }
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { object: object_id } => {
+                ResolutionCastOffer::Exiled {
+                    object: object_id,
+                    below,
+                } => {
+                    out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
+                }
+                ResolutionCastOffer::AmongExiled { objects } => {
+                    for object in objects {
+                        out.object_id("cast from exile", *object);
+                    }
                 }
                 ResolutionCastOffer::Cascade {
                     object: object_id,
                     exiled,
+                    below,
                 } => {
+                    out.field("cascade mana value limit", below);
                     out.object_id("cast from exile", *object_id);
                     for exiled in exiled {
                         out.object_id("cascade exiled", *exiled);
@@ -1225,7 +1757,7 @@ pub(crate) fn project_decision(
             }
             if let Some(key) = spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
         }
         // Mana output/cost and caller chains are already explicit relation frames;
@@ -1236,4 +1768,84 @@ pub(crate) fn project_decision(
         | Decision::NameCard { .. } => return,
     }
     out.finish(frame);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::state::{player::PlayerConfig, zone::ZoneType};
+
+    fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
+        let mut out = Projection::new(game, PlayerId(0), true);
+        out.entry(&ZoneEntry {
+            face,
+            ..Default::default()
+        });
+        out.text.expect("text projection").notes
+    }
+
+    /// A modal back face entering is not a transformation (CR 712.11,
+    /// 712.14), and each entry form records only its own historical key:
+    /// `manifested`, `transformed`, `modal_back` or the `meld` pair.
+    #[test]
+    fn an_entry_face_reads_and_records_only_its_own_form() {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        let game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            712_11,
+            false,
+        );
+        let modal = entry_notes(&game, EntryFace::ModalBack);
+        assert!(modal.iter().any(|note| note == "enters back face up: true"));
+        assert!(!modal
+            .iter()
+            .any(|note| note.starts_with("enters transformed")));
+        assert_eq!(
+            entry_notes(&game, EntryFace::Transformed),
+            ["effect execution: true", "enters transformed: true"]
+        );
+        assert!(entry_notes(&game, EntryFace::Front).is_empty());
+
+        // Each form records only its historical key, where the old fields
+        // sat: between `face_down` and the end of this default entry.
+        let bytes = |face| {
+            serde_json::to_string(&ZoneEntry {
+                face,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let library = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0));
+        let partner = game.state.card_of(library[0]).unwrap();
+        let partner_index = serde_json::to_string(&partner).unwrap();
+        let front = bytes(EntryFace::Front);
+        let with = |keys: &str| front.replace(r#""transformed":false"#, keys);
+        assert!(front.ends_with(r#""face_down":false,"transformed":false}"#));
+        assert_eq!(bytes(EntryFace::Transformed), with(r#""transformed":true"#));
+        assert_eq!(
+            bytes(EntryFace::ModalBack),
+            with(r#""transformed":false,"modal_back":true"#)
+        );
+        assert_eq!(
+            bytes(EntryFace::Manifested),
+            with(r#""manifested":true,"transformed":false"#)
+        );
+        assert_eq!(
+            bytes(EntryFace::Melded {
+                partner,
+                result: CardDefId(7),
+            }),
+            with(&format!(
+                r#""transformed":false,"meld":[{partner_index},7]"#
+            ))
+        );
+    }
 }

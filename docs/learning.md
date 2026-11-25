@@ -243,7 +243,8 @@ Selection uses magnitude, so strongly bad decisions stay alongside strongly good
 ones. By default, a dropped row leaves both the policy and value losses;
 `filter_scope="actor"` keeps every row for the value loss. Advantages are not
 renormalized after filtering. If nothing survives, the iteration still counts
-but takes no optimizer step.
+but takes no optimizer step. Mixed snapshot batches apply the filter separately
+to eligible fresh and snapshot rows. [Snapshot learning rules](training-loop.md#rloo-baselines-stratified-filtering-and-plr)
 
 These are the last five decisions of a real lost game, from a batch that kept
 81 of 324 rows on an untrained network. `uv run python scripts/inspect_batch.py`
@@ -278,7 +279,7 @@ Filtered rows are removed within the window, and an empty window is skipped.
 Per retained row, with $r$ the ratio of current to behavior probability for the
 chosen action:
 
-$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}})$$
+$$L_\pi = -\min\big(rA,\ \mathrm{clip}(r, 0.8, 1.2)\,A\big) + 0.1\,\mathrm{KL}(\pi \,\|\, \pi_{\text{behavior}}) + \tau_i\,\mathrm{KL}(\pi \,\|\, \pi_{\text{magnet}}) + \varepsilon\,\mathrm{KL}(\pi_{\text{magnet}} \,\|\, \pi)$$
 
 The total loss is the mean of $L_\pi$ over retained rows plus the value loss:
 cross-entropy for a categorical head, squared error for a scalar one. Each term
@@ -292,16 +293,21 @@ has a separate job:
 - **KL to the magnet** pulls toward a fixed reference: uniform over action
   types, then uniform within a type. A spell with dozens of target choices then
   gets no more prior weight than a single attack. Its strength τ decays.
+- **The forward-KL floor** pulls each legal offer toward its magnet weight q.
+  In a two-offer balance with a fixed advantage gap δ, a rare offer has
+  probability about ε·q/δ when the forward KL dominates the reverse KL.
+  Set ε with `reference_forward_kl`. Its default is 0.
   [Influences](#influences) says where each term comes from.
 
 The **behavior policy** is the frozen weights that played the batch, and the
 ratio measures how far the learner has moved from them. From
 `damped_policy_loss` in
-[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
+[`manabot/training/updates/objective.py`](../manabot/training/updates/objective.py):
 
 ```python
-ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
-surrogate = clipped_surrogate(ratio_logs, advantages, clip)
+chosen_behavior = rl.action_logs(rl.constant(behavior_logs), actions)
+ratio_logs = rl.action_logs(logs, actions) - chosen_behavior
+surrogate = rl.clipped_surrogate(ratio_logs, advantages, clip)
 ```
 
 Collection stores log-probabilities for every legal action, because the KL term
@@ -323,7 +329,42 @@ return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 ```
 
 Each action type present gets equal mass, split evenly among that type's legal
-actions, and the penalty is a reverse KL summed over all legal actions.
+actions. The reverse KL and the optional forward KL both sum over legal actions.
+
+### Why the floor is a forward KL
+
+On a two-offer choice with probability π of one offer and logit gap g, the
+reverse-KL gradient on its logit is τ·π(1−π)·g for a uniform magnet.
+The restoring gradient peaks at about 0.224τ when |g| = 1.54 (the more
+likely offer has probability 0.824). At large gaps its magnitude decays
+as τ·|g|·exp(−|g|). In float32 the dominant
+probability can round to one while the rare offer still has a small restoring
+gradient. The forward KL's pull,
+ε·(π − ½) on a two-offer choice and ε·(π_a − q_a) per legal offer in general,
+is zero at the magnet and approaches magnitude ε/2 at a saturated two-offer
+choice. In a many-offer decision, a rare offer receives a pull of about ε·q_a.
+The magnet shares mass within each action type, so two rare offers can
+receive different pulls.
+
+Turn it on with one field of the learning record:
+
+```python
+from manabot.training.learning import DampedPolicyLearning
+
+learning = DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=0.002)
+```
+
+Each update records `reference_forward_kl_coefficient` (ε). The KL panel
+shows `reference_forward_kl`, the mean KL(magnet ‖ π) in nats over actor
+rows in the last optimized minibatch, including when the floor is off. The
+weight stays constant as τ decays. A negative weight is refused. A stored
+learning record or capture row without the key reads 0. At 0 the learning
+record omits the key, preserving the serialized settings of existing recipes.
+
+At ε = 0.002 a two-offer choice with a constant advantage of 0.06 at τ = 0.0063
+settles at a gap of about 3.6, where the rarer offer is still sampled about 2.6%
+of the time; without the floor it settles near 9.5 (0.01%). These are balance
+points for one decision with a fixed advantage, not predictions for a run.
 
 ![Constants from collection feed the policy, damping and value terms. Gradients reach only the live network, through one shared encoder.](images/gradient-flow.svg)
 
@@ -357,22 +398,17 @@ damping decay with the fraction of a declared `horizon` completed
 
 Training keeps two sets of weights. The **raw** weights are the learner, and
 they play the next batch. The **EMA** is an average updated once per iteration
-at 0.999, including iterations the filter emptied. A recipe can collect with the
+at 0.999, including iterations the filter emptied. Discovery batches with zero
+sample weight skip both Adam and EMA. A recipe can collect with the
 EMA by setting `behavior="ema-self"`; otherwise it is only an evaluation output.
 
-Checkpoints are bound to their [world](../WORLDS.md): a frozen version of the
-rules, cards and observation encoding. From `validate_checkpoint_world` in
-[`manabot/model/world.py`](../manabot/model/world.py):
-
-```python
-if _digest(current_binding_form(binding)) != _digest(expected):
-    raise ValueError(
-        "checkpoint world/setup/input binding differs from this runtime"
-    )
-```
-
-The check compares a digest of the world, setup and input binding, so a
-matching world number alone isn't enough. Evaluation runs outside
+A checkpoint is bound to the meaning of what it reads and chooses: its input
+columns, token names and action kinds, each by name. It keeps loading as cards
+are added and as the engine changes; `model_interface` in
+[`manabot/model/interface.py`](../manabot/model/interface.py) decides, and a
+refusal names the column, key or field that no longer means what the model
+learned ([running a checkpoint on a later revision](observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
+Evaluation runs outside
 the training clock and plays on held-out deals with both decks and seats
 ([evaluation.md](evaluation.md)). Its scores don't affect the loss. A run's
 selection rule is `last-complete-raw`, never the best seed or best evaluation,
@@ -383,7 +419,7 @@ so a result can't be picked by looking at the test.
 | Question | Metric | Reading it |
 | --- | --- | --- |
 | Is the agent improving? | Evaluation scores | The only strength signal. Self-play results can't show it, because both seats are the same agent. |
-| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of trajectory columns paused mid-game. Always 0 for complete games. |
+| Did batches contain unfinished games? | `bootstrapped_tail_fraction` | Share of seat trajectories that end with a critic bootstrap. A column containing two completed games and one paused game contributes three trajectories. |
 | Is the filter working as designed? | `retained` / `rows` | Should sit near a quarter. |
 | Is the policy moving too fast? | `collection_kl`, `numerical/clip_fraction` | Rising values mean updates are pushing against their limits. |
 | Is exploration collapsing? | `entropy` | A fast fall means the policy is committing early. |
@@ -466,14 +502,15 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 ## Fidelity to the sources
 
-`damped_policy_loss` in `manabot/backends/torch/rl.py` owns the
+`damped_policy_loss` in `manabot/training/updates/objective.py` owns the
 objective and `update_damped_iteration` in
 `manabot/training/updates/damped_policy.py` applies it; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
 regimes are rejected and need their pinned source; frozen evidence keeps the
 old tag. Per retained observation the policy loss is the negative clipped-ratio
 advantage surrogate plus `collection_kl * KL(current || behavior)` and
-`tau * KL(current || magnet)`, summed over all legal offers. Advantages use
+`tau * KL(current || magnet)`, summed over all legal offers, plus
+`reference_forward_kl * KL(magnet || current)` when that weight is nonzero. Advantages use
 signed expected outcomes with their own lambda. Outcome targets are three-way
 lambda mixtures stored in **loss, draw, win** order with one-hot terminals; the
 critic gets cross-entropy, equally weighted with the policy loss. The scalar
@@ -500,6 +537,7 @@ outputs are selected explicitly at arena registration.
 | --- | --- | --- |
 | S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; both clipping branches tested | Same loss |
 | Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and magnet | Finite legal log support required; rounded zeros counted, no smoothing |
+| Forward-KL floor (not in the source) | `reference_forward_kl * KL(magnet ‖ current)` over legal offers of retained rows | Departure, default 0: the reverse KL's pull vanishes at a locked choice |
 | Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control | MTG action types replace piece-then-move groups |
 | Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace same-player positions |
 | Outcome estimator, eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap | Loss/draw/win storage order is a permutation |
@@ -517,9 +555,11 @@ outputs are selected explicitly at arena registration.
 initialization, quantile interpolation and exact bootstrap pseudocode at a
 collection boundary. The choices above are explicit implementations, not
 recovered details. Supplement S5–S7 recipes are not blended in; DeepNash's
-R-NaD is not implemented. Departures also include post-normalization
-attention (the paper specifies pre-normalization), the value token as a local
-choice, and missing ordered past-move inputs.
+R-NaD is not implemented. Departures also include the value token as a local
+choice and missing ordered past-move inputs. Attention is pre-normalized, as
+the paper specifies, in a model with
+[`stream_norm`](observation-and-model.md#one-scale-for-every-stream); a model
+without the field keeps the historical post-normalization.
 
 Before any scientific comparison of PPO, categorical and scalar move learning,
 freeze a protocol, independent seeds, budgets, world and code identities,
@@ -537,11 +577,12 @@ each piece they are made of as a public function.
 | --- | --- |
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
-| Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
-| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Advantages and value targets | [`compute_batch_targets`](../manabot/training/updates/targets.py) |
+| Damped objective | `damped_policy_loss`, `minibatch_objective` in [`training/updates/objective.py`](../manabot/training/updates/objective.py) |
+| Loss terms | `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
-| Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
-| Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
+| Update rule | `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
+| Filter and per-source diagnostics | [`select_sources`](../manabot/training/updates/selection.py) |
 | Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
 | Defaults | `DampedPolicyLearning` in [`training/learning.py`](../manabot/training/learning.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

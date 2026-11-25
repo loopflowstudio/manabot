@@ -37,6 +37,8 @@ from manabot.training.updates.damped_policy import (
     compute_targets,
     update_damped_iteration,
 )
+from managym import SlotLoad
+from tests.fixtures.dense_collector import dense_collector
 
 Kind = Literal["scalar", "categorical_wdl"]
 Seats = Literal["one", "both"]
@@ -115,6 +117,8 @@ class CreditGames:
     start a draw game. Buffers deliberately contain unrelated native rewards.
     """
 
+    skip_trivial = True
+
     def __init__(
         self,
         buffers: dict[str, np.ndarray],
@@ -142,9 +146,16 @@ class CreditGames:
             if position == 1:
                 self.buffers["actions_valid"][row, 1] = 0  # forced offer
 
+    def load_slots_into_buffers(self, requests: list[SlotLoad]) -> None:
+        for request in requests:
+            self.positions[request.slot] = 0
+            self.episodes[request.slot] += 1
+        self._encode()
+
     def current_agent_indices(self) -> list[int]:
         return [
-            self.sequences[r][p] ^ self.swapped for r, p in enumerate(self.positions)
+            (seats[pos] ^ self.swapped) if pos < len(seats) else -1
+            for seats, pos in zip(self.sequences, self.positions, strict=True)
         ]
 
     def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
@@ -157,14 +168,12 @@ class CreditGames:
             assert self.buffers["actions_valid"][row, actions[row]]
             self.positions[row] += 1
             if self.positions[row] == len(self.sequences[row]):
-                self.positions[row] = 0
-                self.episodes[row] += 1
                 self.buffers["truncated" if self.truncated else "terminated"][row] = 1
         self._encode()
 
     def get_last_info(self) -> list[dict[str, int]]:
         return [
-            {} if self.draw or e > 1 else {"winner_index": 1 ^ self.swapped}
+            {} if self.draw or e >= 1 else {"winner_index": 1 ^ self.swapped}
             for e in self.episodes
         ]
 
@@ -193,7 +202,7 @@ def collector_for(
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     collector._env = CreditGames(
-        collector._buffers, swapped=swapped, draw=draw, truncated=truncated
+        dense_collector(collector), swapped=swapped, draw=draw, truncated=truncated
     )
     return collector
 
@@ -308,10 +317,10 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     collector = collector_for(agent, "one", games=None, closure="exact-quota")
     batch = collect(collector, agent, 2)
     # Stream 0 has taken 0,1 and pauses before 3 (after opponent 2).
-    # Stream 1 has taken 10,12 and terminated. Its reset value is irrelevant.
+    # Stream 1 has taken 10,12 and terminated. Its parked terminal value is irrelevant.
     assert markers(batch) == [0, 10, 1, 12]
     np.testing.assert_array_equal(batch.dones, [[False, False], [False, True]])
-    np.testing.assert_array_equal(batch.next_obs["agent_player"][:, 0, 0], [3, 30])
+    np.testing.assert_array_equal(batch.next_obs["agent_player"][:, 0, 0], [3, 13])
     assert not any(collector._pending) and not any(collector._streams)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     targets = compute_targets(
@@ -457,7 +466,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
         games_per_stream=1,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = CreditGames(collector._buffers)
+    collector._env = CreditGames(dense_collector(collector))
     batch = collect(collector, agent, 1)
     assert markers(batch) == [0, 1, 3, 10, 12]
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)

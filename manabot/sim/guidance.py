@@ -11,9 +11,13 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.identity import file_sha256
-from manabot.policy.protocol import Backend, BackendPolicy
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search import local_update
@@ -25,6 +29,7 @@ from manabot.sim.search.puct import (
     UniformRandomLeafEvaluator,
     puct_source_sha256,
 )
+import managym
 
 
 class PolicyPriorRandomLeafEvaluator:
@@ -45,18 +50,24 @@ class PolicyPriorRandomLeafEvaluator:
     ) -> np.ndarray:
         if action_count < 1:
             raise RuntimeError("policy-prior node has no legal actions")
-        encoded = (
-            observation
-            if isinstance(observation, Mapping)
-            else self.observation_space.encode(observation)
-        )
-        batch = self.agent.prepare(
-            {
+        if not isinstance(observation, Mapping) and self.observation_space.one_token:
+            obs_input: Any = managym.encode_observation_batch(
+                [observation],
+                self.observation_space.layout,
+                self.observation_space.config.action_overflow,
+            )
+        else:
+            # Deprecated dense dict / v9/v10 path; removed in 0.3.0.
+            encoded = (
+                observation
+                if isinstance(observation, Mapping)
+                else encode_observation(self.observation_space, observation)
+            )
+            obs_input = {
                 key: np.asarray(value, dtype=np.float32)[None]
                 for key, value in encoded.items()
-            },
-            inference=True,
-        )
+            }
+        batch = self.agent.prepare(obs_input, inference=True)
         logits, _discarded_value = self.agent.evaluate(batch)
         legal_logits = logits[0, :action_count]
         if not np.isfinite(legal_logits).all():
@@ -106,7 +117,7 @@ def build_registered_player(
     *,
     seed: int,
     checkpoint_path: str | None = None,
-    backend: Backend | None = None,
+    backend: PolicyLoader | None = None,
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     """Resolve the additive prior-only candidate or delegate unchanged kinds."""
 
@@ -154,7 +165,7 @@ def _build_policy_player(
     *,
     seed: int,
     checkpoint_path: str | None = None,
-    backend: Backend | None = None,
+    backend: PolicyLoader | None = None,
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     spec = dict(registration.player_spec)
     if registration.runner_kind == "checkpoint":

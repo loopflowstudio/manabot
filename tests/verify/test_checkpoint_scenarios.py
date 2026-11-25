@@ -14,7 +14,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.infra.identity import file_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.replay import replay_games
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint
@@ -65,9 +65,15 @@ def test_bound_checkpoint_scores_and_replays(tmp_path: Path, name: str) -> None:
     changed["decisions"][0]["command"]["expected_revision"] += 1
     assert not replay_games([changed], require_terminal=False).passed
     changed = deepcopy(game)
-    changed["scenario_root"]["world"] = "wrong"
-    with pytest.raises(ValueError, match="version/world/source"):
+    changed["scenario_root"]["source_sha256"] = "wrong"
+    with pytest.raises(ValueError, match="version/source"):
         replay_games([changed], require_terminal=False)
+    # A root recorded before the world label was removed carries it.
+    labelled = deepcopy(game)
+    labelled["scenario_root"]["world"] = "w17"
+    del labelled["game_trace_sha256"]
+    labelled["game_trace_sha256"] = canonical_sha256(labelled)
+    assert replay_games([labelled], require_terminal=False).passed
 
 
 def test_wrong_world_setup_and_capacity_fail_admission(tmp_path: Path) -> None:
@@ -78,11 +84,11 @@ def test_wrong_world_setup_and_capacity_fail_admission(tmp_path: Path) -> None:
     assert score.status == "failed" and score.correct is None
     assert "setup differs" in (score.error or "")
     data = read_checkpoint(path, weights_only=False)
-    data["world_binding"]["world"] = "wrong-world"
+    data["world_binding"]["policy_input_version"] = 1
     write_checkpoint(data, path)
     score, game = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and game is None
-    assert "world binding" in (score.error or "")
+    assert "policy_input_version" in (score.error or "")
     path = _checkpoint(tmp_path, name, max_actions=1)
     score, _ = score_checkpoint(name, path, backend=resolve("torch"))
     assert score.status == "failed" and score.correct is None

@@ -35,7 +35,6 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
-from managym import WORLD_VERSION
 from managym.bots import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
 
 
@@ -169,8 +168,7 @@ def validate_player_compatibility(
     player: PlayerRegistration, key: EvaluationKey, runtime: dict[str, Any]
 ) -> None:
     if (
-        player.world != key.world
-        or player.content_suite != key.content_suite
+        player.content_suite != key.content_suite
         or player.information_boundary != key.viewer_boundary
         or any(
             getattr(player, name) != runtime[name]
@@ -181,7 +179,7 @@ def validate_player_compatibility(
             )
         )
     ):
-        raise EvaluationError("candidate world/content/viewer compatibility mismatch")
+        raise EvaluationError("candidate content/viewer/ABI compatibility mismatch")
 
 
 def append_ledger(out_dir: Path, stage: str, payload: dict[str, Any]) -> None:
@@ -253,11 +251,10 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     space = space or ObservationSpace()
     match = selected_match()
     runtime = evaluation_runtime_fingerprints(
-        match_config=match, observation_space=space, world=WORLD_VERSION
+        match_config=match, observation_space=space
     )
     common = dict(
         runner_kind="code",
-        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         information_boundary="acting-viewer-history-only-v1",
         observation_abi_sha256=runtime["observation_abi_sha256"],
@@ -306,7 +303,6 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     )
     source_sha256 = source_digest(source_paths)
     key = EvaluationKey(
-        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         viewer_boundary=common["information_boundary"],
         arena_version="allies-lessons-"
@@ -327,7 +323,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
         "source_paths": source_paths,
         "source_sha256": source_sha256,
         "match_hypers": match.model_dump(),
-        "observation": space.encoder.config.model_dump(),
+        "observation": space.config.model_dump(),
         "deal_seeds": list(args.deal_seeds),
         "legs_per_block": 4,
         "game_seconds": args.game_seconds,

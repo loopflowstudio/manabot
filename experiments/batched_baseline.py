@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Literal
 
 from etude.jobs import TrainingJob
+from etude.report import Report
 from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,7 @@ from manabot.recipes.builders import PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import IterationSchedule
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+from manabot.training.panels import self_play_report
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -34,6 +36,10 @@ EXPERIMENT = Path(__file__).stem
 class BatchedConfig(BaseModel):
     updates: int = Field(default=128, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
+
+
+def report() -> Report:
+    return self_play_report()
 
 
 def train(config: BatchedConfig) -> None:

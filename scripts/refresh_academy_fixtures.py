@@ -1,4 +1,4 @@
-"""Refresh the w17 Academy fixtures after a change to state digests or ids.
+"""Refresh the live Academy fixtures after a change to state digests or ids.
 
 Each fixture pins digests of positions reached by recorded Commands (offer ids
 and labels) from an ordinary GameSession. This replays those Commands through
@@ -10,10 +10,9 @@ Run from the repository root after rebuilding the extension:
 
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
-Refreshes `managym/academy/fixtures/learn-demo-w17-token-cards.json`,
-`{precision,precision-mana}-demo-w17-manual-payment.json`,
-`choice-navigation-w17-smart-payment.json` and `trigger-order-w17-token-cards.json`. The conformance and
-parity receipts have their own writers (see `conformance/README.md`).
+Refreshes every play demo in `managym.academy.play_demo.DEMO_FILES`,
+and `choice-navigation-opening-v1.json`. Conformance and parity receipts have
+their own writers.
 """
 
 from __future__ import annotations
@@ -23,17 +22,11 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from manabot.verify.trigger_order import root
-from managym.academy.play_demo import load_play_demo
+from managym.academy.play_demo import DEMO_FILES, load_play_demo, manifest_digest
 from managym.academy.server import GameSession
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "managym" / "academy" / "fixtures"
-DEMOS = {
-    "learn": "learn-demo-w17-token-cards.json",
-    "precision": "precision-demo-w17-manual-payment.json",
-    "precision-mana": "precision-mana-demo-w17-manual-payment.json",
-}
 
 
 def _write(path: Path, value: dict[str, Any]) -> None:
@@ -79,7 +72,7 @@ def _replay(
 
 
 def refresh_demo(name: str, trace_dir: Path) -> None:
-    path = FIXTURES / DEMOS[name]
+    path = FIXTURES / DEMO_FILES[name]
     fixture = json.loads(path.read_text())
     demo = load_play_demo(name)
     session, frame, digests = _replay(
@@ -88,7 +81,7 @@ def refresh_demo(name: str, trace_dir: Path) -> None:
     assert session.env is not None
     for step, digest in zip(fixture["prefix"], digests, strict=True):
         step["before_digest"] = digest
-    fixture["manifest"] = session.env.content_pack_manifest()
+    fixture["manifest_digest"] = manifest_digest(session.env.content_pack_manifest())
     fixture["decision_digest"] = session.env.state_digest()
     fixture["decision_revision"] = frame["revision"]
     if frame["action_space"] != fixture["decision_kind"]:
@@ -102,7 +95,7 @@ def refresh_demo(name: str, trace_dir: Path) -> None:
 
 
 def refresh_navigation(trace_dir: Path) -> None:
-    path = FIXTURES / "choice-navigation-w17-smart-payment.json"
+    path = FIXTURES / "choice-navigation-opening-v1.json"
     fixture = json.loads(path.read_text())
     for family, position in fixture["positions"].items():
         session, frame, _ = _replay(position["config"], position["prefix"], trace_dir)
@@ -118,24 +111,11 @@ def refresh_navigation(trace_dir: Path) -> None:
     _write(path, fixture)
 
 
-def refresh_trigger_order() -> None:
-    path = FIXTURES / "trigger-order-w17-token-cards.json"
-    fixture = json.loads(path.read_text())
-    env, _ = root()
-    capture = json.loads(env.capture_decision(0).to_json())
-    fixture["world_version"] = capture["world_version"]
-    fixture["content_digest"] = capture["content_digest"]
-    fixture["root_digest"] = env.state_digest()
-    _write(path, fixture)
-    print(f"{path.name}: root {fixture['root_digest'][:12]}")
-
-
 def main() -> None:
     with tempfile.TemporaryDirectory() as trace_dir:
-        for name in DEMOS:
+        for name in DEMO_FILES:
             refresh_demo(name, Path(trace_dir))
         refresh_navigation(Path(trace_dir))
-    refresh_trigger_order()
 
 
 if __name__ == "__main__":

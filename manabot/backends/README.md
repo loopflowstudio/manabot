@@ -14,8 +14,9 @@ logits, values = policy.evaluate(batch)      # NumPy out: logits [B,A], values [
 `Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
 returns logits, -1e8 off the legal actions, and each row's value.
 `inference=True` lays the batch out as simulation and managed inference do (on CPU it
-drops object and fact columns no row uses); the default is the learning
-layout, whose outputs differ from it by float summation order. Every
+drops object and fact columns no row uses; on Torch MPS it keeps used object
+columns padded with empty columns to a power of two for attention); the default
+is the learning layout, whose outputs differ from it by float summation order. Every
 backend reads the same `Prepared` batch and the same checkpoint file, so the
 MLX lines differ only in the name passed to `resolve`
 ([mlx.md](mlx.md)).
@@ -23,15 +24,15 @@ MLX lines differ only in the name passed to `resolve`
 A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): observation admission, host
-preparation, the checkpoint container and the `BackendPolicy`,
-`BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
-run the PyTorch backend, which is also the reference every other backend is
-checked against.
+preparation, the checkpoint container and the host inference contract. Tracked training defaults to PyTorch. The local, baseline, Elemental and belief recipes
+also accept MLX. PyTorch is the default for evaluation and supplies the
+numerical parity reference; local evaluation and baseline verification also run
+on MLX in explicit CPU float32.
 
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | experimental policy and damped update; bf16 for wide models, f32 otherwise | [mlx.md](mlx.md) |
+| `mlx` | full policy architecture parity, damped and PPO training, live tokens, belief sampling/fitting, portable cross-backend continuation, sampled health, local evaluation, and portable policy and belief containers | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
@@ -44,22 +45,37 @@ with float32 log-probabilities, master weights and optimizer state.
 
 ## Layout
 
-Every backend is one package, `manabot/backends/<name>/`, with at least these
-files; a backend may add private modules that its `policy.py` uses (torch's
-encoders and `live_tokens.py`):
+Every backend is one package, `manabot/backends/<name>/`, with these files
+under the same names:
 
 | File | Holds |
 | --- | --- |
 | `__init__.py` | the import guard naming the optional extra, and the files below as attributes loaded on first use (`backend.rl`) |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
+| `runtime.py` | device setup, execution admission and fresh policy construction |
 | `policy.py` | the policy: `prepare`, and the forward over a `Prepared` batch (logits and values) |
+| `live_tokens.py` | object attention over the valid objects of a packed batch |
+| `decision_memory.py` | the decision-memory encoder over prepared records |
+| `collection.py` | frozen collection forwards and the collector's private RNG |
 | `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
 | `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
-| `checkpoint.py` | the map from canonical names to the backend's layout, loading (torch also saves), and `BACKEND` |
+| `state.py` | the backend tensors of saved training state and numerical incidents |
+| `checkpoint.py` | the map from canonical names to the backend's layout, portable loading and export, and `BACKEND` |
+| `belief.py`, `belief_fit.py` | lazy belief sampling (`SamplerCodec` / `BeliefSampling`) and fitting (`BeliefTrainer`) exposed as `backend.belief` and `backend.belief_fit` |
 
-`resolve` returns a `manabot.policy.protocol.Backend`: a configured loader
-with `rl`, `arrays`, `learner` and `rollout` modules for updates. These modules
+A backend adds modules only for what it alone needs. Torch's policy encoders
+are one module each (`semantic_cards.py`, `facts.py`, `shared_effects.py`,
+`records.py`, `recent_events.py`, `name_candidates.py`, `continuation.py`),
+with `numerics.py` for device arithmetic boundaries; it also holds the
+reference tools `bot.py`, `capture.py`, `decision_memory_probe.py` and
+`verify_decision_memory.py`. MLX's forward runs these encoders over packed
+rows inside `policy.py`, whose parameter containers mirror the torch modules'
+names; `gru.py` holds the packed GRU with its hand-written gradient.
+
+`resolve` returns the configured framework. Simulation loads a policy through
+`PolicyLoader`, checkpoint inspection reads its metadata and tensors through
+`CheckpointReader`, and updates take the `rl`, `arrays`, `learner` and `rollout` modules. These modules
 load on access, so playing a policy does not import training. A backend
 imports its own framework,
 `manabot.policy` and the configuration and observation modules; it never
@@ -71,7 +87,7 @@ Library code receives a backend; it does not import one. An update takes the
 configured backend object (or an imported update module) as its first
 argument, and simulation and evaluation take a
 policy that satisfies `BackendPolicy`. Checkpoint discovery and registration
-receive `Backend` for loading and metadata reads; they never resolve it themselves.
+receive a reader for metadata and a loader when they need a live policy; they never resolve it themselves.
 Only the code that starts a program
 chooses:
 
@@ -113,50 +129,126 @@ choose the backend inside `main()` or the child entry point and pass it to the
 reusable functions. Having a CLI in the same file does not make its library
 functions composition roots.
 
-### Collection, belief and recovery
+### Fresh collection and portable export
 
-Pass the selected backend through training execution, monitoring and
-verification. A caller that only runs inference takes a `BackendPolicy`; a
-caller that collects, learns or captures a numerical incident also needs the
-capabilities for that work. These arguments are required: helpers do not
-default to Torch or resolve a backend themselves. The role contracts are
-`TrainingBackend` and `TrainingState` in `training/state/backend.py`, the
-collector session in `training/rollout/numerics.py`, and the inference-only
-`SamplerBackend` in `belief/protocol.py`.
+`fresh_iteration(settings, backend=..., seed=..., out=...)` runs one collection,
+learner update and EMA step in a new directory. It returns the live policies
+and counts and writes separate raw and EMA policies when averaging is enabled.
+Both frameworks use `policy.checkpoint.save_policy_checkpoint`. Either reader
+can play or inspect an export whose architecture it supports. A learner initialized
+from one starts with fresh Adam state and counts.
+See the [fresh baseline example](mlx.md#what-the-backend-covers).
 
 The collector receives a numerical session that owns policy inference,
 precision and sampling. Native game streams, seat routing and complete-game
 accounting stay in the collector. Rollout records contain NumPy arrays;
 packing validates them through the injected numerical capability. Torch
 collection uses its private generator seeded at `seed + 1`, shared by learner
-actions and current-self opponent actions. A resumed run starts a fresh
-stream; the generator's state is saved only in a numerical incident.
+actions and current-self opponent actions. Tracked saves record it in
+`sampling.safetensors` under the `torch:<device>` domain so same-domain resumes
+continue the same stream; cross-domain resumes reseed deterministically from
+`(run.seed, counts.updates)`.
+
+### Tracked recipes
+
+The local, baseline, Elemental, `belief_policy` and `belief_sampler` recipes
+select the framework through their `backend` setting, which defaults to
+`"torch"`. On Apple Silicon, `backend="mlx"` runs both damped and PPO self-play
+as well as belief history collection and sampler fitting. The self-play recipes
+use the same collection, learning, EMA and portable export as the fresh
+iteration. Etude also records metrics, cumulative clocks and training saves.
+The loop requires the backend's `Continuation` capability before accessing run
+state.
+
+### Continuing a run
+
+Every tracked self-play run writes the same four files into
+`out/state/save-NNNNNNNN/` through Etude's `run.resume(export=, restore=, extra=)`
+API, whichever backend runs it:
+
+| File | Content |
+| --- | --- |
+| `state.json` | Etude clocks, seed, commit, file inventory and `Counts` (updates, transitions, optimizer steps, saved model settings, input readings and snapshot-bank state) |
+| `continuation.json` | Framework-free `HostContinuation` (schema 2): global-slot stream roots and committed action prefixes, `learned_game_rows`, opponent RNG, minibatch RNG and Python/NumPy RNGs |
+| `learner.safetensors` | Canonical float32 `raw/<canonical>`, optional `ema/<canonical>`, `adam/step`, `adam/exp_avg/<canonical>` and `adam/exp_avg_sq/<canonical>` for stepped parameters, plus the `schema="canonical-v1"` manifest (`precision`, `has_ema`, per-parameter `param_steps`, observation config, lookup-buffer digests, `counts_sha256`, `continuation_sha256`, `sampling_sha256`, `sampling_domain`) |
+| `sampling.safetensors` | Backend sampling RNG arrays keyed by `sampling_domain` (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) |
+
+Any backend that supports the saved model and precision can continue a save.
+For a launched run, supply the new recipe config when continuing from the
+parent's saved output. Etude queues the child in the parent's worker pool, so
+that pool must provide the selected backend and device.
+
+```sh
+uv run etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'
+```
+
+Within the same `sampling_domain`, resume restores the learner, EMA, Adam,
+counts, native games and sampling streams. In bounded CPU float32 self-play,
+the next update reproduces the host and sampling files byte for byte, every
+learner tensor and every work counter. Each attempt measures its own elapsed
+training time, which contributes to the learner header's `counts_sha256`.
+Across sampling domains (Torch ↔ MLX or Torch across CUDA/MPS/CPU), resume
+still verifies `sampling_sha256`, reseeds sampling deterministically from
+`(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1` on the first
+resumed update.
+
+Because PyTorch `Adam` skips `state[p]["step"]` when a conditional module
+receives `grad is None`, `learner.safetensors` records per-parameter
+`param_steps` (`0` means unstepped and omits zero moment tensors). Both backends
+restore each parameter's moments and update count. MLX uses the difference
+between that count and the global step for bias correction on subsequent dense
+updates, including a previously unused parameter's first update. On Torch → MLX,
+`run/adam_steps_aligned` counts the parameters whose clocks trailed the global
+step when training resumed.
+
+Published policy milestones (`out/policies/NNNNNNNN-{raw,ema}.safetensors`)
+stay separate from `out/state/save-NNNNNNNN/`: milestones carry `world_binding`,
+`checkpoint_source` and forward-compatible catalog rebinding, while training
+saves are strict exact-match continuation snapshots that validate every header,
+buffer digest, parameter, Adam tensor, host state and sampling digest before
+installing weights. The collector then verifies the reconstructed games before
+training or publishing a milestone.
+
+Legacy Torch saves written by Etude object registration (`learner.pt`,
+`optimizer.pt`, optional `ema.pt`) still resume read-only on Torch with fresh
+game and sampling streams, and write the canonical four-file layout on their
+next save; MLX refuses them with an actionable message to resume once on Torch
+first. Pre-unification MLX `training.safetensors` saves are refused explicitly
+on both backends. See the
+[tracked MLX training guide](mlx.md#tracked-training-and-recovery) and
+[training recovery](../../docs/training.md#recovery).
+
+Numerical incident evidence still uses the producing backend's format (`.pt` on
+Torch, `.safetensors` on MLX), and `manabot/training/loops/minimal.py` remains a
+standalone Torch tutorial loop.
+
+### Inspection and belief
+
+Frozen-choice inspection accepts a `PolicyLoader`. It keeps the observations
+and their offer and object permutations in NumPy and evaluates them through
+`policy.prepare(..., inference=True)`. The MLX reader can inspect a portable
+policy with Torch absent. A collected corpus stores the arrays in
+`observations.npz`, keyed by `<case name>/<buffer name>`. Numerical parity
+also takes a fresh learner and the framework's gradient and parameter mappings.
 
 Belief inference uses host observations and the policy's admission and
-evaluation methods. Search receives a hand sampler; the selected backend
-owns its physical or learned sampling arithmetic, random stream and learned
-state. Verification uses the policy for inference and injected learner
-capabilities for gradient diagnostics. Each forward reads a `Prepared` batch
-from host preparation; inference probes use `inference=True`.
+evaluation methods. Search receives a hand sampler. Both Torch and MLX expose
+`backend.belief` (`SamplerCodec` / `BeliefSampling`, owning sampling arithmetic,
+the random stream and learned state) and lazy `backend.belief_fit`
+(`BeliefTrainer`), and read and write one portable `belief.safetensors`
+container (`manabot.belief.checkpoint`). Torch retains a magic-byte fallback
+for reading legacy `.pt` samplers; MLX refuses legacy `.pt` bytes naming Torch.
+`manabot.reports.belief` reads sampler metadata without raw `torch.load`, while
+the host pools calibration, Brier scores and support violations per decision.
 
-Health reporting keeps step and rejection counters on the host, with tensor
-measurements supplied by the learner. Importing `training.updates.ppo`,
-`training.updates.damped_policy`, any `training.rollout` module or
-`sim.search.sampling` does not import Torch. Executing an operation still
-requires a backend that implements its capabilities. Unsupported operations
-refuse explicitly before collection or recovery; they do not fall back to
-Torch. MLX supports policy inference and the scalar damped update; it does
-not support PPO, belief training or full regime execution and recovery.
-
-A policy checkpoint supplies weights for play. Exact training continuation
-also needs the admitted optimizer, EMA, collector and RNG snapshot. State
-serialization and optimizer validation belong to the selected backend;
-world, source, artifact digest and stage-lineage admission still apply before
-execution. Torch recovery retains its format-4 update snapshots, including
-the historical `torch_rng` field, and restores framework RNG last. Those
-files and incident evidence remain framework-specific; passing a different
-backend does not convert them. Use the original admitted source and backend
-to resume a retained run.
+Health reporting keeps step and rejection counters on the host behind one
+`StepRecorder` protocol (`manabot.training.updates.health.StepRecorder`). Both
+Torch and MLX learners supply sampled gradient and parameter measurements on the
+first optimizer step of iteration 1 and every 25th iteration. An optimizer
+failure after clipping retains the gradient sample. The former
+`manabot.backends.torch.learner.StepRecorder` import is deprecated and will be
+removed in 0.3.0. The update, rollout and search-sampling modules can all be
+imported with Torch absent.
 
 ## Algorithms are written once
 
@@ -173,37 +265,43 @@ diagnostics = update_damped_iteration(
 )
 ```
 
-The damped update runs on torch and on MLX. One minibatch at the same
-weights gives the same diagnostics on both, within the
-[parity check](#parity-check)'s bars
-(`tests/training/test_update_backends.py` runs it on every installed
+Both maintained updates (`update_damped_iteration` and PPO `update_iteration`)
+run on Torch and on MLX. One minibatch at the same weights gives the same
+diagnostics on both, within the [parity check](#parity-check)'s bars
+(`tests/training/test_update_backends.py` runs them on every installed
 backend):
 
 ```python
+import numpy as np
+
 import manabot.backends.mlx as backend
+from manabot.training.learning import Learning
+from manabot.training.updates.ppo import update_iteration
 
 learner = backend.learner.Learner(policy, minibatch_rows=64)
-diagnostics = update_damped_iteration(
+damped = update_damped_iteration(
     backend, learner, batch, move_learning(), iteration=1
+)
+ppo = update_iteration(
+    backend, learner, batch, Learning(), progress=0.0, rng=np.random.default_rng(0)
 )
 ```
 
 Inside an update, array math goes only through the backend's modules. The
-Protocols in `manabot/training/updates/backend.py` state this surface
-(`UpdateBackend` for the damped update; `PPOBackend`, torch only, adds what PPO
-calls; `CategoricalRL`, torch only, the categorical critic), and
-`tests/training/test_update_backend_protocols.py` checks every installed
-backend against them:
+Protocols in `manabot/training/updates/backend.py` state one uniform surface
+(`UpdateBackend` and `RL`, covering both updates and both scalar and
+categorical critics), and `tests/training/test_update_backend_protocols.py`
+checks every installed backend against it:
 
 - `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`)
   and `float32` for a forward output.
 - `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
-  `action_logs`, `reference_logs`, `damped_policy_loss`), the losses
-  (`clipped_surrogate`, `reverse_kl`, `squared_value_loss`,
+  `action_logs`, `reference_logs`), the losses
+  (`clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`,
   `categorical_value_loss`, `entropy`, `clip_fraction`), returns
   (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`,
-  `outcome_probabilities`, `expected_outcome`), selection (`selected_rows`,
-  `selection_mask`, `selected_mean`), `constant` for a value with no gradient
+  `outcome_probabilities`, `expected_outcome`), selection (`selected_magnitudes`) and
+  reductions (`selected_mean`, `weighted_sum`), `constant` for a value with no gradient
   path, and the refusals (`require`, `require_finite`, `float64_operand`,
   `NumericalError`).
 - `backend.learner`: its `Learner` holds the policy and optimizer, sets the
@@ -214,10 +312,15 @@ backend against them:
   `Prepared` batches on the learner's device (`rows`, `next_observation`),
   their legal mask (`legal`) and the arrays a rejected step retains
   (`evidence`: the prepared batch's arrays by field name, in NumPy).
-  PPO additionally consumes `minibatches(order, size, device)` as a context
-  manager: Torch prepares one host batch ahead, yields batches in the supplied
-  order, and joins its worker when the context exits. Device transfers and
-  all model and optimizer work run on the caller.
+  `minibatches(order, size, device)` is a context manager on `AdmittedRollout`
+  in both backends, backed by shared one-ahead host prefetch in
+  `AdmittedRows.prefetch_minibatches` (`manabot/training/rollout/admission.py`)
+  with strict release-before-submit ordering; exiting joins the worker even on
+  failure. Device transfers and all model and optimizer work run on the caller.
+
+The shared `damped_policy_loss(rl, ...)` and `minibatch_objective` in
+`manabot.training.updates.objective` compose the policy and critic terms.
+Calling `backend.rl.damped_policy_loss(...)` emits a deprecation warning until removal in 0.3.0.
 
 An update writes its minibatch loss as a closure over the policy forward and
 hands it to the learner, because a functional framework differentiates a
@@ -240,9 +343,9 @@ on host rows: which rows train, minibatch indexes, action-type counts, batch
 health, `selection_diagnostics` and `value_scale`. Logic that is pure NumPy
 lives once in `manabot.policy`: `reference_distribution` (`prepare.py`) and
 the returns and selection recursions (`returns.py`), which both backends'
-`transition_gae` wrap; torch keeps advantage selection on the minibatch's
-device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
-for bit. The
+`transition_gae` and `categorical_lambda_returns` wrap; torch keeps advantage
+selection on the minibatch's device (`selected_magnitudes`, `torch.quantile`),
+matching `returns.quantile` bit for bit. The
 algorithm modules (`damped_policy.py` and `ppo.py`) import no framework and no backend, even for annotations
 (`tests/test_package_boundaries.py` enforces it); they name the backend's
 arrays, devices and observation batches as the opaque `Array`, `Device` and
@@ -252,20 +355,16 @@ A function has the same name, arguments, shapes and per-row results in every
 backend that has it; the torch backend's signatures are the reference, and
 [training loops](../../docs/training-loop.md#standard-methods-kept-local)
 documents them. A backend never carries its own copy of an update's loss:
-`manabot.backends.parity` runs `minibatch_objective` through each backend's
-`rl` and `Learner`. What still differs between the two backends:
+`manabot.backends.parity` runs `minibatch_objective` (for both scalar and
+`categorical_wdl` policies) through each backend's `rl` and `Learner`. What
+still differs between the two backends:
 
 - MLX has no float64 on the GPU, so its surrogate ratio and loss sum are
   float32; torch's are float64.
-- MLX's `rl` holds what the scalar damped update calls. It has no categorical
-  critic functions (`categorical_lambda_returns`, `categorical_value_loss`,
-  `outcome_probabilities`, `expected_outcome`), and the backend refuses a
-  categorical checkpoint; it also lacks `standardized_advantages` and
-  `selected_rows`, which only PPO calls.
-- `OptimizerHealth` counts steps and rejections on every backend; its sampled
-  gradient and parameter detail comes from the learner and is absent on MLX.
-- The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
-  `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
+- In self-play, `live_tokens=True` is admitted per backend in
+  `backend.runtime.admit_execution`: Torch requires CUDA, while MLX accepts
+  both `mps` and `cpu`. The packed MLX layers share the
+  host offsets for all attention heads and layers in a forward.
 
 ## The torch backend
 
@@ -278,8 +377,8 @@ require their original revision; retained captures remain readable.
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
 | `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
-| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `forward_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_magnitudes`, `selected_rows`, `selection_mask`, `selected_mean`, `weighted_sum`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
+| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of`, `on_device` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
@@ -317,23 +416,52 @@ or `load_checkpoint(...)`, not checkpoint fields. Every lookup a batch needs
 is measured on the host, so the device forward reads nothing back.
 
 `prepare(obs, inference=True)` prepares inference rows with the complete
-catalog program schedule, and on CPU drops the fact and object columns no
-row in the batch uses. Simulation and search prepare this way. Column
-compaction changes floating-point summation order, so learner rows use the
-default `inference=False`: they retain those columns and select only referenced
-catalog programs unless bucketed shapes require the full schedule. The argument
-chooses preparation purpose independently of autograd mode; `no_grad` does not
-change a default learner batch into an inference batch. Torch rollout `rows`
-and `minibatches` always prepare learner rows; `next_observation` always
-prepares inference rows for bootstrapping.
+catalog program schedule and selects the device's inference layout
+([inference column compaction](../../docs/observation-and-model.md#inference-column-compaction)):
 
-`BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
-`ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
-names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
-back).
+- **CPU:** drops unused object columns (`attention="used_columns"`) and, unless
+  `bucketed_shapes=True`, unused fact columns (`facts="used_columns"`).
+- **MPS:** pads used object columns with empty columns to a power of two
+  (`attention="bucketed_columns"`), bounding distinct Metal attention shapes.
+- **CUDA:** keeps padded object and fact columns.
+
+When `attention_on` is false, object column compaction is skipped; when
+`live_tokens=True` and `attention_on` is true, packed live-token attention takes
+precedence over column compaction. Simulation, search and rollout bootstrapping
+prepare with `inference=True`. Column compaction changes floating-point
+summation order, so learner rows use the default `inference=False`: they retain
+padded object columns (unless `live_tokens=True`) and select only referenced
+catalog programs. Bucketed CUDA learners use the full schedule to keep the
+catalog encoder's shape fixed across batches.
+The argument chooses preparation purpose independently of autograd mode;
+`no_grad` does not change a default learner batch into an inference batch.
+Torch rollout `rows` and `minibatches` always prepare learner rows;
+`next_observation` always prepares inference rows for bootstrapping.
+
+Torch MPS uses `facts="bucketed_live_rows"` for inference and learning. It
+packs live facts into one `[1,R]` route and adds unlinked rows so `R` is a
+power of two of at least 64. Captured 64-board calls had at most 1.3% of
+their fact rows live. CPU and CUDA use `[B,F]` fact routes.
+
+Every packed GRU (catalog programs, fact programs, record reducers) goes
+through `packed_gru` (`torch/packed_gru.py`). On MPS it projects all packed
+rows once and runs a hand-written backward that carries only the state
+gradient through the reverse step loop, as MLX's `gru_recurrence` does.
+On MPS, `nn.GRU` over a `PackedSequence` dispatches about twenty ops per step.
+It reads the module's `nn.GRU` weights and runs in float32 under autocast, as
+`nn.GRU` does on MPS. CPU and CUDA call `nn.GRU`.
+
+`Learner` and `forward_precision` accept `"float32"`, `"tf32"` and `"bf16"`,
+refusing unknown precision names and `"bf16"` on CPU with `ValueError` rather
+than silently falling back to float32. For parity, Torch’s `BACKEND.load`
+accepts optional `device`, `precision` and `bucketed_shapes` (defaulting to
+CPU, float32 and padded; `"bfloat16"` translates to `"bf16"` for `Learner`)
+and returns an `ActorCritic` and a `Learner`, whose parameters and gradients
+keep torch's names (`torch_name` in `manabot.policy.checkpoint` maps canonical
+names back).
 
 Read card-program rows through `SemanticCardEncoder.lookup`
-(`manabot/backends/torch/_semantic_cards.py`), never `table[rows]`. Card and fact IDs
+(`manabot/backends/torch/semantic_cards.py`), never `table[rows]`. Card and fact IDs
 repeat heavily in a batch; under CUDA autograd `lookup` uses embedding
 backward, which groups repeated rows, where advanced indexing accumulates each
 row separately and made PPO updates 2.17× slower on an L4
@@ -404,9 +532,13 @@ metadata = read_metadata("policy.safetensors")
 metadata["world_binding"], metadata["hypers"]["agent_hypers"]
 ```
 
-Optimizer state, update snapshots and incident tensors are PyTorch files and
-keep the `.pt` suffix; they are not policy checkpoints and no other backend
-reads them.
+Tracked training continuation uses the shared four-file safetensors/JSON layout
+across both backends ([continuing a run](#continuing-a-run)); Torch still reads
+legacy `.pt` saves and uses `.pt` for numerical incidents, while MLX writes
+numerical incidents as safetensors. Portable policy exports (`.safetensors`)
+and belief samplers (`belief.safetensors`) load on either backend for
+evaluation and fresh learners; legacy `.pt` policies and belief samplers load
+only on Torch.
 
 ### Convert an older `.pt` checkpoint
 
@@ -427,10 +559,8 @@ beside it, with the original file's name under `converted_from`. Every torch
 tensor becomes one parameter or buffer, or conversion fails naming the key.
 It converts any configuration and refuses a `.safetensors` input.
 
-A backend refuses what it does not implement when it loads, not when the file
-is written: the [MLX backend](mlx.md#what-the-backend-covers) raises
-`UnsupportedPolicy` naming every unsupported field, rather than running a
-policy partially.
+Both backends build every `ModelConfig` architecture. The shared checkpoint
+reader rejects unsupported input versions through `ObservationConfig.from_checkpoint`.
 
 ## Parity check
 
@@ -456,28 +586,45 @@ mlx    gradient extra_attention.5.mlp.layers.0.weight min cosine 1.000000 over 2
 parity: pass (torch, mlx)
 ```
 
-The check runs the PyTorch model in float32 on CPU as the reference and every
-installed backend, torch included, on the same inputs, each side computing
-the damped update's `minibatch_objective` through its own backend: a
-retained capture directory written by the frozen MLX pilot (real learner
-minibatches with their targets and settings, and real collection calls). Each
-backend loads the reference's weights through the canonical names and is
-compared in its own parameter layout. The check compares logits on legal
-actions and values (absolute difference), the update's loss (relative difference),
-each parameter's gradient (cosine similarity), and every weight after one
-Adam step with gradient clipping. Float32 tolerances remain fixed:
-logits and values within 1e-4, loss within 0.1%, every gradient cosine at
-least 0.999, post-step weights within 1e-6 absolute. The weight bar includes
-every parameter; only the gradient-cosine check treats negligible tensors as
-zero. A tensor whose gradient norm is below 1e-6 of the global norm in
-both frameworks counts as zero: the policy-score bias and every attention key
-bias have analytically zero gradients (softmax ignores a shift shared by all
-its inputs), so both sides hold rounding noise. The check exits 1 naming each
-failing backend's worst components, and 2 when the checkpoint or capture
-cannot be read, the checkpoint is refused or no backend is installed; a
-timing in the ordinary MLX pilot requires passing parity. The MPS retest
-explicitly retains approximate arms and reports their numerical differences.
+The reference is padded Torch CPU float32. Every candidate loads the same
+weights and replays the same learner minibatches and collection calls from
+`manabot.backends.torch.capture`. Both learners compute the production
+damped objective. After comparing one clipped Adam step, parity reloads the
+checkpoint on each side for the remaining comparisons.
 
-For explicit MLX half precision, select `--backend mlx --precision bfloat16`.
-See the [compute precision guide](mlx.md#compute-precision) for
-the API and dtype-specific numerical gates.
+Float32 requires legal logits and critic values within 1e-4, relative loss
+within 0.1%, per-tensor gradient cosine of at least 0.999 and every post-step
+weight within 1e-6. Gradients below 1e-6 of the reference's global norm on
+both sides count as zero. A constant shift of all softmax inputs leaves its
+output unchanged, so policy-score and attention-key biases can have only
+rounding noise in their gradients. Bfloat16 uses a full-gradient cosine and
+calibrated forward and loss limits. [Compute precision guide](mlx.md#compute-precision)
+
+To check a bucketed Torch MPS candidate in bfloat16, run
+
+```sh
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture \
+  --backend torch --device mps --precision bfloat16 --bucketed --threads 4 --json parity.json
+```
+
+On the M1 w64l2 baseline capture, this command checked eight minibatches and
+eight collection calls. The bucketed Torch MPS forward ran in bfloat16 and
+the clipped Adam step was finite. The largest relative learner-loss difference
+was 3.63% against the 1% tolerance, so the command exited 1 and wrote
+`"failures": ["learner loss"]` to the report.
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--backend` | all installed | Select `torch` or `mlx`. |
+| `--device` | `cpu` (Torch), `mps` (MLX) | Torch accepts `cpu`, `mps`, or `cuda`. MLX accepts `cpu`, `mps`, or its alias `gpu`. |
+| `--precision` | `float32` | Use `float32` or `bfloat16` for the forward. The loss takes float32 logits and values. Torch bfloat16 requires MPS or CUDA. |
+| `--bucketed` | off (padded) | Trim candidate inputs to bucketed shapes. |
+| `--threads` | current Torch thread count | Set Torch threads during the check. MLX manages its own thread pool. |
+
+The JSON records the checkpoint digest, sample indices, actual device,
+layout and observed critic dtype before float32 promotion. A target mismatch,
+empty learner or collection sample, nonfinite computation or tolerance miss
+fails the check (exit 1). Invalid inputs and unavailable devices exit 2.
+The M1 benchmark also reports timings for finite bfloat16 candidates that
+miss a numerical tolerance and identifies each failed check.
+[M1 benchmark results](../../experiments/reports/mini_baseline_backends.md)

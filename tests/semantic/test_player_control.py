@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.managym.decision import SemanticContractError
 from manabot.managym.experience import LegacyHeroObservation
 from manabot.managym.experience_projection import decision_surface_view
@@ -113,9 +113,8 @@ def test_bloodbending_text_policy_and_academy_share_authority(paid: bool) -> Non
     duration = "turn" if paid else "combat phase"
     assert f"during this {duration}" in decision.text
     assert "Accumulate Wisdom" in decision.text
-    expected = ObservationSpace().encode(raw)
-    for key, actual in env.encode_observation(raw).items():
-        np.testing.assert_array_equal(actual, expected[key], err_msg=key)
+    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
+    assert int(np.count_nonzero(valid)) == len(raw.action_space.actions) > 0
     projection = LegacyHeroObservation.model_validate(decision_surface_view(env, 0))
     assert projection.decision_context is not None
     assert projection.decision_context.actor == 0
@@ -194,3 +193,91 @@ def test_native_heuristic_uses_published_chooser_under_control(caster: int) -> N
     assert 0 <= choice < len(raw.action_space.actions)
     env.step(choice)
     assert env.state_digest() != before
+
+
+def test_controlled_flameshape_cards_keep_their_terms_for_the_controller() -> None:
+    """A controller who makes their opponent cast Flameshape inspects the
+    face-down cards it exiled, with the grant's terms: the opponent may play
+    them while they control a Wizard."""
+    gandalf = "Gandalf, Goblins' Bane"
+    env = priority_root(
+        ("Secret of Bloodbending",),
+        ("Island",) * 14,
+        opponent=(gandalf, "Mountain", "Mountain", "Mountain"),
+    )
+    env.scenario_clear_hand(1)
+    env.scenario_force_card_in_hand(1, gandalf)
+    env.scenario_refresh()
+
+    def step(kind: managym.ActionEnum, description: str | None = None) -> None:
+        raw = env.observation_for_player(env.current_agent_index())
+        env.step(
+            next(
+                i
+                for i, action in enumerate(raw.action_space.actions)
+                if action.action_type == kind
+                and (description is None or action.description == description)
+            )
+        )
+
+    def quiet() -> None:
+        raw = env.observation_for_player(env.current_agent_index())
+        env.step(
+            next(
+                (
+                    i
+                    for i, a in enumerate(raw.action_space.actions)
+                    if a.action_type
+                    in (
+                        managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+                        managym.ActionEnum.DECLINE_CHOICE,
+                    )
+                ),
+                0,
+            )
+        )
+
+    raw = env.observation_for_player(0)
+    source = next(
+        c.id
+        for c in raw.agent_cards
+        if c.characteristics.name == "Secret of Bloodbending" and int(c.zone) == 1
+    )
+    env.step(
+        next(
+            i
+            for i, a in enumerate(raw.action_space.actions)
+            if a.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+            and source in a.focus
+        )
+    )
+    step(managym.ActionEnum.PAY_COST)
+    step(managym.ActionEnum.CHOOSE_TARGET)
+    step(managym.ActionEnum.PAY_COST)
+    for _ in range(200):
+        raw = env.observation_for_player(env.current_agent_index())
+        if any(a.description == "Cast Flameshape" for a in raw.action_space.actions):
+            break
+        quiet()
+    else:
+        raise AssertionError("the controlled turn never offered Flameshape")
+    assert env.current_agent_index() == 0
+    step(managym.ActionEnum.PRIORITY_CAST_SPELL, "Cast Flameshape")
+    step(managym.ActionEnum.PAY_COST)
+    for _ in range(10):
+        projection = LegacyHeroObservation.model_validate(decision_surface_view(env, 0))
+        exiled = [c for c in projection.agent.inspected or [] if c.face_down]
+        if exiled:
+            break
+        quiet()
+    else:
+        raise AssertionError("Flameshape did not resolve")
+    assert len(exiled) == 2
+    for card in exiled:
+        assert card.zone == "EXILE"
+        assert card.owner_id == projection.opponent.id
+        grant = card.cast_permission
+        assert grant is not None
+        assert grant.player_id == projection.opponent.id
+        assert grant.face_down and grant.play_lands
+        assert grant.condition == "you control a Wizard permanent"

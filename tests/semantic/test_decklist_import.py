@@ -84,7 +84,6 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     env.reset(Match(config).to_rust())
     world = managym.world_identity()
     assert env.content_pack_manifest()["content_digest"] == world["card_digest"]
-    assert env.content_pack_manifest()["world_version"] == world["world_version"]
 
 
 def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:

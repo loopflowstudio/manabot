@@ -14,6 +14,7 @@ from manabot.infra.config import RewardConfig
 from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
+from tests.fixtures.dense_collector import dense_collector
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,7 +60,7 @@ def _one_seat(closure: BatchClosure) -> Collector:
         batch_closure=closure,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = ScriptedGames(collector._buffers)
+    collector._env = ScriptedGames(dense_collector(collector))
     return collector
 
 
@@ -68,6 +69,19 @@ def test_exact_quota_pauses_mid_game_at_the_quota() -> None:
     batch = collect(_one_seat("exact-quota"), agent, 2)
     assert batch.dones.shape == (2, 2)
     assert not batch.next_done.all()
+
+
+def test_exact_quota_counts_trajectories_within_each_column() -> None:
+    batch = collect(_one_seat("exact-quota"), _agent(), 4)
+    # One three-choice game and an unfinished tail in stream 0, two whole
+    # two-choice games in stream 1. Rows are interleaved in flat batch order.
+    assert [list(rows) for rows in batch.trajectory_rows()] == [
+        [0, 2, 4],
+        [6],
+        [1, 3],
+        [5, 7],
+    ]
+    assert batch.bootstrapped_tail_fraction() == 0.25
 
 
 def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:

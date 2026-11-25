@@ -53,7 +53,7 @@ class TestRolloutPool:
 
         obs_space = ObservationSpace()
         buffers = allocate_buffers(obs_space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=obs_space.layout)
 
         rng = np.random.default_rng(0)
         active = pool.encode_active()
@@ -79,16 +79,18 @@ class TestRolloutPool:
         env, _ = make_env(seed=5)
         pool = env._engine.rollout_pool(1, 1, 7, 2000)
         capacity = pool.num_slots + 8
-        buffers = allocate_buffers(ObservationSpace(), capacity)
-        pool.set_buffers(buffers, capacity)
+        space = ObservationSpace()
+        buffers = allocate_buffers(space, capacity)
+        pool.set_buffers(buffers, capacity, layout=space.layout)
         assert pool.encode_active() is not None
 
     def test_pool_does_not_mutate_source_env(self):
         env, _ = make_env(seed=9)
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
-        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        space = ObservationSpace()
+        buffers = allocate_buffers(space, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         active = pool.encode_active()
         guard = 0
         while active and guard < 3000:
@@ -97,6 +99,36 @@ class TestRolloutPool:
             active = pool.step_active(actions.tolist())
         assert env._engine.action_count() == before
         assert not env._engine.is_game_over()
+
+    def test_rollout_pool_batch_matches_dense_scores(self):
+        env, _ = make_env(seed=11)
+        space = ObservationSpace()
+        dense_pool = env._engine.rollout_pool(2, 2, 42, 2000)
+        batch_pool = env._engine.rollout_pool(2, 2, 42, 2000)
+        buffers = allocate_buffers(space, dense_pool.num_slots)
+        dense_pool.set_buffers(buffers, dense_pool.num_slots, layout=space.layout)
+        batch_pool.set_observation_layout(space.layout)
+
+        rng_dense = np.random.default_rng(0)
+        rng_batch = np.random.default_rng(0)
+        dense_active = dense_pool.encode_active()
+        batch_active, batch = batch_pool.encode_active_batch()
+        while dense_active:
+            assert batch_active == dense_active
+            assert batch.batch_size == len(batch_active)
+            dense_actions = np.zeros(dense_pool.num_slots, dtype=np.int64)
+            batch_actions = np.zeros(batch_pool.num_slots, dtype=np.int64)
+            for idx, (slot, count) in enumerate(
+                zip(batch_active, batch.action_counts, strict=True)
+            ):
+                valid = np.flatnonzero(buffers["actions_valid"][slot] > 0)
+                assert len(valid) == count
+                dense_actions[slot] = rng_dense.choice(valid)
+                batch_actions[slot] = rng_batch.choice(np.arange(count))
+            dense_active = dense_pool.step_active(dense_actions.tolist())
+            batch_active, batch = batch_pool.step_active_batch(batch_actions.tolist())
+        assert batch_active == []
+        assert batch_pool.scores() == dense_pool.scores()
 
 
 class TestBatchedSampler:
@@ -173,6 +205,19 @@ class TestBatchedSampler:
 
 
 class TestVectorDriver:
+    def test_only_unfinished_seat_quota_keeps_playing(self) -> None:
+        records, stats = run_vector_games(
+            RandomBatchController(1),
+            RandomBatchController(2),
+            num_games=3,
+            num_streams=2,
+            deck={"Forest": 8},
+            max_env_steps=100,
+        )
+        assert sorted(game.hero_seat for game in records) == [0, 0, 1]
+        assert all(game.winner in (0, 1) for game in records)
+        assert stats["total_env_steps"] == sum(game.steps for game in records)
+
     def test_seat_balanced_records(self):
         torch.manual_seed(0)
         agent = ActorCritic(ObservationSpace(), ModelConfig())

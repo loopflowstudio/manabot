@@ -1,4 +1,4 @@
-"""Torch tensors for a numerical incident, and their serialization.
+"""Torch policy and Adam continuation, and bounded numerical incident evidence.
 
 `capture_incident` bounds the evidence it keeps; the host owns the incident
 directory and its metadata (`training/state/incidents.py`).
@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from pathlib import Path
+import pickle
 import random
 from typing import TYPE_CHECKING, Any, BinaryIO
 
@@ -15,20 +17,75 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from manabot.backends.torch.checkpoint import (
+    policy_arrays as policy_arrays,
+    policy_buffers as policy_buffers,
+)
 from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import PrefixObservation, archive_memory
+from manabot.env.memory_store import archive_memory, select_rows
+from manabot.policy.checkpoint import canonical_name
+from manabot.policy.decision_memory import retained_memory
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
+from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import Collector, RolloutBatch
+    from manabot.training.rollout.numerics import CollectionSession
 
 
-@contextmanager
-def preserve_rng() -> Iterator[None]:
-    with torch.random.fork_rng(devices=[]):
-        yield
+def parameter_shapes(agent: ActorCritic) -> dict[str, tuple[int, ...]]:
+    return {
+        canonical_name(name): tuple(p.shape) for name, p in agent.named_parameters()
+    }
+
+
+def load_policy_arrays(agent: ActorCritic, arrays: Mapping[str, np.ndarray]) -> None:
+    """Copy into the live parameters so the optimizer keeps its references."""
+    admit_policy_arrays(arrays, parameter_shapes(agent))
+    with torch.no_grad():
+        for name, parameter in agent.named_parameters():
+            parameter.copy_(torch.from_numpy(arrays[canonical_name(name)]))
+    agent.clear_cache()
+
+
+def adam_state(learner: Learner, *, step: int) -> AdamState:
+    steps: dict[str, int] = {}
+    first: dict[str, np.ndarray] = {}
+    second: dict[str, np.ndarray] = {}
+    for name, parameter in learner.agent.named_parameters():
+        key = canonical_name(name)
+        entry = learner.optimizer.state.get(parameter)
+        if entry:
+            steps[key] = int(entry["step"].item())
+            first[key] = entry["exp_avg"].detach().cpu().numpy()
+            second[key] = entry["exp_avg_sq"].detach().cpu().numpy()
+        elif step:
+            steps[key] = 0
+    adam = AdamState(step, steps, first, second)
+    admit_adam(adam, parameter_shapes(learner.agent), step=step)
+    return adam
+
+
+def load_adam(learner: Learner, adam: AdamState) -> int:
+    """Replace live Adam history while preserving optimizer groups and rate."""
+    admit_adam(adam, parameter_shapes(learner.agent), step=adam.step)
+    entries = {}
+    for name, parameter in learner.agent.named_parameters():
+        key = canonical_name(name)
+        if count := adam.param_steps.get(key, 0):
+            entries[parameter] = {
+                "step": torch.tensor(float(count), dtype=torch.float32, device="cpu"),
+                "exp_avg": torch.tensor(adam.exp_avg[key], device=parameter.device),
+                "exp_avg_sq": torch.tensor(
+                    adam.exp_avg_sq[key], device=parameter.device
+                ),
+            }
+    learner.optimizer.state.clear()
+    learner.optimizer.state.update(entries)
+    return 0
 
 
 def save(value: object, stream: BinaryIO) -> None:
@@ -119,22 +176,25 @@ def capture_incident(
         recorded = batch.recorded.index[selected]
         batch_tensors.update(
             {
-                f"observation/{key}": torch.as_tensor(value[recorded])
-                for key, value in batch.recorded.rows.items()
+                f"observation/{key}": torch.tensor(value)
+                for key, value in batch.recorded.gather(selected).items()
             }
         )
         batch_tensors.update(
             {
-                f"next_observation/{key}": torch.as_tensor(value[:max_rows])
-                for key, value in batch.next_obs.items()
+                f"next_observation/{key}": torch.tensor(value)
+                for key, value in select_rows(
+                    batch.next_obs, slice(0, max_rows)
+                ).items()
                 if key not in MEMORY_FIELDS
             }
         )
         if batch.recorded.memory_capacities is not None:
             prefixes = [batch.recorded.memory[int(row)] for row in recorded]
             next_count = 0
-            if isinstance(batch.next_obs, PrefixObservation):
-                next_prefixes = batch.next_obs.prefixes[:max_rows]
+            next_memory = retained_memory(batch.next_obs)
+            if next_memory is not None:
+                next_prefixes = next_memory.prefixes[:max_rows]
                 next_count = len(next_prefixes)
                 prefixes.extend(next_prefixes)
             archive = archive_memory(prefixes, batch.recorded.memory_capacities)
@@ -267,3 +327,138 @@ def capture_incident(
             for name, value in batch_tensors.items()
         ),
     )
+
+
+def sampling_domain(device: str) -> str:
+    return f"torch:{torch.device(device).type}"
+
+
+def sampling_state(session: CollectionSession) -> dict[str, np.ndarray]:
+    device = torch.device(session.device_name)
+    keys = {
+        "rng.collector": np.asarray(session.snapshot_rng()),
+        "rng.torch.cpu": torch.get_rng_state().numpy(),
+    }
+    if device.type == "cuda":
+        keys["rng.torch.cuda"] = torch.cuda.get_rng_state(device).numpy()
+    elif device.type == "mps":
+        keys["rng.torch.mps"] = torch.mps.get_rng_state().numpy()
+    return keys
+
+
+def validate_sampling(device: str, arrays: Mapping[str, np.ndarray]) -> None:
+    kind = torch.device(device).type
+    devices = {
+        "rng.collector": device,
+        "rng.torch.cpu": "cpu",
+        f"rng.torch.{kind}": device,
+    }
+    if differing := devices.keys() ^ arrays.keys():
+        raise ValueError(f"sampling.safetensors: incompatible keys {sorted(differing)}")
+    for name, target in devices.items():
+        value = arrays[name]
+        if value.ndim != 1 or value.dtype != np.uint8:
+            raise ValueError(f"sampling.safetensors: {name} needs a byte vector")
+        # The framework checks the device-specific size and internal RNG fields.
+        try:
+            torch.Generator(device=target).set_state(torch.from_numpy(value))
+        except RuntimeError as error:
+            raise ValueError(
+                f"sampling.safetensors: invalid {name}: {error}"
+            ) from error
+
+
+def restore_sampling(
+    session: CollectionSession, arrays: Mapping[str, np.ndarray]
+) -> None:
+    session.restore_rng(torch.from_numpy(arrays["rng.collector"]))
+    torch.set_rng_state(torch.from_numpy(arrays["rng.torch.cpu"]))
+    if "rng.torch.cuda" in arrays:
+        torch.cuda.set_rng_state(
+            torch.from_numpy(arrays["rng.torch.cuda"]), session.device_name
+        )
+    elif "rng.torch.mps" in arrays:
+        torch.mps.set_rng_state(torch.from_numpy(arrays["rng.torch.mps"]))
+
+
+@contextmanager
+def legacy_file(path: Path) -> Iterator[dict[str, Any]]:
+    """Name the failing file when Torch decoding or tensor admission fails."""
+    try:
+        saved = torch.load(path, map_location="cpu", weights_only=True)
+        if not isinstance(saved, dict):
+            raise ValueError("expected a state dictionary")
+        yield saved
+    except (
+        OSError,
+        EOFError,
+        pickle.UnpicklingError,
+        KeyError,
+        AttributeError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+    ) as error:
+        raise ValueError(f"{path.name}: {error}") from error
+
+
+def legacy_parameters(path: Path, policy: ActorCritic) -> dict[str, np.ndarray]:
+    """Extract weights only after checking every persistent lookup buffer."""
+    with legacy_file(path) as saved:
+        if differing := policy.state_dict().keys() ^ saved.keys():
+            raise ValueError(f"incompatible keys {sorted(differing)}")
+        for name, expected in policy_buffers(policy).items():
+            value = saved[name].numpy()
+            if value.dtype != expected.dtype or not np.array_equal(value, expected):
+                raise ValueError(f"incompatible buffer {name}")
+        arrays = {
+            canonical_name(name): saved[name].numpy()
+            for name, _ in policy.named_parameters()
+        }
+        admit_policy_arrays(arrays, parameter_shapes(policy))
+    return arrays
+
+
+def legacy_adam(saved: dict[str, Any], learner: Learner, step: int) -> AdamState:
+    """Resolve Torch's serialized parameter indices against the optimizer groups."""
+    names = {p: canonical_name(n) for n, p in learner.agent.named_parameters()}
+    steps = dict.fromkeys(names.values(), 0) if step else {}
+    first: dict[str, np.ndarray] = {}
+    second: dict[str, np.ndarray] = {}
+    entries = saved["state"].copy()
+    for old, live in zip(
+        saved["param_groups"], learner.optimizer.param_groups, strict=True
+    ):
+        for index, param in zip(old["params"], live["params"], strict=True):
+            if index in entries:
+                entry = entries.pop(index)
+                name = names[param]
+                count = entry["step"].item()
+                if not float(count).is_integer():
+                    raise ValueError(f"invalid step for {name}")
+                steps[name] = int(count)
+                first[name] = entry["exp_avg"].numpy()
+                second[name] = entry["exp_avg_sq"].numpy()
+    if entries:
+        raise ValueError("unknown parameter indices")
+    adam = AdamState(step, steps, first, second)
+    admit_adam(adam, parameter_shapes(learner.agent), step=step)
+    return adam
+
+
+def restore_legacy(
+    folder: Path, learner: Learner, ema: ActorCritic | None, *, step: int
+) -> None:
+    """Admit the old state dictionaries on CPU before installing any tensors."""
+    raw = legacy_parameters(folder / "learner.pt", learner.agent)
+    averaged = legacy_parameters(folder / "ema.pt", ema) if ema is not None else {}
+    with legacy_file(folder / "optimizer.pt") as saved:
+        adam = legacy_adam(saved, learner, step)
+    load_policy_arrays(learner.agent, raw)
+    if ema is not None:
+        load_policy_arrays(ema, averaged)
+    load_adam(learner, adam)
+
+
+def framework() -> dict[str, str | None]:
+    return {"torch": str(torch.__version__), "cuda": torch.version.cuda}

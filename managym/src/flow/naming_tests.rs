@@ -37,6 +37,7 @@ fn naming_game() -> Game {
         243,
         false,
     );
+    game.keep_opening_hands();
     game.run_frame(EffectFrame {
         context_target: Some(Target::Player(PlayerId(1))),
         ..EffectFrame::new(
@@ -106,7 +107,6 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
     let game = naming_game();
     let root = witness(&game);
     let obs = Observation::for_player(&game, PlayerId(0));
-    // 928 names: ceil(928 / 64) = 15 balanced groups of 61 or 62 names.
     let groups: Vec<[usize; 2]> = obs
         .action_space
         .actions
@@ -153,15 +153,16 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
     }
     assert!(encode(&obs, &ObservationEncoderConfig::default()).is_ok());
 
-    let back = names
-        .iter()
-        .position(|entry| entry.name == "Fire Lord Sozin")
-        .unwrap();
-    let ogre = names
-        .iter()
-        .position(|entry| entry.name == "Gray Ogre")
-        .unwrap();
-    for index in [0, 511, 512, names.len() - 1, back, ogre] {
+    let printed_names = ["Fire Lord Sozin", "Gray Ogre", "Seed Suture"].map(|name| {
+        names
+            .iter()
+            .position(|entry| entry.name == name)
+            .expect(name)
+    });
+    for index in [0, 511, 512, names.len() - 1]
+        .into_iter()
+        .chain(printed_names)
+    {
         let mut branch = game.clone();
         let mut path = vec![];
         loop {
@@ -186,7 +187,7 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
             // The earlier prompt's Command is stale once the scope narrows.
             assert!(branch.execute_semantic_command(&choose).is_err());
         }
-        assert_eq!(path.len(), 2, "928 names need one group level");
+        assert_eq!(path.len(), 2, "this catalog needs one group level");
         let Decision::NameCard { names: cloned, .. } =
             &game.state.suspended_decision.as_ref().unwrap().decision
         else {
@@ -284,9 +285,20 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
     let old: std::collections::BTreeSet<_> = pack
         .definition_entries()
         .filter(|(id, definition)| {
-            !definition.is_token && (!definition.key.is_empty() || pack.front_face(*id).is_some())
+            !definition.is_token
+                && (definition.scryfall_id.is_some()
+                    || !definition.key.is_empty()
+                    || pack.front_face(*id).is_some())
         })
-        .map(|(_, definition)| definition.name.as_str())
+        // An inset can supply a name without its own registered definition.
+        .flat_map(|(_, definition)| {
+            std::iter::once(definition.name.as_str()).chain(
+                definition
+                    .inset
+                    .as_ref()
+                    .map(|inset| inset.characteristics().name.as_str()),
+            )
+        })
         .collect();
     let names = pack.name_candidates();
     assert_eq!(
@@ -307,9 +319,9 @@ fn catalog_naming_cost_attribution() {
         let micros = started.elapsed().as_secs_f64() * 1e6;
         std::hint::black_box(&result);
         drop(result);
-        crate::benchmark_allocations::start();
+        crate::allocator::start();
         let result = operation();
-        let (allocations, bytes) = crate::benchmark_allocations::stop();
+        let (allocations, bytes) = crate::allocator::stop();
         std::hint::black_box(result);
         println!(
             "{}",

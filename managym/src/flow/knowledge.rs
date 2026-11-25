@@ -69,10 +69,34 @@ impl Game {
     /// Called only for cards the owner has inspected, in their resulting
     /// order. True positions are private; this never changes the public view.
     pub(crate) fn remember_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        self.state.library_order_pins_mut(owner).extend(objects);
         let facts = self.library_positions_of(owner, objects);
         let knowledge = self.state.known_library_mut(owner);
         knowledge.own.extend(facts);
         LibraryKnowledge::bound(&mut knowledge.own);
+    }
+
+    /// Cards put into one library position together: their owner arranges
+    /// them and need not reveal the order (CR 401.4), so neither position
+    /// stays public while the owner remembers both.
+    pub(crate) fn arrange_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        let positions = self.library_positions_of(owner, objects);
+        let knowledge = self.state.known_library_mut(owner);
+        for (position, _) in positions {
+            knowledge.public.remove(&position);
+        }
+        self.remember_library_objects(owner, objects);
+    }
+
+    /// Both seats learn the top position even if the revealed card stays there.
+    pub(crate) fn reveal_library_top(&mut self, owner: PlayerId) -> Option<ObjectId> {
+        let object = self.state.zones.top(ZoneType::Library, owner)?;
+        let definition = self.state[object].definition_id;
+        let knowledge = self.state.known_library_mut(owner);
+        knowledge.public.insert(0, definition);
+        LibraryKnowledge::bound(&mut knowledge.public);
+        self.emit(crate::flow::event::GameEvent::CardRevealed { owner, definition });
+        Some(object)
     }
 
     pub(crate) fn refresh_visible_library_tops(&mut self) {
@@ -81,6 +105,7 @@ impl Game {
             if visible[owner.0] {
                 if let Some(object) = self.state.zones.top(ZoneType::Library, owner) {
                     let definition = self.state[object].definition_id;
+                    self.state.library_order_pins_mut(owner).insert(object);
                     let knowledge = self.state.known_library_mut(owner);
                     knowledge.own.insert(0, definition);
                     LibraryKnowledge::bound(&mut knowledge.own);
@@ -133,7 +158,8 @@ impl Game {
                 .iter()
                 .enumerate()
                 .filter(|(_, object)| {
-                    self.state[**object].definition_id == definition && !commitments.pins(**object)
+                    self.state[**object].retained_base().0 == definition
+                        && !commitments.pins(**object)
                 })
                 .min_by_key(|(_, object)| object.slot())
                 .map(|(index, _)| index)?;
@@ -175,7 +201,11 @@ impl Game {
         commitments: &HiddenCommitments,
         rng: &mut impl Rng,
     ) {
-        if self.library_facts(owner, viewer).is_empty() && self.state.suspended_decision.is_none() {
+        let hidden_exile = self.hidden_face_down_exile(owner, viewer);
+        if self.library_facts(owner, viewer).is_empty()
+            && self.state.suspended_decision.is_none()
+            && hidden_exile.is_empty()
+        {
             self.state
                 .zones
                 .shuffle_canonical(ZoneType::Library, owner, rng);
@@ -186,11 +216,16 @@ impl Game {
             .zones
             .zone_objects(ZoneType::Library, owner)
             .to_vec();
+        pool.extend(hidden_exile);
         pool.sort_unstable_by_key(|object| object.slot());
         let reserved = self
             .reserve_library_facts(owner, viewer, &mut pool, commitments)
             .expect("library facts are true in the source world");
         pool.shuffle(rng);
+        assert!(
+            self.refill_hidden_exile_slots(owner, viewer, &mut pool),
+            "face-down cards are in their own pool"
+        );
         let library = Self::place_library_facts(pool, reserved).expect("valid library positions");
         let hand = self
             .state
@@ -206,6 +241,31 @@ impl Game {
         let opponent = PlayerId(1 - viewer.0);
         if !self.shares_information(viewer, opponent) {
             let public = self.state.players[opponent.0].known_library.public.clone();
+            // Rebind surviving facts to the sampled physical witnesses. The
+            // displaced opponent's private placements belong to the old deal.
+            if !self.state.library_order_pins[opponent.0].is_empty() || !public.is_empty() {
+                let mut pins = self.pinned_objects(viewer);
+                pins.retain(|object| {
+                    self.state
+                        .zones
+                        .contains(*object, ZoneType::Library, opponent)
+                });
+                if let Some(suspended) = &self.state.suspended_decision {
+                    for (_, objects) in suspended
+                        .decisions()
+                        .filter_map(Decision::inspected_library_objects)
+                        .filter(|(owner, _)| *owner == opponent)
+                    {
+                        pins.extend_from_slice(objects);
+                    }
+                }
+                pins.extend(
+                    self.library_from_top(opponent)
+                        .enumerate()
+                        .filter_map(|(rank, object)| public.contains_key(&rank).then_some(object)),
+                );
+                *self.state.library_order_pins_mut(opponent) = pins.into_iter().collect();
+            }
             self.state.known_library_mut(opponent).own = public;
         }
     }

@@ -61,6 +61,7 @@ fn event_log_records_damage() {
         source: Some(bolt),
         target: DamageTarget::Player(PlayerId(1)),
         amount: 3,
+        combat: false,
     }));
 }
 
@@ -72,7 +73,7 @@ fn event_log_records_life_change() {
         player: PlayerId(1),
         old: 20,
         new: 17,
-    }));
+    gain_ordinal: 0,}));
 }
 
 #[test]

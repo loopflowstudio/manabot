@@ -5,15 +5,7 @@ backend module passed as an argument. `UpdateBackend` is that module's
 surface: its `rl`, `arrays`, `learner` and `rollout` files, each a Protocol a
 module satisfies with plain functions. `Learner` and `Policy` are the objects
 an update steps and runs forward. `manabot.policy.protocol.Backend` also
-provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
-
-Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
-standardization, top-count selection and a policy `__call__`/`get_value`; only
-torch provides it. A categorical critic needs `CategoricalRL` (torch only);
-`categorical_rl` narrows to it and refuses a backend without one. `ppo_rl`
-likewise refuses an unsupported PPO update before reading rollout or learner state.
-`tests/training/test_update_backend_protocols.py` checks each backend's files
-against these member lists and signatures.
+provides checkpoint admission. Parity supplies its own learner and layout contract.
 
 Nothing here imports a framework. `Array` is a backend's own array
 (`torch.Tensor`, `mlx.core.array`), opaque to the update: it does arithmetic,
@@ -34,16 +26,16 @@ from numpy.typing import NDArray
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
-from manabot.policy.protocol import BackendLearner
 from manabot.training.rollout.actions import ActionRows, ActionValidator
+from manabot.training.updates.objective import Array, LossTerms
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import RolloutBatch
+    from manabot.training.updates.health import StepRecorder
 
 # A backend's array, device and admitted observation minibatch. `Any` because
 # the update applies the framework's own operators to arrays, and only the
 # backend that produced a device or observation batch reads it.
-type Array = Any
 type Device = Any
 type Observations = Prepared[Array]
 
@@ -54,7 +46,7 @@ type FilterKind = Literal["top_count", "quantile"]
 
 
 @runtime_checkable
-class RL(Protocol):
+class RL(LossTerms, Protocol):
     """`backend.rl`: masks, likelihoods, returns, losses and selection over
     the backend's arrays. Shapes are in each backend's docstrings."""
 
@@ -65,18 +57,6 @@ class RL(Protocol):
 
     def require_finite(self, invariant: str, **arrays: Array) -> None: ...
 
-    def float64_operand(self, tensor: Array) -> Array: ...
-
-    def constant(self, tensor: Array) -> Array: ...
-
-    def legal_mask(self, mask: Array) -> Array: ...
-
-    def policy_logs(self, logits: Array, valid: Array) -> Array: ...
-
-    def action_logs(self, logs: Array, actions: Array) -> Array: ...
-
-    def reference_logs(self, reference: Array, valid: Array) -> Array: ...
-
     def transition_gae(
         self,
         rewards: Array,
@@ -85,44 +65,20 @@ class RL(Protocol):
         next_value: Array,
         gamma: float,
         lam: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> tuple[Array, Array]: ...
-
-    def clipped_surrogate(
-        self, log_ratio: Array, advantages: Array, clip: float
-    ) -> Array: ...
-
-    def reverse_kl(self, logs: Array, target_logs: Array, valid: Array) -> Array: ...
-
-    def squared_value_loss(self, values: Array, targets: Array) -> Array: ...
 
     def entropy(self, logs: Array, valid: Array) -> Array: ...
 
-    def damped_policy_loss(
-        self,
-        logits: Array,
-        actions: Array,
-        advantages: Array,
-        behavior_logs: Array,
-        reference: Array,
-        valid: Array,
-        *,
-        clip: float,
-        collection_kl: float,
-        tau: float,
-    ) -> Array: ...
-
     def clip_fraction(self, log_ratio: Array, clip: float) -> float: ...
 
-    def selection_mask(
+    def selected_magnitudes(
         self, advantages: Array, kind: FilterKind, fraction: float, minimum: float
+    ) -> tuple[Array, float | None]: ...
+
+    def standardized_advantages(
+        self, advantages: Array, over: Array | None = None
     ) -> Array: ...
-
-    def selected_mean(self, values: Array, selected: Array) -> Array: ...
-
-
-@runtime_checkable
-class CategoricalRL(RL, Protocol):
-    """`rl` of a backend with a win/draw/loss critic."""
 
     def expected_outcome(self, probabilities: Array) -> Array: ...
 
@@ -135,43 +91,8 @@ class CategoricalRL(RL, Protocol):
         ends: Array,
         bootstrap: Array,
         trace_lambda: float,
+        bootstrap_indexes: np.ndarray | None = None,
     ) -> Array: ...
-
-    def categorical_value_loss(self, value_logits: Array, targets: Array) -> Array: ...
-
-
-def categorical_rl(rl: RL) -> CategoricalRL:
-    """`rl` as a categorical critic's functions; refuses a backend without them."""
-    if not isinstance(rl, CategoricalRL):
-        name = getattr(rl, "__name__", type(rl).__name__)
-        raise TypeError(f"{name} has no categorical critic")
-    return rl
-
-
-@runtime_checkable
-class PPORL(CategoricalRL, Protocol):
-    """`rl` of a backend the PPO update runs on."""
-
-    def standardized_advantages(
-        self, advantages: Array, over: Array | None = None
-    ) -> Array: ...
-
-    def selected_rows(
-        self,
-        advantages: Array,
-        fraction: float,
-        minimum: float,
-        *,
-        kind: FilterKind = "top_count",
-    ) -> Array: ...
-
-
-def ppo_rl(rl: RL) -> PPORL:
-    """Refuse an unsupported update before reading its rollout or learner."""
-    if not isinstance(rl, PPORL):
-        name = getattr(rl, "__name__", type(rl).__name__)
-        raise TypeError(f"{name} has no PPO update")
-    return rl
 
 
 # -- arrays, learner and rollout files ------------------------------------------
@@ -198,14 +119,6 @@ class LearnerFile(Protocol):
         """Nothing computed inside records a gradient."""
         ...
 
-    def critic_gradient_norms(self, model: Any) -> tuple[float, float | None]: ...
-    def gradient_health(
-        self, model: Any, norm_before: Array, critic_norms: tuple[float, float | None]
-    ) -> dict[str, float | int]: ...
-    def parameter_health(
-        self, parameters: list[Any], before: list[Array]
-    ) -> dict[str, float]: ...
-
 
 class AdmittedRollout(Protocol):
     """A rollout batch admitted once for one policy (`backend.rollout`)."""
@@ -215,7 +128,7 @@ class AdmittedRollout(Protocol):
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None: ...
 
-    def next_observation(self, device: Device) -> Observations: ...
+    def next_observation(self, device: Device) -> Observations | None: ...
     def next_observations(
         self, device: Device, size: int
     ) -> Iterator[Observations]: ...
@@ -228,15 +141,6 @@ class AdmittedRollout(Protocol):
 
     def evidence(self, obs: Observations) -> Mapping[str, Array]: ...
 
-
-class RolloutFile(ActionValidator, Protocol):
-    """`backend.rollout`. The first argument is the learner's `agent`."""
-
-    @property
-    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
-
-
-class PPOAdmittedRollout(AdmittedRollout, Protocol):
     def minibatches(
         self, order: NDArray[np.int64], size: int, device: Device
     ) -> AbstractContextManager[
@@ -246,9 +150,11 @@ class PPOAdmittedRollout(AdmittedRollout, Protocol):
         ...
 
 
-class PPORolloutFile(RolloutFile, Protocol):
+class RolloutFile(ActionValidator, Protocol):
+    """`backend.rollout`. The first argument is the learner's `agent`."""
+
     @property
-    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], PPOAdmittedRollout]: ...
+    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
 
 
 # -- policy and learner --------------------------------------------------------
@@ -273,19 +179,14 @@ class Policy(Protocol):
     def forward_distribution(self, obs: Observations, /) -> tuple[Array, Array]: ...
 
 
-class PPOPolicy(Policy, Protocol):
-    def __call__(self, obs: Observations, /) -> tuple[Array, Array]:
-        """Logits [B,A] and scalar values [B]."""
-        ...
-
-    def get_value(self, obs: Observations, /) -> Array: ...
-
-
-class Learner(BackendLearner, Protocol):
+class Learner(Protocol):
     """The policy, its optimizer and profiler, as an update steps them."""
 
     execution_rows: int | None
     bootstrap_rows: int | None
+
+    def set_learning_rate(self, rate: float) -> None: ...
+    def loss(self, objective: Callable[[], tuple[Array, ...]]) -> tuple[Array, ...]: ...
 
     def accumulate(self, loss: Array, *, first: bool) -> None: ...
 
@@ -310,25 +211,20 @@ class Learner(BackendLearner, Protocol):
         loss: Array,
         max_grad_norm: float,
         *,
-        recorder: Any = None,
+        recorder: StepRecorder | None = None,
         accumulated: bool = False,
     ) -> Array:
         """One clipped optimizer step on `loss`: the pre-clip gradient norm.
         `recorder` is the update's `OptimizerHealth`, which each backend
-        reads through its own `StepRecorder`."""
+        reads through the shared `StepRecorder`."""
         ...
-
-
-class PPOLearner(Learner, Protocol):
-    @property
-    def agent(self) -> PPOPolicy: ...
 
 
 # -- the backend module --------------------------------------------------------
 
 
 class UpdateBackend(Protocol):
-    """A backend module as the damped update takes it."""
+    """A backend module as both updates take it."""
 
     @property
     def rl(self) -> RL: ...
@@ -341,11 +237,3 @@ class UpdateBackend(Protocol):
 
     @property
     def rollout(self) -> RolloutFile: ...
-
-
-class PPOBackend(UpdateBackend, Protocol):
-    @property
-    def rl(self) -> PPORL: ...
-
-    @property
-    def rollout(self) -> PPORolloutFile: ...

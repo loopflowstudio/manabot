@@ -103,7 +103,6 @@ from manabot.training.report import (
     job_labels,
 )
 from manabot.training.state.game_errors import GameErrorPolicy, GameErrorState
-import managym
 
 if TYPE_CHECKING:
     from manabot.training.loops.self_play import SelfPlay
@@ -1031,7 +1030,7 @@ def _registration(
             player_id=name,
             display_name=player.name,
             role=role,
-            world=managym.WORLD_VERSION,
+            world="w17",
             content_suite=matchup.content_suite,
             information_boundary="acting-viewer",
             observation_abi_sha256=fingerprints["observation_abi_sha256"],
@@ -1073,7 +1072,7 @@ def play(match: Match[Pair], agents: Sequence[object]) -> Tables:
         if path is not None
     }
     key = EvaluationKey(
-        world=managym.WORLD_VERSION,
+        world="w17",
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version="tla-frontier-c5fba4-agents-v1",

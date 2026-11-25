@@ -9,7 +9,11 @@ import pytest
 
 from manabot.env.match import Match
 from manabot.env.memory_store import CompactObservation, MemoryStore, PrefixIdentity
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import ObservationConfig
 import managym
 from managym.decision_memory import read_records
@@ -91,19 +95,10 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
     assert _observations(env) == retained
     for seat in range(2):
         obs = env.observation_for_player(seat)
-        expected = space.encode(obs)
-        actual = space.encoder.allocate()
-        env.encode_observation_into(obs, actual)
-        for key in (
-            "decision_records",
-            "decision_reference_details",
-            "decision_references",
-            "decision_members",
-        ):
-            np.testing.assert_array_equal(actual[key], expected[key])
+        expected = encode_observation(space, obs)
         store = MemoryStore((32, 32768, 1024, 16384))
         prefix = store.capture(
-            {key: value[None] for key, value in actual.items()},
+            {key: value[None] for key, value in expected.items()},
             0,
             PrefixIdentity("native-replay", seat, "root"),
         )
@@ -127,7 +122,9 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
             "decision_references",
             "decision_members",
         ):
-            np.testing.assert_array_equal(space.encode(restored)[key], expected[key])
+            np.testing.assert_array_equal(
+                encode_observation(space, restored)[key], expected[key]
+            )
     env.reset(Match().to_rust())
     assert _observations(env) == ["[]", "[]"]
 
@@ -149,14 +146,12 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
             max_decision_members=16384,
         )
     )
-    with pytest.raises(managym.AgentError, match="Capacity"):
-        space.encode(obs)
-    with pytest.raises(ValueError, match="capacity exceeded"):
-        env.encode_observation_into(obs, space.encoder.allocate())
-    buffers = dict(ObservationSpace().encoder.allocate())
-    buffers["decision_records"] = np.zeros((4, 74), np.float32)
-    with pytest.raises(ValueError, match="companion"):
-        env.encode_observation_into(obs, buffers)
+    with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
+        encode_observation(space, obs)
+    buffers = space.allocate()
+    del buffers["decision_members"]
+    with pytest.raises(ValueError, match="decision_members"):
+        managym.encode_observation_into(obs, space.layout, buffers)
 
 
 def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> None:
@@ -175,13 +170,8 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     hot = managym.VectorEnv(
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
-    buffers = space.encoder.allocate(2)
-    buffers.update(
-        rewards=np.zeros(2, np.float64),
-        terminated=np.zeros(2, np.uint8),
-        truncated=np.zeros(2, np.uint8),
-    )
-    hot.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, 2)
+    hot.set_buffers(buffers, layout=space.layout)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)
     retained = []
@@ -189,7 +179,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
         rows = reference.step([0, 0])
         hot.step_into_buffers([0, 0])
         for index, (obs, _, _, _, _) in enumerate(rows):
-            expected = space.encode(obs)
+            expected = encode_observation(space, obs)
             retained.extend(read_records(obs.decision_memory_json()))
             for key in (
                 "decision_records",
@@ -246,9 +236,7 @@ def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
             decision_memory_include_own=True,
         )
     )
-    restored = ObservationConfig.model_validate_json(
-        space.encoder.config.model_dump_json()
-    )
+    restored = ObservationConfig.model_validate_json(space.config.model_dump_json())
     assert restored.decision_memory_include_own
     assert not ObservationConfig().decision_memory_include_own
     assert "decision_memory_include_own" not in ObservationConfig().model_dump()
@@ -263,10 +251,9 @@ def test_own_seat_option_is_default_off_and_rebases_opposing_view_only(
         obs = own.observation_for_player(seat)
         records = read_records(obs.decision_memory_json())
         assert {record.actor for record in records} == {1, 2}
-        native = space.encoder.allocate()
-        own.encode_observation_into(obs, native)
-        for key, expected in space.encode(obs).items():
-            np.testing.assert_array_equal(native[key], expected)
+        encode_observation(
+            space, obs
+        )  # include-own memory fits its declared capacities
         # Own public signals are the other seat's opponent records, with pairs
         # and reference roles rebased. Never recapture through private view.
         other_records = [

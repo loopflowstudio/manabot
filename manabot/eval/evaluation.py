@@ -8,9 +8,10 @@ Only complete replayed deal cohorts produce paired-deal score intervals.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import ExitStack
-from functools import partial
+from dataclasses import fields
+from itertools import batched
 import json
 import math
 from pathlib import Path
@@ -20,19 +21,28 @@ from uuid import uuid4
 
 from etude.errors import RetryRequested
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
+from manabot.eval.behaviour import Play, PlayCounts
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval, bootstrap_mean_interval
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
+from manabot.policy.protocol import BackendName
 from manabot.sim.agent import GamePlayer
 from manabot.sim.execution import EvalExecutionV1, RecordedExecution
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
-from manabot.sim.registration import PlayerRegistration
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE, PlayerRegistration
 
 
 class EvaluationRequest(StrictModel):
@@ -69,7 +79,7 @@ class EvaluationRequest(StrictModel):
             return range(8)
         if self.matchup_mode == "mirrors":
             return range(4, 8)
-        return range(2 if self.key.content_suite == "w2-interactive-mirror-v1" else 4)
+        return range(2 if self.key.content_suite == HISTORICAL_MIRROR_SUITE else 4)
 
     @property
     def expected_games(self) -> int:
@@ -178,6 +188,7 @@ def _execute_attempt(
     *,
     out_dir: Path,
     evaluation_id: str,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     card_evidence_dir: Path | None = None,
@@ -195,8 +206,10 @@ def _execute_attempt(
     started = time.perf_counter()
     performance = EvalPerformance("evaluation")
     try:
-        runner = partial(play_cell, agents=agents, deadline=deadline)
-        rows, trace, replay = runner(
+        rows, trace, replay = play_cell(
+            agents=agents,
+            deadline=deadline,
+            backend_name=backend_name,
             key=request.key,
             player_a=request.candidate,
             player_b=request.opponent,
@@ -208,6 +221,7 @@ def _execute_attempt(
             matchup_mode=request.matchup_mode,
             authored_matchup=request.authored_matchup,
             card_evidence_dir=card_evidence_dir,
+            reducers={"play": Play()},
         )
         for name, payload in (("rows", rows), ("trace", trace), ("replay", replay)):
             atomic_json(out_dir / f"{name}.json", payload)
@@ -251,6 +265,7 @@ def evaluate(
     request: EvaluationRequest,
     *,
     out_dir: Path,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     card_evidence_dir: Path | None = None,
@@ -268,10 +283,16 @@ def evaluate(
             request,
             out_dir=out_dir,
             evaluation_id=uuid4().hex,
+            backend_name=backend_name,
             agents=agents,
             deadline=deadline,
             card_evidence_dir=card_evidence_dir,
         )
+
+
+def attempt_directories(directory: Path) -> list[Path]:
+    """The original attempt lives at the root and retries in numbered directories."""
+    return [directory, *sorted((directory / "attempts").glob("*/"))]
 
 
 def _retained_result(directory: Path) -> EvaluationResult:
@@ -286,6 +307,72 @@ def _retained_result(directory: Path) -> EvaluationResult:
             for row in json.loads((directory / "rows.json").read_bytes())
         ]
     return result
+
+
+type GamePlayCounts = dict[tuple[int, int], tuple[PlayCounts, PlayCounts]]
+
+
+def attempt_play_counts(
+    directory: Path, rows: Sequence[EvaluationRow]
+) -> GamePlayCounts | None:
+    """Join the reducer's native-seat pairs to completed games in replay order."""
+    path = directory / "statistics.json"
+    try:
+        statistics = json.loads(path.read_bytes())
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(statistics, dict) or statistics.get("analysis_error"):
+        return None
+    tables = statistics.get("tables")
+    if not isinstance(tables, dict):
+        return None
+    table = tables.get("play")
+    completed = [
+        r for r in rows if r.failure is None and r.replay_passed and r.terminated
+    ]
+    # Construction defaults initialize the live counter. An absent saved count
+    # is unavailable and must never be interpreted as a measured zero.
+    columns = {field.name for field in fields(PlayCounts)}
+    historical = columns - {"attackers_committed", "blockers_committed"}
+    if not isinstance(table, list) or any(
+        not isinstance(item, dict)
+        or (item.keys() & columns) not in (historical, columns)
+        for item in table
+    ):
+        return None
+    try:
+        counts = TypeAdapter(list[PlayCounts]).validate_python(table)
+    except ValidationError:
+        return None
+    if len(counts) != 2 * len(completed):
+        return None
+    found: GamePlayCounts = {}
+    for row, (first, second) in zip(completed, batched(counts, 2), strict=True):
+        if (first.seat, second.seat) != (0, 1):
+            return None
+        if row.valid:
+            found[row.deal_seed, row.leg] = (first, second)
+    return found
+
+
+def evaluation_play_counts(directory: Path) -> GamePlayCounts | None:
+    """Read behaviour from the attempts that supplied the accepted deal blocks."""
+    found: GamePlayCounts = {}
+    for attempt in attempt_directories(directory):
+        if not (attempt / "evaluation.json").is_file():
+            continue
+        retained = _retained_result(attempt)
+        deals = set(retained.complete_deals())
+        if not deals:
+            continue
+        counts = attempt_play_counts(attempt, retained.rows)
+        if counts is None:
+            return None
+        accepted = {key: pair for key, pair in counts.items() if key[0] in deals}
+        if found.keys() & accepted.keys():
+            raise ValueError("duplicate completed evaluation block across attempts")
+        found.update(accepted)
+    return found
 
 
 def _verify_block(directory: Path, rows: list[EvaluationRow]) -> None:
@@ -331,8 +418,7 @@ def evaluation_status(directory: Path) -> EvaluationResult:
         card_evidence_dir=original.card_evidence_dir,
     )
     completed: set[int] = set()
-    attempts = [directory, *sorted((directory / "attempts").glob("*/"))]
-    for attempt in attempts:
+    for attempt in attempt_directories(directory):
         if not (attempt / "evaluation.json").exists():
             continue  # killed before admission; no published block can exist
         retained = original if attempt == directory else _retained_result(attempt)
@@ -377,6 +463,7 @@ def evaluation_status(directory: Path) -> EvaluationResult:
 def continue_evaluation(
     directory: Path,
     *,
+    backend_name: BackendName = "torch",
     agents: Mapping[str, GamePlayer] | None = None,
     deadline: float | None = None,
     checkpoint_paths: dict[str, str] | None = None,
@@ -389,7 +476,7 @@ def continue_evaluation(
     not an object-store lease or an automatic retry after machine loss.
     """
     with exclusive_file_lock(directory / ".evaluation.lock"), ExitStack() as claims:
-        prior = [directory, *sorted((directory / "attempts").glob("*/"))]
+        prior = attempt_directories(directory)
         for attempt in prior:
             claims.enter_context(exclusive_file_lock(attempt / ".execution.lock"))
         result = evaluation_status(directory)
@@ -440,6 +527,7 @@ def continue_evaluation(
             pending,
             out_dir=out,
             evaluation_id=result.evaluation_id,
+            backend_name=backend_name,
             agents=agents,
             deadline=deadline,
             card_evidence_dir=Path(result.card_evidence_dir)
@@ -450,7 +538,13 @@ def continue_evaluation(
 
 
 def evaluate_local(
-    request: EvaluationRequest, *, deadline: float, out_dir: Path
+    request: EvaluationRequest,
+    *,
+    deadline: float,
+    out_dir: Path,
+    backend_name: BackendName = "torch",
 ) -> EvaluationResult:
     """Run a scalar local comparison under one absolute wall-clock deadline."""
-    return evaluate(request, out_dir=out_dir, deadline=deadline)
+    return evaluate(
+        request, out_dir=out_dir, deadline=deadline, backend_name=backend_name
+    )

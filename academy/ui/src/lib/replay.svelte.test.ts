@@ -128,11 +128,17 @@ describe('ReplayStore', () => {
   });
   it('keeps physical seating independent of the acting information view', () => {
     const observation = makeObservation(1);
-    const oriented = orientBoard(observation, 1);
+    const oriented = orientBoard(observation, 1, null);
     expect(oriented.agent).toBe(observation.opponent);
     expect(oriented.opponent).toBe(observation.agent);
     expect(observation.agent.player_index).toBe(0);
     expect(oriented.opponent.hand).toEqual(observation.agent.hand);
+  });
+  it('shows neither seat as the winner of a drawn game', () => {
+    const over = {...makeObservation(1), game_over: true, won: false};
+    expect(orientBoard(over, 1, null).won).toBe(false);
+    expect(orientBoard(over, 1, 1).won).toBe(true);
+    expect(orientBoard(over, 1, 0).won).toBe(false);
   });
 });
 

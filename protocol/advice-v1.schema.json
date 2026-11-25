@@ -2306,6 +2306,20 @@
           ],
           "default": null
         },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
+        "counters": {
+          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
         "face_down": {
           "default": false,
           "title": "Face Down",
@@ -2414,6 +2428,13 @@
           "title": "Any Mana",
           "type": "boolean"
         },
+        "condition": {
+          "description": "What must hold for the player to use it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cost": {
           "anyOf": [
             {
@@ -2426,14 +2447,27 @@
           "default": null,
           "title": "Cost"
         },
+        "face_down": {
+          "description": "Face down in exile without Foretell.",
+          "type": "boolean"
+        },
         "flash": {
           "default": false,
           "title": "Flash",
           "type": "boolean"
         },
+        "flashback": {
+          "type": "boolean"
+        },
+        "follows_source_controller": {
+          "type": "boolean"
+        },
         "foretold": {
           "default": false,
           "title": "Foretold",
+          "type": "boolean"
+        },
+        "on_adventure": {
           "type": "boolean"
         },
         "own_turn_only": {
@@ -2446,6 +2480,9 @@
           "minimum": 0,
           "title": "Player Id",
           "type": "integer"
+        },
+        "prepared": {
+          "type": "boolean"
         },
         "source_permanent_id": {
           "anyOf": [
@@ -2581,6 +2618,26 @@
           "title": "Abilities Lost",
           "type": "boolean"
         },
+        "ability_resolutions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            ]
+          }
+        },
         "attached_to": {
           "anyOf": [
             {
@@ -2594,6 +2651,9 @@
           ],
           "default": null,
           "title": "Attached To"
+        },
+        "attacked_this_turn": {
+          "type": "boolean"
         },
         "attacking": {
           "default": false,
@@ -2639,6 +2699,15 @@
           ],
           "default": null,
           "title": "Blocking"
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller_id": {
           "maximum": 4294967295,
@@ -2687,6 +2756,15 @@
           "title": "Damage",
           "type": "integer"
         },
+        "damaged_permanents": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Damaged Permanents",
+          "type": "array"
+        },
         "dealt_damage_this_turn": {
           "default": false,
           "title": "Dealt Damage This Turn",
@@ -2699,6 +2777,10 @@
           "title": "Effects",
           "type": "array"
         },
+        "entered_this_turn": {
+          "description": "It entered the battlefield during this turn.",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "default": 0,
           "maximum": 4294967295,
@@ -2709,6 +2791,9 @@
         "exile_if_dies_this_turn": {
           "default": false,
           "title": "Exile If Dies This Turn",
+          "type": "boolean"
+        },
+        "first_strike_participant": {
           "type": "boolean"
         },
         "granted_firebending": {
@@ -2885,6 +2970,13 @@
           ],
           "default": null,
           "title": "Combat Mana"
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "effects": {
           "items": {
@@ -3187,6 +3279,24 @@
           "title": "Spells Cast",
           "type": "integer"
         },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
         "stack": {
           "items": {
             "$ref": "#/$defs/LegacyCardView"
@@ -3322,6 +3432,11 @@
           "minimum": 0,
           "title": "Agent Player Id",
           "type": "integer"
+        },
+        "creature_died_this_turn": {
+          "default": false,
+          "title": "Creature Died This Turn",
+          "type": "boolean"
         },
         "phase": {
           "title": "Phase",
@@ -3742,10 +3857,26 @@
           "title": "Cards Drawn",
           "type": "integer"
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "default": false,
           "title": "Land Entered",
           "type": "boolean"
+        },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "life_gains": {
+          "description": "Separate occurrences, independent of the amount gained.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "life_lost": {
           "default": 0,
@@ -3754,12 +3885,31 @@
           "title": "Life Lost",
           "type": "integer"
         },
+        "mana_spent_casting": {
+          "description": "Mana spent by this player to cast spells this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Permanents Sacrificed",
           "type": "integer"
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "title": "PlayerTurnHistoryView",
@@ -4118,6 +4268,11 @@
           "default": null,
           "title": "Ability Index"
         },
+        "ability_resolutions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "chosen_mode": {
           "anyOf": [
             {
@@ -4132,11 +4287,28 @@
           "default": null,
           "title": "Chosen Mode"
         },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
         "controller": {
           "maximum": 255,
           "minimum": 0,
           "title": "Controller",
           "type": "integer"
+        },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
         },
         "id": {
           "maximum": 18446744073709551615,
@@ -4151,6 +4323,11 @@
         "label": {
           "title": "Label",
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "anyOf": [

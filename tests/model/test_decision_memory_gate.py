@@ -13,10 +13,10 @@ from manabot.backends.torch.checkpoint import (
     save_checkpoint,
 )
 from manabot.backends.torch.policy import ActorCritic, GameObjectAttention
+from manabot.backends.torch.runtime import load_pretrained
 from manabot.env.decision_memory import blank_memory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.training.loops.self_play import load_pretrained
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -35,7 +35,7 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
 ) -> None:
     space, obs = memory_input()
     space = ObservationSpace(
-        space.encoder.config.model_copy(update={"max_decision_records": 128})
+        space.config.model_copy(update={"max_decision_records": 128})
     )
     obs["decision_records"] = np.pad(
         obs["decision_records"], ((0, 0), (0, 124), (0, 0))

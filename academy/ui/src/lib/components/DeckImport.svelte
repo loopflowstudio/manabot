@@ -52,7 +52,7 @@
       if (started !== revision) return;
       if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not validate decklists.');
       if (result.admitted) {
-        messages = [`Ready — ${result.ruleset}, ${result.world_version}. Start a game to play these decks.`];
+        messages = [`Ready — ${result.ruleset}. Start a game to play these decks.`];
       } else {
         const documents = result.documents as Partial<Record<'hero' | 'villain', {
           issues: { line: number | null; message: string }[];

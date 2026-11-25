@@ -226,3 +226,34 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         );
     }
 }
+
+/// CR 602.2b, 601.2c: an ability that needs two targets is not offered while
+/// only one legal target exists.
+#[test]
+fn activation_needs_as_many_legal_targets_as_its_clause_minimum() {
+    use crate::support::{inspect::card_of, play::offers_ability};
+    use managym::state::{
+        ability::{Effect, TargetRequirement, TargetSpec},
+        card::ActivatedAbilityDefinition,
+    };
+    let mut s = five_color_setup(&["Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let object = card_of(&s, ogre);
+    s.game_mut().state[object].activated_abilities = vec![ActivatedAbilityDefinition {
+        effects: vec![Effect::TargetClause {
+            requirement: TargetRequirement {
+                min: 2,
+                max: 2,
+                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+            },
+            effects: Vec::new(),
+        }],
+        ..Default::default()
+    }];
+    assert!(
+        !offers_ability(&mut s, ogre, 0),
+        "one creature, two targets"
+    );
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    assert!(offers_ability(&mut s, ogre, 0));
+}

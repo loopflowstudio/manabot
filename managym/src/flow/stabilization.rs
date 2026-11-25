@@ -5,7 +5,10 @@
 //! actions again before a player receives priority. This module is the one
 //! authority for that fixed point.
 
-use crate::{agent::action::ActionSpace, flow::game::Game};
+use crate::{
+    agent::action::ActionSpace,
+    flow::{game::Game, sba::SbaProgress, turn::StepKind},
+};
 
 impl Game {
     /// Reach the CR 117.5 / 704.3 fixed point before publishing priority.
@@ -15,6 +18,7 @@ impl Game {
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
         self.state.priority_mut().sba_done = false;
+        let cleanup = self.state.turn.current_step_kind() == StepKind::Cleanup;
 
         loop {
             // CR 603.3b: finish this placement round before another SBA or
@@ -24,40 +28,27 @@ impl Game {
                     return Some(choice);
                 }
             }
-            // Only committed facts enter trigger matching. Processing is
-            // deterministic because events, trigger sources, and enqueue
-            // order all have canonical sequence order.
-            self.process_game_events();
-            self.check_state_triggers();
+            self.collect_waiting_triggers();
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
             let progress = self.perform_state_based_actions();
-            if progress == crate::flow::sba::SbaProgress::Pending {
-                return self.suspended_decision_action_space();
+            if cleanup && progress != SbaProgress::Stable {
+                self.state.set_cleanup_priority(true);
             }
-            if progress == crate::flow::sba::SbaProgress::Changed {
-                if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.state.set_cleanup_priority(true);
-                }
-                if self.is_game_over() {
-                    return None;
-                }
-                continue;
-            }
-
             if self.is_game_over() {
                 return None;
             }
-            if let Some(space) = self.suspended_decision_action_space() {
-                return Some(space);
+            match progress {
+                SbaProgress::Pending => return self.suspended_decision_action_space(),
+                SbaProgress::Changed => continue,
+                SbaProgress::Stable => {}
             }
 
             // CR 603.3b (2026-09-25): controller choices within each of two
             // APNAP passes. Placement arrivals wait for the next round.
-            let had_waiting_triggers = !self.state.pending_triggers.is_empty();
-            if had_waiting_triggers {
-                if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
+            if !self.state.pending_triggers.is_empty() {
+                if cleanup {
                     self.state.set_cleanup_priority(true);
                 }
                 if let Some(choice) = self.flush_triggers() {
@@ -65,6 +56,7 @@ impl Game {
                 }
                 continue;
             }
+            self.state.release_resolved_forms();
             self.state.priority_mut().sba_done = true;
             return None;
         }

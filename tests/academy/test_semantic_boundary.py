@@ -4,18 +4,20 @@ import pytest
 
 import managym
 from managym.academy.semantic_boundary import SemanticExperienceBoundary
+from manabot.verify.text_observation import keep_opening_hands
 from managym.decision import SEMANTIC_DECISION_VERSION, SemanticContractError
 
 
 def _env() -> managym.Env:
     env = managym.Env(seed=29, skip_trivial=True)
     deck = {"Mountain": 10, "Gray Ogre": 20, "Lightning Bolt": 4}
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig("hero", dict(deck)),
             managym.PlayerConfig("villain", dict(deck)),
         ]
     )
+    keep_opening_hands(env, obs)
     return env
 
 

@@ -4,15 +4,13 @@
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
-        combat::CombatState,
         event::GameEvent,
-        game::Game,
+        game::{Game, GameOutcome, GameProcedure},
+        priority::LoopSample,
+        proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{
-        card::StaticAbility, game_object::PlayerId, permanent::CounterKind,
-        stack_object::StackObject, zone::ZoneType,
-    },
+    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
 };
 
 impl Game {
@@ -95,14 +93,25 @@ impl Game {
 
     pub(crate) fn tick(&mut self) -> bool {
         loop {
-            let action_space = self.turn_tick();
+            let action_space = self.opening_actions().or_else(|| self.turn_tick());
             if self.is_game_over() {
+                self.finish_combat_capture();
                 self.publish_action_space(ActionSpace::game_over());
                 return true;
             }
 
             if let Some(space) = action_space {
+                if let Some(action) = self.automatic_payment_action(&space) {
+                    self.execute_action(&action)
+                        .expect("automatic payment witness executes");
+                    self.skip_trivial_count += 1;
+                    continue;
+                }
                 if !self.skip_trivial || space.actions.len() > 1 {
+                    if space.kind != ActionSpaceKind::Priority && space.actions.len() > 1 {
+                        // A player chooses: the chain is no longer mandatory.
+                        self.state.priority_mut().clear_loop_watch();
+                    }
                     self.publish_action_space(space);
                     return false;
                 }
@@ -140,77 +149,50 @@ impl Game {
             }
         }
 
-        if step == StepKind::Cleanup {
-            if !self.state.turn.cleanup_priority {
-                let choice = self.stabilize_before_priority();
-                if choice.is_some() {
-                    self.state.set_cleanup_priority(true);
-                }
-                if let Some(space) = choice {
-                    return Some(space);
-                }
-            }
-            if self.state.turn.cleanup_priority {
-                if let Some(space) = self.tick_priority() {
-                    return Some(space);
-                }
-                // CR 514.3a: repeat cleanup after this priority round finishes.
-                self.state.set_cleanup_priority(false);
-                self.state.set_turn_based_actions_complete(false);
-                return None;
-            }
-        }
-
-        if TurnState::step_has_priority(step) {
-            if let Some(space) = self.tick_priority() {
+        if step != StepKind::Untap {
+            if let Some(space) = self.tick_priority(step) {
                 return Some(space);
             }
-            if !self.state.turn.step_initialized {
+            if !self.state.turn.step_initialized || self.is_game_over() {
                 return None;
             }
         }
 
-        // CR 106.4 — Unspent mana empties at the end of each step and phase.
-        self.clear_mana_pools();
         self.on_step_end(step);
-        self.remember_controlled_hands();
-        self.state.advance_step();
-        self.skip_combat_phases_if_required();
+        // Read before writing: a mutable borrow of `state` advances every
+        // derived-cache revision, and most damage steps have no second pass.
+        if step == StepKind::CombatDamage
+            && self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.in_first_strike_damage_step())
+        {
+            self.state.combat.as_mut().unwrap().regular_damage_step = true;
+            self.state.turn.step_initialized = false;
+            self.state.turn.turn_based_actions_complete = false;
+            return None;
+        }
+        if self.state.turn.cleanup_priority {
+            // CR 514.3a: repeat cleanup after its priority round finishes.
+            self.state.turn.start_cleanup();
+        } else {
+            self.state.advance_step();
+            self.skip_combat_phases_if_required();
+        }
 
         None
     }
 
-    /// End the turn (CR 723.1): exile every spell on the stack and remove
-    /// every ability from it (723.1a), drop triggered abilities waiting to be
-    /// put on it (723.1b), end combat, and skip every remaining phase and
-    /// step but cleanup (723.1d). The cleanup step then runs normally, and
-    /// may repeat if anything triggers during it (723.1e).
-    pub(crate) fn end_the_turn(&mut self) {
-        while let Some(object) = self.state.stack_objects.last() {
-            match object {
-                StackObject::Spell(spell) => {
-                    let object_id = spell.object;
-                    self.move_object(object_id, ZoneType::Exile);
-                }
-                _ => {
-                    self.state.stack_objects_mut().pop();
-                }
-            }
-        }
-        self.state.pending_triggers_mut().clear();
-        if self.state.combat.is_some() {
-            self.on_step_end(StepKind::EndOfCombat);
-        }
-        self.clear_mana_pools();
-        let turn = &mut self.state.turn;
-        turn.additional_combats.clear();
-        turn.combat_attackers = None;
-        let ending = PhaseKind::Ending as usize;
-        turn.current_phase = ending;
-        turn.current_step = PHASE_STEPS[ending].len() - 1;
-        turn.step_initialized = false;
-        turn.turn_based_actions_complete = false;
-        turn.cleanup_priority = false;
+    /// CR 725.1d: leaving a combat step early also ends its combat phase.
+    pub(crate) fn end_step_for_cleanup(&mut self) {
+        let step = if self.state.turn.current_phase_kind() == PhaseKind::Combat {
+            StepKind::EndOfCombat
+        } else {
+            self.state.turn.current_step_kind()
+        };
+        self.on_step_end(step);
+        self.state.turn.start_cleanup();
     }
 
     /// A player skipping their combat phases passes from the precombat main
@@ -234,8 +216,12 @@ impl Game {
 
     fn on_step_start(&mut self, step: StepKind) {
         self.restart_priority_round();
+        self.state.priority_mut().clear_loop_watch();
         if step == StepKind::Untap {
             let player = self.active_player();
+            if let Some(exposure) = self.exposure_mut() {
+                exposure.mana_turns[player.0].push(Default::default());
+            }
             let event = GameEvent::TurnStarted {
                 player,
                 turn_number: self.state.turn.turn_number,
@@ -249,20 +235,21 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
-                self.state.combat = Some(CombatState::default());
+                self.state.combat = Some(Box::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
+                combat.already_attacking = combat.attackers.len();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
                 // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 combat.blockers_to_declare = eligible;
             }
             _ => {}
@@ -270,26 +257,20 @@ impl Game {
     }
 
     fn on_step_end(&mut self, step: StepKind) {
-        if matches!(step, StepKind::EndOfCombat) {
+        // CR 106.4 — Unspent mana empties at the end of each step and phase.
+        self.clear_mana_pools();
+        if step == StepKind::EndOfCombat {
             // CR 511.3 — Creatures stop being attacking as combat ends.
-            for index in 0..self.state.permanents.len() {
-                let permanent_id = crate::state::game_object::PermanentId(index);
-                if self.state.permanents[permanent_id].is_some() {
-                    self.state.permanents[permanent_id]
-                        .as_mut()
-                        .expect("checked permanent")
-                        .attacking = false;
-                }
+            for permanent in self.state.permanents.iter_mut().flatten() {
+                permanent.attacking = false;
             }
+            self.finish_combat_capture();
             self.state.combat = None;
-            // Until-end-of-combat mana (firebending) empties now.
+        }
+        if matches!(step, StepKind::EndOfCombat | StepKind::Cleanup) {
             self.clear_combat_mana_pools();
         }
-        if matches!(step, StepKind::Cleanup) {
-            // Safety net: no combat mana survives the turn.
-            self.clear_combat_mana_pools();
-            self.expire_turn_cast_grants();
-        }
+        self.remember_controlled_hands();
     }
 
     fn perform_turn_based_actions(&mut self, step: StepKind) -> Option<ActionSpace> {
@@ -325,10 +306,9 @@ impl Game {
                             delta: 1,
                             by: Some(active),
                         },
-                    )
-                    .collect();
+                    );
                 let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
-                frame.batch = Some(self.event_batch(events));
+                frame.batch = Some(self.event_batch(EventBinding::None, events));
                 frame.completion = crate::flow::decision::FrameCompletion::Continue;
                 self.run_frame(frame);
                 None
@@ -346,12 +326,19 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
-                    let attackers = combat.attackers.clone();
+                    let first = std::mem::take(&mut combat.already_attacking);
+                    let attackers = combat.attackers[first..].to_vec();
                     if !attackers.is_empty() {
+                        self.state.turn.history[active.0].attacked = true;
+                        for &attacker in &attackers {
+                            let object =
+                                self.permanent_object(attacker).expect("declared attacker");
+                            self.state.turn.record_attack(object);
+                        }
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
                             attackers: attackers.clone(),
@@ -370,27 +357,26 @@ impl Game {
                     }
                     return None;
                 };
+                let must_attack = self.must_attack(attacker);
+                let actions = [true, false]
+                    .into_iter()
+                    .filter(|attack| *attack || !must_attack)
+                    .map(|attack| Action::DeclareAttacker {
+                        player: active,
+                        permanent: attacker,
+                        attack,
+                    })
+                    .collect();
                 Some(ActionSpace {
                     player: Some(active),
                     kind: ActionSpaceKind::DeclareAttacker,
-                    actions: vec![
-                        Action::DeclareAttacker {
-                            player: active,
-                            permanent: attacker,
-                            attack: true,
-                        },
-                        Action::DeclareAttacker {
-                            player: active,
-                            permanent: attacker,
-                            attack: false,
-                        },
-                    ],
+                    actions,
                     focus: Vec::new(),
                 })
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
-                let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                let combat = self.state.combat.get_or_insert_default();
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
                     let assignments: Vec<_> = self
@@ -485,7 +471,7 @@ impl Game {
         }
     }
 
-    fn tick_priority(&mut self) -> Option<ActionSpace> {
+    fn tick_priority(&mut self, step: StepKind) -> Option<ActionSpace> {
         // An automatic pass changes only the priority holder. Reuse this
         // invocation's fixed-point proof until a stack object resolves.
         let mut stabilized = false;
@@ -504,10 +490,22 @@ impl Game {
                 if let Some(space) = self.stabilize_before_priority() {
                     return Some(space);
                 }
+                // CR 514.3a: only an SBA or a waiting trigger opens cleanup priority.
+                if !TurnState::step_has_priority(step) && !self.state.turn.cleanup_priority {
+                    return None;
+                }
                 stabilized = true;
             }
             if self.is_game_over() {
                 return None;
+            }
+            if self.state.priority.resolution_owed {
+                // CR 117.5: state-based losses and newly stacked triggers
+                // determine whether the resolution ended the game or the chain.
+                self.state.priority_mut().resolution_owed = false;
+                if self.end_mandatory_loop() {
+                    return None;
+                }
             }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
@@ -515,12 +513,11 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
-                    if !self.state.turn.step_initialized {
-                        // The resolution ended the turn (CR 723.1d): the
-                        // cleanup step begins without priority.
+                    if !self.state.turn.step_initialized || self.is_game_over() {
+                        // A turn-ending resolution leaves this priority round.
                         return None;
                     }
-                    self.restart_priority_round();
+                    self.state.priority_mut().resolution_owed = true;
                     stabilized = false;
                     continue;
                 }
@@ -528,19 +525,50 @@ impl Game {
             }
 
             let player = self.state.priority.holder;
-            let actions = self.compute_player_actions(player);
-            if self.skip_trivial && actions.len() == 1 {
+            self.capture_priority_mana(player);
+            let space = self.priority_action_space(player);
+            if self.skip_trivial && space.actions.len() == 1 {
+                self.skipped_priority_passes += 1;
                 let next = self.next_player(player);
                 self.state.priority_mut().on_pass(next);
                 continue;
             }
 
-            return Some(ActionSpace {
-                player: Some(player),
-                kind: ActionSpaceKind::Priority,
-                actions,
-                focus: Vec::new(),
+            return Some(space);
+        }
+    }
+
+    /// Count one finished resolution toward the CR 104.4b watch, ending the
+    /// game in a draw once it shows a mandatory loop; true if it did. An
+    /// emptied stabilized stack ends any chain, so it ends the watch instead.
+    fn end_mandatory_loop(&mut self) -> bool {
+        if self.stack_is_empty() {
+            self.state.priority_mut().clear_loop_watch();
+            return false;
+        }
+        // Taken out of the state so the sample can read the whole state.
+        let mut watch = self
+            .state
+            .priority_mut()
+            .loop_watch
+            .take()
+            .unwrap_or_default();
+        let looped = watch.repeats(|| {
+            let seats = [PlayerId(0), PlayerId(1)];
+            LoopSample {
+                fingerprint: self.state.loop_fingerprint(),
+                life: seats.map(|seat| self.state.players[seat.0].life),
+                poison: seats
+                    .map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
+                can_lose: seats.map(|seat| !self.protected_from_loss(seat)),
+            }
+        });
+        self.state.priority_mut().loop_watch = Some(watch);
+        if looped {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true,
             });
         }
+        looped
     }
 }

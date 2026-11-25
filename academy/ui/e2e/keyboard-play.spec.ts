@@ -6,36 +6,61 @@
  * region it was made from rather than falling back to the top of the page.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { CONTROLS } from '../src/lib/board/region';
 
-/** The region holding focus, by its accessible name, and the focused control's name. */
-async function focused(page: Page): Promise<{ region: string | null; label: string }> {
-  return page.evaluate(() => {
+/**
+ * The region holding focus, by its accessible name, and the focused control:
+ * its name and its position among the region's visible controls (the set the
+ * region roves over), with how many there are. Copies of one card share a
+ * name, so movement is judged by position.
+ */
+async function focused(page: Page): Promise<{ region: string | null; label: string; index: number; count: number }> {
+  return page.evaluate(selector => {
     const active = document.activeElement as HTMLElement | null;
     const region = active?.closest<HTMLElement>('[data-region]');
-    return { region: region?.getAttribute('aria-label') ?? null, label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '' };
-  });
+    const controls = region
+      ? [...region.querySelectorAll<HTMLElement>(selector)]
+        .filter(element => element.closest('[data-region]') === region && element.getClientRects().length > 0)
+      : [];
+    return {
+      region: region?.getAttribute('aria-label') ?? null,
+      label: active?.getAttribute('aria-label') ?? active?.textContent?.trim() ?? '',
+      index: active ? controls.indexOf(active) : -1,
+      count: controls.length,
+    };
+  }, CONTROLS);
 }
 
-/** Tab to the region whose name matches, then arrow to a control whose name matches. */
+/**
+ * Tab to the region whose name matches, then arrow to a control whose name
+ * matches. Tab enters a region on its first control with an offer, which can
+ * be its last, so the walk first steps left to the region's first control;
+ * a region has no Home key.
+ */
 async function reach(page: Page, region: RegExp, control: RegExp): Promise<boolean> {
   for (let tabs = 0; tabs < 16; tabs += 1) {
     if (region.test((await focused(page)).region ?? '')) break;
     await page.keyboard.press('Tab');
   }
   if (!region.test((await focused(page)).region ?? '')) return false;
-  await page.keyboard.press('Home');
-  const seen = new Set<string>();
+  for (let steps = 0; steps < 40; steps += 1) {
+    const at = (await focused(page)).index;
+    if (at <= 0) break;
+    await page.keyboard.press('ArrowLeft');
+    if ((await focused(page)).index === at) break;
+  }
+  const seen = new Set<number>();
   for (let steps = 0; steps < 40; steps += 1) {
     const now = await focused(page);
     if (control.test(now.label)) return true;
-    if (seen.has(now.label) && steps > 0) {
+    if (seen.has(now.index) && steps > 0) {
       // A row ends: try the next row down before giving up.
       await page.keyboard.press('ArrowDown');
       const below = await focused(page);
-      if (below.label === now.label || seen.has(below.label)) return false;
+      if (below.index === now.index || seen.has(below.index)) return false;
       continue;
     }
-    seen.add(now.label);
+    seen.add(now.index);
     await page.keyboard.press('ArrowRight');
   }
   return false;
@@ -56,9 +81,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
   await page.getByTestId('opponent-select').selectOption('random');
+  // This deal's only playable opening card is the rightmost card in hand.
+  await page.getByRole('combobox', { name: 'Deal mode' }).selectOption('repeat');
+  await page.getByLabel('Seed', { exact: true }).fill('1467515640');
   await page.getByRole('button', { name: 'Start game', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('action-option').first()).toContainText('Keep hand');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'PRIORITY');
 
   // Tab visits the regions in reading order, each once, one stop per region,
   // and leaves them only for the top bar's controls and the stop bar (one
@@ -77,13 +108,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 
-  // Arrows move within a region: the hand's cards one by one.
-  expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const first = (await focused(page)).label;
+  // From the rightmost card, both arrows move one card within the hand.
+  expect(await reach(page, /^Your hand/, /^Mountain .*Play Mountain/)).toBe(true);
+  const { region: hand, index: rightmost, count } = await focused(page);
+  expect(rightmost).toBeGreaterThan(0);
+  expect(rightmost).toBe(count - 1);
+  await page.keyboard.press('ArrowLeft');
+  expect(await focused(page)).toMatchObject({ region: hand, index: rightmost - 1 });
   await page.keyboard.press('ArrowRight');
-  const second = await focused(page);
-  expect(second.region).toMatch(/^Your hand/);
-  expect(second.label).not.toBe(first);
+  expect(await focused(page)).toMatchObject({ region: hand, index: rightmost });
 
   // Several decisions: a land from the hand, attacks on the field, Space for the rest.
   let byEnter = 0;

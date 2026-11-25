@@ -47,6 +47,26 @@ print("chooser:", game.current_agent_index())
 print("game over:", terminated or truncated)
 ```
 
+Reset starts before turn one. Each seat can keep or mulligan. After both seats
+declare, those taking a mulligan redraw and privately choose cards for the
+bottom of their library, deepest first. After both keep, each can put eligible
+cards from their opening hand onto the battlefield in any order. Finishing
+passes that opportunity to the next seat. A snapshot taken between bottom
+selections restores the chooser, the remaining offers and each viewer’s
+knowledge of the cards already placed.
+
+Both players’ observations expose public player counters through
+`player.counters`, keyed by kind (for example, `"poison"`). Ten poison
+counters cause a loss at the next state-based check unless the player is
+protected. Both indexed and semantic steps report the losing seat’s reason under
+`p0_loss_reason` or `p1_loss_reason`. When several causes apply to a seat,
+the reported reason is the first applicable one in the order `deck_empty`,
+`life_total`, `poison`. A simultaneous loss by both seats is a draw.
+A resolving Demonic Pact loss reports `instructed_loss`. Maze's End sets
+`winner_index` directly when its controller has ten differently named Gates
+after searching. Herald of Eternal Dawn prevents its controller’s loss and
+an opponent’s explicit win. Play continues when either instruction is prevented.
+
 Run `uv run --no-project --python .venv/bin/python play.py`. It starts a game
 from two bundled decks and executes the first legal action, then prints the
 next chooser and whether the game ended. Both seats' choices belong to the
@@ -63,6 +83,12 @@ Forced single-action decisions are skipped by default. See the
 reset behavior, Commands and hidden-information boundaries, and
 [encoded observations](engine.md#encoded-observations) for reading the native
 arrays by column name and joining card definition IDs.
+
+In a viewer observation, `card.cast_permissions` lists the grants on that
+visible card, including grants the player cannot currently afford.
+`player.spent_graveyard_types` lists each granting permanent's public ID and
+the permanent type already played through it this turn. It stays available
+when the graveyard is empty. Use the current action space to choose a cast.
 
 ## Collect in-game statistics
 
@@ -88,7 +114,7 @@ print(performance.from_statistics(read_statistics(Path("statistics"))))
 print(performance.excluded_games)
 ```
 
-The same `statistics_path` option works on `CapturedVector`. Use one file per
+The same `statistics_path` option works on `RecordedVectorEnv`. Use one file per
 producer. Rows carry the card digest and the capture's `context` labels at the
 game's end, so a table can be split by run, update or cell; they use mode 0600, flush at each game boundary
 and fsync at close. The reader accepts a file or directory and ignores a torn
@@ -209,12 +235,18 @@ statistics; add `statistics_path` to collect those independently.
 `extra` for anything else JSON can hold. Academy shows the first three and
 marks an absent one "not retained"; it never recomputes them.
 
-For native batches, `managym.recording.CapturedVector` owns its `VectorEnv`
+For native batches, `managym.recording.RecordedVectorEnv` owns its `VectorEnv`
 and takes the same options. Construct it with `num_envs` and `seed`, use
 `reset_all(players)` and `step(actions)` or the buffered methods, and pass
 `annotations=` with one entry (or `None`) per stream. Use `stream_offset` for
 global stream identities across producers. A game recorded from a batch opens
 exactly like a scalar one.
+
+To reopen buffered streams at saved game seeds, call
+`reset_each_into_buffers(setups, seeds=seeds)` after binding the buffers. Pass
+one setup and one seed per slot in stream order. This can be the first reset.
+The next game in each stream advances from its supplied seed by the normal
+stride. Replay the committed actions to reach a saved decision.
 
 `capture.close()` writes each selected game still in progress as
 **interrupted**, with the reason, and syncs the file. Rows written at game end
@@ -284,9 +316,13 @@ A record holds the seed and both decks, so it holds both hands. Files use mode
 cards; Academy still shows each viewer only what that seat could see.
 
 Rows written before this format (`native-failure-v1` receipts and journals)
-read through the same functions. `FailureEvidence` and `read_failure` are the
+read through the same functions. Private snapshot replays (`managym-snapshot-v1`
+exported by `GameSnapshot.to_replay_json()`) also open directly through
+`read_record`, `read_records`, `records_from_source`, `walk`, and
+`managym academy replay`, executing any recorded boundary interventions natively.
+`FailureEvidence` and `read_failure` are the
 former names of `GameRecord` and `read_record`; they warn and are removed in
-0.4.0.
+0.3.0.
 
 ### Keep a durable journal
 
@@ -347,6 +383,202 @@ A persistence error after execution does not mean the operation did not run.
 Retain existing evidence and repair storage before starting a new attempt;
 there is no automatic retry or game skipping. Local durability cannot protect
 against host deletion: collect private files before removing the machine.
+
+## Save and restore game positions
+
+An immutable `GameSnapshot` can restore independent games on several threads,
+even after the source `Env` is gone. Here two opening choices share the same
+unseen library order.
+
+```python
+import json
+from pathlib import Path
+
+import managym
+from managym.journal import DurableJournal
+from managym.recording import read_record
+from managym.replay import walk
+
+game = managym.Env(seed=42, decision_memory=True, decision_memory_include_own=True)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+game.reset(managym.GameSetup(players, decklists="closed"))
+
+snapshot = game.snapshot()
+meta = snapshot.metadata()
+print(meta.turn, meta.phase, meta.action_count, meta.terminal)
+# 1 PhaseEnum.PrecombatMain 6 False
+
+del game
+branch_a = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=0)
+)
+branch_b = snapshot.restore(
+    managym.RestoreOptions.shuffle_libraries(seed=101, forced_first_action=1)
+)
+
+# Atomically save both decks and the branch seed in an owner-only file.
+replay_path = Path("branch-a.json")
+DurableJournal(replay_path).replace(json.loads(branch_a.snapshot().to_replay_json()))
+
+reopened = managym.GameSnapshot.from_replay_json(replay_path.read_text())
+continuation = reopened.restore()
+assert continuation.state_digest() == branch_a.state_digest()
+
+# The same snapshot replay feeds managym.replay and Academy Watch directly.
+replay = walk(read_record(replay_path))
+for _ in replay:
+    pass
+print(replay.stop.status, replay.stop.index)
+# interrupted 1
+```
+
+```bash
+uv run --no-project --python .venv/bin/python python -m managym.replay branch-a.json --seconds 30
+uv run --no-project managym academy replay branch-a.json
+```
+
+`game.snapshot()` accepts a decision boundary or a finished game and raises
+before the first reset. Each restored game starts a fresh generation with
+empty projection caches. The source keeps its profiler, statistics and
+recording sinks. Use `snapshot.restore()` for exact continuation, or pass
+`RestoreOptions` to change the branch at its root.
+
+| Constructor | Effect at the saved boundary |
+|---|---|
+| `RestoreOptions()` / `RestoreOptions.exact(*, reseed=None, ...)` | Preserves full game authority state. Supply `reseed` to replace only future rules RNG. |
+| `RestoreOptions.shuffle_libraries(seed, ...)` | Permutes only exchangeable slots in each player's library using a local seeded RNG, on open or closed decks. Preserves both hands, face-down exile, future rules RNG, and every inspected, revealed, or positioned library card until a genuine rules shuffle. Reusing `seed` across sibling branches gives Common Random Numbers. |
+| `RestoreOptions.determinize(viewer, seed, ...)` | Redraws hidden opponent cards consistently with what the chosen seat can see. The constructor requires `viewer` to be 0 or 1. Restore requires an open opponent decklist. |
+
+Each constructor also accepts two keyword arguments.
+
+- `enable_decision_memory` defaults to the live capture setting. Set it to
+  `False` to freeze the existing logs or `True` to append from this boundary.
+  Both retain the prefix and the setting for own-seat records. Search forks
+  (`Env.clone_env()` and `fork_exact()`) always freeze their logs.
+- `forced_first_action` commits one legal index after sampling and setting
+  capture. It returns the resulting game, including a terminal result.
+  Restore rejects a terminal root, an out-of-range index or a choice changed
+  by determinization. For a built-in seat it records the override for replay.
+
+`snapshot.metadata()` returns a frozen `SnapshotMetadata` with `turn`, `phase`
+(`PhaseEnum`), `life`, `board_counts` (live battlefield permanents by
+controller, including tokens), `stack_len`, `action_count`, `action_kind`
+(`ActionSpaceEnum | None`), `acting_player` (`int | None`), `terminal`, and
+sorted unique `active_card_defs` (catalog `CardDefId`s on the battlefield or
+stack). On a terminal snapshot, `terminal` is `True`, `action_count` is `0`,
+and `action_kind` and `acting_player` are `None`. Reading metadata never builds
+observation JSON or opens hidden zones. `snapshot.state_digest` returns the
+cached state digest and `snapshot.seed` returns the originating reset seed.
+Use `snapshot.acting_player` to read the chooser alone. It returns `None`
+at a terminal and skips the board summary.
+
+`snapshot.to_replay_json()` exports the seed, both decks, chooser and memory
+settings, committed external actions, and ordered branch interventions. It
+retains fingerprints for issued semantic frames so Commands keep their object
+bindings. `GameSnapshot.from_replay_json(raw)` checks the schema, catalog and
+replay checksum, replays the inputs, and verifies the final state digest.
+
+`read_record(path)` checks the snapshot replay and its intervention offsets before
+simulation. `walk(record)` then yields the verified decisions and reports
+the first detected divergence if the rules have changed.
+
+Unrecorded operations such as `scenario_*`, hidden-world materialization,
+structured submissions, and external `random_action_index()` calls still
+allow in-memory restore. Export raises when it cannot reconstruct the prefix.
+
+Keep snapshot replays private. Academy opens one as a **Recorded game** when
+forced-decision skipping is enabled, both seats use `agent`, and decklist
+disclosure agrees. The acting view hides the opponent’s hand. The spectator
+response includes both hands. The board draws the bottom seat’s cards and
+shows the top seat’s hand count. Branch seeds stay on the server.
+
+### Batched slot loading and snapshots
+
+A terminal step on `VectorEnv` or `RecordedVectorEnv` reports the finished
+game's observation, reward, flags and winner. The slot then parks with chooser
+`-1`. Reset the whole vector (`reset_all_into_buffers` for buffered callers),
+or load individual slots as in this example.
+
+```python
+import numpy as np
+import managym
+
+layout = managym.ObservationLayout()
+buffers = {
+    **layout.allocate(2),
+    "rewards": np.zeros(2, dtype=np.float64),
+    "terminated": np.zeros(2, dtype=np.uint8),
+    "truncated": np.zeros(2, dtype=np.uint8),
+}
+games = managym.VectorEnv(num_envs=2, seed=42)
+games.set_buffers(buffers, layout=layout)
+players = [
+    managym.PlayerConfig(f"p{seat}", {"Mountain": 8, "Gray Ogre": 4})
+    for seat in (0, 1)
+]
+games.reset_all_into_buffers(players)
+
+# Read metadata or clone snapshots only for masked slots.
+[meta, _] = games.slot_metadata([True, False])
+[snap, _] = games.snapshot_slots([True, False])
+assert meta is not None and snap is not None
+
+# Restore slot 0 and deal slot 1 with a different setup.
+alt_players = [
+    managym.PlayerConfig(f"alt{seat}", {"Forest": 8, "Llanowar Elves": 4})
+    for seat in (0, 1)
+]
+results = games.load_slots_into_buffers([
+    managym.SlotLoad.snapshot(
+        0, snap, managym.RestoreOptions.shuffle_libraries(seed=101)
+    ),
+    managym.SlotLoad.fresh(1, player_configs=alt_players),
+])
+for result in results:
+    print(result.slot, result.seed, result.acting_player, result.terminal)
+# 0 42 0 False
+# 1 45 0 False
+print(games.next_fresh_seeds())
+# [42, 47]
+```
+
+`slot_metadata(mask)` reads the live position without cloning it or advancing
+its RNG. `snapshot_slots(mask)` returns detached handles. Both return `None`
+for skipped slots and reject requests to read an unset or poisoned slot.
+
+`load_slots_into_buffers(requests)` accepts live, finished and poisoned slots.
+
+- `SlotLoad.fresh(slot, player_configs=None)` deals the slot's next scheduled
+  seed and advances it by `seed_stride`, saturating at the maximum u64.
+  An explicit setup becomes the default for subsequent fresh loads. With a
+  uniform or training roster, omit the setup so the roster can draw the decks.
+- `SlotLoad.snapshot(slot, snapshot, options=None)` restores a branch.
+  Replacing an untouched fresh opening with a snapshot refunds that opening's
+  seed. Other snapshot loads leave the seed sequence unchanged.
+- `SlotLoad.slot`, `SlotLoad.with_slot(slot)` and `SlotLoadResult.with_slot(slot)`
+  map requests and results between local and global shard coordinates.
+
+The loader checks distinct slot indices, setups, restore options and encoding
+capacity across all participating shards before writing any row or spending a
+seed. You can correct a rejected request and retry it. Results follow request
+order and carry the slot, generation, seed, acting player, terminal flag and
+source digest. `next_fresh_seeds()` gives each slot's next unspent seed.
+
+Mask parked slots out of steps until you reset or reload them. A forced action
+can finish a restored game during the load itself. Its result then has
+`terminal=True` and `acting_player=None`, its buffer has `terminated=1`, and
+its last info carries the winner when there is one.
+
+Game recordings, statistics and exposure count fresh games. Replacing a played
+fresh game retains its evidence. Replacing an untouched opening with a branch
+discards that opening. A recorded fresh terminal includes its winner and final
+digest even if the slot stays parked. For branch evidence,
+`RecordedVectorEnv.game_inputs(slot)` joins the original commitments and
+interventions to the attempted suffix on demand. Failure capture and durable
+journaling use the same replay inputs.
 
 ## Ask questions of recorded games
 
@@ -425,13 +657,13 @@ when the attack was good" belongs in a reducer of your own, since the engine
 has no opinion on good.
 
 The same reducers run during scalar or vector play. Pass `reducers=[...]` to
-`ScalarCapture` or `CapturedVector`, and call `capture.rows()` for tables from
+`ScalarCapture` or `RecordedVectorEnv`, and call `capture.rows()` for tables from
 completed or closed games:
 
 ```python
-from managym.recording import CapturedVector
+from managym.recording import RecordedVectorEnv
 
-capture = CapturedVector(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
+capture = RecordedVectorEnv(num_envs=32, seed=7, reducers=[Behaviour(), HeldSpells()])
 # Reset and step through the capture, using ordinary or buffered vector calls.
 # No games_path is needed: these questions cover every game, not a saved sample.
 capture.close()
@@ -440,10 +672,10 @@ print(capture.rows())
 
 Each vector stream receives a deep copy of your reducers and owns independent
 per-game state. `start` resets that state at every native root, including
-autoreset and same-seed replacement. Only committed, active-stream decisions
-reach `decision`; rejected isolated calls do not. `end` receives the old game's
-card facts before autoreset discards them, or an interrupted result on root
-replacement/close. Per-game rows are combined and the original reducer's
+`load_slots_into_buffers` and same-seed resets. Only committed, active-stream
+decisions reach `decision`; rejected isolated calls do not. `end` receives a
+finished game's card facts when it reaches terminal, or an interrupted result
+when an unfinished slot is replaced or closed. Per-game rows are combined and the original reducer's
 `finish(rows)` aggregates them; do not depend on stream-local mutable state in
 `finish`. Rows accumulate until the capture is released, so return compact
 per-game summaries. Record annotations are available to live hooks even when
@@ -605,8 +837,7 @@ as `manabot.env.vector_env.VectorEnv` still require `manabot`; the native
 batch class is `managym.VectorEnv`.
 
 The two packages release together at the same version. Package upgrades do
-not change frozen observation layouts or make old checkpoints compatible
-with a new world. Retain the package versions, world identity, configuration
+not change frozen observation layouts. Retain the package versions, configuration
 and seeds with collected data, and reproduce old runs in their original
 environments.
 

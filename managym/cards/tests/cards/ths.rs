@@ -5,10 +5,11 @@ use crate::support::{
     inspect::{assert_choice_contract, card_of, counters_of, offered_targets, zone_of},
     play::{cast, settle},
 };
+use managym::flow::turn::StepKind;
 use managym::state::{
     card::{CardType, CardTypes, Keyword, Keywords},
     effect::Modification,
-    game_object::{PlayerId, Target},
+    game_object::{PermanentId, PlayerId, Target},
     permanent::CounterKind,
     zone::ZoneType,
 };
@@ -135,4 +136,230 @@ fn lightning_strike_excludes_opposing_hexproof_planeswalkers_and_battles() {
         assert_eq!(counters_of(&s, own, counter), 2);
         assert_eq!(counters_of(&s, opposing, counter), 5);
     }
+}
+
+/// Theros's five Temples enter tapped, scry 1 as they enter (the
+/// top card stays or goes to the bottom, as chosen) and pay either of their
+/// two colors, and no other.
+#[test]
+fn temples_enter_tapped_scry_one_and_supply_either_color() {
+    for (name, colors) in [
+        ("Temple of Abandon", "RG"),
+        ("Temple of Deceit", "UB"),
+        ("Temple of Mystery", "GU"),
+        ("Temple of Silence", "WB"),
+        ("Temple of Triumph", "RW"),
+    ] {
+        crate::support::play::temple_scries_one_and_pays_either_color(name, colors);
+    }
+}
+
+/// Burnished Hart pays {3} and itself for up to two basic lands, both
+/// entering tapped.
+#[test]
+fn burnished_hart_sacrifices_itself_for_two_tapped_basic_lands() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        inspect::{card_of, library_card, tapped, zone_of},
+        play::{activate, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_unfunded_setup(&["Burnished Hart"]);
+    let hart = s.force_permanent_on_battlefield(0, "Burnished Hart");
+    let hart_card = card_of(&s, hart);
+    force_lands(&mut s, 0, "Mountain", 3);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, hart, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, hart_card), Some(ZoneType::Graveyard));
+    assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
+    for name in ["Forest", "Plains"] {
+        let land = library_card(&s, 0, name);
+        select_card(&mut s, land);
+    }
+    settle(&mut s);
+    for name in ["Forest", "Plains"] {
+        let [entered] = s.battlefield_permanents_named(0, name)[..] else {
+            panic!("one {name} entered")
+        };
+        assert!(tapped(&s, entered), "{name}");
+    }
+}
+
+#[test]
+fn foundations_5e_heros_downfall() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, offered_targets, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Hero's Downfall", "Gray Ogre", "Sol Ring"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ring = s.force_permanent_on_battlefield(1, "Sol Ring");
+    let walker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    crate::make_planeswalker(&mut s, walker);
+    let card = card_of(&s, walker);
+    cast(&mut s, "Hero's Downfall");
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(ogre)));
+    assert!(offers.contains(&Target::Permanent(walker)));
+    assert!(!offers.contains(&Target::Permanent(ring)));
+    assert!(s.choose_target(Target::Permanent(walker)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+}
+
+/// Ogre enchanted by a resolved Ordeal of Nylea, ready to attack, with
+/// `counters` +1/+1 counters from earlier attacks.
+fn ordeal_on_ogre(counters: i32) -> (crate::support::game::Scenario, PermanentId, PermanentId) {
+    use crate::support::{game::clear_summoning_sickness, inspect::permanent_of};
+    let mut s = five_color_setup(&["Ordeal of Nylea", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    let aura = cast(&mut s, "Ordeal of Nylea");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let ordeal = permanent_of(&s, aura).expect("Ordeal resolved");
+    assert_eq!(
+        s.game().state.permanents[ordeal]
+            .as_ref()
+            .unwrap()
+            .attached_to,
+        Some(card_of(&s, ogre))
+    );
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, counters);
+    (s, ogre, ordeal)
+}
+
+/// Declare the Ogre's attack and stop with Ordeal's trigger on the stack.
+fn attack_with_enchanted(s: &mut crate::support::game::Scenario, ogre: PermanentId) {
+    use crate::support::play::{attack_with, pass_until};
+    use managym::agent::action::ActionSpaceKind;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(s, ogre);
+    pass_until(s, ActionSpaceKind::Priority);
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        1,
+        "Ordeal's attack trigger"
+    );
+}
+
+#[test]
+fn ordeal_of_nylea_grows_its_attacker_then_sacrifices_for_two_tapped_basics() {
+    use crate::support::{
+        inspect::{library_card, permanent_of},
+        play::{command, pass_until, resolve_top, select_card},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+
+    // Below the threshold the counter lands and Ordeal stays.
+    let (mut s, ogre, ordeal) = ordeal_on_ogre(1);
+    let ordeal_object = card_of(&s, ordeal);
+    attack_with_enchanted(&mut s, ogre);
+    resolve_top(&mut s);
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 2);
+    assert_eq!(zone_of(&s, ordeal_object), Some(ZoneType::Battlefield));
+    assert!(s.game().state.stack_objects.is_empty());
+
+    // The third counter sacrifices Ordeal, whose own trigger searches.
+    let (mut s, ogre, ordeal) = ordeal_on_ogre(2);
+    let ordeal_object = card_of(&s, ordeal);
+    attack_with_enchanted(&mut s, ogre);
+    resolve_top(&mut s);
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 3);
+    assert_eq!(zone_of(&s, ordeal_object), Some(ZoneType::Graveyard));
+    assert_eq!(s.game().state.stack_objects.len(), 1, "sacrifice trigger");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let search = s.snapshot();
+    let lands_before = s.battlefield_permanents_named(0, "Forest").len()
+        + s.battlefield_permanents_named(0, "Island").len();
+
+    let forest = library_card(&s, 0, "Forest");
+    let island = library_card(&s, 0, "Island");
+    assert!(
+        !s.action_space().actions.iter().any(|a| matches!(
+            a,
+            Action::SelectCard { object, .. } if s.game().state[*object].name == "Hill Giant"
+        )),
+        "only basic lands are offered"
+    );
+    select_card(&mut s, forest);
+    select_card(&mut s, island);
+    settle(&mut s);
+    for found in [forest, island] {
+        let id = permanent_of(&s, found).expect("searched land entered");
+        assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
+        assert_eq!(
+            s.game().state.permanents[id].as_ref().unwrap().controller,
+            PlayerId(0)
+        );
+    }
+
+    // "Up to two": declining finds nothing and still shuffles.
+    s.restore(&search);
+    command(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Forest").len()
+            + s.battlefield_permanents_named(0, "Island").len(),
+        lands_before
+    );
+    assert_eq!(zone_of(&s, ordeal_object), Some(ZoneType::Graveyard));
+}
+
+/// `Attached` names the enchanted creature, never the event's object, and
+/// reads the Aura's last known attachment once it has left.
+#[test]
+fn ordeal_of_nylea_attached_survives_aura_departure_and_ignores_event_objects() {
+    use crate::support::{
+        game::{inject_ability, move_card},
+        inspect::{permanent_of, tapped},
+        play::{enter_and_settle, resolve_top},
+    };
+    use managym::state::{
+        ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
+        predicate::CardPredicate,
+    };
+
+    // The Aura leaves in response: the attacker still gets its counter, and
+    // Ordeal, no longer on the battlefield, is not sacrificed (no search).
+    let (mut s, ogre, ordeal) = ordeal_on_ogre(2);
+    let ordeal_object = card_of(&s, ordeal);
+    attack_with_enchanted(&mut s, ogre);
+    move_card(&mut s, ordeal_object, ZoneType::Graveyard);
+    resolve_top(&mut s);
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 3);
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "no sacrifice trigger"
+    );
+
+    // A trigger whose event names another creature: "that creature" is the
+    // Giant, the enchanted creature is the Ogre.
+    let (mut s, ogre, ordeal) = ordeal_on_ogre(0);
+    let ordeal_object = card_of(&s, ordeal);
+    inject_ability(
+        &mut s,
+        ordeal_object,
+        Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::another(CardPredicate::creature()),
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::tap(ObjectSelector::Triggering),
+                Effect::put_counters(ObjectSelector::Attached, CounterKind::PlusOnePlusOne, 1),
+            ],
+        },
+    );
+    let giant = enter_and_settle(&mut s, "Hill Giant");
+    let giant = permanent_of(&s, giant).expect("Giant entered");
+    assert!(tapped(&s, giant));
+    assert!(!tapped(&s, ogre));
+    assert_eq!(counters_of(&s, ogre, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, giant, CounterKind::PlusOnePlusOne), 0);
 }

@@ -7,7 +7,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![shattering_spree()]
+    vec![mortify(), shattering_spree()]
 }
 
 fn shattering_spree() -> CardDefinition {
@@ -29,6 +29,29 @@ fn shattering_spree() -> CardDefinition {
                 },
             ))],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mortify() -> CardDefinition {
+    CardDefinition {
+        key: "gpt.mortify",
+        scryfall_id: "3b2c5187-71c7-4801-8a76-339c67322d35",
+        printed: PrintedCharacteristics {
+            name: "Mortify".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Enchantment],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target creature or enchantment.".into(),
             ..Default::default()
         },
         ..Default::default()

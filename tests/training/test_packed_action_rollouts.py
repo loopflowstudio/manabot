@@ -4,15 +4,16 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch.rl as rl
 from manabot.backends.torch.rl import (
     NumericalError,
     clipped_surrogate,
-    damped_policy_loss,
     policy_logs,
     reverse_kl,
 )
 import manabot.backends.torch.rollout as torch_rollout
 from manabot.training.rollout.actions import PackedActions
+from manabot.training.updates.objective import damped_policy_loss
 
 
 def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
@@ -97,6 +98,7 @@ def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
         reference = mask.float() / mask.sum(-1, keepdim=True)
         if rule == "damped":
             loss = damped_policy_loss(
+                rl,
                 current,
                 selected,
                 advantages,

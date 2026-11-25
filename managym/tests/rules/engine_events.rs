@@ -8,7 +8,7 @@ use crate::support::{
         clear_hand, deck, deck_of, five_color_setup, force_from_library, force_lands,
         inject_ability, set_counters, until_end_of_turn, Scenario,
     },
-    inspect::{card_of, find_owned_card_off_battlefield, hand, permanent},
+    inspect::{card_of, counters, find_owned_card_off_battlefield, hand, permanent},
     play::{activate_first, cast_and_resolve, cast_only, choose, resolve_until_priority},
 };
 use managym::{
@@ -18,7 +18,10 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        ability::{Ability, Effect, EffectValue, Per, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, DamageKind, DamageRecipientFilter, Effect, EffectValue, ObjectSelector, Per,
+            TriggerCondition, TriggerSubject,
+        },
         card::{BlockRestriction, CardType, StaticAbility},
         effect::Modification,
         game_object::PlayerId,
@@ -31,6 +34,7 @@ use managym::{
 #[test]
 fn mana_activation_keeps_the_nonactive_players_priority() {
     let mut s = five_color_setup(&[]);
+    s.allow_priority_floats();
     s.game_mut()
         .create_token("token.treasure", PlayerId(1), false);
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -143,6 +147,89 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
     // Unblocked: Gray Ogre (2) + token (1) = 3 damage.
     s.advance_to_active_step(0, StepKind::EndOfCombat);
     s.assert_life(1, 17);
+}
+
+/// "Whenever a creature you control deals combat damage" watches damage to
+/// any recipient: a blocked attacker's damage to its blocker triggers once
+/// with that damage as the amount, and the opponent's creature does not.
+#[test]
+fn combat_damage_to_a_creature_triggers_deals_damage() {
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Gray Ogre", 40)]), 59);
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for ogre in [attacker, blocker] {
+        s.game_mut().state.permanents[ogre]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+    }
+    let attacker_card = card_of(&s, attacker);
+    inject_ability(
+        &mut s,
+        attacker_card,
+        Ability::Triggered {
+            condition: TriggerCondition::DealsDamage {
+                kind: DamageKind::Combat,
+                source: TriggerSubject::you_control(CardPredicate::creature()),
+                to: DamageRecipientFilter::Any,
+            },
+            intervening_if: None,
+            effects: vec![Effect::gain_life(EffectValue::TriggeringAmount)],
+        },
+    );
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+
+    s.assert_life(1, 20);
+    s.assert_life(0, 22);
+}
+
+/// A damage trigger's "that creature" is the permanent that dealt the
+/// damage, not the trigger's own source (Quilled Greatwurm).
+#[test]
+fn deals_damage_binds_source_as_triggering_object() {
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 59);
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let watcher = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().state.permanents[attacker]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+    // Only the attacker can attack; the tapped watcher stays home.
+    s.game_mut().state.permanents[watcher]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let watcher_card = card_of(&s, watcher);
+    inject_ability(
+        &mut s,
+        watcher_card,
+        Ability::Triggered {
+            condition: TriggerCondition::DealsDamage {
+                kind: DamageKind::Combat,
+                source: TriggerSubject::you_control(CardPredicate::creature()),
+                to: DamageRecipientFilter::Any,
+            },
+            intervening_if: None,
+            effects: vec![Effect::put_counters(
+                ObjectSelector::Triggering,
+                CounterKind::PlusOnePlusOne,
+                1,
+            )],
+        },
+    );
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+
+    s.assert_life(1, 18);
+    assert_eq!(counters(&s, attacker), 1);
+    assert_eq!(counters(&s, watcher), 0);
 }
 
 /// "Whenever one or more creatures you control attack" fires once per

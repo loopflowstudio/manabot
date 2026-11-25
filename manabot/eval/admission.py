@@ -56,9 +56,7 @@ def register_checkpoint(
 ) -> CheckpointAdmission:
     """Admit local bytes; a missing producer seed remains unknown, never invented.
 
-    The world and both ABI hashes come from the checkpoint's own
-    `ObservationSpace`, never the matchup's fresh defaults: serving compares
-    them with the loaded space and refuses a registration that disagrees.
+    Both ABI hashes describe the checkpoint's own observation space.
     Blanking registers the same bytes as a distinct memory-ablation player.
     """
     digest, size = file_sha256(path), path.stat().st_size
@@ -66,7 +64,8 @@ def register_checkpoint(
         expected_bytes is not None and size != expected_bytes
     ):
         raise ValueError("checkpoint differs from recorded artifact")
-    agent, space = backend.load_policy(str(path))
+    checkpoint = backend.read_policy(str(path))
+    agent, space = backend.load_policy(checkpoint)
     validate_agent_setup(
         agent, Match(match).to_rust(), allow_deck_repetition=allow_deck_repetition
     )
@@ -77,7 +76,6 @@ def register_checkpoint(
     )
     registration = PlayerRegistration(
         information_boundary="acting-viewer",
-        world=runtime["world"],
         content_suite=content_suite,
         observation_abi_sha256=runtime["observation_abi_sha256"],
         action_abi_sha256=runtime["action_abi_sha256"],
@@ -97,6 +95,8 @@ def register_checkpoint(
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=digest,
+        writer_revision=checkpoint.writer_revision,
+        stored_programs=checkpoint.stored_programs,
         checkpoint_bytes=size,
         parameter_count=agent.parameter_count,
         training_seed=training_seed,
@@ -106,10 +106,18 @@ def register_checkpoint(
 
 
 def register_anchor(
-    candidate: PlayerRegistration, kind: AnchorKind, *, player_id: str
+    candidate: PlayerRegistration,
+    kind: AnchorKind,
+    *,
+    player_id: str,
+    heuristic_actions: int | None = None,
 ) -> PlayerRegistration:
     """Keep frozen scripted/random source identities and the heuristic bundle."""
-    player_spec: dict[str, str] = {"kind": kind}
+    player_spec: dict[str, str | int] = {"kind": kind}
+    if heuristic_actions is not None:
+        if kind != "heuristic" or heuristic_actions < 1:
+            raise ValueError("an action cap requires a heuristic and a positive count")
+        player_spec.update(max_actions=heuristic_actions, action_overflow="first-legal")
     if kind == "heuristic":
         source = source_bundle_sha256(heuristic_source_paths())
         player_spec["version"] = "native-v2"
@@ -120,7 +128,6 @@ def register_anchor(
     common = candidate.model_dump(
         include={
             "information_boundary",
-            "world",
             "content_suite",
             "observation_abi_sha256",
             "action_abi_sha256",

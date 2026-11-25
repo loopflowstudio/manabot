@@ -21,6 +21,7 @@ use managym::{
 #[test]
 fn dispute_sacrifices_before_responses_draws_two_and_makes_live_treasure() {
     let mut s = five_color_setup(&["Deadly Dispute", "Unlucky Cabbage Merchant"]);
+    s.allow_priority_floats();
     play_and_settle(&mut s, "Unlucky Cabbage Merchant");
     let food = permanent_named(&s, "Food");
     let food_card = s.game().state.permanents[food].as_ref().unwrap().object;
@@ -95,7 +96,6 @@ fn selected_sacrifice_cannot_also_fund_the_announced_spell() {
             );
             activate_named(&mut s, "Treasure", 0);
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         }
         assert!(s.game().state.permanents[treasure].is_none());
         assert_eq!(zone_of(&s, dispute), Some(ZoneType::Stack));
@@ -161,4 +161,13 @@ fn removal_respects_mana_value_and_excluded_creature_types() {
             })
         );
     }
+}
+
+#[test]
+fn foundations_5f_vampire_spawn() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Vampire Spawn"]);
+    enter_and_settle(&mut s, "Vampire Spawn");
+    assert_eq!((s.life(0), s.life(1)), (22, 18));
 }

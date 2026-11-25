@@ -11,18 +11,20 @@ game's reset seed. `uniform-independent-v1` draws each seat independently,
 including mirrors; historical `uniform-distinct-v1` excludes mirrors. Exact
 resume reproduces the same decks for the same games, and the run also records
 each game's actual decks.
-Checkpoints never know the source; they bind only the world.
+Sampling settings belong to the run.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Iterable
+from typing import Literal, TypedDict
 
 from pydantic import Field, model_validator
 
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.model.world import admit_world_decks
+from manabot.model.writer_catalog import WriterCatalog
 import managym
 from managym import Deck
 from managym.disclosure import DecklistSampling
@@ -92,3 +94,37 @@ class UniformDecks(StrictModel):
             players[1] if len(players) > 1 else players[0],
             decklists="closed" if self.decklists == "closed" else "open",
         )
+
+
+class DeckCard(TypedDict):
+    entry: int
+    deck: str
+    card: str
+    copies: int
+    board: Literal["main", "sideboard"]
+
+
+def deck_cards(decks: Iterable[Deck], catalog: WriterCatalog) -> list[DeckCard]:
+    """One row per roster entry, board and card, keyed by the catalog's definition."""
+    keys = catalog["definition_keys"]
+    names = {key: key for key in keys} | {
+        entry["name"]: keys[index]
+        for entry in catalog["naming_catalog"]
+        if (index := entry["definition"]) is not None
+    }
+    rows: list[DeckCard] = []
+    for entry, deck in enumerate(decks):
+        identity = deck.identity
+        for board in ("main", "sideboard"):
+            counts = deck.main if board == "main" else deck.sideboard
+            for name, copies in counts.items():
+                rows.append(
+                    DeckCard(
+                        entry=entry,
+                        deck=identity,
+                        card=names[name],
+                        copies=copies,
+                        board=board,
+                    )
+                )
+    return rows

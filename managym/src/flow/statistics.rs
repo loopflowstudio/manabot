@@ -188,22 +188,21 @@ pub fn reduce_capture(raw: &str) -> Result<Vec<CardCounts>, serde_json::Error> {
 mod tests {
     use super::*;
     use crate::{
-        flow::{card_capture::ExposureCapture, game::Game},
+        flow::{card_capture::CaptureMode, game::Game},
         state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     };
 
-    fn game(capture: bool) -> Game {
+    fn game(capture: Option<CaptureMode>) -> Game {
         let configs = ["a", "b"]
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
             .collect::<Vec<_>>();
-        Game::construct(configs.into(), 17, true, capture, true)
+        Game::construct(&configs.into(), 17, true, capture, true)
     }
 
     #[test]
     fn statistics_count_draws_not_selection_or_return_and_match_retained() {
-        let mut game = game(true);
-        game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
+        let mut game = game(Some(CaptureMode::Exposure));
         let object = game
             .state
             .zones
@@ -235,7 +234,7 @@ mod tests {
 
     #[test]
     fn statistics_without_capture_keeps_rules_and_rejected_choices() {
-        let mut stats = game(false);
+        let mut stats = game(None);
         assert!(stats.card_capture.is_none());
         let mut plain = stats.clone();
         let before = serde_json::to_value(stats.statistics.as_ref().unwrap().rows()).unwrap();
@@ -256,8 +255,8 @@ mod tests {
     #[test]
     fn statistics_command_counts_once_and_rejects_stale_binding() {
         use crate::agent::structured_offer::OfferSubmission;
-        let mut command_game = game(false);
-        let mut indexed = game(false);
+        let mut command_game = game(None);
+        let mut indexed = game(None);
         let offers = command_game.structured_search_offers().unwrap();
         let command = offers
             .decode(&OfferSubmission {

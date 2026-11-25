@@ -26,15 +26,18 @@ export interface CardState {
   toughness: number;
   mana_value: number;
   types: CardTypes;
-  /** Foretold and face down in exile; only its owner's views list it. */
+  /** Face down in exile; only views of players who may look at it list it. */
   face_down?: boolean;
-  /** The permission to play this card from exile, when it has one. */
+  /** The permission to play this card from its current zone, when it has one. */
   cast_permission?: CastPermission;
+  cast_permissions?: CastPermission[];
   /** The value of X announced for this spell on the stack. */
   x?: number;
+  /** Counters on the card off the battlefield ("with a stash counter on it"), by kind. */
+  counters?: Record<string, number>;
 }
 
-/** A public permission to play an exiled card; only set terms are present. */
+/** A public permission to play a card in its current zone; only set terms are present. */
 export interface CastPermission {
   player_id: number;
   /** Mana symbols paid to cast it; absent for a land play. */
@@ -45,12 +48,23 @@ export interface CastPermission {
   own_turn_only?: boolean;
   /** Usable only on a turn numbered after this one. */
   after_turn?: number;
-  /** Lasts while the permitted player controls this permanent. */
+  /** The public permanent sustaining this grant. */
   source_permanent_id?: number;
   flash?: boolean;
   any_mana?: boolean;
   waterbend?: boolean;
   foretold?: boolean;
+  flashback?: boolean;
+  follows_source_controller?: boolean;
+  on_adventure?: boolean;
+  /** This exact exiled copy stays prepared while linked to its source. */
+  prepared?: boolean;
+  /** Face down in exile without Foretell. */
+  face_down?: boolean;
+  /** A land face may be played with it; otherwise it casts spells only. */
+  play_lands?: boolean;
+  /** What must hold to use it, such as "you control a Wizard". */
+  condition?: string;
 }
 
 /** Mana spendable only on the named spell or ability-source subtypes. */
@@ -114,16 +128,24 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  first_strike_participant?: boolean;
+  attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  /** Face down (CR 708.2). */
+  face_down?: boolean;
   /** Keywords it has after continuous effects; absent when it has none. */
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  combat_damage_to_players?: number[];
+  damaged_permanents?: number[];
+  ability_resolutions?: [number, number][];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;
+  entered_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
   effects?: ContinuousEffect[];
   /** The copy effect that made it a copy (CR 707.2). */
@@ -153,6 +175,13 @@ export interface PlayerTurnHistory {
   bent?: number;
   /** Life lost this turn (CR 119.3). */
   life_lost?: number;
+  life_gains?: number;
+  life_gained?: number;
+  creatures_died?: number;
+  permanents_left?: number;
+  nonland_permanents_left?: number;
+  warped_this_turn?: boolean;
+  mana_spent_casting?: number;
 }
 
 export interface PlayerState {
@@ -162,8 +191,10 @@ export interface PlayerState {
   /** `lesson_mana` split by restriction class. */
   restricted_mana?: RestrictedMana[];
   /** Player id whose next turn ends this player's hand-only casting. */
+  spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
   no_maximum_hand_size?: boolean;
+  counters?: Record<string, number>;
   combat_mana?: number;
   inspected?: CardState[];
   sideboard?: SideboardCard[];
@@ -220,6 +251,13 @@ export interface DecisionTargetView {
   object: DecisionObjectView;
 }
 
+/** One object's payment toward the pending cost: "sacrificed Gray Ogre". */
+export interface PaidView {
+  phrase: string;
+  /** That object as it is now; absent when nothing visible remains of it. */
+  object?: DecisionObjectView;
+}
+
 export interface DecisionContextView {
   pending?: string[];
   recent_facts: string[];
@@ -233,9 +271,14 @@ export interface DecisionContextView {
   chosen_mode: number | null;
   /** `source` is being announced, so it is on the stack by the rules (CR 601.2a, 602.2a). */
   announcing?: 'spell' | 'activated_ability';
+  /** What objects have already paid toward the cost being paid, in paid order. */
+  paid?: PaidView[];
 }
 
 export interface StackEntryView {
+  mana_spent?: number;
+  combat_damage_to_players?: number[];
+  ability_resolutions?: number;
   id: number;
   kind: string;
   controller: number;
@@ -245,6 +288,10 @@ export interface StackEntryView {
   chosen_mode?: number;
   /** The announced value of X, when above zero. */
   x?: number;
+  /** A spell cast from a prepared copy; its stack copies are not. */
+  from_prepared?: boolean;
+  /** A spell cast with flashback, exiled as it leaves the stack. */
+  flashback?: boolean;
 }
 
 export interface PlayerControlView {
@@ -279,6 +326,7 @@ export interface Observation {
   won: boolean;
   turn: {
     turn_number: number;
+    creature_died_this_turn?: boolean;
     phase: string;
     step: string;
     active_player_id: number;

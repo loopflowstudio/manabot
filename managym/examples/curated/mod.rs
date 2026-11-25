@@ -1,7 +1,7 @@
 //! The Academy curated matchup (UR Lessons versus GW Allies main decks) as
 //! benchmark seats. Both engine benchmarks play exactly these lists so their
 //! baselines describe one workload; change the lists only with the baseline.
-use managym::state::player::PlayerConfig;
+use managym::state::player::{GameSetup, ManaFloats, PlayerConfig};
 use std::collections::BTreeMap;
 
 fn deck(objects: &[(&str, usize)]) -> BTreeMap<String, usize> {
@@ -11,7 +11,7 @@ fn deck(objects: &[(&str, usize)]) -> BTreeMap<String, usize> {
         .collect()
 }
 
-pub fn players() -> Vec<PlayerConfig> {
+fn players() -> Vec<PlayerConfig> {
     let lessons = deck(&[
         ("Island", 9),
         ("Mountain", 8),
@@ -51,10 +51,24 @@ pub fn players() -> Vec<PlayerConfig> {
     ]
 }
 
+/// Opt-in treatment for timing; the CI workload keeps ordinary payment offers.
+pub fn setup(usable_taps: bool) -> GameSetup {
+    let mut setup = GameSetup::from(players());
+    if usable_taps {
+        setup.mana_floats = [ManaFloats::Usable; 2];
+    }
+    setup
+}
+
 /// A bounded layer-rich position using the reference world's existing cards.
 /// The old curated workload stays intact; these roots add overlapping Ally
 /// anthems and type-dependent power to ordinary steps and complete search scores.
 pub fn add_layer_board(env: &mut managym::agent::env::Env) {
+    let actor = env.current_agent_index().unwrap();
+    let mut obs = env.observation_for_player(actor).unwrap();
+    while obs.turn.turn_number == 0 {
+        obs = env.step(0).unwrap().0; // These fixture decks keep both dealt hands.
+    }
     for name in [
         "White Lotus Reinforcements",
         "White Lotus Reinforcements",

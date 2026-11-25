@@ -1,6 +1,6 @@
 //! Adventures in the Forgotten Realms.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerSubject},
     card::{
         AdditionalCost, CardDefinition, CardType, CardTypes, PrintedCharacteristics, SacrificeCost,
     },
@@ -9,7 +9,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![deadly_dispute(), power_word_kill()]
+    vec![vampire_spawn(), deadly_dispute(), power_word_kill()]
 }
 
 fn deadly_dispute() -> CardDefinition {
@@ -67,6 +67,31 @@ fn power_word_kill() -> CardDefinition {
                     },
                 },
             ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vampire_spawn() -> CardDefinition {
+    let text_box = "When this creature enters, each opponent loses 2 life and you gain 2 life.";
+    CardDefinition {
+        key: "afr.vampire_spawn",
+        scryfall_id: "b8975c72-b2ec-4c5f-86a4-4e1e3bb41c15",
+        printed: PrintedCharacteristics {
+            name: "Vampire Spawn".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(2),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

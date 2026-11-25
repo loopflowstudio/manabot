@@ -44,6 +44,8 @@ export interface PermanentItem {
   offers: PlacedOffer[];
   /** Auras and Equipment attached to this permanent, drawn behind it. */
   attached: PermanentItem[];
+  /** What it has committed to the pending cost: "tapped to crew". */
+  paid: string | null;
 }
 
 /** Identical permanents fanned as one pile; each copy stays its own control. */
@@ -79,6 +81,9 @@ export interface TrayItem {
   placed: PlacedOffer;
   /** The card the offer names, when the frame lets this viewer see it. */
   name: string | null;
+  /** That card's projection, for inspecting its rules text, counters and
+   *  play permissions; null for a sideboard candidate. */
+  card: CardState | null;
 }
 
 export interface BoardView {
@@ -114,17 +119,14 @@ function drawnObjects(frame: ExperienceFrame): Set<number> {
   ].map(card => card.id));
 }
 
-function isButton(offer: InteractionOffer): boolean {
-  if (PRIMARY_VERBS.has(offer.verb) || DECLINE_TYPES.has(offer.action_type)) return true;
-  // A combat prompt asks about one creature. Attacking with it is a click on
-  // it (the declaration names it as its source), and blocking is a click on
-  // the attacker (the target); every other combat answer, declining
-  // included, sits beside the prompt as an explicit button.
-  return COMBAT_VERBS.has(offer.verb) && !offer.subjects?.some(subject => subject.role === 'target' || subject.role === 'source');
-}
-
 function anchorOf(offer: InteractionOffer, frame: ExperienceFrame, drawn: Set<number>): Anchor {
-  if (isButton(offer)) return { kind: 'button' };
+  // A damage amount applies to both combatants, so it belongs beside the prompt.
+  if (frame.projection.decision_context?.stage === 'assign_combat_damage'
+    || PRIMARY_VERBS.has(offer.verb) || DECLINE_TYPES.has(offer.action_type)) return { kind: 'button' };
+  // Click the attacker to attack or block it. Other declarations stay beside the prompt.
+  if (COMBAT_VERBS.has(offer.verb) && !offer.subjects?.some(subject => subject.role === 'target' || subject.role === 'source')) {
+    return { kind: 'button' };
+  }
   const players = [frame.projection.agent, frame.projection.opponent];
   const subjects = [...(offer.subjects ?? [])]
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
@@ -144,29 +146,38 @@ function anchorOf(offer: InteractionOffer, frame: ExperienceFrame, drawn: Set<nu
   return offer.focus.length ? { kind: 'tray', id: offer.focus[0] } : { kind: 'button' };
 }
 
-/** Objects named by combat buttons: the creature the prompt is about. */
-function askedObjects(placed: PlacedOffer[], frame: ExperienceFrame): Set<number> {
+/** Objects named by combat buttons: the creature the prompt is about, or the
+ * attacker and blocker an amount of combat damage is between. */
+function askedObjects(buttons: PlacedOffer[], frame: ExperienceFrame): Set<number> {
   const asked = new Set<number>();
-  const source = frame.projection.decision_context?.source;
+  const context = frame.projection.decision_context;
+  const source = context?.source;
   if (source && source.subject.kind === 'object' && frame.prompt) asked.add(source.display_id);
-  for (const { offer, anchor } of placed) {
-    if (anchor.kind !== 'button' || !COMBAT_VERBS.has(offer.verb)) continue;
+  for (const { offer } of buttons) {
+    if (context?.stage !== 'assign_combat_damage' && !COMBAT_VERBS.has(offer.verb)) continue;
     for (const subject of offer.subjects ?? []) asked.add(subject.object.display_id);
     if (!offer.subjects?.length) offer.focus.forEach(id => asked.add(id));
   }
   return asked;
 }
 
-function knownName(frame: ExperienceFrame, id: number | null): string | null {
-  if (id === null) return null;
-  for (const player of [frame.projection.agent, frame.projection.opponent]) {
-    const cards = [...player.graveyard, ...player.exile, ...(player.inspected ?? [])];
-    const card = cards.find(candidate => candidate.id === id);
-    if (card) return card.name;
-    const candidate = player.sideboard?.find(entry => entry.candidate_id === id);
-    if (candidate) return candidate.name;
-  }
-  return null;
+/** Every card this viewer can see off the battlefield, by zone, then the
+ *  cards it may inspect elsewhere (a library top it may play, a controlled
+ *  opponent's hand). */
+export function inspectableCards(players: PlayerState[]): CardState[] {
+  return players.flatMap(player => [
+    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...(player.inspected ?? []),
+  ]);
+}
+
+function trayItem(frame: ExperienceFrame, placed: PlacedOffer): TrayItem {
+  const id = placed.anchor.kind === 'tray' ? placed.anchor.id : null;
+  if (id === null) return { placed, name: null, card: null };
+  const players = [frame.projection.agent, frame.projection.opponent];
+  const card = inspectableCards(players).find(candidate => candidate.id === id) ?? null;
+  if (card) return { placed, name: card.name, card };
+  const candidate = players.flatMap(player => player.sideboard ?? []).find(entry => entry.candidate_id === id);
+  return { placed, name: candidate?.name ?? null, card: null };
 }
 
 // ———————————————————————————————————————— Board rows
@@ -182,7 +193,7 @@ function isLand(permanent: PermanentState): boolean {
 /** Everything a person could tell two permanents apart by, plus their offers. */
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
-  if (item.attached.length || p.attacking || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
+  if (item.paid || item.attached.length || p.attacking || p.first_strike_participant || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
   return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
     p.plus1_counters, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false,
     item.offers.map(placed => placed.offer.label)]);
@@ -199,9 +210,9 @@ function piles(items: PermanentItem[]): Pile[] {
   return [...byKey.values()];
 }
 
-function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
+function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): SideView {
   const items = new Map<number, PermanentItem>(player.battlefield.map(permanent => [permanent.id,
-    { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [] }]));
+    { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [], paid: paid.get(permanent.id) ?? null }]));
   const hosts: PermanentItem[] = [];
   for (const item of items.values()) {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
@@ -241,8 +252,9 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
   const announced = announcement(frame);
   if (announced) {
     const { source, kind } = announced;
-    // A spell's card is drawn here rather than in the hand; an ability's source stays on the battlefield.
-    const card = kind === 'spell' ? frame.projection.agent.hand.find(candidate => candidate.id === source.display_id) ?? null : null;
+    // A spell's card is drawn here rather than in its zone (hand, graveyard, exile); an ability's source stays on the battlefield.
+    const players = [frame.projection.agent, frame.projection.opponent];
+    const card = kind === 'spell' ? inspectableCards(players).find(candidate => candidate.id === source.display_id) ?? null : null;
     items.push({
       entry: { id: -source.display_id - 1, kind, controller: frame.projection.decision_context!.actor, label: source.label,
         ...(kind === 'activated_ability' ? { source_permanent: source.display_id } : {}) },
@@ -264,6 +276,11 @@ export function announcement(frame: ExperienceFrame): { kind: 'spell' | 'activat
 export function possessive(name: string): string {
   if (name === 'You') return 'your';
   return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+}
+
+/** How a spell was cast, when its exit differs: "prepared" (its copies are not), "flashback". */
+export function stackProvenance(entry: StackEntryView): string[] {
+  return [entry.from_prepared && 'prepared', entry.flashback && 'flashback'].filter((tag): tag is string => Boolean(tag));
 }
 
 /** A stack entry's short name: a spell's name, or "X's trigger" / "X's ability" for an ability of X. */
@@ -312,7 +329,9 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
     anchor.kind === 'player' ? `player:${anchor.index}` : 'id' in anchor ? `${anchor.kind}:${anchor.id}` : anchor.kind;
   for (const placed of list) {
     const key = anchorKey(placed.anchor);
-    at.set(key, [...(at.get(key) ?? []), placed]);
+    const group = at.get(key);
+    if (group) group.push(placed);
+    else at.set(key, [placed]);
   }
   const placedAt = new Set<PlacedOffer>();
   const offersAt = (anchor: Anchor): PlacedOffer[] => {
@@ -322,18 +341,19 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   };
 
   const { agent, opponent } = frame.projection;
-  const you = side(agent, offersAt);
-  const them = side(opponent, offersAt);
+  // What the pending cost has already taken, by the object as it is now.
+  const paid = new Map((frame.projection.decision_context?.paid ?? [])
+    .flatMap(entry => (entry.object ? [[entry.object.display_id, entry.phrase] as const] : [])));
+  const you = side(agent, offersAt, paid);
+  const them = side(opponent, offersAt, paid);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
   const hand = agent.hand.filter(card => !onStack.has(card.id))
     .map(card => ({ card, offers: offersAt({ kind: 'object', id: card.id }) }));
 
-  const buttons = list.filter(placed => placed.anchor.kind === 'button');
-  buttons.forEach(placed => placedAt.add(placed));
+  const buttons = offersAt({ kind: 'button' });
   // Anything anchored to something not drawn falls back to the tray.
-  const tray = list.filter(placed => !placedAt.has(placed))
-    .map(placed => ({ placed, name: knownName(frame, placed.anchor.kind === 'tray' ? placed.anchor.id : null) }));
+  const tray = list.filter(placed => !placedAt.has(placed)).map(placed => trayItem(frame, placed));
 
   return {
     you,
@@ -344,7 +364,7 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
     primary: buttons.find(placed => PRIMARY_VERBS.has(placed.offer.verb)) ?? null,
     tray,
     list,
-    asked: askedObjects(list, frame),
+    asked: askedObjects(buttons, frame),
   };
 }
 
@@ -537,4 +557,32 @@ export function handStrip(
     if (sizes(hand).every((card, index) => card >= base[index] * 0.97)) return hand;
   }
   return range.min;
+}
+
+/** Cards in hand, laid out across the strip. */
+export interface HandFan {
+  /** Each card's width, px. */
+  card: number;
+  /** From one card's left edge to the next's, px. */
+  step: number;
+  /** Whether each card but the last is partly covered by the next. */
+  covered: boolean;
+}
+
+/** A covered card keeps at least this much of its left edge in view, px. */
+const HAND_MIN_SLICE = 24;
+
+/**
+ * Lay out `count` cards in hand within `width` px: as large as `card.max`
+ * while they fit side by side `gap` apart, then smaller, down to `card.min`,
+ * and only then overlapping, each later card over the one before, its left
+ * slice (name and cost) in view. A hand that fits keeps its cards apart.
+ */
+export function handFan(count: number, width: number, card: { min: number; max: number }, gap: number): HandFan {
+  if (count <= 1) return { card: card.max, step: card.max + gap, covered: false };
+  const side = Math.floor((width - gap * (count - 1)) / count);
+  // A short strip can make the full size smaller than the floor; the full size wins.
+  const size = Math.max(Math.min(card.min, card.max), Math.min(card.max, side));
+  if (size * count + gap * (count - 1) <= width) return { card: size, step: size + gap, covered: false };
+  return { card: size, step: Math.max(HAND_MIN_SLICE, (width - size) / (count - 1)), covered: true };
 }

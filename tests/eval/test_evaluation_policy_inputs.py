@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.arrays import array_fields, on_device
+from manabot.backends.torch.arrays import array_fields, transfer
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, sample_rows
 from manabot.env.match import Match
@@ -17,7 +17,6 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
-from managym import WORLD_VERSION
 from tests.eval.arena_fixture import arena_fixture
 from tests.model.prepared_routes import host_inputs
 from tests.model.test_inference import _policy
@@ -41,14 +40,11 @@ def fixture_policy(
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(
-        match_config=selected_match(), observation_space=space, world=WORLD_VERSION
+        match_config=selected_match(), observation_space=space
     )
-    key = contract.key.model_copy(
-        update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
-    )
+    key = contract.key.model_copy(update={"content_suite": SELECTED_SUITE})
     anchor = contract.anchors[0].model_copy(
         update={
-            "world": WORLD_VERSION,
             "content_suite": SELECTED_SUITE,
             "matchup_sha256": canonical_sha256(selected_match().model_dump()),
         }
@@ -100,9 +96,13 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     case = _policy()
+    case.agent.bucketed_shapes = True
     host = case.agent.prepare(host_inputs(case.obs))
     arrays = array_fields(host, np.ndarray)
-    moved = array_fields(on_device(host, "meta"), torch.Tensor)
+    device, transferred, copies = transfer(host, "meta")
+    assert host.bucket_needs is not None and device.bucket_needs is host.bucket_needs
+    assert transferred == sum(value.nbytes for value in arrays.values())
+    moved = array_fields(device, torch.Tensor)
     assert {
         key: (value.shape, value.dtype, value.device.type)
         for key, value in moved.items()
@@ -111,9 +111,13 @@ def test_packed_transfer_makes_one_copy_per_dtype() -> None:
         for key, value in arrays.items()
     }
     # Every dtype group shares exactly one transferred allocation.
-    assert len({value.untyped_storage()._cdata for value in moved.values()}) == len(
-        {value.dtype for value in moved.values()}
-    )
-    cpu = array_fields(on_device(host, "cpu"), torch.Tensor)
+    assert copies == len({value.dtype for value in moved.values()})
+    assert copies == len({value.untyped_storage()._cdata for value in moved.values()})
+    shared, transferred, copies = transfer(host, "cpu")
+    assert (transferred, copies) == (0, 0)
+    cpu = array_fields(shared, torch.Tensor)
     for key, value in cpu.items():
-        np.testing.assert_array_equal(value.numpy(), arrays[key])
+        source = arrays[key]
+        np.testing.assert_array_equal(value.numpy(), source)
+        if source.size:
+            assert np.shares_memory(value.numpy(), source) == source.flags.writeable

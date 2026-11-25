@@ -21,7 +21,7 @@ for (const theme of ['light', 'dark'] as const) {
     }));
     await page.goto(addresses.play);
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
-    await expect(page.getByTestId('player-plate').getByText(/search 1×1/).first()).toBeVisible();
+    await expect(page.getByTestId('player-plate').getByText(/search 1×1/i).first()).toBeVisible();
     const before = frames.at(-1)!;
     await page.reload();
     await expect(page.getByTestId('action-option').first()).toBeEnabled();
@@ -41,18 +41,28 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByLabel('Seed', { exact: true }).fill('0');
     await page.getByRole('button', { name: 'Start watching' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    // The updated policy is on each offer's card and row; the search's own columns open beside the prompt.
-    await expect(page.getByTestId('card-policy').first()).toBeVisible();
-    await page.getByTestId('search-detail').locator('summary').click();
+    // The opening decision has policy rows and no card subjects.
+    const searchDetail = page.getByTestId('search-detail');
+    await searchDetail.locator('summary').click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Updated policy', exact: true })).toBeVisible();
     await expect(page.getByText('Uniform belief (physical deal):', { exact: false })).toBeVisible();
     await page.reload();
-    await page.getByTestId('search-detail').locator('summary').click();
+    await searchDetail.locator('summary').click();
     await expect(page.getByRole('columnheader', { name: 'Raw policy', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await page.getByRole('columnheader', { name: 'Raw policy', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: fileURLToPath(new URL(`../test-results/search/watch-${theme}.png`, import.meta.url)) });
+
+    // Later card choices carry the searched policy on the board.
+    const counter = page.getByTestId('position-counter');
+    const cardPolicy = page.getByTestId('card-policy').first();
+    for (let step = 0; step < 8 && !(await cardPolicy.isVisible()); step += 1) {
+      const beforePosition = (await counter.textContent())!;
+      await page.getByRole('button', { name: /^(Next|Continue)$/ }).click();
+      await expect(counter).not.toHaveText(beforePosition);
+    }
+    await expect(cardPolicy).toBeVisible();
 
     await page.goto(addresses.saved);
     // The bot's first searched decision, reached with the transport's next-decision control.
@@ -84,7 +94,7 @@ test('timeouts retain Play and initial Watch choices across reload and explicit 
   const retry = page.getByRole('button', { name: 'Retry search', exact: true });
   await expect(retry.or(page.getByTestId('action-option').first()).first()).toBeVisible();
   if (await retry.count() === 0) {
-    await page.getByTestId('action-option').filter({ hasText: 'Pass priority' }).first().click();
+    await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).first().click();
   }
   await expect(page.getByRole('button', { name: 'Retry search', exact: true })).toBeVisible();
   const pending = frames.at(-1)!;
