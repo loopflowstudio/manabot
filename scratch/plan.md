@@ -29,7 +29,10 @@ Done:
   fixtures `2327a41b94`).
 
 - Slice 3, command-zone emblems and four planeswalkers (`833f67e3ed`). All
-  24 FRA cases and both effect and selector token guards passed.
+  24 FRA cases passed. The cp313 wheel cold-restored Ajani’s emblem and all
+  nine positions in the five refreshed fixtures (`52b05b2fa8`). All 444
+  choices retained their labels and IDs. All 109 player-only attack frames
+  matched their baseline bytes.
 
 ## Passes remaining
 
@@ -116,6 +119,13 @@ Defiance each create a public command-zone object. Layers and triggers read its
 own abilities after the walker leaves. Each battlefield trigger retains its
 battlefield LKI. Chandra’s first +1 binds the exact exiled object to the paid
 cast decision and deals damage when the cast is declined or unavailable.
+
+The debug fixture with four of every emblem per seat and 22 creatures passed
+in 0.72 seconds. The battlefield trigger snapshot retained its v16 bytes after
+departure. Both seats saw Ajani’s emblem and its text after a paid −10.
+The effect and selector learning-token guards and the observation column guard
+passed. The guard now attributes the attack-target column to action focus.
+Python protocol shape, older recording import and Svelte checks passed.
 
 ### Slice 4 — Empower (built: `4966204033`, fixtures `2327a41b94`)
 
