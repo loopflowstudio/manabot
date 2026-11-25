@@ -1,4 +1,4 @@
-at: dbda3a656ed0b695869d01e0e56e253fb700357b
+at: 63d66a841754b8291024cef7c7c66d9efea2b9a5
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -41,7 +41,7 @@ first:
   - path: managym/src/flow/statics.rs
     why: Guarded source-relative predicates, graveyard arrivals, Spyglass bans
   - path: managym/src/flow/mana.rs
-    why: Chosen-value mana, expiry clearing, memoized payment supply bounds
+    why: Chosen-value mana, expiry clearing, purpose-projected search equivalence and dedup
   - path: managym/src/flow/turn.rs
     why: Unified graveyard arrivals and casts-before-triggering lookup
   - path: managym/src/flow/zones.rs
@@ -89,7 +89,7 @@ first:
   - path: managym/src/flow/target_authority_tests.rs
     why: Whole-assignment target swaps vs single-slot retargeting
   - path: managym/src/flow/mana/tests.rs
-    why: Optimistic supply, ManaChoices, and payment search bound tests
+    why: Purpose-projected equivalence, bitmasks, mana dedup, and search bound tests
   - path: managym/examples/bench_states.rs
     why: Entry-choice, Changeling, Genesis Wave, and Ventmaw stress states
   - path: managym/cards/tests/cards/fdn.rs
