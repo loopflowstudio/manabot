@@ -38,6 +38,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         marit_lage(),
         monk(),
         plain_spirit(),
+        flying_spirit(),
         powerstone(),
         rabbit(),
         black_rat(),
@@ -666,6 +667,18 @@ fn villain() -> TokenDefinition {
         PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Menace]),
             ..creature(base, 2, 1, [Color::Black])
+        },
+    )
+}
+
+fn flying_spirit() -> TokenDefinition {
+    let base = face("Spirit", [CardType::Creature], &["Spirit"], "Flying");
+    token(
+        "token.flying_spirit",
+        "14ef4815-3dfe-47b3-ad81-1506925280d3",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 1, 1, [Color::White])
         },
     )
 }

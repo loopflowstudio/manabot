@@ -14,19 +14,20 @@ use crate::{
         game::Game,
         payment::{CostComponent, PaymentProgress},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
+            ZoneEntry,
         },
-        trigger::{DelayedTrigger, DelayedTriggerEvent},
+        trigger::{DelayedEffects, DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
     },
     state::{
         ability::{
-            Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except,
-            LinkedChooser, LinkedExile, ObjectProperty, ObjectSelector, PlayerSelector, Scope,
-            TargetRequirement, TargetSpec,
+            effect_target_requirements, Ability, DelayedEvent, DelayedExpiry, DelayedFrequency,
+            Effect, EffectValue, Except, LinkedChooser, LinkedExile, ObjectProperty,
+            ObjectSelector, PlayerSelector, Scope, TargetRequirement, TargetSpec,
         },
         card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
-        effect::{Affected, EffectDuration, Modification},
+        effect::{Affected, CopyException, EffectDuration, Modification},
         game_object::{
             AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
@@ -37,9 +38,86 @@ use crate::{
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
+        subtype::CreatureTypes,
         zone::ZoneType,
     },
 };
+
+/// Stack abilities own their face through an immutable catalog row or an
+/// appearance-specific snapshot (CR 113.7a).
+pub(crate) fn stacked_trigger_face(trigger: &TriggeredAbilityOnStack) -> &PrintedCharacteristics {
+    trigger.source_face.as_deref().unwrap_or_else(|| {
+        &default_content_pack()
+            .definition(trigger.source_definition_id)
+            .expect("captured trigger face")
+            .printed
+    })
+}
+
+/// The effects a stacked trigger runs: its inline program, or its printed
+/// ability narrowed to the chosen modes (CR 700.2b).
+pub(crate) fn stacked_trigger_effects(
+    trigger: &TriggeredAbilityOnStack,
+) -> std::borrow::Cow<'_, [Effect]> {
+    match &trigger.inline_effects {
+        Some(effects) => effects.as_slice().into(),
+        None => crate::state::ability::chosen_trigger_effects(
+            stacked_trigger_face(trigger).abilities[trigger.ability_index].effects(),
+            &trigger.chosen_modes,
+        ),
+    }
+}
+
+/// The program a catalog join and the projected mode cannot recover for a
+/// viewer or a suspended frame: an unrecoverable inline program, or a printed
+/// ability `catalog_join_misses`.
+pub(crate) fn stacked_trigger_program(
+    trigger: &TriggeredAbilityOnStack,
+) -> Option<std::borrow::Cow<'_, [Effect]>> {
+    if let Some(effects) = &trigger.inline_effects {
+        return trigger.program.then(|| effects.as_slice().into());
+    }
+    catalog_join_misses(
+        stacked_trigger_face(trigger),
+        trigger.source_definition_id,
+        trigger.ability_index,
+        Some(&trigger.chosen_modes),
+    )
+    .then(|| stacked_trigger_effects(trigger))
+}
+
+/// Whether a viewer joining `definition`'s catalog row at `index` (and the
+/// single projected mode) misses what `face` runs there: the face is a
+/// snapshot whose ability differs from the catalog (a copy exception's
+/// grant), or a modal rule's chosen modes are other than exactly one.
+/// `chosen_modes` is `None` while modes are unchosen, when the viewer reads
+/// the whole modal rule.
+pub(crate) fn catalog_join_misses(
+    face: &PrintedCharacteristics,
+    definition: CardDefId,
+    index: usize,
+    chosen_modes: Option<&[usize]>,
+) -> bool {
+    let ability = face.abilities.get(index);
+    let catalog = default_content_pack()
+        .definition(definition)
+        .and_then(|row| row.abilities.get(index));
+    let modal = matches!(
+        ability.map(Ability::effects),
+        Some([Effect::TriggerModes { .. }])
+    );
+    catalog != ability || (modal && chosen_modes.is_some_and(|modes| modes.len() != 1))
+}
+
+/// The single chosen mode of a modal trigger, which a viewer joins to the
+/// catalog program; `None` for any other trigger.
+pub(crate) fn stacked_trigger_mode(trigger: &TriggeredAbilityOnStack) -> Option<usize> {
+    // Inline triggers never choose modes (`pending_mode_rule`).
+    match trigger.chosen_modes.as_slice() {
+        [mode] => Some(*mode),
+        _ => None,
+    }
+}
 
 impl Game {
     pub(crate) fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
@@ -96,12 +174,8 @@ impl Game {
         match property {
             ObjectProperty::Power => lki.power,
             ObjectProperty::Toughness => lki.toughness,
-            ObjectProperty::ManaValue => self
-                .lki_mana_printing(lki)
-                .mana_cost
-                .as_ref()
-                .map_or(0, |cost| i32::from(cost.mana_value)),
-            ObjectProperty::Colors => lki.colors.len() as i32,
+            ObjectProperty::ManaValue => i32::from(lki.battlefield.mana_value),
+            ObjectProperty::Colors => lki.battlefield.colors.len() as i32,
             ObjectProperty::Counters(kind) => lki.counters.get(kind),
         }
     }
@@ -201,6 +275,12 @@ impl Game {
                     })
             }
             EffectValue::X => i32::from(frame.x),
+            EffectValue::DeathCountersMinus { kind, subtract } => frame
+                .source_ref()
+                .and_then(|object| self.object_lki(object))
+                .map_or(0, |lki| {
+                    lki.counters.get(*kind).saturating_sub(*subtract).max(0)
+                }),
             EffectValue::NegativeX => -i32::from(frame.x),
             EffectValue::TargetPower => {
                 self.target_property(frame.primary_target(), ObjectProperty::Power)
@@ -214,7 +294,7 @@ impl Game {
             EffectValue::TargetToughness => {
                 self.target_property(frame.primary_target(), ObjectProperty::Toughness)
             }
-            EffectValue::TriggeringAmount => frame.triggering_amount,
+            EffectValue::TriggerDamage | EffectValue::TriggeringAmount => frame.triggering_amount,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::LifeLostThisWay => frame.life_lost,
             EffectValue::PowerTappedToPay => paid_properties(How::Tapped, ObjectProperty::Power)
@@ -327,56 +407,50 @@ impl Game {
     }
 
     pub(crate) fn resolve_top_of_stack(&mut self) {
-        let Some(stack_object) = self.state.stack_objects.last().cloned() else {
+        // A resolving spell stays on the stack through suspended decisions
+        // (CR 608.2m). Abilities can move straight into the resolution frame.
+        let stacked = match self.state.stack_objects.last() {
+            None => return,
+            Some(spell @ StackObject::Spell(_)) => spell.clone(),
+            Some(_) => self.pop_stack().unwrap(),
+        };
+        let source = stacked.effect_source();
+        let Some(targets) = self.resolution_targets(&stacked, source) else {
+            if let StackObject::Spell(spell) = stacked {
+                self.move_object(spell.object, ZoneType::Graveyard);
+                self.emit(GameEvent::SpellCountered {
+                    object_id: spell.object,
+                    by: None,
+                });
+            }
             return;
         };
-
-        match stack_object {
-            // The spell's stack object stays on the stack while it resolves
-            // (CR 608.2m — the card moves out as resolution's final step),
-            // so a suspended resolution leaves a consistent stack.
-            StackObject::Spell(spell) => self.resolve_spell_object(spell),
+        match stacked {
+            StackObject::Spell(spell) => self.resolve_spell_object(spell, source, targets),
             StackObject::ActivatedAbility(ability) => {
-                self.pop_stack();
-                self.resolve_activated_ability(ability);
+                self.resolve_activated_ability(ability, source, targets)
             }
-            StackObject::TriggeredAbility(triggered) => {
-                self.pop_stack();
-                self.resolve_triggered_ability(triggered);
+            StackObject::TriggeredAbility(trigger) => {
+                self.resolve_triggered_ability(trigger, targets)
             }
         }
     }
 
-    fn resolve_spell_object(&mut self, spell: SpellOnStack) {
+    fn resolve_spell_object(
+        &mut self,
+        spell: SpellOnStack,
+        source: AbilitySource,
+        targets: Vec<ResolutionTarget>,
+    ) {
         let object = spell.object;
-        let card_ref = &self.state[object];
-        let effects =
-            crate::state::ability::bind_effect_clauses(card_ref.spell_effects_for_mode(spell.mode));
-        let requirements = card_ref.target_requirements_for_mode(spell.mode);
-
-        let Some(targets) = self.resolution_targets(
-            &spell.targets,
-            &spell.target_req_indices,
-            &requirements,
-            spell.controller,
-            AbilitySource::new(object, None),
-        ) else {
-            self.move_object(object, ZoneType::Graveyard);
-            self.emit(GameEvent::SpellCountered {
-                object_id: object,
-                by: None,
-            });
-            return;
-        };
-
+        let effects = crate::state::ability::bind_effect_clauses(
+            self.state[object].spell_effects_for_mode(spell.mode),
+        );
         let frame = EffectFrame {
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(object),
-                self.state.live(object),
-            ),
+            source_identity: Some(source),
             kicked: spell.kicked,
             x: spell.x,
-            spent: spell.spent.clone(),
+            spent: spell.spent,
             targets,
             completion: FrameCompletion::Spell {
                 object,
@@ -412,14 +486,9 @@ impl Game {
             return;
         };
         let ability = self.state.stack_objects_mut().remove(index);
-        let source_object = match &ability {
-            StackObject::ActivatedAbility(ability) => ability.source_object(),
-            StackObject::TriggeredAbility(ability) => ability.source_object(),
-            StackObject::Spell(_) => unreachable!("an ability index"),
-        };
         self.emit(GameEvent::AbilityCountered {
             ability: id,
-            source_object,
+            source_object: ability.source_object(),
             controller: ability.controller(),
             by,
         });
@@ -429,7 +498,7 @@ impl Game {
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        if self.stack_spell(object).is_none() {
+        if self.spell_on_stack(object).is_none() {
             return;
         }
         if self.state[object]
@@ -453,74 +522,53 @@ impl Game {
         &self,
         object: ObjectId,
         face: CardDefId,
-    ) -> Option<&PrintedCharacteristics> {
-        let (definition, current) = self.state.source_base(object);
-        if definition == face {
-            Some(current)
+    ) -> Option<&std::sync::Arc<PrintedCharacteristics>> {
+        if let Ok(current) = self.state.object(object) {
+            if current.definition_id == face {
+                return Some(current.copiable_face());
+            }
+        } else if let Some(values) = self
+            .object_lki(object)
+            .and_then(|lki| lki.copiable.as_ref())
+        {
+            if values.definition_id == face.catalog_id() {
+                return Some(&values.definition.printed);
+            }
+        }
+        let (base, printed) = self.state.objects.get(object.slot())?.retained_definition();
+        if base == face {
+            Some(printed)
         } else {
             default_content_pack()
                 .definition(face)
-                .map(|row| &*row.printed)
+                .map(|row| &row.printed)
         }
     }
 
-    /// The effects a stacked triggered ability runs: its inline (delayed,
-    /// granted or reflexive) effects, or its printed ability's with a modal
-    /// trigger's chosen modes expanded. Resolution reads the printed ability
-    /// itself, since it also checks the intervening "if".
-    pub(crate) fn stacked_trigger_effects<'a>(
-        &'a self,
-        triggered: &'a TriggeredAbilityOnStack,
-    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
-        if let Some(effects) = &triggered.inline_effects {
-            return Some(std::borrow::Cow::Borrowed(effects.as_slice()));
-        }
-        let object = triggered
-            .source_lki
-            .as_ref()
-            .map_or(triggered.source_object(), |lki| lki.object);
-        let printed = self
-            .source_face(object, triggered.source_definition_id)?
-            .abilities
-            .get(triggered.ability_index)?;
-        Some(crate::state::ability::with_chosen_modes(
-            printed.effects(),
-            &triggered.chosen_modes,
-        ))
-    }
-
-    fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
+    fn resolve_activated_ability(
+        &mut self,
+        ability: ActivatedAbilityOnStack,
+        source: AbilitySource,
+        targets: Vec<ResolutionTarget>,
+    ) {
         let effects = ability.effects;
         let program = if ability.program {
             effects.clone()
         } else {
             Vec::new()
         };
-        let requirements = crate::state::ability::effect_target_requirements(&effects);
-        let Some(targets) = self.resolution_targets(
-            &ability.targets,
-            &ability.target_req_indices,
-            &requirements,
-            ability.controller,
-            AbilitySource::new(ability.source_object, Some(ability.source_object)),
-        ) else {
-            return;
-        };
-
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
         let frame = EffectFrame {
             program,
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(ability.source_object),
-                Some(ability.source_object),
-            ),
+            source_identity: Some(source),
             inherited_from: ability.inherited_from,
             source_transforms: ability.source_transforms,
             x: ability.x,
             spent: ability.paid,
             targets,
+            attached: ability.attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
             ..EffectFrame::new(
                 ability.controller,
@@ -530,70 +578,63 @@ impl Game {
         self.run_frame(frame);
     }
 
-    fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
-        let program = if triggered.program {
-            triggered.inline_effects.clone().unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let source_object = triggered
-            .source_lki
-            .as_ref()
-            .map(|lki| lki.object)
-            .unwrap_or(triggered.source_object());
+    fn resolve_triggered_ability(
+        &mut self,
+        triggered: TriggeredAbilityOnStack,
+        targets: Vec<ResolutionTarget>,
+    ) {
+        let program = stacked_trigger_program(&triggered)
+            .map(std::borrow::Cow::into_owned)
+            .unwrap_or_default();
         let source_controller = triggered
             .source_lki
             .as_ref()
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
-        // Inline (delayed, granted or reflexive) effects have no printed
-        // ability; a printed modal trigger runs its chosen modes.
-        let (effects, ability) = if let Some(effects) = triggered.inline_effects {
-            (effects, None)
+        // Inline (non-printed) effects have no printed ability. A modal
+        // printed ability keeps its index and intervening "if".
+        let effects = stacked_trigger_effects(&triggered).into_owned();
+        let reads_resolution_count = effects.iter().any(Effect::reads_resolution_count);
+        let (ability, intervening_if) = if triggered.inline_effects.is_some() {
+            (None, None)
         } else {
-            let Some(ability) = self
-                .source_face(source_object, triggered.source_definition_id)
-                .and_then(|face| face.abilities.get(triggered.ability_index))
-                .cloned()
-            else {
-                return;
-            };
-            let Ability::Triggered {
-                intervening_if,
-                effects,
-                ..
-            } = ability;
-            // CR 603.4: an intervening "if" that no longer holds removes the
-            // ability from the stack doing nothing.
-            if intervening_if.as_ref().is_some_and(|condition| {
-                !self.check_intervening_if(
-                    condition,
-                    source_controller,
-                    triggered.source_ref(),
-                    triggered.context,
-                )
-            }) {
-                return;
-            }
-            (
-                crate::state::ability::with_chosen_modes(&effects, &triggered.chosen_modes)
-                    .into_owned(),
-                Some(triggered.ability_index),
+            let Ability::Triggered { intervening_if, .. } =
+                &stacked_trigger_face(&triggered).abilities[triggered.ability_index];
+            (Some(triggered.ability_index), intervening_if.clone())
+        };
+
+        let mut frame = EffectFrame {
+            program,
+            remembered: triggered.remembered,
+            source_identity: Some(triggered.source_identity),
+            inherited_from: triggered
+                .source_lki
+                .as_ref()
+                .and_then(|lki| lki.inherited_from),
+            source_transforms: triggered.source_transforms,
+            kicked: triggered.kicked,
+            triggering_amount: triggered.triggering_amount,
+            x: triggered.x,
+            spent: triggered.spent,
+            targets,
+            context_target: triggered.context,
+            triggering_player: triggered.player,
+            ability,
+            ability_face: ability.map(|_| triggered.source_definition_id),
+            ..EffectFrame::new(
+                triggered.controller,
+                crate::state::ability::bind_effect_clauses(effects),
             )
         };
-
-        let requirements = crate::state::ability::effect_target_requirements(&effects);
-        let Some(targets) = self.resolution_targets(
-            &triggered.targets,
-            &triggered.target_req_indices,
-            &requirements,
-            triggered.controller,
-            triggered.source_identity,
-        ) else {
+        // CR 603.4: recheck before counting a resolution. The frame keeps
+        // the spell's kicker choice even if its permanent has since left.
+        if intervening_if.as_ref().is_some_and(|condition| {
+            !self.check_condition(condition, source_controller, Some(&frame))
+        }) {
             return;
-        };
+        }
 
-        let resolutions_this_turn = if effects.iter().any(Effect::reads_resolution_count) {
+        frame.resolutions_this_turn = if reads_resolution_count {
             let key = (
                 triggered.source_identity.object(),
                 triggered.source_definition_id,
@@ -611,33 +652,23 @@ impl Game {
             0
         };
 
-        let frame = EffectFrame {
-            program,
-            remembered: triggered.remembered,
-            triggering_amount: triggered.triggering_amount,
-            source_identity: crate::state::game_object::AbilitySource::optional(
-                Some(source_object),
-                triggered.source_identity.reference(),
-            ),
-            inherited_from: triggered
-                .source_lki
-                .as_ref()
-                .and_then(|lki| lki.inherited_from),
-            source_transforms: triggered.source_transforms,
-            resolutions_this_turn,
-            x: triggered.x,
-            spent: triggered.spent.clone(),
-            targets,
-            context_target: triggered.context,
-            triggering_player: triggered.player,
-            ability,
-            ability_face: ability.map(|_| triggered.source_definition_id),
-            ..EffectFrame::new(
-                triggered.controller,
-                crate::state::ability::bind_effect_clauses(effects),
-            )
-        };
         self.run_frame(frame);
+    }
+
+    /// Clauses of the spell's chosen mode or the ability's captured program.
+    pub(super) fn stack_target_requirements(
+        &self,
+        stacked: &StackObject,
+    ) -> Vec<TargetRequirement> {
+        match stacked {
+            StackObject::Spell(spell) => {
+                self.state[spell.object].target_requirements_for_mode(spell.mode)
+            }
+            StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects),
+            StackObject::TriggeredAbility(trigger) => {
+                effect_target_requirements(&stacked_trigger_effects(trigger))
+            }
+        }
     }
 
     /// CR 608.2b: check every chosen slot against its own clause once, before
@@ -646,13 +677,17 @@ impl Game {
     /// instructions. The retained slots also enter clones and state hashes.
     fn resolution_targets(
         &self,
-        targets: &[Target],
-        indices: &[usize],
-        requirements: &[TargetRequirement],
-        controller: PlayerId,
+        stacked: &StackObject,
         source: AbilitySource,
     ) -> Option<Vec<ResolutionTarget>> {
-        let mut slots: Vec<_> = targets
+        if stacked.targets().is_empty() {
+            return Some(Vec::new());
+        }
+        let requirements = self.stack_target_requirements(stacked);
+        let indices = stacked.target_req_indices();
+        let controller = stacked.controller();
+        let mut slots: Vec<_> = stacked
+            .targets()
             .iter()
             .enumerate()
             .map(|(index, target)| {
@@ -661,7 +696,7 @@ impl Game {
                     target: *target,
                     requirement,
                     legal: requirements.get(requirement).is_some_and(|req| {
-                        self.target_meets_requirement(*target, req, controller, source)
+                        self.target_fits_clause(*target, req, controller, source)
                     }),
                 }
             })
@@ -671,7 +706,7 @@ impl Game {
                 self.require_shared_creature_type(&mut slots, index);
             }
         }
-        (slots.is_empty() || slots.iter().any(|slot| slot.legal)).then_some(slots)
+        slots.iter().any(|slot| slot.legal).then_some(slots)
     }
 
     /// "That share a creature type" (CR 608.2b): a target stays legal only
@@ -682,7 +717,7 @@ impl Game {
         let members: Vec<usize> = (0..slots.len())
             .filter(|&index| slots[index].requirement == requirement)
             .collect();
-        let types: Vec<Vec<String>> = members
+        let types: Vec<CreatureTypes> = members
             .iter()
             .map(|&index| self.last_known_creature_types(slots[index].target))
             .collect();
@@ -691,22 +726,22 @@ impl Game {
             slots[index].legal &= types
                 .iter()
                 .enumerate()
-                .all(|(other, theirs)| other == member || theirs.iter().any(|t| own.contains(t)));
+                .all(|(other, theirs)| other == member || theirs.shares(own));
         }
     }
 
     /// A permanent target's creature types: current ones while it remains,
     /// else as it last existed on the battlefield (CR 608.2h).
-    fn last_known_creature_types(&self, target: Target) -> Vec<String> {
+    fn last_known_creature_types(&self, target: Target) -> CreatureTypes {
         match target {
             Target::Permanent(id) => self
                 .with_permanent_or_lki(
                     id,
                     |_| self.layer_view(id).creature_types.clone(),
-                    |lki| lki.creature_types(),
+                    |lki| lki.creature_types.clone(),
                 )
                 .unwrap_or_default(),
-            _ => Vec::new(),
+            _ => CreatureTypes::default(),
         }
     }
 
@@ -727,15 +762,19 @@ impl Game {
         }
     }
 
-    /// Read the attachment at resolution (CR 608.2h). If the source left,
-    /// use its last known wearer, which may itself have left.
-    fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
+    /// The permanent the resolving ability's Aura or Equipment is attached
+    /// to as it resolves (CR 608.2h). Once the source leaves, read its
+    /// last attachment, falling back to the attachment paid as a cost.
+    pub(crate) fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
         let source = frame.source_ref()?;
         if let Ok(permanent) = self.lookup_current_permanent(source) {
             return self.attached_permanent(permanent);
         }
-        self.lookup_current_permanent(self.object_lki(source)?.attached_to?)
-            .ok()
+        let attached = match self.object_lki(source) {
+            Some(lki) => lki.attached_to,
+            None => frame.attached,
+        }?;
+        self.lookup_current_permanent(attached).ok()
     }
 
     /// Put library cards into their owners' graveyards as one simultaneous
@@ -980,14 +1019,14 @@ impl Game {
                 // the previous instruction moved (flicker's return).
                 let selected = self.select(what, frame);
                 frame.moved.clear();
-                let source = frame
-                    .source_ref()
-                    .filter(|source| self.lookup_current_permanent(*source).is_ok());
+                let source = frame.source_ref();
                 // "Until this leaves the battlefield" (CR 603.6e pragmatics,
                 // Banisher Priest ruling): the exact source must still be on
                 // the battlefield; a later incarnation of the same card does
                 // not keep the old link alive.
-                if *linked == Some(LinkedExile::UntilSourceLeaves) && source.is_none() {
+                if *linked == Some(LinkedExile::UntilSourceLeaves)
+                    && source.is_none_or(|source| self.lookup_current_permanent(source).is_err())
+                {
                     return None;
                 }
                 let controller = match under {
@@ -999,8 +1038,8 @@ impl Game {
                     },
                 };
                 let mut counters = Counters::default();
-                if let Some(kind) = with_counter {
-                    counters.change(*kind, 1);
+                if let Some(entry) = with_counter {
+                    counters.change(entry.kind, self.effect_value(&entry.count, frame).max(0));
                 }
                 let mut events = Vec::new();
                 for object in selected {
@@ -1017,20 +1056,20 @@ impl Game {
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
-                    // Returning transformed requires a back face (CR 712.14a).
                     if *to == ZoneType::Battlefield
-                        && ((!self.state[object].is_card() && from != Some(ZoneType::Battlefield))
-                            || (*transformed
-                                && default_content_pack()
-                                    .back_face(self.state[object].definition_id)
-                                    .is_none()))
+                        && !self.state[object].is_card()
+                        && from != Some(ZoneType::Battlefield)
                     {
                         continue;
                     }
                     let entry = if *to == ZoneType::Battlefield {
                         ZoneEntry {
                             tapped: *tapped,
-                            transformed: *transformed,
+                            face: if *transformed {
+                                EntryFace::Transformed
+                            } else {
+                                EntryFace::Front
+                            },
                             counters: counters.clone(),
                             controller,
                             ..ZoneEntry::default()
@@ -1229,6 +1268,7 @@ impl Game {
                     from,
                     ObjectSelector::Zone(_)
                         | ObjectSelector::TargetPlayersZone { .. }
+                        | ObjectSelector::ZoneMatching { .. }
                         | ObjectSelector::CardsThisWay
                 );
                 let candidates: Vec<_> = self
@@ -1328,7 +1368,7 @@ impl Game {
             }
             Effect::CopyTriggeringSpellForEach { each } => {
                 let spell = frame.context_target?;
-                let legal = self.retarget_candidates_for(spell, 0);
+                let legal = self.retarget_candidates(spell, 0);
                 let onto: Vec<Target> = self
                     .selected_permanents(each, frame)
                     .into_iter()
@@ -1386,6 +1426,57 @@ impl Game {
                 }
                 None
             }
+            Effect::ExileMeldPair { .. } => {
+                let source = frame.source_ref()?;
+                let Some(chosen) = frame.chosen else {
+                    return Some(Decision::ChooseObject {
+                        player: frame.controller,
+                        predicate: CardPredicate::creature(),
+                        excluded: self.source_permanent_id(frame),
+                        optional: false,
+                        effect: Box::new(effect.clone()),
+                    });
+                };
+                let events = [source, chosen].into_iter().map(|object| {
+                    self.zone_move_proposal(object, ZoneType::Exile, Default::default())
+                });
+                frame.batch = Some(self.event_batch(
+                    EventBinding::Moved {
+                        linked: None,
+                        shuffle: false,
+                        library_end: None,
+                        reveal: false,
+                    },
+                    events,
+                ));
+                None
+            }
+            Effect::MeldExiled { fronts, result } => {
+                let [first, second] = *frame.moved.as_slice() else {
+                    return None;
+                };
+                let cards = [self.state.card_of(first)?, self.state.card_of(second)?];
+                let content = crate::cards::content_pack::default_content_pack();
+                for ((object, card), name) in [first, second].into_iter().zip(cards).zip(fronts) {
+                    if self.state.zones.zone_of(object) != Some(ZoneType::Exile)
+                        || content.definition(self.state.cards[card].definition)?.name != *name
+                    {
+                        return None;
+                    }
+                }
+                let entry = ZoneEntry {
+                    face: EntryFace::Melded {
+                        partner: cards[1],
+                        result: content.definition_id(result)?,
+                    },
+                    ..Default::default()
+                };
+                frame.batch = Some(self.event_batch(
+                    EventBinding::None,
+                    [self.zone_move_proposal(first, ZoneType::Battlefield, entry)],
+                ));
+                None
+            }
             Effect::TransformSource => {
                 let id = self.source_permanent_id(frame)?;
                 // CR 701.27f: only if it hasn't turned over since this ability
@@ -1421,18 +1512,27 @@ impl Game {
                 None
             }
             Effect::Airbend { what } => {
-                let selected = self.select(what, frame);
-                let mut bent = false;
-                for object in selected {
-                    if matches!(self.state.zones.zone_of(object), Some(ZoneType::Stack))
-                        || self.lookup_current_permanent(object).is_ok()
-                    {
-                        self.airbend(object);
-                        bent = true;
-                    }
-                }
-                if bent {
-                    self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
+                let events: Vec<_> = self
+                    .select(what, frame)
+                    .into_iter()
+                    .filter(|&object| {
+                        matches!(
+                            self.state.zones.zone_of(object),
+                            Some(ZoneType::Battlefield | ZoneType::Stack)
+                        )
+                    })
+                    .map(|object| {
+                        self.zone_move_proposal(object, ZoneType::Exile, ZoneEntry::default())
+                    })
+                    .collect();
+                if !events.is_empty() {
+                    frame.batch = Some(self.event_batch(
+                        EventBinding::Bending {
+                            player: frame.controller,
+                            kind: crate::flow::turn::Bending::Air,
+                        },
+                        events,
+                    ));
                 }
                 None
             }
@@ -1743,7 +1843,6 @@ impl Game {
                 until_end_of_combat,
             } => {
                 let count = self.effect_value(amount, frame).max(0);
-                self.invalidate_mana_cache(frame.controller);
                 let origin = frame.source().map(|source| self.mana_origin(source));
                 let pool = if *until_end_of_combat {
                     self.state.combat_mana_pool_mut(frame.controller)
@@ -1817,12 +1916,18 @@ impl Game {
                 None
             }
             Effect::CounterSpell { what, exile } => {
-                let to = if *exile {
-                    ZoneType::Exile
-                } else {
-                    ZoneType::Graveyard
-                };
-                for spell in self.select(what, frame) {
+                // Spells only: countering an ability is a different effect.
+                let spells: Vec<_> = self
+                    .select(what, frame)
+                    .into_iter()
+                    .filter(|object_id| self.spell_on_stack(*object_id).is_some())
+                    .collect();
+                for spell in spells {
+                    let to = if *exile {
+                        ZoneType::Exile
+                    } else {
+                        ZoneType::Graveyard
+                    };
                     self.counter_spell(spell, frame.source(), to);
                 }
                 None
@@ -1837,7 +1942,12 @@ impl Game {
                 }
                 None
             }
-            Effect::CreateTokenCopy { of, exceptions } => {
+            Effect::CreateTokenCopy {
+                of,
+                count,
+                exceptions,
+            } => {
+                let count = self.effect_value(count, frame);
                 let exceptions: Vec<_> = exceptions
                     .iter()
                     .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
@@ -1872,7 +1982,7 @@ impl Game {
                     .map(|copied| ProposedEvent::CreateTokens {
                         definition: Box::new(self.copy_source(copied, exceptions.clone())),
                         controller: frame.controller,
-                        count: 1,
+                        count,
                         entry: ZoneEntry::default(),
                     });
                 frame.batch =
@@ -1893,13 +2003,13 @@ impl Game {
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
                 let trigger = self.enqueue_inline_trigger(
-                    frame.source()?,
-                    frame.source_ref(),
+                    frame.source_identity?,
                     frame.controller,
                     effects.clone(),
                     frame.context_target,
                 );
                 trigger.remembered = frame.remembered.clone();
+                trigger.kicked = frame.kicked;
                 trigger.x = frame.x;
                 trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;
@@ -2001,28 +2111,21 @@ impl Game {
                 // CR 400.7e: the card the dying creature became, while it is
                 // still that graveyard object; `Move` exiles it as the frame's
                 // target and retains the link.
-                let Some(Target::Permanent(id)) = frame.context_target else {
-                    return None;
-                };
-                let died = self.departed_permanent_lki(id)?.object;
-                let became = self.state.zones.successor(died)?;
-                if self.state.card_of(became).is_none()
-                    || self.state.zones.zone_of(became) != Some(ZoneType::Graveyard)
+                if !self
+                    .select(&ObjectSelector::Triggering, frame)
+                    .into_iter()
+                    .any(|object| {
+                        self.state.card_of(object).is_some()
+                            && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
+                    })
                 {
                     return None;
                 }
-                frame.targets = vec![crate::flow::decision::ResolutionTarget {
-                    target: Target::GraveyardCard(became),
-                    requirement: 0,
-                    legal: true,
-                }];
                 Some(Decision::Modal {
                     player: frame.controller,
                     modes: vec![
                         vec![Effect::exile_linked(
-                            ObjectSelector::Target(TargetSpec::GraveyardCard {
-                                predicate: CardPredicate::default(),
-                            }),
+                            ObjectSelector::Triggering,
                             LinkedExile::WithSource,
                         )],
                         vec![],
@@ -2033,15 +2136,8 @@ impl Game {
                 let source = frame.source_ref()?;
                 let modes: Vec<Vec<Effect>> = self
                     .state
-                    .exile_links
-                    .iter()
-                    .filter(|link| link.source == source)
-                    .filter(|link| self.state.object(link.exiled_object).is_ok())
-                    .map(|link| link.exiled_object)
-                    .filter(|object_id| {
-                        self.state.zones.zone_of(*object_id) == Some(ZoneType::Exile)
-                            && predicate.matches_object(&self.state[*object_id])
-                    })
+                    .exiled_with(source)
+                    .filter(|object| self.object_matches_predicate(*object, predicate))
                     .map(|object_id| {
                         vec![Effect::HaveAbilitiesOf {
                             definition: self.state[object_id].definition_id,
@@ -2068,7 +2164,6 @@ impl Game {
                         duration: EffectDuration::Indefinite,
                         source_object: None,
                     });
-                self.invalidate_mana_cache(frame.controller);
                 None
             }
             Effect::NameAndExileFromTargetPlayer { count } => {
@@ -2147,16 +2242,30 @@ impl Game {
                     }
                     DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
                 };
+                // A death count is already fixed by the departed appearance.
+                // Store its literal in the scheduled return so every viewer and
+                // fork sees the number even before the end-step trigger fires.
+                let mut effects = effects.clone();
+                for instruction in &mut effects {
+                    if let Effect::Move {
+                        with_counter: Some(entry),
+                        ..
+                    } = instruction
+                    {
+                        if matches!(entry.count, EffectValue::DeathCountersMinus { .. }) {
+                            entry.count =
+                                EffectValue::Fixed(self.effect_value(&entry.count, frame));
+                        }
+                    }
+                }
+                let program = DelayedEffects::new(effects);
                 for event in events {
                     self.add_delayed_trigger(DelayedTrigger {
                         remembered: remembered.clone(),
                         event,
                         controller: frame.controller,
-                        source_identity: crate::state::game_object::AbilitySource::new(
-                            frame.source()?,
-                            frame.source_ref(),
-                        ),
-                        effects: effects.clone(),
+                        source_identity: frame.source_identity?,
+                        effects: program.clone(),
                         frequency: *frequency,
                         expiry: *expiry,
                     });
@@ -2205,6 +2314,19 @@ impl Game {
                     top: Vec::new(),
                     bottom: Vec::new(),
                 })
+            }
+            Effect::ManifestDread => {
+                let player = frame.controller;
+                let looked = self.library_top_objects(player, 2);
+                self.remember_library_objects(player, &looked);
+                match looked.as_slice() {
+                    [] => None,
+                    [only] => {
+                        self.manifest(*only, player);
+                        None
+                    }
+                    _ => Some(Decision::ManifestDread { player, looked }),
+                }
             }
             Effect::Surveil { count } => {
                 if *count > 0 {
@@ -2259,11 +2381,17 @@ impl Game {
                     max_select: *max_select,
                 })
             }
+            Effect::RevealLibraryTop => {
+                frame.this_way = self
+                    .reveal_library_top(frame.controller)
+                    .into_iter()
+                    .collect();
+                None
+            }
             Effect::PutTopCardsInHand { count } => {
                 for object_id in self.library_top_objects(frame.controller, *count) {
-                    self.move_object(object_id, ZoneType::Hand);
+                    self.put_library_top_in_hand(object_id);
                 }
-                self.invalidate_mana_cache(frame.controller);
                 None
             }
             Effect::Learn => Some(Decision::Learn {
@@ -2366,7 +2494,7 @@ impl Game {
                             watched,
                             Some(watched),
                         ),
-                        effects: vec![Effect::Move {
+                        effects: DelayedEffects::new(vec![Effect::Move {
                             unrevealed: false,
                             library_end: None,
                             what: ObjectSelector::This,
@@ -2376,7 +2504,7 @@ impl Game {
                             under: Some(PlayerSelector::Owner),
                             with_counter: None,
                             linked: None,
-                        }],
+                        }]),
                         frequency: DelayedFrequency::Once,
                         expiry: DelayedExpiry::Never,
                     });
@@ -2450,15 +2578,14 @@ impl Game {
     /// exact current object, else a departed triggering permanent through its
     /// last known information (CR 608.2h).
     fn damage_source(&self, by: &ObjectSelector, frame: &EffectFrame) -> Option<ObjectId> {
-        self.select(by, frame)
-            .into_iter()
-            .next()
-            .or_else(|| match (by, frame.context_target) {
-                (ObjectSelector::Triggering, Some(Target::Permanent(id))) => {
-                    self.departed_permanent_lki(id).map(|lki| lki.object)
-                }
-                _ => None,
-            })
+        if let (ObjectSelector::Triggering, Some(Target::Permanent(id))) =
+            (by, frame.context_target)
+        {
+            return self
+                .permanent_object(id)
+                .or_else(|| self.departed_permanent_lki(id).map(|lki| lki.object));
+        }
+        self.select(by, frame).into_iter().next()
     }
 
     /// The objects a selector names as the instruction resolves. A `Chosen`
@@ -2476,7 +2603,7 @@ impl Game {
                 .and_then(|source| self.state.live(source))
                 .into_iter()
                 .collect(),
-            ObjectSelector::This => self.source_object(frame).into_iter().collect(),
+            ObjectSelector::This => self.source_objects(frame),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)
                 .and_then(|target| self.target_object(target))
@@ -2507,12 +2634,23 @@ impl Game {
                     .collect()
             }
             ObjectSelector::Triggering => match frame.context_target {
-                Some(Target::Permanent(id)) => permanent(Some(id)),
+                Some(Target::Permanent(id)) => self.permanent_object(id).map_or_else(
+                    || {
+                        self.departed_permanent_lki(id)
+                            .map_or_else(Vec::new, |lki| {
+                                self.departure_arrivals(lki.object).collect()
+                            })
+                    },
+                    |object| vec![object],
+                ),
                 Some(Target::GraveyardCard(object)) => {
                     self.state.live(object).into_iter().collect()
                 }
                 _ => Vec::new(),
             },
+            ObjectSelector::ExiledWithSource => frame
+                .source_ref()
+                .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame
                 .created
@@ -2603,6 +2741,27 @@ impl Game {
                                 .is_none_or(|max| self.permanent_mana_value(*id) <= max)
                     })
                     .filter_map(|id| self.permanent_object(id))
+                    .filter(|object| {
+                        max_mana_value
+                            .is_none_or(|max| i32::from(self.object_mana_value(*object)) <= max)
+                    })
+                    .collect()
+            }
+            ObjectSelector::ZoneMatching {
+                zone,
+                owner,
+                predicate,
+            } => {
+                debug_assert!(
+                    matches!(zone, ZoneType::Graveyard | ZoneType::Exile),
+                    "ZoneMatching reads a public card zone"
+                );
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .filter(|player| owner.includes(frame.controller, *player))
+                    .flat_map(|player| self.state.zone_cards(*zone, player))
+                    .map(|card| self.state.object_of(card))
+                    .filter(|object| self.object_matches_predicate(*object, predicate))
                     .collect()
             }
         }
@@ -2649,10 +2808,8 @@ impl Game {
     /// A battlefield permanent's mana value (CR 202.3): that of its card;
     /// 0 without a mana cost.
     pub(super) fn permanent_mana_value(&self, id: PermanentId) -> i32 {
-        self.state.permanents[id]
-            .as_ref()
-            .and_then(|permanent| self.state[permanent.object].mana_value_cost())
-            .map_or(0, |cost| i32::from(cost.mana_value))
+        self.permanent_object(id)
+            .map_or(0, |object| i32::from(self.object_mana_value(object)))
     }
 
     /// The battlefield permanents a selector names.
@@ -2697,24 +2854,34 @@ impl Game {
         .unwrap_or_default()
     }
 
-    /// [`ObjectSelector::This`]: the exact source object in any zone, or
-    /// once it has left the battlefield the card it became in the graveyard
-    /// or exile it went to (CR 400.7, 603.10a); a spell while on the stack.
-    fn source_object(&self, frame: &EffectFrame) -> Option<ObjectId> {
-        let object = frame.source()?;
+    /// CR 400.7, 713. A departed permanent can become two cards. Each
+    /// arrival remains identifiable only until its own next zone change.
+    fn departure_arrivals(&self, departed: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        std::iter::once(departed)
+            .chain(self.object_lki(departed).and_then(|lki| lki.meld_partner))
+            .filter_map(|previous| self.state.zones.successor(previous))
+            .filter(|arrival| {
+                matches!(
+                    self.state.zones.zone_of(*arrival),
+                    Some(ZoneType::Graveyard | ZoneType::Exile)
+                )
+            })
+    }
+
+    fn source_objects(&self, frame: &EffectFrame) -> Vec<ObjectId> {
         match frame.source_ref() {
-            Some(source) => self.state.live(source).or_else(|| {
-                // Only a departing battlefield source can refer to the card it
-                // became this way. A graveyard activation keeps its exact source.
-                self.object_lki(source)?;
-                self.state.zones.successor(source).filter(|successor| {
-                    matches!(
-                        self.state.zones.zone_of(*successor),
-                        Some(ZoneType::Graveyard | ZoneType::Exile)
-                    )
-                })
-            }),
-            None => self.stack_spell(object).is_some().then_some(object),
+            Some(source) => self.state.live(source).map_or_else(
+                || {
+                    self.object_lki(source)
+                        .map_or_else(Vec::new, |_| self.departure_arrivals(source).collect())
+                },
+                |object| vec![object],
+            ),
+            None => frame
+                .source()
+                .filter(|source| self.spell_on_stack(*source).is_some())
+                .into_iter()
+                .collect(),
         }
     }
 
@@ -2753,45 +2920,16 @@ impl Game {
         self.state.permanents[permanent_id].as_mut()
     }
 
-    /// Copy the live appearance or its last battlefield values (CR 608.2h, 707.2).
-    fn copy_source(&self, copied: ObjectId, exceptions: Vec<Modification>) -> TokenSource {
-        if let Ok(row) = self.state.object(copied) {
-            return TokenSource::Copy {
-                definition_id: row.definition_id,
-                definition: default_content_pack().object_row(row),
-                front: row.front_face().cloned(),
-                copy: row.copy.clone(),
-                exceptions,
-            };
-        }
-        let (definition_id, printed, kind) = self
-            .state
-            .objects
-            .retained_definition(copied)
-            .expect("copied object storage");
-        let changed = self.object_lki(copied).and_then(|lki| {
-            lki.copiable
-                .as_deref()
-                .map(|values| (lki.definition_id, values))
-        });
-        let definition_id = changed.map_or(definition_id, |(id, _)| id);
-        TokenSource::Copy {
-            definition_id,
-            definition: crate::state::card::ObjectDefinition {
-                key: "",
-                scryfall_id: None,
-                printed: changed
-                    .map_or(printed, |(_, values)| &values.printed)
-                    .clone(),
-                is_token: kind != crate::state::game_object::ObjectKind::Card,
-                back_face: default_content_pack()
-                    .definition(definition_id)
-                    .and_then(|row| row.back_face.clone()),
-            },
-            front: changed.and_then(|(_, values)| values.front.clone()),
-            copy: changed.and_then(|(_, values)| values.copy.clone()),
-            exceptions,
-        }
+    /// Read the current form or the exact appearance's final values (CR 608.2h).
+    fn copy_source(&self, copied: ObjectId, exceptions: Vec<CopyException>) -> TokenSource {
+        let content = default_content_pack();
+        let values = if let Ok(object) = self.state.object(copied) {
+            content.copiable_values(object)
+        } else {
+            let lki = self.object_lki(copied).expect("departed copy source");
+            content.departed_copiable_values(lki)
+        };
+        TokenSource::Copy { values, exceptions }
     }
 
     /// Check whether a target is (still) legal for a given TargetSpec, from
@@ -2826,28 +2964,28 @@ impl Game {
                 TargetSpec::Opponent => player != controller,
                 _ => false,
             },
-            Target::StackSpell(object) => {
-                self.stack_spell(object).is_some_and(|spell| match spec {
-                    TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
-                    TargetSpec::SpellMatching { predicate } => {
-                        self.object_matches_predicate(object, predicate)
-                    }
-                    TargetSpec::SpellOrPermanent { min_mana_value } => {
-                        self.state[object].mana_value_with_x(spell.x) >= *min_mana_value
-                    }
-                    TargetSpec::SpellOrAbilityWithSingleTarget => spell.targets.len() == 1,
-                    _ => false,
-                })
-            }
-            Target::StackAbility(id) => {
-                self.stack_index_of(Target::StackAbility(id))
-                    .is_some_and(|index| match spec {
-                        TargetSpec::Ability => true,
-                        TargetSpec::SpellOrAbilityWithSingleTarget => {
-                            self.state.stack_objects[index].targets().len() == 1
+            Target::StackSpell(object_id) => {
+                self.spell_on_stack(object_id)
+                    .is_some_and(|spell| match spec {
+                        TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
+                        TargetSpec::SpellMatching { predicate } => {
+                            self.object_matches_predicate(object_id, predicate)
                         }
+                        TargetSpec::SpellOrPermanent { min_mana_value } => {
+                            self.object_mana_value(object_id) >= *min_mana_value
+                        }
+                        TargetSpec::SpellOrAbilityWithSingleTarget => spell.targets.len() == 1,
                         _ => false,
                     })
+            }
+            Target::StackAbility(_) => {
+                self.stack_index_of(target).is_some_and(|index| match spec {
+                    TargetSpec::Ability => true,
+                    TargetSpec::SpellOrAbilityWithSingleTarget => {
+                        self.state.stack_objects[index].targets().len() == 1
+                    }
+                    _ => false,
+                })
             }
             Target::GraveyardCard(object) => {
                 let (predicate, you_own) = match spec {
@@ -2876,41 +3014,47 @@ impl Game {
         }
     }
 
-    /// Source-relative parts of a targeting clause, including a dying
-    /// permanent's immediate graveyard successor for "another" (CR 400.7).
-    pub(crate) fn target_meets_requirement(
+    /// Target legality shared by trigger modes, placement, changes of target
+    /// and the resolution-start check (CR 608.2b).
+    pub(crate) fn target_fits_clause(
         &self,
         target: Target,
         requirement: &TargetRequirement,
         controller: PlayerId,
         source: AbilitySource,
     ) -> bool {
-        if !self.target_is_legal(target, &requirement.spec, controller) {
-            return false;
-        }
-        if requirement.another
-            && match target {
-                Target::Permanent(id) => self.permanent_object(id) == source.reference(),
-                Target::GraveyardCard(card) => {
-                    card == source.object()
-                        || self.state.zones.successor(source.object()) == Some(card)
-                }
-                _ => false,
-            }
+        if !self.target_is_legal(target, &requirement.spec, controller)
+            || (requirement.another && self.target_is_source(target, source))
         {
             return false;
         }
-        let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = requirement.spec else {
-            return true;
-        };
-        let Target::GraveyardCard(object) = target else {
-            return false;
-        };
-        let power = source
-            .reference()
-            .and_then(|object| self.permanent_power_or_lki(object))
-            .unwrap_or_else(|| self.object_pt(source.object()).0);
-        i32::from(self.object_mana_value(object)) <= power
+        if let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = requirement.spec {
+            let Target::GraveyardCard(card) = target else {
+                return false;
+            };
+            let power = source
+                .reference()
+                .and_then(|object| self.permanent_power_or_lki(object))
+                .unwrap_or_else(|| self.object_pt(source.object()).0);
+            return i32::from(self.object_mana_value(card)) <= power;
+        }
+        true
+    }
+
+    fn target_is_source(&self, target: Target, source: AbilitySource) -> bool {
+        match target {
+            Target::Permanent(id) => self.permanent_object(id) == Some(source.object()),
+            Target::GraveyardCard(card) => {
+                card == source.object()
+                    || source.reference().is_some_and(|object| {
+                        self.object_lki(object).is_some()
+                            && self
+                                .departure_arrivals(object)
+                                .any(|arrival| arrival == card)
+                    })
+            }
+            _ => false,
+        }
     }
 
     /// Whether a battlefield permanent matches a spec's characteristics and
@@ -2958,11 +3102,23 @@ impl Game {
         }
     }
 
-    /// The object's mana value; a spell on the stack counts its announced X
+    /// The object's mana value: a transformed permanent's front face
+    /// (CR 712.8e), a melded permanent's two cards together (CR 712.8g), 0
+    /// face down (CR 708.2), and a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
-        let x = self.stack_spell(object).map_or(0, |spell| spell.x);
-        self.state[object].mana_value_with_x(x)
+        if let Some(second) = self.state.zones.melded_card(object) {
+            let first = self.state.card_of(object).expect("melded primary card");
+            return self.meld_mana_value(first, second);
+        }
+        let Some(cost) = self.state[object].mana_value_cost() else {
+            return 0;
+        };
+        if cost.x == 0 {
+            return cost.mana_value;
+        }
+        let x = self.spell_on_stack(object).map_or(0, |spell| spell.x);
+        cost.mana_value_at(x)
     }
 }
 

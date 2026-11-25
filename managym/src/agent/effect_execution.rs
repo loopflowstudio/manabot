@@ -23,13 +23,14 @@ use crate::{
         game::{ActivationSource, CastChoices, Game},
         payment::{CostComponent, Operation, Payment},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
+            EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
+            ZoneEntry,
         },
     },
     state::{
         ability::{Ability, Effect},
         card::CardDefId,
-        game_object::{ObjectId, ObjectLki, PlayerId, Target},
+        game_object::{CopiableValues, ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
         payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
         stack_object::SpellLki,
@@ -90,6 +91,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "end the turn",
     "entering card",
     "entering definition",
+    "enters back face up",
     "enters face down",
     "enters tapped",
     "enters transformed",
@@ -99,6 +101,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "event",
     "event ordinal",
     "excess damage",
+    "DamageEvent::Amount",
     "excluded",
     "execution holder",
     "exile choice",
@@ -138,6 +141,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked exile",
     "linked return",
     "linked source",
+    "meld component",
     "mana spent",
     "spending option",
     "cost sacrifice",
@@ -156,6 +160,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "paid announcement",
     "paid by",
     "paid source",
+    "turn face up",
     "paid spell",
     "pay casting costs",
     "payer",
@@ -308,28 +313,6 @@ impl<'a> Projection<'a> {
     fn retained_object(&mut self, object: ObjectId) {
         if let Some(lki) = self.game.object_lki(object) {
             self.lki(lki);
-        }
-    }
-
-    /// The same event object follows an occurrence from placement to the stack.
-    fn trigger_context(
-        &mut self,
-        context: Option<Target>,
-        source: ObjectId,
-        definition: CardDefId,
-        index: usize,
-        inline: Option<&[Effect]>,
-    ) {
-        let Some(target) = context else { return };
-        if self.game.trigger_reads(
-            source,
-            definition,
-            index,
-            inline,
-            Effect::reads_triggering_object,
-            Ability::reads_triggering_object,
-        ) {
-            self.retained_target(target);
         }
     }
 
@@ -492,6 +475,7 @@ impl<'a> Projection<'a> {
         // retains nothing; every other destination is a fact.
         match completion {
             FrameCompletion::Priority => {}
+            FrameCompletion::TurnFaceUp(object) => self.object_id("turn face up", *object),
             FrameCompletion::Continue => self.field("return", &"turn action"),
             FrameCompletion::EndTurn => {
                 self.summary(|| {
@@ -727,9 +711,9 @@ impl<'a> Projection<'a> {
             format!(
                 "Last known {}{}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object, viewer)),
-                if lki.was_attacking {
+                if lki.battlefield.attacking {
                     ", attacking"
-                } else if lki.was_in_combat {
+                } else if lki.battlefield.in_combat {
                     ", blocking"
                 } else {
                     ""
@@ -741,21 +725,15 @@ impl<'a> Projection<'a> {
         });
         let ObjectLki {
             copiable,
-            attached_to,
             transforms,
             inherited_from,
             granted_abilities,
             keywords,
-            renamed: _,
-            types,
-            subtypes,
-            colors,
-            is_legendary,
             permanent: _,
-            animated_creature,
-            was_attacking,
-            was_in_combat,
-            was_tapped,
+            creature_types,
+            battlefield,
+            attached_to,
+            meld_partner: _, // Physical components have their own viewer references on arrival.
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -768,34 +746,19 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
-        if let Some(values) = copiable {
-            self.field(
-                "copy exceptions",
-                &values.copy.as_ref().map(|copy| &copy.exceptions),
-            );
-            if let Some((id, _)) = &values.front {
-                self.reference(
-                    "copy front face",
-                    VisibleReference {
-                        definition: Some(id.0),
-                        ..Default::default()
-                    },
-                );
-            }
-        }
         if lki.was_land() {
             self.field("last known land", &true);
         }
         if lki.was_creature() {
             self.field("last known creature", &true);
         }
-        if *was_attacking {
+        if battlefield.attacking {
             self.field("last known attacking", &true);
         }
-        if *was_in_combat {
+        if battlefield.in_combat {
             self.field("last known in combat", &true);
         }
-        if *was_tapped {
+        if battlefield.tapped {
             self.field("last known tapped", &true);
         }
         if let Some(attached) = attached_to {
@@ -805,6 +768,13 @@ impl<'a> Projection<'a> {
             );
         }
         self.field("last known definition", definition_id);
+        if let Some(values) = copiable {
+            self.tokens
+                .append_definition(&values.definition)
+                .expect("last copiable definition tokens");
+            self.field("copy exceptions", &values.copy);
+            self.note(|| format!("Last copiable form: {}.", values.definition.name));
+        }
         let counter_values: Vec<_> = counters.iter().collect();
         self.field(
             "last known characteristics",
@@ -814,11 +784,24 @@ impl<'a> Projection<'a> {
                     inherited_from,
                     granted_abilities,
                     keywords,
-                    lki.creature_types(),
-                    (types, subtypes, colors, is_legendary),
+                    creature_types,
                 ),
                 (
-                    animated_creature,
+                    // A tuple, not the struct: field names would be
+                    // unregistered execution tokens.
+                    (
+                        &battlefield.types,
+                        &battlefield.subtypes,
+                        &battlefield.supertypes,
+                        &battlefield.colors,
+                        &battlefield.name,
+                        battlefield.mana_value,
+                        battlefield.is_legendary,
+                        battlefield.token,
+                        battlefield.attacking,
+                        battlefield.in_combat,
+                        battlefield.tapped,
+                    ),
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,
@@ -843,17 +826,22 @@ impl<'a> Projection<'a> {
             let counters: Vec<_> = entry.counters.iter().collect();
             self.field("entry counters", &counters);
         }
-        if entry.x != 0 {
-            self.field("entry X", &entry.x);
+        if let Some(spell) = entry.spell.as_ref().filter(|spell| spell.x != 0) {
+            self.field("entry X", &spell.x);
         }
         if let Some(controller) = entry.controller {
             self.field("entry controller", &controller);
         }
-        if entry.face_down {
+        if entry.is_face_down() {
             self.field("enters face down", &true);
         }
-        if entry.transformed {
-            self.field("enters transformed", &true);
+        match entry.face {
+            EntryFace::Transformed => self.field("enters transformed", &true),
+            EntryFace::ModalBack => self.field("enters back face up", &true),
+            EntryFace::Front | EntryFace::Manifested | EntryFace::Melded { .. } => {}
+        }
+        if let Some(object) = entry.attached_to {
+            self.object("enters attached to", object);
         }
     }
 
@@ -928,9 +916,13 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(
-                                    self.game.state.entry_object(*object_id).definition_id.0,
-                                ),
+                                definition: self
+                                    .game
+                                    .state
+                                    .entry_object(*object_id)
+                                    .definition_id
+                                    .catalog_id()
+                                    .map(|id| id.0),
                                 ..Default::default()
                             },
                         );
@@ -965,24 +957,28 @@ impl<'a> Projection<'a> {
                             let name = content.token_name(key);
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
-                        TokenSource::Copy {
-                            definition_id,
-                            definition,
-                            front,
-                            copy,
-                            exceptions,
-                        } => {
+                        TokenSource::Copy { values, exceptions } => {
+                            let CopiableValues {
+                                definition_id,
+                                definition,
+                                faces,
+                                copy,
+                            } = values;
                             self.reference(
                                 "copy definition",
                                 VisibleReference {
-                                    definition: Some(definition_id.0),
+                                    definition: definition_id.map(|id| id.0),
                                     ..Default::default()
                                 },
                             );
                             self.tokens
                                 .append_definition(definition)
                                 .expect("copiable definition tokens");
-                            if let Some((front, _)) = front {
+                            if let Some((front, _)) = faces
+                                .as_ref()
+                                .filter(|faces| faces.back_up)
+                                .map(|faces| &faces.front)
+                            {
                                 self.reference(
                                     "copy front face",
                                     VisibleReference {
@@ -1036,6 +1032,23 @@ impl<'a> Projection<'a> {
                 if let Some((source, returns)) = linked {
                     self.object("linked source", *source);
                     self.field("linked return", returns);
+                }
+            }
+            EventBinding::ExileLinked {
+                actor,
+                grantee,
+                source,
+                grant,
+            } => {
+                let rules = EventBinding::ExileLinked {
+                    actor: *actor,
+                    grantee: *grantee,
+                    source: None,
+                    grant: *grant,
+                };
+                self.field("bind result", &rules);
+                if let Some(source) = source {
+                    self.object("linked source", *source);
                 }
             }
             // These variants contain only rules values and player identities.
@@ -1200,25 +1213,22 @@ pub(crate) fn project_pending_payment(
     out.finish(frame);
 }
 
-impl Game {
-    pub(super) fn trigger_reads(
-        &self,
-        source: ObjectId,
-        definition: CardDefId,
-        index: usize,
-        inline: Option<&[Effect]>,
-        effect_reads: fn(&Effect) -> bool,
-        ability_reads: fn(&Ability) -> bool,
-    ) -> bool {
-        match inline {
-            Some(effects) => effects.iter().any(effect_reads),
-            None => self
-                .source_face(source, definition)
-                .and_then(|face| face.abilities.get(index))
-                .is_some_and(ability_reads),
-        }
+fn trigger_reads<'a>(
+    face: impl FnOnce() -> Option<&'a crate::state::card::PrintedCharacteristics>,
+    index: usize,
+    inline: Option<&[Effect]>,
+    effect_reads: fn(&Effect) -> bool,
+    ability_reads: fn(&Ability) -> bool,
+) -> bool {
+    match inline {
+        Some(effects) => effects.iter().any(effect_reads),
+        None => face()
+            .and_then(|face| face.abilities.get(index))
+            .is_some_and(ability_reads),
     }
+}
 
+impl Game {
     pub(super) fn stack_object_reads(
         &self,
         object: &crate::state::stack_object::StackObject,
@@ -1228,9 +1238,8 @@ impl Game {
         use crate::state::stack_object::StackObject;
         match object {
             StackObject::ActivatedAbility(ability) => ability.effects.iter().any(effect_reads),
-            StackObject::TriggeredAbility(ability) => self.trigger_reads(
-                ability.source_object(),
-                ability.source_definition_id,
+            StackObject::TriggeredAbility(ability) => trigger_reads(
+                || Some(crate::flow::resolution::stacked_trigger_face(ability)),
                 ability.ability_index,
                 ability.inline_effects.as_deref(),
                 effect_reads,
@@ -1258,13 +1267,15 @@ pub(crate) fn project_stack_object(
         out.retained_object(object.source_object());
     }
     if let StackObject::TriggeredAbility(ability) = object {
-        out.trigger_context(
-            ability.context,
-            ability.source_object(),
-            ability.source_definition_id,
-            ability.ability_index,
-            ability.inline_effects.as_deref(),
-        );
+        if let Some(target) = ability.context.filter(|_| {
+            game.stack_object_reads(
+                object,
+                Effect::reads_triggering_object,
+                Ability::reads_triggering_object,
+            )
+        }) {
+            out.retained_target(target);
+        }
     }
     if let Some(spent) = super::continuation::stack_receipt(object) {
         out.receipt(spent, Some(object.source_object()));
@@ -1281,13 +1292,27 @@ pub(crate) fn project_pending_trigger(
     frame: &mut ContinuationFrame,
 ) {
     let mut out = Projection::new(game, viewer, false);
-    out.trigger_context(
-        trigger.context,
-        trigger.source_object(),
-        game.pending_trigger_definition(trigger),
-        trigger.ability_index,
-        trigger.inline_effects.as_deref(),
-    );
+    if frame.trigger_damage > 0 {
+        out.field("DamageEvent::Amount", &frame.trigger_damage);
+    }
+    if let Some(target) = trigger.context.filter(|_| {
+        trigger_reads(
+            || game.pending_trigger_face(trigger),
+            trigger.ability_index,
+            trigger.inline_effects.as_deref(),
+            Effect::reads_triggering_object,
+            Ability::reads_triggering_object,
+        )
+    }) {
+        out.retained_target(target);
+    }
+    out.finish(frame);
+}
+
+/// The damage occurrence remains visible while its trigger is stacked.
+pub(crate) fn project_trigger_damage(game: &Game, viewer: PlayerId, frame: &mut ContinuationFrame) {
+    let mut out = Projection::new(game, viewer, false);
+    out.field("DamageEvent::Amount", &frame.trigger_damage);
     out.finish(frame);
 }
 
@@ -1309,6 +1334,9 @@ pub(crate) fn project_frame(
     }
     if let Some(target) = effect.context_target {
         out.retained_target(target);
+    }
+    if let Some(attached) = effect.attached {
+        out.retained_object(attached);
     }
     for target in &effect.targets {
         out.retained_target(target.target);
@@ -1333,6 +1361,9 @@ pub(crate) fn project_frame(
     if let Some(source) = &effect.selected_from {
         out.field("selection domain", source);
     }
+    if effect.triggering_amount != 0 {
+        out.field("DamageEvent::Amount", &effect.triggering_amount);
+    }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
     }
@@ -1341,7 +1372,7 @@ pub(crate) fn project_frame(
     }
     let source_definition = effect
         .source()
-        .map(|object| game.state.source_base(object).0);
+        .and_then(|object| game.observed_source_definition(object));
     if receipt_matters(&effect.spent, source_definition, effect.source()) {
         out.receipt(&effect.spent, effect.source());
     }
@@ -1425,6 +1456,7 @@ pub(crate) fn project_decision(
                         out.field("once each turn ability", &key.2);
                     }
                 }
+
                 SpendCompletion::Foretell(card) => {
                     out.object_id("cast from hand", game.state.object_of(*card))
                 }
@@ -1449,6 +1481,28 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
+        }
+        Decision::OrderMeldedCards { cards, .. } => {
+            for (mode, card) in cards.iter().enumerate() {
+                let definition = game.state.cards[*card].definition;
+                out.reference(
+                    "meld component",
+                    VisibleReference {
+                        definition: Some(definition.0),
+                        ..Default::default()
+                    },
+                );
+                out.note(|| {
+                    format!(
+                        "Order option {} places {} first.",
+                        mode + 1,
+                        default_content_pack()
+                            .definition(definition)
+                            .expect("physical card definition")
+                            .name
+                    )
+                });
+            }
         }
         Decision::AssignCombatDamage {
             attacker,
@@ -1498,6 +1552,7 @@ pub(crate) fn project_decision(
             out.object_ids("kept on top", top);
             out.object_ids("placed on bottom", bottom);
         }
+        Decision::ManifestDread { looked, .. } => out.object_ids("inspected", looked),
         Decision::Surveil {
             looked, graveyard, ..
         } => {
@@ -1723,4 +1778,84 @@ pub(crate) fn project_decision(
         | Decision::NameCard { .. } => return,
     }
     out.finish(frame);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use crate::state::{player::PlayerConfig, zone::ZoneType};
+
+    fn entry_notes(game: &Game, face: EntryFace) -> Vec<String> {
+        let mut out = Projection::new(game, PlayerId(0), true);
+        out.entry(&ZoneEntry {
+            face,
+            ..Default::default()
+        });
+        out.text.expect("text projection").notes
+    }
+
+    /// A modal back face entering is not a transformation (CR 712.11,
+    /// 712.14), and each entry form records only its own historical key:
+    /// `manifested`, `transformed`, `modal_back` or the `meld` pair.
+    #[test]
+    fn an_entry_face_reads_and_records_only_its_own_form() {
+        let deck = BTreeMap::from([("Mountain".to_string(), 40)]);
+        let game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            712_11,
+            false,
+        );
+        let modal = entry_notes(&game, EntryFace::ModalBack);
+        assert!(modal.iter().any(|note| note == "enters back face up: true"));
+        assert!(!modal
+            .iter()
+            .any(|note| note.starts_with("enters transformed")));
+        assert_eq!(
+            entry_notes(&game, EntryFace::Transformed),
+            ["effect execution: true", "enters transformed: true"]
+        );
+        assert!(entry_notes(&game, EntryFace::Front).is_empty());
+
+        // Each form records only its historical key, where the old fields
+        // sat: between `face_down` and the end of this default entry.
+        let bytes = |face| {
+            serde_json::to_string(&ZoneEntry {
+                face,
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let library = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0));
+        let partner = game.state.card_of(library[0]).unwrap();
+        let partner_index = serde_json::to_string(&partner).unwrap();
+        let front = bytes(EntryFace::Front);
+        let with = |keys: &str| front.replace(r#""transformed":false"#, keys);
+        assert!(front.ends_with(r#""face_down":false,"transformed":false}"#));
+        assert_eq!(bytes(EntryFace::Transformed), with(r#""transformed":true"#));
+        assert_eq!(
+            bytes(EntryFace::ModalBack),
+            with(r#""transformed":false,"modal_back":true"#)
+        );
+        assert_eq!(
+            bytes(EntryFace::Manifested),
+            with(r#""manifested":true,"transformed":false"#)
+        );
+        assert_eq!(
+            bytes(EntryFace::Melded {
+                partner,
+                result: CardDefId(7),
+            }),
+            with(&format!(
+                r#""transformed":false,"meld":[{partner_index},7]"#
+            ))
+        );
+    }
 }

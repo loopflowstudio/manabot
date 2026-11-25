@@ -1,6 +1,6 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
+use super::game_object::{AbilitySource, Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
 use crate::card::SpellProfile;
 use crate::payment::PaymentReceipt;
@@ -97,6 +97,10 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
+    /// Exact object attached to the source when the ability was activated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub attached: Option<ObjectId>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
@@ -123,6 +127,10 @@ fn serialize_activation_source<S: serde::Serializer>(
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    /// Captured characteristics if the catalog row alone cannot identify the
+    /// triggering face. Forks and copied abilities share this immutable value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_face: Option<std::sync::Arc<super::card::PrintedCharacteristics>>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
@@ -135,7 +143,7 @@ pub struct TriggeredAbilityOnStack {
     pub id: PublicId,
     pub controller: PlayerId,
     #[serde(flatten)]
-    pub source_identity: crate::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
@@ -148,6 +156,8 @@ pub struct TriggeredAbilityOnStack {
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kicked: bool,
     /// The ability's X (`PendingTrigger::x`).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
@@ -155,12 +165,12 @@ pub struct TriggeredAbilityOnStack {
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub spent: PaymentReceipt,
-    /// A printed modal trigger's chosen modes (CR 700.2), expanded from
-    /// its printed `Effect::TriggerModes` at resolution.
+    /// The modes chosen for a printed modal trigger (CR 700.2b); empty for
+    /// any other trigger, or when "up to" chose none.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chosen_modes: Vec<usize>,
-    /// Delayed, granted and reflexive triggers resolve these effects
-    /// instead of looking up `Object::abilities[ability_index]`.
+    /// Non-printed triggers (delayed, reflexive, granted, firebending)
+    /// resolve these effects instead of `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -196,21 +206,27 @@ impl StackObject {
         }
     }
 
-    /// The spell's object, or the object whose ability this is.
-    pub fn source_object(&self) -> ObjectId {
+    /// An effect of a spell uses the spell itself as its exact source.
+    /// Abilities retain the source captured when they were created.
+    pub fn effect_source(&self) -> AbilitySource {
         match self {
-            StackObject::Spell(spell) => spell.object,
-            StackObject::ActivatedAbility(ability) => ability.source_object(),
-            StackObject::TriggeredAbility(triggered) => triggered.source_object(),
+            Self::Spell(spell) => AbilitySource::new(spell.object, Some(spell.object)),
+            Self::ActivatedAbility(ability) => {
+                AbilitySource::new(ability.source_object, Some(ability.source_object))
+            }
+            Self::TriggeredAbility(trigger) => trigger.source_identity,
         }
+    }
+
+    pub fn source_object(&self) -> ObjectId {
+        self.effect_source().object()
     }
 
     /// The exact source object of an ability; spells have none.
     pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
-            StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
+            Self::Spell(_) => None,
+            ability => ability.effect_source().reference(),
         }
     }
 
@@ -229,6 +245,15 @@ impl StackObject {
         PublicId(self.source_definition_id().0)
     }
 
+    /// The spell's kicker choice, including the choice carried by its ETB trigger.
+    pub fn kicked(&self) -> bool {
+        match self {
+            Self::Spell(spell) => spell.kicked,
+            Self::TriggeredAbility(trigger) => trigger.kicked,
+            Self::ActivatedAbility(_) => false,
+        }
+    }
+
     pub fn ability_index(&self) -> Option<usize> {
         match self {
             StackObject::Spell(_) => None,
@@ -239,9 +264,17 @@ impl StackObject {
 
     pub fn x(&self) -> u8 {
         match self {
-            StackObject::Spell(spell) => spell.x,
-            StackObject::ActivatedAbility(ability) => ability.x,
-            StackObject::TriggeredAbility(triggered) => triggered.x,
+            Self::Spell(spell) => spell.x,
+            Self::ActivatedAbility(ability) => ability.x,
+            Self::TriggeredAbility(trigger) => trigger.x,
+        }
+    }
+
+    pub fn target_req_indices(&self) -> &[usize] {
+        match self {
+            Self::Spell(spell) => &spell.target_req_indices,
+            Self::ActivatedAbility(ability) => &ability.target_req_indices,
+            Self::TriggeredAbility(trigger) => &trigger.target_req_indices,
         }
     }
 

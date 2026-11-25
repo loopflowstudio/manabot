@@ -712,7 +712,7 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
         ],
         metamorphic_checks: vec![
             "explicit_singletons_equal_trivial_step_collapse".to_string(),
-            "compatibility_card_renames_preserve_trace".to_string(),
+            "reallocated_card_definitions_preserve_trace".to_string(),
             "fresh_and_cloned_roots_preserve_trace".to_string(),
         ],
         fuzz: manifest.fuzz.clone(),
@@ -1021,14 +1021,6 @@ pub fn verify_properties(spec: &CaseSpec) -> Result<(), String> {
     Ok(())
 }
 
-fn rename_compatibility_cards(pair: &mut ConformancePair) {
-    for game in [&mut pair.reference, &mut pair.optimized] {
-        for (index, object) in game.state.objects.iter_mut().enumerate() {
-            object.name = format!("compatibility-name-{index}");
-        }
-    }
-}
-
 pub fn verify_metamorphic(
     orientation: Orientation,
     game_seed: u64,
@@ -1036,9 +1028,14 @@ pub fn verify_metamorphic(
     commands: usize,
 ) -> Result<(), String> {
     let mut baseline = ConformancePair::new(orientation, game_seed)?;
-    let mut renamed = baseline.clone();
-    rename_compatibility_cards(&mut renamed);
-    if baseline.checkpoint()? != renamed.checkpoint()? {
+    let mut reallocated = baseline.clone();
+    for game in [&mut reallocated.reference, &mut reallocated.optimized] {
+        for object in game.state.objects.iter_mut() {
+            let (id, printing) = object.retained_base();
+            object.assign_hidden_printing(id, std::sync::Arc::new(printing.clone()));
+        }
+    }
+    if baseline.checkpoint()? != reallocated.checkpoint()? {
         return Err("metamorphic initial checkpoint changed".to_string());
     }
     let mut rng = ChaCha8Rng::seed_from_u64(choice_seed);
@@ -1055,9 +1052,20 @@ pub fn verify_metamorphic(
         let index = rng.gen_range(0..action_count);
         let action = selected_action(&baseline.optimized, index)?.2;
         let expected = baseline.apply_semantic_action(&action)?;
-        let renamed_checkpoint = renamed.apply_semantic_action(&action)?;
-        if expected != renamed_checkpoint {
-            return Err(format!("metamorphic trace diverged at step {step}"));
+        let reallocated_checkpoint = reallocated.apply_semantic_action(&action)?;
+        if expected != reallocated_checkpoint {
+            let left = serde_json::to_value(&expected).expect("serializable checkpoint");
+            let right =
+                serde_json::to_value(&reallocated_checkpoint).expect("serializable checkpoint");
+            let changed: Vec<_> = left
+                .as_object()
+                .expect("checkpoint fields")
+                .iter()
+                .filter_map(|(key, value)| (right.get(key) != Some(value)).then_some(key))
+                .collect();
+            return Err(format!(
+                "metamorphic trace diverged at step {step}: {changed:?}"
+            ));
         }
     }
     Ok(())

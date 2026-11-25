@@ -10,94 +10,49 @@
 use crate::{
     flow::{decision::Decision, game::Game},
     state::{
-        ability::{effect_target_requirements, TargetRequirement},
-        game_object::{AbilitySource, Object, PlayerId, Target},
+        game_object::{Object, PlayerId, Target},
         stack_object::StackObject,
     },
 };
 
-/// Activated abilities without an explicit slot mapping use their first clause.
-fn requirement_index(stacked: &StackObject, slot: usize) -> Option<usize> {
-    match stacked {
-        StackObject::Spell(spell) => spell.target_req_indices.get(slot).copied(),
-        StackObject::TriggeredAbility(trigger) => trigger.target_req_indices.get(slot).copied(),
-        StackObject::ActivatedAbility(ability) => {
-            Some(ability.target_req_indices.get(slot).copied().unwrap_or(0))
-        }
-    }
-}
-
 impl Game {
-    /// The targeting requirement a stack object's target slot was chosen for.
-    pub(crate) fn stack_target_requirement(
-        &self,
-        index: usize,
-        slot: usize,
-    ) -> Option<TargetRequirement> {
-        let stacked = &self.state.stack_objects[index];
-        let clause = requirement_index(stacked, slot)?;
-        match stacked {
-            StackObject::Spell(spell) => {
-                let requirements =
-                    self.state[spell.object].target_requirements_for_mode(spell.mode);
-                requirements.get(clause).cloned()
-            }
-            StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
-                .get(clause)
-                .cloned(),
-            StackObject::TriggeredAbility(triggered) => {
-                effect_target_requirements(&self.stacked_trigger_effects(triggered)?)
-                    .get(clause)
-                    .cloned()
-            }
-        }
-    }
-
     /// The targets slot `slot` of the stack object could change to: legal for
     /// its requirement from its controller's perspective, not its current
     /// target, not chosen for another slot of the same requirement, and not
     /// its own source when the requirement says "another".
-    pub(crate) fn retarget_candidates(&self, decision: &Decision) -> Vec<Target> {
-        match decision {
-            Decision::Retarget { object, slot, .. } => self.retarget_candidates_for(*object, *slot),
-            _ => Vec::new(),
-        }
-    }
-
-    pub(crate) fn retarget_candidates_for(&self, object: Target, slot: usize) -> Vec<Target> {
+    pub(crate) fn retarget_candidates(&self, object: Target, slot: usize) -> Vec<Target> {
         let Some(index) = self.stack_index_of(object) else {
             return Vec::new();
         };
-        let Some(requirement) = self.stack_target_requirement(index, slot) else {
+        let stacked = &self.state.stack_objects[index];
+        let targets = stacked.targets();
+        let Some(&current) = targets.get(slot) else {
             return Vec::new();
         };
-        let stacked = &self.state.stack_objects[index];
-        let controller = stacked.controller();
-        let targets = stacked.targets();
-        let clause = requirement_index(stacked, slot);
-        let x = stacked.x();
-        let current = targets.get(slot).copied();
-        let source = AbilitySource::new(stacked.source_object(), stacked.source_ref());
-        let self_target = stacked.as_target();
-        // Both distinctness and the shared mana-value budget apply only to
-        // the other targets of this clause, never to the slot being replaced.
-        let other_targets: Vec<Target> = targets
+        let indices = stacked.target_req_indices();
+        let clause = match indices.get(slot) {
+            Some(&clause) => clause,
+            // Single-clause activations store no indices.
+            None if matches!(stacked, StackObject::ActivatedAbility(_)) => 0,
+            None => return Vec::new(),
+        };
+        let requirements = self.stack_target_requirements(stacked);
+        let Some(requirement) = requirements.get(clause) else {
+            return Vec::new();
+        };
+        // The clause rules apply only to the other targets of this clause,
+        // never to the slot being replaced.
+        let other_targets = targets
             .iter()
             .enumerate()
-            .filter(|(other, _)| *other != slot && requirement_index(stacked, *other) == clause)
-            .map(|(_, target)| *target)
-            .collect();
-        self.targets_for_source(&requirement, controller, source)
+            .filter(|(other, _)| {
+                *other != slot && indices.get(*other).copied().unwrap_or(0) == clause
+            })
+            .map(|(_, target)| *target);
+        self.legal_clause_targets(requirement, stacked.controller(), stacked.effect_source())
+            .filter(|target| *target != current && *target != object)
             .filter(|target| {
-                Some(*target) != current
-                    && *target != self_target
-                    && !other_targets.contains(target)
-                    && self.fits_target_clause(
-                        &requirement,
-                        x,
-                        other_targets.iter().copied(),
-                        *target,
-                    )
+                self.can_add_clause_target(requirement, stacked.x(), other_targets.clone(), *target)
             })
             .collect()
     }
@@ -114,7 +69,7 @@ impl Game {
         let index = self.stack_index_of(object)?;
         let count = self.state.stack_objects[index].targets().len();
         (slot..count)
-            .find(|&slot| !self.retarget_candidates_for(object, slot).is_empty())
+            .find(|slot| !self.retarget_candidates(object, *slot).is_empty())
             .map(|slot| Decision::Retarget {
                 player,
                 object,
@@ -161,15 +116,8 @@ impl Game {
                 };
                 let lki = self.state.spell_lki.get(&object)?;
                 let saved = lki.copiable.as_ref()?;
-                let mut source = Object::from_definition(
-                    saved.spell.id,
-                    controller,
-                    lki.definition_id,
-                    saved.values.printed.clone(),
-                    false,
-                );
-                source.set_front_face(saved.values.front.clone());
-                source.copy = saved.values.copy.clone();
+                let source =
+                    Object::from_copiable_values(saved.spell.id, controller, &saved.values);
                 (StackObject::Spell(saved.spell.clone()), Some(source))
             }
         };

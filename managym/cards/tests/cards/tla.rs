@@ -18,7 +18,7 @@ use crate::support::{
     inspect::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
-        library, library_card, library_top, offered_cards, offered_targets, permanent,
+        library, library_card, library_top, observed, offered_cards, offered_targets, permanent,
         permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, top_spell,
         zone_of,
     },
@@ -34,7 +34,7 @@ use managym::state::game_object::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
-        observation::{EventEntityKind, KeywordData, Observation, PermanentData},
+        observation::{EventEntityKind, KeywordData, Observation},
         policy_history::HistoryReference,
         structured_offer::{AtomicCommand, OfferSubmission, StructuredOfferError},
     },
@@ -45,7 +45,7 @@ use managym::{
     search_state::witness,
     state::{
         card::{Keyword, Keywords, SpellProfile, StaticAbility},
-        effect::{CopyEffect, EffectDuration, Modification},
+        effect::{CopyEffect, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
         payment::{Contribution, How, Toward},
@@ -1439,7 +1439,7 @@ fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
     let view = s.game().characteristics(tunnel);
     assert!(view.has_subtype("Cave"), "{:?}", view.subtypes);
     assert!(view.has_subtype("Citizen"));
-    assert_eq!(view.creature_types, vec!["Citizen".to_string()]);
+    assert_eq!(view.creature_types.listed(), ["Citizen".to_string()]);
 }
 
 /// Elemental Teachings reveals up to four differently named lands; the
@@ -2039,7 +2039,7 @@ fn jasmine_dragon_tea_shop_taps_for_colorless_or_an_ally_token() {
     let mut s = five_color_setup(&["Jasmine Dragon Tea Shop"]);
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        s.game().producible_mana(PlayerId(0)).mana,
         [0, 0, 0, 0, 0, 1]
     );
     s.set_player_mana_pool(0, "5");
@@ -4844,7 +4844,7 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
     let definition = s.game().state[comet].definition_id.0;
     assert!(opponent.policy_history.iter().all(|row| !matches!(
         row.source,
-        HistoryReference::Card { definition: d, .. } if d == definition
+        HistoryReference::Card { definition: d, .. } if d == Some(definition)
     )));
 
     // Not castable this turn; castable for {2}{R} on its owner's next turn.
@@ -5146,18 +5146,6 @@ fn realm_of_koh_creates_a_spirit() {
     assert!(tapped(&s, realm));
     assert_eq!(s.battlefield_permanents_named(0, "Spirit").len(), 1);
     assert!(s.battlefield_permanents_named(1, "Spirit").is_empty());
-}
-
-fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
-    let permanent = s.game().state.permanents[id].as_ref().unwrap();
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    observation
-        .agent_permanents
-        .iter()
-        .chain(&observation.opponent_permanents)
-        .find(|p| p.id == permanent.id.0 as i32)
-        .cloned()
-        .unwrap()
 }
 
 fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
@@ -6977,7 +6965,7 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
     let mut s = five_color_unfunded_setup(&["Honest Work", "Llanowar Elves"]);
     let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
     clear_summoning_sickness(&mut s, elves);
-    let green = |s: &mut Scenario| s.game_mut().cached_producible_mana(PlayerId(1));
+    let green = |s: &mut Scenario| s.game().producible_mana(PlayerId(1));
     assert_eq!(green(&mut s), Mana::parse("G"));
 
     let aura = enchant(&mut s, "Honest Work", "U", elves);
@@ -6985,7 +6973,6 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
         .as_mut()
         .unwrap()
         .tapped = false;
-    s.game_mut().invalidate_mana_cache(PlayerId(1));
     assert_eq!(green(&mut s), Mana::default(), "no fixed {{G}} remains");
     assert!(!s.game().characteristics(elves).has_subtype("Elf"));
 
@@ -7072,10 +7059,7 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     };
     grant.keywords = Keywords::of(&[Keyword::Haste]);
     let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
-    let mana = |s: &mut Scenario| {
-        s.game_mut().invalidate_mana_cache(PlayerId(0));
-        s.game_mut().cached_producible_mana(PlayerId(0))
-    };
+    let mana = |s: &mut Scenario| s.game().producible_mana(PlayerId(0));
     assert_eq!(mana(&mut s), Mana::default(), "sick without the grant");
 
     add_counters(&mut s, elves, CounterKind::PlusOnePlusOne, 1);
@@ -7104,10 +7088,7 @@ fn secret_tunnel_makes_two_creatures_sharing_a_type_unblockable() {
     let tunnel = s.force_permanent_on_battlefield(0, "Secret Tunnel");
     let soldier = s.force_permanent_on_battlefield(0, "Earth Kingdom Soldier");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)),
-        Mana::parse("C")
-    );
+    assert_eq!(s.game().producible_mana(PlayerId(0)), Mana::parse("C"));
     s.set_player_mana_pool(0, "4");
     assert!(!offers_ability(&mut s, tunnel, 0), "no two share a type");
 
@@ -8117,8 +8098,8 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
     assert_eq!(object.mana_cost.as_ref().unwrap().mana_value, 2);
     let printed = s.game().state[card_of(&s, joo_dee)].definition_id;
     assert_eq!(
-        object.copy,
-        Some(CopyEffect {
+        object.copy(),
+        Some(&CopyEffect {
             of: printed,
             exceptions: vec![]
         }),
@@ -8820,8 +8801,8 @@ fn phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice()
     let object = &s.game().state[card_of(&s, token)];
     assert!(object.kind() == ObjectKind::Token);
     assert_eq!(
-        object.copy,
-        Some(CopyEffect {
+        object.copy(),
+        Some(&CopyEffect {
             of: s.game().state[card_of(&s, airship)].definition_id,
             exceptions: vec![],
         })
@@ -8951,7 +8932,7 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
             (s.game().state[p.object].kind() == ObjectKind::Token).then_some(p)
         })
         .unwrap();
-    assert!(!token.was_cast);
+    assert!(token.spell_entry.is_none());
     let definition = &s.game().state[token.object];
     assert!(definition.supertypes.is_empty());
     assert!(definition.keywords.has(Keyword::Flying));
@@ -8979,12 +8960,12 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
         [a, b] => (b, a),
     };
     assert!(objects[source].is_card());
-    assert_eq!(objects[source].copy, None);
+    assert_eq!(objects[source].copy(), None);
     assert_eq!(
-        objects[copy].copy,
-        Some(CopyEffect {
+        objects[copy].copy(),
+        Some(&CopyEffect {
             of: objects[source].definition_id,
-            exceptions: vec![Modification::Nonlegendary],
+            exceptions: vec![CopyException::Nonlegendary],
         })
     );
     assert_eq!(objects[copy].registry_key, objects[source].registry_key);
@@ -10675,7 +10656,7 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        s.game().producible_mana(PlayerId(0)).mana,
         [0, 0, 0, 0, 0, 1]
     );
     s.set_player_mana_pool(0, "");
@@ -14054,6 +14035,54 @@ fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
     assert_eq!(counters(&s, forest), 3);
 }
 
+/// Two chosen modes are no catalog mode: while Bumi's trigger targets, its
+/// frame carries the chosen program, and its text and stack row name the
+/// modes it will run rather than the whole modal rule (CR 700.2b).
+#[test]
+fn bumi_two_chosen_modes_project_as_the_program_while_targeting() {
+    let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!", "Price of Freedom"]);
+    plant_in_graveyard(&mut s, 0, "Yip Yip!");
+    plant_in_graveyard(&mut s, 0, "Price of Freedom");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    choose_mode(&mut s, 2);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let frames = s.game().continuation_frames(PlayerId(0));
+    let frame = frames
+        .iter()
+        .find(|frame| frame.kind == 8)
+        .expect("the placing trigger's frame");
+    assert_eq!(frame.mode, None, "two modes are not one catalog mode");
+    let program = frame
+        .program_description
+        .as_deref()
+        .expect("chosen program");
+    assert!(program.contains("Scry 3"), "{program}");
+    assert!(program.contains("arthbend"), "{program}");
+    assert!(!program.contains("Choose up to"), "{program}");
+    let context = s.game().decision_context(PlayerId(0)).expect("targeting");
+    assert!(
+        !context.instruction.contains("Choose up to"),
+        "{}",
+        context.instruction
+    );
+
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    assert!(s.choose_target(Target::Permanent(forest)));
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let row = observation
+        .stack_objects
+        .iter()
+        .find(|row| row.kind == managym::agent::observation::StackObjectKindData::TriggeredAbility)
+        .expect("Bumi's trigger on the stack");
+    assert_eq!(row.chosen_mode, None);
+    let description = row.description.as_deref().expect("described");
+    assert!(description.contains("Scry 3"), "{description}");
+    assert!(!description.contains("Choose up to"), "{description}");
+}
+
 /// Paying 5 life (or {2}) moves a single-target spell to another legal
 /// target.
 #[test]
@@ -15637,7 +15666,7 @@ fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
         let face = branch.game().characteristics(id);
         assert_eq!(face.pt(), (1, 1));
         assert!(face.keywords.has(Keyword::Flash));
-        assert_eq!(face.creature_types, ["Ally", "Human", "Warrior"]);
+        assert_eq!(face.creature_types.listed(), ["Ally", "Human", "Warrior"]);
         assert_eq!(branch.game().state.stack_objects[0], pending[0]);
         assert!(matches!(
             &branch.game().state.stack_objects[..],
@@ -17033,7 +17062,7 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
     assert_eq!(s.action_space().actions.len(), 2);
     assert_eq!(counters_of(&s, pridemate, CounterKind::PlusOnePlusOne), 0);
     let second = s.action_space().actions[1].clone();
-    let mut replay = crate::support::play::command(&mut s, |a| *a == second);
+    let (mut replay, _) = crate::support::play::command(&mut s, |a| *a == second);
     for branch in [&mut s, &mut replay] {
         branch.advance_to_active_step(0, StepKind::EndOfCombat);
         // Two simultaneous gains, one per lifelink source (CR 119.9); their
@@ -17100,7 +17129,7 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         assert_eq!(s.life(1), 20);
         let root = s.game().clone();
         let before = witness(&root);
-        let mut replay = crate::support::play::command(
+        let (mut replay, _) = crate::support::play::command(
             &mut s,
             |a| matches!(a, Action::ChooseMode { mode: choice, .. } if *choice == mode),
         );
