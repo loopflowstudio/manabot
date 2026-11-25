@@ -143,7 +143,16 @@ def _coverage(coverage: list[Step]) -> None:
     assert set(routes) == {"clean", "optimize"}, routes.keys()
     assert routes["clean"] == [], "clean path exits directly to compress"
     opt = routes["optimize"]
-    assert _phase(opt, 0, "engine-measure", "engine-performance-review") == len(opt)
+    assert (
+        _phase(
+            opt,
+            0,
+            "engine-measure",
+            "engine-performance-review",
+            worker="engine-implement",
+        )
+        == len(opt)
+    )
     assert coverage[position + 1].label == "compress"
     assert coverage[position + 2].label == "pr-publish"
     assert coverage[position + 3].label == "ship-review"
@@ -165,9 +174,15 @@ def _experiment(experiment: list[Step]) -> None:
     assert finding[-1].returns_to == finding[0].key
 
 
-def _performance(steps: list[Step], measure: str, review: str) -> None:
+def _performance(
+    steps: list[Step],
+    measure: str,
+    review: str,
+    *,
+    worker: str = "implement",
+) -> None:
     """Check the optimization loop, final compress, and ship-review delivery."""
-    position = _phase(steps, 0, measure, review)
+    position = _phase(steps, 0, measure, review, worker=worker)
     assert steps[position].label == "compress"
     assert steps[position + 1].label == "pr-publish"
     assert steps[position + 2].label == "ship-review"
@@ -180,7 +195,10 @@ def main() -> None:
     graphs = _compile_graphs(root)
     _coverage(graphs["coverage"])
     _performance(
-        graphs["engine-performance"], "engine-measure", "engine-performance-review"
+        graphs["engine-performance"],
+        "engine-measure",
+        "engine-performance-review",
+        worker="engine-implement",
     )
     _performance(
         graphs["experiment-performance"],

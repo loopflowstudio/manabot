@@ -41,7 +41,7 @@ learner work or evaluation matches, including how these costs change with model
 size. Use `engine-performance` for a bottleneck within the native engine, such as
 state copying or search. Coverage gates `engine-optimization` behind `card-perf`
 so clean card batches skip optimization while regressions and superlinear
-new-card stress shapes reuse the shared `engine-measure` → `implement` →
+new-card stress shapes reuse the shared `engine-measure` → `engine-implement` →
 `engine-performance-review` loop.
 The performance workflow does not change Wave defaults or replace a Task's
 captured graph.
@@ -143,7 +143,7 @@ handoff:
    `bench_steps`/`bench_search` retired instructions against base. Clean runs
    exit directly to `compress` with no extra steps; regressions or superlinear
    new-card paths enter `engine-optimization` (`engine-measure` → `sync` →
-   `implement` → `engine-performance-review`) scoped to this branch's diff.
+   `engine-implement` → `engine-performance-review`) scoped to this branch's diff.
    Pre-existing global engine hotspots belong in `engine-performance` Tasks
    rather than parallel card branches.
 
