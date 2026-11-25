@@ -49,12 +49,11 @@ The published surface, contract format and classification rules live in `manabot
 1. Export lists, contract recorder and compatibility tests: `d70731a562`, compressed in `06f2634d42`, QA'd in `bb824541f4`.
 2. External CPU learner and README example fix: `c205dfb579` (0.72 s test body).
 3. CI selection and integration wiring: `c205dfb579`.
-4. **Remaining slice (from post-implementation concept review, `scratch/concept-review.html`):**
-   - **Exclude Pydantic decorator hooks in `scripts/public_api.py:python_class`:** for `BaseModel` subclasses, collect function names from `cls.__pydantic_decorators__` (`field_validators`, `model_validators`, `field_serializers`, `model_serializers`) and skip them when extracting methods. Drops 10 internal hooks (`validate_world`, `validate_sources`, `validate_sideboard_counts`, `reject_compound_decisions`, `reject_pooled_token_stream`, `validate_value_architecture`, `reject_other_inputs`, `valid_population`, `resource_limit_has_input_contract`, `bounded_warmup`) while keeping all real methods and fields. Add a regression assertion in `tests/test_public_api_contract.py`.
-   - **Remove duplicate `PackedActions` re-export from `manabot.training.rollout.collection`:** remove `"PackedActions"` from `manabot/training/rollout/collection.py`'s `__all__` and from `manabot.training.rollout.collection`'s row in `manabot/README.md#library-api` (`PackedActions` stays published from its defining module `manabot.training.rollout.actions`).
-   - **Unify `# Deprecated` comment detection in `scripts/public_api.py`:** check inline `# Deprecated` or immediately preceding `# Deprecated` line (`lines[node.lineno - 2].lstrip().startswith("# Deprecated")`) uniformly across stub declarations (`FunctionDef`, `ClassDef`, `AnnAssign`, `Assign`) instead of only `Assign`. Marks `managym.PlayerConfig.disclosure` and `managym.Observation.legacy_card_lists` as `deprecated: true` without touching `managym/__init__.pyi`.
-   - **Route `manabot/README.md` to `integration` in `.github/ci/select-tests.sh`:** add `manabot/README.md) select_jobs integration ;;` before `*/README.md`, add `("manabot/README.md", {"integration"})` to `tests/infra/test_ci_selection.py`, and list `manabot/README.md` in the `docs/development.md` CI selection table.
-   - **Regenerate `tests/public_api.json` cleanly** (starting from a fresh extraction of the tightened baseline, since MTG-436 has not merged yet — `breaks` must remain `[]` and `line` must remain `"0.2"`), run `uv run python scripts/public_api.py check`, ruff, and `uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py tests/test_package_boundaries.py tests/infra/test_ci_selection.py -q`.
+4. README-only changes select integration (`af931f56d4`). The contract excludes Pydantic callbacks, publishes `PackedActions` from its defining module, and recognizes inline and preceding stub deprecation comments (`8d665adbdd`).
+
+The regenerated 0.2 baseline dropped ten callback entries and the duplicate export. It marked `PlayerConfig.disclosure` and `Observation.legacy_card_lists` deprecated and retained an empty break history. The contract check and Ruff passed. The four pytest files listed above finished with 118 passed and one skip (MLX unavailable).
+
+Implementation is ready for review. Gate and ship-review remain.
 
 ## Coordination with MTG-437
 
