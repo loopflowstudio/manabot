@@ -1,4 +1,4 @@
-at: b361663a0b294e0497469f9ad20e468dbe213f0c
+at: 87c42e1734c2dce816aadfdf2318add3d9e60076
 first:
   - path: scratch/plan.md
     why: Outcome, determinism rule, and verified passes.
@@ -13,7 +13,7 @@ first:
   - path: managym/state/src/ability.rs
     why: Recursive effect check for self-animating lands.
   - path: managym/src/flow/mana.rs
-    why: Source offers, color equivalence, and surplus-pruned automatic taps.
+    why: Source offers, unified payability, modal equivalence, automatic taps.
   - path: managym/src/flow/mana/interchangeable.rs
     why: Indistinguishable source classes and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
@@ -26,7 +26,7 @@ first:
   - path: manabot/semantic/text_observation.py
     why: Simple choice mana taps adopt native Tap-for wording in LLM text.
   - path: managym/academy/recording.py
-    why: Moves log resolves choice-of-color mana taps to the color actually added.
+    why: Moves log resolves choice-of-color mana taps to the color added.
   - path: academy/ui/src/lib/board/Rail.svelte
     why: Moves log renders mana symbols as pips via ManaText.
   - path: academy/ui/src/lib/board/prompt.ts
