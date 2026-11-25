@@ -680,7 +680,7 @@
         },
         {
           "path": "managym/src/agent/record_vocabulary.rs",
-          "sha256": "43cd19f95c09b8fc9249c44cbdf459dfa75e0368076b4173e2e7343cd98fcc61"
+          "sha256": "d4887610f91e908b64825163ce8873a07f433cc76b19636a38e496dfedbb4c71"
         },
         {
           "path": "managym/src/agent/rollout_pool.rs",
@@ -1139,7 +1139,7 @@
           "sha256": "21ea0de792dea9a7e4ed02d8878e9d026e93fe3d53a366727f7ed773848cce1f"
         }
       ],
-      "sha256": "1d76a3844d10a28d70c959377c4cf5f9c9f24dfe99d53f9db1712f670e931dfd"
+      "sha256": "7f448d0b57906730282cfadb18fbe0e1227f8bf128569f0dff86610d81290112"
     },
     "seed": 0
   },

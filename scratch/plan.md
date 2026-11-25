@@ -202,4 +202,11 @@ Academy Integration and model integration failed.
   New fixtures retain the prior casting evidence alongside the battlefield-form
   recordings. CI on the gate commit will verify the full matrix and Engine Budget.
 
+Main advanced to `cf73d9778f` during gate. The sync at `db6461c405` keeps its
+published turn-history column indices and appends the battlefield-form columns.
+The merged corpus has 3,150 Commands, and Academy parity still covers the same
+174 Command families and 1,050 viewer projections. The combined catalog sweep
+found that resolving a discard could emit `CostComponent::Discard` without a
+vocabulary row. The gate adds the row and a native vocabulary witness.
+
 Delete `scratch/` in the pre-land commit.

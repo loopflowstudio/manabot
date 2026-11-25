@@ -162,6 +162,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
+    add(TokenKind::Variant, "CostComponent::Discard");
     // A play grant's condition reaches its fact program as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
         let json = serde_json::to_value(definition).expect("serializable definition");
@@ -399,6 +400,7 @@ mod tests {
             flow::{
                 event::GameEvent,
                 game::CastChoices,
+                payment::CostComponent,
                 proposed_event::{CounterProvenance, EventBinding, EventCause},
                 turn::Bending,
             },
@@ -494,6 +496,7 @@ mod tests {
             tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
         }
         tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
+        tokens.extend(rules_tokens(&CostComponent::Discard, pack).unwrap());
         for (kind, value) in tokens {
             assert!(
                 matches!(kind, 4 | 5) || known.contains(&(kind, value)),
