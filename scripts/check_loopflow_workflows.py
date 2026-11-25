@@ -108,18 +108,25 @@ def _compile_graphs(root: Path) -> dict[str, list[Step]]:
     return graphs
 
 
-def _phase(steps: list[Step], start: int, plan: str, review: str) -> int:
+def _phase(
+    steps: list[Step],
+    start: int,
+    plan: str,
+    review: str,
+    *,
+    worker: str = "implement",
+) -> int:
     """Check one sliced build/review phase; return the index after it.
 
-    The plan step cuts the work into slices. Sync runs before implement so
-    implement decides the slice loop directly, and the phase's review decides
+    The plan step cuts the work into slices. Sync runs before the worker so
+    the worker decides the slice loop directly, and the phase's review decides
     whether to return to implementation or advance.
     """
     end = [step.label for step in steps].index(review, start)
     phase = steps[start : end + 1]
-    assert [step.label for step in phase] == [plan, "sync", "implement", review], phase
-    sync, implement, decider = phase[1], phase[2], phase[3]
-    assert implement.returns_to == sync.key, "implement decides the slice loop"
+    assert [step.label for step in phase] == [plan, "sync", worker, review], phase
+    sync, build, decider = phase[1], phase[2], phase[3]
+    assert build.returns_to == sync.key, f"{worker} decides the slice loop"
     assert decider.returns_to == sync.key, f"{review} decides the phase"
     assert not any(step.interactive for step in phase), f"{plan} phase is headless"
     return end + 1
@@ -127,7 +134,9 @@ def _phase(steps: list[Step], start: int, plan: str, review: str) -> int:
 
 def _coverage(coverage: list[Step]) -> None:
     """Check the two-pass coverage graph: sliced build/review, then card-perf xor."""
-    position = _phase(coverage, 0, "card-batch", "card-review")
+    position = _phase(
+        coverage, 0, "card-batch", "card-review", worker="card-implement"
+    )
     perf = coverage[position]
     assert perf.label == "card-perf" and perf.kind == "xor", perf
     routes = {path.name: path.steps for path in perf.paths}

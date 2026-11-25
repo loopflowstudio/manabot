@@ -131,12 +131,12 @@ handoff:
 
 1. **Build and review:** `card-batch` cuts the cohort into ~30–50 minute
    mechanism slices and names the large-board stress shapes the new cards could
-   make expensive. An inner `sync` → `implement` loop builds slice after slice
-   (with `implement` collapsing finished slices in `scratch/plan.md` and
-   deciding directly whether more slices remain). Once the slices are built,
+   make expensive. An inner `sync` → `card-implement` loop builds slice after
+   slice (with `card-implement` collapsing finished slices in `scratch/plan.md`
+   and deciding directly whether more slices remain). Once the slices are built,
    `card-review` checks outward concepts/wire contracts, inward Rust
    composability, dead-code/duplication simplifications and workspace behavior
-   together, returning to `implement` for one batched fix pass when needed.
+   together, returning to `card-implement` for one batched fix pass when needed.
 2. **Targeted new-card performance gate (`card-perf`):** after `card-review`
    advances, the `card-perf` `xor` router measures the new cards' `bench_states`
    stress shapes for superlinear scaling and checks uninstrumented release
