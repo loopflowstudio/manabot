@@ -747,18 +747,11 @@ change.
    `Board.svelte` `combatPreview` prop, `+page.svelte:554`, mocked in
    `e2e/drag-play.spec.ts:345`). Live combat drafting in the browser is broken
    until pass 3 replaces it; this branch must not ship without pass 3.
-3. **Browser and docs.** Nothing blocks this pass. `gameStore.liveGroup`,
-   `PendingSubmission` reconnect/reload reconciliation in `socket.svelte.ts`,
-   `sendGroupCommand` + `fetchGroupPreview`, combat on one-shot Confirm (with
-   1-creature parity, replacing every `/combat-preview` caller listed above),
-   `ArrangePanel.svelte` (Scry, Surveil, OrderLibrary Top &
-   Bottom, committed prefix display), rail disclosure, unified draft storage,
-   `e2e/grouped-decisions.spec.ts`, updates to MTG-441's combat specs for the
-   removed stop control. Keep `docs/academy.md` and `managym/README.md` (written
-   up front) aligned with the finished implementation; `AGENTS.md` "Decision
-   ownership" gains the sentence that grouped input compiles to sequential
-   Actions and never widens an action space. Shows: acceptance step 3 and the
-   demo.
+3. **Browser and docs** — done (`c870fb9349`). `svelte-check` (0 errors, 0
+   warnings), unit tests (`design`, `socket`, `shared-table-protocol`, `group`,
+   `arrange`, `combat`), and Playwright acceptance specs
+   (`grouped-decisions`, `combat-presentation`, `drag-play`, `keyboard-play`,
+   34/34) pass. All passes complete; ready for gate.
 
 ## Done when
 
