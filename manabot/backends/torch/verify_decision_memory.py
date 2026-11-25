@@ -13,7 +13,7 @@ import torch
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.decision_memory import blank_memory
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -32,19 +32,15 @@ import managym
 
 def prove_policies(
     space: ObservationSpace,
-    obs: dict[str, np.ndarray],
+    obs: managym.ObservationBatch,
     out: Path,
     player_configs: managym.GameSetup,
 ) -> list[dict[str, object]]:
     torch.set_num_threads(1)
-    blank = blank_memory(obs)
-    for key in obs.keys() - {
-        "decision_records",
-        "decision_reference_details",
-        "decision_references",
-        "decision_members",
-    }:
-        np.testing.assert_array_equal(obs[key], blank[key])
+    blank = obs.blank_decision_memory()
+    original, ablated = obs.tables(), blank.tables()
+    for key in original.keys() - set(MEMORY_FIELDS):
+        assert original[key] == ablated[key], key
     results: list[dict[str, object]] = []
     for encoder in ("transformer", "gru"):
         for summaries in (1, 4):

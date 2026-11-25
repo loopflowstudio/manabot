@@ -12,9 +12,7 @@ import json
 from pathlib import Path
 from typing import Literal, Protocol
 
-import numpy as np
-
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
@@ -27,7 +25,7 @@ class DemoBackend(Protocol):
     def prove_policies(
         self,
         space: ObservationSpace,
-        obs: dict[str, np.ndarray],
+        obs: managym.ObservationBatch,
         out: Path,
         player_configs: managym.GameSetup,
     ) -> list[dict[str, object]]: ...
@@ -75,17 +73,17 @@ class Proof:
                 source
                 == self.replay.observation_for_player(viewer).decision_memory_json()
             )
-            live = encode_observation(self.space, obs)
-            restored = encode_observation(
-                self.space, managym.Observation.from_json(obs.toJSON())
-            )
+            live = managym.encode_observation_batch([obs], self.space.layout).tables()
+            restored = managym.encode_observation_batch(
+                [managym.Observation.from_json(obs.toJSON())], self.space.layout
+            ).tables()
             for key in (
                 "decision_records",
                 "decision_reference_details",
                 "actions",
                 "action_focus",
             ):
-                np.testing.assert_array_equal(restored[key], live[key])
+                assert restored[key] == live[key], key
             counts[str(viewer)] = len(read_records(source))
             (directory / f"viewer-{viewer}.json").write_text(source + "\n")
         text = capture_text_decision(self.env)
@@ -231,12 +229,9 @@ def run_demo(out: Path, backend: DemoBackend) -> None:
         proof = _native_proof(out / disclosure, disclosure)
         actor = proof.env.current_agent_index()
         assert actor is not None
-        obs = {
-            key: value[None]
-            for key, value in encode_observation(
-                proof.space, proof.env.observation_for_player(actor)
-            ).items()
-        }
+        obs = managym.encode_observation_batch(
+            [proof.env.observation_for_player(actor)], proof.space.layout
+        )
         policies[disclosure] = backend.prove_policies(
             proof.space, obs, proof.out, _configs(disclosure)
         )
