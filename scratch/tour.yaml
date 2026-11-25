@@ -1,7 +1,7 @@
-at: 72a12fa27799dc08a9213d53187cc5a310ba8a08
+at: 428eb5c17d51901359d7ac28c76458dc091db2ab
 first:
   - path: scratch/plan.md
-    why: Completed slice and the remaining source-equivalence cases.
+    why: Why required sources also matter when counting optional taps.
   - path: docs/academy.md
     why: The intended experience when choosing mana in Academy.
   - path: managym/README.md
@@ -15,5 +15,5 @@ first:
   - path: managym/src/flow/decision.rs
     why: Which source choices remain during resolution.
   - path: managym/tests/source_taps.rs
-    why: Casts, ward, receipts, and divergent color choices.
+    why: Forked payments verify untapped lands and floating mana.
 hide: []
