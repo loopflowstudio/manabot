@@ -4027,22 +4027,60 @@ fn raise_the_past() -> CardDefinition {
 }
 
 fn kaito_cunning_infiltrator() -> CardDefinition {
+    let text_box = "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"";
     let loyalty = ActivatedAbilityDefinition::loyalty;
     CardDefinition {
-        key: "fdn.kaito_cunning_infiltrator", scryfall_id: "5dabdea9-2015-49b9-853d-4f7e1262eab3",
+        key: "fdn.kaito_cunning_infiltrator",
+        scryfall_id: "5dabdea9-2015-49b9-853d-4f7e1262eab3",
         printed: PrintedCharacteristics {
-            name: "Kaito, Cunning Infiltrator".into(), types: CardTypes::new([CardType::Planeswalker]), supertypes: vec!["Legendary".into()],
-            subtypes: vec!["Kaito".into()], mana_cost: Some(ManaCost::parse("{1}{U}{U}")), loyalty: Some(3),
-            text_box: "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"".into(), abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::DealsCombatDamage {subject: TriggerSubject::you_control(CardPredicate::creature()), to: Some(Actor::AnyPlayer), per: Per::Object },
-                intervening_if: None, effects: vec![Effect::put_counters(ObjectSelector::This, CounterKind::Loyalty, 1)]
+            name: "Kaito, Cunning Infiltrator".into(),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Kaito".into()],
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            loyalty: Some(3),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    to: Some(Actor::AnyPlayer),
+                    per: Per::Object,
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Loyalty,
+                    1,
+                )],
             }],
             activated_abilities: vec![
-                loyalty(1, vec![Effect::TargetClause {requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl), effects: vec![Effect::until_end_of_turn(ObjectSelector::Target(TargetSpec::CreatureYouControl), Modification::CantBeBlocked)]},
-                    Effect::DrawCards { count: 1.into() }, Effect::discard()]),
+                loyalty(
+                    1,
+                    vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::up_to(
+                                1,
+                                TargetSpec::CreatureYouControl,
+                            ),
+                            effects: vec![Effect::until_end_of_turn(
+                                ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                Modification::CantBeBlocked,
+                            )],
+                        },
+                        Effect::DrawCards { count: 1.into() },
+                        Effect::discard(),
+                    ],
+                ),
                 loyalty(-2, vec![Effect::create_tokens("token.ninja_2_1_u", 1)]),
-                loyalty(-9, vec![Effect::CreateEmblem { key: "emblem.kaito_cunning_infiltrator".into() }]),
-            ], ..Default::default()
-        }, ..Default::default()
+                loyalty(
+                    -9,
+                    vec![Effect::CreateEmblem {
+                        key: "emblem.kaito_cunning_infiltrator".into(),
+                    }],
+                ),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }

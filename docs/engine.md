@@ -1060,6 +1060,14 @@ actions next run. The chosen token has two loyalty abilities, −1 to surveil
 loyalty ability on another player’s turn and still uses its one activation
 for that turn.
 
+An ultimate that gives you an emblem puts it in your command zone. If paying
+the loyalty cost sends Vivien Reid to the graveyard, her ultimate still
+resolves. Your creatures get +2/+2, vigilance, trample and indestructible
+from the emblem. A second copy gives them another +2/+2. Kaito’s emblem
+creates a Ninja for its controller when either player casts a spell. Both
+players can inspect each emblem and its rules text under **Emblems** on the
+controller’s player plate in Academy.
+
 ### Attacking a planeswalker
 
 Each attacker can attack the defending player or one of that player’s
@@ -1196,7 +1204,7 @@ it:
 | Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
 | Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
 | Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` |
-| Emblem | CR 114 | none yet; no defined card creates one | no card |
+| Emblem | CR 114 | `Object` with `ObjectKind::Emblem`, from an `EmblemDefinition` | its own abilities in its controller’s command zone |
 
 `Card` is a small `Copy` value written once at setup: `owner`, `definition`
 and the `PublicId` observations show for it. `GameState::cards` holds both
@@ -1204,9 +1212,8 @@ main decks and both sideboards and never grows.
 
 An object's kind is fixed when the object is made. A copy of a permanent spell
 resolves into a token (CR 111.12, 608.3f): the permanent is a new object of
-kind `Token`, and neither it nor the copy has a `CardId`. A definition's
-`is_token` says only that its catalog row is a token definition's; an object's
-kind is the authority for what it is.
+kind `Token`, and neither it nor the copy has a `CardId`. The catalog row records the kind of
+object it creates.
 
 Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
 nonland permanent card with mana value two or less in your graveyard. Nullpriest
@@ -1489,7 +1496,7 @@ lists hold `ObjectId`s, and card-only readers narrow them through
 | Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
 | Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
 | Stack | CR 405 | spells (cards and copies) and abilities | `ObjectId` for spells; `GameState::stack_objects` includes abilities and owns stack order |
-| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there | `ObjectId` |
+| Command | CR 408 | emblems (CR 114.1) and cards placed there by a format (CR 903.6) | `ObjectId` |
 
 Decklists and sideboards are outside the game and hold cards alone.
 

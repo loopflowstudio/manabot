@@ -158,7 +158,10 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     );
     let sources = game.trigger_ability_sources(&event);
     assert!(sources.iter().any(|source| source.object == original));
-    assert!(!sources.iter().any(|source| source.lki.as_ref().is_some_and(|lki| lki.permanent == second)));
+    assert!(!sources.iter().any(|source| source
+        .lki
+        .as_ref()
+        .is_some_and(|lki| lki.permanent == second)));
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
     assert_eq!(

@@ -417,21 +417,68 @@ fn kargan_dragonrider() -> CardDefinition {
 }
 
 fn vivien_reid() -> CardDefinition {
+    let text_box = "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"";
     let loyalty = ActivatedAbilityDefinition::loyalty;
     CardDefinition {
-        key: "m19.vivien_reid", scryfall_id: "681fbd66-b622-4f20-a860-f101aff21109",
+        key: "m19.vivien_reid",
+        scryfall_id: "681fbd66-b622-4f20-a860-f101aff21109",
         printed: PrintedCharacteristics {
-            name: "Vivien Reid".into(), types: CardTypes::new([CardType::Planeswalker]), supertypes: vec!["Legendary".into()],
-            subtypes: vec!["Vivien".into()], mana_cost: Some(ManaCost::parse("{3}{G}{G}")), loyalty: Some(5),
-            text_box: "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"".into(), 
+            name: "Vivien Reid".into(),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vivien".into()],
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            loyalty: Some(5),
+            text_box: text_box.into(),
             activated_abilities: vec![
-                loyalty(1, vec![Effect::LookAndSelect { random_order: true, reveal: true, to_battlefield: false, look: 4.into(), min_select: 0, max_select: 1,
-                    predicate: CardPredicate {card_types_any: vec![CardType::Creature, CardType::Land], ..Default::default()}, max_mana_value: None }]),
-                loyalty(-3, vec![Effect::destroy(ObjectSelector::Target(TargetSpec::Permanent { predicate: CardPredicate {
-                    any_of: vec![CardPredicate {card_types_any: vec![CardType::Artifact, CardType::Enchantment], ..Default::default()}, CardPredicate {flying: true, ..CardPredicate::creature()}], ..Default::default()
-                }}))]),
-                loyalty(-8, vec![Effect::CreateEmblem { key: "emblem.vivien_reid".into() }]),
-            ], ..Default::default()
-        }, ..Default::default()
+                loyalty(
+                    1,
+                    vec![Effect::LookAndSelect {
+                        random_order: true,
+                        reveal: true,
+                        to_battlefield: false,
+                        look: 4.into(),
+                        min_select: 0,
+                        max_select: 1,
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Creature, CardType::Land],
+                            ..Default::default()
+                        },
+                        max_mana_value: None,
+                    }],
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                any_of: vec![
+                                    CardPredicate {
+                                        card_types_any: vec![
+                                            CardType::Artifact,
+                                            CardType::Enchantment,
+                                        ],
+                                        ..Default::default()
+                                    },
+                                    CardPredicate {
+                                        flying: true,
+                                        ..CardPredicate::creature()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                ),
+                loyalty(
+                    -8,
+                    vec![Effect::CreateEmblem {
+                        key: "emblem.vivien_reid".into(),
+                    }],
+                ),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }

@@ -31,6 +31,7 @@
     { key: 'Hand', count: hand, cards: null },
     { key: 'Library', count: player.library_count, cards: null },
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
+    ...(player.command?.length ? [{ key: 'Emblems', count: player.command.length, cards: player.command }] : []),
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
   ]);
   const total = $derived(floatingTotal(player));

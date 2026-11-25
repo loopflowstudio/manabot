@@ -13243,5 +13243,57 @@
     "colors": [
       "B"
     ]
+  },
+  "Ajani Resolute": {
+    "name": "Ajani Resolute",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a loyalty counter on Ajani.\n0: You gain 1 life.\n−4: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n−10: You get an emblem with \"Creatures you control get +2/+2.\"",
+    "colors": [
+      "W"
+    ],
+    "loyalty": "2"
+  },
+  "Chandra, Torch of Defiance": {
+    "name": "Chandra, Torch of Defiance",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Planeswalker — Chandra",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "+1: Exile the top card of your library. You may cast that card. If you don't, Chandra deals 2 damage to each opponent.\n+1: Add {R}{R}.\n−3: Chandra deals 4 damage to target creature.\n−7: You get an emblem with \"Whenever you cast a spell, this emblem deals 5 damage to any target.\"",
+    "colors": [
+      "R"
+    ],
+    "loyalty": "4"
+  },
+  "Kaito, Cunning Infiltrator": {
+    "name": "Kaito, Cunning Infiltrator",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Legendary Planeswalker — Kaito",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"",
+    "colors": [
+      "U"
+    ],
+    "loyalty": "3"
+  },
+  "Vivien Reid": {
+    "name": "Vivien Reid",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Planeswalker — Vivien",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"",
+    "colors": [
+      "G"
+    ],
+    "loyalty": "5"
   }
 }

@@ -1614,6 +1614,10 @@ impl Observation {
             }
         }
 
+        for (_, object) in game.emblems() {
+            add_object(object, ZoneType::Command);
+        }
+
         for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
             for object_id in game
                 .state
@@ -1897,6 +1901,9 @@ impl Observation {
     fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
         let mut card = Self::printed_card_data(game, object_id, zone);
         (card.characteristics.power, card.characteristics.toughness) = game.object_pt(object_id);
+        if game.state[object_id].kind() == crate::state::game_object::ObjectKind::Emblem {
+            card.characteristics.name = game.unnamed_label(object_id).into();
+        }
         card
     }
 
@@ -1907,7 +1914,11 @@ impl Observation {
             owner_id: game.state.players[object.owner.0].id.0 as i32,
             id: object.id.0 as i32,
             registry_key: object.registry_key.0 as i32,
-            is_token: !object.is_card(),
+            is_token: matches!(
+                object.kind(),
+                crate::state::game_object::ObjectKind::Token
+                    | crate::state::game_object::ObjectKind::SpellCopy
+            ),
             characteristics: Self::printed_characteristics_data(game, object_id),
             face_down: game.is_face_down_in_exile(object_id),
             cast_permissions: game

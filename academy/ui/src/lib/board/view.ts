@@ -166,7 +166,7 @@ function askedObjects(buttons: PlacedOffer[], frame: ExperienceFrame): Set<numbe
  *  opponent's hand). */
 export function inspectableCards(players: PlayerState[]): CardState[] {
   return players.flatMap(player => [
-    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...(player.inspected ?? []),
+    ...player.hand, ...player.graveyard, ...player.exile, ...(player.command ?? []), ...player.stack, ...(player.inspected ?? []),
   ]);
 }
 

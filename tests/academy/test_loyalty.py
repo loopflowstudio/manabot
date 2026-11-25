@@ -7,6 +7,7 @@ from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.combat import CombatPlan, PlannedAttack, preview_combat
 from managym.decision import Command, DecisionFrame
+from managym.enums import ZoneEnum
 from managym.experience_projection import describe_actions, serialize_observation
 
 
@@ -224,3 +225,78 @@ def test_empowered_token_visible_to_both_seats_and_cold_replay() -> None:
     ).restore()
     assert restored.state_digest() == env.state_digest()
     assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+
+
+def test_ajani_emblem_visible_to_both_seats_and_restored_from_play() -> None:
+    name = "Ajani Resolute"
+    env = managym.Env(seed=23)
+    obs, _ = env.reset(
+        [
+            managym.PlayerConfig("Ajani", {"Plains": 24, name: 12}),
+            managym.PlayerConfig("Opponent", {"Island": 36}),
+        ]
+    )
+    for _ in range(1200):
+        if any(
+            card.zone == ZoneEnum.COMMAND
+            for card in (*obs.agent_cards, *obs.opponent_cards)
+        ):
+            break
+        actions = obs.action_space.actions
+        index = None
+        if any(
+            a.action_type == managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY
+            for a in actions
+        ):
+            offers = DecisionFrame.from_json(env.semantic_decision_frame_json()).offers
+            index = next(
+                (
+                    offer["id"]
+                    for cost in ("[−10]", "[0]")
+                    for offer in offers
+                    if cost in offer["label"]
+                ),
+                None,
+            )
+        if index is None:
+            kinds = [managym.ActionEnum.PRIORITY_PLAY_LAND]
+            if not any(p.characteristics.name == name for p in obs.agent_permanents):
+                kinds.append(managym.ActionEnum.PRIORITY_CAST_SPELL)
+            kinds.extend(
+                (managym.ActionEnum.PAY_COST, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
+            )
+            index = next(
+                (
+                    i
+                    for kind in kinds
+                    for i, a in enumerate(actions)
+                    if a.action_type == kind
+                ),
+                0,
+            )
+        obs = env.step(index)[0]
+    else:
+        raise AssertionError("Ajani never created an emblem")
+
+    for viewer in (0, 1):
+        board = serialize_observation(env.observation_for_player(viewer))
+        side = board["agent" if viewer == 0 else "opponent"]
+        (emblem,) = side["command"]
+        assert emblem["name"] == "Emblem — Ajani Resolute"
+        assert emblem["text_box"] == "Creatures you control get +2/+2."
+        assert all(p["name"] != name for p in side["battlefield"])
+    assert "Emblem — Ajani Resolute" in capture_text_decision(env).text
+    for restored in (
+        env.snapshot().restore(),
+        managym.GameSnapshot.from_replay_json(
+            env.snapshot().to_replay_json()
+        ).restore(),
+    ):
+        assert restored.state_digest() == env.state_digest()
+        assert (
+            restored.semantic_decision_frame_json()
+            == env.semantic_decision_frame_json()
+        )
+        assert serialize_observation(restored.observation_for_player(0))["agent"][
+            "command"
+        ] == [emblem]

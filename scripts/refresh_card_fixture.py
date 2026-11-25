@@ -51,7 +51,7 @@ def registered_names(oracle: dict[str, dict]) -> list[str]:
     names = {
         row["registry_name"]
         for row in rows
-        if row["key"] and not row["key"].startswith("token.")
+        if row["key"] and not row["key"].startswith(("token.", "emblem."))
     }
     registered = {row["registry_name"] for row in rows}
     # Back faces have no key of their own. Join them through the printing

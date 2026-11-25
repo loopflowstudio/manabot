@@ -598,6 +598,9 @@ class LegacyPlayerView(ProtocolModel):
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
+    command: list[LegacyCardView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     exile: list[LegacyCardView]
     stack: list[LegacyCardView]
     battlefield: list[LegacyPermanentView]

@@ -1376,6 +1376,7 @@ impl ObjectSelector {
             | Self::Attached
             | Self::CreatedThisWay
             | Self::Remembered
+            | Self::LibraryTop
             | Self::ExiledWithSource
             | Self::Grantor
             | Self::Moved
@@ -1733,7 +1734,10 @@ pub enum Effect {
     /// option.
     CastLibraryTopFree,
     /// Offer the exact exiled card for its normal costs during resolution.
-    MayCastExiled { what: ObjectSelector, if_declined: Vec<Effect> },
+    MayCastExiled {
+        what: ObjectSelector,
+        if_declined: Vec<Effect>,
+    },
     /// You may cast a matching spell from your hand without paying its mana cost.
     CastFromHandFree {
         predicate: CardPredicate,
@@ -1854,7 +1858,10 @@ pub enum Effect {
         amount: EffectValue,
     },
     /// Create the emblem with these catalog abilities in your command zone.
-    CreateEmblem { key: String },
+    CreateEmblem {
+        #[serde(rename = "emblem_key")]
+        key: String,
+    },
     /// Create `count` tokens from the token definition keyed `token`
     /// (`token.<name>`), under the resolving player's control, `count` read
     /// as the instruction resolves. Serialized as `token_name`, the learning
@@ -2448,7 +2455,10 @@ impl Effect {
                 ..
             } => then.iter().chain(otherwise).any(test),
             Self::OptionalManaPaymentX { if_paid: effects }
-            | Self::MayCastExiled { if_declined: effects, .. }
+            | Self::MayCastExiled {
+                if_declined: effects,
+                ..
+            }
             | Self::ForEachTarget { effects }
             | Self::TargetClause { effects, .. }
             | Self::ForPlayer { effects, .. }

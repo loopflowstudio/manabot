@@ -652,8 +652,12 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
-    pub fn loyalty(cost: i32, effects: Vec<Effect>) -> Self {
-        Self { loyalty: Some(LoyaltyCost::Fixed(cost)), effects, ..Default::default() }
+    pub fn loyalty(cost: i16, effects: Vec<Effect>) -> Self {
+        Self {
+            loyalty: Some(LoyaltyCost::Fixed(cost)),
+            effects,
+            ..Default::default()
+        }
     }
 
     pub fn announces_x(&self) -> bool {
@@ -1476,16 +1480,18 @@ pub struct EmblemDefinition {
 }
 
 /// A registered row of the engine's catalog, the definition a [`CardDefId`]
-/// names: a card face, a back face, a token or a rules fixture. Token status
-/// is not a printed characteristic, so it lives here and on game objects.
+/// names: a card face, token, emblem or rules fixture. The kind of object the
+/// row creates is separate from its copiable characteristics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectDefinition {
-    /// The card's or token's key; empty for a back face or rules fixture.
+    /// Display label for an unnamed catalog object.
+    pub label: Option<&'static str>,
+    /// The definition key, empty for a back face or rules fixture.
     pub key: &'static str,
     pub scryfall_id: Option<&'static str>,
     /// Shared with every object instantiated from this row.
     pub printed: Arc<PrintedCharacteristics>,
-    /// Token status (CR 111.1): rows from a [`TokenDefinition`].
+    /// The kind of object instantiated from this row.
     pub kind: crate::game_object::ObjectKind,
     /// The printed name of this front face's back face, registered as the
     /// next row.
@@ -1493,9 +1499,14 @@ pub struct ObjectDefinition {
 }
 
 impl ObjectDefinition {
+    pub fn registry_name(&self) -> &str {
+        self.label.unwrap_or(&self.printed.name)
+    }
+
     /// The front face of `card` as a row; its back face is registered apart.
     pub fn card(card: &CardDefinition) -> Self {
         Self {
+            label: None,
             key: card.key,
             scryfall_id: (!card.scryfall_id.is_empty()).then_some(card.scryfall_id),
             printed: Arc::new(card.printed.clone()),
@@ -1507,6 +1518,7 @@ impl ObjectDefinition {
     /// A row with no identity of its own: a back face.
     pub fn face(printed: PrintedCharacteristics) -> Self {
         Self {
+            label: None,
             key: "",
             scryfall_id: None,
             printed: Arc::new(printed),
@@ -1517,6 +1529,7 @@ impl ObjectDefinition {
 
     pub fn token(token: &TokenDefinition) -> Self {
         Self {
+            label: None,
             key: token.key,
             scryfall_id: token.scryfall_id,
             printed: Arc::new(token.printed.clone()),
@@ -1587,7 +1600,11 @@ impl PrintedCharacteristics {
             .map(InsetSpell::characteristics)
     }
 
-    fn wire<'a>(&'a self, kind: crate::game_object::ObjectKind, back_face: Option<&'a str>) -> DefinitionWire<'a> {
+    fn wire<'a>(
+        &'a self,
+        kind: crate::game_object::ObjectKind,
+        back_face: Option<&'a str>,
+    ) -> DefinitionWire<'a> {
         DefinitionWire {
             adventure: self
                 .inset_definition(SpellProfile::Adventure)
@@ -1612,7 +1629,10 @@ impl PrintedCharacteristics {
             additional_costs: &self.additional_costs,
             keywords: &self.keywords,
             color_override: &self.color_override,
-            is_token: matches!(kind, crate::game_object::ObjectKind::Token | crate::game_object::ObjectKind::SpellCopy),
+            is_token: matches!(
+                kind,
+                crate::game_object::ObjectKind::Token | crate::game_object::ObjectKind::SpellCopy
+            ),
             is_emblem: kind == crate::game_object::ObjectKind::Emblem,
             replacement_effects: &self.replacement_effects,
             text_box: &self.text_box,
@@ -1636,7 +1656,8 @@ impl serde::Serialize for ObjectDefinition {
 /// Copiable values alone, in the row's shape: not a token, no back face.
 impl serde::Serialize for PrintedCharacteristics {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.wire(crate::game_object::ObjectKind::Card, None).serialize(serializer)
+        self.wire(crate::game_object::ObjectKind::Card, None)
+            .serialize(serializer)
     }
 }
 

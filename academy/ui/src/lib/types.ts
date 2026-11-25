@@ -234,6 +234,7 @@ export interface PlayerState {
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
+  command?: CardState[];
   stack: CardState[];
   battlefield: PermanentState[];
 }

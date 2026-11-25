@@ -533,13 +533,7 @@ impl Game {
                 | Condition::AnyOf(_)
                 | Condition::Not(_)
         ));
-        self.condition_holds(
-            condition,
-            controller,
-            None,
-            Some(source),
-            None,
-        )
+        self.condition_holds(condition, controller, None, Some(source), None)
     }
     /// Power and toughness in the object's current zone (CR 604.3): a
     /// characteristic-defining ability applies everywhere. On the stack

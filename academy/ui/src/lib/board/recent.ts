@@ -133,7 +133,7 @@ export function nameBook(frames: readonly ExperienceFrame[], moves: readonly Gam
   const ids = new Map<number, string>();
   for (const frame of frames) {
     for (const player of [frame.projection.agent, frame.projection.opponent]) {
-      for (const card of [...player.hand, ...player.stack, ...player.graveyard, ...player.exile]) ids.set(card.id, card.name);
+      for (const card of [...player.hand, ...player.stack, ...player.graveyard, ...player.exile, ...(player.command ?? [])]) ids.set(card.id, card.name);
       for (const permanent of player.battlefield) if (permanent.name) ids.set(permanent.id, permanent.name);
     }
   }

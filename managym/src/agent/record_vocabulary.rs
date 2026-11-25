@@ -122,6 +122,9 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
     out.push(record(Token, WARD, None));
+    for family in ["Emblem::Static", "Emblem::Triggered"] {
+        out.push(record(Token, family, None));
+    }
     out.push(record(Token, PLAY_GRANT, None));
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
     out.push(record(Token, SPENT_TYPE, None));

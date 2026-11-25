@@ -1,10 +1,10 @@
 //! The world's one immutable card catalog.
 //!
-//! A [`ContentPack`] maps card names and token keys to stable [`CardDefId`]s
+//! A [`ContentPack`] maps card names and token and emblem keys to stable [`CardDefId`]s
 //! and their [`ObjectDefinition`] rows. A process holds one ([`default_content_pack`]):
-//! every card and token definition in `managym-cards` plus the rules fixtures, in
+//! every card, token and emblem definition in `managym-cards` plus the rules fixtures, in
 //! name order, with each double-faced card's back face registered right after its
-//! front. Cards resolve by name; tokens, which may share a name, by `token.*` key. Every
+//! front. Cards resolve by name; tokens and emblems resolve by their definition keys. Every
 //! match, authored setup and search fork runs on it. Its digest and manifest
 //! name the world's cards for derived consumers (the world identity, learning
 //! catalogs, checkpoints).
@@ -20,10 +20,12 @@ use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
     card::{
-        CardDefId, CardDefinition, CastOption, EmblemDefinition, ObjectDefinition, PrintedCharacteristics,
-        SpellProfile, TokenDefinition,
+        CardDefId, CardDefinition, CastOption, EmblemDefinition, ObjectDefinition,
+        PrintedCharacteristics, SpellProfile, TokenDefinition,
     },
-    game_object::{CopiableValues, Object, ObjectKind, ObjectLki, PlayerId, PublicId, TransformingFaces},
+    game_object::{
+        CopiableValues, Object, ObjectKind, ObjectLki, PlayerId, PublicId, TransformingFaces,
+    },
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -124,7 +126,7 @@ impl ContentPack {
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
                     card_def_id,
                     key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
-                    registry_name: definition.name.clone(),
+                    registry_name: definition.registry_name().into(),
                 })
                 .collect(),
         }
@@ -166,8 +168,12 @@ impl Default for ContentPack {
                 Row::Card(card) => out.register_card(card.clone()),
                 Row::Token(token) => out.register_token(token),
                 Row::Emblem(emblem) => out.register(ObjectDefinition {
-                    key: emblem.key, scryfall_id: None, printed: Arc::new(emblem.printed.clone()),
-                    kind: ObjectKind::Emblem, back_face: None,
+                    key: emblem.key,
+                    label: Some(emblem.label),
+                    scryfall_id: None,
+                    printed: Arc::new(emblem.printed.clone()),
+                    kind: ObjectKind::Emblem,
+                    back_face: None,
                 }),
             }
         }
@@ -188,7 +194,7 @@ impl Row<'_> {
         match self {
             Self::Card(card) => &card.name,
             Self::Token(token) => &token.name,
-            Self::Emblem(emblem) => &emblem.printed.name,
+            Self::Emblem(emblem) => emblem.label,
         }
     }
 
@@ -241,10 +247,13 @@ impl ContentPack {
                 .expect("content pack exceeds CardDefId capacity"),
         );
         if definition.kind != ObjectKind::Card {
-            let keys = if definition.kind == ObjectKind::Emblem { &mut self.emblems_by_key } else { &mut self.tokens_by_key };
+            let keys = if definition.kind == ObjectKind::Emblem {
+                &mut self.emblems_by_key
+            } else {
+                &mut self.tokens_by_key
+            };
             assert!(
-                keys.insert(definition.key, definition_id)
-                    .is_none(),
+                keys.insert(definition.key, definition_id).is_none(),
                 "duplicate object definition {}",
                 definition.key
             );
@@ -357,7 +366,7 @@ impl ContentPack {
                 self.definitions()
                     .map(|card| {
                         let mut public = serde_json::json!({
-                            "name": card.name, "text_box": card.text_box,
+                            "name": card.registry_name(), "text_box": card.text_box,
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": KeywordData::from_keywords(&card.keywords),
@@ -435,6 +444,7 @@ impl ContentPack {
     pub fn object_row(&self, card: &Object) -> ObjectDefinition {
         ObjectDefinition {
             key: "",
+            label: None,
             scryfall_id: None,
             printed: card.copiable_definition(),
             kind: card.kind(),
@@ -502,8 +512,12 @@ impl ContentPack {
         self.instantiate_row(self.token_id(key)?, owner, object_id)
     }
 
+    pub fn emblem_id(&self, key: &str) -> Option<CardDefId> {
+        self.emblems_by_key.get(key).copied()
+    }
+
     pub fn instantiate_emblem(&self, key: &str, owner: PlayerId, id: PublicId) -> Option<Object> {
-        self.instantiate_row(*self.emblems_by_key.get(key)?, owner, id)
+        self.instantiate_row(self.emblem_id(key)?, owner, id)
     }
 
     fn instantiate_row(

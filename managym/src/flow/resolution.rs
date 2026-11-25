@@ -1996,12 +1996,21 @@ impl Game {
                 if_declined.clone(),
             ))),
             Effect::MayCastExiled { what, if_declined } => {
-                let decision = self.select(what, frame).into_iter().find(|object| self.state.zones.zone_of(*object) == Some(ZoneType::Exile))
-                    .map(|object| Decision::CastDuringResolution {
-                        player: frame.controller, paid: true, spends: None, offer: ResolutionCastOffer::ExactExiled { object, if_declined: if_declined.clone() }
-                    }).filter(|decision| !self.resolution_cast_candidates(decision).is_empty());
-                if decision.is_none() { frame.prepend_effects(if_declined.iter().cloned()); }
-                decision
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    spends: None,
+                    offer: ResolutionCastOffer::ChooseExiled {
+                        objects: self.select(what, frame),
+                        if_declined: if_declined.clone(),
+                    },
+                };
+                if self.resolution_cast_candidates(&decision).is_empty() {
+                    frame.prepend_effects(if_declined.iter().cloned());
+                    None
+                } else {
+                    Some(decision)
+                }
             }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
@@ -2643,7 +2652,12 @@ impl Game {
                 }
                 _ => Vec::new(),
             },
-            ObjectSelector::LibraryTop => self.state.zones.top(ZoneType::Library, frame.controller).into_iter().collect(),
+            ObjectSelector::LibraryTop => self
+                .state
+                .zones
+                .top(ZoneType::Library, frame.controller)
+                .into_iter()
+                .collect(),
             ObjectSelector::ExiledWithSource => frame
                 .source_ref()
                 .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),

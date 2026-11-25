@@ -6329,3 +6329,26 @@ fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
         }
     }
 }
+
+#[test]
+fn full_board_with_four_of_each_emblem_per_seat() {
+    let (mut game, _, _) = fixture(PlayerId(0));
+    for seat in [PlayerId(0), PlayerId(1)] {
+        for _ in 0..10 {
+            game.scenario_force_battlefield(seat, "Gray Ogre", true)
+                .unwrap();
+        }
+        for emblem in managym_cards::emblem_catalog() {
+            for _ in 0..4 {
+                game.create_emblem(emblem.key, seat);
+            }
+        }
+    }
+    let _scan = game.board_scan();
+    for seat in [PlayerId(0), PlayerId(1)] {
+        assert_eq!(game.state.zones.size(ZoneType::Command, seat), 16);
+        for id in game.iter_battlefield_permanents(seat) {
+            assert_eq!(game.object_pt(game.permanent_object(id).unwrap()), (18, 18));
+        }
+    }
+}

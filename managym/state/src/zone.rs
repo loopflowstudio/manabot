@@ -191,7 +191,7 @@ impl SlotState {
 
 impl ZoneManager {
     /// The player whose `zone` holds `object`.
-    fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
+    pub fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
             .find(|player| self.zone_objects(zone, *player).contains(object))

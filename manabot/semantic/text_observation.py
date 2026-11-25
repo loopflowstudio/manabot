@@ -34,6 +34,7 @@ from managym.decision_memory import (
     DecisionReference,
     read_records,
 )
+from managym.enums import ZoneEnum
 
 REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -977,6 +978,11 @@ class _Renderer:
         lines: list[str] = []
         for card in state.agent_cards + state.opponent_cards:
             characteristics = card.characteristics
+            if card.zone == ZoneEnum.COMMAND:
+                lines.append(
+                    f"{self.name(card.id)} [command zone], controlled by {self.name(card.owner_id)}. {characteristics.text_box}"
+                )
+                continue
             optional = _type_flags(characteristics.card_types)
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"

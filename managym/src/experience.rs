@@ -622,6 +622,8 @@ pub struct LegacyPlayerView {
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<LegacyCardView>,
     pub stack: Vec<LegacyCardView>,
     pub battlefield: Vec<LegacyPermanentView>,
 }

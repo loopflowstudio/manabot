@@ -343,6 +343,7 @@ def _serialize_player(
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
+        "COMMAND": [],
         "STACK": [],
     }
     for card in cards:
@@ -462,6 +463,7 @@ def _serialize_player(
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
+        **({"command": grouped_cards["COMMAND"]} if grouped_cards["COMMAND"] else {}),
         "stack": grouped_cards["STACK"],
         "battlefield": serialized_permanents,
     }

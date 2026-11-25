@@ -912,6 +912,7 @@ impl ArrayLayout {
 /// A fact kind's name and what its row holds.
 fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
+        FactKind::EmblemAbility => ("emblem_ability", "id: emblem ability family; value: zero-based ability index in the joined definition"),
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
@@ -1145,7 +1146,7 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount
+                FactKind::AbilityResolution | FactKind::TriggeringAmount | FactKind::EmblemAbility
             )
     });
     facts.row_kinds = kinds

@@ -72,6 +72,8 @@ pub enum FactKind {
     ContinuationProgram = 14,
     AbilityResolution = 15,
     TriggeringAmount = 16,
+    /// Printed ability of a command-zone emblem: family and index on its definition.
+    EmblemAbility = 17,
 }
 
 impl FactKind {
@@ -83,7 +85,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 15] = [
+    pub const ALL: [FactKind; 16] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -99,6 +101,7 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::TriggeringAmount,
+        FactKind::EmblemAbility,
     ];
 }
 
@@ -1755,6 +1758,26 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     // Counters on a visible card off the battlefield ("with a stash counter").
     if layout == InputLayout::OneToken {
         for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+            if card.zone == crate::state::zone::ZoneType::Command {
+                if let Some(row) = crate::cards::content_pack::default_content_pack()
+                    .definition(crate::state::card::CardDefId(card.registry_key as u32))
+                    .filter(|row| row.kind == crate::state::game_object::ObjectKind::Emblem)
+                {
+                    for (family, count) in [
+                        ("Emblem::Static", row.statics.len()),
+                        ("Emblem::Triggered", row.abilities.len()),
+                    ] {
+                        for index in 0..count {
+                            push(
+                                card.id,
+                                FactKind::EmblemAbility,
+                                name_value(family),
+                                index as i64,
+                            );
+                        }
+                    }
+                }
+            }
             for (kind, count) in &card.counters {
                 push(
                     card.id,

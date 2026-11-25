@@ -421,6 +421,7 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
         let reference = match self.field {
+            Some("emblem_key") => Some(self.pack.emblem_id(value)),
             Some("token_name") => Some(self.pack.token_id(value)),
             Some(field) if CARD_NAME_FIELDS.contains(&field) => {
                 Some(self.pack.definition_id(value))

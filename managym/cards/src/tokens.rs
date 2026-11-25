@@ -69,11 +69,38 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         red_white_spirit(),
         rat(),
         jace(),
-        token("token.ninja_2_1_u", "aeec04b1-475c-4e55-b72f-327ea5258146", creature(face("Ninja", [CardType::Creature], &["Ninja"], ""), 2, 1, [Color::Blue])),
-        token("token.ajanis_pridemate", "b0819e8e-fb7e-43c7-a7cf-d768f43193ac", PrintedCharacteristics {
-            abilities: vec![Ability::when_you_gain_life(Effect::put_counters(ObjectSelector::This, managym_state::permanent::CounterKind::PlusOnePlusOne, 1))],
-            ..creature(face("Ajani's Pridemate", [CardType::Creature], &["Cat", "Soldier"], "Whenever you gain life, put a +1/+1 counter on this token."), 2, 2, [Color::White])
-        }),
+        token(
+            "token.ninja_2_1_u",
+            "aeec04b1-475c-4e55-b72f-327ea5258146",
+            creature(
+                face("Ninja", [CardType::Creature], &["Ninja"], ""),
+                2,
+                1,
+                [Color::Blue],
+            ),
+        ),
+        token(
+            "token.ajanis_pridemate",
+            "b0819e8e-fb7e-43c7-a7cf-d768f43193ac",
+            PrintedCharacteristics {
+                abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+                    ObjectSelector::This,
+                    managym_state::permanent::CounterKind::PlusOnePlusOne,
+                    1,
+                ))],
+                ..creature(
+                    face(
+                        "Ajani's Pridemate",
+                        [CardType::Creature],
+                        &["Cat", "Soldier"],
+                        "Whenever you gain life, put a +1/+1 counter on this token.",
+                    ),
+                    2,
+                    2,
+                    [Color::White],
+                )
+            },
+        ),
         token(
             "token.illusion_1_1_u",
             "7bda0b63-fd0f-495d-9eb0-20057571c0ee",
@@ -132,11 +159,7 @@ fn creature(
 
 fn jace() -> TokenDefinition {
     let text_box = "−1: Surveil 1. (Look at the top card of your library. You may put that card into your graveyard.)\n−3: Draw a card.";
-    let ability = |cost, effect| ActivatedAbilityDefinition {
-        loyalty: Some(managym_state::card::LoyaltyCost::Fixed(cost)),
-        effects: vec![effect],
-        ..Default::default()
-    };
+    let loyalty = ActivatedAbilityDefinition::loyalty;
     token(
         "token.jace",
         "8d1e424f-6407-4f8c-bed2-eaf148237c81",
@@ -144,8 +167,8 @@ fn jace() -> TokenDefinition {
             loyalty: Some(0),
             color_override: Some(Colors::from_iter([Color::Blue])),
             activated_abilities: vec![
-                ability(-1, Effect::Surveil { count: 1 }),
-                ability(-3, Effect::DrawCards { count: 1.into() }),
+                loyalty(-1, vec![Effect::Surveil { count: 1 }]),
+                loyalty(-3, vec![Effect::DrawCards { count: 1.into() }]),
             ],
             ..face("Jace", [CardType::Planeswalker], &["Jace"], text_box)
         },

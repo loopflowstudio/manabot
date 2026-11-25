@@ -513,6 +513,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
+        ObjectSelector::LibraryTop => "ObjectSelector::LibraryTop",
         ObjectSelector::ExiledWithSource => "ObjectSelector::ExiledWithSource",
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
@@ -531,7 +532,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 23] {
+fn selector_witnesses() -> [ObjectSelector; 24] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -542,6 +543,7 @@ fn selector_witnesses() -> [ObjectSelector; 23] {
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Remembered,
+        ObjectSelector::LibraryTop,
         ObjectSelector::ExiledWithSource,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
@@ -812,6 +814,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
         Effect::DrawCards { .. } => "Effect::DrawCards",
         Effect::LoseLife { .. } => "Effect::LoseLife",
+        Effect::CreateEmblem { .. } => "Effect::CreateEmblem",
+        Effect::MayCastExiled { .. } => "Effect::MayCastExiled",
         Effect::CreateToken { .. } => "Effect::CreateToken",
         Effect::PutCounters { .. } => "Effect::PutCounters",
         Effect::PutCountersFrom { .. } => "Effect::PutCountersFrom",
@@ -882,7 +886,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 98;
+const EFFECT_VARIANTS: usize = 100;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -992,6 +996,13 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::LoseLife {
             player: PlayerSelector::TriggeringPlayer,
             amount: EffectValue::Fixed(2),
+        },
+        Effect::CreateEmblem {
+            key: "emblem.vivien_reid".into(),
+        },
+        Effect::MayCastExiled {
+            what: ObjectSelector::Moved,
+            if_declined: vec![Effect::gain_life(1)],
         },
         Effect::create_tokens("token.clue", value()),
         Effect::gain_life(value()),
@@ -3319,7 +3330,11 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
     for definition in tokens {
         let row = pack.token_id(definition.key).unwrap();
         let token = pack.definition(row).unwrap();
-        assert!(token.kind == managym_state::game_object::ObjectKind::Token, "{}", token.key);
+        assert!(
+            token.kind == managym_state::game_object::ObjectKind::Token,
+            "{}",
+            token.key
+        );
         let row = row.0 as i32;
         let referencing = catalog
             .definition_ref_source_tokens
@@ -3445,6 +3460,7 @@ enum Encoded {
 /// The field each fact kind states; no wildcard, so a new kind must name it.
 fn fact_field(kind: FactKind) -> &'static str {
     match kind {
+        FactKind::EmblemAbility => "CardData.registry_key",
         FactKind::ContinuationProgram => "ContinuationFrame.program",
         FactKind::EffectProgram => "ContinuousEffectData.program",
         FactKind::EffectiveColor => "PermanentData.colors",
@@ -3612,7 +3628,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
         owner_id => [column(Card, card::IS_MINE), Side],
         id => [Identity],
-        registry_key => [Rows("semantic_cards")],
+        registry_key => [Rows("semantic_cards"), Fact(FactKind::EmblemAbility)],
         is_token => [
             column(Card, card::IS_TOKEN),
             column(Permanent, permanent::IS_TOKEN),

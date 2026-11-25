@@ -251,10 +251,10 @@ def belief_schema_from_engine(
     *,
     count_buckets: int,
 ) -> BeliefEncodingSchema:
-    """Build fixed opponent hand/library rows from non-token definitions.
+    """Build fixed opponent hand/library rows from card definitions.
 
-    Tokens cannot remain in either hidden zone (CR 111.7); their printed names
-    can match cards or other tokens, so they do not belong to deck-count rows.
+    Tokens cannot remain in either hidden zone (CR 111.7). Emblems live in
+    the command zone (CR 114). Both have their own content-pack rows.
     """
 
     try:
@@ -263,7 +263,7 @@ def belief_schema_from_engine(
         definitions = tuple(
             (int(row["card_def_id"]), str(row["registry_name"]))
             for row in manifest["definitions"]
-            if not str(row["key"]).startswith("token.")
+            if not str(row["key"]).startswith(("token.", "emblem."))
         )
     except Exception as error:
         raise BeliefError(

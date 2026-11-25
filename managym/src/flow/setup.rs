@@ -103,7 +103,8 @@ impl Game {
                     content
                         .definition(definition_id)
                         .expect("resolved definition")
-                        .kind == crate::state::game_object::ObjectKind::Card,
+                        .kind
+                        == crate::state::game_object::ObjectKind::Card,
                     "token cannot be a sideboard card: {name}"
                 );
                 for _ in 0..*qty {

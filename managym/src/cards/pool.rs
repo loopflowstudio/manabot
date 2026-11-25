@@ -42,7 +42,9 @@ fn describe() -> ContentPool {
     let mut definitions = content
         .definition_entries()
         .map(|(card_def_id, definition)| {
-            let reason = if definition.kind == crate::state::game_object::ObjectKind::Emblem { Some("An emblem in the command zone".to_owned()) } else if definition.kind == crate::state::game_object::ObjectKind::Token {
+            let reason = if definition.kind == crate::state::game_object::ObjectKind::Emblem {
+                Some("An emblem in the command zone".to_owned())
+            } else if definition.kind == crate::state::game_object::ObjectKind::Token {
                 Some("A token, created by its card; not a deck entry".to_owned())
             } else if content.front_face(card_def_id).is_some() {
                 Some("The back face of a double-faced card; not a deck entry".to_owned())
@@ -57,7 +59,7 @@ fn describe() -> ContentPool {
                 card_def_id,
                 key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
                 scryfall_id: definition.scryfall_id.map(str::to_owned),
-                registry_name: definition.name.clone(),
+                registry_name: definition.registry_name().into(),
                 eligibility: if reason.is_none() {
                     Eligibility::Eligible
                 } else {

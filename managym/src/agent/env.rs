@@ -326,7 +326,9 @@ impl Env {
                 let valid = content
                     .definition_id(name)
                     .and_then(|id| content.definition(id))
-                    .is_some_and(|definition| definition.kind == crate::state::game_object::ObjectKind::Card);
+                    .is_some_and(|definition| {
+                        definition.kind == crate::state::game_object::ObjectKind::Card
+                    });
                 if *count == 0 || !valid {
                     return Err(AgentError(format!("invalid sideboard card: {name}")));
                 }

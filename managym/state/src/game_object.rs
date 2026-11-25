@@ -721,7 +721,8 @@ impl Object {
         copy: Option<crate::effect::CopyEffect>,
         exceptions: &[crate::effect::CopyException],
     ) -> Self {
-        let mut token = Self::from_definition(id, owner, definition_id, definition, ObjectKind::Token);
+        let mut token =
+            Self::from_definition(id, owner, definition_id, definition, ObjectKind::Token);
         token.form = Some(Box::new(ObjectForm {
             faces,
             copy,

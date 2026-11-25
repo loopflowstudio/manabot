@@ -859,3 +859,295 @@ fn enforcer_counts_creatures_on_resolution_and_machinations_allows_one_activatio
     assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 8);
     assert!(!offers_ability(&mut s, jace, 1));
 }
+
+/// Each ultimate spends the last counter before its emblem enters. The emblem
+/// stays on the original side when another copy or an opponent casts a spell.
+#[test]
+fn emblems_buff_only_their_controllers_creatures_after_the_walker_dies() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, set_counters},
+        inspect::card_of,
+        play::{activate, settle},
+    };
+    use managym::{
+        agent::{
+            observation::Observation,
+            observation_encoder::{encode, FactKind, ObservationEncoderConfig, FACT_DIM},
+            observation_layout::fact,
+        },
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+
+    let mut s = five_color_setup(&["Ajani Resolute", "Vivien Reid", "Gray Ogre"]);
+    let ogre = enter_battlefield(&mut s, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for (index, (name, cost)) in [
+        ("Ajani Resolute", 10),
+        ("Vivien Reid", 8),
+        ("Vivien Reid", 8),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let walker = enter_battlefield(&mut s, name);
+        set_counters(&mut s, walker, CounterKind::Loyalty, cost);
+        activate(&mut s, walker, 2);
+        settle(&mut s);
+        assert!(s.battlefield_permanents_named(0, name).is_empty());
+        let total = 2 + 2 * (index as i32 + 1);
+        assert_eq!(s.game().object_pt(card_of(&s, ogre)), (total, total));
+        assert_eq!(s.game().object_pt(card_of(&s, other)), (2, 2));
+        for seat in [0, 1] {
+            let obs = Observation::for_player(s.game(), PlayerId(seat));
+            let (cards, permanents) = if seat == 0 {
+                (&obs.agent_cards, &obs.agent_permanents)
+            } else {
+                (&obs.opponent_cards, &obs.opponent_permanents)
+            };
+            let emblems: Vec<_> = cards
+                .iter()
+                .filter(|row| row.zone == ZoneType::Command)
+                .collect();
+            assert_eq!(emblems.len(), index + 1);
+            assert!(emblems
+                .iter()
+                .all(|e| !e.is_token && e.text_box.contains("+2/+2")));
+            let view = permanents
+                .iter()
+                .find(|p| p.characteristics.name == "Gray Ogre")
+                .unwrap();
+            assert_eq!(view.characteristics.keywords.indestructible, index > 0);
+            let rows = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            assert_eq!(
+                rows.facts
+                    .chunks_exact(FACT_DIM)
+                    .filter(|r| r[fact::KIND] == FactKind::EmblemAbility as u8 as f32)
+                    .count(),
+                index + 1
+            );
+        }
+    }
+}
+
+#[test]
+fn kaito_emblem_creates_ninjas_for_spells_cast_by_either_player() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, move_from_library, set_counters},
+        play::{activate, cast_card, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Kaito, Cunning Infiltrator", "Gray Ogre"]);
+    let kaito = enter_battlefield(&mut s, "Kaito, Cunning Infiltrator");
+    set_counters(&mut s, kaito, CounterKind::Loyalty, 9);
+    activate(&mut s, kaito, 2);
+    settle(&mut s);
+    for seat in [0, 1] {
+        s.advance_to_active_step(seat, StepKind::Main);
+        s.set_player_mana_pool(seat, "2R");
+        let ogre = move_from_library(&mut s, seat, "Gray Ogre", ZoneType::Hand);
+        cast_card(&mut s, ogre);
+        settle(&mut s);
+        assert_eq!(s.battlefield_permanents_named(0, "Ninja").len(), seat + 1);
+        assert!(s.battlefield_permanents_named(1, "Ninja").is_empty());
+    }
+}
+
+#[test]
+fn chandra_offers_the_exiled_spell_at_full_cost_or_deals_two() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, pin_top},
+        play::{activate, resolve_top, settle},
+    };
+    use managym::agent::action::Action;
+    for (top, mana, cast) in [
+        ("Gray Ogre", "2R", true),
+        ("Gray Ogre", "2R", false),
+        ("Gray Ogre", "", false),
+        ("Mountain", "2R", false),
+    ] {
+        let mut s = five_color_setup(&["Chandra, Torch of Defiance", "Gray Ogre"]);
+        let chandra = enter_battlefield(&mut s, "Chandra, Torch of Defiance");
+        pin_top(&mut s, &[top]);
+        s.set_player_mana_pool(0, mana);
+        let life = s.life(1);
+        activate(&mut s, chandra, 0);
+        resolve_top(&mut s);
+        let candidate = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::SelectCard { .. }));
+        assert_eq!(candidate.is_some(), top == "Gray Ogre" && mana == "2R");
+        if cast {
+            s.step_action(candidate.unwrap());
+        }
+        settle(&mut s);
+        assert_eq!(s.life(1), life - if cast { 0 } else { 2 });
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Gray Ogre").len(),
+            usize::from(cast)
+        );
+    }
+}
+
+#[test]
+fn chandra_emblem_is_the_source_of_its_targeted_damage() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, set_counters},
+        play::{activate, cast_owned, settle, settle_targeting_opponent},
+    };
+    use managym::{
+        flow::event::GameEvent,
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Chandra, Torch of Defiance", "Gray Ogre"]);
+    let walker = enter_battlefield(&mut s, "Chandra, Torch of Defiance");
+    set_counters(&mut s, walker, CounterKind::Loyalty, 7);
+    activate(&mut s, walker, 3);
+    settle(&mut s);
+    let emblem = s
+        .game()
+        .state
+        .zones
+        .top(ZoneType::Command, PlayerId(0))
+        .unwrap();
+    let life = s.life(1);
+    cast_owned(&mut s, "Gray Ogre");
+    if s.game().state.stack_objects.is_empty() {
+        crate::support::play::pay_rest(&mut s);
+    }
+    settle_targeting_opponent(&mut s);
+    assert_eq!(s.life(1), life - 5);
+    assert!(s.game().state.events.iter().any(|event| matches!(event, GameEvent::DamageDealt {source: Some(source), amount: 5, ..} if *source == emblem)));
+}
+
+#[test]
+fn ajanis_pridemate_and_ajani_each_trigger_on_the_same_life_gain() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, set_counters},
+        inspect::counters_of,
+        play::{activate, settle},
+    };
+    use managym::{flow::turn::StepKind, state::permanent::CounterKind};
+    let mut s = five_color_setup(&["Ajani Resolute"]);
+    let ajani = enter_battlefield(&mut s, "Ajani Resolute");
+    set_counters(&mut s, ajani, CounterKind::Loyalty, 5);
+    activate(&mut s, ajani, 1);
+    settle(&mut s);
+    let cat = s.battlefield_permanents_named(0, "Ajani's Pridemate")[0];
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let life = s.life(0);
+    activate(&mut s, ajani, 0);
+    settle(&mut s);
+    assert_eq!(s.life(0), life + 1);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 2);
+    assert_eq!(counters_of(&s, cat, CounterKind::PlusOnePlusOne), 1);
+}
+
+#[test]
+fn vivien_selects_a_creature_from_four_and_can_destroy_a_flyer() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, pin_top},
+        inspect::{card_of, zone_of},
+        play::{activate, choose, resolve_top, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{game_object::Target, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Vivien Reid", "Gray Ogre", "Lightning Bolt", "Wind Drake"]);
+    let vivien = enter_battlefield(&mut s, "Vivien Reid");
+    let top = pin_top(
+        &mut s,
+        &["Lightning Bolt", "Gray Ogre", "Forest", "Mountain"],
+    );
+    activate(&mut s, vivien, 0);
+    resolve_top(&mut s);
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard {object, ..} if *object == top[0])));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard {object, ..} if *object == top[1]),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Hand));
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let ogre = enter_battlefield(&mut s, "Gray Ogre");
+    let flyer = enter_battlefield(&mut s, "Wind Drake");
+    let object = card_of(&s, flyer);
+    activate(&mut s, vivien, 1);
+    assert!(!s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(flyer)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+}
+
+#[test]
+fn kaitos_ninja_hits_a_player_and_adds_loyalty() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup},
+        inspect::counters_of,
+        play::{activate, attack_with, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{game_object::Target, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Kaito, Cunning Infiltrator"]);
+    let kaito = enter_battlefield(&mut s, "Kaito, Cunning Infiltrator");
+    activate(&mut s, kaito, 1);
+    settle(&mut s);
+    let ninja = s.battlefield_permanents_named(0, "Ninja")[0];
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    activate(&mut s, kaito, 0);
+    assert!(s.choose_target(Target::Permanent(ninja)));
+    settle(&mut s);
+    s.advance_to_step(StepKind::DeclareAttackers);
+    let life = s.life(1);
+    attack_with(&mut s, ninja);
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.life(1), life - 2);
+    assert_eq!(counters_of(&s, kaito, CounterKind::Loyalty), 3);
+}
+
+#[test]
+fn chandras_red_mana_uses_the_stack_and_her_damage_targets_a_creature() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup},
+        inspect::{card_of, zone_of},
+        play::{activate, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{game_object::Target, mana::Mana, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Chandra, Torch of Defiance", "Gray Ogre"]);
+    let chandra = enter_battlefield(&mut s, "Chandra, Torch of Defiance");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, chandra, 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool.mana(), &Mana::default());
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.players[0].mana_pool.mana(),
+        &Mana::parse("RR")
+    );
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let ogre = enter_battlefield(&mut s, "Gray Ogre");
+    let object = card_of(&s, ogre);
+    activate(&mut s, chandra, 2);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+}

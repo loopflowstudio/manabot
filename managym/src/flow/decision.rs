@@ -400,7 +400,11 @@ pub enum ResolutionCastOffer {
         object: ObjectId,
         below: i32,
     },
-    ExactExiled { #[serde(serialize_with = "crate::state::game_object::exact")] object: ObjectId, if_declined: Vec<Effect> },
+    ChooseExiled {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        objects: Vec<ObjectId>,
+        if_declined: Vec<Effect>,
+    },
     /// The top card of the deciding player's library, which they have looked
     /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
     LibraryTop {
@@ -3123,7 +3127,9 @@ impl Game {
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
-                    ResolutionCastOffer::ExactExiled { if_declined, .. } => suspended.frame.prepend_effects(if_declined.iter().cloned()),
+                    ResolutionCastOffer::ChooseExiled { if_declined, .. } => {
+                        suspended.frame.prepend_effects(if_declined.iter().cloned())
+                    }
                     ResolutionCastOffer::Exiled {
                         object: object_id, ..
                     } => {
@@ -3473,12 +3479,12 @@ impl Game {
             ResolutionCastOffer::Hand { .. } => {
                 self.state.zone_cards(ZoneType::Hand, *player).collect()
             }
-            ResolutionCastOffer::AmongExiled { objects } => objects
+            ResolutionCastOffer::ChooseExiled { objects, .. }
+            | ResolutionCastOffer::AmongExiled { objects } => objects
                 .iter()
                 .filter(|object| self.state.zones.zone_of(**object) == Some(ZoneType::Exile))
                 .filter_map(|object| self.state.card_of(*object))
                 .collect(),
-            ResolutionCastOffer::ExactExiled { object, .. } => self.state.card_of(*object).filter(|_| self.state.zones.zone_of(*object) == Some(ZoneType::Exile)).into_iter().collect(),
             ResolutionCastOffer::Exiled { object, .. }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
@@ -3541,7 +3547,8 @@ impl Game {
                             < *below
                     }
                     ResolutionCastOffer::AmongExiled { .. }
-                    | ResolutionCastOffer::ExactExiled { .. } | ResolutionCastOffer::LibraryTop { .. } => true,
+                    | ResolutionCastOffer::ChooseExiled { .. }
+                    | ResolutionCastOffer::LibraryTop { .. } => true,
                 };
                 if eligible && self.castable_mana_value(*player, object, cast).is_some() {
                     candidates.push((card, profile));
@@ -3550,7 +3557,9 @@ impl Game {
         }
         if !matches!(
             offer,
-            ResolutionCastOffer::Graveyard { .. } | ResolutionCastOffer::AmongExiled { .. }
+            ResolutionCastOffer::Graveyard { .. }
+                | ResolutionCastOffer::AmongExiled { .. }
+                | ResolutionCastOffer::ChooseExiled { .. }
         ) {
             let mut offered = HashSet::new();
             candidates.retain(|(card, profile)| {

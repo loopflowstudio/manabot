@@ -3002,6 +3002,13 @@
           "default": null,
           "title": "Combat Mana"
         },
+        "command": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Command",
+          "type": "array"
+        },
         "counters": {
           "type": "object",
           "additionalProperties": {

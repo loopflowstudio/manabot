@@ -17,7 +17,7 @@ use managym::state::{
     predicate::CardPredicate,
     subtype::subtype_category,
 };
-use managym_cards::{catalog, token_catalog};
+use managym_cards::{catalog, emblem_catalog, token_catalog};
 use serde_json::Value;
 
 /// Where a condition sits: an `Effect::If` condition may ask anything; an
@@ -114,12 +114,13 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     }
 }
 
-/// The printed characteristics of every card face and token.
+/// The printed characteristics of every card face, token and emblem.
 fn authored_definitions() -> impl Iterator<Item = &'static PrintedCharacteristics> {
     catalog()
         .iter()
         .flat_map(|card| std::iter::once(&card.printed).chain(card.back_face.as_deref()))
         .chain(token_catalog().iter().map(|token| &token.printed))
+        .chain(emblem_catalog().iter().map(|emblem| &emblem.printed))
 }
 
 #[test]
@@ -277,7 +278,11 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
                     .find(|token| token.name == name)
                     .unwrap_or_else(|| panic!("undefined allocated token {name}"));
                 let id = catalog.token_id(token.key).unwrap();
-                assert!(catalog.definition(id).unwrap().is_token, "{name}");
+                assert!(
+                    catalog.definition(id).unwrap().kind
+                        == managym_state::game_object::ObjectKind::Token,
+                    "{name}"
+                );
             }
             "copy_marker" => {
                 markers += 1;

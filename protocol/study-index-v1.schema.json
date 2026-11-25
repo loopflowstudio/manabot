@@ -1677,6 +1677,12 @@
           ],
           "format": "int32"
         },
+        "command": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
         "counters": {
           "type": "object",
           "additionalProperties": {

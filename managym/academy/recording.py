@@ -390,7 +390,7 @@ class Recording:
                         labels["players"][str(key)] = (
                             f"Seat {seat + 1}" if seat is not None else "Player"
                         )
-                zones = ["battlefield", "graveyard", "exile", "stack"]
+                zones = ["battlefield", "graveyard", "exile", "command", "stack"]
                 if private and seat == viewer:
                     zones.extend(["hand", "inspected"])
                 for zone in zones:
@@ -583,7 +583,7 @@ def narrate_move(
         card["id"]: card["name"]
         for board in (before, after)
         for side_name in ("agent", "opponent")
-        for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack", "hand")
         for card in board.get(side_name, {}).get(zone, [])
         if isinstance(card, dict) and card.get("name") and "id" in card
     }
@@ -785,7 +785,7 @@ def _new_cards(
     old, new = before.get(side, {}), after.get(side, {})
     seen = {
         card.get("id")
-        for zone in ("battlefield", "graveyard", "exile", "stack")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack")
         for card in old.get(zone, [])
     }
     for zone in ("stack", "battlefield", "graveyard", "exile"):

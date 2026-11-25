@@ -72,7 +72,12 @@ pub(crate) struct TriggerSourceSnapshot {
 
 impl From<ObjectLki> for TriggerSourceSnapshot {
     fn from(lki: ObjectLki) -> Self {
-        Self { object: lki.object, controller: lki.controller, definition: lki.definition_id, lki: Some(lki) }
+        Self {
+            object: lki.object,
+            controller: lki.controller,
+            definition: lki.definition_id,
+            lki: Some(lki),
+        }
     }
 }
 
@@ -231,8 +236,7 @@ fn turn_step(step: StepKind) -> Option<TurnStep> {
     }
 }
 
-/// A battlefield permanent and the event kinds its printed triggered
-/// abilities can fire on.
+/// An exact source and the event kinds its active abilities can see.
 #[derive(Debug, PartialEq, Eq)]
 struct TriggerSourceEntry {
     object: ObjectId,
@@ -240,13 +244,8 @@ struct TriggerSourceEntry {
     command_controller: Option<PlayerId>,
 }
 
-/// Which battlefield permanents can have a triggered ability that fires on
-/// each kind of event, at one `triggers` revision (`Revisions`, cached in
-/// `DerivedCache`): every permanent with the kinds of its printed abilities
-/// and those it inherits from a `HasAbilitiesOfSource` record, in object
-/// order like `snapshot_trigger_sources`, plus the kinds of every
-/// static triggered-ability grant, which may reach any permanent its scope
-/// covers.
+/// Battlefield and command-zone sources in exact object order. Layered grants
+/// and losses determine each permanent’s active abilities at this revision.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TriggerIndex {
     sources: Vec<TriggerSourceEntry>,
@@ -980,7 +979,6 @@ impl Game {
     ) -> Vec<FiredTrigger<'a>> {
         let mut fired = Vec::new();
         for source in sources {
-            
             let face = self
                 .source_face(source.object, source.definition)
                 .expect("source face");
@@ -990,7 +988,10 @@ impl Game {
                 .enumerate()
                 .filter(|_| !source.lki.as_ref().is_some_and(|lki| lki.abilities_lost))
                 .map(|(index, ability)| (TriggerAbility::Printed(index), ability));
-            let granted = source.lki.iter().flat_map(|lki| &lki.granted_abilities)
+            let granted = source
+                .lki
+                .iter()
+                .flat_map(|lki| &lki.granted_abilities)
                 .map(|grant| (TriggerAbility::Granted(grant), &grant.ability));
             for (origin, ability) in printed.chain(granted) {
                 let Ability::Triggered {
@@ -1078,7 +1079,6 @@ impl Game {
             ability,
         } in fired
         {
-            
             let controller = source.controller;
             let source_object = source.object;
             let (ability_index, granted, program) = match ability {
@@ -1110,11 +1110,9 @@ impl Game {
             };
             if once {
                 match ability {
-                    TriggerAbility::Printed(_) => self.spend_once_each_turn((
-                        source_object,
-                        source.definition,
-                        ability_index,
-                    )),
+                    TriggerAbility::Printed(_) => {
+                        self.spend_once_each_turn((source_object, source.definition, ability_index))
+                    }
                     TriggerAbility::Granted(grant) => self
                         .state
                         .turn
@@ -1169,7 +1167,6 @@ impl Game {
         source: &TriggerSourceSnapshot,
         mut emit: impl FnMut(TriggerMember),
     ) {
-        
         match (condition, event) {
             (
                 TriggerCondition::Attacks {
@@ -1380,7 +1377,12 @@ impl Game {
                         }
                         _ => None,
                     })
-                    .filter(|predicate| source.lki.as_ref().map_or_else(|| self.object_matches_predicate(source.object, predicate), |lki| super::layers::matches_departure(lki, predicate)))
+                    .filter(|predicate| {
+                        source.lki.as_ref().map_or_else(
+                            || self.object_matches_predicate(source.object, predicate),
+                            |lki| super::layers::matches_departure(lki, predicate),
+                        )
+                    })
                     .count()
             })
             .sum()
@@ -1510,13 +1512,6 @@ impl Game {
     fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
         for source in self.indexed_sources(EventKinds::STATE_TRIGGER) {
-            let Some(permanent) = self
-                .state
-                .permanent_of(source.object)
-                .and_then(|id| self.state.permanents[id].as_ref())
-            else {
-                continue;
-            };
             if source.lki.as_ref().is_some_and(|lki| lki.abilities_lost) {
                 continue;
             }
@@ -1527,7 +1522,10 @@ impl Game {
             for (ability_index, ability) in face.abilities.iter().enumerate() {
                 let Ability::Triggered { condition, .. } = ability;
                 let holds = match condition {
-                    TriggerCondition::NoCounters { kind } => permanent.counter_count(*kind) == 0,
+                    TriggerCondition::NoCounters { kind } => source
+                        .lki
+                        .as_ref()
+                        .is_none_or(|lki| lki.counters.get(*kind) == 0),
                     TriggerCondition::State(condition) => {
                         self.condition_holds(condition, source.controller, None, object, None)
                     }
@@ -1737,7 +1735,7 @@ impl Game {
         )
     }
 
-    /// Current snapshots of the indexed permanents with an ability of any of
+    /// Current snapshots of the indexed objects with an ability of any of
     /// `kinds`, in object order.
     fn indexed_sources(&self, kinds: EventKinds) -> Vec<TriggerSourceSnapshot> {
         let index = self.trigger_index();
@@ -1746,8 +1744,16 @@ impl Game {
             .iter()
             .filter(|entry| entry.kinds.intersects(kinds))
             .map(|entry| match entry.command_controller {
-                Some(controller) => TriggerSourceSnapshot { object: entry.object, controller, definition: self.state[entry.object].definition_id, lki: None },
-                None => self.snapshot_current_permanent(entry.object).expect("indexed permanent").into(),
+                Some(controller) => TriggerSourceSnapshot {
+                    object: entry.object,
+                    controller,
+                    definition: self.state[entry.object].definition_id,
+                    lki: None,
+                },
+                None => self
+                    .snapshot_current_permanent(entry.object)
+                    .expect("indexed permanent")
+                    .into(),
             })
             .collect()
     }
@@ -1796,11 +1802,19 @@ impl Game {
             })
             .collect();
         sources.extend(self.emblems().map(|(controller, object)| {
-            let kinds = self.state[object].abilities.iter().fold(EventKinds::NONE, |kinds, ability| {
-                let Ability::Triggered { condition, .. } = ability;
-                kinds | condition_event_kinds(condition)
-            });
-            TriggerSourceEntry { object, kinds, command_controller: Some(controller) }
+            let kinds =
+                self.state[object]
+                    .abilities
+                    .iter()
+                    .fold(EventKinds::NONE, |kinds, ability| {
+                        let Ability::Triggered { condition, .. } = ability;
+                        kinds | condition_event_kinds(condition)
+                    });
+            TriggerSourceEntry {
+                object,
+                kinds,
+                command_controller: Some(controller),
+            }
         }));
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
