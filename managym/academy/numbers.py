@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from managym.academy.attempts import RetainedAttempt
 from managym.academy.recording import REEXECUTION_ERRORS, record_of, step_matches
+from managym.academy.trace import human_seat_at
 from managym.replay import walk
 from managym.statistics import Behaviour, BehaviourRow, Reduction, Totals, TotalsRow
 
@@ -56,7 +57,6 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     trace = attempt.trace
     if trace["end_reason"] == "active":
         raise ValueError("A game still being played has no numbers yet.")
-    human = trace["config"].get("human_seat", 0)
     try:
         walker = walk(record_of(attempt), capture_cards=True)
     except REEXECUTION_ERRORS:
@@ -66,7 +66,7 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     events = trace["events"]
     for index, decision in enumerate(walker):
         if index >= len(events) or not step_matches(
-            decision.observation, events[index], human
+            decision.observation, events[index], human_seat_at(trace, index)
         ):
             return None
         reduction.decision(decision)

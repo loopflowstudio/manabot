@@ -16,6 +16,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'resume',
   'new_game',
   'rematch',
+  'swap_sides',
   'command',
   'action',
   'pass_turn',
@@ -123,6 +124,7 @@ export type SharedTableRequest =
     }
   | ({ type: 'new_game'; grant_revision?: number | null; config?: Record<string, unknown> })
   | (GrantedRequest & { type: 'rematch'; request_id: string; attempt_id: string; setup_revision: number; intent: 'rematch' | 'swap_sides' | 'change_opponent'; config?: Record<string, unknown> })
+  | (GrantedRequest & { type: 'swap_sides'; request_id: string; match_id: string; expected_revision: number })
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })

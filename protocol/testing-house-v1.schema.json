@@ -1692,6 +1692,47 @@
       "title": "ShowAnalysisMessage",
       "type": "object"
     },
+    "SwapSidesMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "swap_sides",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "request_id",
+        "match_id",
+        "expected_revision"
+      ],
+      "title": "SwapSidesMessage",
+      "type": "object"
+    },
     "TableAudience": {
       "additionalProperties": false,
       "properties": {
@@ -2070,6 +2111,7 @@
             "set_stops": "#/$defs/SetStopsMessage",
             "share_belief": "#/$defs/ShareBeliefMessage",
             "show_analysis": "#/$defs/ShowAnalysisMessage",
+            "swap_sides": "#/$defs/SwapSidesMessage",
             "transfer_pilot": "#/$defs/TransferPilotMessage"
           },
           "propertyName": "type"
@@ -2086,6 +2128,9 @@
           },
           {
             "$ref": "#/$defs/RematchMessage"
+          },
+          {
+            "$ref": "#/$defs/SwapSidesMessage"
           },
           {
             "$ref": "#/$defs/CommandMessage"

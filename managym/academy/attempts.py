@@ -352,7 +352,7 @@ class AttemptStore:
             exists = db.execute(
                 "SELECT 1 FROM attempts WHERE id=?", (attempt,)
             ).fetchone()
-            db.execute(
+            cursor = db.execute(
                 """INSERT INTO attempts
                 (id,participant_id,process_id,started_at,ended_at,status,ending_reason,deal_seed,winner,
                  revision,world_json,trace_json,record_version,visibility,origin,num_events)
@@ -383,8 +383,57 @@ class AttemptStore:
                 self._save_players(db, attempt, players)
                 if session_start is not None:
                     self._start_session_game(
-                        db, attempt, trace["timestamp"], session_start, config
+                        db, attempt, trace["timestamp"], session_start, trace
                     )
+            elif cursor.rowcount == 1:
+                stored = db.execute(
+                    "SELECT seat,player_id,kind,name,deck,version,inference_json "
+                    "FROM attempt_players WHERE attempt_id=? ORDER BY seat",
+                    (attempt,),
+                ).fetchall()
+                expected = sorted(
+                    (
+                        (
+                            p.seat,
+                            p.player_id,
+                            p.kind,
+                            p.name,
+                            p.deck,
+                            p.version,
+                            json.dumps(p.inference)
+                            if p.inference is not None
+                            else None,
+                        )
+                        for p in players
+                    ),
+                    key=lambda row: row[0],
+                )
+                if [tuple(row) for row in stored] != expected:
+                    db.execute(
+                        "DELETE FROM attempt_players WHERE attempt_id=?", (attempt,)
+                    )
+                    self._save_players(db, attempt, players)
+                    db.execute(
+                        "UPDATE session_games SET matchup_json=? WHERE attempt_id=?",
+                        (self._matchup_json(trace), attempt),
+                    )
+
+    @staticmethod
+    def _matchup_json(trace: dict[str, Any]) -> str:
+        config = trace["config"]
+        swapped = bool(len(trace.get("seat_swaps") or ()) & 1)
+        payload = {
+            "hero_deck": config.get("villain_deck" if swapped else "hero_deck"),
+            "villain_deck": config.get("hero_deck" if swapped else "villain_deck"),
+            "hero_sideboard": config.get(
+                "villain_sideboard" if swapped else "hero_sideboard"
+            ),
+            "villain_sideboard": config.get(
+                "hero_sideboard" if swapped else "villain_sideboard"
+            ),
+            "decklists": config.get("decklists"),
+        }
+        return json.dumps(payload, sort_keys=True)
 
     @staticmethod
     def _start_session_game(
@@ -392,7 +441,7 @@ class AttemptStore:
         attempt: str,
         timestamp: str,
         start: SessionStart,
-        config: dict[str, Any],
+        trace: dict[str, Any],
     ) -> None:
         if start.revision == 0:
             db.execute(
@@ -422,19 +471,7 @@ class AttemptStore:
             (
                 attempt,
                 start.session_id,
-                json.dumps(
-                    {
-                        key: config.get(key)
-                        for key in (
-                            "hero_deck",
-                            "villain_deck",
-                            "hero_sideboard",
-                            "villain_sideboard",
-                            "decklists",
-                        )
-                    },
-                    sort_keys=True,
-                ),
+                AttemptStore._matchup_json(trace),
                 start.session_id,
             ),
         )

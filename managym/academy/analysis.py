@@ -27,7 +27,7 @@ the policy's own line from one analysed decision; and `LiveAnalysis`, the same
 reading of a game while it is played, when the person shows it.
 """
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
 import json
@@ -44,11 +44,12 @@ from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import Opponent, policy_registry
 from managym.academy.recording import (
     REEXECUTION_ERRORS,
+    acting_seat,
     record_of,
     recorded_build,
     step_matches,
 )
-from managym.academy.trace import GameConfig, academy_actions
+from managym.academy.trace import GameConfig, academy_actions, human_seat_at
 from managym.bots import BotPolicy, choose_bot
 from managym.experience_projection import decision_surface_view
 from managym.policy import PolicyDescriptor, PolicyRegistry, PolicyRunner
@@ -83,14 +84,20 @@ def score(value: float, semantic: str | None) -> float | None:
     return None
 
 
-def analysed_events(trace: dict[str, Any], seat: int) -> list[int]:
-    """The events an analysis of `seat` reads: its deliberate decisions, not automation."""
-    human = trace["config"].get("human_seat", 0)
-    role = "hero" if seat == human else "villain"
+def analysed_events(trace: dict[str, Any], seat: int | None = None) -> list[int]:
+    """Deliberate decisions to analyse: all human decisions when `seat` is None,
+    else the deliberate decisions acted by native `seat`."""
+    if seat is None:
+        return [
+            i
+            for i, event in enumerate(trace["events"])
+            if event["actor"] == "hero" and not event.get("auto")
+        ]
     return [
         i
         for i, event in enumerate(trace["events"])
-        if event["actor"] == role and not event.get("auto")
+        if acting_seat(event, human_seat_at(trace, i)) == seat
+        and not event.get("auto")
     ]
 
 
@@ -114,10 +121,9 @@ def recorded_steps(
     action description, not its whole board: Review's views check boards
     (`ReplayedViews`); here a forward pass is the cost.
     """
-    human = trace["config"].get("human_seat", 0)
     steps = iter(walker)
     for index, event in enumerate(trace["events"]):
-        if not step_matches(walker.observation, event, human):
+        if not step_matches(walker.observation, event, human_seat_at(trace, index)):
             raise AnalysisStop(f"Step {index + 1} re-executed differently.")
         yield index, walker.env, walker.observation
         if next(steps, None) is None:
@@ -128,9 +134,9 @@ def recorded_steps(
 
 
 def seat_decisions(
-    walker: RecordWalker, trace: dict[str, Any], seat: int
+    walker: RecordWalker, trace: dict[str, Any], seat: int | None = None
 ) -> Iterator[tuple[int, managym.Env, managym.Observation]]:
-    """`recorded_steps` at `seat`'s analysed decisions only."""
+    """`recorded_steps` at analysed decisions only (all human decisions when `seat` is None)."""
     wanted = set(analysed_events(trace, seat))
     return (step for step in recorded_steps(walker, trace) if step[0] in wanted)
 
@@ -179,18 +185,28 @@ def read_decision(
 
 
 def analyse_game(
-    attempt: RetainedAttempt, seat: int, runner: PolicyRunner, *, seed: int
+    attempt: RetainedAttempt,
+    seat: int | None,
+    runner: PolicyRunner | Mapping[int, PolicyRunner],
+    *,
+    seed: int,
 ) -> Iterator[AnalysedDecision]:
-    """Each analysed decision of `seat`, in order, as the walk reaches it.
+    """Each analysed decision, in order, as the walk reaches it.
 
+    When `seat` is None, reads every deliberate human decision across whichever
+    seats the human piloted (looking up each seat's runner in `runner`).
     Raises AnalysisStop where the game stops re-executing or the policy fails.
     """
     events = attempt.trace["events"]
+    runners: Mapping[int, PolicyRunner] = (
+        runner if isinstance(runner, Mapping) else {runner.seat: runner}
+    )
     for index, env, observation in seat_decisions(
         open_walk(attempt), attempt.trace, seat
     ):
+        decision_seat = int(observation.agent.player_index)
         annotation, semantic, after = read_decision(
-            env, observation, index, seat, runner, seed=seed
+            env, observation, index, decision_seat, runners[decision_seat], seed=seed
         )
         yield AnalysedDecision(
             event=index,
@@ -392,11 +408,14 @@ def run_analysis(
     store: AttemptStore,
     analysis: str,
     attempt: RetainedAttempt,
-    seat: int,
-    runner: PolicyRunner,
+    seat: int | None,
+    runner: PolicyRunner | Mapping[int, PolicyRunner],
 ) -> None:
-    """Walk the game, saving each decision as it is read, then close `runner`."""
+    """Walk the game, saving each decision as it is read, then close all runners."""
     reason: str | None = None
+    runners = (
+        list(runner.values()) if isinstance(runner, Mapping) else [runner]
+    )
     try:
         seed = int(attempt.trace["config"]["seed"])
         for decision in analyse_game(attempt, seat, runner, seed=seed):
@@ -409,7 +428,8 @@ def run_analysis(
         logging.getLogger(__name__).exception("Analysis %s failed", analysis)
         reason = f"The analysis failed: {type(error).__name__}"
     finally:
-        runner.close()
+        for item in runners:
+            item.close()
         store.end_analysis(analysis, reason)
 
 
@@ -499,22 +519,26 @@ class LiveAnalysis:
             runner = load()
             walker = open_walk(attempt)
             earlier: list[dict[str, Any]] = []
-            for index, env, observation in seat_decisions(
-                walker, attempt.trace, self._seat
-            ):
-                ask(runner, env, observation, index)
-                decision = runner.last_decision
-                if decision is not None and decision.value is not None:
-                    event = attempt.trace["events"][index]
-                    earlier.append(
-                        {
-                            "event": index,
-                            "turn": observation.turn.turn_number,
-                            "label": event["action_description"],
-                            "score": score(decision.value, decision.value_semantic),
-                            "semantic": decision.value_semantic,
-                        }
-                    )
+            events = attempt.trace["events"]
+            for index, env, observation in recorded_steps(walker, attempt.trace):
+                if int(observation.agent.player_index) != self._seat:
+                    continue
+                event = events[index]
+                if event["actor"] == "hero" and not event.get("auto"):
+                    ask(runner, env, observation, index)
+                    decision = runner.last_decision
+                    if decision is not None and decision.value is not None:
+                        earlier.append(
+                            {
+                                "event": index,
+                                "turn": observation.turn.turn_number,
+                                "label": event["action_description"],
+                                "score": score(decision.value, decision.value_semantic),
+                                "semantic": decision.value_semantic,
+                            }
+                        )
+                elif runner.base_descriptor.recurrent:
+                    ask(runner, env, observation, index)
             if earlier:
                 # The line so far: the policy's estimate at each decision already
                 # made. These were not shown when chosen, so they mark nothing.
@@ -611,7 +635,6 @@ def agent_line(
     first = first_choice(decision.annotation.probabilities)
     if first is None:
         raise AnalysisStop("This decision has no probabilities to follow.")
-    human = attempt.trace["config"].get("human_seat", 0)
     complete = attempt.trace["end_reason"] == "game_over"
     replayed = [
         policy
@@ -635,7 +658,7 @@ def agent_line(
     end: Literal["game_over", "turn", "limit"] = "limit"
     for _ in range(MAX_LINE_STEPS):
         actor = int(observation.agent.player_index)
-        row = academy_actions(observation, human)[action]
+        row = academy_actions(observation, seat)[action]
         env.step(action)
         passed = row["type"] == "PRIORITY_PASS_PRIORITY"
         if moves and passed:

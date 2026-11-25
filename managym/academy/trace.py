@@ -5,6 +5,8 @@ Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 
 from __future__ import annotations
 
+from bisect import bisect_right
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
@@ -269,6 +271,9 @@ class Trace:
     canonical_replay: dict[str, Any] | None = None
     recording_import: RecordingImport | None = None
     played_from: PlayedFrom | None = None
+    # Event indices (`len(events)`) at which the pilot swapped seats mid-game;
+    # omitted from serialized JSON when empty so unswapped traces stay identical.
+    seat_swaps: list[int] = field(default_factory=list)
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -287,6 +292,10 @@ class Trace:
             record.pop("played_from")
         else:
             record["played_from"] = asdict(self.played_from)
+        if not self.seat_swaps:
+            record.pop("seat_swaps")
+        else:
+            record["seat_swaps"] = list(self.seat_swaps)
         record["config"] = self.config.to_record()
         record["mana_payment"] = list(
             self.config.by_seat(self.config.mana_payment, "manual")
@@ -400,6 +409,14 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
     return summaries
 
 
+def human_seat_at(trace: Mapping[str, Any], event_index: int | None = None) -> int:
+    """Native seat the human piloted at `event_index` (or at game end when None)."""
+    seat = int(trace["config"].get("human_seat", 0))
+    swaps = trace.get("seat_swaps") or ()
+    flips = len(swaps) if event_index is None else bisect_right(swaps, event_index)
+    return seat ^ (flips & 1)
+
+
 def normalize_observation_to_hero(
     observation: dict[str, Any], human_seat: int, *, winner: int | None
 ) -> None:
@@ -462,24 +479,28 @@ def prepare_trace_payload(
         config["villain_deck_name"] = "closed"
         config.pop("asset_pack", None)
 
-    observations = [
-        event.get("observation", {}) for event in prepared.get("events", [])
-    ]
-    observations.append(prepared.get("final_observation", {}))
-
+    events = prepared.get("events", [])
     if not reveal_hidden:
-        for event in prepared.get("events", []):
+        for event in events:
             if event.get("actor") == "villain":
                 event["actions"] = []
                 event["action"] = -1
                 event["action_description"] = "Opponent decision"
                 event.pop("bot_decision", None)
 
-    for observation in observations:
+    for index, event in enumerate(events):
+        observation = event.get("observation", {})
         normalize_observation_to_hero(
-            observation, config.get("human_seat", 0), winner=prepared.get("winner")
+            observation, human_seat_at(prepared, index), winner=prepared.get("winner")
         )
         if not reveal_hidden:
             redact_observation(observation)
+
+    final_observation = prepared.get("final_observation", {})
+    normalize_observation_to_hero(
+        final_observation, human_seat_at(prepared, None), winner=prepared.get("winner")
+    )
+    if not reveal_hidden:
+        redact_observation(final_observation)
 
     return prepared

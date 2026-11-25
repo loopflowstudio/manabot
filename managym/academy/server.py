@@ -74,6 +74,7 @@ from managym.experience_projection import (
 )
 from managym.payment import preview_payment
 from managym.policy import PolicyRunner
+from managym.replay import walk
 from managym.search import (
     SearchConfig,
     SearchError,
@@ -145,7 +146,14 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, narrate_move, own_steps, person_board, read_cache
+from .recording import (
+    Recording,
+    narrate_move,
+    own_steps,
+    person_board,
+    read_cache,
+    record_of,
+)
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -153,6 +161,7 @@ from .replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
     DecisionNotFoundError,
+    DecisionSource,
     InvalidAddressError,
     ReplayDecision,
     RestoredReplayDecision,
@@ -187,6 +196,7 @@ from .shared_table_protocol import (
     SetStopsMessage,
     ShareBeliefMessage,
     ShowAnalysisMessage,
+    SwapSidesMessage,
     TableCapability,
     TableSnapshot,
     TransferPilotMessage,
@@ -1016,9 +1026,9 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
 
 
 class LogEntry(TypedDict):
-    """One line of narration: either player's move, or an automated action."""
+    """One line of narration: either player's move, an automated action, or a system note."""
 
-    actor: Literal["hero", "villain", "auto"]
+    actor: Literal["hero", "villain", "auto", "system"]
     turn: int
     text: str
 
@@ -1053,6 +1063,10 @@ class GameSession:
         # A policy reading the person's decisions, while they show it; off at
         # the start of every game (`show_analysis`).
         self._live_analysis: LiveAnalysis | None = None
+        self._live_analysis_publish: (
+            Callable[[dict[str, Any]], concurrent.futures.Future[bool]] | None
+        ) = None
+        self._swap_receipts: dict[str, tuple[str, int]] = {}
         self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -1193,11 +1207,13 @@ class GameSession:
             raw_config = {**raw_config, **demo.config}
         played_from: PlayedFrom | None = None
         source_events: list[dict[str, Any]] = []
+        source_swaps: list[int] = []
         if isinstance(raw_config, dict) and raw_config.get("played_from") is not None:
             played_from, source = self._played_from_source(
                 raw_config["played_from"], raw_config.get("player_token")
             )
             source_events = source["events"]
+            source_swaps = list(source.get("seat_swaps") or ())
             # The source's own setup and seed; only identity travels with the request.
             raw_config = {
                 **setup_draft(GameConfig(**source["config"])),
@@ -1358,6 +1374,8 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt = None
         self.accepted_commands = {}
+        self._swap_receipts = {}
+        self._live_analysis_publish = None
         self.presentation.reset()
         self.presentation_events = []
         self._last_presentation_cursor = 0
@@ -1407,7 +1425,9 @@ class GameSession:
         self._preparing_demo = demo is not None or played_from is not None
         try:
             if played_from is not None:
-                self._play_recorded_prefix(source_events, played_from.event)
+                self._play_recorded_prefix(
+                    source_events, played_from.event, source_swaps=source_swaps
+                )
             else:
                 self._advance()
             self._last_presentation_cursor = self.presentation.next_seq
@@ -1454,17 +1474,42 @@ class GameSession:
             raise ValueError("played_from_decision: That step is not one of your decisions.")
         return PlayedFrom(trace_id, event), source
 
-    def _play_recorded_prefix(self, events: list[dict[str, Any]], upto: int) -> None:
+    def _play_recorded_prefix(
+        self,
+        events: list[dict[str, Any]],
+        upto: int,
+        *,
+        source_swaps: list[int] = [],
+    ) -> None:
         """Play a recorded game's first `upto` steps through the Command path.
 
         The opponent's recorded choices go through the offer-policy hook (a
         recurrent opponent is still asked at each, so it has the history it
         would have had) and the person's through `hero_command`. Every window
         surfaces meanwhile, so the steps automation took replay as recorded,
-        now as Commands. The game is left at decision `upto`, the person's.
+        now as Commands. Any mid-game seat swaps recorded at or before `upto`
+        are applied at their recorded step indices so the person lands in
+        `human_seat_at(source, upto)` with the bot in the other seat.
         Raises ValueError where the game no longer plays as recorded.
         """
         assert self.trace is not None
+
+        pending_swaps = sorted(s for s in source_swaps if s <= upto)
+        swap_pos = 0
+
+        def apply_due_swaps() -> None:
+            nonlocal swap_pos
+            assert self.trace is not None
+            swapped = False
+            while (
+                swap_pos < len(pending_swaps)
+                and pending_swaps[swap_pos] == len(self.trace.events)
+            ):
+                self._flip_seats_in_place()
+                swap_pos += 1
+                swapped = True
+            if swapped:
+                self._advance()
 
         def recorded(actor: str, context: DecisionContext) -> int:
             index = len(self.trace.events)
@@ -1497,7 +1542,11 @@ class GameSession:
         self._villain_offer_policy, self.auto_pass = opponent, False
         try:
             self._advance()
+            apply_due_swaps()
             while len(self.trace.events) < upto:
+                apply_due_swaps()
+                if len(self.trace.events) >= upto:
+                    break
                 context = self._publish_current_prompt()
                 if context is None:
                     raise ValueError("played_from_diverged: The game ended early.")
@@ -1513,6 +1562,7 @@ class GameSession:
                 )
                 if result["status"] != "accepted":
                     raise ValueError("played_from_diverged: A recorded move was refused.")
+            apply_due_swaps()
         finally:
             self._villain_offer_policy, self.auto_pass = saved
         # The prompt published during the prefix carries its stops; publish it
@@ -1520,6 +1570,207 @@ class GameSession:
         self.published_prompt = None
         if len(self.trace.events) != upto or self._publish_current_prompt() is None:
             raise ValueError("played_from_diverged: The decision was not reached.")
+
+    def _flip_seats_in_place(self) -> None:
+        """Flip pilot and bot seats during prefix replay, rebuilding the bot policy."""
+        assert self.env is not None and self.obs is not None and self.trace is not None
+        new_bot_seat = self.human_seat
+        new_policy = build_villain_policy(self.trace.config, seat=new_bot_seat)
+        with ExitStack() as prepared:
+            if isinstance(new_policy, PolicyRunner):
+                prepared.callback(new_policy.close)
+            if (
+                isinstance(new_policy, PolicyRunner)
+                and new_policy.base_descriptor.recurrent
+            ):
+                self._warm_up_recurrent_policy(new_policy, new_bot_seat)
+            else:
+                observe_policies((new_policy,), self.env, self.obs)
+            prepared.pop_all()
+        close_policies((self.villain_policy,))
+        self.villain_policy = new_policy
+        self.human_seat = 1 - self.human_seat
+        if self.deck_names is not None:
+            self.deck_names = {
+                "hero": self.deck_names["villain"],
+                "villain": self.deck_names["hero"],
+            }
+        self.trace.seat_swaps.append(len(self.trace.events))
+        self._swap_record_players()
+        self._f6_turn = None
+        self._step_boards = []
+        self.published_prompt = None
+        self._pending_decision = None
+        self.presentation_events = [
+            deepcopy(event)
+            for event in self.canonical_presentation[self.human_seat][
+                -MAX_PRESENTATION_EVENTS:
+            ]
+        ]
+        self._last_presentation_cursor = self.presentation.next_seq
+        self._advance_protocol_revision()
+
+    def _swap_record_players(self) -> None:
+        """Swap recorded seat and deck assignments between the human and bot players."""
+        if not self.record_players:
+            return
+        human_player = next(
+            (player for player in self.record_players if player.kind == "human"), None
+        )
+        bot_player = next(
+            (player for player in self.record_players if player.kind == "bot"), None
+        )
+        if human_player is None or bot_player is None:
+            return
+        self.record_players = [
+            replace(human_player, seat=self.human_seat, deck=bot_player.deck),
+            replace(bot_player, seat=1 - self.human_seat, deck=human_player.deck),
+        ]
+
+    def _warm_up_recurrent_policy(self, policy: PolicyRunner, seat: int) -> None:
+        """Replay the live game's actions into a recurrent policy for `seat`."""
+        assert self.env is not None and self.trace is not None
+        snapshot = RetainedAttempt(
+            {
+                "config": self.trace.config.to_record(),
+                "events": [{"action": event.action} for event in self.trace.events],
+                "end_reason": "active",
+                "winner": None,
+            },
+            json.dumps(self.env.content_pack_manifest()),
+        )
+        walker = walk(record_of(snapshot))
+        observe_policies((policy,), walker.env, walker.observation)
+        steps = iter(walker)
+        for _ in self.trace.events:
+            if int(walker.observation.agent.player_index) == seat:
+                choose_bot(policy, walker.env, walker.observation)
+            if next(steps, None) is None:
+                stop = walker.stop
+                raise ValueError(
+                    stop.reason if stop and stop.reason else "game replay diverged"
+                )
+            observe_policies((policy,), walker.env, walker.observation)
+
+    def swap_sides(
+        self,
+        *,
+        request_id: str,
+        match_id: str,
+        expected_revision: int,
+    ) -> dict[str, Any]:
+        """Swap the human pilot and bot between native seats in place on the live game.
+
+        All fallible work (policy admission, load, and recurrent warm-up) runs
+        before mutating session state so a refusal leaves the live game untouched
+        at the same revision.
+        """
+        recorded = self._swap_receipts.get(request_id)
+        if recorded is not None:
+            if recorded == (match_id, expected_revision):
+                return self.current_message()
+            raise ValueError(
+                "Swap request id was already used for a different decision."
+            )
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("swap_unavailable: No active game.")
+        if self.watch_mode:
+            raise ValueError("swap_unavailable: Cannot swap sides in Watch mode.")
+        if self.obs.game_over:
+            raise ValueError("swap_unavailable: Game is already over.")
+        if self.mirror_retry is not None:
+            raise ValueError(
+                "swap_unavailable: Resolve the pending bot decision before swapping sides."
+            )
+        if self._study_attempts:
+            raise ValueError(
+                "swap_unavailable: Return from Study before swapping sides."
+            )
+        if match_id != self.match_id or expected_revision != self.revision:
+            raise ValueError(
+                "swap_unavailable: The game changed; recover before swapping sides."
+            )
+
+        new_bot_seat = self.human_seat
+        self.work.stage("load", self.match_id, self.revision)
+        try:
+            new_policy = build_villain_policy(self.trace.config, seat=new_bot_seat)
+        except SearchError as exc:
+            raise ValueError(f"swap_unavailable: {exc}") from exc
+        except ValueError as exc:
+            raise ValueError(f"swap_unavailable: {exc}") from exc
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Failed to load swap opponent policy")
+            raise ValueError(
+                f"swap_unavailable: Failed to load opponent policy ({type(exc).__name__}); see the server log."
+            ) from exc
+
+        with ExitStack() as prepared:
+            if isinstance(new_policy, PolicyRunner):
+                prepared.callback(new_policy.close)
+            try:
+                if (
+                    isinstance(new_policy, PolicyRunner)
+                    and new_policy.base_descriptor.recurrent
+                ):
+                    self._warm_up_recurrent_policy(new_policy, new_bot_seat)
+                else:
+                    observe_policies((new_policy,), self.env, self.obs)
+            except Exception as exc:
+                logging.getLogger(__name__).exception(
+                    "Failed to initialize swap opponent policy"
+                )
+                raise ValueError(
+                    f"swap_unavailable: Failed to initialize opponent policy ({type(exc).__name__}); see the server log."
+                ) from exc
+            prepared.pop_all()
+
+        live_analysis_policy = (
+            dict(self._live_analysis.policy)
+            if self._live_analysis is not None
+            else None
+        )
+        live_analysis_publish = self._live_analysis_publish
+        self._end_live_analysis()
+        close_policies((self.villain_policy,))
+        self.villain_policy = new_policy
+        self.human_seat = 1 - self.human_seat
+        if self.deck_names is not None:
+            self.deck_names = {
+                "hero": self.deck_names["villain"],
+                "villain": self.deck_names["hero"],
+            }
+        self.trace.seat_swaps.append(len(self.trace.events))
+        self._swap_record_players()
+        self._f6_turn = None
+        self._step_boards = []
+        self.published_prompt = None
+        self._pending_decision = None
+        self.presentation_events = [
+            deepcopy(event)
+            for event in self.canonical_presentation[self.human_seat][
+                -MAX_PRESENTATION_EVENTS:
+            ]
+        ]
+        self._last_presentation_cursor = self.presentation.next_seq
+        self._advance_protocol_revision()
+        self._swap_receipts[request_id] = (match_id, expected_revision)
+        self._pending_action_log.append(
+            {
+                "actor": "system",
+                "turn": int(self.obs.turn.turn_number),
+                "text": "Swapped sides",
+            }
+        )
+        self._persist_attempt(config_changed=True)
+        self._advance()
+        if (
+            live_analysis_policy is not None
+            and live_analysis_publish is not None
+            and not self.obs.game_over
+        ):
+            self._start_live_analysis(live_analysis_policy, live_analysis_publish)
+        return self._wire_message(reason="explicit_resync")
 
     def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
         """Resolve one revision-bound next game from the owner-private draft."""
@@ -2079,6 +2330,7 @@ class GameSession:
                 own_steps(
                     [vars(event) for event in self.trace.events],
                     len(self.trace.events) - 1,
+                    seat_swaps=self.trace.seat_swaps,
                 )
                 if actor == "hero"
                 else (),
@@ -2877,12 +3129,14 @@ class GameSession:
 
     def fork_study(self, raw_address: str) -> StudyBranch:
         """Fork an authorized acting-player decision for ephemeral Study."""
-        viewer = (
-            int(parse_decision_address(raw_address).viewer)
-            if self.watch_mode
-            else self.human_seat
+        provider = self.study_fork_provider()
+        viewer = _authorized_decision_viewer(
+            provider.replay,
+            raw_address,
+            watch_mode=self.watch_mode,
+            fallback_seat=self.human_seat,
         )
-        return self.study_fork_provider().fork(raw_address, viewer)
+        return provider.fork(raw_address, viewer)
 
     def retry_study(
         self,
@@ -2904,10 +3158,11 @@ class GameSession:
             for attempt in self._study_attempts.values()
         ):
             raise StudyCommandUnavailableError("study_attempt_active")
-        viewer = (
-            int(parse_decision_address(raw_address).viewer)
-            if self.watch_mode
-            else self.human_seat
+        viewer = _authorized_decision_viewer(
+            replay,
+            raw_address,
+            watch_mode=self.watch_mode,
+            fallback_seat=self.human_seat,
         )
         projection = project_replay(replay, viewer)
         restored = restore_decision(replay, raw_address, viewer)
@@ -3138,6 +3393,48 @@ class GameSession:
             self._live_analysis.close()
             self._live_analysis = None
 
+    def _start_live_analysis(
+        self,
+        chosen: dict[str, str],
+        publish: Callable[[dict[str, Any]], concurrent.futures.Future[bool]],
+    ) -> None:
+        assert self.env is not None and self.trace is not None
+        config = self.trace.config
+        setup = config.to_rust()
+        seat = self.human_seat
+        key = chosen["sha256"]
+        events = [
+            {
+                "actor": event.actor,
+                "auto": event.auto,
+                "action": event.action,
+                "action_description": event.action_description,
+            }
+            for event in self.trace.events
+        ]
+        trace_record: dict[str, Any] = {
+            "config": config.to_record(),
+            "events": events,
+            "end_reason": "active",
+            "winner": None,
+        }
+        if self.trace.seat_swaps:
+            trace_record["seat_swaps"] = list(self.trace.seat_swaps)
+        snapshot = RetainedAttempt(
+            trace_record,
+            json.dumps(self.env.content_pack_manifest()),
+        )
+        self._live_analysis_publish = publish
+        self._live_analysis = LiveAnalysis(
+            snapshot,
+            seat,
+            chosen,
+            lambda: policy_registry().load(
+                key, setup, seat=seat, seed=int(config.seed or 0)
+            ),
+            publish,
+        )
+
     def show_analysis(
         self,
         shown: bool,
@@ -3155,6 +3452,7 @@ class GameSession:
         if self.watch_mode:
             raise TableDispatchError("conflict", "A watched game has no seat of yours.")
         self._end_live_analysis()
+        self._live_analysis_publish = None
         # Admission takes seconds the first time; the connection admits off the
         # game lock before dispatching here (`policy_admissions`).
         choices = analysing_policies(self.trace.config, policy_admissions())
@@ -3173,37 +3471,8 @@ class GameSession:
         chosen = next((p for p in choices.policies if p["sha256"] == key), None)
         if chosen is None:
             raise TableDispatchError("not_found", "That policy cannot read this game.")
-        config = self.trace.config
-        setup = config.to_rust()
-        seat = self.human_seat
-        events = [
-            {
-                "actor": event.actor,
-                "auto": event.auto,
-                "action": event.action,
-                "action_description": event.action_description,
-            }
-            for event in self.trace.events
-        ]
-        snapshot = RetainedAttempt(
-            {
-                "config": config.to_record(),
-                "events": events,
-                "end_reason": "active",
-                "winner": None,
-            },
-            json.dumps(self.env.content_pack_manifest()),
-        )
-        self._live_analysis = LiveAnalysis(
-            snapshot,
-            seat,
-            chosen,
-            lambda: policy_registry().load(
-                key, setup, seat=seat, seed=int(config.seed or 0)
-            ),
-            publish,
-        )
-        if self.published_prompt is not None:
+        self._start_live_analysis(chosen, publish)
+        if self.published_prompt is not None and self._live_analysis is not None:
             self._live_analysis.decide(len(self.trace.events), self.revision)
         return {**state, "shown": True, "policy": chosen}
 
@@ -3215,12 +3484,37 @@ class GameSession:
             try:
                 self._close_policies()
             finally:
+                self._live_analysis_publish = None
                 self.env = None
                 self.obs = None
                 self.villain_policy = None
                 self.watch_policies = None
                 self._bot_decision = None
                 self.mirror_retry = None
+
+
+def _authorized_decision_viewer(
+    replay: CanonicalReplayV1,
+    raw_address: str,
+    *,
+    watch_mode: bool,
+    fallback_seat: int,
+) -> int:
+    """Resolve the authorized viewer seat for restoring one decision address.
+
+    In Watch mode every acting viewer is authorized; in Play mode every
+    client-sourced decision (`DecisionSource.CLIENT`) of the game is authorized
+    in whichever seat the person piloted when they made it.
+    """
+    address = parse_decision_address(raw_address)
+    if watch_mode:
+        return int(address.viewer)
+    if 0 <= address.ordinal < len(replay.decisions):
+        row = replay.decisions[address.ordinal]
+        if row.source == DecisionSource.CLIENT:
+            return int(row.viewer)
+        raise DecisionNotFoundError("decision not found")
+    return fallback_seat
 
 
 def _error_message(message: str) -> dict[str, str]:
@@ -3319,7 +3613,7 @@ def _participant_from_resume(
         ]
         game._record_player_owner = owner
         game.interrupted_config = retained["config"]
-        game.human_seat = retained["config"].get("human_seat", 0)
+        game.human_seat = trace_store.human_seat_at(retained)
         record = SessionRecord(
             session_id=raw_session_id, resume_token=raw_resume_token, game=game
         )
@@ -3405,7 +3699,7 @@ def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
             "offer_id": decision.offer_id,
         }
         for decision in record.game.canonical_decisions
-        if decision.viewer == record.game.human_seat
+        if decision.source == DecisionSource.CLIENT
     ]
     pending = record.game._pending_decision
     if pending is None:
@@ -3592,6 +3886,7 @@ def _detach_participant_websocket(
 DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "new_game": TableCapability.CONFIGURE_MATCH,
     "rematch": TableCapability.CONFIGURE_MATCH,
+    "swap_sides": TableCapability.CONFIGURE_MATCH,
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
@@ -3751,6 +4046,17 @@ def _dispatch_table_request(
             candidate.study_attempts.clear()
         record.table_revision += 1
         return response, True
+    if isinstance(request, SwapSidesMessage):
+        previous_revision = record.game.revision
+        response = record.game.swap_sides(
+            request_id=request.request_id,
+            match_id=request.match_id,
+            expected_revision=request.expected_revision,
+        )
+        if record.game.revision == previous_revision:
+            return response, False
+        record.table_revision += 1
+        return response, True
     if isinstance(request, CommandMessage):
         command_id = request.command.command_id
         record.accepted_command_submitters[command_id] = participant.viewer_id
@@ -3809,7 +4115,13 @@ def _dispatch_table_request(
     if isinstance(request, RestoreDecisionMessage):
         replay = record.game.canonical_replay()
         try:
-            restored = restore_decision(replay, request.address, record.game.human_seat)
+            viewer = _authorized_decision_viewer(
+                replay,
+                request.address,
+                watch_mode=record.game.watch_mode,
+                fallback_seat=record.game.human_seat,
+            )
+            restored = restore_decision(replay, request.address, viewer)
         except (InvalidAddressError, DecisionNotFoundError) as exc:
             raise TableDispatchError("not_found", "Decision not found.") from exc
         return {
@@ -4355,11 +4667,15 @@ async def record_feedback(
         if address is not None:
             if not isinstance(address, str):
                 raise ValueError("Invalid decision address.")
-            restore_decision(
-                _load_trace_replay(trace_id),
+            replay = _load_trace_replay(trace_id)
+            trace_payload = trace_store.load_trace(trace_id)
+            viewer = _authorized_decision_viewer(
+                replay,
                 address,
-                trace_store.load_trace(trace_id)["config"].get("human_seat", 0),
+                watch_mode=bool(trace_payload["config"].get("watch_players")),
+                fallback_seat=trace_store.human_seat_at(trace_payload),
             )
+            restore_decision(replay, address, viewer)
         author = (
             store.profile(x_etude_player_token)["id"] if x_etude_player_token else None
         )
@@ -4724,9 +5040,9 @@ def get_recording_index(
     if isinstance(provenance, dict):
         provenance = {k: v for k, v in provenance.items() if k != "checkpoint"}
     players = deepcopy(metadata.get("players", []))
-    if payload["config"].get("decklists") == "closed":
+    if payload["config"].get("decklists") == "closed" and not recording.watch:
         for player in players:
-            if player["seat"] == 1 - payload["config"].get("human_seat", 0):
+            if player.get("kind") == "bot":
                 player["deck"] = "closed"
     for player in players:
         deck = player.get("deck")
@@ -4736,6 +5052,18 @@ def get_recording_index(
                 if deck == "closed"
                 else DECK_DISPLAY_NAMES.get(deck, deck)
             )
+    events = payload["events"]
+    seat_swaps = [
+        {
+            "event": event_index,
+            "turn": (
+                events[event_index]["observation"]["turn"].get("turn_number")
+                if event_index < len(events)
+                else payload["final_observation"].get("turn", {}).get("turn_number")
+            ),
+        }
+        for event_index in (payload.get("seat_swaps") or ())
+    ]
     return {
         "id": trace_id,
         "positions": [
@@ -4760,6 +5088,8 @@ def get_recording_index(
         "can_study": study_available,
         "winner": payload.get("winner") if finished else None,
         "players": players,
+        "starting_human_seat": int(payload["config"].get("human_seat", 0)),
+        "seat_swaps": seat_swaps,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
         # A game played on from another: its source and the turn it starts at.
         "played_from": {
@@ -4851,9 +5181,7 @@ def get_analysis_policies(trace_id: str) -> dict[str, Any]:
         "policies": choices.policies,
         "default": choices.default,
         "unavailable": choices.unavailable,
-        "events": analysed_events(
-            attempt.trace, attempt.trace["config"].get("human_seat", 0)
-        ),
+        "events": analysed_events(attempt.trace),
     }
 
 
@@ -4864,7 +5192,7 @@ class AnalysisRequest(BaseModel):
 
 @app.post("/api/traces/{trace_id}/analyses")
 def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
-    """Analyse your seat of a game that is no longer being played."""
+    """Analyse the human's deliberate decisions of a game that is no longer being played."""
     store, attempt = _analysed_attempt(trace_id)
     if attempt.trace["end_reason"] == "active":
         raise HTTPException(409, "analysis_game_active")
@@ -4881,24 +5209,38 @@ def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
     ):
         raise HTTPException(409, choices.unavailable or "analysis_policy_unavailable")
     config = GameConfig(**attempt.trace["config"])
-    seat = config.human_seat
+    events = analysed_events(attempt.trace)
+    final_seat = trace_store.human_seat_at(attempt.trace, None)
+    seats_piloted = sorted(
+        {trace_store.human_seat_at(attempt.trace, i) for i in events}
+    ) or [final_seat]
     with _ANALYSING_LOCK:
         if trace_id in _ANALYSING:
             raise HTTPException(409, "analysis_running")
+        runners: dict[int, PolicyRunner] = {}
         try:
-            runner = registry.load(
-                descriptor.id, config.to_rust(), seat=seat, seed=int(config.seed or 0)
-            )
+            with ExitStack() as loaded:
+                setup = config.to_rust()
+                for piloted_seat in seats_piloted:
+                    runner = registry.load(
+                        descriptor.id,
+                        setup,
+                        seat=piloted_seat,
+                        seed=int(config.seed or 0),
+                    )
+                    loaded.callback(runner.close)
+                    runners[piloted_seat] = runner
+                loaded.pop_all()
         except (ImportError, OSError, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
         _ANALYSING.add(trace_id)
     analysis = store.start_analysis(
-        trace_id, seat, descriptor.record(), len(analysed_events(attempt.trace, seat))
+        trace_id, final_seat, descriptor.record(), len(events)
     )
 
     def run() -> None:
         try:
-            run_analysis(store, analysis, attempt, seat, runner)
+            run_analysis(store, analysis, attempt, None, runners)
         finally:
             with _ANALYSING_LOCK:
                 _ANALYSING.discard(trace_id)
@@ -4930,7 +5272,7 @@ def see_line(trace_id: str, analysis_id: str, request: LineRequest) -> dict[str,
         raise HTTPException(404, "line_decision_not_analysed")
     config = GameConfig(**attempt.trace["config"])
     registry = policy_registry()
-    seat = int(saved["seat"])
+    seat = trace_store.human_seat_at(attempt.trace, request.event)
     runner: PolicyRunner | None = None
     opponent: BotPolicy | None = None
     try:
@@ -4963,7 +5305,7 @@ async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
     return projection_with_addresses(
         project_replay(
-            replay, trace_store.load_trace(trace_id)["config"].get("human_seat", 0)
+            replay, trace_store.human_seat_at(trace_store.load_trace(trace_id))
         )
     )
 
@@ -4987,10 +5329,11 @@ async def get_trace_decision(
     ):
         _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
-        viewer = (
-            int(parse_decision_address(address).viewer)
-            if watch_mode
-            else payload["config"].get("human_seat", 0)
+        viewer = _authorized_decision_viewer(
+            replay,
+            address,
+            watch_mode=watch_mode,
+            fallback_seat=trace_store.human_seat_at(payload),
         )
         restored = restore_decision(replay, address, viewer)
     except InvalidAddressError as exc:
