@@ -152,6 +152,7 @@ describe('PresentationPlayer track store', () => {
       'damage',
       'died',
       'turn_started',
+      'drew',
     ]);
   });
 

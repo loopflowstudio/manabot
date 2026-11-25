@@ -423,6 +423,7 @@ class AuthorityTransition:
     state_after: str
     semantic_events: list[dict[str, Any]]
     presentation_events: list[dict[str, Any]]
+    viewer_presentation_events: tuple[list[dict[str, Any]], list[dict[str, Any]]]
     encountered_definition_ids: list[int]
 
 
@@ -2231,7 +2232,7 @@ class GameSession:
         self._bot_decision = None
         self._advance_protocol_revision()
         caused_by = None if command is None or auto else str(command["command_id"])
-        presentation_events = self._commit_step_presentation(
+        viewer_presentation_events = self._commit_step_presentation(
             from_revision=from_revision,
             actor=actor_index,
             caused_by=caused_by,
@@ -2267,7 +2268,13 @@ class GameSession:
                     state_before=state_before,
                     state_after=state_after,
                     semantic_events=semantic_events,
-                    presentation_events=deepcopy(presentation_events),
+                    presentation_events=deepcopy(
+                        viewer_presentation_events[self.human_seat]
+                    ),
+                    viewer_presentation_events=(
+                        deepcopy(viewer_presentation_events[0]),
+                        deepcopy(viewer_presentation_events[1]),
+                    ),
                     encountered_definition_ids=encountered_definition_ids,
                 )
             )
@@ -2495,7 +2502,7 @@ class GameSession:
         from_revision: int,
         actor: int,
         caused_by: str | None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[list[dict[str, Any]]]:
         """Commit one engine step into both authorized semantic tracks."""
         assert self.env is not None
         viewer_events = [
@@ -2538,7 +2545,7 @@ class GameSession:
                 presentation=deepcopy(live_events),
                 boards=trace_boards,
             )
-        return live_events
+        return viewer_events
 
     def _keep_step_board(
         self, events: list[dict[str, Any]], positions: list[managym.Env]
