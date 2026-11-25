@@ -302,6 +302,7 @@ fn etali_primal_storm() -> CardDefinition {
                     subject: TriggerSubject::This,
                     per: Per::Object,
                     attackers: AttackSize::Any,
+                    attacked: Default::default(),
                     nth: None,
                 },
                 effects: vec![Effect::ExileEachLibraryTopCastFree],

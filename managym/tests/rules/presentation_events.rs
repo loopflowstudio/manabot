@@ -58,6 +58,7 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
             player,
             defender,
             attackers,
+            ..
         }
             if player.0 == 0
                 && defender.0 == 1

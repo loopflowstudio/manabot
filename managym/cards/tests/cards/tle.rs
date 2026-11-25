@@ -180,11 +180,11 @@ fn tle_baseline_tundra_wall_cannot_attack() {
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     assert!(!has_action(&s, |action| matches!(
         action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == wall
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == wall
     )));
     assert!(has_action(&s, |action| matches!(
         action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == ogre
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == ogre
     )));
 }
 
@@ -232,7 +232,7 @@ fn tle_baseline_iroh_pumps_every_attacking_creature() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
             matches!(action, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == (*permanent == iroh || *permanent == ogre))
+                if attack.is_some() == (*permanent == iroh || *permanent == ogre))
         });
     }
     resolve_everything(&mut s);
@@ -488,7 +488,13 @@ fn merchant_sacrifices_a_food_for_each_creature_dealing_combat_damage_to_you() {
     s.advance_to_active_step(1, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
-            matches!(action, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                action,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     s.advance_to_active_step(1, StepKind::DeclareBlockers);

@@ -135,10 +135,13 @@ impl Game {
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
                             | Action::TurnFaceUp { .. }
-                            | Action::Foretell { .. }
-                            // The creature an attack declaration sends in acts;
-                            // its decline names the same creature as a choice.
-                            | Action::DeclareAttacker { attack: true, .. } => "source",
+                            | Action::Foretell { .. } => "source",
+                            Action::DeclareAttacker {
+                                attack: Some(_), ..
+                            } if index == 0 => "source",
+                            Action::DeclareAttacker {
+                                attack: Some(_), ..
+                            } => "target",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",
@@ -485,6 +488,7 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
+                Decision::EnterAttacking { .. } => ("resolution_choice", "Choose who or what the entering creature attacks."),
                 Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),
                 Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),

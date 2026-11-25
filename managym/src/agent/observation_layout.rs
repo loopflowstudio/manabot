@@ -442,6 +442,7 @@ columns! { permanent {
     56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
     57: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
     58: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
+    59: ATTACKED_PERMANENT => ("attacked_permanent", ValueLayout::OBJECT_REFERENCE),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -532,6 +533,7 @@ columns! { action {
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
+    30: ATTACK_TARGET => ("attack_target", ValueLayout::OBJECT_REFERENCE),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {

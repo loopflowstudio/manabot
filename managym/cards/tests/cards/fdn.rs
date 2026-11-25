@@ -1420,7 +1420,7 @@ fn linden_and_chart_read_the_completed_attack_declaration() {
 
     *s.game_mut() = partial;
     assert_eq!(s.action_space(), &offer);
-    let chosen = &s.game().state.combat.as_ref().unwrap().attackers;
+    let chosen: Vec<_> = s.game().state.combat.as_ref().unwrap().attackers().collect();
     assert_eq!(chosen.len(), 1);
     assert_eq!(
         crate::support::inspect::permanent(&s, chosen[0]).tapped,
@@ -2548,7 +2548,7 @@ fn exemplar_of_light_counts_one_gain_per_lifelink_source() {
     crate::support::play::pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         match s.action_space().actions.iter().position(|a| {
-            matches!(a, Action::DeclareAttacker { permanent, attack: true, .. }
+            matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. }
                 if hawks.contains(permanent))
         }) {
             Some(index) => s.step_action(index),
@@ -3106,7 +3106,7 @@ fn ingenious_leonin_grows_another_attacker_and_gives_a_cat_first_strike() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
             matches!(action, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == [leonin, cat, ogre].contains(permanent))
+                if attack.is_some() == [leonin, cat, ogre].contains(permanent))
         });
         s.step_action(index.unwrap());
     }
@@ -7032,7 +7032,13 @@ fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
@@ -7120,7 +7126,13 @@ fn quilled_greatwurm_triggers_name_their_creature_and_damage_on_the_stack() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     let mut placement = Vec::new();

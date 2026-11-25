@@ -216,7 +216,7 @@ impl ObservationLayout {
         use crate::agent::observation_extents::{joins, Join};
         let mut references = BTreeMap::new();
         for key in self.arrays.keys() {
-            for join in joins(key, self.config.policy_history) {
+            for join in joins(key, self.config.policy_history, self.config.layout) {
                 let field = match *join {
                     Join::Objects => (None, 0),
                     Join::Object(column, base) => (Some(column), base),

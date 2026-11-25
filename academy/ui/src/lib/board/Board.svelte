@@ -264,9 +264,11 @@
     return false;
   }
 
+  const needsDefender = $derived(draft.attackers.some(id => (declarable.get(id)?.can_attack?.length ?? 0) > 0 && draft.defenders?.[id] === undefined));
+
   function confirmDraft(): void {
     const ready = exact;
-    if (!ready || ready.refused || !ready.steps.length) return;
+    if (needsDefender || !ready || ready.refused || !ready.steps.length) return;
     const offer = stepOffer(frame, ready.kind, ready.steps[0]);
     if (!offer) { stopNote = 'The board changed before the plan was sent; draft again.'; return; }
     running = { kind: ready.kind, steps: ready.steps, at: 0, sentAt: frame.revision };
@@ -842,11 +844,29 @@
       {#if running}
         <button type="button" class="btn btn-secondary" data-testid="combat-stop" onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={!needsDefender && exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!exact || exact.refused !== null} onclick={confirmDraft}>
+          disabled={needsDefender || !exact || exact.refused !== null} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
+        {#each draft.attackers as attacker (attacker)}
+          {@const targets = declarable.get(attacker)?.can_attack ?? []}
+          {#if targets.length}
+            <label>Attack with {names.get(attacker)}
+              <select value={draft.defenders?.[attacker] === null ? 'player' : draft.defenders?.[attacker] ?? ''} onchange={event => {
+                const defenders = { ...draft.defenders };
+                defenders[attacker] = event.currentTarget.value === 'player' ? null : Number(event.currentTarget.value);
+                draft = { ...draft, defenders };
+              }}>
+                <option value="" disabled>Choose a defender</option>
+                <option value="player">Defending player</option>
+                {#each targets as target (target.entity)}
+                  <option value={target.entity}>{names.get(target.entity)} (object {target.entity})</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+        {/each}
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>

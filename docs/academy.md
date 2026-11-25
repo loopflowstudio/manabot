@@ -700,7 +700,9 @@ a tray over the board.
 
 Combat is drafted whole. At an attack, every creature that can attack is
 outlined; click one (or focus it and press Enter) to add it to the attack or
-leave it out. Drafted attackers are ringed with a dashed line and lean in, and
+leave it out. When a planeswalker can be attacked, choose the defending player
+or a named planeswalker for each attacker. The confirmation lists those assignments.
+Drafted attackers are ringed with a dashed line and lean in, and
 a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
 rail. At a block, click a blocker, then the attacker it blocks; a blocker
 that can block only one attacker takes it at once, and the block's line is

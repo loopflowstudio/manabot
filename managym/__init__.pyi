@@ -1194,6 +1194,7 @@ class Permanent:
     attacking: bool
     first_strike_participant: bool
     exhausted_abilities: int
+    attacked_permanent: int | None
     loyalty_activated_this_turn: bool
     once_each_turn_used: int
     granted_firebending: int

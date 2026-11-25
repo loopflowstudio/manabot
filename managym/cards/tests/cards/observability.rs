@@ -2519,6 +2519,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             subject: TriggerSubject::you_control(CardPredicate::creature()),
             per: Per::Batch,
             attackers,
+            attacked: Default::default(),
             nth: None,
         });
         expected.push(match attackers {
@@ -3740,6 +3741,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         name => [Fact(FactKind::SetName)],
         creature_types => [Fact(FactKind::SetCreatureType)],
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
+        attacked_permanent => [Join(Permanent, permanent::ATTACKED_PERMANENT)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
         face_down => [column(Permanent, permanent::FACE_DOWN)],
@@ -4988,7 +4990,10 @@ fn declare(
             .attacking = true;
     }
     s.game_mut().state.combat = Some(Box::new(managym::flow::combat::CombatState {
-        attackers: attackers.to_vec(),
+        attack_targets: attackers
+            .iter()
+            .map(|&id| (id, managym::flow::combat::AttackTarget::Player(PlayerId(0))))
+            .collect(),
         attacker_to_blockers: blocks
             .map(|(attacker, blocker)| (attacker, vec![blocker]))
             .into_iter()

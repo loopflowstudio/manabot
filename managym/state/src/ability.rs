@@ -190,6 +190,8 @@ pub enum TriggerCondition {
         subject: TriggerSubject,
         per: Per,
         attackers: AttackSize,
+        #[serde(skip_serializing_if = "AttackedSubject::is_any")]
+        attacked: AttackedSubject,
         #[serde(skip_serializing_if = "Option::is_none")]
         nth: Option<u32>,
     },
@@ -548,8 +550,25 @@ impl TriggerCondition {
             subject,
             per,
             attackers: AttackSize::Any,
+            attacked: Default::default(),
             nth: None,
         }
+    }
+}
+
+/// The player or planeswalker a matching creature was declared attacking.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum AttackedSubject {
+    #[default]
+    Any,
+    Player(Actor),
+    PlaneswalkerControlledBy(Actor),
+    YouOrYourPlaneswalker,
+}
+
+impl AttackedSubject {
+    pub fn is_any(&self) -> bool {
+        *self == Self::Any
     }
 }
 

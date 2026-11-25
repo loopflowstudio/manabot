@@ -285,7 +285,13 @@ export function recentView(
         const attackers = kind.attackers.map(object => objectName(object, labels, book) ?? 'a creature');
         const owner = kind.defender.kind === 'player' ? playerSide(frame, kind.defender.id) : null;
         const by: Side | null = owner === 'you' ? 'opponent' : owner === 'opponent' ? 'you' : null;
-        fact(by, 'attacked', `${sideName(by)} attacked with ${list(attackers)}`, null, kind.attackers.map(object => object.entity));
+        if (kind.defender.kind === 'object') {
+          const defender = kind.defender.id;
+          fact(by, 'attacked', `${list(attackers)} attacked ${objectName(defender, labels, book) ?? 'a planeswalker'}`, null, [...kind.attackers.map(object => object.entity), defender.entity]);
+          view.touched.add(defender.entity);
+        } else {
+          fact(by, 'attacked', `${sideName(by)} attacked with ${list(attackers)}`, null, kind.attackers.map(object => object.entity));
+        }
         kind.attackers.forEach(object => view.touched.add(object.entity));
         break;
       }

@@ -12,7 +12,11 @@ pub(crate) enum Join {
     Span(&'static str, usize, usize), // destination, offset and count columns
 }
 
-pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
+pub(crate) fn joins(
+    key: &str,
+    policy_history: bool,
+    layout: super::observation_encoder::InputLayout,
+) -> &'static [Join] {
     use Join::*;
     match key {
         "action_focus" => &[Objects],
@@ -29,6 +33,19 @@ pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
             Object(relation::REFERENCE, 1),
             Extent("relations", relation::FRAME),
         ],
+        "actions" if layout == super::observation_encoder::InputLayout::OneToken => &[
+            Extent("relations", action::CONTINUATION),
+            Object(action::ATTACK_TARGET, 1),
+        ],
+        "agent_permanents" | "opponent_permanents"
+            if layout == super::observation_encoder::InputLayout::OneToken =>
+        {
+            &[
+                Object(permanent::ATTACHED_TO, 1),
+                Object(permanent::BLOCKING, 1),
+                Object(permanent::ATTACKED_PERMANENT, 1),
+            ]
+        }
         "actions" => &[Extent("relations", action::CONTINUATION)],
         "agent_permanents" | "opponent_permanents" => &[
             Object(permanent::ATTACHED_TO, 1),

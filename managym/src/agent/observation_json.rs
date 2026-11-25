@@ -876,6 +876,8 @@ pub(super) struct WirePermanentData {
     /// The attacking creature this one blocks (CR 509.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -1042,6 +1044,7 @@ impl From<WirePermanentData> for PermanentData {
             creature_types: w.creature_types,
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
+            attacked_permanent: w.attacked_permanent,
             abilities_lost: w.abilities_lost,
             face_down: w.face_down,
             combat_damage_to_players: w.combat_damage_to_players,
@@ -1119,6 +1122,7 @@ impl Serialize for PermanentData {
             creature_types: self.creature_types.clone(),
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
+            attacked_permanent: self.attacked_permanent,
             abilities_lost: self.abilities_lost,
             face_down: self.face_down,
             combat_damage_to_players: self.combat_damage_to_players.clone(),

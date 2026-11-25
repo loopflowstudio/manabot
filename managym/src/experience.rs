@@ -481,6 +481,9 @@ pub struct LegacyPermanentView {
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
+    /// The permanent this creature is attacking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<u32>,
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,

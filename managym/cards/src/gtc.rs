@@ -91,6 +91,7 @@ fn aurelia_the_warleader() -> CardDefinition {
                     subject: TriggerSubject::This,
                     per: Per::Object,
                     attackers: AttackSize::Any,
+                    attacked: Default::default(),
                     nth: Some(1),
                 },
                 intervening_if: None,

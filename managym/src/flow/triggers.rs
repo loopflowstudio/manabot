@@ -1179,13 +1179,25 @@ impl Game {
                     subject,
                     per: Per::Object,
                     attackers: size,
+                    attacked,
                     nth,
                 },
-                GameEvent::AttackersDeclared { attackers, .. },
+                GameEvent::AttackersDeclared {
+                    attackers,
+                    player,
+                    permanent_defenders,
+                },
             ) => {
                 if size.matches(attackers.len()) {
                     for &id in attackers {
-                        if self.attack_matches(subject, *nth, lki.object, lki.controller, id) {
+                        if self.attack_matches(subject, *nth, lki.object, lki.controller, id)
+                            && self.attacked_subject_matches(
+                                *attacked,
+                                lki.controller,
+                                *player,
+                                permanent_defenders.iter().any(|(a, _)| *a == id),
+                            )
+                        {
                             emit(TriggerMember::Attacker(id));
                         }
                     }
@@ -1968,14 +1980,25 @@ impl Game {
                 TriggerCondition::Attacks {
                     subject,
                     attackers: size,
+                    attacked,
                     nth,
                     ..
                 },
-                GameEvent::AttackersDeclared { attackers, .. },
+                GameEvent::AttackersDeclared {
+                    attackers,
+                    player,
+                    permanent_defenders,
+                },
             ) => {
                 size.matches(attackers.len())
                     && attackers.iter().any(|&id| {
                         self.attack_matches(subject, *nth, source_object, source_controller, id)
+                            && self.attacked_subject_matches(
+                                *attacked,
+                                source_controller,
+                                *player,
+                                permanent_defenders.iter().any(|(a, _)| *a == id),
+                            )
                     })
             }
             (
@@ -2234,6 +2257,25 @@ impl Game {
             }
             GameEvent::CardMoved { from, .. } => *from,
             _ => None,
+        }
+    }
+
+    fn attacked_subject_matches(
+        &self,
+        attacked: crate::state::ability::AttackedSubject,
+        controller: PlayerId,
+        active: PlayerId,
+        planeswalker: bool,
+    ) -> bool {
+        use crate::state::ability::AttackedSubject;
+        let defender = self.next_player(active);
+        match attacked {
+            AttackedSubject::Any => true,
+            AttackedSubject::Player(who) => !planeswalker && who.includes(controller, defender),
+            AttackedSubject::PlaneswalkerControlledBy(who) => {
+                planeswalker && who.includes(controller, defender)
+            }
+            AttackedSubject::YouOrYourPlaneswalker => defender == controller,
         }
     }
 

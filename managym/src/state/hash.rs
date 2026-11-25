@@ -90,6 +90,11 @@ struct CanonicalTurn<'a> {
         serialize_with = "crate::state::game_object::exact"
     )]
     attacks_this_turn: Vec<(ObjectId, u32)>,
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    attacked_permanents: Vec<(ObjectId, usize, crate::flow::combat::AttackTarget)>,
 
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -123,7 +128,26 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
-            attacks_this_turn: turn.attacks_this_turn.clone(),
+            attacks_this_turn: turn
+                .attacks_this_turn
+                .iter()
+                .map(|(attacker, targets)| (*attacker, targets.len() as u32))
+                .collect(),
+            attacked_permanents: turn
+                .attacks_this_turn
+                .iter()
+                .flat_map(|(attacker, targets)| {
+                    targets
+                        .iter()
+                        .enumerate()
+                        .filter_map(move |(index, target)| match *target {
+                            target @ crate::flow::combat::AttackTarget::Permanent(_) => {
+                                Some((*attacker, index, target))
+                            }
+                            _ => None,
+                        })
+                })
+                .collect(),
 
             history: turn.history,
             used_trigger_grants: &turn.used_trigger_grants,
@@ -157,6 +181,10 @@ struct CanonicalCombat {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     regular_damage_step: bool,
     attackers: Vec<PermanentId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    permanent_defenders: Vec<(PermanentId, crate::flow::combat::AttackTarget)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    attackers_without_defender: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     already_attacking: Option<usize>,
@@ -169,7 +197,14 @@ impl From<&CombatState> for CanonicalCombat {
         Self {
             first_strikers: combat.first_strikers.clone(),
             regular_damage_step: combat.regular_damage_step,
-            attackers: combat.attackers.clone(),
+            attackers: combat.attackers().collect(),
+            permanent_defenders: combat
+                .attack_targets
+                .iter()
+                .copied()
+                .filter(|(_, t)| matches!(t, crate::flow::combat::AttackTarget::Permanent(_)))
+                .collect(),
+            attackers_without_defender: combat.attackers_without_defender.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
                 .iter()

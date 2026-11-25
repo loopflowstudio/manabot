@@ -463,6 +463,9 @@ class LegacyPermanentView(ProtocolModel):
         default=False, exclude_if=lambda value: not value
     )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    attacked_permanent: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

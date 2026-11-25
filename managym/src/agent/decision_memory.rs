@@ -988,8 +988,18 @@ pub(crate) fn capture(
             true
         }
         Action::PassPriority { .. } => true,
-        Action::DeclareAttacker { attack, .. } => {
-            choice.declared = Some(*attack);
+        Action::DeclareAttacker {
+            permanent, attack, ..
+        } => {
+            choice.declared = Some(attack.is_some());
+            if let Some(crate::flow::combat::AttackTarget::Permanent(defender)) = attack {
+                let attacker = game
+                    .permanent_object(*permanent)
+                    .expect("declared attacker");
+                choice.references.extend(
+                    [attacker, *defender].map(|object| reference(game, object, viewer, true)),
+                );
+            }
             true
         }
         Action::DeclareBlocker { attacker, .. } => {

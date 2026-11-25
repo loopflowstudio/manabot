@@ -2659,6 +2659,20 @@
           "default": null,
           "title": "Attached To"
         },
+        "attacked_permanent": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attacked Permanent"
+        },
         "attacked_this_turn": {
           "type": "boolean"
         },

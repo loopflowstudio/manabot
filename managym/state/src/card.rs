@@ -491,6 +491,8 @@ pub enum Restriction {
     CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// No more than one declared creature can attack this permanent each combat.
+    CantBeAttackedByMoreThanOne,
     /// "Attacks each combat if able" (CR 508.1d): a requirement on the
     /// attack declaration, obeyed whenever the creature can attack.
     AttacksEachCombat,

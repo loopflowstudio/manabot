@@ -2993,7 +2993,9 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         root.state[object].replacement_effects = vec![effect];
     }
     root.state.combat = Some(Box::new(CombatState {
-        attackers: vec![first, second],
+        attack_targets: [first, second]
+            .map(|id| (id, crate::flow::combat::AttackTarget::Player(defender)))
+            .to_vec(),
         ..Default::default()
     }));
     root.resolve_combat_damage();
@@ -6158,6 +6160,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                     }
                 }
                 game.emit(GameEvent::AttackersDeclared {
+                    permanent_defenders: vec![],
                     player,
                     attackers: vec![permanent],
                 });

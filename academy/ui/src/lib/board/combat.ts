@@ -20,10 +20,11 @@ import { PRIMARY_CHARS } from './prompt';
 
 export interface RenderId { entity: number; incarnation: number }
 export interface PlannedBlock { blocker: RenderId; attacker: RenderId }
-export interface CombatPlan { attackers: RenderId[]; blocks: PlannedBlock[] }
-export interface DeclarableCreature { creature: RenderId; label: string; can_block: RenderId[]; must_block: boolean; must_attack: boolean }
+export interface PlannedAttack extends RenderId { defender?: RenderId }
+export interface CombatPlan { attackers: PlannedAttack[]; blocks: PlannedBlock[] }
+export interface DeclarableCreature { creature: RenderId; label: string; can_attack?: RenderId[]; can_block: RenderId[]; must_block: boolean; must_attack: boolean }
 export interface DeclarationStep {
-  revision: number; fingerprint: string; creature: RenderId; action_index: number; attack: boolean; blocks: RenderId | null;
+  revision: number; fingerprint: string; creature: RenderId; action_index: number; attack: boolean; defender?: RenderId | null; blocks: RenderId | null;
 }
 export interface CombatPreview {
   kind: 'attackers' | 'blockers';
@@ -40,7 +41,7 @@ export type CombatFetcher = (request: CombatAddress & { plan: CombatPlan }, sign
 // ———————————————————————————————————————— Drafts
 
 /** Attackers in the attack, or blocker → attacker; display ids. */
-export interface Draft { attackers: number[]; blocks: [number, number][] }
+export interface Draft { attackers: number[]; defenders?: Record<number, number | null>; blocks: [number, number][] }
 export const EMPTY_DRAFT: Draft = { attackers: [], blocks: [] };
 
 export function isDeclaration(frame: ExperienceFrame): boolean {
@@ -53,7 +54,12 @@ export function addressOf(frame: ExperienceFrame): CombatAddress | null {
 
 export function toggleAttacker(draft: Draft, id: number): Draft {
   const attackers = draft.attackers.includes(id) ? draft.attackers.filter(other => other !== id) : [...draft.attackers, id];
-  return { ...draft, attackers };
+  return withAttackers(draft, attackers);
+}
+
+function withAttackers(draft: Draft, attackers: number[]): Draft {
+  const defenders = Object.fromEntries(Object.entries(draft.defenders ?? {}).filter(([id]) => attackers.includes(Number(id))));
+  return { attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
 }
 
 /** Block `attacker` with `blocker`, or take the block back when it is already drafted. */
@@ -66,7 +72,7 @@ export function toggleBlock(draft: Draft, blocker: number, attacker: number): Dr
 /** Draft the first `count` of a pile's identical creatures into the attack. */
 export function setPileCount(draft: Draft, pile: number[], count: number): Draft {
   const rest = draft.attackers.filter(id => !pile.includes(id));
-  return { ...draft, attackers: [...rest, ...pile.slice(0, Math.max(0, Math.min(pile.length, count)))] };
+  return withAttackers(draft, [...rest, ...pile.slice(0, Math.max(0, Math.min(pile.length, count)))]);
 }
 
 /** The plan to send: the draft named by the preview's own exact identities. */
@@ -74,18 +80,22 @@ export function planOf(draft: Draft, preview: CombatPreview): CombatPlan {
   const ids = new Map<number, RenderId>();
   for (const creature of preview.declarable) {
     ids.set(creature.creature.entity, creature.creature);
+    for (const target of creature.can_attack ?? []) ids.set(target.entity, target);
     for (const attacker of creature.can_block) ids.set(attacker.entity, attacker);
   }
   const id = (entity: number): RenderId => ids.get(entity) ?? { entity, incarnation: 0 };
   return {
-    attackers: draft.attackers.map(id),
+    attackers: draft.attackers.map(attacker => {
+      const defender = draft.defenders?.[attacker];
+      return defender == null ? id(attacker) : { ...id(attacker), defender: id(defender) };
+    }),
     blocks: draft.blocks.map(([blocker, attacker]) => ({ blocker: id(blocker), attacker: id(attacker) })),
   };
 }
 
 export function planKey(plan: CombatPlan): string {
   const key = (id: RenderId): string => `${id.entity}@${id.incarnation}`;
-  return JSON.stringify([plan.attackers.map(key).sort(), plan.blocks.map(block => `${key(block.blocker)}>${key(block.attacker)}`).sort()]);
+  return JSON.stringify([plan.attackers.map(a => a.defender ? key(a) + ">" + key(a.defender) : key(a)).sort(), plan.blocks.map(block => `${key(block.blocker)}>${key(block.attacker)}`).sort()]);
 }
 
 /** The board as drafted: drafted attackers lean, drafted blockers draw their line. Presentation only. */
@@ -113,7 +123,9 @@ export function drawDraft(frame: ExperienceFrame, draft: Draft): ExperienceFrame
  */
 export function committedOf(frame: ExperienceFrame): Draft {
   const permanents = [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield];
+  const defenders = Object.fromEntries(permanents.flatMap(p => p.attacking && p.attacked_permanent != null ? [[p.id, p.attacked_permanent]] : []));
   return {
+    ...(Object.keys(defenders).length && { defenders }),
     attackers: permanents.filter(permanent => permanent.attacking).map(permanent => permanent.id),
     blocks: permanents.flatMap(permanent => (permanent.blocking === undefined ? [] : [[permanent.id, permanent.blocking] as [number, number]])),
   };
@@ -154,6 +166,11 @@ export function draftWords(
     const out = declarable.filter(creature => !draft.attackers.includes(creature.creature.entity)).map(creature => creature.label);
     const one = `Attack with ${name(draft.attackers[0])}`;
     const text = count === 1 && one.length <= PRIMARY_CHARS ? one : `Attack with ${count}`;
+    const defenders = { ...committed.defenders, ...drafted.defenders };
+    if (Object.keys(defenders).length) {
+      const assignments = draft.attackers.map(id => `${name(id)} attacks ${defenders[id] == null ? 'the defending player' : name(defenders[id]!)}`);
+      return { text, plan: assignments.join(' · ') };
+    }
     if (!out.length) return { text, plan: count > 1 ? `Attack with all ${count}` : `Attack with ${name(draft.attackers[0])}` };
     const left = counted(out);
     return { text, plan: `${count === 1 ? `Attack with ${name(draft.attackers[0])}` : text} · not with ${left.length > 2 ? `${out.length} others` : list(left)}` };
@@ -199,7 +216,10 @@ export function stepOffer(frame: ExperienceFrame, kind: CombatPreview['kind'], s
   if (!named.includes(step.creature.entity)) return null;
   if (kind === 'attackers') {
     const attacks = about('source').includes(step.creature.entity);
-    return attacks === step.attack ? offer : null;
+    const targets = offer.subjects.filter(s => s.role === 'target');
+    const defender = step.defender;
+    const matches = defender ? targets.length === 1 && targets[0].object.display_id === defender.entity && targets[0].object.subject.kind === 'object' && targets[0].object.subject.id.incarnation === defender.incarnation : targets.length === 0;
+    return attacks === step.attack && matches ? offer : null;
   }
   const targets = about('target');
   if (step.blocks === null) return targets.length === 0 ? offer : null;

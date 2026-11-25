@@ -140,11 +140,13 @@ fn cr_702_haste_can_attack_turn_it_enters() {
     s.play_land_and_cast_creature(0, "Mountain", "Raging Goblin");
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
 
-    assert!(s
-        .action_space()
-        .actions
-        .iter()
-        .any(|action| matches!(action, Action::DeclareAttacker { attack: true, .. })));
+    assert!(s.action_space().actions.iter().any(|action| matches!(
+        action,
+        Action::DeclareAttacker {
+            attack: Some(_),
+            ..
+        }
+    )));
 }
 
 /// Negative: non-haste creatures remain summoning sick.
@@ -158,11 +160,13 @@ fn cr_702_haste_negative_nonhaste_cant_attack_immediately() {
     s.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
 
-    assert!(!s
-        .action_space()
-        .actions
-        .iter()
-        .any(|action| matches!(action, Action::DeclareAttacker { attack: true, .. })));
+    assert!(!s.action_space().actions.iter().any(|action| matches!(
+        action,
+        Action::DeclareAttacker {
+            attack: Some(_),
+            ..
+        }
+    )));
 }
 
 /// CR 702.20 — Vigilance attackers don't tap.
@@ -233,7 +237,7 @@ fn cr_702_defender_cant_attack() {
             action,
             Action::DeclareAttacker {
                 permanent,
-                attack: true,
+                attack: Some(_),
                 ..
             } if *permanent == wall
         )
@@ -243,7 +247,7 @@ fn cr_702_defender_cant_attack() {
             action,
             Action::DeclareAttacker {
                 permanent,
-                attack: true,
+                attack: Some(_),
                 ..
             } if *permanent == goblin
         )
@@ -468,7 +472,7 @@ fn cr_702_menace_single_block_is_removed() {
     s.declare_block();
 
     let combat = s.game().state.combat.as_ref().expect("combat should exist");
-    let attacker = *combat.attackers.first().expect("attacker should exist");
+    let attacker = combat.attackers().next().expect("attacker should exist");
     let blockers = combat
         .attacker_to_blockers
         .get(&attacker)
@@ -496,7 +500,7 @@ fn cr_702_menace_two_blockers_is_legal() {
     s.declare_block();
 
     let combat = s.game().state.combat.as_ref().expect("combat should exist");
-    let attacker = *combat.attackers.first().expect("attacker should exist");
+    let attacker = combat.attackers().next().expect("attacker should exist");
     let blockers = combat
         .attacker_to_blockers
         .get(&attacker)

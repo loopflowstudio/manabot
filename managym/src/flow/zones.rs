@@ -399,7 +399,12 @@ impl Game {
         );
         let results = self.complete_immediate_batch(batch);
         for object in results.iter().flat_map(|result| result.arrivals()) {
-            self.finish_created_token(object, tapped_and_attacking);
+            if tapped_and_attacking {
+                self.finish_created_token(
+                    object,
+                    crate::flow::combat::AttackTarget::Player(self.next_player(controller)),
+                );
+            }
         }
         results
             .iter()
@@ -418,14 +423,16 @@ impl Game {
         Some(self.add_object(object))
     }
 
-    pub(crate) fn finish_created_token(&mut self, object: ObjectId, attacking: bool) {
+    pub(crate) fn finish_created_token(
+        &mut self,
+        object: ObjectId,
+        target: crate::flow::combat::AttackTarget,
+    ) {
         if let Some(id) = self.state.permanent_of(object) {
-            if attacking {
-                self.state.permanents[id].as_mut().expect("token").attacking = true;
-                if let Some(combat) = self.state.combat.as_mut() {
-                    combat.attackers.push(id);
-                    combat.attacker_to_blockers.entry(id).or_default();
-                }
+            self.state.permanents[id].as_mut().expect("token").attacking = true;
+            if let Some(combat) = self.state.combat.as_mut() {
+                combat.attack_targets.push((id, target));
+                combat.attacker_to_blockers.entry(id).or_default();
             }
         }
     }
@@ -1183,6 +1190,9 @@ impl Game {
             return;
         }
         let object_id = permanent.object;
+        if let Some(combat) = &mut self.state.combat {
+            combat.remove_defender(object_id);
+        }
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.controller = controller;
         permanent.summoning_sick = true;

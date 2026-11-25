@@ -76,7 +76,52 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         vigorbloom_annex(),
         void_extrapolator(),
         the_theorist(),
+        tomik_orzhov_lawmage(),
     ]
+}
+
+fn tomik_orzhov_lawmage() -> CardDefinition {
+    let restriction = StaticAbility::Restriction(StaticRestriction {
+        scope: StaticScope::This,
+        kind: Restriction::CantBeAttackedByMoreThanOne,
+        unless: None,
+    });
+    CardDefinition {
+        key: "fra.tomik_orzhov_lawmage",
+        scryfall_id: "7ca95235-6e54-4ff8-bc2e-6a3d483ff007",
+        printed: PrintedCharacteristics {
+            name: "Tomik, Orzhov Lawmage".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            text_box: "Flying\nPlaneswalkers you control have \"No more than one creature can attack this planeswalker each combat.\"\n{T}: Target creature with a +1/+1 counter on it gains flying until end of turn.".into(),
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::YouControl(CardPredicate {
+                    card_type: Some(CardType::Planeswalker),
+                    ..Default::default()
+                }),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::GrantStatic(Box::new(restriction))],
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate { with_counter: true, ..CardPredicate::creature() },
+                    }),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                )],
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn the_theorist() -> CardDefinition {

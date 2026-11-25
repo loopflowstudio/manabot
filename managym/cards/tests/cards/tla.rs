@@ -334,7 +334,7 @@ fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
             matches!(a, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == (*permanent == attacker))
+                if attack.is_some() == (*permanent == attacker))
         });
     }
     pass_until(&mut s, ActionSpaceKind::Priority);
@@ -1552,10 +1552,16 @@ fn fire_nation_attacks_soldiers_add_red_when_attacking() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     // Attackers are offered one at a time: attack with the first, hold the other.
     choose(&mut s, |a| {
-        matches!(a, Action::DeclareAttacker { attack: true, .. })
+        matches!(
+            a,
+            Action::DeclareAttacker {
+                attack: Some(_),
+                ..
+            }
+        )
     });
     choose(&mut s, |a| {
-        matches!(a, Action::DeclareAttacker { attack: false, .. })
+        matches!(a, Action::DeclareAttacker { attack: None, .. })
     });
     pass_until(&mut s, ActionSpaceKind::Priority);
     while !s.game().state.stack_objects.is_empty() {
@@ -1588,7 +1594,7 @@ fn foggy_swamp_vinebender_grows_on_own_turn_and_evades_small_blockers() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == vinebender),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == vinebender),
     );
     for _ in 0..10 {
         if s.action_space().kind == ActionSpaceKind::DeclareBlocker {
@@ -2022,7 +2028,13 @@ fn iroh_grand_lotus_firebends_two_when_attacking() {
     s.set_player_mana_pool(0, "");
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(&mut s, |a| {
-        matches!(a, Action::DeclareAttacker { attack: true, .. })
+        matches!(
+            a,
+            Action::DeclareAttacker {
+                attack: Some(_),
+                ..
+            }
+        )
     });
     pass_until(&mut s, ActionSpaceKind::Priority);
     while !s.game().state.stack_objects.is_empty() {
@@ -2321,7 +2333,13 @@ fn rough_rhino_cavalry_firebends_two_and_exhausts_for_counters_and_trample() {
     s.set_player_mana_pool(0, "");
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(&mut s, |a| {
-        matches!(a, Action::DeclareAttacker { attack: true, .. })
+        matches!(
+            a,
+            Action::DeclareAttacker {
+                attack: Some(_),
+                ..
+            }
+        )
     });
     pass_until(&mut s, ActionSpaceKind::Priority);
     while !s.game().state.stack_objects.is_empty() {
@@ -2797,7 +2815,7 @@ fn animated_land_attacks_with_haste_and_still_taps_for_mana() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let space = s.action_space().clone();
         let attack_land = space.actions.iter().position(|action| {
-        matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == land)
+        matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == land)
     });
         match attack_land {
             Some(index) => {
@@ -3024,7 +3042,7 @@ fn cat_owl_attack_untaps_artifacts_or_creatures_in_either_control() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         choose(
             &mut s,
-            |a| matches!(a,Action::DeclareAttacker{permanent,attack:true,..} if *permanent==owl),
+            |a| matches!(a,Action::DeclareAttacker{permanent,attack:Some(_),..} if *permanent==owl),
         );
         pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(!s
@@ -3348,7 +3366,7 @@ fn dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters() {
     s.pass_priority();
     s.pass_priority();
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let index = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack, .. } if (*permanent == agents) == *attack)).unwrap();
+        let index = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack, .. } if (*permanent == agents) == attack.is_some())).unwrap();
         s.step_action(index);
     }
     settle(&mut s);
@@ -3527,7 +3545,7 @@ fn dragon_and_soldier_tokens_firebend_their_printed_amount() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         choose(
             &mut s,
-            |a| matches!(a,Action::DeclareAttacker{permanent,attack:true,..} if *permanent==token),
+            |a| matches!(a,Action::DeclareAttacker{permanent,attack:Some(_),..} if *permanent==token),
         );
         pass_until(&mut s, ActionSpaceKind::Priority);
         settle(&mut s);
@@ -4203,7 +4221,7 @@ fn cadets_keep_announced_firebending_after_last_lesson_leaves() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == cadets),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == cadets),
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
     move_card(&mut s, lesson, ZoneType::Exile);
@@ -4228,7 +4246,7 @@ fn fire_sages_counter_cost_and_firebending_mana_lifetime() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a,Action::DeclareAttacker { permanent,attack:true,.. } if *permanent==sages),
+        |a| matches!(a,Action::DeclareAttacker { permanent,attack:Some(_),.. } if *permanent==sages),
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
     settle(&mut s);
@@ -4614,7 +4632,7 @@ fn gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card() {
         .last()
         .unwrap();
     let before = s.zone_size(0, ZoneType::Hand);
-    let index = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == gran)).unwrap();
+    let index = s.action_space().actions.iter().position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == gran)).unwrap();
     s.step_action(index);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
@@ -4744,7 +4762,13 @@ fn sozins_comet_grants_firebending_five_until_end_of_turn() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     for _ in 0..2 {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     pass_until(&mut s, ActionSpaceKind::Priority);
@@ -5123,7 +5147,13 @@ fn fire_nation_palace_grants_firebending_four_to_one_creature() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     for _ in 0..2 {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     pass_until(&mut s, ActionSpaceKind::Priority);
@@ -5887,7 +5917,7 @@ fn tundra_tank_protects_on_entry_and_firebends_once_crewed() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == tank),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == tank),
     );
     s.advance_until(
         |s| s.game().state.players[0].mana_pool.mana[3] == 1,
@@ -6144,7 +6174,7 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     );
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == turtle),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == turtle),
     );
     assert!(!tapped(&s, turtle), "vigilance");
 }
@@ -6182,7 +6212,7 @@ fn declare_attackers(s: &mut Scenario, attackers: &[PermanentId]) {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(s, |a| {
             matches!(a, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == attackers.contains(permanent))
+                if attack.is_some() == attackers.contains(permanent))
         });
     }
 }
@@ -7426,7 +7456,7 @@ fn team_avatar_buffs_a_creature_attacking_alone() {
         for declared in 0..3 {
             choose(
                 &mut s,
-                |a| matches!(a, Action::DeclareAttacker { attack, .. } if *attack == (declared < attackers)),
+                |a| matches!(a, Action::DeclareAttacker { attack, .. } if attack.is_some() == (declared < attackers)),
             );
         }
         pass_until(&mut s, ActionSpaceKind::Priority);
@@ -9360,7 +9390,7 @@ fn spirit_tokens_cannot_block_or_be_blocked_by_nonspirits() {
             }
             let index = s.action_space().actions.iter().position(|action| matches!(
             action,
-            Action::DeclareAttacker { permanent, attack, .. } if (*permanent == attacker) == *attack
+            Action::DeclareAttacker { permanent, attack, .. } if (*permanent == attacker) == attack.is_some()
         )).unwrap();
             s.step_action(index);
         }
@@ -9423,7 +9453,7 @@ fn suki_power_tracks_creature_count_and_attack_makes_a_token() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let space = s.action_space().clone();
         let attack_suki = space.actions.iter().position(|action| {
-        matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == suki)
+        matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == suki)
     });
         match attack_suki {
             Some(index) => {
@@ -9503,7 +9533,7 @@ fn tiger_dillo_needs_another_four_power_creature_to_be_an_attacker() {
             offered |= s.action_space().actions.iter().any(|action| {
                 matches!(
                     action,
-                    Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == tiger
+                    Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == tiger
                 )
             });
             s.decline_attack();
@@ -9656,7 +9686,7 @@ fn treetop_creates_one_white_ally_and_can_attack_immediately() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a,Action::DeclareAttacker { permanent,attack:true,.. } if *permanent==fighter),
+        |a| matches!(a,Action::DeclareAttacker { permanent,attack:Some(_),.. } if *permanent==fighter),
     );
     assert!(tapped(&s, fighter));
 }
@@ -9748,7 +9778,7 @@ fn uncle_iroh_firebending_survives_steps_and_expires_after_combat() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == iroh),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == iroh),
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
     settle(&mut s);
@@ -9911,12 +9941,12 @@ fn wandering_musicians_pump_all_own_creatures_for_the_turn() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a,Action::DeclareAttacker{permanent,attack:true,..} if *permanent==band),
+        |a| matches!(a,Action::DeclareAttacker{permanent,attack:Some(_),..} if *permanent==band),
     );
     // Decline the remaining fixture creature's attack.
     if s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: false, .. })
+            matches!(a, Action::DeclareAttacker { attack: None, .. })
         });
     }
     pass_until(&mut s, ActionSpaceKind::Priority);
@@ -9953,7 +9983,7 @@ fn wartime_protestors_haste_grant_is_temporary_and_only_for_other_own_allies() {
         for action in &s.action_space().actions {
             if let Action::DeclareAttacker {
                 permanent,
-                attack: true,
+                attack: Some(_),
                 ..
             } = action
             {
@@ -11563,7 +11593,7 @@ fn attack_and_settle(s: &mut Scenario, attackers: &[PermanentId], target: Option
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
+            matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. }
                 if attackers.contains(permanent))
         });
         match index {
@@ -12574,7 +12604,7 @@ fn attack_until_decision(s: &mut Scenario, attackers: &[PermanentId]) {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         let index = s.action_space().actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
+            matches!(action, Action::DeclareAttacker { permanent, attack: Some(_), .. }
                 if attackers.contains(permanent))
         });
         match index {
@@ -13478,7 +13508,7 @@ fn fire_navy_trebuchet_attacks_with_a_boulder_sacrificed_at_end_step() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     assert!(!s.action_space().actions.iter().any(|action| matches!(
         action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == trebuchet
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == trebuchet
     )));
     let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);
     s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
@@ -13550,7 +13580,7 @@ fn combustion_man_destroys_unless_the_controller_takes_damage_equal_to_his_power
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         choose(
             &mut s,
-            |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == man),
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == man),
         );
         while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
             s.decline_attack();
@@ -13768,7 +13798,7 @@ fn teo_spirited_glider_loots_and_counters_on_a_nonland_discard() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         choose(
             &mut s,
-            |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == teo),
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == teo),
         );
         while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
             s.decline_attack();
@@ -14165,7 +14195,7 @@ fn firebender_ascension_counts_attack_triggers_and_copies_them_at_four() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == soldier),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == soldier),
     );
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         s.decline_attack();
@@ -14350,7 +14380,7 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
-        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == rioter),
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == rioter),
     );
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         s.decline_attack();
@@ -15049,7 +15079,7 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
         .filter_map(|a| match a {
             Action::DeclareAttacker {
                 permanent,
-                attack: true,
+                attack: Some(_),
                 ..
             } => Some(*permanent),
             _ => None,
@@ -16266,7 +16296,13 @@ fn secret_of_bloodbending_controls_only_the_next_combat_in_either_seat() {
             caster as u8
         );
         choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
         s.advance_to_active_step(victim, StepKind::PostcombatMain);
         assert_eq!(
@@ -16726,7 +16762,7 @@ fn combustion_man_uses_departed_source_power_across_a_choice_and_reentry() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(&mut s, |action| {
         matches!(action,
-        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == man)
+        Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == man)
     });
     if s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         s.decline_attack();
@@ -17026,7 +17062,7 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |a| {
             matches!(a, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == [small, large].contains(permanent))
+                if attack.is_some() == [small, large].contains(permanent))
         });
     }
     pass_until(&mut s, ActionSpaceKind::OrderTriggers);

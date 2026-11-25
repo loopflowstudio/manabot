@@ -642,7 +642,11 @@ mod tests {
             .collect();
         game.mark_permanents_not_summoning_sick(active);
         for &attacker in &attackers {
-            game.declare_attacker(attacker, true).unwrap();
+            game.declare_attacker(
+                attacker,
+                Some(crate::flow::combat::AttackTarget::Player(defender)),
+            )
+            .unwrap();
         }
         for (&blocker, attacker) in blockers.iter().zip([0, 0, 1, 2]) {
             game.declare_blocker(blocker, Some(attackers[attacker]))
@@ -664,7 +668,11 @@ mod tests {
         // controller. Only earlier, committed deaths count on this branch.
         let extra = game.create_token("token.ally", active, false).unwrap();
         game.mark_permanents_not_summoning_sick(active);
-        game.declare_attacker(extra, true).unwrap();
+        game.declare_attacker(
+            extra,
+            Some(crate::flow::combat::AttackTarget::Player(defender)),
+        )
+        .unwrap();
         let last = game.create_token("token.ally", defender, false).unwrap();
         game.declare_blocker(last, Some(extra)).unwrap();
         *game.state.life_mut(defender).unwrap() = 1;

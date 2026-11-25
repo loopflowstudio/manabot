@@ -1068,6 +1068,10 @@ preview.refused         # None, or the first creature refused and why
 plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
 ordinary action at the decision it will be asked at, with that decision's
 revision and fingerprint; stepping them in order declares exactly the plan.
+Each declarable creature’s `can_attack` lists its permanent defenders. Supply
+a `PlannedAttack(entity=..., incarnation=..., defender=...)` to attack one.
+Omitting the defender attacks the player. The preview returns that same
+defender on the step to confirm.
 Creatures with a single legal answer are answered by the engine without a
 step, as in play. A block plan names blocker → attacker pairs
 (`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block

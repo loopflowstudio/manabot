@@ -56,7 +56,7 @@ fn foundations_5d_pacifism() {
             for action in &branch.action_space().actions {
                 if let Action::DeclareAttacker {
                     permanent,
-                    attack: true,
+                    attack: Some(_),
                     ..
                 } = action
                 {

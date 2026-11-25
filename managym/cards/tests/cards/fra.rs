@@ -451,3 +451,57 @@ fn minus_x_loyalty_survives_target_selection_payment_and_resolution() {
         assert_eq!(s.game().state.permanents[ogre].is_none(), take_target);
     }
 }
+
+#[test]
+fn tomik_grants_a_restriction_to_each_planeswalker_and_flying_to_a_countered_creature() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup, ready, set_counters},
+        inspect::keywords,
+        play::{activate, command, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::{combat::AttackTarget, turn::StepKind},
+        state::{card::Keyword, game_object::Target, permanent::CounterKind},
+    };
+    let tomik = "Tomik, Orzhov Lawmage";
+    let walker = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&[tomik, walker, "Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, tomik);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let jace = s.force_permanent_on_battlefield(1, walker);
+    s.force_permanent_on_battlefield(1, tomik);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 3);
+    set_counters(&mut s, first, CounterKind::PlusOnePlusOne, 1);
+    ready(&mut s, tomik);
+    activate(&mut s, source, 0);
+    assert!(s.action_space().actions.iter().all(
+        |a| matches!(a, Action::ChooseTarget {target: Target::Permanent(id), ..} if *id == first)
+    ));
+    assert!(s.choose_target(Target::Permanent(first)));
+    settle(&mut s);
+    assert!(keywords(&s, first).has(Keyword::Flying));
+    for id in [first, second] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    command(&mut s, |a| {
+        matches!(
+            a,
+            Action::DeclareAttacker {
+                attack: Some(AttackTarget::Permanent(_)),
+                ..
+            }
+        )
+    });
+    assert_eq!(s.action_space().actions.len(), 2);
+    assert!(matches!(
+        s.action_space().actions[0],
+        Action::DeclareAttacker {
+            attack: Some(AttackTarget::Player(_)),
+            ..
+        }
+    ));
+    s.declare_attack();
+}

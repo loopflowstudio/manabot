@@ -98,6 +98,7 @@ export interface ContinuousEffect {
 export interface PermanentState {
   printed_loyalty?: number | null;
   loyalty_activated_this_turn?: boolean;
+  attacked_permanent?: number;
   types?: CardTypes;
   is_token?: boolean;
   temp_subtypes?: string[];

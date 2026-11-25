@@ -2429,6 +2429,10 @@ impl PyPermanent {
         self.data.is_granted_land = value;
     }
     #[getter]
+    fn attacked_permanent(&self) -> Option<i32> {
+        self.data.attacked_permanent
+    }
+    #[getter]
     fn blocking(&self) -> Option<i32> {
         self.data.blocking
     }

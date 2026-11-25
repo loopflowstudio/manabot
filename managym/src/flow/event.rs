@@ -162,12 +162,16 @@ pub enum GameEvent {
     AttackersDeclared {
         player: PlayerId,
         attackers: Vec<PermanentId>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        permanent_defenders: Vec<(PermanentId, super::combat::AttackTarget)>,
     },
     /// Viewer-safe attacker identities captured at declaration completion.
     CombatAttackersDeclared {
         player: PlayerId,
         defender: PlayerId,
         attackers: Vec<ObjectEventRef>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        permanent_defenders: Vec<(ObjectEventRef, ObjectEventRef)>,
     },
     /// Final legal assignments after the complete blocker declaration loop.
     BlockersDeclared {

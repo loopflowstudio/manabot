@@ -10915,6 +10915,20 @@
       "U"
     ]
   },
+  "Tomik, Orzhov Lawmage": {
+    "name": "Tomik, Orzhov Lawmage",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nPlaneswalkers you control have \"No more than one creature can attack this planeswalker each combat.\"\n{T}: Target creature with a +1/+1 counter on it gains flying until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
   "Tolls of War": {
     "name": "Tolls of War",
     "mana_cost": "{W}{B}",

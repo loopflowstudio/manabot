@@ -1492,6 +1492,15 @@
           "format": "uint32",
           "minimum": 0
         },
+        "attacked_permanent": {
+          "description": "The permanent this creature is attacking.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "attacked_this_turn": {
           "type": "boolean"
         },

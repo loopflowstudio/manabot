@@ -901,6 +901,7 @@ pub struct PermanentData {
     pub is_granted_land: bool,
     /// The attacking creature this one blocks (CR 509.1).
     pub blocking: Option<i32>,
+    pub attacked_permanent: Option<i32>,
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     pub abilities_lost: bool,
@@ -1206,7 +1207,7 @@ impl Observation {
                                     .map(|id| id.0 as i32)
                                     .collect(),
                                 declared: match action {
-                                    Action::DeclareAttacker { attack, .. } => Some(*attack),
+                                    Action::DeclareAttacker { attack, .. } => Some(attack.is_some()),
                                     Action::DeclareBlocker { attacker, .. } => {
                                         Some(attacker.is_some())
                                     }
@@ -1771,6 +1772,16 @@ impl Observation {
                 .creature_types_set
                 .then(|| characteristics.creature_types.listed().to_vec()),
             is_granted_land: characteristics.is_land() && !object.types.is_land(),
+            attacked_permanent: game.state.combat.as_ref().and_then(|c| {
+                match c.defender(perm_id)? {
+                    crate::flow::combat::AttackTarget::Permanent(obj) => game
+                        .state
+                        .permanent_of(obj)
+                        .and_then(|id| game.state.permanents[id].as_ref())
+                        .map(|p| p.id.0 as i32),
+                    _ => None,
+                }
+            }),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -2237,13 +2248,19 @@ impl Observation {
                 player,
                 defender,
                 attackers,
+                permanent_defenders,
             } => attackers
                 .iter()
                 .map(|attacker| {
                     Self::build_event_data(
                         EventType::CombatAttackersDeclared,
                         Some(Object(*attacker)),
-                        Some(Player(*defender)),
+                        Some(
+                            permanent_defenders
+                                .iter()
+                                .find(|(a, _)| a == attacker)
+                                .map_or(Player(*defender), |(_, object)| Object(*object)),
+                        ),
                         0,
                         Some(*player),
                     )
@@ -2435,12 +2452,26 @@ impl Observation {
                 }
                 focus
             }
-            Action::DeclareAttacker { permanent, .. }
-            | Action::WaterbendTap { permanent, .. }
-            | Action::TapForMana { permanent, .. } => game.state.permanents[*permanent]
-                .as_ref()
-                .map(|perm| vec![perm.id])
-                .unwrap_or_default(),
+            Action::DeclareAttacker {
+                permanent, attack, ..
+            } => {
+                let mut focus: Vec<_> = game.state.permanents[*permanent]
+                    .iter()
+                    .map(|p| p.id)
+                    .collect();
+                if let Some(crate::flow::combat::AttackTarget::Permanent(object)) = attack {
+                    if let Some(id) = game.state.permanent_of(*object) {
+                        focus.push(game.state.permanents[id].as_ref().unwrap().id);
+                    }
+                }
+                focus
+            }
+            Action::WaterbendTap { permanent, .. } | Action::TapForMana { permanent, .. } => {
+                game.state.permanents[*permanent]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default()
+            }
             Action::PassPriority { .. } => vec![],
             Action::DeclareBlocker {
                 blocker, attacker, ..

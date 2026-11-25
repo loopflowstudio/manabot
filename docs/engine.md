@@ -1050,6 +1050,23 @@ loyalty among its counter facts, and the per-turn limit in
 `loyalty_activated_this_turn`. Each available loyalty activation names its
 cost and effect in the shared offer.
 
+### Attacking a planeswalker
+
+Each attacker can attack the defending player or one of that player’s
+planeswalkers. In v11 the action’s `attack_target` joins the defending
+permanent, and `attacked_permanent` on an attacking permanent identifies
+its current defender. Both use one-based object references. A player attack
+has a zero permanent reference. The first two ordinary declaration offers
+still attack the player and decline, respectively.
+
+Combat damage removes loyalty from the planeswalker. Ordinary trample can
+assign excess damage to that planeswalker. If it leaves combat before damage,
+the creature stays attacking and can still deal damage to its blockers.
+Tomik, Orzhov Lawmage limits declarations to one attacker per planeswalker
+its controller controls. A token entering tapped and attacking chooses its
+own defender as it enters. This can include a planeswalker already under
+attack, and multiple tokens entering together choose independently.
+
 ## Objects and zones
 
 The engine's runtime types and their names come from the Comprehensive Rules.

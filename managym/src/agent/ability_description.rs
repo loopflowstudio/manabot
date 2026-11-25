@@ -222,11 +222,18 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
         TriggerCondition::Attacks {
             subject,
             per,
-            attackers, nth,
+            attackers, nth, attacked,
         } => {
             let attack = match per {
                 Per::Object => format!("{} attacks", subject_description(subject, attached)),
                 Per::Batch => format!("{} attack", one_or_more(subject, "permanents", attached)),
+            };
+            use crate::state::ability::AttackedSubject;
+            let attack = match attacked {
+                AttackedSubject::Any => attack,
+                AttackedSubject::Player(who) => format!("{attack} {}", actor_noun(*who)),
+                AttackedSubject::PlaneswalkerControlledBy(who) => format!("{attack} a planeswalker controlled by {}", actor_noun(*who)),
+                AttackedSubject::YouOrYourPlaneswalker => format!("{attack} you or a planeswalker you control"),
             };
             let prefix = nth.map_or_else(|| "Whenever".to_string(), |n| format!("On attack {n} this turn, when"));
             match attackers {
@@ -1941,6 +1948,7 @@ mod tests {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
+                    attacked: Default::default(),
                     nth: None,
                 },
                 "Whenever a creature you control attacks alone",

@@ -119,3 +119,14 @@ describe('a saved draft', () => {
     expect(loadDraft({ ...block, frame_hash: 'another' })).toBeNull();
   });
 });
+
+it('keeps each chosen defender on its own attacker through preview and confirmation', () => {
+  const jace = { entity: 7, incarnation: 3 };
+  const declarable = [1, 2].map(id => ({ ...creature(id, names.get(id)!), can_attack: [jace] }));
+  const draft = { attackers: [1, 2], defenders: { 1: 7, 2: null }, blocks: [] };
+  const plan = planOf(draft, { declarable } as CombatPreview);
+  expect(plan.attackers).toEqual([{ entity: 1, incarnation: 2, defender: jace }, { entity: 2, incarnation: 2 }]);
+  expect(draftWords('attackers', draft, declarable, new Map([...names, [7, 'Jace']]), EMPTY_DRAFT).plan)
+    .toBe('Tiger-Seal attacks Jace · Otter-Penguin attacks the defending player');
+  expect(toggleAttacker(draft, 1).defenders).toEqual({ 2: null });
+});

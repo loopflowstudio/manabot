@@ -515,6 +515,8 @@ pub(crate) struct PendingEvent {
     pub(crate) copy_chosen: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) second_card_first: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) attack_target: Option<super::combat::AttackTarget>,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -699,6 +701,7 @@ impl Game {
             sacrifice,
             applied: Vec::new(),
             copy_chosen: false,
+            attack_target: None,
             second_card_first: None,
         })
     }
@@ -792,6 +795,34 @@ impl Game {
                 [] => {
                     if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
                         return BatchProgress::Decision(Box::new(decision));
+                    }
+                    if let (
+                        EventBinding::Created { attacking: true },
+                        None,
+                        ProposedEvent::ZoneMove {
+                            object_id,
+                            to: ZoneType::Battlefield,
+                            entry,
+                            ..
+                        },
+                    ) = (&batch.binding, pending.attack_target, &pending.event)
+                    {
+                        let player = entry
+                            .controller
+                            .unwrap_or(self.state.entry_object(*object_id).owner);
+                        if player == self.active_player() && self.state.combat.is_some() {
+                            let defenders: Vec<_> = self.attack_targets(player).collect();
+                            if defenders.len() > 1 {
+                                return BatchProgress::Decision(Box::new(
+                                    Decision::EnterAttacking {
+                                        player,
+                                        object: *object_id,
+                                        defenders,
+                                    },
+                                ));
+                            }
+                            batch.events[batch.cursor].attack_target = defenders.first().copied();
+                        }
                     }
                     batch.cursor += 1;
                 }
@@ -928,6 +959,11 @@ impl Game {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
             }
             if result.committed {
+                if let Some(defender) = pending.attack_target {
+                    for object in result.arrivals() {
+                        self.finish_created_token(object, defender);
+                    }
+                }
                 if matches!(
                     batch.binding,
                     EventBinding::Moved {

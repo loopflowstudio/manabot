@@ -99,7 +99,13 @@ fn taunting_challenge_makes_every_able_creature_block_its_target() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(&mut s, |action| {
-            matches!(action, Action::DeclareAttacker { attack: true, .. })
+            matches!(
+                action,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
         });
     }
     s.advance_to_active_step(0, StepKind::DeclareBlockers);

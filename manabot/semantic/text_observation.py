@@ -641,11 +641,13 @@ class _Renderer:
         ):
             raise TextEncodingError("action missing required visible focus")
         if kind == "declare_attacker":
-            if action.declared is None or len(focus) != 1:
+            if action.declared is None or len(focus) not in (1, 2):
                 raise TextEncodingError("attack declaration missing")
             label = (
                 "Attack with " if action.declared else "Do not attack with "
             ) + first
+            if len(focus) == 2:
+                label = f"Attack {focus[1]} with {first}"
         elif kind == "declare_blocker":
             if len(focus) not in (1, 2):
                 raise TextEncodingError("unsupported blocker focus")
@@ -1108,6 +1110,8 @@ class _Renderer:
             parts.append(f"creature types set to {types}")
         if permanent.is_granted_land:
             parts.append("land through an effect")
+        if permanent.attacked_permanent is not None:
+            parts.append(f"attacking {self.name(permanent.attacked_permanent)}")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
         if permanent.abilities_lost:

@@ -107,6 +107,7 @@ impl Game {
             return;
         }
         self.state.effects.extend(records);
+        self.remove_invalid_defenders();
     }
 
     /// The `Affected` of a battlefield permanent's current incarnation.

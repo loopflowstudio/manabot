@@ -108,6 +108,7 @@ impl Game {
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
     pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
+        self.remove_invalid_defenders();
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
         if self.is_game_over() {

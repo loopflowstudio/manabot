@@ -1183,6 +1183,7 @@ fn armasaur_guide() -> CardDefinition {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Batch,
                     attackers: AttackSize::AtLeast(3),
+                    attacked: Default::default(),
                     nth: None,
                 },
                 intervening_if: None,

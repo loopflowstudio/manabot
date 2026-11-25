@@ -190,7 +190,7 @@ fn default_action(actions: &[Action]) -> usize {
             matches!(
                 action.action_type(),
                 ActionType::PriorityPassPriority | ActionType::ChooseTarget
-            ) || matches!(action, Action::DeclareAttacker { attack: false, .. })
+            ) || matches!(action, Action::DeclareAttacker { attack: None, .. })
                 || matches!(action, Action::DeclareBlocker { attacker: None, .. })
         })
         .unwrap_or(actions.len().saturating_sub(1))

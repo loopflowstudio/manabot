@@ -74,7 +74,10 @@ fn an_attack_plan_is_read_only_and_its_steps_declare_exactly_it() {
     let (mut s, attackers, _) = combat();
     let game = s.game();
     let plan = CombatPlan {
-        attackers: vec![render(game, attackers[0]), render(game, attackers[2])],
+        attackers: vec![
+            render(game, attackers[0]).into(),
+            render(game, attackers[2]).into(),
+        ],
         blocks: Vec::new(),
     };
     let before = witness(game);
@@ -93,20 +96,16 @@ fn an_attack_plan_is_read_only_and_its_steps_declare_exactly_it() {
     assert_eq!(result.steps.len(), 3, "one answer per creature asked");
     assert_eq!(result.steps.iter().filter(|step| step.attack).count(), 2);
     let mut declared = result.declared_attackers.clone();
-    declared.sort_by_key(|id| id.entity);
+    declared.sort_by_key(|a| a.creature.entity);
     let mut planned = plan.attackers.clone();
-    planned.sort_by_key(|id| id.entity);
+    planned.sort_by_key(|a| a.creature.entity);
     assert_eq!(declared, planned);
 
     follow(s.game_mut(), &result);
     let combat = s.game().state.combat.as_ref().unwrap();
-    let mut live: Vec<_> = combat
-        .attackers
-        .iter()
-        .map(|id| render(s.game(), *id))
-        .collect();
+    let mut live: Vec<_> = combat.attackers().map(|id| render(s.game(), id)).collect();
     live.sort_by_key(|id| id.entity);
-    assert_eq!(live, planned);
+    assert_eq!(live, planned.iter().map(|a| a.creature).collect::<Vec<_>>());
 }
 
 #[test]
@@ -127,7 +126,7 @@ fn a_stale_address_is_refused_and_a_creature_that_cannot_attack_is_named() {
         game,
         0,
         &CombatPlan {
-            attackers: vec![elf],
+            attackers: vec![elf.into()],
             blocks: Vec::new(),
         },
     );
@@ -143,7 +142,10 @@ fn at_blocks() -> (Scenario, Vec<PermanentId>, Vec<PermanentId>) {
     let (mut s, attackers, blockers) = combat();
     let game = s.game();
     let all = CombatPlan {
-        attackers: attackers.iter().map(|id| render(game, *id)).collect(),
+        attackers: attackers
+            .iter()
+            .map(|id| render(game, *id).into())
+            .collect(),
         blocks: Vec::new(),
     };
     let result = preview(game, 0, &all);
@@ -274,7 +276,7 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 game,
                 0,
                 &CombatPlan {
-                    attackers: vec![ogre],
+                    attackers: vec![ogre.into()],
                     blocks: Vec::new(),
                 },
             );
@@ -295,7 +297,10 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 // Already declared without asking: the plan covers the rest.
                 None => {
                     assert!(home.refused.is_none(), "{context}: {:?}", home.refused);
-                    assert!(home.declared_attackers.contains(&juggernaut), "{context}");
+                    assert!(
+                        home.declared_attackers.contains(&juggernaut.into()),
+                        "{context}"
+                    );
                 }
             }
             assert!(home
@@ -304,15 +309,15 @@ fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
                 .all(|creature| creature.creature == juggernaut || !creature.must_attack));
 
             let both = CombatPlan {
-                attackers: vec![juggernaut, ogre],
+                attackers: vec![juggernaut.into(), ogre.into()],
                 blocks: Vec::new(),
             };
             let result = preview(game, 0, &both);
             assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
             let mut declared = result.declared_attackers.clone();
-            declared.sort_by_key(|id| id.entity);
+            declared.sort_by_key(|a| a.creature.entity);
             let mut planned = both.attackers.clone();
-            planned.sort_by_key(|id| id.entity);
+            planned.sort_by_key(|a| a.creature.entity);
             assert_eq!(declared, planned, "{context}");
         }
     }
@@ -362,7 +367,10 @@ fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
                 .position(|action| {
                     matches!(
                         action,
-                        managym::agent::action::Action::DeclareAttacker { attack: true, .. }
+                        managym::agent::action::Action::DeclareAttacker {
+                            attack: Some(_),
+                            ..
+                        }
                     )
                 })
                 .unwrap();

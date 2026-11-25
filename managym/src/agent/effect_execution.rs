@@ -89,6 +89,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "effect execution",
     "end batch",
     "end the turn",
+    "attacked defender",
     "entering card",
     "entering definition",
     "enters back face up",
@@ -846,6 +847,12 @@ impl<'a> Projection<'a> {
         });
         for pending in &batch.events {
             self.field("event ordinal", &pending.ordinal);
+            if let Some(subject) = pending
+                .attack_target
+                .and_then(|t| self.game.attack_target_subject(t))
+            {
+                self.target("attacked defender", subject);
+            }
             match &pending.event {
                 ProposedEvent::Damage {
                     source,
@@ -1670,6 +1677,7 @@ pub(crate) fn project_decision(
             }
             out.object_ids("legends kept", keep);
         }
+        Decision::EnterAttacking { object, .. } => out.object_id("entering card", *object),
         Decision::EnterAsCopy {
             object_id,
             candidates,

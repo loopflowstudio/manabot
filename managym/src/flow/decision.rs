@@ -528,6 +528,12 @@ pub enum Decision {
         object_id: ObjectId,
         candidates: Vec<PermanentId>,
     },
+    /// CR 508.4: choose the defender of one entering creature before the simultaneous entries.
+    EnterAttacking {
+        player: PlayerId,
+        object: ObjectId,
+        defenders: Vec<super::combat::AttackTarget>,
+    },
     /// Choose a name from the immutable installed vocabulary, one ordinary
     /// decision per level: a scope larger than `NAME_BRANCHING` offers its
     /// balanced child groups, and choosing one narrows `scope` without
@@ -783,6 +789,7 @@ impl Decision {
             Decision::OrderMeldedCards { player, .. }
             | Decision::AssignCombatDamage { player, .. }
             | Decision::OrderReplacement { player, .. }
+            | Decision::EnterAttacking { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -892,6 +899,7 @@ impl Decision {
             Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }
             | Decision::OrderReplacement { .. }
+            | Decision::EnterAttacking { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -1582,12 +1590,7 @@ impl Game {
                     self.place_library_arrivals(result, second_from_top);
                 }
             }
-            EventBinding::Created { attacking } => {
-                frame.created = moved.collect();
-                for &object in &frame.created {
-                    self.finish_created_token(object, attacking);
-                }
-            }
+            EventBinding::Created { .. } => frame.created = moved.collect(),
             EventBinding::Damage { result: measured } => {
                 // Each damage instruction measures its own excess: prevented
                 // or redirected damage leaves none, never an earlier one's.
@@ -1702,6 +1705,24 @@ impl Game {
                     })
                     .collect(),
                 focus: source_focus,
+            },
+            Decision::EnterAttacking {
+                player,
+                object,
+                defenders,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                focus: vec![self.state.entry_object(*object).id],
+                actions: defenders
+                    .iter()
+                    .map(|defender| Action::ChooseTarget {
+                        player: *player,
+                        target: self
+                            .attack_target_subject(*defender)
+                            .expect("offered defender"),
+                    })
+                    .collect(),
             },
             Decision::EnterAsCopy {
                 player,
@@ -2263,6 +2284,21 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::EnterAttacking { defenders, .. }, Action::ChooseTarget { target, .. })
+                if let Some(defender) = defenders
+                    .iter()
+                    .copied()
+                    .find(|&d| self.attack_target_subject(d) == Some(*target)) =>
+            {
+                let batch = suspended
+                    .frame
+                    .batch
+                    .as_mut()
+                    .expect("attacking token entry batch");
+                batch.events[batch.cursor].attack_target = Some(defender);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
                 let of = match choice {
                     Action::ChooseTarget {

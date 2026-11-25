@@ -40,6 +40,12 @@ def _event_type(event: managym.EventData) -> str:
         return "UNKNOWN"
 
 
+def _combat_recipient(event: managym.EventData) -> dict[str, Any]:
+    if int(event.target_kind) == int(managym.EventEntityKindEnum.OBJECT):
+        return {"kind": "object", "id": _event_object_id(event, source=False)}
+    return {"kind": "player", "id": int(event.target_id)}
+
+
 def _event_object_id(event: managym.EventData, *, source: bool) -> dict[str, int]:
     entity = event.source_id if source else event.target_id
     incarnation = event.source_incarnation if source else event.target_incarnation
@@ -322,10 +328,11 @@ class PresentationProjector:
 
             if event_type == "COMBAT_ATTACKERS_DECLARED":
                 attackers: list[dict[str, int]] = []
-                defender = int(event.target_id)
+                defender = _combat_recipient(event)
                 while (
                     index < len(events)
                     and _event_type(events[index]) == "COMBAT_ATTACKERS_DECLARED"
+                    and _combat_recipient(events[index]) == defender
                 ):
                     attackers.append(_event_object_id(events[index], source=True))
                     index += 1
@@ -337,7 +344,7 @@ class PresentationProjector:
                         kind={
                             "kind": "attack_group",
                             "attackers": attackers,
-                            "defender": {"kind": "player", "id": defender},
+                            "defender": defender,
                         },
                     )
                 )
@@ -375,14 +382,7 @@ class PresentationProjector:
                 continue
 
             if event_type == "COMBAT_DAMAGE_DEALT":
-                target = (
-                    {
-                        "kind": "object",
-                        "id": _event_object_id(event, source=False),
-                    }
-                    if int(event.target_kind) == int(managym.EventEntityKindEnum.OBJECT)
-                    else {"kind": "player", "id": int(event.target_id)}
-                )
+                target = _combat_recipient(event)
                 self._facts.append(
                     _PresentationFact(
                         importance="critical",

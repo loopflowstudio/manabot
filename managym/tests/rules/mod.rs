@@ -1,3 +1,4 @@
+pub mod attack_targets;
 pub mod combat_preview;
 pub mod cr_103_game_start;
 pub mod cr_106_mana;

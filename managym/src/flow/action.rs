@@ -47,6 +47,30 @@ impl Game {
             return opening.action_description(self, action);
         }
         match action {
+            Action::ChooseTarget { target, .. }
+                if let Some(Decision::EnterAttacking { object, .. }) =
+                    self.state.suspended_decision.as_ref().map(|s| &s.decision) =>
+            {
+                let defender = match *target {
+                    Target::Player(seat) => format!("Seat {}", seat.0 + 1),
+                    Target::Permanent(id) => self.observed_object_name(self.permanent_object(id)?),
+                    _ => return None,
+                };
+                Some(format!(
+                    "Attack {defender} with {}",
+                    self.state.entry_object(*object).name
+                ))
+            }
+            Action::DeclareAttacker {
+                permanent,
+                attack: Some(super::combat::AttackTarget::Permanent(object)),
+                ..
+            } => Some(format!(
+                "Attack {} (object {}) with {}",
+                self.observed_object_name(*object),
+                self.object_event_ref(*object)?.entity.0,
+                self.observed_object_name(self.permanent_object(*permanent)?)
+            )),
             Action::CastSpell {
                 object,
                 route: None,
@@ -380,9 +404,23 @@ impl Game {
             }) => {
                 let rest = remaining - mode as i32;
                 let recipient = if *last {
-                    "to defending player"
+                    let id = self.state.permanent_of(*attacker)?;
+                    match self
+                        .state
+                        .combat
+                        .as_ref()?
+                        .attack_targets
+                        .iter()
+                        .find(|(source, _)| *source == id)?
+                        .1
+                    {
+                        super::combat::AttackTarget::Permanent(object) => {
+                            format!("to {}", self.observed_object_name(object))
+                        }
+                        super::combat::AttackTarget::Player(_) => "to defending player".into(),
+                    }
                 } else {
-                    "left to assign"
+                    "left to assign".into()
                 };
                 Some(format!(
                     "{} assigns {mode} to {}, {rest} {recipient}",

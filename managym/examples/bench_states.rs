@@ -689,7 +689,13 @@ fn nth_action(env: &mut Env, kind: &str, nth: usize) -> Option<usize> {
             a,
             Action::ActivateAbility { .. } | Action::ActivateCardAbility { .. }
         ),
-        "attack" => matches!(a, Action::DeclareAttacker { attack: true, .. }),
+        "attack" => matches!(
+            a,
+            Action::DeclareAttacker {
+                attack: Some(_),
+                ..
+            }
+        ),
         "block" => matches!(
             a,
             Action::DeclareBlocker {
@@ -796,9 +802,15 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
         }
         let options = actions(&mut env);
         let index = if kind == ActionSpaceKind::DeclareAttacker {
-            options
-                .iter()
-                .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+            options.iter().position(|a| {
+                matches!(
+                    a,
+                    Action::DeclareAttacker {
+                        attack: Some(_),
+                        ..
+                    }
+                )
+            })
         } else {
             options
                 .iter()
@@ -886,7 +898,7 @@ fn reach(root: &Env, label: &str) -> Env {
             .or_else(|| {
                 options
                     .iter()
-                    .position(|a| matches!(a, Action::DeclareAttacker { attack: false, .. }))
+                    .position(|a| matches!(a, Action::DeclareAttacker { attack: None, .. }))
             })
             .unwrap_or(0);
         env.step(index as i64).unwrap();

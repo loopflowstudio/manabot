@@ -229,6 +229,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
+        "attacked_permanent": permanent.attacked_permanent,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
@@ -634,7 +635,7 @@ def format_action(
 
     Focus semantics (managym observation.rs action_focus):
       PLAY_LAND / CAST_SPELL: [card_id]
-      DECLARE_ATTACKER:       [attacker_permanent_id]
+      DECLARE_ATTACKER:       [attacker_permanent_id, attacked_permanent_id?]
       DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
                               (one entry means "this creature does not block")
       CHOOSE_TARGET:          [player_id or permanent_id]
@@ -659,6 +660,8 @@ def format_action(
     if action_name == "PRIORITY_CAST_SPELL" and first:
         return f"Cast {first}"
     if action_name == "DECLARE_ATTACKER" and first:
+        if len(focus_names) == 2:
+            return f"Attack {focus_names[1]} with {first}"
         return (
             f"Do not attack with {first}"
             if declared is False

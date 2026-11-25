@@ -114,7 +114,11 @@ PERMANENT_TIMESTAMP_INDEX = column("agent_permanents", "timestamp")
 PERMANENT_MANA_VALUE_INDEX = column("agent_permanents", "mana_value")
 PERMANENT_DIM = width("agent_permanents")
 # Permanent columns that hold object links (joins), in model parameter order.
-PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+PERMANENT_LINK_INDEXES = (
+    PERMANENT_ATTACHED_INDEX,
+    PERMANENT_BLOCKING_INDEX,
+    column("agent_permanents", "attacked_permanent"),
+)
 
 # Input v11 stack rows, top first: one per spell or ability.
 STACK_IS_MINE_INDEX = column("stack", "is_mine")

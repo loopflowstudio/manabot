@@ -1091,6 +1091,7 @@ pub fn encode_rows(
                     row[permanent::COMBAT_DAMAGE_TO_ME],
                     row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
                 ] = combat_damage_flags(&permanent.combat_damage_to_players);
+                row[permanent::ATTACKED_PERMANENT] = link(permanent.attacked_permanent);
             }
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
@@ -2287,6 +2288,13 @@ fn encode_actions(
         }
         if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
             *route = Integer(i64::from(action.play_route.unwrap_or_default()));
+        }
+        if let (crate::agent::action::ActionType::DeclareAttacker, Some(column), Some(index)) = (
+            action.action_type,
+            row.get_mut(action::ATTACK_TARGET),
+            action.focus.get(1).and_then(|id| object_to_index.get(id)),
+        ) {
+            *column = Integer(i64::from(*index) + 1);
         }
         out.write(Table::Actions, 0, action_index, row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;

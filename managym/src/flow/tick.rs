@@ -242,7 +242,7 @@ impl Game {
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_default();
-                combat.already_attacking = combat.attackers.len();
+                combat.already_attacking = combat.attack_targets.len();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
@@ -331,15 +331,35 @@ impl Game {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
-                    let attackers = combat.attackers[first..].to_vec();
-                    if !attackers.is_empty() {
+                    let declared = combat.attack_targets[first..].to_vec();
+                    let permanent_defenders: Vec<_> = declared
+                        .iter()
+                        .copied()
+                        .filter(|(_, t)| matches!(t, super::combat::AttackTarget::Permanent(_)))
+                        .collect();
+                    if !declared.is_empty() {
+                        let mut attackers = Vec::with_capacity(declared.len());
                         self.state.turn.history[active.0].attacked = true;
-                        for &attacker in &attackers {
+                        for (attacker, target) in declared {
+                            attackers.push(attacker);
                             let object =
                                 self.permanent_object(attacker).expect("declared attacker");
-                            self.state.turn.record_attack(object);
+                            self.state.turn.record_attack(object, target);
                         }
+                        let visible_defenders = permanent_defenders
+                            .iter()
+                            .filter_map(|&(attacker, target)| {
+                                let super::combat::AttackTarget::Permanent(object) = target else {
+                                    return None;
+                                };
+                                Some((
+                                    self.permanent_event_ref(attacker)?,
+                                    self.object_event_ref(object)?,
+                                ))
+                            })
+                            .collect();
                         self.emit(GameEvent::AttackersDeclared {
+                            permanent_defenders,
                             player: active,
                             attackers: attackers.clone(),
                         });
@@ -351,6 +371,7 @@ impl Game {
                             self.emit_observation_event(GameEvent::CombatAttackersDeclared {
                                 player: active,
                                 defender: self.non_active_player(),
+                                permanent_defenders: visible_defenders,
                                 attackers,
                             });
                         }
@@ -358,9 +379,13 @@ impl Game {
                     return None;
                 };
                 let must_attack = self.must_attack(attacker);
-                let actions = [true, false]
+                let mut targets = self.declaration_targets(active);
+                let actions = targets
+                    .next()
+                    .map(Some)
                     .into_iter()
-                    .filter(|attack| *attack || !must_attack)
+                    .chain((!must_attack).then_some(None))
+                    .chain(targets.map(Some))
                     .map(|attack| Action::DeclareAttacker {
                         player: active,
                         permanent: attacker,
@@ -407,7 +432,7 @@ impl Game {
                     }
                     return None;
                 };
-                let attackers = combat.attackers.clone();
+                let attackers = combat.attackers().collect::<Vec<_>>();
 
                 let mut actions = Vec::with_capacity(attackers.len() + 1);
                 for attacker in &attackers {

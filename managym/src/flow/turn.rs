@@ -289,7 +289,7 @@ pub struct TurnState {
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "crate::state::game_object::exact"
     )]
-    pub attacks_this_turn: Vec<(ObjectId, u32)>,
+    pub attacks_this_turn: Vec<(ObjectId, Vec<super::combat::AttackTarget>)>,
     /// Once-each-turn uses by `(exact source, printed face, ability index)`: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
@@ -346,16 +346,16 @@ impl TurnState {
     pub fn attack_count(&self, object: ObjectId) -> u32 {
         self.attacks_this_turn
             .binary_search_by_key(&object, |entry| entry.0)
-            .map_or(0, |index| self.attacks_this_turn[index].1)
+            .map_or(0, |index| self.attacks_this_turn[index].1.len() as u32)
     }
 
-    pub fn record_attack(&mut self, object: ObjectId) {
+    pub fn record_attack(&mut self, object: ObjectId, target: super::combat::AttackTarget) {
         match self
             .attacks_this_turn
             .binary_search_by_key(&object, |entry| entry.0)
         {
-            Ok(index) => self.attacks_this_turn[index].1 += 1,
-            Err(index) => self.attacks_this_turn.insert(index, (object, 1)),
+            Ok(index) => self.attacks_this_turn[index].1.push(target),
+            Err(index) => self.attacks_this_turn.insert(index, (object, vec![target])),
         }
     }
 
