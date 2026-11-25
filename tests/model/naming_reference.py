@@ -14,6 +14,7 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     RELATION_VALID_INDEX,
 )
+import managym
 from tests.model.prepared_routes import dense_action_features, device_input
 
 
@@ -40,8 +41,8 @@ def packed_definitions(
 
 
 class DenseActionReference(ActorCritic):
-    def forward_distribution(
-        self, obs: dict[str, torch.Tensor]
+    def forward_distribution(  # type: ignore[override]
+        self, batch: managym.ObservationBatch, obs: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits and raw critic output from one shared encoding.
 
@@ -50,8 +51,10 @@ class DenseActionReference(ActorCritic):
         Neither output is detached: categorical supervision can train the
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
+        Objects are prepared from the native `batch`; actions are scored from
+        its padded projection `obs`.
         """
-        prepared = device_input(self, obs)
+        prepared = device_input(self, batch)
         state = self._gather_object_embeddings(prepared)
 
         encoded = self._attend_objects(

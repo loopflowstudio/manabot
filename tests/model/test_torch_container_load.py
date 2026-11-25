@@ -17,12 +17,11 @@ from manabot.policy.checkpoint import (
     read_metadata,
 )
 import managym
-from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.model.prepared_routes import device_input
 
 
-def _observation(space: ObservationSpace) -> dict[str, torch.Tensor]:
+def _observation() -> managym.Observation:
     env = managym.Env(seed=7)
     env.reset(
         [
@@ -30,8 +29,7 @@ def _observation(space: ObservationSpace) -> dict[str, torch.Tensor]:
             managym.PlayerConfig("Villain", {"Plains": 20, "Gray Ogre": 20}),
         ]
     )
-    encoded = observation_arrays(space, env.observation_for_player(0))
-    return {key: torch.from_numpy(value)[None] for key, value in encoded.items()}
+    return env.observation_for_player(0)
 
 
 @pytest.mark.parametrize("optimized", [False, True])
@@ -68,7 +66,7 @@ def test_pt_and_container_load_the_same_policy(tmp_path: Path, optimized: bool) 
         for name, value in expected.items():
             assert torch.equal(state[name], value), name
 
-    observation = _observation(space)
+    observation = _observation()
     with torch.no_grad():
         reference = model(device_input(model, observation))
         for loaded in (legacy, shared):

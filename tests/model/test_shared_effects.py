@@ -10,9 +10,8 @@ import torch
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy import admission
 from manabot.recipes.baseline import settings
 from manabot.recipes.local import LocalConfig
 from manabot.sim.rollout import BatchedSampler
@@ -23,7 +22,7 @@ from manabot.verify.representation import shared_effect_root
 import managym
 from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.training_records import recording
-from tests.model.prepared_routes import device_input, effect_rows, record_vocabulary
+from tests.model.prepared_routes import device_input, effect_rows
 
 
 def _batch(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
@@ -69,15 +68,6 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     torch.testing.assert_close(
         encoder(effect_rows(headers, details, members, objects), objects) - objects, two
     )
-    headers[0, 0, 16] = 2049
-    with pytest.raises(ValueError, match="CSR"):
-        admission.shared_effects(
-            (headers).detach().cpu().numpy(),
-            (details).detach().cpu().numpy(),
-            (members).detach().cpu().numpy(),
-            objects.shape[1],
-            record_vocabulary(None),
-        )
 
 
 def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
@@ -93,16 +83,14 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
             world=managym.WORLD_SETUP,
         ),
     )
-    values = _batch(observation_arrays(space, obs))
-    logits, value = model(device_input(model, values))
+    prepared = device_input(model, obs)
+    logits, value = model(prepared)
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     with reorder_objects(obs):
         reordered_logits, reordered_value = model(device_input(model, obs))
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)
-    (
-        logits[values["actions_valid"].bool()].square().mean() + value.square().mean()
-    ).backward()
+    (logits[prepared.legal].square().mean() + value.square().mean()).backward()
     assert any(
         p.grad is not None and p.grad.abs().sum() > 0
         for p in model.shared_effects.parameters()
@@ -115,8 +103,8 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     model.eval()
     with torch.no_grad():
         for expected, actual in zip(
-            model(device_input(model, values)),
-            restored(device_input(restored, values)),
+            model(device_input(model, obs)),
+            restored(device_input(restored, obs)),
             strict=True,
         ):
             torch.testing.assert_close(expected, actual)
@@ -181,10 +169,10 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
         ObservationSpace(ObservationConfig()),
         ModelConfig(hidden_dim=16),
     )
-    buffers = {key: value.numpy() for key, value in values.items()}
-    selected = BatchedSampler(model, deterministic=True).select(buffers, np.array([0]))
-    assert buffers["actions_valid"][0, selected[0]] == 1
-    assert np.isfinite(ValueScorer(model).score(buffers, np.array([0]))).all()
+    batch = encode_policy_batch(model.observation_space, [observation])
+    selected = BatchedSampler(model, deterministic=True).select(batch, np.array([0]))
+    assert 0 <= selected[0] < len(observation.action_space.actions)
+    assert np.isfinite(ValueScorer(model).score(batch, np.array([0]))).all()
 
 
 @pytest.mark.parametrize("device", ("cpu", "cuda"))

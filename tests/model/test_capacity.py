@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pytest
 import torch
 
@@ -21,11 +22,9 @@ from manabot.model.architecture import (
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.policy import admission
 from manabot.training.rollout.collection import collect, open_collector
-from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
-from tests.model.prepared_routes import device_input, fact_rows, record_vocabulary
+from tests.model.prepared_routes import device_input, fact_rows
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -62,12 +61,9 @@ def test_capacity_export_and_real_legal_policy(
         numerics=TorchCollectionSession(device="cpu", seed=102, precision="float32"),
     )
     batch = collect(collector, agent, 2)
+    # The first time step of each stream.
     obs = device_input(
-        agent,
-        {
-            k: torch.from_numpy(v[0])
-            for k, v in trajectory_rows(batch).observation.items()
-        },
+        agent, batch.observations(np.arange(batch.actions.shape[1])).observation
     )
     policy, value = agent(obs)
     assert policy.shape == obs.legal.shape
@@ -263,10 +259,3 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     assert prepared.columns.grad is not None
     assert (prepared.columns.grad[0, 128:140, 4] != 0).all()
     assert prepared.columns.grad[0, 140:].count_nonzero() == 0
-    with pytest.raises(ValueError, match="expected"):
-        admission.facts(
-            (facts).detach().cpu().numpy(),
-            128,
-            objects.shape[1],
-            record_vocabulary(None),
-        )

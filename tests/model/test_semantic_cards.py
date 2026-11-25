@@ -1,5 +1,6 @@
 """Ordinary policies consume complete outside programs and public knowledge."""
 
+from dataclasses import replace
 import os
 from typing import Literal
 
@@ -9,8 +10,9 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import Prepared
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
@@ -108,13 +110,6 @@ def test_definition_lookup_preserves_autograd_contract(
     assert actual.requires_grad == (requires_grad and grad_enabled)
 
 
-def tensors(space, observation):
-    return {
-        key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in observation_arrays(space, observation).items()
-    }
-
-
 def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa: F811
     engine = learn_root.clone_env()
     contract = SemanticDecisionContract.from_env(engine)
@@ -128,8 +123,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
             hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
-    obs = tensors(space, before)
-    logits, _ = agent(device_input(agent, obs))
+    logits, _ = agent(device_input(agent, before))
     take = [
         index
         for index, action in enumerate(before.action_space.actions)
@@ -147,39 +141,33 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     retrieval = contract.frame.find_verb("learn_take_lesson")
     contract.apply(engine, retrieval["id"])
     after = engine.observation_for_player(1 - actor)
-    public = tensors(space, after)
-    assert public["known_hand"][0, 1, :, 1].sum() == 1
+    public = observation_arrays(space, after)
+    assert public["known_hand"][1, :, 1].sum() == 1
     assert all(int(card.zone) != 1 for card in after.opponent_cards)
-    _, value = agent(device_input(agent, public))
-    forgotten = {key: value.clone() for key, value in public.items()}
-    forgotten["known_hand"].zero_()
-    _, forgotten_value = agent(device_input(agent, forgotten))
+    prepared = agent.prepare(encode_policy_batch(space, [after]))
+    _, value = agent(device_input(agent, prepared))
+
+    def without(*names: str) -> Prepared[np.ndarray]:
+        """The opponent's `names` knowledge rows hold nothing."""
+        changes = {}
+        for name in names:
+            rows = getattr(prepared, name).copy()
+            rows[:, 1] = 0
+            changes[name] = rows
+        return replace(prepared, **changes)
+
+    _, forgotten_value = agent(
+        device_input(agent, without("known_rows", "known_counts"))
+    )
     assert not torch.equal(value, forgotten_value)
     # The opponent's open decklist (main, unseen and sideboard rows) also
     # reaches the value; a closed decklist would encode as these zero rows.
-    assert public["decklists"][0, 1, :, 1].sum() == 41
-    closed = {key: value.clone() for key, value in public.items()}
-    closed["decklists"][:, 1].zero_()
-    _, closed_value = agent(device_input(agent, closed))
+    assert public["decklists"][1, :, 1].sum() == 41
+    _, closed_value = agent(device_input(agent, without("deck_rows", "deck_counts")))
     assert not torch.equal(value, closed_value)
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=1 - actor)
         encoded = observation_arrays(space, hidden.observation_for_player(1 - actor))
         for key in ("semantic_cards", "known_hand", "decklists"):
-            np.testing.assert_array_equal(encoded[key], public[key][0].numpy())
-
-
-def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F811
-    space = ObservationSpace()
-    agent = ActorCritic(
-        space,
-        ModelConfig(
-            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
-        ),
-    )
-    actor = SemanticDecisionContract.from_env(learn_root).frame.actor
-    obs = tensors(space, learn_root.observation_for_player(actor))
-    obs["semantic_cards"][0, 0, 0] = 1000000
-    with pytest.raises(ValueError, match="unadmitted"):
-        agent(device_input(agent, obs))
+            np.testing.assert_array_equal(encoded[key], public[key])

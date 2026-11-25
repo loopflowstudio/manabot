@@ -7,6 +7,7 @@ names off definitions (`definition_names`); names on are the case where a card
 and a token permanent drift furthest apart.
 """
 
+from dataclasses import dataclass, replace
 from functools import cache
 
 import numpy as np
@@ -15,12 +16,15 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.semantic_cards import KnowledgeStreams
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Prepared
-from manabot.policy.readings import published_columns
+from manabot.policy.readings import published_columns, write_numeric_column
+from manabot.policy.spans import ObservationSelection
 from manabot.verify.action_cases import decision_case
-from tests.model.prepared_routes import device_input, fixture_tensors
+from manabot.verify.choice_inputs import encode
+import managym
+from tests.model.prepared_routes import device_input
 from tests.model.test_input_scales import WORLD, sampled_batches
 
 SPACE = ObservationSpace()
@@ -45,12 +49,28 @@ def _agent(
     )
 
 
+@dataclass(frozen=True)
+class Game:
+    """One sampled decision, and its padded fields for inspection."""
+
+    batch: managym.ObservationBatch
+    arrays: dict[str, np.ndarray]
+
+    def unknown_opponent_hand(self) -> bool:
+        return not self.arrays["known_hand"][0, 1].any()
+
+
 @cache
-def _games() -> tuple[dict[str, torch.Tensor], ...]:
-    return tuple(
-        {key: torch.as_tensor(value) for key, value in batch.items()}
-        for batch in sampled_batches(SPACE, games=2, stride=10)
-    )
+def _games() -> tuple[Game, ...]:
+    games = []
+    for batch in sampled_batches(SPACE, games=2, stride=10):
+        rows = ObservationSelection(SPACE, ((batch, 0),))
+        games.append(Game(batch, {key: rows.project(key) for key in rows.fields}))
+    return tuple(games)
+
+
+def _host(agent: ActorCritic, batch: managym.ObservationBatch) -> Prepared[np.ndarray]:
+    return agent.prepare(batch, inference=not torch.is_grad_enabled())
 
 
 def _object_definitions(
@@ -71,14 +91,14 @@ def _permanent_norms(agent: ActorCritic) -> dict[str, np.ndarray]:
     token_column = COLUMNS.index("is_token")
     numeric, definition, tokens, cards = [], [], [], []
     with torch.no_grad():
-        for batch in _games():
-            prepared = device_input(agent, batch)
+        for game in _games():
+            prepared = device_input(agent, game.batch)
             state = agent._gather_object_embeddings(prepared)
             table = _object_definitions(agent, prepared)
             slots = prepared.permanents.shape[2]
             for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
-                valid = batch[f"{key}_valid"][0] == 1
-                is_token = batch[key][0, :, token_column] == 1
+                valid = torch.from_numpy(game.arrays[f"{key}_valid"][0] == 1)
+                is_token = torch.from_numpy(game.arrays[key][0, :, token_column] == 1)
                 rows = agent.perm_embedding(prepared.permanents[:, seat].contiguous())
                 numeric.append(agent._stream("permanent", rows)[0][valid].norm(dim=-1))
                 definition.append(
@@ -144,12 +164,18 @@ def test_combat_stats_move_the_whole_token(
     0.16-0.25. Without names the historical layout moves it 0.48-0.60: the
     stat flags (`steps:8`) already carry the stats there."""
     agent = _agent(stream_norm, definition_names=definition_names)
-    case = fixture_tensors(decision_case("attack").observation)
-    big = {key: value.clone() for key, value in case.items()}
-    big["agent_permanents"][
-        0, 0, [COLUMNS.index("power"), COLUMNS.index("toughness")]
-    ] = 0.9
     with torch.no_grad():
+        case = _host(agent, encode(decision_case("attack").observation, SPACE))
+        board = case.permanents.copy()
+        for name in ("power", "toughness"):
+            write_numeric_column(
+                board[0, 0, 0],
+                slice(None),
+                agent.readings["agent_permanents"],
+                COLUMNS.index(name),
+                0.9,
+            )
+        big = replace(case, permanents=board)
         prepared = device_input(agent, case)
         attacker = int(prepared.focus[0, 0])
         before = agent._gather_object_embeddings(prepared).objects.flatten(0, 1)[
@@ -160,14 +186,31 @@ def test_combat_stats_move_the_whole_token(
     assert (moved >= 0.3) == moves, moved
 
 
-def _with_known_card(batch: ObservationBuffers) -> ObservationBuffers:
+def _with_known_card(prepared: Prepared[np.ndarray]) -> Prepared[np.ndarray]:
     """The opponent's hand holds one known copy of their first listed card."""
-    known = {key: value.clone() for key, value in batch.items()}
-    assert not known["known_hand"][0, 1].any()
-    known["known_hand"][0, 1, 0] = torch.tensor(
-        [float(known["decklists"][0, 1, 0, 0]), 1.0]
-    )
-    return known
+    assert not prepared.known_rows[0, 1].any()
+    rows, counts = prepared.known_rows.copy(), prepared.known_counts.copy()
+    rows[0, 1, 0] = prepared.deck_rows[0, 1, 0]
+    counts[0, 1, 0] = 1
+    return replace(prepared, known_rows=rows, known_counts=counts)
+
+
+_SOURCES = {
+    "known_hand": ("known_rows", "known_counts"),
+    "known_library": ("library_rows", "library_weights"),
+    "decklists": ("deck_rows", "deck_counts"),
+}
+
+
+def _emptied(prepared: Prepared[np.ndarray], *sources: str) -> Prepared[np.ndarray]:
+    """The opponent's knowledge `sources` hold nothing."""
+    changes = {}
+    for source in sources:
+        for name in _SOURCES[source]:
+            value = getattr(prepared, name).copy()
+            value[0, 1] = 0
+            changes[name] = value
+    return replace(prepared, **changes)
 
 
 def test_known_card_share_of_the_player_token() -> None:
@@ -175,11 +218,12 @@ def test_known_card_share_of_the_player_token() -> None:
     least as large under `stream_norm` as in the historical `/ 60` pool."""
 
     def share(agent: ActorCritic) -> float:
-        batch = next(b for b in _games() if not b["known_hand"][0, 1].any())
+        game = next(g for g in _games() if g.unknown_opponent_hand())
         with torch.no_grad():
-            before = agent._gather_object_embeddings(device_input(agent, batch))
+            host = _host(agent, game.batch)
+            before = agent._gather_object_embeddings(device_input(agent, host))
             after = agent._gather_object_embeddings(
-                device_input(agent, _with_known_card(batch))
+                device_input(agent, _with_known_card(host))
             )
         player = before.objects[0, 1]
         return float((after.objects[0, 1] - player).norm() / player.norm())
@@ -189,7 +233,7 @@ def test_known_card_share_of_the_player_token() -> None:
     assert normalized > 0.05
 
 
-def _knowledge(agent: ActorCritic, batch: ObservationBuffers) -> KnowledgeStreams:
+def _knowledge(agent: ActorCritic, batch: Prepared[np.ndarray]) -> KnowledgeStreams:
     assert agent.semantic_cards is not None
     with torch.no_grad():
         prepared = device_input(agent, batch)
@@ -204,7 +248,9 @@ def test_a_known_card_leaves_the_decklist_stream_untouched(seed: int) -> None:
     bit-for-bit what it was, and the knowledge vector keeps its direction
     (one norm over the sum measured cosine 0.07-0.29)."""
     agent = _agent(True, seed=seed)
-    batch = next(b for b in _games() if not b["known_hand"][0, 1].any())
+    game = next(g for g in _games() if g.unknown_opponent_hand())
+    with torch.no_grad():
+        batch = _host(agent, game.batch)
     before, after = _knowledge(agent, batch), _knowledge(agent, _with_known_card(batch))
     assert before.decklist is not None and after.decklist is not None
     assert torch.equal(before.decklist[0, 1], after.decklist[0, 1])
@@ -228,11 +274,10 @@ def test_each_empty_source_is_exactly_zero(source: str) -> None:
     ):
         assert norm is not None
         norm.bias.data.fill_(1.0)
-    full = _with_known_card(
-        next(b for b in _games() if not b["known_hand"][0, 1].any())
-    )
-    emptied = {key: value.clone() for key, value in full.items()}
-    emptied[source][0, 1] = 0
+    game = next(g for g in _games() if g.unknown_opponent_hand())
+    with torch.no_grad():
+        full = _with_known_card(_host(agent, game.batch))
+    emptied = _emptied(full, source)
 
     def by_source(streams: KnowledgeStreams) -> dict[str, torch.Tensor]:
         assert streams.library is not None and streams.decklist is not None
@@ -253,9 +298,8 @@ def test_each_empty_source_is_exactly_zero(source: str) -> None:
 
 def test_nothing_known_is_exactly_zero() -> None:
     agent = _agent(True)
-    batch = {key: value.clone() for key, value in _games()[0].items()}
-    for key in ("known_hand", "known_library", "decklists"):
-        batch[key][0, 1] = 0
+    with torch.no_grad():
+        batch = _emptied(_host(agent, _games()[0].batch), *_SOURCES)
     known = _knowledge(agent, batch).total
     assert not known[0, 1].any()
     assert known[0, 0].norm() > 1
@@ -268,7 +312,6 @@ def test_no_context_is_exactly_zero() -> None:
         norm = agent.stream_norms["context"] if agent.stream_norms else None
         assert norm is not None
         norm.bias.fill_(1.0)
-        case = fixture_tensors(decision_case("attack").observation)
-        prepared = device_input(agent, case)
+        prepared = device_input(agent, decision_case("attack").observation)
         assert not prepared.relation_valid.any()
         assert not agent._gather_object_embeddings(prepared).shared_context.any()

@@ -22,11 +22,13 @@ from manabot.env.observation import (
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
+    encode_policy_batch,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
 from manabot.policy import admission
 from manabot.policy.prepare import RecordNamespace
+from manabot.policy.readings import PROGRAM_KINDS
 from manabot.verify.representation import kellan_upgrade_root
 import managym
 from tests.fixtures.observation_rows import observation_arrays
@@ -189,25 +191,42 @@ def test_catalog_fact_inference_preserves_sparse_rows(
         assert not torch.allclose(actual[:, 0], objects[:, 0])
 
 
+def _native_fact(name: str, source: int = 0) -> np.ndarray:
+    """The `_granted_keyword` fact as one native integer row: whole signed words."""
+    row = np.zeros((1, FACT_DIM), np.int32)
+    row[0, FACT_OBJECT_INDEX] = 1
+    row[0, FACT_KIND_INDEX] = FACT_EFFECT
+    for index, value in (
+        (FACT_ID_INDEX, _value("Modification::AddKeywords")),
+        (FACT_DETAIL_INDEX, _value(name)),
+    ):
+        row[0, index] = np.array([value & 0xFFFFFFFF], np.uint32).view(np.int32)[0]
+    row[0, FACT_SOURCE_INDEX] = source
+    row[0, FACT_VALID_INDEX] = 1
+    return row
+
+
+def _admit_fact(row: np.ndarray, cards: SemanticCardEncoder) -> None:
+    vocabulary = record_vocabulary(cards)
+    assert vocabulary is not None
+    kinds = row[:, FACT_KIND_INDEX]
+    admission.fact_vocabulary(row, kinds, np.isin(kinds, PROGRAM_KINDS), vocabulary)
+
+
 def test_unknown_ids_fail_admission_instead_of_hashing(
     cards: SemanticCardEncoder,
 ) -> None:
+    _admit_fact(_native_fact("flying"), cards)
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admission.facts(
-            (_granted_keyword("not a keyword")).detach().cpu().numpy(),
-            4,
-            2,
-            record_vocabulary(cards),
-        )
-    facts = _granted_keyword("flying")
-    facts[0, 0, FACT_ID_INDEX : FACT_ID_INDEX + 2] = torch.tensor(
-        _halves(_value("Modification::NoSuchModification"))
-    )
+        _admit_fact(_native_fact("not a keyword"), cards)
+    facts = _native_fact("flying")
+    facts[0, FACT_ID_INDEX] = np.array(
+        [_value("Modification::NoSuchModification") & 0xFFFFFFFF], np.uint32
+    ).view(np.int32)[0]
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admission.facts((facts).detach().cpu().numpy(), 4, 2, record_vocabulary(cards))
-    facts = _granted_keyword("flying", source=len(cards.definition_rows))
+        _admit_fact(facts, cards)
     with pytest.raises(ValueError, match="unadmitted"):
-        admission.facts((facts).detach().cpu().numpy(), 4, 2, record_vocabulary(cards))
+        _admit_fact(_native_fact("flying", source=len(cards.definition_rows)), cards)
     with pytest.raises(ValueError, match="outside the vocabulary"):
         vocabulary = record_vocabulary(cards)
         assert vocabulary is not None
@@ -278,17 +297,25 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
             assert joint is individual
         else:
             torch.testing.assert_close(joint, individual, rtol=1e-4, atol=1e-5)
-    # Admission is still enforced when the invalid id is in a later batch member.
-    headers[2, 0, :2] = torch.tensor(
-        _halves(_value("Modification::NoSuchModification"))
+    # Admission refuses an unknown modification whatever else the batch holds.
+    vocabulary = record_vocabulary(cards)
+    assert vocabulary is not None
+    known = int(cards.definition_rows.nonzero()[0])
+    none = np.zeros(0, np.int64)
+    admission.effect_vocabulary(
+        np.array([_value("Modification::AddKeywords")]),
+        np.array([known]),
+        none,
+        none,
+        vocabulary,
     )
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admission.shared_effects(
-            (headers).detach().cpu().numpy(),
-            (details).detach().cpu().numpy(),
-            (members).detach().cpu().numpy(),
-            objects.shape[1],
-            record_vocabulary(cards),
+        admission.effect_vocabulary(
+            np.array([_value("Modification::NoSuchModification")]),
+            np.array([known]),
+            none,
+            none,
+            vocabulary,
         )
 
 
@@ -299,11 +326,8 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     space = ObservationSpace()
-    values = {
-        key: torch.from_numpy(v)[None]
-        for key, v in observation_arrays(space, obs).items()
-    }
-    assert (values["effect_details"][..., 0] >= 11).any()
+    assert (observation_arrays(space, obs)["effect_details"][..., 0] >= 11).any()
+    values = encode_policy_batch(space, [obs])
     fresh = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
     assert fresh.record_vocabulary == "catalog"
     for vocabulary in ("catalog", "hashed"):

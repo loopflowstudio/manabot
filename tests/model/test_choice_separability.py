@@ -7,10 +7,11 @@ generalization. Native encoding and action execution remain in the loop.
 """
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pytest
 import torch
 
@@ -24,13 +25,17 @@ from manabot.env.observation import (
     PERMANENT_MANA_VALUE_INDEX,
     PERMANENT_TIMESTAMP_INDEX,
     ObservationSpace,
+    encode_policy_batch,
 )
 from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import Prepared
+from manabot.policy.readings import Readings, write_numeric_column
 from manabot.verify.action_cases import initial, reach
-from manabot.verify.choice_inputs import reorder_objects
+from manabot.verify.choice_inputs import encode, reorder_objects
 from manabot.verify.trigger_order import ordering_root
 import managym
-from tests.model.prepared_routes import device_input, fixture_tensors
+from tests.fixtures.observation_rows import observation_arrays
+from tests.model.prepared_routes import device_input
 
 ChoiceName = Literal[
     "land_pass",
@@ -336,36 +341,60 @@ def _choice(name: ChoiceName) -> NativeChoice:
 
 
 def _remove_discriminant(
-    case: NativeChoice, obs: dict[str, torch.Tensor]
-) -> dict[str, torch.Tensor]:
+    case: NativeChoice, prepared: Prepared[np.ndarray], readings: Readings
+) -> Prepared[np.ndarray]:
     """Reproduce a specific information-loss hypothesis for each choice pair."""
-    erased = {key: value.clone() for key, value in obs.items()}
+    actions = prepared.action_features.copy()
+    focus, focus_mask = prepared.focus.copy(), prepared.focus_mask.copy()
+    changes: dict[str, np.ndarray] = {}
+
+    def erase(*columns: int) -> None:
+        for column in columns:
+            write_numeric_column(actions, slice(None), readings["actions"], column, 0)
+
     a, b = case.candidates
     if case.name == "trigger_order":
-        erased["actions"][..., ACTION_CONTINUATION_INDEX] = 0
-        erased["action_focus"].fill_(-1)
+        erase(ACTION_CONTINUATION_INDEX)
+        changes["action_frame_mask"] = np.zeros_like(prepared.action_frame_mask)
+        focus_mask[:] = 0
     elif case.name == "convoke_or_mana":
-        erased["actions"][..., ACTION_PAYS_DIRECTLY_INDEX] = 0
+        erase(ACTION_PAYS_DIRECTLY_INDEX)
     elif case.name in {"scry", "pay_decline"}:
-        erased["actions"][..., :ACTION_TYPE_DIM] = 0
+        erase(*range(ACTION_TYPE_DIM))
     elif case.name in {"look_select", "learn_discard"}:
-        erased["semantic_cards"].zero_()
+        changes["card_rows"] = np.zeros_like(prepared.card_rows)
     elif case.name in {"block_target", "waterbend"}:
         # Policy input v5 also orders permanents by timestamp (CR 613.7);
         # input v11 permanent rows also hold the definition's characteristics.
-        for key in ("agent_permanents", "opponent_permanents"):
-            erased[key][..., PERMANENT_DEFINITION_INDEX] = 0
-            erased[key][..., PERMANENT_TIMESTAMP_INDEX] = 0
-            erased[key][..., PERMANENT_MANA_VALUE_INDEX:-1] = 0
+        board = prepared.permanents.copy()
+        width = ObservationSpace().shapes["agent_permanents"][-1]
+        for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
+            for column in (
+                PERMANENT_DEFINITION_INDEX,
+                PERMANENT_TIMESTAMP_INDEX,
+                *range(PERMANENT_MANA_VALUE_INDEX, width - 1),
+            ):
+                write_numeric_column(
+                    board[:, seat], slice(None), readings[key], column, 0
+                )
+        changes["permanents"] = board
+        changes["permanent_rows"] = np.zeros_like(prepared.permanent_rows)
     elif case.name == "block_decline":
-        erased["actions"][..., ACTION_DECLARED_INDEX] = 0
-        erased["action_focus"][..., 1:] = -1
+        erase(ACTION_DECLARED_INDEX)
+        focus_mask[:, 1:] = 0
     elif case.name == "player_target":
-        erased["action_focus"][:, b] = erased["action_focus"][:, a]
+        first, second = prepared.logit_positions[0, [a, b]]
+        focus[second], focus_mask[second] = focus[first], focus_mask[first]
     else:
-        erased["actions"][..., :ACTION_TYPE_DIM] = 0
-        erased["action_focus"].fill_(-1)
-    return erased
+        erase(*range(ACTION_TYPE_DIM))
+        focus_mask[:] = 0
+    return replace(
+        prepared,
+        action_features=actions,
+        focus=focus,
+        focus_mask=focus_mask,
+        **changes,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -387,11 +416,11 @@ def one_thread() -> Iterator[None]:
 @pytest.mark.parametrize("name", CHOICES)
 def test_native_choice_preserves_focus_and_changes_state(name: ChoiceName) -> None:
     case = _choice(name)
-    obs = fixture_tensors(case.raw)
+    obs = observation_arrays(ObservationSpace(), case.raw)
     assert int(obs["actions_valid"].sum()) == len(case.raw.action_space.actions)
     # A nonempty native focus must not silently become padding in either encoder.
     for i, action in enumerate(case.raw.action_space.actions):
-        assert (obs["action_focus"][0, i, : len(action.focus)] >= 0).all(), (
+        assert (obs["action_focus"][i, : len(action.focus)] >= 0).all(), (
             name,
             i,
             action.focus,
@@ -413,20 +442,19 @@ def test_shared_policy_can_learn_either_choice(
     # Fixed protocol before scoring: two shared fits total, 180 updates each;
     # no early stopping, per-family fitting, or strategically "correct" labels.
     torch.manual_seed(17)
-    observations = [fixture_tensors(case.raw) for case in choices]
-    batch = {
-        key: torch.cat([obs[key] for obs in observations]) for key in observations[0]
-    }
-    selected = torch.zeros_like(batch["actions_valid"], dtype=torch.bool)
+    space = ObservationSpace()
+    batch = encode_policy_batch(space, [case.raw for case in choices])
+    selected = torch.zeros((len(choices), space.config.max_actions), dtype=torch.bool)
     for row, case in enumerate(choices):
         selected[row, list(case.groups[preference])] = True
     spec = ModelConfig(
         hidden_dim=32, num_attention_heads=2, attention_feedforward_dim=64
     )
-    agent = ActorCritic(ObservationSpace(), spec)
+    agent = ActorCritic(space, spec)
     optimizer = torch.optim.Adam(agent.parameters(), lr=0.003)
+    prepared = device_input(agent, batch)
     for _ in range(180):
-        logits, _ = agent(device_input(agent, batch))
+        logits, _ = agent(prepared)
         # NLL of the selected observable choice; identical copies share mass.
         log_probabilities = logits.log_softmax(-1)
         loss = (
@@ -441,8 +469,9 @@ def test_shared_policy_can_learn_either_choice(
     restored.load_state_dict(torch.load(path, weights_only=True))
     restored.eval()
     with torch.no_grad():
-        for case, obs in zip(choices, observations, strict=True):
-            logits, _ = restored(device_input(restored, obs))
+        for case in choices:
+            admitted = device_input(restored, case.raw)
+            logits, _ = restored(admitted)
             probability = logits.softmax(-1)[0, list(case.groups[preference])].sum()
             assert float(probability) >= 0.95, (case.name, float(probability))
             for group in case.groups:
@@ -451,7 +480,7 @@ def test_shared_policy_can_learn_either_choice(
                         logits[0, index], logits[0, group[0]], atol=1e-5, rtol=1e-5
                     )
             selected_action, _, _, _ = restored.get_action_and_value(
-                device_input(restored, obs), deterministic=True
+                admitted, deterministic=True
             )
             assert int(selected_action) in case.groups[preference], case.name
             # Reorder the native offers before either encoder, not just a tensor.
@@ -460,21 +489,26 @@ def test_shared_policy_can_learn_either_choice(
             space.actions = original[::-1]
             case.raw.action_space = space
             try:
-                reordered = fixture_tensors(case.raw)
+                reordered = device_input(restored, case.raw)
             finally:
                 space.actions = original
                 case.raw.action_space = space
-            permuted, _ = restored(device_input(restored, reordered))
+            permuted, _ = restored(reordered)
             count = len(original)
             torch.testing.assert_close(permuted[0, :count].flip(0), logits[0, :count])
             with reorder_objects(case.raw):
                 permuted, _ = restored(device_input(restored, case.raw))
             torch.testing.assert_close(permuted, logits, atol=1e-5, rtol=1e-5)
-            assert not logits.softmax(-1)[obs["actions_valid"] == 0].any()
+            assert not logits.softmax(-1)[~admitted.legal].any()
             # A specific dropped channel must recreate the forced tie. These
             # mutations are hypotheses, not historical-version evidence.
             a, b = case.candidates
-            tied, _ = restored(device_input(restored, _remove_discriminant(case, obs)))
+            erased = _remove_discriminant(
+                case,
+                restored.prepare(encode(case.raw, restored.observation_space)),
+                restored.readings,
+            )
+            tied, _ = restored(device_input(restored, erased))
             # Legal-row GEMMs can differ by float32 rounding across row tiles.
             # The behavioral requirement above remains >= 0.95 for either choice.
             torch.testing.assert_close(

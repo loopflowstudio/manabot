@@ -80,3 +80,15 @@ reversible before merge.
 17. **Historical eligibility evidence.** The retained v4 fixture lacks permanent
     and spell identities. Preserve its text check and assert native v11 refusal.
     The constructed Rust position checks the live target-eligibility columns.
+
+18. **Decision-memory program tokens outside the vocabulary (found in 3b).**
+    On Elemental random play, native decision-memory reference details carry
+    program tokens (kinds 1, 2, 3; e.g. `(1, 0x02f6b128)`) that appear nowhere
+    in `managym.record_vocabulary()`. Native `admission.admit` refuses them;
+    the deleted dense path and the retained-prefix featurizer look them up
+    with `Tables.tokens`, whose `_lookup` silently returns a neighbouring row.
+    Assumed out of scope for MTG-433: the strict check stays, and
+    `test_fresh_inputs_stay_within_the_bound[memory]` is a strict xfail
+    naming the defect. Needs its own bug Task (native memory token emission
+    or `agent/record_vocabulary.rs`), and the retained-prefix featurizer
+    should then refuse unknown tokens too.

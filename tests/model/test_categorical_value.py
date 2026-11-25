@@ -14,14 +14,12 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.interface import world_fields
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
-from tests.fixtures.observation_rows import observation_arrays
-from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 
 
@@ -94,10 +92,7 @@ def test_value_interface_and_collection_likelihoods(
     agent = _agent(kind, aggregation, depth)
     collector = _collector(agent)
     batch = collect(collector, agent, 4)
-    obs = {
-        key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
-        for key, value in trajectory_rows(batch).observation.items()
-    }
+    obs = batch.observations(np.arange(batch.actions.size)).observation
     policy, raw_value = agent.forward_distribution(device_input(agent, obs))
     ordinary_policy, value = agent(device_input(agent, obs))
     assert torch.equal(policy, ordinary_policy)
@@ -202,10 +197,8 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
     agent = _agent("categorical_wdl")
     collector = _collector(agent)
     batch = collect(collector, agent, 1)
-    obs = {
-        key: torch.from_numpy(value[0])
-        for key, value in trajectory_rows(batch).observation.items()
-    }
+    # The first time step of each stream.
+    obs = batch.observations(np.arange(batch.actions.shape[1])).observation
     _, logits = agent.forward_distribution(device_input(agent, obs))
     F.cross_entropy(logits, torch.tensor([0, 2])).backward()
     assert any(
@@ -233,24 +226,16 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
     actor = SemanticDecisionContract.from_env(engine).frame.actor
     agent = _agent("categorical_wdl", aggregation, depth)
     space = agent.observation_space
-    original = {
-        key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in observation_arrays(
-            space, engine.observation_for_player(actor)
-        ).items()
-    }
+    original = engine.observation_for_player(actor)
     expected = agent.forward_distribution(device_input(agent, original))
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=actor)
-        observation = {
-            key: torch.from_numpy(value).unsqueeze(0)
-            for key, value in observation_arrays(
-                space, hidden.observation_for_player(actor)
-            ).items()
-        }
-        for key in original:
-            torch.testing.assert_close(original[key], observation[key], rtol=0, atol=0)
+        observation = hidden.observation_for_player(actor)
+        assert (
+            encode_policy_batch(space, [observation]).to_bytes()
+            == encode_policy_batch(space, [original]).to_bytes()
+        )
         actual = agent.forward_distribution(device_input(agent, observation))
         for left, right in zip(expected, actual, strict=True):
             torch.testing.assert_close(left, right, rtol=0, atol=0)

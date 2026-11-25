@@ -10,34 +10,41 @@ from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import Settings, Targets
 import managym
-from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
-def _batch(space: ObservationSpace, count: int) -> dict[str, np.ndarray]:
+def _play(count: int) -> tuple[list[managym.Observation], managym.Observation]:
+    """`count` decisions of one random game, then a terminal observation."""
     rng = np.random.default_rng(3)
     env = managym.Env(seed=11)
     env.reset(Match().to_rust())
-    rows = []
-    while len(rows) < count:
+    rows: list[managym.Observation] = []
+    while True:
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(observation_arrays(space, obs))
+        if len(rows) < count:
+            rows.append(obs)
         _, _, terminated, truncated, _ = env.step(
             int(rng.integers(len(obs.action_space.actions)))
         )
         if terminated or truncated:
-            env.reset(Match().to_rust())
-    return {key: np.stack([row[key] for row in rows]) for key in rows[0]}
+            return rows, env.observation_for_player(0)
 
 
-def _targets(obs: dict[str, np.ndarray], logits: np.ndarray) -> Targets:
-    legal = obs["actions_valid"] > 0
+def _batch(space: ObservationSpace, count: int) -> managym.ObservationBatch:
+    rows, _ = _play(count)
+    assert len(rows) == count
+    return encode_policy_batch(space, rows)
+
+
+def _targets(obs: managym.ObservationBatch, logits: np.ndarray) -> Targets:
+    counts = np.asarray(obs.action_counts)
+    legal = np.arange(logits.shape[-1]) < counts[:, None]
     masked = np.where(legal, logits, -np.inf)
     logs = masked - np.logaddexp.reduce(masked, axis=-1, keepdims=True)
     rows = len(legal)
@@ -74,9 +81,7 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
 
     logits, values = policy.evaluate(policy.prepare(obs, inference=True))
     with torch.no_grad():
-        expected_logits, expected_values = model(
-            device_input(model, {k: torch.from_numpy(v) for k, v in obs.items()})
-        )
+        expected_logits, expected_values = model(device_input(model, obs))
     np.testing.assert_array_equal(logits, expected_logits.numpy())
     np.testing.assert_array_equal(values, expected_values.numpy())
 
@@ -140,24 +145,11 @@ def test_prepared_policy_boundary_and_cached_program_lifetime() -> None:
         not np.array_equal(a, b)
         for a, b in zip(expected, model.evaluate(batch), strict=True)
     )
-    empty = {**obs, "actions_valid": np.zeros_like(obs["actions_valid"])}
+    _, terminal = _play(0)
+    empty = encode_policy_batch(model.observation_space, [terminal])
+    assert list(empty.action_counts) == [0]
     with pytest.raises(ValueError, match="No valid actions"):
         model.get_action_and_value(on_device(model.prepare(empty), "cpu"))
-
-
-@pytest.mark.parametrize("bad", [float("nan"), -1.0, 0.5])
-def test_host_admission_retains_invalid_mask_evidence(bad: float) -> None:
-    model = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=8))
-    obs = _batch(model.observation_space, 1)
-    obs["actions_valid"][0, 0] = bad
-    with pytest.raises(
-        torch_backend.rl.NumericalError, match="invalid_action_mask"
-    ) as error:
-        model.prepare(obs)
-    assert error.value.tensors["failed"][0, 0]
-    np.testing.assert_array_equal(
-        error.value.tensors["mask"].numpy(), obs["actions_valid"]
-    )
 
 
 @pytest.mark.parametrize("inference", [False, True])

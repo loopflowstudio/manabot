@@ -8,10 +8,11 @@ import torch
 
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.env.observation import encode_policy_batch
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
+from manabot.policy.spans import ObservationSelection
 from manabot.verify.text_observation import priority_root
-from tests.fixtures.observation_rows import observation_arrays
-from tests.model.prepared_routes import device_input, host_inputs
+from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -41,19 +42,17 @@ def _pair(
     return padded, live
 
 
-def _different_boards(case: PolicyFixture) -> dict[str, torch.Tensor]:
+def _different_boards(case: PolicyFixture) -> ObservationSelection:
     """Construct legal priority decisions on boards of two fixed sizes."""
     space = case.agent.observation_space
-    rows = [
-        observation_arrays(
-            space, priority_root(("Lightning Bolt",), lands).scenario_refresh()
-        )
-        for lands in (("Mountain",), ("Mountain", "Gray Ogre"))
-    ]
-    return {
-        key: torch.from_numpy(np.stack([row[key] for row in rows])).float()
-        for key in rows[0]
-    }
+    batch = encode_policy_batch(
+        space,
+        [
+            priority_root(("Lightning Bolt",), lands).scenario_refresh()
+            for lands in (("Mountain",), ("Mountain", "Gray Ogre"))
+        ],
+    )
+    return ObservationSelection(space, ((batch, 0), (batch, 1)))
 
 
 @pytest.mark.parametrize(
@@ -73,7 +72,8 @@ def test_outputs_and_gradients_match_padded(
     case = _policy()
     obs = _different_boards(case)
     valid = sum(
-        obs[key].sum(1) for key in ("agent_cards_valid", "agent_permanents_valid")
+        obs.project(key).sum(1)
+        for key in ("agent_cards_valid", "agent_permanents_valid")
     )
     assert len(set(valid.tolist())) > 1, "fixture boards should differ in size"
     padded, live = _pair(case, value_aggregation, bucketed, streams)
@@ -81,7 +81,7 @@ def test_outputs_and_gradients_match_padded(
     for model in (padded, live):
         logits, values = model.forward_distribution(device_input(model, obs))
         outputs.append((logits, values))
-        legal = obs["actions_valid"].bool()
+        legal = torch.from_numpy(obs.project("actions_valid")).bool()
         (logits[legal].square().mean() + values.square().mean()).backward()
     (expected_logits, expected_values), (logits, values) = outputs
     torch.testing.assert_close(logits, expected_logits, atol=1e-5, rtol=1e-5)
@@ -93,13 +93,12 @@ def test_outputs_and_gradients_match_padded(
             assert b.grad is not None, name
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(live) as scope:
-        prepared = scope.prepare(host_inputs(obs))
+        prepared = scope.prepare(obs)
         present = sum(
-            int(obs[key].count_nonzero())
+            int(np.count_nonzero(obs.project(key)))
             for key in (*OBJECT_VALIDITY_KEYS, "stack_valid")
-            if key in obs
         )
-        tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
+        tokens = len(obs.coordinates) if value_aggregation == "value_token" else 0
         assert prepared is not None
         coordinates = prepared
         assert coordinates.live_index is not None
@@ -114,7 +113,7 @@ def test_outputs_and_gradients_match_padded(
 def test_padded_policy_measures_no_live_count() -> None:
     case = _policy()
     with torch.no_grad(), PolicyInference(case.agent) as scope:
-        batch = scope.prepare(host_inputs(case.obs))
+        batch = scope.prepare(case.obs)
         assert batch is not None and batch.live_index is None
 
 

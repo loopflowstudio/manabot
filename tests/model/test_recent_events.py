@@ -1,7 +1,10 @@
 """Public identity/history acceptance through native collection and serving."""
 
+from copy import deepcopy
+from dataclasses import replace
+import json
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pytest
@@ -25,12 +28,12 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.policy.spans import observation_spans
+from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection, observation_spans
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
 import managym
-from tests.fixtures.observation_rows import observation_arrays
-from tests.fixtures.rollout_arrays import projected_fields, trajectory_field
+from tests.fixtures.rollout_arrays import trajectory_field
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -54,7 +57,8 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
     return ActorCritic(space, settings)
 
 
-def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
+def _collected(agent: ActorCritic) -> ObservationSelection:
+    """A late decision of ordinary collection, with at least two public events."""
     collector = open_collector(
         agent.observation_space,
         _match(),
@@ -70,13 +74,44 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
     assert len(nonempty) > 2, (
         "ordinary semantic collection must retain past public events"
     )
-    step = int(nonempty[-1])
-    return {
-        key: torch.from_numpy(value)
-        for key, value in projected_fields(
-            batch.observations(np.array([step])).observation
-        ).items()
-    }
+    return batch.observations(np.array([int(nonempty[-1])])).observation
+
+
+def _history_root() -> tuple[managym.Observation, dict[str, Any]]:
+    """A decoded decision with public history, and its JSON for edits."""
+    env = managym.Env(seed=111, skip_trivial=True)
+    env.reset(_match().to_rust())
+    while True:
+        payload = json.loads(
+            env.observation_for_player(env.current_agent_index()).toJSON()
+        )
+        if len(payload.get("policy_history", [])) >= 4:
+            # Decode once: every variant below starts from the same lineage.
+            return managym.Observation.from_json(json.dumps(payload)), payload
+        env.step(0)
+
+
+def _edited(payload: dict[str, Any], history: list[Any]) -> managym.Observation:
+    """`payload` with `history`; canonical JSON omits an empty history."""
+    edited = {key: value for key, value in payload.items() if key != "policy_history"}
+    if history:
+        edited["policy_history"] = history
+    return managym.Observation.from_json(json.dumps(edited))
+
+
+def _without_events(prepared: Prepared[np.ndarray]) -> Prepared[np.ndarray]:
+    events = prepared.events
+    assert events is not None
+    return replace(
+        prepared,
+        events=replace(
+            events,
+            validity=np.zeros_like(events.validity),
+            counts=np.zeros_like(events.counts),
+            ages=np.zeros_like(events.ages),
+            focus_mask=np.zeros_like(events.focus_mask),
+        ),
+    )
 
 
 @pytest.mark.parametrize("attention", [False, True])
@@ -92,14 +127,14 @@ def test_real_history_reaches_both_heads_and_reloads(
         pytest.skip("value token requires attention")
     agent = _agent(_space(), attention_on=attention, value_aggregation=aggregation)
     obs = _collected(agent)
-    valid = obs["events_valid"].bool()
-    assert (obs["events"][..., [2, 7]][valid] > 0).any(), (
+    valid = obs.project("events_valid") == 1
+    assert (obs.project("events")[..., [2, 7]][valid] > 0).any(), (
         "public definition identity is required"
     )
-    policy, value = agent(device_input(agent, obs))
-    without = {**obs, "events_valid": torch.zeros_like(obs["events_valid"])}
-    no_policy, no_value = agent(device_input(agent, without))
-    legal = obs["actions_valid"].bool()
+    prepared = agent.prepare(obs)
+    policy, value = agent(device_input(agent, prepared))
+    no_policy, no_value = agent(device_input(agent, _without_events(prepared)))
+    legal = torch.from_numpy(prepared.legal)
     assert not torch.equal(policy[legal], no_policy[legal])
     assert not torch.equal(value, no_value)
     assert agent.recent_events is not None
@@ -133,48 +168,39 @@ def test_real_history_reaches_both_heads_and_reloads(
         load_checkpoint(str(path))
 
 
-def test_semantics_order_padding_and_stateless_reset() -> None:
+def test_semantics_order_and_stateless_reset() -> None:
     agent = _agent(_space())
-    obs = _collected(agent)
-    # Distinct native public rows, including semantic card references.
-    count = int(obs["events_valid"].sum())
-    expected = agent(device_input(agent, obs))
-    reversed_obs = {**obs, "events": obs["events"].clone()}
-    reversed_obs["events"][:, :count] = obs["events"][:, :count].flip(1)
+    raw, payload = _history_root()
+    history = payload["policy_history"]
+    expected = agent(device_input(agent, raw))
+    reversed_obs = _edited(payload, history[::-1])
     assert any(
         not torch.equal(a, b)
         for a, b in zip(expected, agent(device_input(agent, reversed_obs)), strict=True)
     )
-    changed = {**obs, "events": obs["events"].clone()}
-    # Reassign only a public definition to another admitted visible definition.
-    ids = obs["semantic_cards"][obs["semantic_cards"] > 0].unique()
-    index = next(i for i in range(count) if obs["events"][0, i, 2] > 0)
-    replacement = ids[ids != obs["events"][0, index, 2]][0]
-    changed["events"][0, index, 2] = replacement
+    # Reassign only a public definition to another one this history shows.
+    sources = [
+        (i, event["source"]["Card"])
+        for i, event in enumerate(history)
+        if isinstance(event["source"], dict) and "Card" in event["source"]
+    ]
+    index, source = sources[0]
+    other = next(
+        card["definition"]
+        for _, card in sources
+        if card["definition"] != source["definition"]
+    )
+    changed = deepcopy(history)
+    changed[index]["source"]["Card"]["definition"] = other
     assert any(
         not torch.equal(a, b)
-        for a, b in zip(expected, agent(device_input(agent, changed)), strict=True)
+        for a, b in zip(
+            expected, agent(device_input(agent, _edited(payload, changed))), strict=True
+        )
     )
-    padded = torch.full((1, count * 2 + 3, 12), float("nan"))
-    validity = torch.zeros(1, count * 2 + 3)
-    padded[:, 1 : 2 * count : 2] = obs["events"][:, :count]
-    validity[:, 1 : 2 * count : 2] = 1
-    for left, right in zip(
-        expected,
-        agent(device_input(agent, {**obs, "events": padded, "events_valid": validity})),
-        strict=True,
-    ):
-        torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
-    empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
-    zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
+    empty = _edited(payload, [])
     baseline_space = ObservationSpace()
     baseline = ActorCritic(baseline_space, ModelConfig(hidden_dim=16, world=PACK))
-    # The baseline reads events in its own (history-free) layout.
-    unrecorded = {
-        **obs,
-        "events": torch.empty(1, 0, baseline_space.shapes["events"][-1]),
-        "events_valid": torch.empty(1, 0),
-    }
     baseline.load_state_dict(
         {
             key: value
@@ -182,26 +208,15 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
             if not key.startswith("recent_events.")
         }
     )
+    # The baseline reads the same decision in its own (history-free) layout.
     for left, right in zip(
-        baseline(device_input(baseline, unrecorded)),
+        baseline(device_input(baseline, empty)),
         agent(device_input(agent, empty)),
         strict=True,
     ):
         torch.testing.assert_close(left, right, atol=0, rtol=0)
-    for left, right in zip(
-        agent(device_input(agent, empty)),
-        agent(device_input(agent, zero)),
-        strict=True,
-    ):
+    for left, right in zip(expected, agent(device_input(agent, raw)), strict=True):
         torch.testing.assert_close(left, right, atol=0, rtol=0)
-    for left, right in zip(expected, agent(device_input(agent, obs)), strict=True):
-        torch.testing.assert_close(left, right, atol=0, rtol=0)
-    with pytest.raises(ValueError, match="requires events"):
-        agent(
-            device_input(
-                agent, {key: value for key, value in obs.items() if key != "events"}
-            )
-        )
 
 
 def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
@@ -282,15 +297,9 @@ def test_history_off_preserves_model_identity_and_outputs() -> None:
         assert torch.equal(weights, explicit.state_dict()[name])
     env = Env(_match(), ObservationSpace(), Reward(RewardConfig()), seed=111)
     raw, _ = env.reset()
-    tensors = {
-        key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in observation_arrays(env.obs_space, raw).items()
-    }
-    expected = baseline(device_input(baseline, tensors))
-    tensors.pop("events")
-    tensors.pop("events_valid")
+    expected = baseline(device_input(baseline, raw))
     for left, right in zip(
-        expected, explicit(device_input(explicit, tensors)), strict=True
+        expected, explicit(device_input(explicit, raw)), strict=True
     ):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
 
@@ -299,7 +308,7 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     space = ObservationSpace(ObservationConfig(policy_history_version=1, max_events=3))
     agent = _agent(space)
     obs = _collected(agent)
-    assert obs["events"].shape == (1, 3, 12)
-    assert obs["events_valid"].sum() == 3
+    assert obs.project("events").shape == (1, 3, 12)
+    assert obs.project("events_valid").sum() == 3
     with pytest.raises(ValueError, match="policy_history_version"):
         _agent(ObservationSpace())

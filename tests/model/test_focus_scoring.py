@@ -7,14 +7,20 @@ initialization. The tests by construction hold whatever the parameter draws;
 the fit compares learning on one decision.
 """
 
+from dataclasses import replace
+
+import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig
-from manabot.policy.readings import published_columns
+from manabot.policy.prepare import Prepared
+from manabot.policy.readings import published_columns, write_numeric_column
 from manabot.verify.action_cases import decision_case
-from tests.model.prepared_routes import device_input, fixture_tensors
+from manabot.verify.choice_inputs import encode
+import managym
+from tests.model.prepared_routes import device_input
 
 SPACE = ObservationSpace()
 COLUMNS = [column.name for column in published_columns(SPACE)["agent_permanents"]]
@@ -40,12 +46,21 @@ def _agent(
 
 
 def _attacker(
-    obs: ObservationBuffers, power: int | torch.Tensor, toughness: int | torch.Tensor
-) -> None:
-    """Set the attack case's one creature (agent permanent 0) in place, one
-    value for every row or one per row."""
-    obs["agent_permanents"][:, 0, POWER] = power / 10
-    obs["agent_permanents"][:, 0, TOUGHNESS] = toughness / 10
+    agent: ActorCritic,
+    obs: managym.Observation,
+    power: torch.Tensor,
+    toughness: torch.Tensor,
+) -> Prepared[np.ndarray]:
+    """Copies of `obs` whose one creature (agent permanent 0) has the given
+    power and toughness per row, set in the prepared numeric readings."""
+    batch = encode_policy_batch(SPACE, [obs] * len(power))
+    prepared = agent.prepare(batch)
+    board = prepared.permanents.copy()
+    readings = agent.readings["agent_permanents"]
+    for row, (p, t) in enumerate(zip(power.tolist(), toughness.tolist(), strict=True)):
+        write_numeric_column(board[row, 0, 0], slice(None), readings, POWER, p / 10)
+        write_numeric_column(board[row, 0, 0], slice(None), readings, TOUGHNESS, t / 10)
+    return replace(prepared, permanents=board)
 
 
 def test_field_is_omitted_when_off_and_keeps_every_other_draw() -> None:
@@ -61,18 +76,19 @@ def test_field_is_omitted_when_off_and_keeps_every_other_draw() -> None:
 
 
 def test_an_unfocused_offer_is_scaled_by_exactly_one() -> None:
-    obs = {
-        key: value.clone()
-        for key, value in fixture_tensors(decision_case("mode").observation).items()
-    }
-    obs["action_focus"].fill_(-1)
+    observation = decision_case("mode").observation
     with torch.no_grad():
         additive, focused = _agent(7), _agent(7, focus_film=True)
         assert focused.focus_film is not None
         focused.focus_film.weight.add_(1)
+
+        def unfocused(agent: ActorCritic) -> Prepared[np.ndarray]:
+            prepared = agent.prepare(encode(observation, SPACE), inference=True)
+            return replace(prepared, focus_mask=np.zeros_like(prepared.focus_mask))
+
         torch.testing.assert_close(
-            focused(device_input(focused, obs))[0],
-            additive(device_input(additive, obs))[0],
+            focused(device_input(focused, unfocused(focused)))[0],
+            additive(device_input(additive, unfocused(additive)))[0],
             rtol=0,
             atol=0,
         )
@@ -99,16 +115,14 @@ def test_only_a_focused_offer_trains_the_focus_weight() -> None:
     """The attack case's two offers name the attacker; with the second's
     focus removed, its logit sends no gradient to `focus_film.weight` and the
     first's does."""
-    obs = {
-        key: value.clone()
-        for key, value in fixture_tensors(decision_case("attack").observation).items()
-    }
-    obs["action_focus"][0, 1] = -1
     agent = _agent(3, focus_film=True)
     assert agent.focus_film is not None
     with torch.no_grad():
         agent.focus_film.weight.add_(1)
-    prepared = device_input(agent, obs)
+    host = agent.prepare(encode(decision_case("attack").observation, SPACE))
+    mask = host.focus_mask.copy()
+    mask[host.logit_positions[0, 1]] = 0
+    prepared = device_input(agent, replace(host, focus_mask=mask))
 
     def weight_gradient(offer: int) -> torch.Tensor:
         agent.zero_grad()
@@ -125,12 +139,11 @@ def _steps_to_fit(seed: int, **fields: bool) -> int:
     """Full-batch Adam updates on "attack iff power >= 3" over 100 attackers
     until every board's label has probability at least 0.9 (at most 300)."""
     power, toughness = torch.cartesian_prod(torch.arange(10), torch.arange(10)).T
-    case = fixture_tensors(decision_case("attack").observation)
-    batch = {key: torch.cat([value] * len(power)) for key, value in case.items()}
-    _attacker(batch, power, toughness)
     labels = (power < 3).long()
     agent = _agent(seed, bucketed_shapes=True, **fields)
-    prepared = device_input(agent, batch)
+    prepared = device_input(
+        agent, _attacker(agent, decision_case("attack").observation, power, toughness)
+    )
     optimizer = torch.optim.Adam(agent.parameters(), lr=3e-4)
     for step in range(300):
         logits, _ = agent(prepared)

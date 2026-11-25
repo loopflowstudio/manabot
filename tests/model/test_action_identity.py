@@ -11,7 +11,6 @@ from manabot.env.observation import (
     ACTION_ABILITY_INDEX,
     ACTION_MODE_INDEX,
     MAX_ACTION_SELECTOR,
-    PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
@@ -22,7 +21,7 @@ from manabot.verify.action_cases import (
     initial,
 )
 from manabot.verify.choice_inputs import encode, reorder_offers
-from tests.model.prepared_routes import device_input, fixture_tensors
+from tests.model.prepared_routes import device_input
 
 
 @pytest.fixture(autouse=True)
@@ -106,21 +105,6 @@ def test_policy_can_score_either_choice_first(
     torch.testing.assert_close(
         actual[:, :count], logits[:, order], atol=2e-5, rtol=1e-5
     )
-
-
-@pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), float("inf"), 1000000.0])
-@pytest.mark.parametrize("key", ["semantic_cards", "agent_permanents"])
-def test_generic_definition_rejects_unadmitted_ids(bad: float, key: str) -> None:
-    obs = fixture_tensors(decision_case("land").observation)
-    if key == "semantic_cards":
-        obs[key][0, 0, 0] = bad
-    else:
-        obs[key][0, 0, PERMANENT_DEFINITION_INDEX] = bad
-    agent = ActorCritic(
-        ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
-    )
-    with pytest.raises(ValueError, match="unadmitted card definition"):
-        device_input(agent, obs)
 
 
 def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:

@@ -17,7 +17,7 @@ import torch
 from tests.belief.support import fixture_decision
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.training.backend_fixtures import policy_weights, self_play_batch
-from tests.training.test_memory_chunk_cache import chunk_input
+from tests.training.memory_chunks import chunk_input
 
 mx = pytest.importorskip("mlx.core")
 
@@ -67,17 +67,11 @@ from manabot.belief.encoding import BeliefCheckpointBinding, encode_belief
 from manabot.belief.state import CompatibleDealBeliefModel
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.match import Match
-from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, RetainedMemory
 from manabot.env.observation import (
-    FACT_CONTINUATION_PROGRAM,
-    FACT_DETAIL_INDEX,
-    FACT_KIND_INDEX,
-    FACT_OBJECT_INDEX,
-    FACT_VALID_INDEX,
-    FACT_VALUE_INDEX,
     STACK_SOURCE_INDEX,
     ObservationSpace,
-    column,
+    encode_policy_batch,
 )
 from manabot.infra.config import (
     BF16_MIN_HIDDEN_DIM,
@@ -95,6 +89,7 @@ from manabot.policy.checkpoint import (
 from manabot.policy.prepare import Prepared, Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.policy.readings import legacy_readings
+from manabot.policy.spans import ObservationSelection
 from manabot.recipes import baseline, elemental
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.learning import DampedPolicyLearning
@@ -114,7 +109,6 @@ from manabot.verify.learning_regression import inspect_policy
 from manabot.verify.representation import kellan_upgrade_root
 import managym
 from tests.fixtures.observation_rows import observation_arrays
-from tests.fixtures.rollout_arrays import projected_fields
 
 
 def _mlx_names(torch_named: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -237,6 +231,21 @@ def lesson_match() -> Match:
     return Match(
         MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
+
+
+def stack_source_decision(space: ObservationSpace) -> managym.Observation:
+    """A lesson-match decision with an ability on the stack whose source is
+    on the battlefield, reached by seeded random play."""
+    env = managym.Env(seed=0, skip_trivial=True)
+    env.reset(lesson_match().to_rust())
+    rng = np.random.default_rng(0)
+    for _ in range(600):
+        obs = env.observation_for_player(env.current_agent_index())
+        stack = observation_arrays(space, obs)["stack"]
+        if (stack[:, STACK_SOURCE_INDEX] > 0).any():
+            return obs
+        env.step(int(rng.integers(len(obs.action_space.actions))))
+    raise AssertionError("no ability with a source reached the stack")
 
 
 @pytest.fixture
@@ -428,15 +437,17 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     indexes = np.arange(rollout.actions.size)
     rows = rollout.observations(indexes)
     obs = rows.observation
-    if not config.belief_count_buckets:
-        obs = projected_fields(obs)
-        # Put an ability on the stack with a source on the acting battlefield.
-        source = 2 + obs["agent_cards"].shape[1] + obs["opponent_cards"].shape[1]
-        obs["agent_permanents_valid"][0, 0] = 1
-        obs["stack_valid"][0, 0] = 1
-        obs["stack"][0, 0, STACK_SOURCE_INDEX] = source + 1
-        obs["player_turn_state"][0, 0, 0] = 1
-        obs["card_turn_state"][0, 0, 0] = 1
+    actions = rollout.actions.reshape(-1).copy()
+    behavior_logs = rows.log_probabilities.copy()
+    if obs.memory is None and not config.belief_count_buckets:
+        # The first row holds an ability on the stack with a source on the
+        # battlefield, so the stack-source join fires.
+        extra = encode_policy_batch(space, [stack_source_decision(space)])
+        obs = ObservationSelection(space, ((extra, 0), *obs.coordinates[1:]))
+        count = int(extra.action_counts[0])
+        actions[0] = 0
+        behavior_logs[0] = -np.inf
+        behavior_logs[0, :count] = -np.log(count)
 
     policy = assemble(checkpoint, bucketed_shapes=bucketed, live_tokens=memory)
     belief_rows = None
@@ -511,11 +522,11 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
         # Give each logit its own target, including draws.
         value_targets = np.eye(3, dtype=np.float32)[np.arange(rollout.actions.size) % 3]
     targets = Targets(
-        actions=rollout.actions.reshape(-1),
+        actions=actions,
         advantages=np.linspace(-1.0, 1.0, rollout.actions.size, dtype=np.float32),
         value_targets=value_targets,
         actor_mask=np.ones(rollout.actions.size, dtype=bool),
-        behavior_logs=rows.log_probabilities,
+        behavior_logs=behavior_logs,
         reference=reference_distribution(obs, "action_type_uniform"),
     )
     settings = Settings(
@@ -590,7 +601,9 @@ def test_mlx_gru_reuses_only_stable_records_in_the_same_lifetime() -> None:
             (replace(prefix, native_epoch=2), 65),
             (replace(prefix, identity=PrefixIdentity("fork", 1, "branch")), 65),
         ):
-            selected = PrefixObservation(raw, [history], capacities)
+            selected = ObservationSelection(
+                raw.space, raw.coordinates, RetainedMemory((history,), capacities)
+            )
             prepared = scope.prepare(selected)
             assert prepared.memory is not None
             assert len(prepared.memory.numbers) == expected_records
@@ -668,8 +681,8 @@ def test_hashed_records_match_torch_with_a_live_shared_effect(
     env = kellan_upgrade_root()
     space = ObservationSpace()
     obs = env.observation_for_player(env.current_agent_index())
-    rows = {key: value[None] for key, value in observation_arrays(space, obs).items()}
-    assert (rows["effect_details"][..., 0] >= 11).any()
+    assert (observation_arrays(space, obs)["effect_details"][..., 0] >= 11).any()
+    rows = encode_policy_batch(space, [obs])
     config = ModelConfig(hidden_dim=16, world=world, record_vocabulary="hashed")
     reference = ActorCritic(space, config)
     with torch.no_grad():
@@ -875,10 +888,9 @@ def test_mlx_learner_encodes_only_referenced_catalog_programs(
     )
     env = managym.Env(seed=7)
     env.reset(lesson_match().to_rust())
-    obs = observation_arrays(
-        space, env.observation_for_player(env.current_agent_index())
+    inputs = encode_policy_batch(
+        space, [env.observation_for_player(env.current_agent_index())]
     )
-    inputs = {key: row[None] for key, row in obs.items()}
     batch = policy.prepare(inputs)
     inference = policy.prepare(inputs, inference=True)
     assert batch.programs is not None and inference.programs is not None
@@ -987,12 +999,14 @@ def test_mlx_fresh_recipe_exports_both_live_policies(
 
     env = managym.Env(seed=7)
     env.reset(Match(settings.match).to_rust())
-    encoded = observation_arrays(
+    obs = encode_policy_batch(
         result.raw.observation_space,
-        env.observation_for_player(env.current_agent_index()),
+        [env.observation_for_player(env.current_agent_index())],
     )
-    obs = {key: value[None] for key, value in encoded.items()}
-    legal = obs["actions_valid"] > 0
+    legal = (
+        np.arange(obs.layout.shapes["actions"][0])
+        < np.asarray(obs.action_counts)[:, None]
+    )
     for label, source in (("raw", result.raw), ("ema", result.ema)):
         saved = result.checkpoint.with_name(f"00000001-{label}.safetensors")
         record = mlx.metadata(saved)["bc"]
@@ -1128,37 +1142,16 @@ def test_mlx_seeded_diagnostics_restore_outer_random_stream(exceptional: bool) -
     assert mx.random.uniform().item() == expected
 
 
-def test_mlx_prepares_observation_spans_at_checkpoint_shape() -> None:
-    space = ObservationSpace()
-    source = ActorCritic(
-        space,
-        ModelConfig(
-            hidden_dim=8,
-            num_attention_heads=2,
-            world=managym.WORLD_SETUP,
-            value_aggregation="masked_mean",
-        ),
-    )
-    policy = assemble(policy_weights(source), bucketed_shapes=True)
-    env = managym.Env(seed=7)
-    env.reset(Match().to_rust())
-    dense = space.allocate(1)
-    managym.encode_observations_into([env], space.layout, dense, 1)
-    batch = managym.encode_observation_batch([env], space.layout)
-    np.testing.assert_equal(
-        asdict(policy.prepare(batch)), asdict(policy.prepare(dense))
-    )
-
-
 def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
     _, target, _ = _converted(tmp_path)
     policy, space = resolve("mlx").load_policy(str(target))
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
-    obs = observation_arrays(
-        space, env.observation_for_player(env.current_agent_index())
+    batch = policy.prepare(
+        encode_policy_batch(
+            space, [env.observation_for_player(env.current_agent_index())]
+        )
     )
-    batch = policy.prepare({key: value[None] for key, value in obs.items()})
     with pytest.raises(ValueError, match="another policy configuration"):
         policy(replace(batch, binding="another model"))
 
@@ -1172,10 +1165,12 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
     policy.to("cpu").eval()
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
-    obs = observation_arrays(
-        space, env.observation_for_player(env.current_agent_index())
+    inputs = encode_policy_batch(
+        space, [env.observation_for_player(env.current_agent_index())]
     )
-    inputs = {key: value[None] for key, value in obs.items()}
+    legal = (
+        np.arange(space.config.max_actions) < np.asarray(inputs.action_counts)[:, None]
+    )
     batch = policy.prepare(inputs, inference=True)
     logits, values = policy.evaluate(batch)
     assert policy.device_type == "cpu"
@@ -1190,11 +1185,9 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
         np.testing.assert_array_equal(result.logits, logits)
         assert result.transfers == 0
         assert result.transfer_bytes == 0
-        action = policy.sample_rows(result.logits, inputs["actions_valid"], [13], False)
-        assert action == policy.sample_rows(
-            logits, inputs["actions_valid"], [13], False
-        )
-        assert inputs["actions_valid"][0, action[0]]
+        action = policy.sample_rows(result.logits, legal, [13], False)
+        assert action == policy.sample_rows(logits, legal, [13], False)
+        assert legal[0, action[0]]
         assert (
             policy.sample(batch, deterministic=True).tolist()
             == logits.argmax(-1).tolist()
@@ -1213,8 +1206,11 @@ def test_mlx_scope_rejects_a_changed_observation_binding(tmp_path: Path) -> None
     _, _, agent = _converted(tmp_path)
     policy = assemble(policy_weights(agent), bucketed_shapes=True)
     space = policy.observation_space
-    obs = space.allocate(1)
-    obs["actions_valid"][0, 0] = obs["agent_player_valid"][0, 0] = 1
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    obs = encode_policy_batch(
+        space, [env.observation_for_player(env.current_agent_index())]
+    )
     with policy.inference_scope() as scope:
         prepared = scope.prepare(obs)
         space.config.max_facts = 8
@@ -1226,8 +1222,6 @@ def test_mlx_scope_rejects_a_changed_observation_binding(tmp_path: Path) -> None
         ValueError, match="prepared batch belongs to another policy configuration"
     ):
         policy.evaluate(prepared)
-    with pytest.raises(ValueError, match=r"expected \[batch, 8, \d+\] facts"):
-        policy.prepare(obs)
 
 
 def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
@@ -1258,21 +1252,39 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
 type LearnerTerms = tuple[np.ndarray, np.ndarray, float, ParameterArrays]
 
 
+def _played(space: ObservationSpace, rows: int) -> managym.ObservationBatch:
+    """`rows` decisions of seeded random play, across as many games as it takes."""
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    rng = np.random.default_rng(7)
+    observations = []
+    while len(observations) < rows:
+        obs = env.observation_for_player(env.current_agent_index())
+        observations.append(obs)
+        _, _, terminated, truncated, _ = env.step(
+            int(rng.integers(len(obs.action_space.actions)))
+        )
+        if terminated or truncated:
+            env.reset(Match().to_rust())
+    return encode_policy_batch(space, observations)
+
+
 def _learner_terms(
     policy: MLXActorCritic, prepared: Prepared[np.ndarray], returns: np.ndarray
 ) -> LearnerTerms:
     """Two-action logits, values, loss and unclipped gradients of one minibatch
-    whose behaviour policy is uniform over two legal actions."""
+    whose behaviour policy is uniform over its legal actions."""
     rows = len(returns)
     logits, values = policy.evaluate(prepared)
     legal = prepared.legal
+    uniform = legal / legal.sum(-1, keepdims=True)
     targets = Targets(
         np.zeros(rows, np.int64),
         returns,
         np.ones(rows, np.float32),
         np.ones(rows, bool),
-        np.where(legal, np.log(0.5), -np.inf).astype(np.float32),
-        np.where(legal, 0.5, 0).astype(np.float32),
+        np.where(legal, np.log(uniform, where=legal), -np.inf).astype(np.float32),
+        uniform.astype(np.float32),
     )
     learner = MLXLearner(policy, minibatch_rows=rows)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
@@ -1293,49 +1305,34 @@ def _assert_terms_close(expected: LearnerTerms, actual: LearnerTerms) -> None:
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Grouped attention restores interleaved rows and their focused opponent permanent.
-
-    Compact fact routes reach the same objects as padded ones: rows hold unequal
-    fact counts, one has none, and a later row carries a two-token program.
-    """
+    """Grouped attention restores interleaved rows of unequal live lengths;
+    compact fact routes reach the same objects as padded ones."""
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
-    obs = {
-        k: np.zeros((4, *shape), dtype=np.float32) for k, shape in space.shapes.items()
-    }
-    obs["agent_player_valid"][:] = 1
-    obs["opponent_player_valid"][:] = 1
-    # Live lengths 6, 3, 5, 4 put nonadjacent rows in both groups.
-    obs["agent_cards_valid"][0, [0, 2, 4]] = 1
-    obs["agent_cards_valid"][2, [1, 3]] = 1
-    obs["agent_cards_valid"][3, 2] = 1
-    obs["opponent_permanents_valid"][:, 0] = 1
-    obs["actions_valid"][:, :2] = 1
-    obs["action_focus"].fill(-1)
-    obs["action_focus"][:, 0, 0] = 0
-    obs["action_focus"][:, 1, 0] = (
-        2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
+    pool = ObservationSelection(
+        space,
+        tuple((batch, row) for batch in [_played(space, 64)] for row in range(64)),
     )
-    # (observation, slot, object, program position, number): row 1 has no
-    # facts, and row 2's second program is linked to no object.
-    fact_rows = [
-        (0, 0, 1, 0, -71),
-        (2, 0, 2, 0, 3),
-        (2, 1, 2, 1, 70000),
-        (2, 2, 0, 0, 9),
-        (3, 0, 4, 0, -2147483648),
-        (3, 1, 4, 1, 5),
-        (3, 2, 1, 0, 12),
-    ]
-    for b, slot, target, position, number in fact_rows:
-        row = obs["facts"][b, slot]
-        row[FACT_VALID_INDEX] = 1
-        row[FACT_OBJECT_INDEX] = target
-        row[FACT_KIND_INDEX] = FACT_CONTINUATION_PROGRAM
-        row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = [4, position]
-        word = number & 0xFFFFFFFF
-        row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = [word >> 16, word & 65535]
+    live = sum(
+        pool.project(f"{key}_valid").sum(1)
+        for key in (
+            "agent_player",
+            "opponent_player",
+            "agent_cards",
+            "opponent_cards",
+            "agent_permanents",
+            "opponent_permanents",
+            "stack",
+        )
+    )
+    # Four distinct lengths in the order longest, shortest, second, third put
+    # nonadjacent rows in both attention groups.
+    by_length = {int(length): row for row, length in enumerate(live)}
+    lengths = sorted(by_length)
+    assert len(lengths) >= 4, lengths
+    chosen = [lengths[-1], lengths[0], lengths[-2], lengths[1]]
+    obs = pool.select(np.array([by_length[length] for length in chosen]))
     checkpoint = policy_weights(agent)
     widths: list[int] = []
     table_widths: list[int] = []
@@ -1355,7 +1352,9 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
         policy = assemble(checkpoint, bucketed_shapes=bucketed)
         prepared = policy.prepare(obs)
         assert (prepared.bucket_needs is not None) == bucketed
-        assert (prepared.agent_cards.shape[1] < obs["agent_cards"].shape[1]) == bucketed
+        assert (
+            prepared.agent_cards.shape[1] < space.shapes["agent_cards"][0]
+        ) == bucketed
         assert prepared.is_agent.shape == prepared.validity.shape
         # Learner rows can reuse the measured extents from admission.
         needs = policy.check_observation(obs)
@@ -1363,16 +1362,14 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
             asdict(prepared), asdict(policy.prepare_admitted(obs, needs=needs))
         )
         assert prepared.facts.compact == bucketed
-        if bucketed:
-            assert prepared.facts.kinds.shape == (1, len(fact_rows))
-            programs = prepared.facts.programs
-            assert programs is not None
-            np.testing.assert_array_equal(programs.rows, np.arange(len(fact_rows)))
-            assert programs.schedule.lengths == (1, 2, 1, 2, 1)
         table_widths.append(prepared.validity.shape[1])
         widths.clear()
         results.append(_learner_terms(policy, prepared, returns))
-        assert set(widths) == ({4, 6} if bucketed else {prepared.validity.shape[1]})
+        if bucketed:
+            assert len(set(widths)) == 2
+            assert max(widths) < prepared.validity.shape[1]
+        else:
+            assert set(widths) == {prepared.validity.shape[1]}
         np.testing.assert_allclose(
             results[-1][0], expected_logits[:, :2], atol=LOGIT_TOLERANCE
         )
@@ -1383,30 +1380,31 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     # Inference and single-length batches keep the cheaper single attention call.
     widths.clear()
     infer_logits, infer_values = policy.evaluate(policy.prepare(obs, inference=True))
-    assert set(widths) == {8}
+    assert len(set(widths)) == 1
     np.testing.assert_allclose(infer_logits[:, :2], logits[:, :2], atol=2e-6)
     np.testing.assert_allclose(infer_values, values, atol=2e-6)
     for identical_rows in ([0], [0, 0]):
         widths.clear()
-        same = {key: value[identical_rows] for key, value in obs.items()}
+        same = obs.select(np.array(identical_rows))
         same_logits, same_values = policy.evaluate(policy.prepare(same))
-        assert set(widths) == {6}
+        assert len(set(widths)) == 1
         np.testing.assert_allclose(
             same_logits[:, :2], logits[identical_rows, :2], atol=2e-6
         )
         np.testing.assert_allclose(same_values, values[identical_rows], atol=2e-6)
 
-    # Odd batches place the middle observation in the shorter half.
+    # Odd batches still split into two groups.
     widths.clear()
     odd_rows = [0, 1, 2]
-    odd = {key: value[odd_rows] for key, value in obs.items()}
-    odd_logits, odd_values = policy.evaluate(policy.prepare(odd))
-    assert set(widths) == {5, 6}
+    odd_logits, odd_values = policy.evaluate(
+        policy.prepare(obs.select(np.array(odd_rows)))
+    )
+    assert len(set(widths)) == 2
     np.testing.assert_allclose(odd_logits[:, :2], logits[odd_rows, :2], atol=2e-6)
     np.testing.assert_allclose(odd_values, values[odd_rows], atol=2e-6)
 
     padded_width, bucket_width = table_widths
-    assert 6 < bucket_width < padded_width
+    assert bucket_width < padded_width
     _assert_terms_close(*results)
 
 
@@ -1418,21 +1416,9 @@ def test_large_bucketed_batches_pack_more_attention_groups(
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
-    obs = {
-        k: np.zeros((rows, *shape), dtype=np.float32)
-        for k, shape in space.shapes.items()
-    }
-    obs["agent_player_valid"][:] = 1
-    obs["opponent_player_valid"][:] = 1
-    obs["opponent_permanents_valid"][:, 0] = 1
-    cards = space.shapes["agent_cards"][0]
+    # Random play gives boards of many sizes.
+    obs = _played(space, rows)
     rng = np.random.default_rng(7)
-    for b, live in enumerate(rng.integers(0, cards + 1, rows)):
-        obs["agent_cards_valid"][b, rng.permutation(cards)[:live]] = 1
-    obs["actions_valid"][:, :2] = 1
-    obs["action_focus"].fill(-1)
-    obs["action_focus"][:, 0, 0] = 0
-    obs["action_focus"][:, 1, 0] = 2 + 2 * cards + space.shapes["agent_permanents"][0]
     returns = rng.uniform(-1, 1, rows).astype(np.float32)
     checkpoint = policy_weights(agent)
     results = []
@@ -1450,52 +1436,19 @@ def test_large_bucketed_batches_pack_more_attention_groups(
     _assert_terms_close(*results)
 
 
-def test_mlx_bucketed_rejections_match_padded_and_torch(tmp_path: Path) -> None:
-    _, _, torch_policy = _converted(tmp_path)
-    space = torch_policy.observation_space
-    checkpoint = policy_weights(torch_policy)
-    policies = (
-        torch_policy,
-        ActorCritic(space, torch_policy.config, bucketed_shapes=True),
-        assemble(checkpoint),
-        assemble(checkpoint, bucketed_shapes=True),
-    )
-    for case, message in (
-        ("padding", "state record validity must be binary"),
-        ("fractional", "invalid fact object reference"),
-        ("shape", "facts"),
-        ("mask", "invalid_action_mask"),
-    ):
-        obs = space.allocate(1)
-        obs["actions_valid"][0, 0] = 1
-        if case == "padding":
-            obs["effects"][0, -1, column("effects", "valid")] = np.nan
-        elif case == "fractional":
-            obs["facts"][0, 0, column("facts", "valid")] = 1
-            obs["facts"][0, 0, column("facts", "object")] = 1e-12
-        elif case == "shape":
-            obs["facts"] = obs["facts"][:, :-1]
-        else:
-            obs["actions_valid"][0, -1] = 0.25
-        errors = []
-        for policy in policies:
-            for admit in (policy.check_observation, policy.prepare):
-                with pytest.raises(ValueError, match=message) as exc:
-                    admit(obs)
-                errors.append((type(exc.value).__name__, str(exc.value)))
-        assert len(set(errors)) == 1
-
-
 def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
     precision: Precision = "bfloat16"
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
-    obs = {k: np.zeros((2, *shape), np.float32) for k, shape in space.shapes.items()}
-    obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
-    obs["actions_valid"][:, :2] = 1
-    obs["action_focus"][:] = -1
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    first = env.observation_for_player(env.current_agent_index())
+    env.step(0)
+    obs = encode_policy_batch(
+        space, [first, env.observation_for_player(env.current_agent_index())]
+    )
     policy = assemble(policy_weights(agent))
     assert policy.precision == "float32"
     learner = MLXLearner(policy, precision=precision, minibatch_rows=2)

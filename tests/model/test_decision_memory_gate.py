@@ -3,9 +3,16 @@
 from pathlib import Path
 from typing import Literal
 
-import numpy as np
 import pytest
-from test_decision_memory import forward, memory_input, policy
+from test_decision_memory import (
+    blank,
+    encode_with_records,
+    forward,
+    memory_input,
+    memory_root,
+    policy,
+    rows_of,
+)
 import torch
 
 from manabot.backends.torch.checkpoint import (
@@ -14,9 +21,40 @@ from manabot.backends.torch.checkpoint import (
 )
 from manabot.backends.torch.policy import ActorCritic, GameObjectAttention
 from manabot.backends.torch.runtime import load_pretrained
-from manabot.env.decision_memory import blank_memory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
+from managym.decision_memory import DecisionContext, DecisionRecord, PublicChoice
+
+
+def _priority(index: int) -> DecisionRecord:
+    """An opponent's pass at the `index`th position of its decision log."""
+    return DecisionRecord(
+        actor=2,
+        ordinal=index,
+        first_position=index,
+        last_position=index,
+        count=1,
+        kind="Priority",
+        context=DecisionContext(
+            turn=3,
+            phase=1,
+            step=3,
+            life=(20, 18),
+            hand=(6, 3),
+            board_counts=((0,) * 8, (0,) * 8),
+            mana_sources=[],
+        ),
+        response=[],
+        choice=PublicChoice(
+            kind="PassPriority",
+            mode=None,
+            ability=None,
+            named=None,
+            name_row=None,
+            declared=None,
+            references=[],
+        ),
+    )
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -33,13 +71,11 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
     bucketed: bool,
     aggregation: str,
 ) -> None:
-    space, obs = memory_input()
+    short_space, root = memory_root()
     space = ObservationSpace(
-        space.config.model_copy(update={"max_decision_records": 128})
+        short_space.config.model_copy(update={"max_decision_records": 128})
     )
-    obs["decision_records"] = np.pad(
-        obs["decision_records"], ((0, 0), (0, 124), (0, 0))
-    )
+    obs = encode_with_records(space, root, [_priority(0)])
     template = policy(
         space, encoder, summaries, live=live, bucketed=bucketed, aggregation=aggregation
     )
@@ -56,16 +92,9 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
         space, template.config, live_tokens=live, bucketed_shapes=bucketed
     ).eval()
     load_pretrained(arm, admitted.state_dict(), admitted.config)
-    longer = {key: value.copy() for key, value in obs.items()}
-    for index in range(128):
-        longer["decision_records"][0, index] = obs["decision_records"][0, 0]
-        for column in (1, 7, 9):
-            longer["decision_records"][0, index, column] = index
-    mixed = {
-        key: np.concatenate((value, blank_memory(obs)[key]), axis=0)
-        for key, value in longer.items()
-    }
-    for rows in (obs, blank_memory(obs), mixed):
+    longer = encode_with_records(space, root, [_priority(i) for i in range(128)])
+    mixed = rows_of(space, longer, blank(obs))
+    for rows in (obs, blank(obs), mixed):
         for context in (torch.enable_grad(), torch.inference_mode()):
             with context:
                 for actual, expected in zip(
@@ -77,7 +106,7 @@ def test_trunk_branch_is_exact_and_checkpoint_retains_gates(
         assert arm.attention.memory_gate is not None
         arm.attention.memory_gate.fill_(0.25)
     for actual, expected in zip(
-        forward(arm, blank_memory(obs)), forward(trunk, blank_memory(obs)), strict=True
+        forward(arm, blank(obs)), forward(trunk, blank(obs)), strict=True
     ):
         torch.testing.assert_close(actual, expected, atol=0, rtol=0)
     saved = tmp_path / "arm.safetensors"

@@ -1,7 +1,7 @@
 """Serving preparation preserves policy meaning across collection and learning."""
 
 from copy import deepcopy
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from unittest.mock import patch
 
 import numpy as np
@@ -14,13 +14,11 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
-    PERMANENT_DEFINITION_INDEX,
-    ObservationBuffers,
     ObservationSpace,
 )
 from manabot.infra.config import RewardConfig
 from manabot.policy.prepare import CatalogPrograms, Prepared
-from manabot.policy.spans import ObservationSelection
+from manabot.policy.spans import ObservationSelection, observation_spans
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     Collector,
@@ -60,7 +58,12 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 class PolicyFixture:
     agent: ActorCritic
     collector: Collector
-    obs: ObservationBuffers
+    obs: ObservationSelection
+
+
+def _legal(obs: ObservationSelection) -> torch.Tensor:
+    counts = torch.from_numpy(obs.action_counts.astype(np.int64))
+    return torch.arange(obs.space.config.max_actions) < counts[:, None]
 
 
 def _policy(
@@ -92,7 +95,7 @@ def _policy(
     return PolicyFixture(
         agent,
         collector,
-        projected_fields(collection._retain_obs_rows(collector, np.arange(2))),
+        collection._retain_obs_rows(collector, np.arange(2)),
     )
 
 
@@ -110,7 +113,7 @@ def test_half_precision_head_keeps_finite_public_logits() -> None:
     handle = case.agent.policy_head.register_forward_hook(half_scores)
     try:
         logits, _ = case.agent(device_input(case.agent, case.obs))
-        legal = torch.from_numpy(case.obs["actions_valid"]).bool()
+        legal = _legal(case.obs)
         assert logits.dtype == torch.float32
         assert torch.isfinite(logits).all()
         assert (logits[~legal] == -1e8).all()
@@ -135,10 +138,7 @@ def test_preparation_preserves_forward_and_training_gradients(semantic: bool) ->
     # Serving must not detach or reuse a catalog during a subsequent update.
     for agent in (case.agent, reference):
         logits, values = agent.forward_distribution(device_input(agent, case.obs))
-        loss = (
-            logits[torch.from_numpy(case.obs["actions_valid"]).bool()].square().mean()
-            + values.square().mean()
-        )
+        loss = logits[_legal(case.obs)].square().mean() + values.square().mean()
         loss.backward()
     for a, b in zip(case.agent.parameters(), reference.parameters(), strict=True):
         assert (a.grad is None) == (b.grad is None)
@@ -151,18 +151,14 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     history: bool,
 ) -> None:
     case = _policy(history=history)
-    if history:
-        # Later decisions carry public history.
-        batch = collect(case.collector, case.agent, 16)
-        case.obs = {
-            key: value[-8:, 0].astype(np.float32)
-            if key == "action_focus"
-            else value[-8:, 0]
-            for key, value in trajectory_rows(batch).observation.items()
-        }
+    # Later decisions (stream 0's last eight) hold permanents and, with
+    # history, public events.
+    batch = collect(case.collector, case.agent, 16)
+    steps, streams = batch.actions.shape
+    case.obs = batch.observations(np.arange(steps - 8, steps) * streams).observation
     semantic = case.agent.semantic_cards
     assert semantic is not None
-    _plant_unseen_definitions(case.obs, semantic.definition_rows, history)
+    planted = _plant_unseen_definitions(case.agent, case.obs, history)
     full = deepcopy(case.agent)
     encode = semantic.definitions
     referenced: list[int] = []
@@ -186,12 +182,9 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     )  # type: ignore[method-assign]
     outputs = []
     for agent in (case.agent, full):
-        logits, values = agent.forward_distribution(device_input(agent, case.obs))
+        logits, values = agent.forward_distribution(device_input(agent, planted))
         outputs.append((logits, values))
-        (
-            logits[torch.from_numpy(case.obs["actions_valid"]).bool()].square().mean()
-            + values.square().mean()
-        ).backward()
+        (logits[_legal(case.obs)].square().mean() + values.square().mean()).backward()
     assert 0 < referenced[0] < semantic.catalog_shape.definitions
     for a, b in zip(outputs[0], outputs[1], strict=True):
         torch.testing.assert_close(a, b, atol=1e-6, rtol=1e-5)
@@ -202,35 +195,51 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
 
 
 def _plant_unseen_definitions(
-    obs: ObservationBuffers, lookup: torch.Tensor, history: bool
-) -> None:
-    """Give every reference source a definition no other source names, so
-    the encoded subset must draw on each source separately."""
+    agent: ActorCritic, obs: ObservationSelection, history: bool
+) -> Prepared[np.ndarray]:
+    """Learner rows where every reference source names a definition no other
+    source names, so the encoded subset must draw on each source separately.
+
+    The definitions are planted in the native rows before preparation, which
+    scans them for the catalog subset.
+    """
+    assert agent.semantic_cards is not None
+    lookup = agent.semantic_cards.definition_rows
+    spans = observation_spans(
+        obs, agent.observation_space, bucketed=False, objects=False
+    )
     named = set(
-        lookup[torch.from_numpy(obs["semantic_cards"]).long()].flatten().tolist()
+        lookup[torch.from_numpy(spans.tables["semantic_cards"].integers).long()]
+        .flatten()
+        .tolist()
     )
     unseen = iter(
         transport
         for transport in range(1, len(lookup))
         if int(lookup[transport]) > 0 and int(lookup[transport]) not in named
     )
-    obs["agent_permanents"][0, 0, PERMANENT_DEFINITION_INDEX] = next(unseen)
-    obs["known_hand"][0, 0, 0, 0] = next(unseen)
-    obs["decklists"][0, 0, 0, 0] = next(unseen)
-    obs["relations"][0, 0, 5] = next(unseen)
+    sources = [
+        ("agent_permanents", "definition"),
+        ("known_hand", "definition"),
+        ("decklists", "definition"),
+        ("relations", "source_definition"),
+    ]
     if history:
-        batch, event = np.argwhere(obs["events_valid"])[0].tolist()
-        obs["events"][batch, event, 2] = next(unseen)
-
-
-@pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), 1e6])
-@pytest.mark.parametrize("semantic", [False, True])
-def test_cpu_admission_rejects_invalid_definition(bad: float, semantic: bool) -> None:
-    case = _policy(semantic=semantic)
-    case.obs["semantic_cards"][0, 0, 0] = bad
-    with PolicyInference(case.agent) as scope:
-        with pytest.raises(ValueError, match="unadmitted"):
-            scope.prepare(case.obs)
+        sources.append(("events", "source_definition"))
+    tables = dict(spans.tables)
+    for key, field in sources:
+        rows = tables[key]
+        assert len(rows.records), f"no live {key} row to plant"
+        records = rows.records.copy()
+        records[field][0] = next(unseen)
+        tables[key] = replace(rows, records=records)
+    return agent._prepare_rows(
+        replace(spans, tables=tables),
+        agent._admission_spec().tables,
+        False,
+        None,
+        None,
+    )
 
 
 def test_preparation_preserves_object_validity_and_mode_checks() -> None:
@@ -239,20 +248,6 @@ def test_preparation_preserves_object_validity_and_mode_checks() -> None:
         case.agent.train()
         with pytest.raises(RuntimeError, match="mode/configuration"):
             scope.prepare(case.obs)
-    for key in (
-        "agent_player_valid",
-        "opponent_player_valid",
-        "agent_cards_valid",
-        "opponent_cards_valid",
-        "agent_permanents_valid",
-        "opponent_permanents_valid",
-    ):
-        case.obs[key].fill(0)
-    with PolicyInference(case.agent) as scope:
-        with pytest.raises(ValueError, match="valid object"):
-            scope.prepare(case.obs)
-    with pytest.raises(ValueError, match="valid object"):
-        device_input(case.agent, case.obs)
 
 
 def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
@@ -280,7 +275,7 @@ def test_prepared_collection_matches_reference() -> None:
 
     @torch.no_grad()
     def plain_inputs(
-        scope: PolicyInference, obs: ObservationBuffers
+        scope: PolicyInference, obs: ObservationSelection
     ) -> Prepared[torch.Tensor]:
         """Admitted outside the scope: no cached catalog or scope checks."""
         return device_input(scope.agent, obs)

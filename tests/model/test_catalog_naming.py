@@ -6,7 +6,7 @@ the final name choice commits. The policy input encodes group spans and names
 at ordinary action capacity.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -19,19 +19,22 @@ import torch
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.observation import (
-    ACTION_CONTINUATION_INDEX,
     ACTION_MODE_INDEX,
     NAME_DIM,
     ObservationSpace,
-    allocate_vector_buffers,
+    encode_policy_batch,
+    step_buffers,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.world import deck_world
+from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.semantic.text_observation import capture_text_decision
+from manabot.verify.choice_inputs import reorder_offers
 import managym
 from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
-from tests.model.prepared_routes import device_input, host_inputs
+from tests.model.prepared_routes import device_input
 
 
 @dataclass(frozen=True)
@@ -94,8 +97,13 @@ def naming_root(naming_trace: NamingTrace) -> managym.Env:
     return naming_trace.root
 
 
-def _tensor(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
-    return {key: torch.from_numpy(value)[None] for key, value in values.items()}
+def _acting(env: managym.Env) -> managym.Observation:
+    return env.observation_for_player(env.current_agent_index())
+
+
+def _buffers(space: ObservationSpace) -> dict[str, np.ndarray]:
+    """Native dense vector transport, until it is removed."""
+    return {**space.layout.allocate(1), **step_buffers(1)}
 
 
 def _offer_toward(env: managym.Env, name: str) -> tuple[int, bool]:
@@ -228,7 +236,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     groups = [action.name_group for action in raw.action_space.actions]
     assert len(groups) == -(-len(catalog) // managym.NAME_BRANCHING)
     model = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
-    tensors = _tensor(values)
+    tensors = _acting(root)
     logits, _ = model(device_input(model, tensors))
     assert logits.shape == (1, 512)
     assert (logits.softmax(-1)[0, : len(groups)] > 0).all()
@@ -255,7 +263,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     vector.reset_all(_players())
     for action in naming_trace.actions:
         vector.step([action])
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = _buffers(space)
     vector.set_buffers(buffers, layout=space.layout)
     vector.scenario_naming_vocabulary_into_buffers()
     for key, expected in values.items():
@@ -273,7 +281,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
         np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
     with pytest.raises(Exception, match="revision|stale"):
         leaf.step_semantic_command(group_command)
-    leaf_tensors = _tensor(leaf_values)
+    leaf_tensors = _acting(leaf)
     row = 512 - first
     assert leaf_values["name_candidates"][row, 0] == 513
     model.zero_grad()
@@ -350,14 +358,6 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     torch.testing.assert_close(
         restored(device_input(restored, leaf_tensors))[0], trained
     )
-    bad = {key: value.clone() for key, value in leaf_tensors.items()}
-    bad["name_candidates"][0, row, 1] = managym.CARD_DEFINITION_COUNT + 100
-    with pytest.raises(ValueError, match="vocabulary"):
-        device_input(model, bad)
-    bad = {key: value.clone() for key, value in tensors.items()}
-    bad["name_candidates"][0, 0, 3] = 0
-    with pytest.raises(ValueError, match="group span"):
-        device_input(model, bad)
     world = deck_world(space)
     assert world["naming_representation"] == "public-groups-v1"
     assert world["naming_branching"] == managym.NAME_BRANCHING
@@ -375,7 +375,7 @@ def test_catalog_naming_programs_affect_scores(
     leaf = naming_root.clone_env()
     _name_path(leaf, "Fire Lord Sozin")
     raw = leaf.observation_for_player(0)
-    tensors = _tensor(observation_arrays(space, raw))
+    tensors = raw
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
     logits, _ = model(device_input(model, tensors))
@@ -404,7 +404,7 @@ def test_naming_checkpoint_binds_names_before_loading_weights(
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
-    tensors = _tensor(observation_arrays(space, naming_root.observation_for_player(0)))
+    tensors = naming_root.observation_for_player(0)
     path = tmp_path / "naming.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
@@ -460,7 +460,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         # The following private search has no naming candidates.
         env.step(_offer_toward(env, "Gray Ogre")[0])
     space = ObservationSpace()
-    tensors = _tensor(observation_arrays(space, env.observation_for_player(0)))
+    tensors = env.observation_for_player(0)
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
@@ -479,22 +479,19 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
             patch.object(semantic, "definitions", wraps=semantic.definitions) as encode,
             PolicyInference(model) as scope,
         ):
-            prepared = scope.prepare(host_inputs(tensors))
+            prepared = scope.prepare(encode_policy_batch(space, [tensors]))
             for _ in range(2):
                 actual = model(prepared)
                 for left, right in zip(actual, expected, strict=True):
                     torch.testing.assert_close(left, right, atol=0, rtol=0)
             assert encode.call_count == 1
 
-        # Move a legal row to the final slot and padding into the middle. Trimming
-        # must preserve action identity even when validity is not a dense prefix.
-        order = torch.arange(tensors["actions"].shape[1])
-        order[0], order[-1] = order[-1].item(), order[0].item()
-        permuted = dict(tensors)
-        for key in ("actions", "action_focus", "actions_valid", "name_candidates"):
-            permuted[key] = tensors[key][:, order]
-        logits, value = model(device_input(model, permuted))
-        torch.testing.assert_close(logits, expected[0][:, order])
+        # Present the offers in reverse: each keeps its scores at its new slot.
+        count = len(tensors.action_space.actions)
+        order = list(range(count))[::-1]
+        with reorder_offers(tensors, order):
+            logits, value = model(device_input(model, tensors))
+        torch.testing.assert_close(logits[:, :count], expected[0][:, order])
         torch.testing.assert_close(value, expected[1])
 
 
@@ -504,7 +501,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     space = ObservationSpace()
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = _buffers(space)
     vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(_players())
     raw = scalar.reset(_players())[0]
@@ -542,8 +539,9 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
 
 def _mixed_naming_batch(
     naming_root: managym.Env,
-) -> tuple[ObservationSpace, dict[str, torch.Tensor]]:
-    """Group prompt, name prompt, private search and an ordinary decision."""
+) -> tuple[ObservationSpace, managym.ObservationBatch, dict[str, torch.Tensor]]:
+    """Group prompt, name prompt, private search and an ordinary decision,
+    natively and as their padded projection."""
     space = ObservationSpace()
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
@@ -556,14 +554,15 @@ def _mixed_naming_batch(
             managym.PlayerConfig("B", {"Mountain": 20, "Gray Ogre": 20}),
         ]
     )
-    arrays = [
-        observation_arrays(space, env.observation_for_player(env.current_agent_index()))
-        for env in (naming_root, leaf, search, ordinary)
-    ]
-    return space, {
-        key: torch.from_numpy(np.stack([row[key] for row in arrays]))
-        for key in arrays[0]
-    }
+    batch = encode_policy_batch(
+        space, [_acting(env) for env in (naming_root, leaf, search, ordinary)]
+    )
+    rows = ObservationSelection(space, tuple((batch, i) for i in range(4)))
+    return (
+        space,
+        batch,
+        {key: torch.from_numpy(rows.project(key)) for key in rows.fields},
+    )
 
 
 @pytest.mark.parametrize("film", [False, True])
@@ -577,7 +576,7 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(243)
-    space, obs = _mixed_naming_batch(naming_root)
+    space, batch, obs = _mixed_naming_batch(naming_root)
     config = ModelConfig(
         hidden_dim=width,
         world=managym.WORLD_SETUP,
@@ -590,13 +589,8 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
             model.policy_film.weight.fill_(0.01)
     reference = DenseActionReference(space, config).eval()
     reference.load_state_dict(model.state_dict())
-    # Move a legal offer beyond padding, with all joins kept at its new slot.
-    order = torch.arange(obs["actions"].shape[1])
-    order[0], order[-1] = order[-1].item(), order[0].item()
-    for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
-        obs[key] = obs[key][:, order]
     targets = obs["actions_valid"].argmax(-1)
-    actual, values = model.forward_distribution(device_input(model, obs))
+    actual, values = model.forward_distribution(device_input(model, batch))
     assert reference.semantic_cards is not None
     with patch.object(
         reference.semantic_cards,
@@ -605,7 +599,7 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
             reference.semantic_cards, programs.rows
         ),
     ):
-        expected, expected_values = reference.forward_distribution(obs)
+        expected, expected_values = reference.forward_distribution(batch, obs)
     torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
     torch.testing.assert_close(values, expected_values, atol=2e-6, rtol=2e-5)
     for net, logits, critic in (
@@ -626,28 +620,11 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
                 value.grad, refvalue.grad, atol=2e-6, rtol=3e-4, msg=name
             )
     with torch.no_grad(), PolicyInference(model) as scope:
-        prepared = scope.prepare(host_inputs(obs))
-        direct = model(device_input(model, obs))
+        prepared = scope.prepare(batch)
+        direct = model(device_input(model, batch))
         cached = model(prepared)
         for left, right in zip(direct, cached, strict=True):
             torch.testing.assert_close(left, right, atol=0, rtol=0)
-
-
-def test_legal_row_scoring_rejects_malformed_joins(naming_root: managym.Env) -> None:
-    space, obs = _mixed_naming_batch(naming_root)
-    model = ActorCritic(space, ModelConfig(hidden_dim=8))
-    # Batch row 0 is a group prompt, row 1 a name prompt.
-    for key, row, column, value, message in (
-        ("actions", 1, ACTION_CONTINUATION_INDEX, 0.5, "continuation reference"),
-        ("action_focus", 1, 0, -2, "focus reference"),
-        ("name_candidates", 1, 1, 0, "disagrees with vocabulary"),
-        ("name_candidates", 0, 3, 0, "group span"),
-        ("name_candidates", 0, 2, 10_000, "unadmitted"),
-    ):
-        changed = {k: v.clone() for k, v in obs.items()}
-        changed[key][row, 0, column] = value
-        with pytest.raises(ValueError, match=message):
-            device_input(model, changed)
 
 
 def test_equal_rule_names_learn_opposite_public_preferences(
@@ -666,8 +643,8 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     space = ObservationSpace()
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
-    offers = leaf.observation_for_player(0).action_space.actions
-    batch = _tensor(observation_arrays(space, leaf.observation_for_player(0)))
+    raw = leaf.observation_for_player(0)
+    offers = raw.action_space.actions
     model = ActorCritic(
         space,
         ModelConfig(
@@ -694,12 +671,20 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     with torch.no_grad():
         encoder.tokens[program_rows[1]] = encoder.tokens[program_rows[0]]
         encoder.lengths[program_rows[1]] = encoder.lengths[program_rows[0]]
-    paired = {
-        key: value.repeat(2, *([1] * (value.ndim - 1))) for key, value in batch.items()
-    }
-    paired["decklists"].zero_()
-    for row, definition in enumerate(definitions):
-        paired["decklists"][row, 1, 0] = torch.tensor([definition, 4, 4, 0, 0])
+
+    def paired(*, disclosed: bool = True) -> Prepared[np.ndarray]:
+        """Two copies of the prompt; when `disclosed`, each opponent decklist
+        lists one of the two names (four main, four total) and nothing else."""
+        prepared = model.prepare(encode_policy_batch(space, [raw, raw]))
+        rows = np.zeros_like(prepared.deck_rows)
+        counts = np.zeros_like(prepared.deck_counts)
+        if disclosed:
+            lookup = model._admission_spec().tables
+            for row, definition in enumerate(definitions):
+                rows[row, 1, 0] = lookup.rows(np.array(definition))
+                counts[row, 1, 0] = np.array([4, 4, 0, 0], np.float32) / 60
+        return replace(prepared, deck_rows=rows, deck_counts=counts)
+
     # Fit a two-example linear probe through the policy's existing final head.
     # This is a deterministic representability check, not SGD convergence or
     # sample-efficiency evidence. Nonzero FiLM exposes public context to actions.
@@ -711,7 +696,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
         "public_definitions",
         side_effect=lambda programs: programs,
     ):
-        indistinguishable, _ = model(device_input(model, paired))
+        indistinguishable, _ = model(device_input(model, paired()))
         torch.testing.assert_close(
             indistinguishable[0], indistinguishable[1], atol=2e-6, rtol=1e-6
         )
@@ -723,7 +708,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
         features.append(args[0].detach())
 
     hook = model.policy_head[-1].register_forward_pre_hook(retain_features)
-    before, _ = model(device_input(model, paired))
+    before, _ = model(device_input(model, paired()))
     hook.remove()
     count = len(offers)
     encoded = features[0].reshape(2, count, -1)
@@ -748,22 +733,44 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     assert encoder.token_embedding.weight.grad.abs().sum() > 0
     with torch.no_grad():
         model.policy_head[-1].weight.copy_(fitted[None].float())
-    logits, _ = model(device_input(model, paired))
+    logits, _ = model(device_input(model, paired()))
     assert torch.equal(logits[:, choices].argmax(-1), torch.arange(2))
     assert (logits.softmax(-1)[:, :count] > 0).all()
     # Moving choices retains learned identity, not ordinal preferences.
-    order = torch.arange(logits.shape[1] - 1, -1, -1)
-    reordered = dict(paired)
-    for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
-        reordered[key] = paired[key][:, order]
-    moved, _ = model(device_input(model, reordered))
-    torch.testing.assert_close(moved, logits[:, order], atol=2e-6, rtol=1e-5)
+    order = list(range(count))[::-1]
+    with reorder_offers(raw, order):
+        moved, _ = model(device_input(model, paired()))
+    torch.testing.assert_close(moved[:, :count], logits[:, order], atol=2e-6, rtol=1e-5)
     # Closed information is the native zero decklist projection; both states
     # then have exactly the same observable evidence. Packed GEMMs can round
     # identical rows differently by batch position, so only inputs are bitwise.
-    closed = {key: value.clone() for key, value in paired.items()}
-    closed["decklists"][:, 1].zero_()
-    for value in closed.values():
-        torch.testing.assert_close(value[0], value[1], atol=0, rtol=0)
+    closed = paired(disclosed=False)
+    for name in (
+        "agent_player",
+        "opponent_player",
+        "agent_cards",
+        "opponent_cards",
+        "permanents",
+        "validity",
+        "card_rows",
+        "known_rows",
+        "known_counts",
+        "library_rows",
+        "library_weights",
+        "deck_rows",
+        "deck_counts",
+        "permanent_rows",
+        "relation_features",
+        "relation_valid",
+        "relation_rows",
+        "legal",
+        "is_agent",
+    ):
+        value = getattr(closed, name)
+        np.testing.assert_array_equal(value[0], value[1], err_msg=name)
+    first = closed.legal_batches == 0
+    np.testing.assert_array_equal(
+        closed.action_features[first], closed.action_features[~first]
+    )
     hidden, _ = model(device_input(model, closed))
     torch.testing.assert_close(hidden[0], hidden[1], atol=2e-6, rtol=1e-6)
