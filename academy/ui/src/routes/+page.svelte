@@ -12,7 +12,7 @@
   import Board from '$lib/board/Board.svelte';
   import { PaymentPreviewController, type PreviewState } from '$lib/payment-preview';
   import PlaySessionStrip from '$lib/components/PlaySessionStrip.svelte';
-  import { recordFetch } from '$lib/records';
+  import { playerToken, recordFetch } from '$lib/records';
   import type { PlaySession } from '$lib/play-session';
   import { checkpointIdentity, playerIdentity } from '$lib/player-identity';
   import Feedback from '$lib/components/Feedback.svelte';
@@ -50,6 +50,8 @@
   import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
   let demoName = $state<string | null>(null);
+  // Review's "Play on from here": a game whose moves before `event` are another game's.
+  let playedFrom = $state<{trace_id: string; event: number} | null>(null);
   let learnDemo = $state(false);
   type Editor = {kind:'closed'} | {kind:'new' | 'next'; setup:GameStore; opponentOnly:boolean; pendingAttempt?:string | null};
   let editor = $state<Editor>({kind:'closed'});
@@ -62,6 +64,8 @@
   onMount(() => {
     const params = new URLSearchParams(window.location.search);
     demoName = params.get('demo');
+    const from = params.get('played_from'), at = Number(params.get('event'));
+    playedFrom = from && Number.isInteger(at) && at >= 0 ? {trace_id: from, event: at} : null;
     if (!demoName) {
       const decks = sanitizeDeckSelection({ hero: params.get('hero'), villain: params.get('villain') });
       if (decks) {
@@ -108,6 +112,14 @@
     setupStatus = '';
     gameStore.setError(null);
     if (page.url.searchParams.has('setup')) void goto(destination);
+  }
+
+  function playOn(): void {
+    if (!playedFrom || gameStore.newGamePending) return;
+    sendNewGame({played_from:playedFrom, player_token:playerToken()});
+    // One start per link: a reload resumes the game rather than replaying again.
+    playedFrom = null;
+    void goto('/', {replaceState: true, keepFocus: true});
   }
 
   function startNewGame(): void {
@@ -363,6 +375,12 @@
 </script>
 
 {#snippet notices()}
+  {#if playedFrom}
+    <section class="notice" data-testid="played-from-origin">
+      <p>Play on from a recorded game: its moves are replayed to your decision, then you choose.{gameActive ? ' This stops the current game.' : ''}</p>
+      <button class="btn btn-primary btn-sm mt-1" data-testid="start-played-from" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'} onclick={playOn}>{gameStore.newGamePending ? 'Preparing game…' : 'Play on'}</button>
+    </section>
+  {/if}
   {#if gameStore.errorMessage}
     <section role="alert" aria-atomic="true" class="notice error">
       {#if gameStore.resumeFailed}<strong>Interrupted.</strong>{' '}{/if}{gameStore.errorMessage}

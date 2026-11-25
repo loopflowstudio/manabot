@@ -1,5 +1,6 @@
 """Playing on from a finished game: a new game whose first moves are the record's."""
 
+import json
 from pathlib import Path
 import random
 
@@ -32,6 +33,8 @@ def test_playing_on_starts_at_your_decision_with_the_games_moves_before_it(
 
     frame = message["frame"]
     assert frame["status"] != "game_over" and frame["prompt"] is not None
+    # The game's own stops, though the prefix surfaced every window.
+    assert frame["stops"]["auto_pass"] is True
     assert [o["label"] for o in frame["offers"]] == [
         action["description"] for action in events[event]["actions"]
     ]
@@ -69,3 +72,16 @@ def test_only_your_own_finished_games_can_be_played_on(tmp_path: Path) -> None:
     live.new_game({"hero_deck": BOLT, "villain_deck": BOLT, "seed": 2})
     with pytest.raises(ValueError, match="played_from_active"):
         live.new_game({"played_from": {"trace_id": live.match_id, "event": 0}})
+
+
+def test_a_game_played_on_is_left_out_of_my_record(tmp_path: Path) -> None:
+    game, source = played(tmp_path)
+    owners = {game.attempt_owner}
+    (before,) = game.attempt_store.record(owners)
+    event = decision(source.trace["events"], 0)
+    game.new_game({"played_from": {"trace_id": game.match_id, "event": event}})
+    play(game, random.Random(6))
+    numbers = game.attempt_store.numbers(game.match_id)
+    assert numbers is not None and numbers[1] is not None
+    assert json.loads(numbers[1])["played_from"] == event
+    assert game.attempt_store.record(owners) == [before]

@@ -1344,6 +1344,9 @@ class GameSession:
                     raise ValueError("played_from_diverged: A recorded move was refused.")
         finally:
             self._villain_offer_policy, self.auto_pass = saved
+        # The prompt published during the prefix carries its stops; publish it
+        # again under the game's own. Nobody has seen it, so nothing goes stale.
+        self.published_prompt = None
         if len(self.trace.events) != upto or self._publish_current_prompt() is None:
             raise ValueError("played_from_diverged: The decision was not reached.")
 
@@ -4549,6 +4552,15 @@ def get_recording_index(
         "winner": payload.get("winner") if finished else None,
         "players": players,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
+        # A game played on from another: its source and the turn it starts at.
+        "played_from": {
+            **payload["played_from"],
+            "turn": payload["events"][payload["played_from"]["event"]]["observation"][
+                "turn"
+            ].get("turn_number"),
+        }
+        if payload.get("played_from")
+        else None,
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),

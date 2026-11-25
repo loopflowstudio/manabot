@@ -185,6 +185,12 @@
     return winner === null ? 'to a draw' : winner === heroSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
   });
 
+  // Play on from one of your decisions of a finished game you played: a new
+  // Play game whose moves before it are this game's (`played_from`).
+  const playOnHref = $derived(index?.can_feedback && !index.watch && index.status !== 'waiting'
+    && current?.kind === 'choice' && current.event !== undefined && current.viewer === heroSeat
+    ? `/?played_from=${encodeURIComponent(index.id)}&event=${current.event}` : null);
+
   async function seeLine(): Promise<void> {
     const id = index?.id;
     if (!id || !analysis || !analysedHere || !recorded) return;
@@ -528,6 +534,9 @@
   {#if index?.mirror_retry && !replayStore.error}<p role="alert" class="notice">{index.mirror_retry.message}</p>{/if}
   {#if replayStore.error}<p role="alert" class="notice error">{replayStore.error}</p>{/if}
   {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
+  {#if index?.played_from}
+    <p class="type-caption text-ink-2" data-testid="played-from">Played on from <a href={`/replay?trace=${encodeURIComponent(index.played_from.trace_id)}&review=1`}>an earlier game</a>{index.played_from.turn === null ? '' : ` at turn ${index.played_from.turn}`}: the moves before it are that game's.</p>
+  {/if}
   {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
   {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}
   {#if analyses && analysisChoices && !analysis && !index?.watch}
@@ -563,10 +572,13 @@
     {#if studyStore.errorMessage}<p role="alert" class="notice error">{studyStore.errorMessage}</p>{/if}
     {#if current.description}<p class="type-caption text-ink-2" data-testid="position-description">After · {current.description}</p>{/if}
     {#if momentHere}<p class="type-caption text-ink-2" data-testid="key-moment">Key moment · {momentHere.reason}</p>{/if}
-    {#if moments.length || (analysedHere && index?.can_feedback)}
+    {#if moments.length || (analysedHere && index?.can_feedback) || playOnHref}
       <p class="analysis-actions">
         {#if analysedHere && index?.can_feedback && analysis}
           <button class="btn btn-secondary btn-sm" data-testid="see-line" disabled={lineBusy || replayStore.busy} onclick={() => void seeLine()}>{lineBusy ? 'Playing its line…' : 'See its line'}</button>
+        {/if}
+        {#if playOnHref}
+          <a class="btn btn-secondary btn-sm" data-testid="play-on" href={playOnHref}>Play on from here</a>
         {/if}
         {#if moments.length}
           <button class="btn btn-ghost btn-sm" data-testid="next-key-moment" disabled={nextMoment === null || replayStore.busy} onclick={() => { if (nextMoment !== null) seek(nextMoment); }}>Next key moment</button>

@@ -39,13 +39,16 @@ class GameNumbers(BaseModel):
     before game over; its counts run to where it stopped. `seats` are in
     native seat order (seat 0 is on the play). `analysis_shown` counts the
     person's decisions committed with a live analysis shown (stored on each
-    event, not re-executed; numbers saved before it existed read 0)."""
+    event, not re-executed; numbers saved before it existed read 0).
+    `played_from` is the step a game played on from another starts at: the
+    steps before it are that game's, so My record leaves the game out."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     complete: bool
     turns: int
     seats: tuple[SeatNumbers, SeatNumbers]
     analysis_shown: int = 0
+    played_from: int | None = None
 
 
 def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
@@ -80,6 +83,7 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
         turns=totals[0].turns,
         seats=(_seat(behaviour[0], totals[0]), _seat(behaviour[1], totals[1])),
         analysis_shown=sum(1 for event in events if event.get("analysis_shown")),
+        played_from=(trace.get("played_from") or {}).get("event"),
     )
 
 

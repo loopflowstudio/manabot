@@ -869,7 +869,8 @@ class AttemptStore:
         """Your completed games against bots, counted by opponent identity and
         your deck and theirs, across sessions. Counts, never a rating;
         `with_analysis` counts the games with a decision made while a live
-        analysis was shown."""
+        analysis was shown. A game played on from another is left out: its
+        opening moves were not played in it."""
         mine, args = self._mine(owners, token)
         with self.connect() as db:
             rows = db.execute(
@@ -885,6 +886,7 @@ class AttemptStore:
                 JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
                 JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'
                 WHERE a.status='completed' AND {mine}
+                    AND json_extract(a.numbers_json,'$.played_from') IS NULL
                 GROUP BY b.player_id,b.name,h.deck,b.deck
                 ORDER BY games DESC,b.name,h.deck,b.deck""",
                 args,

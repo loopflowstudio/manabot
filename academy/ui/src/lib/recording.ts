@@ -70,6 +70,8 @@ export interface RecordingIndex {
   players: RecordedPlayer[];
   source_kind: string | null;
   record_stop?: {status: 'complete' | 'interrupted' | 'diverged'; index: number; reason: string | null} | null;
+  /** A game played on from another: moves before `event` (on `turn`) are that game's. */
+  played_from?: {trace_id: string; event: number; turn: number | null} | null;
   /** Seat 2's configured checkpoint, for records that predate recorded players. */
   opponent?: TraceConfig['opponent'];
   opponent_checkpoint?: TraceConfig['opponent_checkpoint'];
