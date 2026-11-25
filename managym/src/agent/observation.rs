@@ -2017,7 +2017,7 @@ impl Observation {
                 StackObject::ActivatedAbility(_) => None,
             },
             ability_index: stack_object.ability_index().map(|index| index as i32),
-            x: i32::from(stack_object.x()),
+            x: stack_object.x(),
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {
                     let keywords = game.spell_keywords(spell.object, spell.controller);
@@ -2500,14 +2500,18 @@ impl Observation {
                             object: object_id,
                             ..
                         }) => Some(*object_id),
-                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            source: crate::flow::game::ActivationSource::Card(card),
-                            ..
-                        }) => Some(game.state.object_of(*card)),
-                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            source: crate::flow::game::ActivationSource::Permanent(permanent),
-                            ..
-                        })
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget(
+                            crate::flow::game::ActivatedTargeting {
+                                source: crate::flow::game::ActivationSource::Card(card),
+                                ..
+                            },
+                        )) => Some(game.state.object_of(*card)),
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget(
+                            crate::flow::game::ActivatedTargeting {
+                                source: crate::flow::game::ActivationSource::Permanent(permanent),
+                                ..
+                            },
+                        ))
                         | Some(crate::flow::game::PendingChoice::ActivationX {
                             permanent, ..
                         }) => game.state.permanents[*permanent]

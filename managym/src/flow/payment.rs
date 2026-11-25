@@ -45,7 +45,7 @@ pub enum Operation {
         targets: Vec<Target>,
         /// The announced value of X (CR 602.2b, 601.2b).
         #[serde(skip_serializing_if = "crate::state::is_zero")]
-        x: u8,
+        x: i32,
     },
 }
 
@@ -114,7 +114,7 @@ pub enum CostComponent {
     /// paid rather than its other cost.
     Life(u32),
     #[serde(rename = "RemoveCounters")]
-    RemoveSourceCounters(CounterKind, u16),
+    RemoveSourceCounters(CounterKind, i32),
     /// "Put N [kind] counters on this" (CR 118.3): always payable while the
     /// source is on the battlefield.
     AddCounters(CounterKind, u16),
@@ -659,17 +659,24 @@ impl Game {
                 if let Some(cost) = ability.sacrifice {
                     owed.push(CostComponent::Sacrifice(cost, Toward::Printed));
                 }
-                let cost = ability.mana_cost.with_x(*x);
+                let cost = if ability.mana_cost.x == 0 {
+                    ability.mana_cost
+                } else {
+                    ability
+                        .mana_cost
+                        .with_x(u8::try_from(*x).expect("payable mana X"))
+                };
                 let help = Help {
                     waterbend: if ability.waterbend { cost.generic() } else { 0 },
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
-                if let Some(crate::state::card::LoyaltyCost::Fixed(delta)) = ability.loyalty {
+                if let Some(loyalty) = ability.loyalty {
+                    let delta = loyalty.counter_change(*x);
                     if delta < 0 {
                         owed.push(CostComponent::RemoveSourceCounters(
                             CounterKind::Loyalty,
-                            delta.unsigned_abs(),
+                            -delta,
                         ));
                     } else if delta > 0 {
                         owed.push(CostComponent::AddCounters(
@@ -679,7 +686,7 @@ impl Game {
                     }
                 }
                 if let Some((kind, count)) = ability.remove_counters {
-                    owed.push(CostComponent::RemoveSourceCounters(kind, count));
+                    owed.push(CostComponent::RemoveSourceCounters(kind, i32::from(count)));
                 }
                 if let Some((kind, count)) = ability.add_counters {
                     owed.push(CostComponent::AddCounters(kind, count));
@@ -1245,10 +1252,10 @@ impl Game {
                                 .permanent_of(source_object)
                                 .and_then(|id| self.state.permanents[id].as_ref())
                                 .map_or(0, |permanent| permanent.counter_count(kind));
-                            if available < i32::from(count) {
+                            if available < count {
                                 return Err(AgentError("cannot pay counter cost".into()));
                             }
-                            source_costs.push(counter_cost(kind, -i32::from(count)));
+                            source_costs.push(counter_cost(kind, -count));
                         }
                         CostComponent::AddCounters(kind, count) => {
                             source_costs.push(counter_cost(kind, i32::from(count)));

@@ -638,6 +638,10 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    pub fn announces_x(&self) -> bool {
+        self.mana_cost.x > 0 || self.loyalty == Some(LoyaltyCost::MinusX)
+    }
+
     /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
     pub fn equip(mana_cost: ManaCost) -> Self {
         Self {
@@ -869,11 +873,22 @@ impl serde::Serialize for TapCost {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LoyaltyCost {
     Fixed(i16),
+    MinusX,
+}
+
+impl LoyaltyCost {
+    pub fn counter_change(self, x: i32) -> i32 {
+        match self {
+            Self::Fixed(n) => i32::from(n),
+            Self::MinusX => -x,
+        }
+    }
 }
 
 impl std::fmt::Display for LoyaltyCost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
+            Self::MinusX => write!(f, "[−X]"),
             Self::Fixed(0) => write!(f, "[0]"),
             Self::Fixed(n) if n < 0 => write!(f, "[−{}]", n.unsigned_abs()),
             Self::Fixed(n) => write!(f, "[+{n}]"),

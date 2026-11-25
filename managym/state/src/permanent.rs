@@ -236,19 +236,25 @@ impl Permanent {
         turn != 0 && self.entry_turn == turn
     }
 
+    /// Loyalty left for a loyalty symbol after other source-counter costs.
+    pub fn available_loyalty(&self, ability: &ActivatedAbilityDefinition) -> i32 {
+        let reserved = ability
+            .remove_counters
+            .filter(|(kind, _)| *kind == CounterKind::Loyalty)
+            .map_or(0, |(_, count)| i32::from(count));
+        self.counter_count(CounterKind::Loyalty) - reserved
+    }
+
     pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
-        let mut loyalty_removed = 0;
         if let Some((kind, count)) = ability.remove_counters {
-            if kind == CounterKind::Loyalty {
-                loyalty_removed = i32::from(count);
-            } else if self.counter_count(kind) < i32::from(count) {
+            if self.counter_count(kind) < i32::from(count) {
                 return false;
             }
         }
-        if let Some(crate::card::LoyaltyCost::Fixed(cost)) = ability.loyalty {
-            loyalty_removed -= i32::from(cost).min(0);
-        }
-        loyalty_removed == 0 || self.counter_count(CounterKind::Loyalty) >= loyalty_removed
+        ability.loyalty.is_none_or(|loyalty| {
+            let removed = -loyalty.counter_change(i32::from(ability.x_min)).min(0);
+            self.available_loyalty(ability) >= removed
+        })
     }
 
     /// Whether this object has used up the ability: exhaust once ever

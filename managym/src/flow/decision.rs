@@ -147,7 +147,7 @@ pub struct EffectFrame {
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
-    pub x: u8,
+    pub x: i32,
     /// What was paid to cast the resolving spell, to cast the permanent whose
     /// entering triggered the resolving ability, or to activate the
     /// resolving ability; empty otherwise.
@@ -1446,7 +1446,7 @@ impl Game {
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
                                         transformed: profile == SpellProfile::BackFace,
-                                        x: frame.x,
+                                        x: spell.x,
                                         // Spend effects that applied to
                                         // this spell as it was cast.
                                         counters: {
@@ -2299,7 +2299,7 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("unpayable X".into()));
                 };
-                suspended.frame.x = x;
+                suspended.frame.x = i32::from(x);
                 let payment = PaymentProgress::new(
                     *player,
                     CostComponent::mana(ManaCost::default().with_generic(x)),

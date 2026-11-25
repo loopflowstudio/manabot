@@ -1031,6 +1031,12 @@ controller’s main phase with an empty stack.
 An effect can grant instant timing for matching permanents. The turn limit
 still applies.
 
+For a [−X] ability, choose X before choosing targets. The offers run from
+zero through the loyalty available to pay the cost, including 256 when the
+permanent has 256 loyalty. Declining an optional target keeps the announced X.
+The ability uses that value on resolution even if paying the cost took the
+planeswalker’s last loyalty counter.
+
 | Rule | State on the permanent | What the player does |
 | --- | --- | --- |
 | Loyalty (CR 306, 606) | Loyalty counters | Pay the signed cost and put an ability on the stack |

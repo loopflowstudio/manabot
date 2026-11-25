@@ -2434,7 +2434,7 @@ impl Game {
             source: ActivationSource::Permanent(permanent),
             ability_index,
             targets: Vec::new(),
-            x,
+            x: i32::from(x),
         };
         let Some(model) = self.announced_model(player, &operation) else {
             return false;

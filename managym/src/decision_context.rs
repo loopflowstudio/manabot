@@ -490,7 +490,7 @@ impl Game {
                 CostComponent::TapPower { .. } =>
                     ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             },
-            Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
+            Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget(_)) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),

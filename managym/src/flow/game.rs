@@ -377,6 +377,20 @@ pub struct CastChoices {
     pub resolving: bool,
 }
 
+/// An activation between announcement and payment. Its controller and X
+/// stay fixed while either player chooses targets for successive clauses.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct ActivatedTargeting {
+    pub player: PlayerId,
+    pub source: ActivationSource,
+    pub ability_index: usize,
+    pub chosen: Vec<Target>,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub requirement: usize,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: i32,
+}
+
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
 /// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> Pay; activating an
 /// ability walks ActivationX? -> ActivatedTarget? -> Pay.
@@ -389,18 +403,7 @@ pub enum PendingChoice {
         player: PlayerId,
         payment: Box<Payment>,
     },
-    /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
-    /// `chosen` holds those already selected, clause by clause, and
-    /// `requirement` is the clause being chosen. `player` activates; a
-    /// clause the opponent chooses is offered to them.
-    ActivatedTarget {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        chosen: Vec<Target>,
-        #[serde(skip_serializing_if = "crate::state::is_zero")]
-        requirement: usize,
-    },
+    ActivatedTarget(ActivatedTargeting),
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
         player: PlayerId,

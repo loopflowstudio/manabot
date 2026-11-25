@@ -90,7 +90,7 @@ pub struct ActivatedAbilityOnStack {
     pub target_req_indices: Vec<usize>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
-    pub x: u8,
+    pub x: i32,
     /// For an ability granted by an attached permanent: that exact object and
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -141,7 +141,7 @@ pub struct TriggeredAbilityOnStack {
     pub player: Option<PlayerId>,
     /// The ability's X (`PendingTrigger::x`).
     #[serde(skip_serializing_if = "crate::is_zero")]
-    pub x: u8,
+    pub x: i32,
     /// The mana spent to cast the permanent whose entering triggered this,
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
@@ -228,9 +228,9 @@ impl StackObject {
         }
     }
 
-    pub fn x(&self) -> u8 {
+    pub fn x(&self) -> i32 {
         match self {
-            StackObject::Spell(spell) => spell.x,
+            StackObject::Spell(spell) => i32::from(spell.x),
             StackObject::ActivatedAbility(ability) => ability.x,
             StackObject::TriggeredAbility(triggered) => triggered.x,
         }

@@ -597,7 +597,13 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
-                    || !self.activation_targets_available(player, source, ability_index)
+                    || !self.activation_targets_available(
+                        player,
+                        source,
+                        ability_index,
+                        ability,
+                        i32::from(ability.x_min),
+                    )
                 {
                     continue;
                 }
@@ -717,7 +723,13 @@ impl Game {
                     };
                     let source = ActivationSource::Card(card);
                     if self.check_activation_terms(player, &ability).is_err()
-                        || !self.activation_targets_available(player, source, ability_index)
+                        || !self.activation_targets_available(
+                            player,
+                            source,
+                            ability_index,
+                            &ability,
+                            0,
+                        )
                     {
                         continue;
                     }
@@ -866,23 +878,19 @@ impl Game {
             PendingChoice::Pay { player, payment } => {
                 Some(self.payment_action_space(*player, payment))
             }
-            PendingChoice::ActivatedTarget {
-                player,
-                source,
-                ability_index,
-                chosen,
-                requirement,
-            } => {
+            PendingChoice::ActivatedTarget(targeting) => {
+                let crate::flow::game::ActivatedTargeting {
+                    player,
+                    source,
+                    ability_index,
+                    chosen,
+                    requirement,
+                    ..
+                } = targeting;
                 let chooser =
                     self.activation_target_chooser(*player, *source, *ability_index, *requirement);
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(
-                        *player,
-                        *source,
-                        *ability_index,
-                        *requirement,
-                        chosen,
-                    )
+                    .activated_ability_targets(targeting)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: chooser,
@@ -927,7 +935,9 @@ impl Game {
                 cast,
             } => Some(x_action_space(
                 *player,
-                self.legal_x_values(*player, *object, *cast),
+                self.legal_x_values(*player, *object, *cast)
+                    .into_iter()
+                    .map(i32::from),
                 vec![self.state[object].id],
             )),
             PendingChoice::ActivationX {
@@ -1238,10 +1248,7 @@ impl Game {
                     Some(PendingChoice::ChooseTargets { .. })
                 ) {
                     self.choose_target_action(*player, target)
-                } else if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::ActivatedTarget { .. })
-                ) {
+                } else if matches!(self.pending_choice, Some(PendingChoice::ActivatedTarget(_))) {
                     self.choose_activated_target(*player, target)
                 } else if self
                     .state
@@ -1326,7 +1333,7 @@ impl Game {
                     return self.execute_decision_action(action);
                 }
                 match self.pending_choice {
-                    Some(PendingChoice::ActivatedTarget { .. }) => {
+                    Some(PendingChoice::ActivatedTarget(_)) => {
                         self.decline_activated_target(*player)
                     }
                     Some(PendingChoice::KickerChoice { .. }) => {
@@ -1374,7 +1381,11 @@ impl Game {
 }
 
 /// Announcing X offers each payable value as a `ChooseMode` whose mode is X.
-fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> ActionSpace {
+fn x_action_space(
+    player: PlayerId,
+    values: impl IntoIterator<Item = i32>,
+    focus: Vec<PublicId>,
+) -> ActionSpace {
     ActionSpace {
         player: Some(player),
         kind: ActionSpaceKind::Modal,
@@ -1382,7 +1393,7 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
             .into_iter()
             .map(|x| Action::ChooseMode {
                 player,
-                mode: usize::from(x),
+                mode: x as usize,
             })
             .collect(),
         focus,

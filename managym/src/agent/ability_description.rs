@@ -23,7 +23,7 @@ use crate::state::{
 struct TriggerText {
     noun: &'static str,
     amount: i32,
-    x: Option<(&'static str, u8)>,
+    x: Option<(&'static str, i32)>,
 }
 
 impl TriggerText {
@@ -66,7 +66,7 @@ pub(crate) fn trigger_description(
     index: usize,
     inline: Option<&[Effect]>,
     chosen_modes: Option<&[usize]>,
-    x: u8,
+    x: i32,
     triggering_amount: i32,
 ) -> String {
     if let Some(effects) = inline {

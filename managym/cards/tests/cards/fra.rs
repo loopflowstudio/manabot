@@ -366,3 +366,88 @@ fn theorist_loyalty_with_zero_cost_and_mana_output_uses_the_stack() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
     assert!(!offers_ability(&mut s, jace, 0));
 }
+
+#[test]
+fn minus_x_loyalty_survives_target_selection_payment_and_resolution() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_unfunded_setup, set_counters},
+        inspect::{card_of, counters_of},
+        play::{activate, choose, choose_mode, settle},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::{
+            ability::{Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
+            card::{ActivatedAbilityDefinition, LoyaltyCost},
+            game_object::{PlayerId, Target},
+            permanent::CounterKind,
+        },
+    };
+
+    let name = "The Theorist, Jace Beleren";
+    for take_target in [true, false] {
+        let mut s = five_color_unfunded_setup(&[name, "Gray Ogre"]);
+        let jace = enter_battlefield(&mut s, name);
+        let ogre = enter_battlefield(&mut s, "Gray Ogre");
+        let object = card_of(&s, jace);
+        // A separate source-counter cost reserves its counter before pricing X.
+        let reserved = u16::from(!take_target);
+        s.game_mut().state[object]
+            .activated_abilities
+            .push(ActivatedAbilityDefinition {
+                loyalty: Some(LoyaltyCost::MinusX),
+                remove_counters: (!take_target).then_some((CounterKind::Loyalty, reserved)),
+                effects: vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                            TargetSpec::Creature,
+                        ))],
+                    },
+                    Effect::GainLife {
+                        amount: EffectValue::X,
+                    },
+                ],
+                ..Default::default()
+            });
+        let loyalty = 256 + i32::from(reserved);
+        set_counters(&mut s, jace, CounterKind::Loyalty, loyalty);
+        let before = s.life(0);
+        activate(&mut s, jace, 3);
+        let offered: Vec<_> = s
+            .action_space()
+            .actions
+            .iter()
+            .map(|a| match a {
+                Action::ChooseMode { mode, .. } => *mode,
+                _ => panic!("unexpected X offer {a:?}"),
+            })
+            .collect();
+        assert_eq!(offered, (0..=256).collect::<Vec<_>>());
+        let frame = s.game().semantic_decision_frame().unwrap();
+        assert_eq!(frame.offers[256].label, "X = 256");
+        choose_mode(&mut s, 256);
+        assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), loyalty);
+        let obs = Observation::for_player(s.game(), PlayerId(0));
+        assert!(obs.continuation.iter().any(|f| f.x == 256));
+        if take_target {
+            assert!(s.choose_target(Target::Permanent(ogre)));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        let stacked = s.game().state.stack_objects.last().unwrap();
+        assert_eq!(stacked.x(), 256);
+        assert_eq!(
+            stacked.targets(),
+            if take_target {
+                vec![Target::Permanent(ogre)]
+            } else {
+                vec![]
+            }
+        );
+        assert!(s.game().state.permanents[jace].is_none());
+        settle(&mut s);
+        assert_eq!(s.life(0), before + 256);
+        assert_eq!(s.game().state.permanents[ogre].is_none(), take_target);
+    }
+}

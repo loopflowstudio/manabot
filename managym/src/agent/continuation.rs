@@ -162,7 +162,7 @@ pub struct ContinuationFrame {
     /// The announced value of X (CR 107.3) of the spell or ability this frame
     /// casts, activates or resolves; zero when it has none.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub x: u8,
+    pub x: i32,
     /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
     /// in `KeywordData` field order.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -656,7 +656,7 @@ impl Game {
                 frame.source = self.object_reference(spell.object, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
-                frame.x = spell.x;
+                frame.x = i32::from(spell.x);
                 frame.granted_keywords = KeywordData::from_keywords(
                     &self.spell_keywords(spell.object, spell.controller),
                 )
@@ -773,7 +773,7 @@ impl Game {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
+                frame.x = i32::from(cast.x);
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
@@ -782,20 +782,22 @@ impl Game {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
+                frame.x = i32::from(cast.x);
             }
             PendingChoice::KickerChoice { object, cast, .. }
             | PendingChoice::AnnounceX { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.spell_profile = spell_profile_code(cast.profile);
             }
-            PendingChoice::ActivatedTarget {
+            PendingChoice::ActivatedTarget(crate::flow::game::ActivatedTargeting {
                 source,
                 ability_index,
                 chosen,
                 requirement,
+                x,
                 ..
-            } => {
+            }) => {
+                frame.x = *x;
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.active_clause = Some(*requirement);
@@ -1044,7 +1046,7 @@ impl Game {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = cast.x;
+                frame.x = i32::from(cast.x);
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }

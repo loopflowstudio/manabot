@@ -301,7 +301,7 @@ impl Game {
     pub(crate) fn fits_target_clause(
         &self,
         requirement: &TargetRequirement,
-        x: u8,
+        x: i32,
         chosen: impl Iterator<Item = Target> + Clone,
         target: Target,
     ) -> bool {
@@ -322,7 +322,7 @@ impl Game {
                     + chosen
                         .map(|other| self.target_mana_value(other))
                         .sum::<u32>()
-                    <= u32::from(x))
+                    <= x as u32)
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -1042,7 +1042,7 @@ impl Game {
             trigger.triggering_amount = amount;
             trigger.context = context;
             trigger.player = player;
-            trigger.x = x;
+            trigger.x = i32::from(x);
             trigger.spent = spent;
             trigger.attacker = attacker;
             trigger.inline_effects = granted;

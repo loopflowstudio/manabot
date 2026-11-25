@@ -200,8 +200,8 @@ impl Game {
                         _ => i32::from(spell.mana_value),
                     })
             }
-            EffectValue::X => i32::from(frame.x),
-            EffectValue::NegativeX => -i32::from(frame.x),
+            EffectValue::X => frame.x,
+            EffectValue::NegativeX => -frame.x,
             EffectValue::TargetPower => {
                 self.target_property(frame.primary_target(), ObjectProperty::Power)
             }
@@ -361,7 +361,7 @@ impl Game {
                 self.state.live(object),
             ),
             kicked: spell.kicked,
-            x: spell.x,
+            x: i32::from(spell.x),
             spent: spell.spent.clone(),
             targets,
             completion: FrameCompletion::Spell {

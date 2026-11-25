@@ -74,7 +74,7 @@ pub struct PendingTrigger {
     /// The ability's X: for an entering permanent's own trigger, the X of
     /// the spell that became it (CR 107.3m); for a counters or per-creature
     /// combat damage trigger, its event's amount ("that many"); otherwise 0.
-    pub x: u8,
+    pub x: i32,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.
     pub spent: crate::state::payment::PaymentReceipt,
