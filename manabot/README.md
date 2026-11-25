@@ -203,6 +203,139 @@ Local Etude evaluation needs an explicit directory for its replay evidence
 ETUDE_OUTPUT_DIR="$PWD/.runs/tla-frontier-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_frontier.py --source r2://manabot/jobs
 ```
 
+## Library API
+
+Use `manabot` as a Python library to build an `ActorCritic`, collect native
+self-play rollouts, run your own Torch update loop, and save or load portable
+checkpoints:
+
+```python
+from pathlib import Path
+
+import numpy as np
+import torch
+
+import managym
+from manabot.backends.torch.bot import evaluate_observation
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.collection import CollectionSession
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.backends.torch.rollout import AdmittedRollout
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    open_collector,
+)
+
+space = ObservationSpace(ObservationConfig())
+agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
+match = Match(MatchConfig())
+
+collector = open_collector(
+    space,
+    match,
+    Reward(RewardConfig()),
+    num_envs=2,
+    seed=0,
+    opponent_mode="self",
+    learning_seats="one",
+    batch_closure="exact-quota",
+    numerics=CollectionSession(device="cpu", seed=0),
+)
+try:
+    batch = collect(collector, agent, 16)
+finally:
+    close_collector(collector)
+
+admitted = AdmittedRollout(agent, batch)
+order = np.arange(batch.actions.size, dtype=np.int64)
+admitted.admit_rows(order, chunk_rows=16)
+
+optimizer = torch.optim.SGD(agent.parameters(), lr=1e-3)
+with admitted.minibatches(order, size=16, device=torch.device("cpu")) as batches:
+    for chunk, prepared, _rows in batches:
+        logits, value = agent.forward_distribution(prepared)
+        valid = admitted.legal(prepared) != 0
+        log_probs = torch.log_softmax(logits.masked_fill(~valid, -1e9), dim=-1)
+        actions = torch.as_tensor(batch.actions.reshape(-1)[chunk], dtype=torch.long)
+        targets = torch.as_tensor(batch.rewards.reshape(-1)[chunk], dtype=torch.float32)
+        loss = (
+            -log_probs[torch.arange(len(chunk)), actions].mean()
+            + ((value.squeeze(-1) - targets) ** 2).mean()
+        )
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+checkpoint = Path("policy.safetensors")
+save_checkpoint(agent, space, checkpoint, player_configs=None)
+loaded, loaded_space = load_checkpoint(str(checkpoint))
+
+obs, _ = managym.Env(seed=0).reset(match.to_rust())
+with PolicyInference(loaded) as scope:
+    probs, value_est = evaluate_observation(scope, loaded_space, obs)
+
+print(len(probs), round(sum(probs), 6), round(value_est, 4))
+# e.g. 2 1.0 -0.0142
+```
+
+Package `__init__.py` files stay empty so inference and replay children do not
+pull in Torch or training modules; import each symbol from its defining module.
+Each published module declares `__all__`, and no internal `manabot` module
+defines `__all__` (aside from deprecated `0.3.0` shims), so `__all__` inside an
+installed wheel names the same boundary as this table:
+
+| Module | Published surface |
+| --- | --- |
+| `manabot.infra.config` | `ObservationConfig`, `MatchConfig`, `ModelConfig`, `RewardConfig`, `UnsupportedPolicyInput`, `PolicyInputVersion`, `POLICY_INPUT_VERSION` |
+| `manabot.env.observation` | `ObservationSpace`, `column`, `columns`, `column_names`, `width`, plus `0.3.0`-deprecated `encode_observation` and `ObservationEncoder` |
+| `manabot.env.match` | `Match`, `Reward` |
+| `manabot.env.memory_store` | `MemoryArchive`, `MemoryCapacities`, `Prefix`, `archive_memory`, `restore_memory` |
+| `manabot.training.decks` | `UniformDecks` |
+| `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
+| `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint` |
+| `manabot.backends.torch.bot` | `evaluate_observation` |
+| `manabot.backends.torch.arrays` | `on_device` |
+| `manabot.backends.torch.collection` | `CollectionSession` |
+| `manabot.backends.torch.rollout` | `AdmittedRollout` |
+| `manabot.policy.prepare` | `Prepared`, `reference_distribution` |
+| `manabot.training.rollout.collection` | `open_collector`, `collect`, `close_collector`, `Collector`, `RolloutBatch`, `RecordedObservations`, `PackedActions` |
+| `manabot.training.rollout.actions` | `PackedActions`, `ActionRows` |
+| `manabot.training.state.game_errors` | `GameErrorPolicy`, `GameAttempt`, `GameErrorState`, `GameErrorLimit`, `GameOutcome`, `settle` |
+
+`managym`'s top-level API is defined by [`managym/__init__.pyi`](../managym/__init__.pyi)
+(for example `managym.Env`, `managym.Deck`, `managym.catalog_tokens()`).
+
+**Stability promise.** Within a `0.Y.x` patch line, published symbols, callable
+signatures, dataclass/Pydantic fields, attributes, and `managym` enum values
+stay backwards-compatible. Four container types — `Prepared`, `Collector`,
+`Prefix`, and `MemoryArchive` — are **opaque handles**: their class identity is
+promised for type annotations and `isinstance`, while their internal fields may
+change on `0.Y.x`. When a published API is replaced, the old spelling stays as
+a `DeprecationWarning` alias targeting `0.(Y+1).0`. Everything outside these
+fifteen modules and `managym/__init__.pyi` — including recipes, training loops,
+other backends, search players, and CLI internals — is internal and may change
+between patch releases.
+
+The checked-in contract snapshot lives in [`tests/public_api.json`](../tests/public_api.json)
+and is checked by [`scripts/public_api.py`](../scripts/public_api.py):
+
+```bash
+uv run python scripts/public_api.py check
+# public API matches tests/public_api.json
+```
+
+See [patch-clean main](../docs/development.md#patch-clean-main) for how
+additions, deprecations, and minor-version rollovers update the contract.
+
 ## Local-update search
 
 Construct a search player around an admitted local checkpoint:
