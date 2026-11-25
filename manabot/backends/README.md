@@ -93,7 +93,7 @@ chooses:
 
 - `experiments/` and `scripts/`;
 - recipe entry points, the CLI and child-process entry points;
-- Academy's opponent loader (`manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py`);
+- Academy's policy provider (`manabot/sim/policy_provider.py`);
 - the backends' own tests.
 
 They name a backend once, by import or through the resolver:

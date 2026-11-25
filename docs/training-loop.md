@@ -412,7 +412,8 @@ again when resuming.
 
 At a save boundary, the collector opens the fresh game that the next allocation
 would install in each slot awaiting a fresh root. Portable resume reconstructs
-those live streams and restores the host RNGs from `continuation.json`. Policy sampling RNGs restore within the same sampling domain and reseed when it
+those live streams and restores the host RNGs from `continuation.json`. Policy
+sampling RNGs restore within the same sampling domain and reseed when it
 changes.
 
 Native vectors leave finished and failed slots parked until the collector

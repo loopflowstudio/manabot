@@ -279,7 +279,7 @@ def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
 
 @pytest.fixture
 def legacy_save(tmp_path: Path, settings: loop.SelfPlay) -> RestoredState:
-    """Write the former registered objects with real nonempty optimizer history."""
+    """Write the former Etude object-registered save without model or readings."""
     from manabot.backends.torch.learner import Learner
 
     backend = resolve("torch")
@@ -290,30 +290,16 @@ def legacy_save(tmp_path: Path, settings: loop.SelfPlay) -> RestoredState:
     ):
         learner, ema = loop.create(settings, seed=run.seed, backend=backend)
         assert isinstance(learner, Learner) and ema is not None
-        counts = loop.Counts(model=settings.model.checkpoint_payload())
-        counts.readings = loop.resume_readings(
-            counts, learner.agent.readings, learner.agent.observation_space
-        )
+        counts = loop.Counts()
         run.resume(
             learner=learner.agent, optimizer=learner.optimizer, ema=ema, extra=counts
         )
-        with loop.self_play_games(settings, run, counts, backend=backend) as collector:
-            for _ in run.steps("updates", to=1):
-                row = loop.step(
-                    settings,
-                    learner,
-                    ema,
-                    collector,
-                    counts,
-                    np.random.default_rng(1),
-                    out=run.out,
-                    backend=backend,
-                )
-                run.log(row, **loop.clocks(counts))
-                run.save()
+        for update in run.steps("updates", to=1):
+            counts.updates = update
+            run.log({}, **loop.clocks(counts))
+            run.save()
     saved = latest(tmp_path)
     assert set(saved.record.files.values()) == {"learner.pt", "ema.pt", "optimizer.pt"}
-    assert saved.record.extra["optimizer_updates"] > 0
     return saved
 
 

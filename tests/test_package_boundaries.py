@@ -544,7 +544,6 @@ def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
 # capabilities to library code. Mixed modules permit only named entry points.
 _BACKEND_ROOTS = frozenset(
     (
-        "manabot/sim/table_bots.py",
         "manabot/sim/policy_provider.py",
         "manabot/cli.py",
         "manabot/eval/cards.py",

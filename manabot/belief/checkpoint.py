@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import struct
 import tempfile
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
@@ -75,7 +74,7 @@ def read_belief_sampler(
     try:
         parameters, metadata = decode_safetensors(data)
         payload = {key: json.loads(value) for key, value in metadata.items()}
-    except (ValueError, TypeError, KeyError, AttributeError, struct.error) as error:
+    except ValueError as error:
         raise ValueError("unknown sampler checkpoint format") from error
     if payload.get("format") != FORMAT:
         raise ValueError("unknown sampler checkpoint format")

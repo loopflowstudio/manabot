@@ -1047,14 +1047,13 @@ def resume_training(
 
     def restore(folder: Path) -> None:
         nonlocal restored, readings
-        record = admit_save_format(folder)
+        admit_save_format(folder)
         resume_model(counts.model, settings.model)
         readings = resume_readings(
             counts, learner.agent.readings, learner.agent.observation_space
         )
         restored = restore_continuation(
             folder,
-            record=record,
             state=state,
             learner=learner,
             ema=ema,

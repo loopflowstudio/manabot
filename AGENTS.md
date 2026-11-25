@@ -164,7 +164,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).

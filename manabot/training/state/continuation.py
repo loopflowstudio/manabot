@@ -12,7 +12,6 @@ import hashlib
 import json
 from pathlib import Path
 import random
-import struct
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -192,25 +191,13 @@ def export_continuation(
 
 def read_tensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]:
     try:
-        arrays, header = read_safetensors(path)
-        if not isinstance(header, dict) or any(
-            not isinstance(v, str) for v in header.values()
-        ):
-            raise ValueError("invalid safetensors metadata")
-        return arrays, header
-    except (
-        OSError,
-        ValueError,
-        TypeError,
-        KeyError,
-        AttributeError,
-        struct.error,
-    ) as error:
+        return read_safetensors(path)
+    except (OSError, ValueError) as error:
         raise ValueError(f"{path.name}: {error}") from error
 
 
-def admit_save_format(folder: Path) -> dict[str, Any]:
-    """Read Etude's record and refuse pre-portable saves before model admission."""
+def admit_save_format(folder: Path) -> None:
+    """Refuse pre-portable saves before model or reading admission."""
     if (folder / "training.safetensors").exists():
         raise ValueError("training.safetensors: unsupported pre-portable MLX save")
     record = json.loads((folder / "state.json").read_bytes())
@@ -220,7 +207,6 @@ def admit_save_format(folder: Path) -> dict[str, Any]:
             "resume it with manabot 0.2.5, or start a new run warm-started from "
             "the run's published policy"
         )
-    return record
 
 
 def restore_continuation(
@@ -231,11 +217,10 @@ def restore_continuation(
     ema: BackendPolicy | None,
     counts: Counts,
     settings: SelfPlay,
-    record: dict[str, Any] | None = None,
 ) -> RestoredContinuation:
     """Validate the entire snapshot before copying into the live policies and Adam."""
-    if record is None:
-        record = admit_save_format(folder)
+    admit_save_format(folder)
+    record = json.loads((folder / "state.json").read_bytes())
     if record["at"].get("updates") != counts.updates:
         raise ValueError("state.json: updates differs from the saved counts")
     files = record["files"]
