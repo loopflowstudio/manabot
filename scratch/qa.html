@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>MTG-436 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}pre{background:#f4f1ea;padding:.6rem;overflow-x:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.3rem .5rem;text-align:left;vertical-align:top}.ok{color:#2a6b2a}.warn{color:#8a5a00}</style>
+<h1>MTG-436 QA: published API contract and consumer path</h1>
+<p>2026-11-24, at <code>db7565ea1f</code>. Each temporary edit was reverted with <code>git checkout</code>, and the tree was clean at the end. No fixes were needed.</p>
+
+<h2>Contributor: <code>scripts/public_api.py</code></h2>
+<table>
+<tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>Clean <code>check</code></td><td class="ok">"public API matches tests/public_api.json", 0.85 s</td></tr>
+<tr><td>Rename <code>open_collector(num_envs=)</code> to <code>envs</code></td><td class="ok">check and plain record exit 1 with the two BREAKING lines and the 0.2.x guidance</td></tr>
+<tr><td>Add an optional parameter</td><td class="ok"><code>ADDED … optional parameter qa_extra added</code>; it suggests <code>record</code></td></tr>
+<tr><td>Drop <code>RewardConfig</code> from <code>__all__</code></td><td class="ok"><code>BREAKING manabot.infra.config.RewardConfig: removed</code></td></tr>
+<tr><td>Drop the <code>RewardConfig.land_play_reward</code> field</td><td class="ok"><code>BREAKING …land_play_reward: removed</code></td></tr>
+<tr><td>Stub: <code>catalog_tokens(strict: bool)</code> / <code>(*, strict: bool = False)</code></td><td class="ok">BREAKING required parameter / ADDED optional parameter</td></tr>
+<tr><td>Rename <code>UniformDecks</code>→<code>UniformDeckPool</code>, convert 12 callers, keep a <code>__getattr__</code> alias</td><td class="ok">ADDED class + "deprecated"; <code>record</code> passes under <code>-W error::DeprecationWarning</code>; check then matches</td></tr>
+<tr><td>Remove that alias while on 0.2.5</td><td class="ok"><code>DEPRECATED_REMOVED</code>; plain record refuses; <code>--allow-break</code> without a reason is rejected; with a reason, it is recorded in <code>breaks</code></td></tr>
+<tr><td>Bump the root pyproject to 0.3.0, then remove the alias</td><td class="ok">plain record accepts it; <code>line: "0.3"</code>, <code>breaks: []</code>; check matches</td></tr>
+<tr><td>Rename an internal <code>Collector</code> field (opaque handle)</td><td class="ok">still matches</td></tr>
+</table>
+
+<h2>Library consumer: installed wheels, CPython 3.12</h2>
+<p>I installed a fresh <code>/tmp</code> venv from the local <code>manabot-0.2.5</code> wheel, the cp312 engine wheel (built after the last engine commit, with a stub byte-identical to the checkout's) and CPU Torch 2.15. Everything ran from <code>/tmp</code> under <code>python -I</code>.</p>
+<ul>
+<li class="ok">All 15 published modules import, and every name in each <code>__all__</code> resolves (7/7/2/5/1/2/2/1/1/1/1/2/7/2/6 names, matching the README table).</li>
+<li class="ok">The README <code>## Library API</code> example, run verbatim under <code>-W error::DeprecationWarning</code>, prints <code>2 1.0 0.0133</code> in 3.7 s and leaves only <code>policy.safetensors</code> in the cwd.</li>
+</ul>
+
+<h2>Tests</h2>
+<pre>uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py tests/test_package_boundaries.py tests/infra/test_ci_selection.py -q
+114 passed, 1 skipped in 11.88s</pre>
+
+<h2>What works / not reached / still wrong</h2>
+<ul>
+<li><b>Works:</b> every break, addition, deprecation and rollover path above, plus the installed consumer path on 3.12.</li>
+<li><b>Not reached:</b> a 3.13 installed consumer. The cp313 wheel in <code>managym/target/wheels</code> is a 39 KB build with no extension, and I didn't rebuild one, because the checkout tests already cover 3.13.</li>
+<li class="warn"><b>Minor, a design choice, not fixed:</b> <code>from manabot.env.observation import *</code> emits the <code>ObservationEncoder</code> DeprecationWarning, because the 0.3.0-deprecated names are listed in <code>__all__</code>. A star-importer who never touches them still sees the warning. Dropping them from <code>__all__</code> would avoid it, at the cost of the contract no longer marking them as published-and-deprecated.</li>
+<li><b>Outside this change:</b> the README's <code>## Local-update search</code> example writes to <code>.runs/policy.safetensors</code>, so it fails outside a checkout.</li>
+</ul>
+</html>
