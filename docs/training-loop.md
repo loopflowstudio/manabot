@@ -131,6 +131,9 @@ bootstrap indexes, joins `next_obs` across parts that carry bootstrap rows
 non-negative `branch_group_id` values across parts so sibling groups from
 different workers do not collide in RLOO baselines. `RecordedObservations.concatenate`
 and `PackedActions.concatenate` provide the matching piece-level merges.
+Recorded indexes advance by the full size of each worker’s observation store.
+A paired collector can retain both learners’ observations in that store even
+when the worker returns one learner’s batch.
 Empty inputs, multi-column `[T, E]` batches (even in a one-element list),
 mixed native and dense transports, differing `ObservationConfig`s or memory
 capacities, and mismatched optional fields raise `ValueError`.
