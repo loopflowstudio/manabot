@@ -459,6 +459,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
     padding: 4px 6px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -484,6 +485,7 @@
     cursor: help;
   }
   .card-name {
+    min-width: 0;
     font-family: var(--font-serif);
     font-weight: 600;
     font-size: 14px;

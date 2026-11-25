@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><title>MTG-483 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code{background:#f3f3f3;padding:0 3px}h2{margin-top:2em}</style>
+<h1>MTG-483 QA: grouped decisions in a real Academy game</h1>
+<p>Rebuilt native extension (release, from this branch's Rust) and static SPA; launched <code>managym academy play</code> with imported decks against Passive, driven by Playwright with every outgoing WebSocket frame logged. Recordings read from <code>play.sqlite</code>.</p>
+
+<h2>1. Combat: attack Confirm</h2>
+<p>Deck <code>7 Mountain / 7 Island / 7 Swamp / 16 Raging Goblin / 12 Bilbo / 11 Diresight</code> vs <code>60 Plains</code>. Seven attacks of 1–4 goblins, each drafted by clicking creatures then the primary. Each Confirm sent exactly one <code>group_command</code> (e.g. four <code>attackers</code>) and nothing else; damage landed (Passive 20 → −1).</p>
+<img src="qa/attack-4.png">
+<p>Seen: with a goblin cast this turn, the counter reads "3 of 3 Raging Goblin" beside "Attack with 4" because the new goblin is its own pile. The pile logic is the same on main, so this change did not cause it.</p>
+
+<h2>2. Scry 2 (Take a Glance), eight times</h2>
+<p>Panel opens with both cards unplaced and Confirm disabled ("Place 2 more cards"); still disabled after one card is placed; enabled as "Confirm (1 top, 1 bottom)". One <code>group_command</code> per Confirm. The next Surveil revealed exactly the card the previous Scry had put on top (entity 86).</p>
+<p><b>Fixed:</b> a placed row with a long name ("Bilbo Baggins, Burglar") overflowed its bucket. The Bottom button was clipped to "Bo" and × was hidden. The cause was flex/grid items keeping <code>min-width:auto</code>, so the ellipsis never engaged. Fix: <code>min-width:0</code> on <code>.card-row</code> and <code>.card-name</code> in <code>ArrangePanel.svelte</code>. Measured after the fix: every row button sits inside its bucket at 1440 and 1024 px.</p>
+<p>Before / after:</p>
+<img src="qa/scry-overflow-before.png"><img src="qa/scry-fixed.png">
+
+<h2>3. Surveil 2 → OrderLibrary</h2>
+<p>Diresight: Surveil starts as "Keep all 2 on top" (enabled). Confirm sent one <code>surveil</code> plan with an empty graveyard. The OrderLibrary panel followed as its own group ("Order 2 more cards", disabled until both were ordered, then "Confirm top order"), and its Confirm sent one <code>order_library</code>. A second Surveil with one card moved to the graveyard read "Put 1 in graveyard, keep 1 on top".</p>
+<img src="qa/surveil.png"><img src="qa/order.png">
+
+<h2>4. Recording and Replay</h2>
+<p><code>canonical_replay.decisions</code> holds one row per native step: <code>authority.group.&lt;id&gt;.0</code> "Keep Bilbo on top", <code>.1</code> "Put Island on the bottom". In Replay these are two SCRY decisions showing raw offers with the chosen one checked; Replay has no arrange panel and no disclosure.</p>
+<img src="qa/replay-scry.png">
+
+<h2>5. Interruptions</h2>
+<ul>
+<li><b>Draft survives reload:</b> placed one Scry card, reloaded; the panel came back with that card still on top (<code>academy.table.group-draft</code>).</li>
+<li><b>Raw offer mid-group:</b> the "Each card's choice" disclosure listed all four raw offers. Clicking "Put Bilbo on the bottom" sent one ordinary <code>command</code>. With one card left (below the 2-card threshold) the panel gave way to the raw offers, and the game finished normally.</li>
+<li><b>Keyboard:</b> placed both cards with Enter on focused buttons and confirmed with Space ("Put all 2 on top").</li>
+<li><b>Reload 60 ms after Confirm:</b> the <code>group_command</code> went out, then a <code>resume</code>. After the reload the game was past the Scry, no submission was pending, and the recording holds the group's two steps exactly once.</li>
+<li>After any reload, Moves restarts at the tail (the Scry line is not shown). This is identical after a raw two-step Scry, so it is existing reload behaviour and this change did not cause it.</li>
+</ul>
+
+<h2>Result</h2>
+<p><b>Works:</b> attack drafts, Scry, Surveil and OrderLibrary each confirm as one message. Recording, Replay, reload and the raw-offer path all behave as planned.</p>
+<p><b>Not reached:</b> blocker groups (Passive never attacks; the e2e fixture covers them), watcher/TransferPilot delivery and refused plans in a live game (covered by <code>tests/academy/test_group_command.py</code>), and Bottom-end OrderLibrary (no card in these decks).</p>
+<p><b>Still wrong, worst first:</b> none introduced by this change. Two existing, cosmetic issues: the pile counter next to a fresh creature, and the panel shifting up as it shrinks while cards are placed (it is vertically centred).</p>

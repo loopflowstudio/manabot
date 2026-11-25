@@ -19,7 +19,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
   continuation and laptop navigation. Keep generation/builds finished while
   browser proofs run; rebuilding replaces chunks under a preview server.
-  Combat remains ordinary per-creature offers, including nonparticipation.
   A swapped human is native seat 1; check player-target role labels against
   actual native seats. Floating mana has its own disclosure outside player
   status; status retains full policy identity and provenance.
@@ -163,13 +162,28 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
-- Combat drafts (`[data-testid=combat-draft]`, `POST
-  /api/sessions/<id>/combat-preview`): the draft appears only after the
-  preview answers, so wait for it before clicking creatures; without a preview
-  (a mocked socket with no route) the table keeps one creature at a time.
-  `[data-draft]` on a card is `can`, `in` or `armed`; confirm only once the
-  primary has `data-draft-ready=true`. Collect creature ids before clicking:
-  a locator over `[data-draft=can]` shifts as cards are drafted.
+- Grouped decisions (combat drafts, Scry, Surveil, OrderLibrary): the live
+  `group` arrives beside the frame; drafts preview through `POST
+  /api/sessions/<id>/group-preview` and Confirm sends one `group_command`
+  WebSocket message (count `framesent` types). `[data-draft]` on a card is
+  `can`, `in` or `armed`; confirm only once `[data-testid=primary-action]` has
+  `data-draft-ready=true`. Collect creature ids before clicking: a locator over
+  `[data-draft=can]` shifts as cards are drafted. A creature cast this turn is
+  its own pile, so "Attack with 4" can sit beside "3 of 3 Raging Goblin".
+  For library groups, import `12 Island / 12 Swamp / 20 Bilbo Baggins,
+  Burglar / 16 Diresight` against `60 Plains` with `--opponent passive`:
+  Take a Glance ({U}, Scry 2) is castable on turn 1 and Diresight (Surveil 2,
+  then OrderLibrary when both are kept) on turn 3. Drive
+  `[data-testid=arrange-panel]` by its buttons (`Put X on top|bottom`,
+  `Put X in graveyard`, `Add X to order`) and `[data-testid=arrange-confirm]`;
+  the raw per-card offers are in the closed `[data-testid=per-creature-choices]`.
+  One raw step on Scry 2 leaves one card, below the group threshold, so the
+  panel gives way to raw offers. Recorded rows are per native step with
+  command ids `authority.group.<id>.<n>` in
+  `canonical_replay.decisions` of `<traces>/play.sqlite`. Land and spell offers
+  are `[data-testid=action-option]` rows in "All legal choices", not in
+  `[data-testid=action-panel]`. `/replay?trace=<id>` of an active game works
+  only in the context that played it.
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/sessions/<id>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count
