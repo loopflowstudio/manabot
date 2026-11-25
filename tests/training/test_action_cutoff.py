@@ -28,6 +28,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+import managym
 from managym.decision import Command, DecisionFrame
 
 
@@ -64,8 +65,8 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             assert obs["actions_valid"].sum() == 64
             frame = json.loads(engine.semantic_decision_frame_json())
             before = engine.state_digest()
-            unrestricted = HeuristicPlayer().act(env, obs)
-            retained = HeuristicPlayer(max_actions=64).act(env, obs)
+            unrestricted = HeuristicPlayer().act(env, raw)
+            retained = HeuristicPlayer(max_actions=64).act(env, raw)
             assert unrestricted == 65 and retained == 0
             cards = {card.id: card.name for card in raw.agent_cards}
             assert (
@@ -161,7 +162,9 @@ def test_scalar_evaluation_cutoff_is_diagnostic_not_game_truncation(
             env.reset()
             env.step(0)
             obs, *_ = env.step(0)
-            assert obs["actions_valid"].sum() == 2
+            assert managym.encode_observation_batch(
+                [obs], space.layout, "first-legal"
+            ).action_counts == [2]
             assert len(env.last_raw_obs.action_space.actions) > 2
             actor = env.last_raw_obs.agent.player_index
             _, _, _, truncated, info = env.step(0)

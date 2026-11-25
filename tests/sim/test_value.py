@@ -22,7 +22,7 @@ from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 
-def make_env(seed: int = 3) -> tuple[Env, dict]:
+def make_env(seed: int = 3) -> tuple[Env, managym.Observation]:
     obs_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -41,12 +41,9 @@ class TestValueScorer:
     def test_scores_are_probs(self):
         env, obs = make_env()
         scorer = ValueScorer(ActorCritic(ObservationSpace(), ModelConfig()))
-        batch = {
-            key: np.asarray(obs[key])[None].astype(
-                np.int32 if key == "action_focus" else np.float32
-            )
-            for key in scorer.agent.observation_space.shapes
-        }
+        batch = managym.encode_observation_batch(
+            [obs], scorer.agent.observation_space.layout
+        )
         probs = scorer.score(batch, np.array([0]))
         assert probs.shape == (1,)
         assert 0.0 <= probs[0] <= 1.0
@@ -105,7 +102,7 @@ class TestPlayers:
         )
         assert isinstance(player, VGreedyPlayer)
         for _ in range(20):
-            valid = np.flatnonzero(obs["actions_valid"] > 0)
+            valid = range(len(obs.action_space.actions))
             action = player.act(env, obs)
             assert action in valid
             assert len(player.last_scores) == len(valid)
@@ -128,7 +125,7 @@ class TestPlayers:
         )
         assert isinstance(player, ValueSearchPlayer)
         for _ in range(10):
-            valid = np.flatnonzero(obs["actions_valid"] > 0)
+            valid = range(len(obs.action_space.actions))
             action = player.act(env, obs)
             assert action in valid
             scores = player.last_scores

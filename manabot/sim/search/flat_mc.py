@@ -25,10 +25,9 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from manabot.env.decision_memory import blank_memory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
@@ -37,6 +36,7 @@ from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
+import managym
 from managym.decision import Command, DecisionFrame
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
@@ -84,7 +84,7 @@ def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float, floa
 class MatchupPlayer(Protocol):
     """A player usable by play_games: picks an action index each decision."""
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int: ...
+    def act(self, env: Env, obs: managym.Observation) -> int: ...
 
 
 class FlatMCPlayer:
@@ -116,7 +116,7 @@ class FlatMCPlayer:
         #: (win-probability estimates in [0, 1], engine action order).
         self.last_scores: np.ndarray | None = None
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
@@ -154,7 +154,7 @@ class AgentMatchupPlayer:
         self.blank_decision_memory = blank_decision_memory
         agent.eval()
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         from manabot.model.world import validate_agent_setup
 
         validate_agent_setup(
@@ -162,11 +162,13 @@ class AgentMatchupPlayer:
             env.match.to_rust(),
             allow_deck_repetition=self.allow_deck_repetition,
         )
-        buffers = {
-            key: np.asarray(value, dtype=np.float32)[None] for key, value in obs.items()
-        }
+        buffers = encode_policy_batch(
+            self.agent.observation_space,
+            [obs],
+            blank_decision_memory=self.blank_decision_memory,
+        )
         batch = self.agent.prepare(
-            blank_memory(buffers) if self.blank_decision_memory else buffers,
+            buffers,
             inference=True,
         )
         return int(self.agent.sample(batch, deterministic=self.deterministic)[0])
@@ -199,7 +201,7 @@ def make_player(
          "checkpoint_sha256": "...", "epsilon": 0.05}
         {"kind": "uniform_range", ...same fields...}
         {"kind": "local_update", "checkpoint": "/abs/policy.pt",
-         "checkpoint_sha256": "...", "config": {...}, "native_encoder": False}
+         "checkpoint_sha256": "...", "config": {...}}
     Returns (player, observation_space_or_None). Checkpoint players carry the
     ObservationSpace their encoder was trained with.
     """
@@ -233,6 +235,10 @@ def make_player(
             SamplerArtifact,
         )
 
+        if spec.get("native_encoder") is False:
+            raise ValueError(
+                "run local-update specs with native_encoder=false from v0.2.5"
+            )
         teacher = LocalUpdateTeacher(
             Path(spec["checkpoint"]),
             str(spec["checkpoint_sha256"]),
@@ -240,7 +246,6 @@ def make_player(
             sampler=SamplerArtifact.model_validate(spec["sampler"])
             if spec.get("sampler")
             else None,
-            native_encoder=bool(spec.get("native_encoder", True)),
             backend=backend,
         )
         return LocalUpdatePlayer(teacher, seed=seed), teacher.space

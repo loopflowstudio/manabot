@@ -107,7 +107,7 @@ def test_scenario_positions_construct(name):
     """Every scenario's decks/cards are registered and the injection holds."""
 
     scenario = SCENARIOS[name]
-    env, obs, raw = build_scenario_env(scenario, None, seed=5)
+    env, raw = build_scenario_env(scenario, None, seed=5)
     try:
         # Exact hands.
         assert int(raw.agent.zone_counts[1]) == len(scenario.hero_hand)

@@ -467,7 +467,11 @@ The capture wrapper is a separate Python class:
 | Native `ObservationBatch` stepping, per-slot setups, sparse slot loading and partial stepping | `VectorEnv.set_observation_layout` with `observation_rows()` / `step_into_buffers`, or `step_observation_batch` |
 | Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
 
-Scalar `Env.step` returns the terminal observation and waits for `reset`.
+The scalar `manabot.env.env.Env` returns a viewer's `managym.Observation` on
+reset, step, and semantic step. After a scenario injection, `scenario_refresh()`
+returns the refreshed observation. Read legal offers from
+`observation.action_space.actions`. A checkpoint player encodes the observation
+with its own input layout when it acts. A terminal step waits for an explicit reset.
 Native `VectorEnv` and `RecordedVectorEnv` return the terminal observation,
 reward, flags and winner, then park that slot with chooser `-1`. Restart
 all slots with the matching readable or buffered reset, or use

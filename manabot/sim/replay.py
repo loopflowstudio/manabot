@@ -117,7 +117,7 @@ def replay_environment(
     *,
     capture_cards: bool = False,
     capture: ScalarCapture | None = None,
-) -> tuple[Env, dict[str, Any]]:
+) -> tuple[Env, managym.Observation]:
     if "scenario_root" in game:
         if capture_cards:
             raise ValueError("card capture requires ordinary deck setup")
@@ -129,7 +129,7 @@ def replay_environment(
         space = observation_space or ObservationSpace(
             ObservationConfig.from_checkpoint(game["observation_hypers"])
         )
-        env, observation, _ = build_scenario_env(
+        env, observation = build_scenario_env(
             SCENARIOS[name], space, int(game["deal_seed"])
         )
         binding = game["world_binding"]

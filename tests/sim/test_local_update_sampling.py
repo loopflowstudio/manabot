@@ -446,13 +446,12 @@ def test_batched_search_checks_deadline_after_forward(
         teacher.search(env._engine, history, seed=17)
 
 
-@pytest.mark.parametrize("native_encoder", [True, False])
 def test_batch_rejects_incomplete_and_nonfinite_rows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_encoder: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    teacher, env = make_teacher(tmp_path, native_encoder=native_encoder)
+    teacher, env = make_teacher(tmp_path)
     # A fresh teacher, so native frontier buffers are first sized for this space.
-    narrow, _ = make_teacher(tmp_path, native_encoder=native_encoder)
+    narrow, _ = make_teacher(tmp_path)
     with monkeypatch.context() as patch:
         patch.setattr(
             narrow,

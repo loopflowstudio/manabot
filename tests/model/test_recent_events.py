@@ -25,8 +25,10 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
+from manabot.policy.spans import observation_spans
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
+import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -210,31 +212,37 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     )
     assert isinstance(player, AgentMatchupPlayer) and loaded_space is not None
     env = Env(_match(), loaded_space, Reward(RewardConfig()), seed=111)
+
+    def events(obs: managym.Observation) -> np.ndarray:
+        batch = managym.encode_observation_batch([obs], loaded_space.layout)
+        return (
+            observation_spans(batch, loaded_space, bucketed=False, objects=False)
+            .tables["events"]
+            .features()
+        )
+
     obs, _ = env.reset()
-    assert not obs["events_valid"].any()
+    previous = events(obs)
+    assert not len(previous)
     retained = False
     nonempty_calls = 0
     for _ in range(32):
-        previous = obs["events"][obs["events_valid"].astype(bool)].copy()
         actor = env._engine.current_agent_index()
-        fixed = encode_observation(
-            loaded_space, env._engine.observation_for_player(actor)
+        np.testing.assert_array_equal(
+            previous, events(env._engine.observation_for_player(actor))
         )
-        np.testing.assert_array_equal(obs["events"], fixed["events"])
-        if obs["events_valid"].any():
+        if len(previous):
             nonempty_calls += 1
             for seed in (17, 91):
                 hidden = env._engine.clone_env()
                 hidden.determinize(seed, perspective=actor)
-                variant = encode_observation(
-                    loaded_space, hidden.observation_for_player(actor)
+                np.testing.assert_array_equal(
+                    previous, events(hidden.observation_for_player(actor))
                 )
-                for key in ("events", "events_valid"):
-                    np.testing.assert_array_equal(obs[key], variant[key])
         action = player.act(env, obs)
-        assert obs["actions_valid"][action]
+        assert 0 <= action < len(obs.action_space.actions)
         obs, _, terminated, truncated, _ = env.step(action)
-        current = obs["events"][obs["events_valid"].astype(bool)]
+        current = events(obs)
         # Perspective/context can change, but kind/amount/definition chronology remains.
         if len(previous) and len(current) >= len(previous):
             retained |= bool(
@@ -242,14 +250,13 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
                     previous[:, [0, 1, 2, 7]], current[: len(previous), [0, 1, 2, 7]]
                 )
             )
+        previous = current
         if terminated or truncated:
             break
     assert nonempty_calls > 2 and retained
     fresh, _ = env.reset(seed=112)
-    assert not fresh["events_valid"].any()
-    assert not encode_observation(loaded_space, env._engine.observation_for_player(1))[
-        "events_valid"
-    ].any()
+    assert not len(events(fresh))
+    assert not len(events(env._engine.observation_for_player(1)))
 
 
 def test_history_off_preserves_model_identity_and_outputs() -> None:
@@ -271,7 +278,10 @@ def test_history_off_preserves_model_identity_and_outputs() -> None:
         assert torch.equal(weights, explicit.state_dict()[name])
     env = Env(_match(), ObservationSpace(), Reward(RewardConfig()), seed=111)
     raw, _ = env.reset()
-    tensors = {key: torch.from_numpy(value).unsqueeze(0) for key, value in raw.items()}
+    tensors = {
+        key: torch.from_numpy(value).unsqueeze(0)
+        for key, value in encode_observation(env.obs_space, raw).items()
+    }
     expected = baseline(device_input(baseline, tensors))
     tensors.pop("events")
     tensors.pop("events_valid")

@@ -207,7 +207,7 @@ class VGreedyPlayer:
     def stats(self) -> ValueSearchStats:
         return self._leaf.stats
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         del obs
         scores = self._leaf.score_actions(env)
         self.last_scores = scores
@@ -253,7 +253,7 @@ class ValueSearchPlayer:
     def stats(self) -> ValueSearchStats:
         return self._leaf.stats
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         del obs
         scores = self._leaf.score_actions(env)
         self.last_scores = scores

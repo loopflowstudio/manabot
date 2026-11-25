@@ -155,8 +155,8 @@ def test_belief_and_prior_use_identical_canonical_search_path() -> None:
     belief.start_game(env, viewer)
     prior.start_game(env, viewer)
 
-    belief_action = belief.act(env, {})
-    prior_action = prior.act(env, {})
+    belief_action = belief.act(env, env.last_raw_obs)
+    prior_action = prior.act(env, env.last_raw_obs)
 
     assert belief_action == prior_action
     assert np.array_equal(belief.last_scores, prior.last_scores)
@@ -170,7 +170,7 @@ def test_player_emits_authoritative_revision_bound_command() -> None:
     viewer = int(env._engine.current_agent_index())
     player = ExactRangePlayer(1, likelihood=NeutralLikelihood(), seed=127)
     player.start_game(env, viewer)
-    action = player.act(env, {})
+    action = player.act(env, env.last_raw_obs)
     frame = DecisionFrame.from_json(env._engine.semantic_decision_frame_json())
 
     command = player.command_for_action(env._engine, action, command_id="int-9-test")

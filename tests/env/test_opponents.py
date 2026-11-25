@@ -1,6 +1,5 @@
 """Supported opponent policies and rejection at public API boundaries."""
 
-import numpy as np
 import pytest
 
 from manabot.env.failures import RecordedVectorEnv
@@ -15,11 +14,10 @@ from managym.replay import replay_failure_inputs
 
 
 def test_random_policy_picks_only_valid_actions() -> None:
-    obs = {"actions_valid": np.array([1, 0, 1, 0], dtype=np.float32)}
+    obs, _ = managym.Env(seed=3).reset(Match().to_rust())
     policy = RandomPolicy()
-    chosen = {policy(obs) for _ in range(100)}
-    assert chosen.issubset({0, 2})
-    assert chosen
+    for _ in range(100):
+        assert 0 <= policy(obs) < len(obs.action_space.actions)
 
 
 def test_build_opponent_policy_none() -> None:

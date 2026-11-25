@@ -30,6 +30,7 @@ from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search import local_update
+from manabot.sim.search.flat_mc import make_player
 from manabot.sim.search.local_update import LocalUpdateTeacher
 from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
@@ -55,7 +56,6 @@ def make_teacher(
     *,
     config: LocalSearchConfig | None = None,
     observation: ObservationConfig | None = None,
-    native_encoder: bool = True,
 ) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
@@ -84,7 +84,6 @@ def make_teacher(
         file_sha256(path),
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
-        native_encoder=native_encoder,
         backend=resolve("torch"),
     )
     env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
@@ -408,7 +407,7 @@ def _searched_roots(env: Env, steps: int) -> list[managym.Env]:
     return roots
 
 
-def test_compact_native_defaults_match_full_evidence_and_row_encoding(
+def test_compact_rollouts_match_full_evidence(
     tmp_path: Path,
 ) -> None:
     compact_config = LocalSearchConfig(
@@ -416,25 +415,12 @@ def test_compact_native_defaults_match_full_evidence_and_row_encoding(
     )
     assert compact_config.rollout_evidence == "compact"
     full_config = compact_config.model_copy(update={"rollout_evidence": "full"})
-    full, env = make_teacher(tmp_path, config=full_config, native_encoder=False)
+    full, env = make_teacher(tmp_path, config=full_config)
     checkpoint = full.likelihood.checkpoint
     digest = full.likelihood.checkpoint_sha256
-    arms = {
-        "compact": LocalUpdateTeacher(
-            checkpoint,
-            digest,
-            compact_config,
-            native_encoder=False,
-            backend=resolve("torch"),
-        ),
-        "native": LocalUpdateTeacher(
-            checkpoint, digest, full_config, backend=resolve("torch")
-        ),
-        "defaults": LocalUpdateTeacher(
-            checkpoint, digest, compact_config, backend=resolve("torch")
-        ),
-    }
-    assert arms["defaults"].native_encoder
+    compact = LocalUpdateTeacher(
+        checkpoint, digest, compact_config, backend=resolve("torch")
+    )
     for root in _searched_roots(env, 4):
         viewer = root.current_agent_index()
         history = ViewerHistory.from_observation(
@@ -448,31 +434,23 @@ def test_compact_native_defaults_match_full_evidence_and_row_encoding(
             LocalUpdateReceipt.from_json(reference.to_json()).replay_identity()
             == reference.replay_identity()
         )
-        for name, teacher in arms.items():
-            receipt = teacher.search(root, history, seed=11)
-            compact = teacher.config.rollout_evidence == "compact"
-            assert receipt.schema == (
-                "regularized-local-update/v4" if compact else reference.schema
-            ), name
-            for field in ("base", "values", "target", "allocation_counts"):
-                assert getattr(receipt, field) == getattr(reference, field), name
-            for row, expected in zip(receipt.rollouts, reference.rollouts, strict=True):
-                assert row.canonical_commands == expected.canonical_commands
-                assert row.signed_value == expected.signed_value
-                assert row.terminal == expected.terminal
-                assert row.rollout_seed == expected.rollout_seed
-                if compact:
-                    assert row.actor_observation_hashes == ()
-                    assert '"audit": false' in row.branch_audit_json
-                else:
-                    assert row == expected
-            assert (
-                LocalUpdateReceipt.from_json(receipt.to_json()).replay_identity()
-                == receipt.replay_identity()
-            )
-            teacher.verify_replay(root, history, receipt)
+        receipt = compact.search(root, history, seed=11)
+        assert receipt.schema == "regularized-local-update/v4"
+        for field in ("base", "values", "target", "allocation_counts"):
+            assert getattr(receipt, field) == getattr(reference, field)
+        for row, expected in zip(receipt.rollouts, reference.rollouts, strict=True):
+            assert row.canonical_commands == expected.canonical_commands
+            assert row.signed_value == expected.signed_value
+            assert row.terminal == expected.terminal
+            assert row.rollout_seed == expected.rollout_seed
+            assert row.actor_observation_hashes == ()
+            assert '"audit": false' in row.branch_audit_json
+        assert (
+            LocalUpdateReceipt.from_json(receipt.to_json()).replay_identity()
+            == receipt.replay_identity()
+        )
+        compact.verify_replay(root, history, receipt)
 
-    receipt = arms["compact"].search(root, history, seed=11)
     shortened = replace(
         receipt,
         rollouts=(
@@ -490,59 +468,13 @@ def test_compact_native_defaults_match_full_evidence_and_row_encoding(
         LocalUpdateReceipt.from_json(relabeled.to_json())
 
 
-def test_native_frontier_encoding_writes_the_row_encoder_tensors(
-    tmp_path: Path,
-) -> None:
-    teacher, env = make_teacher(tmp_path, native_encoder=False)
-    roots = _searched_roots(env, 6)
-    rows, counts = teacher._encode_rows(roots)
-    buffers = teacher.space.allocate(len(roots) + 2)
-    for value in buffers.values():
-        value.fill(7)
-    assert (
-        managym.encode_observations_into(
-            roots, teacher.space.layout, buffers, len(roots) + 2
+def test_stored_row_encoder_spec_names_its_release() -> None:
+    with pytest.raises(ValueError, match="v0.2.5"):
+        make_player(
+            {"kind": "local_update", "native_encoder": False},
+            seed=0,
+            backend=resolve("torch"),
         )
-        == counts
-    )
-    for key, expected in rows.items():
-        np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
-        assert (buffers[key][len(roots) :] == 7).all(), key
-    # A smaller frontier rewrites only its own rows of a reused buffer.
-    assert (
-        managym.encode_observations_into(
-            roots[:1], teacher.space.layout, buffers, len(roots) + 2
-        )
-        == (counts[:1])
-    )
-    for key, expected in rows.items():
-        np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
-    with pytest.raises(ValueError, match="capacity"):
-        managym.encode_observations_into(roots, teacher.space.layout, buffers, 1)
-    narrow = teacher.space.allocate(len(roots))
-    narrow["actions"] = narrow["actions"][..., :-1].copy()
-    with pytest.raises(ValueError):
-        managym.encode_observations_into(
-            roots, teacher.space.layout, narrow, len(roots)
-        )
-    frozen = teacher.space.allocate(len(roots))
-    frozen["agent_cards"].flags.writeable = False
-    with pytest.raises(ValueError, match="writable"):
-        managym.encode_observations_into(
-            roots, teacher.space.layout, frozen, len(roots)
-        )
-
-    native = LocalUpdateTeacher(
-        teacher.likelihood.checkpoint,
-        teacher.likelihood.checkpoint_sha256,
-        teacher.config,
-        backend=resolve("torch"),
-    )
-    for expected, actual in zip(
-        teacher.predict_batch(roots), native.predict_batch(roots), strict=True
-    ):
-        np.testing.assert_array_equal(expected[0], actual[0])
-        assert expected[1] == actual[1]
 
 
 def test_compact_registration_declares_no_branch_audit() -> None:

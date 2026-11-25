@@ -105,11 +105,14 @@ def test_flat_mc_player_rejects_bad_sims():
         FlatMCPlayer(0)
 
 
-def test_random_matchup_player_uses_valid_mask():
+def test_random_matchup_player_samples_offers_in_native_order() -> None:
+    env = _fresh_engine()
+    raw = env.observation_for_player(env.current_agent_index())
     player = RandomMatchupPlayer(seed=0)
-    obs = {"actions_valid": np.array([0.0, 1.0, 0.0, 1.0])}
+    rng = np.random.default_rng(0)
+    offers = np.arange(len(raw.action_space.actions))
     for _ in range(10):
-        assert player.act(None, obs) in (1, 3)
+        assert player.act(env, raw) == rng.choice(offers)
 
 
 def test_checkpoint_routes_by_serialized_agent_capability(

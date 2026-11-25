@@ -1,22 +1,23 @@
 """Scalar simulation players; model players receive an admitted backend policy.
 
 `Player` is the interface `manabot.sim.sim` plays: a name and one action per
-encoded observation. `load_player` in that module picks the implementation.
+viewer observation. `load_player` in that module picks the implementation.
 """
 
 from typing import Protocol
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import encode_policy_batch
 from manabot.policy.protocol import BackendPolicy
+import managym
 
 
 class Player(Protocol):
     name: str
 
-    def get_action(self, obs: ObservationBuffers) -> int:
-        """One action index for an encoded observation."""
+    def get_action(self, obs: managym.Observation) -> int:
+        """One action index for an viewer observation."""
         ...
 
 
@@ -33,12 +34,9 @@ class ModelPlayer:
         self.agent = agent
         self.deterministic = deterministic
 
-    def get_action(self, obs: ObservationBuffers) -> int:
+    def get_action(self, obs: managym.Observation) -> int:
         batch = self.agent.prepare(
-            {
-                key: np.asarray(value, dtype=np.float32)[None]
-                for key, value in obs.items()
-            },
+            encode_policy_batch(self.agent.observation_space, [obs]),
             inference=True,
         )
         return int(self.agent.sample(batch, deterministic=self.deterministic)[0])
@@ -50,8 +48,8 @@ class RandomPlayer:
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def get_action(self, obs: ObservationBuffers) -> int:
-        valid_actions = np.where(obs["actions_valid"] > 0)[0]
+    def get_action(self, obs: managym.Observation) -> int:
+        valid_actions = np.arange(len(obs.action_space.actions))
         if len(valid_actions) == 0:
             raise ValueError("No valid actions available")
         return int(np.random.choice(valid_actions))
@@ -63,5 +61,5 @@ class DefaultPlayer:
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def get_action(self, obs: ObservationBuffers) -> int:
+    def get_action(self, obs: managym.Observation) -> int:
         return 0

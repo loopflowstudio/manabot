@@ -386,7 +386,7 @@ class PolicyRolloutMCPlayer:
         self.last_scores: np.ndarray | None = None
         self._obs_space = ObservationSpace()
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1

@@ -75,7 +75,7 @@ def test_native_heuristic_matches_retained_python_decisions() -> None:
             chosen = (
                 expected
                 if sources_only
-                else players[raw.agent.player_index].act(view, {})
+                else players[raw.agent.player_index].act(view, raw)
             )
             assert chosen == expected, (case["seed"], case["decks"], decision)
             raw, _, done, truncated, _ = env.step(chosen)

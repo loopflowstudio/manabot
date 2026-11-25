@@ -3,8 +3,9 @@
 from typing import Protocol
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
+import managym
 
 
 class GamePlayer(Protocol):
@@ -13,4 +14,4 @@ class GamePlayer(Protocol):
 
     def admit(self, match: MatchConfig) -> None: ...
 
-    def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int: ...
+    def choose(self, env: Env, obs: managym.Observation, seed: int) -> int: ...

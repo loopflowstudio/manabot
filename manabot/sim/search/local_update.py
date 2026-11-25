@@ -99,7 +99,6 @@ class LocalUpdateTeacher:
         backend: PolicyLoader,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
-        native_encoder: bool = True,
     ) -> None:
         self.likelihood = FrozenPolicyLikelihood(
             checkpoint, expected_sha256=sha256, backend=backend
@@ -117,7 +116,6 @@ class LocalUpdateTeacher:
         self.space = self.likelihood.obs_space
         # Native frontier encoding reuses these teacher-owned buffers across
         # forwards, so one teacher serves one search at a time.
-        self.native_encoder = native_encoder
         self._frontier_buffers: dict[str, NDArray[np.generic]] = {}
         self.config = config
         if file_sha256(checkpoint) != sha256:
@@ -175,10 +173,7 @@ class LocalUpdateTeacher:
         """
         if not engines:
             return []
-        if self.native_encoder:
-            encodings, counts = self._encode_native(engines)
-        else:
-            encodings, counts = self._encode_rows(engines)
+        encodings, counts = self._encode(engines)
         logits, values = self.agent.evaluate(
             self.agent.prepare(encodings, inference=True)
         )
@@ -194,7 +189,7 @@ class LocalUpdateTeacher:
         # Scalar PPO heads are unconstrained; retain their actual signed estimate.
         return predictions
 
-    def _encode_native(
+    def _encode(
         self, engines: Sequence[managym.Env]
     ) -> tuple[PolicyObservation, list[int]]:
         """Encode the full frontier; search requires every legal offer to fit."""
@@ -217,29 +212,6 @@ class LocalUpdateTeacher:
         for index, count in enumerate(counts):
             if count == 0 or int(encodings["actions_valid"][index].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
-        return encodings, counts
-
-    def _encode_rows(
-        self, engines: Sequence[managym.Env]
-    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
-        # The selected space owns every axis, including historical inputs and
-        # nondefault capacities. Each row is a contiguous view of this call's
-        # fresh batch; no observation buffers survive into the next frontier.
-        encodings = self.space.allocate(len(engines))
-        counts: list[int] = []
-        for index, engine in enumerate(engines):
-            actor = int(engine.current_agent_index())
-            raw = engine.observation_for_player(actor)
-            encoded = {key: value[index] for key, value in encodings.items()}
-            count = len(raw.action_space.actions)
-            if count == 0 or count > self.space.config.max_actions:
-                raise ValueError("policy cannot represent complete legal offers")
-            # Search requires every legal offer, even if a checkpoint permits
-            # first-legal truncation during training.
-            managym.encode_observation_into(raw, self.space.layout, encoded)
-            if int(encoded["actions_valid"].sum()) != count:
-                raise ValueError("policy cannot represent complete legal offers")
-            counts.append(count)
         return encodings, counts
 
     def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
@@ -627,7 +599,7 @@ class LocalUpdatePlayer(ExactRangePlayer):
                 )
         super().observe_step(env, acting, transition)
 
-    def act(self, env: Env, obs: dict[str, NDArray[np.float32]]) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         del obs
         if self.tracker is None and self.history is None:
             raise RuntimeError("start_game is required")

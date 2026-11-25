@@ -21,6 +21,7 @@ import manabot.eval.game as game
 from manabot.eval.match import play_cell
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import file_sha256
+from manabot.policy.admission import admit_native
 from manabot.policy.prepare import prepare
 from manabot.sim.card_evidence import EvidenceRef
 from manabot.sim.matchup import DeckMatchup
@@ -96,7 +97,11 @@ def test_loader_batches_prepared_rows_without_sampling(
     env = Env(match, space, Reward(RewardConfig()), seed=71)
     try:
         obs, _ = env.reset()
-        batch = {key: value[None] for key, value in obs.items()}
+        batch = admit_native(
+            managym.encode_observation_batch([obs], space.layout),
+            sampler.spec,
+            bucketed=False,
+        )
         row = prepare(batch, sampler.spec.tables, binding=sampler.spec.binding)
         [single] = forward([row])
         joined = forward([row, row])

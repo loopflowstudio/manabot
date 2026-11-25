@@ -11,8 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
-import numpy as np
-
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -540,13 +538,8 @@ SCENARIOS: dict[str, Scenario] = {
 
 def build_scenario_env(
     scenario: Scenario, obs_space: ObservationSpace | None, seed: int
-) -> tuple[Env, dict[str, np.ndarray], Any]:
-    """Reset an Env, inject the scenario position, and refresh.
-
-    Returns (env, encoded_obs, raw_obs) at the first hero decision of the
-    constructed position.
-    """
-
+) -> tuple[Env, managym.Observation]:
+    """Reset a game and return the injected position at its first decision."""
     match = Match(
         MatchConfig(
             hero="hero",
@@ -563,8 +556,7 @@ def build_scenario_env(
         enable_profiler=False,
         enable_behavior_tracking=False,
     )
-    _, _ = env.reset(seed=seed)
-    raw = env.last_raw_obs
+    raw, _ = env.reset(seed=seed)
     while raw.turn.turn_number == 0:
         env.step(keep_opening_index(raw))
         raw = env.last_raw_obs
@@ -586,5 +578,4 @@ def build_scenario_env(
         engine.scenario_force_battlefield(VILLAIN_SEAT, name, True)
     engine.scenario_set_life(HERO_SEAT, scenario.hero_life)
     engine.scenario_set_life(VILLAIN_SEAT, scenario.villain_life)
-    obs, raw = env.scenario_refresh()
-    return env, obs, raw
+    return env, env.scenario_refresh()

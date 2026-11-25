@@ -3,7 +3,7 @@ env.py
 Environment wrapper around the managym Rust engine that conforms to the Gymnasium API.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -21,7 +21,7 @@ from managym.recording import DecisionAnnotation
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
 from .match import Match, Reward
-from .observation import ObservationSpace, encode_observation
+from .observation import ObservationSpace
 
 
 def add_truncation_flags(
@@ -47,7 +47,14 @@ def add_truncation_flags(
     )
 
 
-class Env(gym.Env):
+class ViewerSpace(spaces.Space[managym.Observation]):
+    """The native viewer projections returned by one game."""
+
+    def contains(self, x: object) -> bool:
+        return isinstance(x, managym.Observation)
+
+
+class Env(gym.Env[managym.Observation, int]):
     metadata = {"render_modes": ["human"], "render_fps": 30}
 
     def __init__(
@@ -93,33 +100,21 @@ class Env(gym.Env):
             enable_behavior_tracking=self.enable_behavior_tracking,
         )
 
-        # For when we need manabot.ObservationSpace
         self.failure_context = self._capture.context
         self._capture.identities["input_shapes"] = {
             name: list(shape) for name, shape in obs_space.shapes.items()
         }
         self.obs_space: ObservationSpace = obs_space
-        # Type: gymnasium.Space
-        self.observation_space = self.obs_space
+        self.observation_space = ViewerSpace()
         self.action_space = spaces.Discrete(self.obs_space.config.max_actions)
 
         self.match = match
         self.reward = reward
 
     def reset(
-        self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
-    ) -> tuple[dict, dict]:
-        """
-        Resets the environment to an initial state and returns (observation, info).
-
-        Args:
-            seed: Optional seed for environment’s RNG.
-            options: Optional `match` replaces the setup, including later resets.
-
-        Returns:
-            observation: A dictionary of numpy arrays (encoded from managym.Observation).
-            info: Additional debug info from managym, as a dict of string->string.
-        """
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[managym.Observation, dict[str, Any]]:
+        """Start a deal and return the acting viewer's observation and reset info."""
         # Gymnasium requires calling this for seeding (if you use self.np_random)
         super().reset(seed=seed)
 
@@ -140,31 +135,15 @@ class Env(gym.Env):
         raw_obs, raw_info = self._capture.reset(self._engine, match.to_rust())
         self.match = match
         self._last_obs = raw_obs
-        # Encode to our dictionary-of-numpy format
-        py_obs = encode_observation(self.obs_space, raw_obs)
-
-        return py_obs, raw_info
+        return raw_obs, raw_info
 
     def step(
         self,
         action: int,
         *,
         annotation: DecisionAnnotation | dict[str, object] | None = None,
-    ) -> tuple[dict, float, bool, bool, dict]:
-        """
-        Step the environment by applying `action` (int). A terminal step returns
-        the terminal observation; the caller resets.
-
-        Args:
-            action: Chosen action index (within our placeholder discrete space).
-
-        Returns:
-            observation: Dictionary of numpy arrays.
-            reward: Float reward for this step.
-            terminated: Whether the episode ended because the game ended in a terminal state.
-            truncated: Whether the episode ended due to a timelimit or external condition.
-            info: Additional debug info from managym, e.g. partial game logs.
-        """
+    ) -> tuple[managym.Observation, float, bool, bool, dict[str, Any]]:
+        """Return the next viewer projection, including the final one at game end."""
         log = getLogger(__name__).getChild("step")
         self._record_policy_actions()
         raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
@@ -179,16 +158,17 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
 
-        py_obs = encode_observation(self.obs_space, raw_obs)
         self._last_obs = raw_obs
-        return py_obs, reward, terminated, truncated, info
+        return raw_obs, reward, terminated, truncated, info
 
     def step_semantic(
         self,
         command: Command,
         *,
         annotation: DecisionAnnotation | dict[str, object] | None = None,
-    ) -> tuple[dict, float, bool, bool, dict, SemanticTransition]:
+    ) -> tuple[
+        managym.Observation, float, bool, bool, dict[str, Any], SemanticTransition
+    ]:
         """Execute one authoritative semantic Command.
 
         This evaluation path deliberately bypasses positional ``Env.step`` and
@@ -219,7 +199,7 @@ class Env(gym.Env):
         add_truncation_flags(raw_obs, info, self.obs_space)
         self._last_obs = raw_obs
         return (
-            encode_observation(self.obs_space, raw_obs),
+            raw_obs,
             reward,
             terminated,
             truncated,
@@ -247,29 +227,22 @@ class Env(gym.Env):
             [worlds, rollouts, seed, max_steps],
         ).native
 
-    def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
-        """Re-sync after managym scenario_* state injection.
-
-        The competency harness (manabot/verify/competency.py) constructs
-        positions via the engine's scenario_* helpers on ``self._engine``;
-        those leave the cached observation and action space stale. This
-        recomputes both and returns (encoded_obs, raw_obs).
-        """
-        raw_obs = self._engine.scenario_refresh()
-        self._last_obs = raw_obs
-        return encode_observation(self.obs_space, raw_obs), raw_obs
+    def scenario_refresh(self) -> managym.Observation:
+        """Refresh the viewer projection and legal offers after scenario injection."""
+        self._last_obs = self._engine.scenario_refresh()
+        return self._last_obs
 
     def hand_snapshot(self, player: int) -> managym.HandSnapshot:
         """Read a native seat's authoritative hand, separate from policy inputs."""
         return self._engine.hand_snapshot(player)
 
-    def render(self):
+    def render(self) -> None:
         pass
 
-    def info(self) -> Dict[str, Any]:
+    def info(self) -> dict[str, Any]:
         return self._engine.info()
 
-    def content_pack_manifest(self) -> Dict[str, Any]:
+    def content_pack_manifest(self) -> dict[str, Any]:
         """Describe the exact immutable content pack retained by the match."""
 
         return self._engine.content_pack_manifest()
@@ -297,5 +270,5 @@ class Env(gym.Env):
         self._capture.flush_policy_actions()
 
     @property
-    def last_raw_obs(self):
+    def last_raw_obs(self) -> managym.Observation:
         return self._last_obs

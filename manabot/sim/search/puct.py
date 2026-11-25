@@ -24,9 +24,8 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.observation import (
-    ObservationBuffers,
     ObservationSpace,
-    encode_observation,
+    encode_policy_batch,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
@@ -105,13 +104,13 @@ class LeafEvaluator(Protocol):
     """Supply root priors and evaluate newly expanded nonterminal nodes."""
 
     def root_priors(
-        self, observation: Any | None, *, action_count: int
+        self, observation: managym.Observation | None, *, action_count: int
     ) -> np.ndarray: ...
 
     def evaluate(
         self,
         env: Any,
-        observation: Any,
+        observation: managym.Observation,
         *,
         root_player: int,
         node_player: int,
@@ -130,14 +129,16 @@ def _uniform_priors(action_count: int) -> np.ndarray:
 class UniformRandomLeafEvaluator:
     """The frozen Teacher-1 policy: uniform priors and random playout leaves."""
 
-    def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
+    def root_priors(
+        self, observation: managym.Observation | None, *, action_count: int
+    ) -> np.ndarray:
         del observation
         return _uniform_priors(action_count)
 
     def evaluate(
         self,
         env: Any,
-        observation: Any,
+        observation: managym.Observation,
         *,
         root_player: int,
         node_player: int,
@@ -204,41 +205,16 @@ class AgentLeafEvaluator:
         raise ValueError("PUCT critic has an unsupported value semantic")
 
     def _predict(
-        self, observation: Any | ObservationBuffers, *, action_count: int
+        self, observation: managym.Observation, *, action_count: int
     ) -> tuple[np.ndarray, float]:
-        if not isinstance(observation, Mapping) and self.observation_space.one_token:
-            encoded_batch = managym.encode_observation_batch(
-                [observation],
-                self.observation_space.layout,
-                self.observation_space.config.action_overflow,
-            )
-            if action_count < 1 or encoded_batch.action_counts[0] != action_count:
-                raise ValueError(
-                    "PUCT policy cannot represent the complete legal offers"
-                )
-            batch = self.agent.prepare(encoded_batch, inference=True)
-        else:
-            # Deprecated dense dict / v9/v10 path; removed in 0.3.0.
-            encoded = (
-                observation
-                if isinstance(observation, Mapping)
-                else encode_observation(self.observation_space, observation)
-            )
-            valid = np.asarray(encoded["actions_valid"])
-            if (
-                action_count < 1
-                or valid.ndim != 1
-                or action_count > len(valid)
-                or not np.all(valid[:action_count] == 1)
-                or np.any(valid[action_count:] != 0)
-            ):
-                raise ValueError(
-                    "PUCT policy cannot represent the complete legal offers"
-                )
-            batch = self.agent.prepare(
-                {key: np.asarray(value)[None] for key, value in encoded.items()},
-                inference=True,
-            )
+        if (
+            not 0 < action_count <= self.observation_space.config.max_actions
+            or len(observation.action_space.actions) != action_count
+        ):
+            raise ValueError("PUCT policy cannot represent the complete legal offers")
+        batch = self.agent.prepare(
+            encode_policy_batch(self.observation_space, [observation]), inference=True
+        )
         logits, value = self.agent.evaluate(batch)
         legal_logits = logits[0, :action_count]
         if not np.isfinite(legal_logits).all():
@@ -252,7 +228,9 @@ class AgentLeafEvaluator:
             self._score(float(value[0])),
         )
 
-    def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
+    def root_priors(
+        self, observation: managym.Observation | None, *, action_count: int
+    ) -> np.ndarray:
         if observation is None:
             raise ValueError("agent leaf evaluator requires the root observation")
         priors, _ = self._predict(observation, action_count=action_count)
@@ -262,7 +240,7 @@ class AgentLeafEvaluator:
     def evaluate(
         self,
         env: Any,
-        observation: Any,
+        observation: managym.Observation,
         *,
         root_player: int,
         node_player: int,
@@ -466,7 +444,7 @@ def determinized_puct(
     c_puct: float = 1.5,
     max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
     evaluator: LeafEvaluator | None = None,
-    root_observation: Any | None = None,
+    root_observation: managym.Observation | None = None,
     branch_driver_id: str = SELECTED_BRANCH_DRIVER_ID,
     branch_backend: SearchBranchBackend | None = None,
     branch_audit: bool = False,
@@ -636,7 +614,7 @@ class DeterminizedPuctPlayer:
         if self.deadline is not None and time.perf_counter() >= self.deadline:
             raise TimeoutError("PUCT deadline exceeded; result unavailable")
 
-    def act(self, env: Env, obs: ObservationBuffers) -> int:
+    def act(self, env: Env, obs: managym.Observation) -> int:
         agent = getattr(self.evaluator, "agent", None)
         if agent is not None:
             validate_agent_setup(agent, env.match.to_rust())

@@ -36,7 +36,7 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import FreshPolicies
@@ -52,6 +52,7 @@ from manabot.verify.util import (
     step_with_fallback,
     suppress_truncation_logs,
 )
+import managym
 
 HERO = 0
 VILLAIN = 1
@@ -106,8 +107,8 @@ def _untrained_agent(
     return agent
 
 
-def _agent_policy(agent: BackendPolicy) -> Callable[[ObservationBuffers], int]:
-    def policy(obs: ObservationBuffers) -> int:
+def _agent_policy(agent: BackendPolicy) -> Callable[[managym.Observation], int]:
+    def policy(obs: managym.Observation) -> int:
         return select_agent_action(agent, obs, deterministic=False)
 
     return policy
@@ -120,7 +121,7 @@ def build_hero_policy(
     seed: int,
     *,
     backend: FreshPolicies,
-) -> Callable[[dict[str, np.ndarray]], int]:
+) -> Callable[[managym.Observation], int]:
     """Hero policies: 'random' (uniform over valid) or 'untrained' (fresh ActorCritic)."""
 
     if name == "random":
@@ -213,7 +214,7 @@ def play_profile_games(
             if kind in DECISION_KINDS:
                 counts[role][kind] += 1
             surfaced += 1
-            if int(np.flatnonzero(obs["actions_valid"] > 0).shape[0]) <= 1:
+            if len(obs.action_space.actions) <= 1:
                 single_valid += 1
 
             if role == HERO:

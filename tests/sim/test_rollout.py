@@ -26,9 +26,10 @@ from manabot.sim.rollout import (
 )
 from manabot.sim.search.flat_mc import aggregate_records
 from manabot.verify.games import INTERACTIVE_DECK
+import managym
 
 
-def make_env(seed: int = 3) -> tuple[Env, dict]:
+def make_env(seed: int = 3) -> tuple[Env, managym.Observation]:
     obs_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -132,16 +133,11 @@ class TestRolloutPool:
 
 
 class TestBatchedSampler:
-    def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
-        """Real opening observations from distinct seeds, one per row."""
-        buffers = allocate_buffers(ObservationSpace(), batch)
-        for row in range(batch):
-            _, obs = make_env(seed=20 + row)
-            for key, value in obs.items():
-                if key in buffers:
-                    buffers[key][row] = value
-        assert (buffers["actions_valid"].sum(axis=1) > 0).all()
-        return buffers
+    def _obs_batch(self, batch: int = 8) -> managym.ObservationBatch:
+        return managym.encode_observation_batch(
+            [make_env(seed=20 + row)[1] for row in range(batch)],
+            ObservationSpace().layout,
+        )
 
     def test_selects_valid_actions_only(self):
         agent = ActorCritic(ObservationSpace(), ModelConfig())
@@ -156,8 +152,7 @@ class TestBatchedSampler:
             sampler = BatchedSampler(agent, seed=2, **kwargs)
             actions = sampler.select(buffers, rows)
             assert actions.shape == (8,)
-            chosen_valid = buffers["actions_valid"][rows, actions]
-            assert (chosen_valid > 0).all(), f"invalid action for {kwargs}"
+            assert ((actions >= 0) & (actions < buffers.action_counts)).all()
 
     @pytest.mark.parametrize(
         "temperature,deterministic", [(1.0, False), (0.3, False), (1.0, True)]
@@ -175,7 +170,7 @@ class TestBatchedSampler:
         rows = np.arange(3)
         prepared = on_device(
             agent.prepare(
-                {key: buffers[key] for key in agent.observation_space.shapes},
+                buffers,
                 inference=True,
             ),
             "cpu",
@@ -201,7 +196,7 @@ class TestBatchedSampler:
         rows = np.arange(8)
         controller = RandomBatchController(seed=3)
         actions = controller.select(buffers, rows)
-        assert (buffers["actions_valid"][rows, actions] > 0).all()
+        assert ((actions >= 0) & (actions < buffers.action_counts)).all()
 
 
 class TestVectorDriver:

@@ -7,7 +7,6 @@ part that matters — that the swap actually reaches the engine (an asymmetric
 matchup whose winner is deck-determined must flip player index with the seat).
 """
 
-import numpy as np
 import pytest
 
 from manabot.backends import resolve
@@ -42,6 +41,7 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
         num_games=4,
         seed=0,
         game_offset=game_offset,
+        backend=resolve("torch"),
     )
     if probed:
         seats = [row["hero_seat"] for row in result["records"]]
@@ -51,14 +51,6 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
         winners = [row.winner for row in result.records]
     assert seats == [(game_offset + index) % 2 for index in range(4)]
     assert winners == [1 - seat for seat in seats]
-
-
-def _first_obs_signature(env: Env) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    raw = env.last_raw_obs
-    return (
-        tuple(card.name for card in raw.agent_cards),
-        tuple(card.name for card in raw.opponent_cards),
-    )
 
 
 def _make_profile(game_index: int, hero_seat: int, winner: int | None) -> GameProfile:
@@ -129,17 +121,15 @@ def test_env_reset_seed_reaches_engine_rng():
         seed=0,
     )
 
-    obs_a, _ = env.reset(seed=123)
-    signature_a = _first_obs_signature(env)
-    obs_b, _ = env.reset(seed=123)
-    signature_b = _first_obs_signature(env)
-    obs_c, _ = env.reset(seed=124)
-    signature_c = _first_obs_signature(env)
+    def deal(seed: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        obs, _ = env.reset(seed=seed)
+        return tuple(card.name for card in obs.agent_cards), tuple(
+            card.name for card in obs.opponent_cards
+        )
 
-    np.testing.assert_array_equal(obs_a["agent_cards"], obs_b["agent_cards"])
-    assert signature_a == signature_b
-    assert signature_c != signature_a
-    assert not np.array_equal(obs_c["agent_cards"], obs_a["agent_cards"])
+    original = deal(123)
+    assert original == deal(123)
+    assert original != deal(124)
 
 
 def test_seat_balancing_alternates_and_swap_reaches_engine():

@@ -334,13 +334,17 @@ def encode_observation(
 
 
 def encode_policy_batch(
-    space: ObservationSpace, observations: Sequence[managym.Observation]
-) -> PolicyObservation:
+    space: ObservationSpace,
+    observations: Sequence[managym.Observation],
+    *,
+    blank_decision_memory: bool = False,
+) -> managym.ObservationBatch | dict[str, np.ndarray]:
     """Encode viewer projections in order using the checkpoint's capacity and overflow policy."""
     if space.one_token:
-        return managym.encode_observation_batch(
+        batch = managym.encode_observation_batch(
             observations, space.layout, space.config.action_overflow
         )
+        return batch.blank_decision_memory() if blank_decision_memory else batch
     # v9/v10 only, removed with the legacy encoder in 0.3.0.
     buffers = space.allocate(len(observations))
     for index, observation in enumerate(observations):

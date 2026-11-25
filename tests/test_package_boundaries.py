@@ -232,7 +232,7 @@ def test_simulation_imports_and_plays_without_training() -> None:
             env = Env(match, space, Reward(RewardConfig()), seed=17)
             observation, _ = env.reset(seed=17)
             action = player.act(env, observation)
-            assert observation['actions_valid'][action] > 0
+            assert 0 <= action < len(observation.action_space.actions)
         assert not any(name.startswith('manabot.training') for name in sys.modules)
         """
     )

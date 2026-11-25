@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +20,6 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
-from manabot.env.env import Env
 import managym
 from managym.decision import Command, Observation, SemanticTransition
 from managym.possible_worlds import PossibleWorldSpace
@@ -120,19 +119,11 @@ class ManabotPlayer:
     def act(
         self,
         env: Any,
-        observation: Mapping[str, np.ndarray] | managym.Observation,
+        observation: managym.Observation,
     ) -> int:
         if self.manabot is None or self.viewer is None or self.history is None:
             raise RuntimeError("start_game must run before ManabotPlayer.act")
-        # Scalar simulation supplies an Env with its last live viewer projection.
-        engine = _engine(env)
-        if isinstance(observation, managym.Observation):
-            raw = observation
-        elif isinstance(env, Env):
-            raw = env.last_raw_obs
-        else:
-            raw = engine.observation_for_player(self.viewer)
-        decision = viewer_decision_from_engine(engine, raw, self.history)
+        decision = viewer_decision_from_engine(_engine(env), observation, self.history)
         step = self.manabot.decide(decision, self.memory)
         action = int(np.argmax(step.result.policy))
         self.memory = step.next_memory

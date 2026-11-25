@@ -13,6 +13,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
+import managym
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class TestEnvironment:
     def test_initialization(self, env):
         """Test basic environment initialization."""
         obs, info = env.reset()
-        assert isinstance(obs, dict), "Observation should be a dictionary"
+        assert isinstance(obs, managym.Observation)
         assert all(isinstance(v, (int, float, bool, dict)) for v in info.values()), (
             "Info values should be basic Python types"
         )
@@ -85,7 +86,7 @@ class TestEnvironment:
         obs, info = env.reset()
         next_obs, reward, done, truncated, step_info = env.step(0)
 
-        assert isinstance(next_obs, dict), "Observation should be a dictionary"
+        assert isinstance(next_obs, managym.Observation)
         assert isinstance(reward, float), "Reward should be a float"
         assert isinstance(done, bool), "Done should be a boolean"
         assert isinstance(truncated, bool), "Truncated should be a boolean"
@@ -119,7 +120,7 @@ class TestEnvironment:
 
         assert terminated, f"Game did not complete within {max_steps} steps"
         assert steps_taken < max_steps, "Possible infinite loop detected"
-        assert isinstance(next_obs, dict), "Final observation should be a dictionary"
+        assert isinstance(next_obs, managym.Observation)
 
     @pytest.mark.parametrize("steps", [1, 10, 100])
     def test_consistent_stepping(self, env, steps):
@@ -128,10 +129,8 @@ class TestEnvironment:
 
         for step in range(steps):
             next_obs, reward, done, truncated, info = env.step(0)
-            assert set(next_obs.keys()) == set(obs.keys()), (
-                f"Observation keys changed at step {step}"
-            )
-            obs = next_obs
+            assert next_obs is env.last_raw_obs
+            assert env.observation_space.contains(next_obs)
 
             if done or truncated:
                 break

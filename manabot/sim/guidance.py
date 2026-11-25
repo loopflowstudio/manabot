@@ -7,14 +7,13 @@ Torch-free `players`; search and checkpoint players load their policy here.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
 from manabot.env.observation import (
-    ObservationBuffers,
     ObservationSpace,
-    encode_observation,
+    encode_policy_batch,
 )
 from manabot.infra.identity import file_sha256
 from manabot.policy.protocol import BackendPolicy, PolicyLoader
@@ -46,28 +45,13 @@ class PolicyPriorRandomLeafEvaluator:
         self.last_root_priors: np.ndarray | None = None
 
     def _priors(
-        self, observation: Any | ObservationBuffers, *, action_count: int
+        self, observation: managym.Observation, *, action_count: int
     ) -> np.ndarray:
         if action_count < 1:
             raise RuntimeError("policy-prior node has no legal actions")
-        if not isinstance(observation, Mapping) and self.observation_space.one_token:
-            obs_input: Any = managym.encode_observation_batch(
-                [observation],
-                self.observation_space.layout,
-                self.observation_space.config.action_overflow,
-            )
-        else:
-            # Deprecated dense dict / v9/v10 path; removed in 0.3.0.
-            encoded = (
-                observation
-                if isinstance(observation, Mapping)
-                else encode_observation(self.observation_space, observation)
-            )
-            obs_input = {
-                key: np.asarray(value, dtype=np.float32)[None]
-                for key, value in encoded.items()
-            }
-        batch = self.agent.prepare(obs_input, inference=True)
+        batch = self.agent.prepare(
+            encode_policy_batch(self.observation_space, [observation]), inference=True
+        )
         logits, _discarded_value = self.agent.evaluate(batch)
         legal_logits = logits[0, :action_count]
         if not np.isfinite(legal_logits).all():
@@ -77,7 +61,9 @@ class PolicyPriorRandomLeafEvaluator:
             raise RuntimeError("checkpoint returned invalid legal-action priors")
         return result
 
-    def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
+    def root_priors(
+        self, observation: managym.Observation | None, *, action_count: int
+    ) -> np.ndarray:
         if observation is None:
             raise ValueError("policy-prior evaluator requires the root observation")
         priors = self._priors(observation, action_count=action_count)
@@ -87,7 +73,7 @@ class PolicyPriorRandomLeafEvaluator:
     def evaluate(
         self,
         env: Any,
-        observation: Any,
+        observation: managym.Observation,
         *,
         root_player: int,
         node_player: int,

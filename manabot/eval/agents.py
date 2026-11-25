@@ -14,16 +14,15 @@ from etude.eval.records import CheckpointPlayer, Code, Player
 from etude.jobs import Agents
 import numpy as np
 
-from manabot.env.decision_memory import blank_memory
 from manabot.env.env import Env
 from manabot.env.match import Match
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.eval.agent_loader import load
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import validate_setup_binding
-from manabot.policy.admission import Spec, check, legal_mask
+from manabot.policy.admission import Spec, admit_native, check, legal_mask
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Layout, Tables, prepare
 from manabot.sim.agent import GamePlayer
@@ -34,6 +33,7 @@ from manabot.sim.registration import (
     ETUDE_SAMPLER_SPEC,
     PlayerRegistration,
 )
+import managym
 
 
 @dataclass(frozen=True)
@@ -57,12 +57,15 @@ class Sampler:
             allow_deck_repetition=self.allow_deck_repetition,
         )
 
-    def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
-        batch = {key: value[None] for key, value in obs.items()}
-        if self.blank_decision_memory:
-            batch = blank_memory(batch)
-        legal = legal_mask(batch["actions_valid"])
-        check(batch, self.spec, legal)
+    def choose(self, env: Env, obs: managym.Observation, seed: int) -> int:
+        encoded = encode_policy_batch(
+            self.space, [obs], blank_decision_memory=self.blank_decision_memory
+        )
+        if isinstance(encoded, managym.ObservationBatch):
+            batch = admit_native(encoded, self.spec, bucketed=False)
+        else:
+            check(encoded, self.spec, legal_mask(encoded["actions_valid"]))
+            batch = encoded
         model = self.spec.model
         row = replace(
             prepare(
@@ -76,6 +79,7 @@ class Sampler:
             ),
             programs=None,
         )
+        legal = row.legal
         [output] = self.forward([row])
         logits = np.asarray(output, dtype=np.float32)
         if logits.shape != legal.shape[1:] or not np.isfinite(logits[legal[0]]).all():
@@ -95,7 +99,7 @@ class Heuristic:
     def admit(self, match: MatchConfig) -> None:
         pass
 
-    def choose(self, env: Env, obs: ObservationBuffers, seed: int) -> int:
+    def choose(self, env: Env, obs: managym.Observation, seed: int) -> int:
         return self.factory(seed).act(env, obs)
 
 

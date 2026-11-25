@@ -3,8 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.sim.guidance import PolicyPriorRandomLeafEvaluator
 from manabot.sim.search.puct import LeafEvaluation
+import managym
 
 
 class _PolicyOnlyAgent:
@@ -18,14 +21,14 @@ class _PolicyOnlyAgent:
         return self
 
     def prepare(
-        self, obs: dict[str, np.ndarray], *, inference: bool = False
-    ) -> dict[str, np.ndarray]:
+        self, obs: managym.ObservationBatch, *, inference: bool = False
+    ) -> managym.ObservationBatch:
         return obs
 
     def evaluate(
-        self, observation: dict[str, np.ndarray]
+        self, observation: managym.ObservationBatch
     ) -> tuple[np.ndarray, np.ndarray]:
-        size = len(next(iter(observation.values())))
+        size = observation.batch_size
         return np.tile(self.logits, (size, 1)), np.full(size, self.value, np.float32)
 
     @staticmethod
@@ -34,11 +37,8 @@ class _PolicyOnlyAgent:
         return weights / weights.sum()
 
 
-class _UnusedObservationSpace:
-    def encode(self, observation: object) -> dict[str, np.ndarray]:
-        raise AssertionError(
-            f"mapping observation should not be encoded: {observation}"
-        )
+def observation() -> managym.Observation:
+    return managym.Env(seed=1).reset(Match().to_rust())[0]
 
 
 class _ThreeActionEnv:
@@ -58,19 +58,19 @@ class _FixedRandomLeaf:
 
 
 def test_policy_prior_evaluator_discards_checkpoint_value() -> None:
-    observation = {"features": np.array([1.0], dtype=np.float32)}
+    raw = observation()
     low_value = PolicyPriorRandomLeafEvaluator(
-        _PolicyOnlyAgent([0.0, 1.0, -1.0], -100.0), _UnusedObservationSpace()
+        _PolicyOnlyAgent([0.0, 1.0, -1.0], -100.0), ObservationSpace()
     )
     high_value = PolicyPriorRandomLeafEvaluator(
-        _PolicyOnlyAgent([0.0, 1.0, -1.0], 100.0), _UnusedObservationSpace()
+        _PolicyOnlyAgent([0.0, 1.0, -1.0], 100.0), ObservationSpace()
     )
     low_value.random_leaf = _FixedRandomLeaf(0.375)
     high_value.random_leaf = _FixedRandomLeaf(0.375)
 
     low = low_value.evaluate(
         _ThreeActionEnv(),
-        observation,
+        raw,
         root_player=0,
         node_player=0,
         seed=7,
@@ -78,7 +78,7 @@ def test_policy_prior_evaluator_discards_checkpoint_value() -> None:
     )
     high = high_value.evaluate(
         _ThreeActionEnv(),
-        observation,
+        raw,
         root_player=0,
         node_player=1,
         seed=99,
@@ -92,11 +92,9 @@ def test_policy_prior_evaluator_discards_checkpoint_value() -> None:
 
 def test_policy_prior_evaluator_normalizes_only_legal_logits() -> None:
     evaluator = PolicyPriorRandomLeafEvaluator(
-        _PolicyOnlyAgent([0.0, 1.0, 50.0], 0.0), _UnusedObservationSpace()
+        _PolicyOnlyAgent([0.0, 1.0, 50.0], 0.0), ObservationSpace()
     )
-    priors = evaluator.root_priors(
-        {"features": np.array([1.0], dtype=np.float32)}, action_count=2
-    )
+    priors = evaluator.root_priors(observation(), action_count=2)
 
     np.testing.assert_allclose(
         priors, np.array([0.26894143, 0.7310586]), rtol=0, atol=1e-7
@@ -106,9 +104,7 @@ def test_policy_prior_evaluator_normalizes_only_legal_logits() -> None:
 
 def test_policy_prior_evaluator_rejects_nonfinite_legal_logits() -> None:
     evaluator = PolicyPriorRandomLeafEvaluator(
-        _PolicyOnlyAgent([0.0, float("nan")], 0.0), _UnusedObservationSpace()
+        _PolicyOnlyAgent([0.0, float("nan")], 0.0), ObservationSpace()
     )
     with pytest.raises(RuntimeError, match="nonfinite"):
-        evaluator.root_priors(
-            {"features": np.array([1.0], dtype=np.float32)}, action_count=2
-        )
+        evaluator.root_priors(observation(), action_count=2)

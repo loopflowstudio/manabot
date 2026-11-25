@@ -105,7 +105,7 @@ def run_scenario_once(
 ) -> dict[str, Any]:
     """One scored run: hero = `player`, villain = the scenario script."""
 
-    env, obs, raw = build_scenario_env(scenario, obs_space, seed)
+    env, obs = build_scenario_env(scenario, obs_space, seed)
     villain = ScriptedVillain(scenario.villain_casts)
     tracker = scenario.tracker()
 

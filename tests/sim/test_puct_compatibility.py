@@ -125,9 +125,8 @@ def test_nonfinite_values_and_incomplete_offers_fail_closed() -> None:
     agent, space = _flat_agent()
     agent.value_semantic = "signed_outcome"
     evaluator = AgentLeafEvaluator(agent, space)
-    encoded = encode_observation(space, obs)
     with pytest.raises(ValueError, match="complete legal offers"):
-        evaluator.root_priors(encoded, action_count=len(encoded["actions_valid"]) + 1)
+        evaluator.root_priors(obs, action_count=env.action_count() + 1)
     with torch.no_grad():
         agent.value_head[-1].bias.fill_(float("nan"))
     with pytest.raises(ValueError, match="nonfinite"):

@@ -2,12 +2,14 @@
 
 import numpy as np
 
+import managym
+
 
 class RandomPolicy:
     """Choose uniformly from valid actions."""
 
-    def __call__(self, obs: dict[str, np.ndarray]) -> int:
-        valid_indices = np.flatnonzero(obs["actions_valid"] > 0)
+    def __call__(self, obs: managym.Observation) -> int:
+        valid_indices = np.arange(len(obs.action_space.actions))
         if len(valid_indices) == 0:
             raise ValueError("No valid opponent actions available.")
         return int(np.random.choice(valid_indices))
