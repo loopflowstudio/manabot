@@ -1,7 +1,8 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
-Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`), so
-slice 3 is unblocked and uses its persistent ability-source representation.
+Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`) and
+later main (`964699a20b`). Slice 3 uses MTG-420's persistent ability-source
+representation.
 
 Done:
 - Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
@@ -58,9 +59,9 @@ o:loyalty or o:emblem)`, `set:fra o:planeswalker`, `set:fdn t:planeswalker`).
   `AdditionalLandPlay`, `CantBeCountered`, `EntersTappedUnlessControls`.
 - `ZoneType::Command` storage exists; nothing ever moves there.
 
-The Theorist is the first defined planeswalker. Remaining primitives include
-combat defenders, emblems, divided damage, loyalty
-activation events, a zero-loyalty SBA exception, proliferate and behold.
+The Theorist and Tomik are defined. Remaining primitives: emblems, divided
+damage, loyalty activation events, a zero-loyalty SBA exception (proliferate
+and behold are pending elsewhere).
 
 ## Classes and Rooms against loyalty (decided before fixing the representation)
 
@@ -97,97 +98,12 @@ Everything else in the cohort is built here, on the slices below.
 
 ## Slices (build order, riskiest first)
 
-### Slice 1 — Loyalty abilities and starting loyalty (implemented)
-
-Types:
-- `PrintedCharacteristics.loyalty: Option<i32>` (CR 306.5b printed starting
-  loyalty; tokens may print `Some(0)` or `None`). Entry applies it as an
-  intrinsic enters-with counter in `src/flow/proposed_event.rs`.
-  CR 306.5b makes it an intrinsic "enters with"
-  replacement (CR 614.1c), so Doubling Season doubles it.
-- `ActivatedAbilityDefinition.loyalty: Option<LoyaltyCost>` with
-  `LoyaltyCost::{Fixed(i16), MinusX}` (signed; `+1`, `0`, `−3`, `−X`). Lowered
-  in `payment.rs` to the ordinary source-counter components with
-  `EventCause::Cost` — never doubled (Doubling Season acceptance). A negative
-  cost needs at least that many loyalty counters (CR 606.6). For −X the
-  shared activation continuation retains X while targets are chosen.
-- Quota: `Permanent.loyalty_activated_this_turn: bool` (CR 606.3), checked for
-  every ability with `loyalty.is_some()`, cleared at cleanup beside
-  `activated_this_turn`. Default timing: main phase, own turn, empty stack.
-- Timing override: `Modification::LoyaltyAtInstantSpeed(predicate)`
-  as an `ApplyContinuous` record on the player (Jace's Machinations: Jace
-  planeswalkers you control, until end of turn). It relaxes timing only; the
-  quota still holds.
-- A loyalty ability with mana output stays in `activated_abilities` and uses
-  the stack (CR 605.1a); never a `ManaAbility`.
-
-Consumers: v11 — loyalty is already a counter fact; add the ability's loyalty
-cost to the activated-ability token/fact rows (`cards/tokens.rs`,
-`agent/record_vocabulary.rs`), the quota flag beside `used_abilities`
-(`observation.rs:893`) and the printed loyalty to card/permanent rows as an
-appended named column (`ValueLayout` count kind). LLM/ability text renders
-`[+1]: …`, `[−X]: …`, `[0]: …` (`ability_description.rs`). Academy shows the
-ability label with its cost. Observability guard rows for the new field and
-cost component.
-
-The proof card The Theorist, Jace Beleren is defined in FRA with its draw-step trigger, Illusion token and three fixed loyalty abilities.
-
-Checks: `cargo test -p managym-cards loyalty`; directed tests in
-`cards/tests/cards/fra.rs`: second loyalty activation same turn rejected;
-−3 with 2 loyalty not offered; −X offers 0..=loyalty; enters with printed
-loyalty, doubled under Doubling Season; +1 under Doubling Season adds exactly
-1; activation on opponent's turn not offered, offered under Jace's
-Machinations, quota still enforced; zero-loyalty SBA after a −N.
-Stress state: 6 planeswalkers × 4 abilities each with Doubling Season
-(enumeration of loyalty offers is linear in abilities).
-
-Deletes: none (new capability).
-
-### Slice 2 — Attacking planeswalkers (primitive; changes the action space)
-
-- `AttackTarget::{Player(PlayerId), Permanent(ObjectId)}` (planeswalker or
-  battle the defending player controls/protects). `CombatState` holds
-  `attack_targets: Vec<(PermanentId, AttackTarget)>` replacing the implicit
-  `non_active_player()` defender; `Action::DeclareAttacker` carries
-  `attack: Option<AttackTarget>` instead of `attack: bool`. Offers per
-  attacker: no-attack, the player, each attackable planeswalker — complete and
-  linear (attackers × targets).
-- Combat damage to an attacked planeswalker uses the existing permanent damage
-  path; trample excess goes to the attacked planeswalker, not its controller
-  (CR 702.19b, 702.19f); an attacker whose planeswalker left combat deals no combat
-  damage unless blocked (CR 506.4c). Defending player = controller of the
-  attacked planeswalker (CR 506.2).
-- No damage redirection: CR 306.7 was removed (Dominaria, 2018); noncombat
-  damage reaches a planeswalker only by targeting it.
-- `TriggerCondition::Attacks` gains an `attacked: AttackedSubject` field
-  (`Any`, `Player(Actor)`, `PlaneswalkerControlledBy(Actor)`,
-  `YouOrYourPlaneswalker`) — a field of the event, not a new variant
-  (Jace, Reality Sculptor −3; Garruk, Curse Breaker −4 "attack one of your
-  opponents").
-- Attack restriction per target: `StaticRestriction::AttackersPerTarget(1)`
-  granted to planeswalkers (Tomik). Declare-attackers legality must check the
-  whole declaration, not attacker-by-attacker: a second attacker at that
-  planeswalker is not offered.
-
-Consumers: action rows gain an attack-target reference (one-based object join,
-0 = player); LLM text "attack Vivien Reid"; Academy declare-attackers UI picks
-a target per attacker through the shared offers (no browser-only semantics);
-preserve the serialized `attack` key and the old player/decline indices.
-Combat history (`AttackedThisTurn`, attack-batch triggers) records the target.
-
-Checks: `cargo test combat` + new `managym/tests/rules/attack_targets.rs`:
-attack planeswalker, damage removes loyalty, SBA; ordinary trample over a blocker to the attacked planeswalker;
-planeswalker removed mid-combat; Tomik limit; Jace −3 fires for attacks on you
-and your planeswalker. Python env/Academy tests for declare-attackers offers;
-Academy parity fixtures refreshed. Engine Budget: `bench_steps` digest moves
-only if curated decks attack planeswalkers (they don't today) — expect no
-digest change; record if it does.
-Stress state exercised here: ten attackers and six opposing planeswalkers, with
-and without Tomik. Battle protectors belong to the later battle rules.
-
-Deletes: `declare_attacker(permanent, attack: bool)` signature and the
-`non_active_player()` defender in `combat_actions.rs:173/277`; the "to
-defending player" prompt text.
+Slices 1 (loyalty abilities, `a5534ee7bb`, `aa35e1a2b6`) and 2 (attack
+targets, `0674982740`, fixtures `5ecb50ceee`) are built; their design is in
+`docs/engine.md` and the commits. The Classes/Rooms table above went to
+`docs/engine.md` with slice 1. Deferred to gate: the pinned pilot (record with
+`--reason` if the attack row moved) and Engine Budget (`bench_steps` digest
+expected unchanged; curated decks attack no planeswalker).
 
 ### Slice 3 — Emblems in the command zone (primitive; after MTG-420 sync)
 
