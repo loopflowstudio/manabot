@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-432 Concept Review — managym Rules &amp; Shared Decision Surface</title>
+<style>
+  :root {
+    --bg: #faf7f2;
+    --surface: #ffffff;
+    --surface-2: #f3ede3;
+    --ink: #1f1b16;
+    --ink-2: #5b5247;
+    --border: #dfd5c5;
+    --yes-bg: #e7f4ea;
+    --yes-ink: #1b5e2d;
+    --yes-bd: #b7dfc1;
+    --no-bg: #fdece8;
+    --no-ink: #8f2414;
+    --no-bd: #f2bfb5;
+    --prop-bg: #eef2ff;
+    --prop-ink: #273c8f;
+    --prop-bd: #c2cffc;
+    --exist-bg: #f4f1ec;
+    --exist-ink: #5a5146;
+    --exist-bd: #d8cfc1;
+    --code-bg: #f5f0e6;
+    --accent: #7a4b20;
+    --warn-bg: #fff6e5;
+    --warn-bd: #e8c37a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151310;
+      --surface: #1e1b17;
+      --surface-2: #27231e;
+      --ink: #efe9df;
+      --ink-2: #afa597;
+      --border: #3a342c;
+      --yes-bg: #162c1c;
+      --yes-ink: #7ee097;
+      --yes-bd: #285636;
+      --no-bg: #351814;
+      --no-ink: #ff9c8c;
+      --no-bd: #6b2a20;
+      --prop-bg: #19213c;
+      --prop-ink: #9eb4ff;
+      --prop-bd: #314380;
+      --exist-bg: #26221d;
+      --exist-ink: #c6bcb0;
+      --exist-bd: #443d34;
+      --code-bg: #12100d;
+      --accent: #e0a363;
+      --warn-bg: #2c2313;
+      --warn-bd: #6c5222;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  header {
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .kicker {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.35rem;
+  }
+  h1 { margin: 0 0 0.5rem; font-size: 1.75rem; line-height: 1.2; }
+  h2 {
+    margin: 2.5rem 0 0.85rem;
+    font-size: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.35rem;
+  }
+  h3 { margin: 1.5rem 0 0.5rem; font-size: 1.02rem; }
+  p { margin: 0.5rem 0 0.85rem; }
+  .lead { font-size: 1.02rem; color: var(--ink-2); }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.2rem;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-top: 0.75rem;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.14rem 0.5rem;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    border: 1px solid transparent;
+  }
+  .badge-yes { background: var(--yes-bg); color: var(--yes-ink); border-color: var(--yes-bd); }
+  .badge-no { background: var(--no-bg); color: var(--no-ink); border-color: var(--no-bd); }
+  .badge-exist { background: var(--exist-bg); color: var(--exist-ink); border-color: var(--exist-bd); }
+  .badge-prop { background: var(--prop-bg); color: var(--prop-ink); border-color: var(--prop-bd); }
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 1rem 1.15rem;
+    margin: 1rem 0 1.4rem;
+  }
+  .callout-no {
+    border-left-color: var(--no-ink);
+    background: var(--surface);
+  }
+  .callout-warn {
+    background: var(--warn-bg);
+    border-color: var(--warn-bd);
+    border-left-color: var(--accent);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface-2);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-2);
+  }
+  tr:last-child td { border-bottom: none; }
+  code {
+    font: 12.8px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 0.1rem 0.32rem;
+    border-radius: 4px;
+  }
+  pre {
+    margin: 0.5rem 0 0.9rem;
+    padding: 0.85rem 1rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre code { background: none; padding: 0; }
+  .split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 1rem;
+    margin: 0.85rem 0 1.35rem;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.95rem 1.05rem;
+  }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    font-weight: 700;
+    font-size: 13.5px;
+  }
+  .mock-ui {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    padding: 0.75rem 0.9rem;
+    font-size: 13.5px;
+    margin: 0.5rem 0;
+  }
+  .mock-title { font-weight: 700; margin-bottom: 0.25rem; }
+  .mock-sub { font-size: 12px; color: var(--ink-2); margin-bottom: 0.45rem; }
+  .mock-bad { color: var(--no-ink); font-weight: 600; }
+  .mock-good { color: var(--yes-ink); font-weight: 600; }
+  .walk-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin: 0.85rem 0 1.25rem;
+  }
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 0.9rem;
+    font-size: 13.5px;
+  }
+  .step-num {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  .q-list { counter-reset: q; list-style: none; padding: 0; margin: 1rem 0; }
+  .q-item {
+    counter-increment: q;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 0.9rem;
+  }
+  .q-head { font-weight: 700; margin-bottom: 0.45rem; }
+  .q-head::before {
+    content: counter(q) ". ";
+    color: var(--accent);
+  }
+  .q-opts { list-style: none; padding-left: 0; margin: 0.4rem 0 0; }
+  .q-opts li { padding: 0.25rem 0; }
+  .opt-key { font-weight: 700; color: var(--accent); margin-right: 0.35rem; }
+  .small { font-size: 13px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <div class="kicker">Concept Review · MTG-432 · HEAD 98f3b7cc3c vs origin/main</div>
+  <h1>Do the Comprehensive Rules &amp; shared decision concepts line up with the code?</h1>
+  <p class="lead">
+    <strong>Area reviewed:</strong> <code>managym</code>'s rules authorities and shared observation / wire / UI contract
+    (layer-2 control, combat block requirements &amp; blocked status, source-qualified protection/hexproof,
+    all-zone creature types &amp; counted P/T, simultaneous event-batch replacements &amp; discards, and entry choices / cast-origin conditions)
+    — because MTG-432 adds new rules types, v11 observation fields, protocol schema properties, and Academy/text projections that become published surface on merge.
+  </p>
+  <div class="meta">
+    <span>Verdict: <strong>Plan updated (Pass 7 before gate)</strong></span>
+    <span>Pairings: <strong>8 yes · 4 no</strong></span>
+    <span>Legend: <span class="badge badge-exist">Existing at HEAD</span> <span class="badge badge-prop">Proposed</span></span>
+  </div>
+</header>
+
+<div class="callout callout-no">
+  <strong>Headline verdict:</strong> The engine rules machinery in MTG-432 is strong — layer-2 control, exact block-requirement matching,
+  unified graveyard/life-gain/entry-counter replacement batches, and determinization over pending discards all match Comprehensive Rules cleanly.
+  However, <strong>four conceptual leaks sit right at the published observation, combat-state, and condition boundaries</strong>:
+  (1) a 2-seat internal XOR bit (<code>control_differs_from_entry</code>) leaked into the wire/Python/UI API and renders backwards prose,
+  (2) raw Rust enum token paths (<code>"Color::Black"</code>, <code>"CardType::Instant"</code>) leaked into the JSON/Python/UI wire format,
+  (3) <code>CombatState</code> splits CR 509.1h "became blocked" across dead blocker slots plus <code>blocked_without_blockers</code> (leaving phased-out blockers still marked blocking), and
+  (4) <code>Condition::EntryCastFrom</code> duplicates <code>Condition::CastFromGraveyard</code> while hiding a hardcoded <code>Hand =&gt; your hand</code> ownership rule.
+  Fixing these before merge keeps <code>0.2.x</code> patch-clean instead of locking awkward wire schemas.
+</div>
+
+<h2>1. Concrete Interaction Walkthrough (Normal, Failure, Recovery)</h2>
+<p>
+  Walk one combat + control + inspection sequence across <code>managym</code>, the wire observation, the LLM text surface, and Academy's Inspector:
+</p>
+<div class="walk-steps">
+  <div class="step-card">
+    <div class="step-num">1 · Normal play</div>
+    You (Seat 0) cast <strong>Grizzly Bears</strong> and <strong>Knight of Grace</strong>. Opponent (Seat 1) casts <strong>Confiscate</strong> on your Grizzly Bears.
+    Layer 2 moves Bears to Seat 1; <code>Permanent.controller</code> becomes Seat 1 and <code>control_differs_from_entry</code> becomes <code>true</code>.
+  </div>
+  <div class="step-card">
+    <div class="step-num">2 · Inspection mismatch</div>
+    You inspect Opponent's battlefield (or an LLM reads Seat 0's text observation). Bears says
+    <code>"entered under the other player's control"</code> — even though <em>you</em> are Seat 0 and it entered under <em>your</em> control.
+    Meanwhile Knight of Grace ships raw <code>"Color::Black"</code> across JSON so both Python and Svelte split on <code>::</code>.
+  </div>
+  <div class="step-card">
+    <div class="step-num">3 · Combat &amp; removal</div>
+    Opponent attacks with Grizzly Bears. Your <strong>Wall</strong> blocks it.
+    If Opponent casts Confiscate on your Wall, <code>remove_from_combat</code> strips Wall from <code>attacker_to_blockers</code> and appends Bears to <code>blocked_without_blockers</code>.
+    If Wall instead <strong>phases out</strong>, <code>remove_from_combat</code> is never called: Wall stays in <code>attacker_to_blockers</code> and still reports <code>blocking: Bears</code>.
+  </div>
+  <div class="step-card">
+    <div class="step-num">4 · Recovery (Disenchant)</div>
+    You destroy Confiscate on Grizzly Bears. <code>refresh_control()</code> re-evaluates layer 2 from <code>entry_controller()</code> (CR 110.2) and returns Bears to Seat 0 cleanly.
+    With <code>entry_controller_id: Option&lt;i32&gt;</code> on the wire, every consumer names Seat 0 directly and never guesses who "the other player" is.
+  </div>
+</div>
+
+<h2>2. Concept Pairing Table — Product / Rules vs. Code</h2>
+<p>Each concept introduced or changed by MTG-432 is judged on whether the Comprehensive Rules / consumer concept and the code's types, records, and APIs align.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:20%">Product / Rules Concept</th>
+      <th style="width:26%">Code Concept (at HEAD)</th>
+      <th style="width:8%">Align?</th>
+      <th>Assessment &amp; What's Wrong Where "No"</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Default controller on battlefield entry</strong><br><span class="small">CR 110.2, 613.1b: which player a permanent returns to when control effects end</span></td>
+      <td><code>Permanent.control_differs_from_entry</code>, <code>PermanentData.control_differs_from_entry</code>, <code>LegacyPermanentView.control_differs_from_entry</code>, <code>PyPermanent</code>, TS <code>PermanentState</code></td>
+      <td><span class="badge badge-no">No</span></td>
+      <td><strong>Derived 2-seat XOR flag leaked into public wire/UI.</strong> Internal 1-bit packing on <code>Permanent</code> became a published boolean alongside player-ID fields (<code>owner_id</code>, <code>controller_id</code>). Causes inverted text (<code>"entered under the other player's control"</code>) when viewing an opponent's stolen permanent that entered under <em>your</em> control.</td>
+    </tr>
+    <tr>
+      <td><strong>Effective qualified hexproof &amp; protection</strong><br><span class="small">CR 702.11, 702.16: quality a permanent is protected/hexproof from</span></td>
+      <td><code>PermanentData.hexproof_from</code> &amp; <code>protection_from: Vec&lt;String&gt;</code> storing <code>SourceQuality::token_name()</code>; <code>FactKind::EffectProgram</code>; <code>record_vocabulary.rs</code></td>
+      <td><span class="badge badge-no">No</span></td>
+      <td><strong>Internal Rust token syntax in published wire format + incomplete vocabulary registration.</strong> Wire JSON sends <code>"Color::Black"</code>, <code>"CardType::Instant"</code>, <code>"SourceQuality::Everything"</code>; both <code>Inspect.svelte</code> and <code>text_observation.py</code> parse <code>::</code>. Every other wire field uses plain domain names and adds Rust prefixes only in <code>observation_encoder.rs</code>. <code>record_vocabulary.rs</code> only scrapes printed <code>definition.statics</code> (missing granted static protection/hexproof), and <code>observation_layout.rs</code>'s <code>EffectProgram</code> doc omits both static abilities.</td>
+    </tr>
+    <tr>
+      <td><strong>Attacker's "blocked" status &amp; live blockers</strong><br><span class="small">CR 509.1h, 506.4, 702.26b: blocked persists after blockers leave combat; removed/phased-out blockers stop blocking</span></td>
+      <td><code>CombatState.attacker_to_blockers</code> (retaining dead/phased-out IDs) + <code>CombatState.blocked_without_blockers</code>; <code>PermanentData.blocked</code></td>
+      <td><span class="badge badge-no">No</span></td>
+      <td><strong>One concept split across two invariants with a phasing counterexample.</strong> <code>is_blocked</code> relies on dead blockers staying in <code>attacker_to_blockers</code> while control-changed blockers move the attacker into <code>blocked_without_blockers</code>. Phasing out a blocker never calls <code>remove_from_combat</code>, so phased-out permanents still project <code>blocking: Some(attacker)</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Spell / permanent cast origin</strong><br><span class="small">CR 400.7, 603.4: "if you cast it [from zone Z]" vs "cast from a graveyard"</span></td>
+      <td><code>Condition::EntryCastFrom(Option&lt;ZoneType&gt;)</code> alongside <code>Condition::CastFromGraveyard</code>; <code>cast_from_matches</code></td>
+      <td><span class="badge badge-no">No</span></td>
+      <td><strong>One idea under two names + hidden ownership rule.</strong> <code>EntryCastFrom</code> is evaluated on both battlefield entries and stack spells, duplicating <code>CastFromGraveyard</code>. Worse, <code>cast_from_matches</code> hardcodes <code>zone != ZoneType::Hand || owner == controller</code>, silently treating <code>Hand</code> as "your hand" while other zones mean "any owner".</td>
+    </tr>
+    <tr>
+      <td><strong>Layer-2 control computation</strong><br><span class="small">CR 613.1b: static &amp; resolved control effects ordered by timestamp/dependency</span></td>
+      <td><code>Layer::Control</code>, <code>Modification::Control</code>, <code>Game::refresh_control()</code>, fast-path skip, independent Aura shortcut</td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Replaces imperative <code>ControlChanged { previous }</code> swap-backs with genuine layer-2 evaluation and fixed-point commit after simultaneous batches. Fast-path avoids rebuilding layers in games with no control effects.</td>
+    </tr>
+    <tr>
+      <td><strong>Simultaneous block requirements &amp; menace</strong><br><span class="small">CR 509.1b–c: satisfy maximal requirements while obeying menace &amp; blocker limits</span></td>
+      <td><code>block_requirements.rs</code> (transversal matroid + menace branch-and-bound), <code>Modification::MustBeBlocked</code>, sequential offers in <code>structured_offer.rs</code></td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Replaces illegal post-hoc menace stripping with exact legal-prefix offers (exhaustively verified on 4,096 small cases) shared by play and <code>combat_preview</code>. Keeping coupled blocks sequential prevents illegal joint plans.</td>
+    </tr>
+    <tr>
+      <td><strong>Source-quality targeting &amp; protection</strong><br><span class="small">CR 702.11, 702.16: spell face at cast, current/LKI source for abilities, protection prevents damage via 616.1</span></td>
+      <td><code>SourceQuality</code>, <code>TargetingSource</code>, <code>StaticAbility::HexproofFrom</code> / <code>Protection</code> / <code>ControllerHas</code> / <code>SpellsCantBeCountered</code></td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>One targeting authority checks announcement and resolution using live permanent → LKI → spell LKI → printed face. Protection injects a <code>PreventAll</code> candidate into <code>collect_replacements</code> so affected players order it under CR 616.1.</td>
+    </tr>
+    <tr>
+      <td><strong>All-zone creature types (changeling)</strong><br><span class="small">CR 702.73a, 205.3m: all creature types in all zones; survives layer-6 ability loss</span></td>
+      <td><code>Keyword::Changeling</code>, <code>CreatureTypes::All</code>, <code>FactKind::Keyword</code>, complete CR 205.3m <code>SUBTYPES</code> table</td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Applies in layer 4 so layer-6 ability loss leaves types intact. Keeps non-evergreen keywords off the fixed 14-column block via <code>FactKind::Keyword</code>, preserving v11 column layout.</td>
+    </tr>
+    <tr>
+      <td><strong>Counted static P/T bonuses</strong><br><span class="small">CR 613.3c layer 7c: +P/+T scaled by one board/graveyard/counter count</span></td>
+      <td><code>StaticPtBuff.per: Option&lt;PtCount&gt;</code> with custom <code>Serialize</code> retaining legacy field names</td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Replaces three independent optional fields (which could be combined illegally) with one mutually exclusive enum while keeping checkpoint card-program tokens stable.</td>
+    </tr>
+    <tr>
+      <td><strong>Unified graveyard &amp; life-gain replacement ordering</strong><br><span class="small">CR 614, 616.1, 701.20d, 119.9: affected player orders competing replacements before simultaneous commit</span></td>
+      <td><code>ReplacementEffect::GraveyardInstead</code>, <code>ModifyLifeGain</code>, <code>ModifyDamage</code> (<code>DamageRecipient</code> + <code>PreventAll</code>), <code>EventBatch.lifelink_proposed</code></td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Removes silent <code>normalize_proposal</code> bypasses so flashback, finality, <code>ExileIfWouldDie</code>, Dryad Militant, Progenitus, and Colossus all compete through CR 616.1. Lifelink proposes gains after damage prevention inside the same batch. Milled Colossus renews identity in place (CR 701.20d).</td>
+    </tr>
+    <tr>
+      <td><strong>Whole-hand discard, cause provenance &amp; sampling</strong><br><span class="small">CR 701.8, 118.12: simultaneous discard; opponent effect (incl. Ward) vs self cost; hidden-hand determinization</span></td>
+      <td><code>Effect::DiscardHand</code>, <code>DiscardCause</code>, <code>EffectFrame.resolving_controller</code>, <code>FrameCompletion::DiscardPayment</code> / <code>DiscardDuringResolution</code>, <code>selection_sampling.rs</code></td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Distinguishes opponent-controlled effects (including Ward via <code>ForPlayer</code>) from cast/activation costs and cleanup while preserving a single receipt. Sampler preserves distinct hand slots and replacement equivalence classes across suspended discard batches.</td>
+    </tr>
+    <tr>
+      <td><strong>Entry choices &amp; entry-counter replacements</strong><br><span class="small">CR 614.1c, 614.12, 614.15: choose creature type before counting; pre-entry count for Giada/Zegana/Banner</span></td>
+      <td><code>ReplacementEffect::AsEntersChoose</code>, <code>Decision::ChooseCreatureType</code> (<code>NameScope</code>), <code>Modification::ChosenCreatureType</code>, unified <code>EntersWithCounters</code></td>
+      <td><span class="badge badge-yes">Yes</span></td>
+      <td>Unifies three entry-counter variants into <code>EntersWithCounters { on, kind, count, condition }</code>. Reuses balanced <code>NameScope</code> narrowing for 300+ creature types. Storing <code>ChosenCreatureType</code> on <code>state.effects</code> mirrors <code>ModeChosen</code> and reuses <code>shared_effects</code> without a new fact table (pragmatic fit; keep).</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3. Biggest Mismatch — Before &amp; After</h2>
+<p>
+  <strong>Biggest mismatch: internal representations leaking across the published observation / protocol / UI boundary</strong>
+  (Findings 1 &amp; 2 together: <code>control_differs_from_entry</code> and raw Rust <code>SourceQuality::token_name()</code> strings).
+  Both ship in <code>PyPermanent</code>, <code>managym/__init__.pyi</code>, all six <code>protocol/*.schema.json</code> files, <code>text_observation.py</code>, and Academy's Svelte board — so once merged into patch-clean <code>main</code>, they become frozen compatibility surfaces.
+</p>
+
+<h3>3a. Default Controller: 2-Seat XOR Boolean → Direct CR 110.2 Player Reference</h3>
+<div class="split">
+  <div class="panel">
+    <div class="panel-head">
+      <span>Before: 2-seat XOR bit on the wire</span>
+      <span class="badge badge-exist">Existing</span>
+    </div>
+    <p class="small">Scenario: Seat 0 ("You") casts Grizzly Bears; Seat 1 ("Opponent") steals it with Confiscate. Seat 0 inspects Opponent's battlefield.</p>
+<pre><code>// PermanentData / LegacyPermanentView JSON
+{
+  "id": 42,
+  "owner_id": 1,
+  "controller_id": 2,
+  "control_differs_from_entry": true
+}</code></pre>
+    <div class="mock-ui">
+      <div class="mock-title">Academy Inspector &amp; Text Surface (Seat 0 viewing Opponent's Grizzly Bears)</div>
+      <div class="mock-sub">Controller: Opponent · Owner: You</div>
+      <div class="mock-bad">Untapped · entered under the other player’s control</div>
+      <div class="small" style="margin-top:0.35rem">Ambiguous/backwards: to Seat 0, "the other player" reads as Opponent, not You.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span>After: direct CR 110.2 <code>entry_controller_id</code></span>
+      <span class="badge badge-prop">Proposed</span>
+    </div>
+    <p class="small"><code>Permanent</code> keeps its 1-bit internal packing &amp; hash; wire/Python/UI project the real player ID (omitted when equal to <code>controller_id</code>).</p>
+<pre><code>// PermanentData / LegacyPermanentView JSON
+{
+  "id": 42,
+  "owner_id": 1,
+  "controller_id": 2,
+  "entry_controller_id": 1   // omitted when == controller_id
+}</code></pre>
+    <div class="mock-ui">
+      <div class="mock-title">Academy Inspector &amp; Text Surface (Seat 0 viewing Opponent's Grizzly Bears)</div>
+      <div class="mock-sub">Controller: Opponent · Owner: You</div>
+      <div class="mock-good">Untapped · entered under your control</div>
+      <div class="small" style="margin-top:0.35rem">When Seat 0 steals Opponent's permanent: <code>entered under Opponent’s control</code>. V11 tensor column stays 1 bit: <code>entry_controller_id.is_some_and(|id| id != controller_id)</code>.</div>
+    </div>
+  </div>
+</div>
+
+<h3>3b. Qualified Hexproof / Protection: Rust Token Paths → Plain Domain Wire Values</h3>
+<div class="split">
+  <div class="panel">
+    <div class="panel-head">
+      <span>Before: Rust enum paths in JSON, Python &amp; Svelte</span>
+      <span class="badge badge-exist">Existing</span>
+    </div>
+<pre><code>// PermanentData JSON (Knight of Grace / Elenda / Progenitus)
+"hexproof_from": ["Color::Black"],
+"hexproof_from": ["CardType::Instant"],
+"protection_from": ["SourceQuality::Everything"]
+
+// Inspect.svelte &amp; text_observation.py both duplicate:
+const label = quality.split('::').at(-1)!.toLowerCase();
+return quality.startsWith('CardType::') ? `${label} sources` : label;</code></pre>
+    <p class="small">
+      Also: <code>record_vocabulary.rs</code> only registers qualities found in printed <code>definition.statics</code> — a future granted static like
+      <code>Modification::GrantStatic(Protection(Color::Red))</code> would emit an unregistered token.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span>After: domain wire strings; Rust tokens confined to encoder</span>
+      <span class="badge badge-prop">Proposed</span>
+    </div>
+<pre><code>// PermanentData JSON (consistent with colors, counters, keywords)
+"hexproof_from": ["black"],
+"hexproof_from": ["instant"],
+"protection_from": ["everything"]
+
+// SourceQuality owns wire_name() &lt;-&gt; from_wire_name() -&gt; token_name()
+// observation_encoder.rs encodes identical v11 FactKind::EffectProgram tokens:
+//   "black"      -&gt; name_value("Color::Black")
+//   "instant"    -&gt; name_value("CardType::Instant")
+//   "everything" -&gt; name_value("SourceQuality::Everything")</code></pre>
+    <p class="small">
+      <code>record_vocabulary.rs</code> registers all <code>SourceQuality</code> variants (every <code>Color</code>, every <code>CardType</code>, and <code>Everything</code>) statically.
+      <code>observation_layout.rs</code> updates <code>FactKind::EffectProgram</code>'s doc to list <code>StaticAbility::HexproofFrom</code> and <code>StaticAbility::Protection</code>.
+    </p>
+  </div>
+</div>
+
+<h2>4. Secondary Model Fixes (Combat State &amp; Cast-Origin Condition)</h2>
+<div class="split">
+  <div class="panel">
+    <div class="panel-head">
+      <span>4a. CombatState: single CR 509.1h <code>blocked</code> record</span>
+      <span class="badge badge-prop">Proposed</span>
+    </div>
+<pre><code>// Existing: two-place invariant + phasing bug
+pub attacker_to_blockers: BTreeMap&lt;PermanentId, Vec&lt;PermanentId&gt;&gt;,
+pub blocked_without_blockers: Vec&lt;PermanentId&gt;, // only control changes
+
+// Proposed: direct CR 509.1h state
+pub attacker_to_blockers: BTreeMap&lt;PermanentId, Vec&lt;PermanentId&gt;&gt;,
+pub blocked: Vec&lt;PermanentId&gt;, // added on DeclareBlocker; stays if blockers leave/phase</code></pre>
+    <p class="small">
+      <code>is_blocked(a)</code> becomes <code>self.blocked.contains(&amp;a)</code>.
+      <code>Modification::PhasedOut</code> calls <code>combat.remove_from_combat(id)</code> so phased-out creatures stop attacking/blocking (CR 506.4, 702.26b) while any attacker they blocked remains in <code>combat.blocked</code>.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <span>4b. Condition: one <code>CastFrom</code> with explicit ownership</span>
+      <span class="badge badge-prop">Proposed</span>
+    </div>
+<pre><code>// Existing: two variants + hidden Hand =&gt; owner == controller check
+Condition::EntryCastFrom(Option&lt;ZoneType&gt;),
+Condition::CastFromGraveyard,
+
+// Proposed: one direct condition (retire CastFromGraveyard in token_renames if unused by pinned pilots)
+Condition::CastFrom {
+    zone: Option&lt;ZoneType&gt;,
+    owner: Option&lt;Actor&gt;, // Some(Actor::You) for Myojin; None for "from a graveyard"
+}</code></pre>
+    <p class="small">
+      Removes the misleading <code>Entry</code> prefix (already evaluated on stack spells too) and replaces the silent <code>zone != ZoneType::Hand</code> ownership assumption with an explicit <code>owner</code> field.
+      <em>Note:</em> If any pinned pilot checkpoint encodes <code>fin.esper_origins</code> (<code>Condition::CastFromGraveyard</code>), keep <code>CastFromGraveyard</code> intact or register its rename in <code>token_renames.rs</code> and verify <code>test_pinned_pilot.py</code>.
+    </p>
+  </div>
+</div>
+
+<h2>5. Choices Made for Review (What We Passed Over &amp; Why)</h2>
+<div class="callout callout-warn">
+  <ul style="margin:0; padding-left:1.25rem;">
+    <li><strong>Keep <code>Modification::ChosenCreatureType</code> in <code>GameState.effects</code>:</strong> Passed over adding a dedicated <code>Permanent.chosen_creature_type</code> field + new <code>FactKind</code>. <code>ModeChosen</code> already uses <code>GameState.effects</code> for permanent-scoped non-layer choices; reusing <code>shared_effects</code> gives v11 encoding, text rendering, Academy inspection, and incarnation-scoped expiry with zero new tables.</li>
+    <li><strong>Keep <code>Permanent.control_differs_from_entry: bool</code> internal to <code>managym_state::Permanent</code> (or <code>entry_controller: u8</code>):</strong> Passed over widening <code>Permanent</code> by 8 bytes for <code>PlayerId(usize)</code>. Keeping the compact internal field preserves cache footprint and unchanged-control state hashes while projecting the clean <code>entry_controller_id: Option&lt;i32&gt;</code> on the wire.</li>
+    <li><strong>Keep <code>FactKind::EffectProgram</code> for <code>HexproofFrom</code> / <code>Protection</code> facts:</strong> Passed over adding a new <code>FactKind::SourceQuality</code> enum variant. Reusing <code>EffectProgram</code> matches how <code>Ward</code> and <code>CastPermission</code> already encode permanent static abilities in v11 without widening the fact-kind table; we only fix the wire strings, vocabulary completeness, and layout documentation.</li>
+    <li><strong>Keep sequential offers for coupled blocker declarations:</strong> Passed over building a joint-support blocker offer shape. Sequential offers with exact legal-prefix filtering guarantee every offered choice completes a legal CR 509.1b–c declaration across play, replay, and search.</li>
+  </ul>
+</div>
+
+<h2>6. Numbered Questions for Review</h2>
+<p class="small">Reply with shorthand like <code>1a 2a 3a 4a</code> if you want to override any choice made in the plan.</p>
+<ol class="q-list">
+  <li class="q-item">
+    <div class="q-head">How should default controller (CR 110.2) appear on <code>PermanentData</code> / <code>LegacyPermanentView</code> / <code>PyPermanent</code>?</div>
+    <ul class="q-opts">
+      <li><span class="opt-key">1a</span> <strong>(Chosen in plan)</strong> <code>entry_controller_id: Option&lt;i32&gt;</code> (omitted when equal to <code>controller_id</code>); UI and text name the actual player; v11 tensor keeps the 1-bit relative column.</li>
+      <li><span class="opt-key">1b</span> Keep <code>control_differs_from_entry: bool</code> on the wire and only fix the UI/text wording using <code>controller_id == viewer_id</code>.</li>
+    </ul>
+  </li>
+  <li class="q-item">
+    <div class="q-head">How should <code>hexproof_from</code> and <code>protection_from</code> serialize on <code>PermanentData</code> / protocol JSON?</div>
+    <ul class="q-opts">
+      <li><span class="opt-key">2a</span> <strong>(Chosen in plan)</strong> Plain lowercase domain strings (<code>"everything"</code>, <code>"black"</code>, <code>"instant"</code>) owned by <code>SourceQuality::wire_name()</code>; <code>observation_encoder.rs</code> maps them to Rust token names for v11.</li>
+      <li><span class="opt-key">2b</span> Keep Rust token paths (<code>"Color::Black"</code>, <code>"CardType::Instant"</code>) on the wire and only fix <code>record_vocabulary.rs</code> and layout docs.</li>
+    </ul>
+  </li>
+  <li class="q-item">
+    <div class="q-head">Should <code>CombatState</code> replace <code>blocked_without_blockers</code> with a direct <code>blocked</code> list and remove phased-out creatures from combat?</div>
+    <ul class="q-opts">
+      <li><span class="opt-key">3a</span> <strong>(Chosen in plan)</strong> Yes — one CR 509.1h <code>combat.blocked</code> list, plus <code>remove_from_combat</code> on phase-out so phased-out blockers stop reporting <code>blocking</code>.</li>
+      <li><span class="opt-key">3b</span> Keep <code>blocked_without_blockers</code> for control changes only and defer phasing combat removal to a separate task.</li>
+    </ul>
+  </li>
+  <li class="q-item">
+    <div class="q-head">Should <code>Condition::EntryCastFrom</code> become <code>Condition::CastFrom { zone, owner }</code> (and unify <code>CastFromGraveyard</code> if pinned pilots allow)?</div>
+    <ul class="q-opts">
+      <li><span class="opt-key">4a</span> <strong>(Chosen in plan)</strong> Yes — replace <code>EntryCastFrom</code> with explicit <code>CastFrom { zone, owner }</code>, and fold <code>CastFromGraveyard</code> if <code>token_renames.rs</code> + <code>test_pinned_pilot.py</code> pass cleanly (otherwise keep <code>CastFromGraveyard</code> as-is and still clean up <code>EntryCastFrom</code>).</li>
+      <li><span class="opt-key">4b</span> Leave <code>EntryCastFrom(Option&lt;ZoneType&gt;)</code> and <code>CastFromGraveyard</code> as-is.</li>
+    </ul>
+  </li>
+</ol>
+
+</main>
+</body>
+</html>

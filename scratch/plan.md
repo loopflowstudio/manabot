@@ -193,6 +193,127 @@ Passes 1–5 implement slices 1–8.
 
 The focused debug run passed all 16 tests, including these six positions.
 The FDN ledger has ten updated rows. All 29 cohort rows were checked for a
-source definition and a named directed fixture. Implementation is complete.
-Gate owns the full debug nextest suite (CI profile, two build jobs and two
-test threads) and the Engine Budget reference record with its reason.
+source definition and a named directed fixture.
+
+## Pass 7 · Conceptual alignment before gate
+
+Concept review (`scratch/concept-review.html`) found four boundary mismatches
+in the new observation/wire contract, combat state and condition vocabulary.
+Fix all four in one clean pass before gate so none ships into patch-clean
+`main` or the six published protocol schemas.
+
+Start with **7.1 + 7.2** (the published wire/API surfaces that touch Rust,
+Python bindings/stubs, protocol schemas, text observation and Academy UI), then
+**7.3 + 7.4** (rules-internal cleanup).
+
+### 7.1 · Direct CR 110.2 default controller on the wire (`entry_controller_id`)
+
+- **Model:** Keep `Permanent`'s compact internal representation (preserving
+  struct size and unchanged-control state hashes), but stop exposing the
+  2-seat XOR bit `control_differs_from_entry` on the public observation,
+  Python, protocol, text and Academy surfaces.
+- **Changes across layers:**
+  - `managym/src/agent/observation.rs` & `observation_json.rs`: replace
+    `PermanentData.control_differs_from_entry: bool` with
+    `entry_controller_id: Option<i32>` (the public player ID of
+    `permanent.entry_controller()`, populated only when it differs from
+    `permanent.controller`, omitted on the wire when `None`).
+  - `managym/src/agent/observation_encoder.rs`: compute the existing v11 binary
+    column `permanent::CONTROL_DIFFERS_FROM_ENTRY` from
+    `permanent.entry_controller_id.is_some_and(|id| id != permanent.controller_id)`
+    so tensor layout and checkpoint compatibility are unchanged.
+  - `managym/src/python/bindings.rs`, `managym/__init__.pyi`,
+    `managym/src/experience.rs`, `managym/experience.py`,
+    `managym/experience_projection.py`, `protocol/*.schema.json`: replace
+    `control_differs_from_entry` with `entry_controller_id: UInt32 | None`
+    (omitted when absent).
+  - `manabot/semantic/text_observation.py`: render
+    `entered under your control` when `entry_controller_id == state.agent.id`
+    and `entered under Opponent's control` otherwise (fixing the inverted
+    `"entered under the other player's control"` phrasing when inspecting an
+    opponent's permanent that entered under your control).
+  - `academy/ui/src/lib/types.ts`, `view.ts`, `view.test.ts`, `Inspect.svelte`:
+    replace `control_differs_from_entry` with `entry_controller_id`, keep
+    non-matching entry controllers in separate land piles, and display the
+    actual player's name (e.g. `"entered under your control"` /
+    `"entered under Opponent's control"`) in Inspector.
+  - Update `managym/README.md`, `managym/cards/tests/cards/usg.rs`,
+    `managym/cards/tests/cards/observability.rs`, and refresh Academy fixtures.
+
+### 7.2 · Plain domain quality names on the wire + complete `SourceQuality` vocabulary
+
+- **Model:** Wire JSON, Python and Academy carry plain domain strings for
+  `hexproof_from` and `protection_from` (matching `colors`, `counters`, and
+  `keywords`), never raw Rust enum paths (`"Color::Black"`,
+  `"CardType::Instant"`, `"SourceQuality::Everything"`). `SourceQuality` owns
+  one bidirectional mapping between wire strings and learning-token names.
+- **Changes across layers:**
+  - `managym/state/src/card.rs`: add `SourceQuality::wire_name(self) -> &'static str`
+    (`"everything"`, `"white"`..`"green"`, `"artifact"`, `"battle"`,
+    `"creature"`, `"enchantment"`, `"instant"`, `"kindred"`, `"land"`,
+    `"planeswalker"`, `"sorcery"`), `SourceQuality::from_wire_name(&str) -> Option<Self>`,
+    and `SourceQuality::ALL` (or iterator over every variant).
+  - `managym/src/agent/observation.rs`: populate `PermanentData.hexproof_from`
+    and `protection_from` using `quality.wire_name().to_owned()`.
+  - `managym/src/agent/observation_encoder.rs`: map each wire string via
+    `SourceQuality::from_wire_name` to `quality.token_name()` before hashing,
+    preserving the exact v11 `FactKind::EffectProgram` tokens. Update the
+    `FactKind::EffectProgram` doc comment here and in `observation_layout.rs`
+    to include `StaticAbility::HexproofFrom` and `StaticAbility::Protection`.
+  - `managym/src/agent/record_vocabulary.rs`: register every `SourceQuality`
+    variant statically instead of scraping printed `definition.statics`, so
+    granted protection/hexproof never emits an unregistered token.
+  - `academy/ui/src/lib/board/Inspect.svelte` and
+    `manabot/semantic/text_observation.py`: remove `::` token parsing; render
+    domain strings directly (appending `" sources"` for card types if desired).
+  - Update `managym/cards/tests/cards/dom.rs` and `observability.rs`.
+
+### 7.3 · Single CR 509.1h `CombatState.blocked` record & phase-out removal
+
+- **Model:** Replace the split invariant (`attacker_to_blockers` holding dead
+  IDs + `blocked_without_blockers` for control changes) with a single
+  `CombatState.blocked: Vec<PermanentId>` recording attackers that became
+  blocked this combat (CR 509.1h).
+- **Changes across layers:**
+  - `managym/src/flow/combat.rs` & `managym/src/state/hash.rs`: replace
+    `blocked_without_blockers` with `blocked: Vec<PermanentId>`. Record an
+    attacker in `blocked` when a blocker is declared on it; `is_blocked(a)`
+    checks `self.blocked.contains(&a)`. `remove_from_combat(id)` removes `id`
+    from `attackers`, `blocked`, `attackers_to_declare`, `blockers_to_declare`,
+    and blocker lists without needing a special empty-list fallback.
+  - `managym/src/flow/resolution.rs`: when applying `Modification::PhasedOut`,
+    call `combat.remove_from_combat(id)` for each phased-out permanent (CR
+    506.4, 702.26b), so a phased-out blocker stops reporting `blocking` while
+    its attacker stays `blocked`.
+  - Add a directed Rust test covering a blocker phasing out after blocks are
+    declared (attacker stays `blocked`, phased-out blocker has `blocking == None`,
+    attacker deals no unblocked damage unless it has trample).
+
+### 7.4 · Unified `Condition::CastFrom` with explicit ownership
+
+- **Model:** Replace `Condition::EntryCastFrom(Option<ZoneType>)` with
+  `Condition::CastFrom { zone: Option<ZoneType>, owner: Option<Actor> }` so the
+  name matches both stack and entry evaluation and the `"your hand"` ownership
+  requirement is explicit rather than hardcoded as `zone != ZoneType::Hand`.
+- **Changes across layers:**
+  - `managym/state/src/ability.rs`, `managym/src/flow/statics.rs`,
+    `managym/src/flow/proposed_event.rs`, `managym/src/agent/ability_description.rs`,
+    `managym/cards/src/chk.rs`, `managym/cards/src/fdn.rs`,
+    `managym/cards/tests/cards/observability.rs`.
+  - If `fin.esper_origins` (`Condition::CastFromGraveyard`) is not bound in any
+    pinned pilot checkpoint (verify with `tests/model/test_pinned_pilot.py`),
+    migrate it to `Condition::CastFrom { zone: Some(ZoneType::Graveyard), owner: None }`
+    and record `Condition::CastFromGraveyard` in `token_renames.rs`; otherwise
+    keep `Condition::CastFromGraveyard` intact and still replace the unreleased
+    `EntryCastFrom`.
+
+### Verification for Pass 7
+
+- Rebuild release extension, run directed Rust tests (including `usg`, `dom`,
+  `chk`, `fdn`, `con`, `observability`, `combat_preview`, and the new
+  phased-out-blocker test), `tests/semantic/test_text_observation.py`,
+  `tests/model/test_pinned_pilot.py`, schema/Academy UI tests (`view.test.ts`,
+  `prompt.test.ts`), and refresh Academy opening fixtures if definitions or
+  projection fields change.
+- Gate owns the full debug nextest suite (CI profile, two build jobs and two
+  test threads) and the Engine Budget reference record with its reason.
