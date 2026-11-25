@@ -337,17 +337,36 @@ recording export, MLX 256-wide eval timeout). Paired-deal fixture allowance
 raised to 240 s (new sources play 2,644 vs 1,683 decisions on the same deals;
 passed in 235.22 s).
 
-Remaining:
+Done: **2b. Native v11 consumers and rollout inspection**
+(`6d07c41230` through `60b8347589`). Combat and identity counterfactuals
+use the loaded checkpoint’s readings. Choice inspection re-encodes permutations
+of the live viewer. Decision-memory verification replays packed rows, including
+both disclosures, both memory encoders and a 245-transition training update.
+Rollout indexes now select native coordinates, aligned memory and behavior logs
+on both backends. Inspectors project individual fields. The selection mapping
+and dense scripted collector fixture are gone. The packed vector benchmark
+matched scalar encodings on five decision families. Across 21 search frontiers
+per evidence mode, singleton and batched encodings matched, with zero measured
+base, value or target error on the seed-42 one-world run.
 
-**2b. Finish migrating v11 consumers.** Move the combat and choice
-counterfactuals (including learning regression), the remaining decision-memory
-verification, and legacy vector-wrapper callers and benches. Move rollout
-inspection and diagnostics to explicit selections/projections, then remove the
-v11 mapping facade and the dense-only fixtures. Reuse the actual checkpoint's
-readings when probing Prepared. Keep the v9/v10 pilot, vector collection and
-evaluation executable until the version decision. The acceptance grep over
-`manabot scripts experiments` still finds 49 lines in 16 files. The debug Rust
-nextest run and the docs' v11-only and single-admission claims remain for gate.
+All production and benchmark callers have moved off the Torch vector wrapper.
+It emits a 0.3.0 deprecation warning and keeps its published behavior and
+contract tests until removal (questions 15). The v10 vector-model check now
+uses the recorded vector’s dense registration directly. Pinned v9 and v11
+replays passed. The optional u1952 replay skipped without its checkpoint.
+The three extra failures from Pass 2a were identified by comparing the saved
+pytest logs. Card evaluation resume/delivery/audit, MLX private-seed selection,
+and the paired-deal learning report all passed together in 261.52 s.
+The six full suites remain for gate.
+
+The acceptance grep over `manabot scripts experiments` now finds 41 lines in
+14 files, all under `manabot`. The hits are dense compatibility, the deprecated
+Torch wrapper, and the shared `admit_native` name retained until Pass 3.
+The current default local-search comparison and a saved-reference round trip
+both ran on one world at seed 42. The historical comparison needs the original
+benchmark checkout (questions 16).
+
+Remaining:
 
 **Dependency correction.** The build tested `encode_observation_batch([],
 layout)` on all three accepted layouts. Versions 9 and 10 both raise
@@ -365,7 +384,7 @@ AGENTS.md says "removed once a v11 pilot is at least as strong as the best v9
 one, not before 0.3.0"; the Task brief asks for retirement now; no comparison is
 recorded (best player u1952 `59718fe34945` is v9). `SUPPORTED_POLICY_INPUTS =
 (11,)`, delete `legacy_input.py`/`.rs`, `InputLayout`, `turn_state`, v9/u1952
-pinned fixtures; rejection naming `v0.2.5`; rebuild.
+pinned fixtures and the deprecated Torch vector wrapper; rejection naming `v0.2.5`; rebuild.
 
 **4. Native dense transport deleted + docs/guards.** The Rust list in "What
 goes"; slot admission via scratch `PackedRows`; Rust tests read rows through

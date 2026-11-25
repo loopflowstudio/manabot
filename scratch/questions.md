@@ -68,3 +68,16 @@ reversible before merge.
     the strength decision in item 1. Their native layouts reject even an empty
     batch with “observation batches require policy input v11”. Keep packed
     v11 migrations independently reviewable in the meantime.
+
+15. **Published Torch vector wrapper.** Remove it in the 0.3.0 retirement.
+    The API documented in `docs/engine.md` includes tensor reuse, automatic
+    slot refill and terminal reward shaping. `RecordedVectorEnv` parks a
+    finished game until the caller refills it. Keep the deprecation warning
+    and wrapper contract tests through 0.2.x. Training, diagnostics and
+    benchmarks now use the recorded vector directly.
+
+16. **Local-search benchmark default.** Compare compact and full evidence on
+    the installed runtime. The previous default, reference `841b1c50c`, imports
+    the removed `manabot.belief.sampling` module. The November 9 measurement
+    is reproducible with its original benchmark checkout `cb75f2166b`. Current
+    source-compatible revisions can still be compared with `--reference`.

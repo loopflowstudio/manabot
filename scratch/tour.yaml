@@ -1,39 +1,39 @@
-at: fab0d064aaefaa3a7a89e886fde5727672b363ed
+at: 60b8347589549052fc471fb518b9a3c3a7243b24
 first:
   - path: scratch/plan.md
-    why: Completed migrations and the v9 retirement dependency
-  - path: docs/engine.md
-    why: Obtain a viewer observation and encode it
+    why: Completed migrations and the v9 retirement condition
   - path: docs/training-loop.md
-    why: Follow legal offers and memory through training
-  - path: manabot/env/env.py
-    why: Scalar games return the acting viewer's observation
-  - path: manabot/env/observation.py
-    why: Encode decisions with the checkpoint's layout
+    why: Inspect selected decisions and their behavior probabilities
+  - path: docs/engine.md
+    why: Read viewer observations and manage parked vector slots
   - path: managym/src/python/observation_batch/archive.rs
-    why: Validate persisted batches and game-local joins
-  - path: manabot/env/memory_store.py
-    why: Retain prefixes and their declared capacities together
+    why: Preserve packed layout and validate restored joins
+  - path: manabot/env/env.py
+    why: Return the acting viewer's native observation
   - path: manabot/policy/spans.py
-    why: Select native rows with aligned memory
-  - path: manabot/policy/captured_observations.py
-    why: Reconstruct selected rows and histories from disk
-  - path: manabot/eval/agents.py
-    why: Prepare the checkpoint's inputs at decision time
-  - path: manabot/env/target_practice.py
-    why: Publish new decisions while preserving parked slots
+    why: Select immutable rows and project named fields
+  - path: manabot/env/memory_store.py
+    why: Retain each viewer's history across sampled rows
+  - path: manabot/training/rollout/collection.py
+    why: Align trajectory indexes, behavior logs and retained memory
   - path: manabot/policy/prepare.py
-    why: Assign reference probabilities over packed legal offers
-  - path: manabot/verify/decision_memory_probe.py
-    why: Capture and fit on recorded viewer histories
-  - path: experiments/tla_frontier.py
-    why: Train fresh v11 policies and evaluate recorded pilots
-  - path: scripts/bench_sharded_collection.py
-    why: Time collection with packed offers and outcome buffers
-  - path: tests/env/test_observation_batch_archive.py
-    why: Reject invalid joins even under a valid checksum
+    why: Prepare native rows with saved readings
+  - path: manabot/training/combat_probe.py
+    why: Perturb prepared combat features in bounded chunks
+  - path: manabot/verify/choice_inputs.py
+    why: Preserve game identities across viewer permutations
+  - path: manabot/verify/learning_regression.py
+    why: Score checkpoint invariance and paired outcomes
+  - path: manabot/verify/decision_memory.py
+    why: Compare packed histories across replay and reload
+  - path: manabot/policy/captured_observations.py
+    why: Restore offline batches with their interned prefixes
+  - path: scripts/bench_breakdown.py
+    why: Time packed vector stepping and inference
   - path: tests/training/test_collection.py
-    why: Exercise sparse target loads on both policy inputs
-  - path: tests/training/test_regimes.py
-    why: Verify offer probabilities after selection and bucketing
+    why: Verify repeated row selection and aligned behavior
+  - path: tests/training/test_combat_probe.py
+    why: Verify counterfactuals against checkpoint readings
+  - path: tests/model/test_pinned_pilot.py
+    why: Replay released policies on recorded decisions
 hide: []
