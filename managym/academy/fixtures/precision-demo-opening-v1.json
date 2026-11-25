@@ -75,11 +75,6 @@
       "before_digest": "82431d5e1a8c3d2ebcd9270a8bdd72bc2cb3965a2bb0601d2dd2337c6629dd42"
     },
     {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "7dda22317563ab28c7e945b975002880a1a949ebfe87d20c86b5469a46d46b74"
-    },
-    {
       "label": "Pass priority",
       "offer_id": 2,
       "before_digest": "f76eb53a7961257f44f929ad6c5b35f74f60e0a60383057cd02bcb8b4c5170d5"
@@ -136,7 +131,7 @@
     }
   ],
   "decision_digest": "e2b756b4be06af2838646bc3a14d6366864b9bbb2ef607ad65ff677fced7cdb6",
-  "decision_revision": 34,
+  "decision_revision": 33,
   "decision_kind": "PRIORITY",
   "manifest_digest": "2b5742b7e1daf5f85a0a8e1584e4fde931ca2b9f829ad83681bf25b9140298dd"
 }

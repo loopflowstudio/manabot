@@ -76,6 +76,25 @@ color-modal skip in `equivalent_mana_choices`. All 30
 identical basics/Guildgates, `Plains × 2 + Kyoshi Village` for `{1}{G}`,
 `Village + 3 Plains` for `{1}{W}`, and targeted/enchanted/animated Plains.
 
+Pass 3 (this commit): added `tests/academy/test_dual_land_payment.py` (exact
+two-drop with `Kyoshi Village` + `Plains` previews exact and skips payment;
+`Kyoshi Village` + 3 `Plains` shows `"Tap Kyoshi Village for {G}/{W}"`, three
+`"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`, and tapping
+Village skips the color modal), updated `tests/academy/test_payment_preview.py`
+for opening-hand keeps and a distinct blue dual (`Tranquil Cove`) so casting
+`Ancestral Recall` keeps a real payment stop, registered both tests in
+`.github/workflows/academy-integration.yml`, rechecked `managym/README.md` and
+tightened `docs/academy.md` ("spent colors"), and refreshed the Academy fixtures
+whose prefixes skipped redundant identical-basic payments
+(`precision-demo-opening-v1.json`, `convoke-demo-opening-v1.json`, and
+`choice-navigation-opening-v1.json`; `learn` and `precision-mana` unchanged).
+`tests/model/test_pinned_pilot.py` passed unchanged for `v9` and `v11` (no
+re-record needed), and no card definitions changed (state-hash pin untouched).
+Release `bench_steps` moved from 118,559 steps (`digest: 10601622128491155944`)
+to 118,674 steps (`digest: 17232083860091493640`, 0 capped); adopting
+`managym/perf/baseline.json` via `scripts/engine_budget.py record --reason`
+waits for the PR's CI `engine-budget` artifact (`measurement.json`).
+
 ## Determinism rule (built)
 
 Answer to steer `5d5904ae` (b): identical sources alone do not force a stop.
@@ -140,10 +159,7 @@ Drafted in place before implementation (recheck wording against final implementa
 
 1. Done — `72a12fa277` (see Built).
 2. Done — `93bc6923e5` (see Built).
-3. **Next — Records & Academy tests.**
-   - `tests/academy/test_dual_land_payment.py` (exact-cost two-drop with Village + Plains skips; Village + 3 Plains shows `"Tap Kyoshi Village for {G}/{W}"`, three `"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`).
-   - Recheck `managym/README.md` ("Manual mana sources") and `docs/academy.md`.
-   - `scripts/engine_budget.py record --reason`, `scripts/refresh_academy_fixtures.py` and state-hash pin only if they move, `tests/model/test_pinned_pilot.py` checked (and declared only if it fails).
+3. Done — Academy tests, docs recheck, refreshed fixtures, pinned-pilot check, and `bench_steps` check (see Built). Remaining CI follow-up after PR run: download `engine-budget` artifact and run `uv run scripts/engine_budget.py record --reason` to adopt the moved digest.
 
 ## Tests
 

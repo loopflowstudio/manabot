@@ -18,4 +18,8 @@ first:
     why: Which source choices remain during resolution.
   - path: managym/tests/source_taps.rs
     why: Forked payments verify untapped lands and floating mana.
+  - path: tests/academy/test_dual_land_payment.py
+    why: Academy session coverage for exact dual-land skip, unified tap labels, and redundant modal skip.
+  - path: tests/academy/test_payment_preview.py
+    why: Payment preview endpoint updated for opening-hand keeps and a distinct blue dual source.
 hide: []

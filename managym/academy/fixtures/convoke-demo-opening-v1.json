@@ -427,11 +427,6 @@
       "before_digest": "bc7c8992ce8681500de9471a9db3756cd1c30b4e0454465434eddaa8b7c9a381"
     },
     {
-      "label": "Tap Plains for {W}",
-      "offer_id": 0,
-      "before_digest": "93a58c4c1eb1439d12a23497449616c55df77fc6d8118f7c859bf778fe9843cb"
-    },
-    {
       "label": "Cast Appeal to Eirdu",
       "offer_id": 0,
       "before_digest": "2aceffbf5f31876fb938e1040a5a6b71a7771cb09ca90e2f9b09344c749f309f"
@@ -453,7 +448,7 @@
     }
   ],
   "decision_digest": "382326a16b2a5434c67a6c1ed605b63d7cbd7e6b085dc5c46c3789d39a5b0d75",
-  "decision_revision": 103,
+  "decision_revision": 102,
   "decision_kind": "PAY_OR_NOT",
   "manifest_digest": "2b5742b7e1daf5f85a0a8e1584e4fde931ca2b9f829ad83681bf25b9140298dd"
 }

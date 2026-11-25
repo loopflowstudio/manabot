@@ -800,8 +800,8 @@ When a real choice stays open — such as Kyoshi Village and three Plains for
 basics: `Tap Kyoshi Village for {G}/{W}` (or `Tap Birds of Paradise for any
 color`) beside `Tap Plains for {W}` and `Pay the cost`. Selecting a
 choice-of-color source asks you to pick a color only when its colors lead to
-different remaining options or floating mana; if every color finishes the same
-way, the color prompt is skipped. Non-simple mana abilities (sacrificing a
+different remaining options, spent colors or floating mana; if every color
+finishes the same way, the color prompt is skipped. Non-simple mana abilities (sacrificing a
 Treasure, paying life, or paying a filter fee) keep `Activate ability: <Name>`
 and always stop.
 
