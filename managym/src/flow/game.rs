@@ -604,8 +604,9 @@ pub enum PendingChoice {
 ///   stun counter advances `counters`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
-/// - `life`: both life totals, which a static condition may read ("as long
-///   as you have 25 or more life"); compared like `mana_pools`.
+/// - `life`: both life totals and this turn's life gain/loss totals, which a
+///   static condition may read ("as long as you have 25 or more life");
+///   compared like `mana_pools`.
 /// - `counters`: non-P/T, non-keyword counters (loyalty, stun, quest, charge,
 ///   soul, etc.). Layers follow it only when a scope, condition, or value
 ///   inspects counters; `+1/+1`, `-1/-1`, and keyword counters advance
@@ -873,23 +874,25 @@ impl TrackedState {
         permanent_id: PermanentId,
         kind: CounterKind,
         delta: i32,
-        keyword_timestamp: Option<crate::state::game_object::PublicId>,
     ) -> Option<i32> {
+        let is_keyword = kind.keyword().is_some();
+        let timestamp = (delta > 0 && is_keyword).then(|| self.state.id_gen.next_id());
         let permanent = self.permanent_untracked(permanent_id)?;
         if !permanent.change_counters(kind, delta) {
             return None;
         }
-        if let Some(timestamp) = keyword_timestamp {
+        if let Some(timestamp) = timestamp {
             permanent.keyword_counter_timestamps.insert(kind, timestamp);
         }
         let total = permanent.counter_count(kind);
         if total == 0 {
             permanent.keyword_counter_timestamps.remove(&kind);
         }
-        if matches!(
-            kind,
-            CounterKind::PlusOnePlusOne | CounterKind::MinusOneMinusOne
-        ) || kind.keyword().is_some()
+        if is_keyword
+            || matches!(
+                kind,
+                CounterKind::PlusOnePlusOne | CounterKind::MinusOneMinusOne
+            )
         {
             self.revisions.characteristics += 1;
         } else {
@@ -1019,6 +1022,8 @@ impl DerefMut for TrackedState {
         self.revisions.mana_pools += 1;
         self.revisions.tapped += 1;
         self.revisions.triggers += 1;
+        self.revisions.life += 1;
+        self.revisions.counters += 1;
         &mut self.state
     }
 }

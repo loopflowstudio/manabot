@@ -1913,12 +1913,7 @@ impl Game {
         let Ok(permanent_id) = self.lookup_current_permanent(target) else {
             return false;
         };
-        let timestamp =
-            (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
-        let Some(total) = self
-            .state
-            .change_counters(permanent_id, kind, delta, timestamp)
-        else {
+        let Some(total) = self.state.change_counters(permanent_id, kind, delta) else {
             return false;
         };
         if let Some(by) = by.filter(|_| delta > 0) {

@@ -76,25 +76,74 @@ pub(super) struct LayerObject {
     pub view: Arc<Characteristics>,
     statics: Vec<StaticEntry>,
 }
+/// Non-characteristic state slices a layer board depends on. Changes to a
+/// slice evict `LayerBoard` only when the board reads it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct StateReads {
+    pub mana: bool,
+    pub tapped: bool,
+    pub life: bool,
+    pub counters: bool,
+}
+
+impl StateReads {
+    pub(super) fn merge(&mut self, other: Self) {
+        self.mana |= other.mana;
+        self.tapped |= other.tapped;
+        self.life |= other.life;
+        self.counters |= other.counters;
+    }
+
+    pub(super) fn any(self) -> bool {
+        self.mana || self.tapped || self.life || self.counters
+    }
+
+    pub(super) fn overlaps(self, other: Self) -> bool {
+        (self.mana && other.mana)
+            || (self.tapped && other.tapped)
+            || (self.life && other.life)
+            || (self.counters && other.counters)
+    }
+}
+
+/// A layer node's source object and cached battlefield slot (`None` for a
+/// command-zone emblem), immutable for one `Context`.
+#[derive(Clone, Copy)]
+struct NodeSource {
+    object: ObjectId,
+    permanent: Option<PermanentId>,
+}
+
+impl NodeSource {
+    fn permanent(object: ObjectId, id: PermanentId) -> Self {
+        Self {
+            object,
+            permanent: Some(id),
+        }
+    }
+
+    fn command(object: ObjectId) -> Self {
+        Self {
+            object,
+            permanent: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct Context<'a> {
     game: &'a Game,
     pub objects: BTreeMap<PermanentId, Arc<LayerObject>>,
     /// Includes conditional nodes discovered in any layer, even when an earlier
     /// condition short-circuits or a dependency later removes their source.
-    pub reads_mana: bool,
-    pub reads_tapped: bool,
-    pub reads_life: bool,
-    pub reads_counters: bool,
+    pub reads: StateReads,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
 /// first application to objects (CR 613.6). Resolved records already own targets.
 #[derive(Clone)]
 struct Node {
-    source: ObjectId,
-    /// Battlefield permanent for `source`, or `None` for a command-zone emblem.
-    source_permanent: Option<PermanentId>,
+    source: NodeSource,
     key: Vec<usize>,
     timestamp: PublicId,
     targets: Option<Vec<PermanentId>>,
@@ -134,10 +183,7 @@ pub(super) struct SourceSeed {
 #[derive(Clone, Copy, Default)]
 struct ReadSet {
     fields: u8,
-    mana: bool,
-    tapped: bool,
-    life: bool,
-    counters: bool,
+    state: StateReads,
 }
 
 impl ReadSet {
@@ -163,8 +209,8 @@ impl ReadSet {
         if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
             self.fields |= POWER;
         }
-        self.tapped |= p.tapped;
-        self.counters |= p.no_counters || p.with_counter;
+        self.state.tapped |= p.tapped;
+        self.state.counters |= p.no_counters || p.with_counter;
         for alternative in &p.any_of {
             self.predicate(alternative);
         }
@@ -205,7 +251,7 @@ impl ReadSet {
             EffectValue::GreatestSharedCreatureType => self.fields |= CARD_TYPES | SUBTYPES,
             EffectValue::CreaturesWithCounters => {
                 self.fields |= CARD_TYPES;
-                self.counters = true;
+                self.state.counters = true;
             }
             EffectValue::GreatestPowerYouControl { predicate } => {
                 self.fields |= CARD_TYPES | POWER;
@@ -217,7 +263,7 @@ impl ReadSet {
                 match property {
                     ObjectProperty::Power | ObjectProperty::Toughness => self.fields |= POWER,
                     ObjectProperty::Colors => self.fields |= COLORS,
-                    ObjectProperty::Counters(_) => self.counters = true,
+                    ObjectProperty::Counters(_) => self.state.counters = true,
                     ObjectProperty::ManaValue => {}
                 }
                 self.selector(of);
@@ -232,7 +278,7 @@ impl ReadSet {
             EffectValue::LifeTotal(_)
             | EffectValue::LifeAboveStarting(_)
             | EffectValue::LifeGainedThisTurn(_)
-            | EffectValue::LifeLostThisTurn(_) => self.life = true,
+            | EffectValue::LifeLostThisTurn(_) => self.state.life = true,
             _ => {}
         }
     }
@@ -264,13 +310,13 @@ impl ReadSet {
                 }
             }
             Condition::Not(condition) => self.condition(condition),
-            Condition::SourceTapped => self.tapped = true,
-            Condition::UnspentManaAtLeast { .. } => self.mana = true,
+            Condition::SourceTapped => self.state.tapped = true,
+            Condition::UnspentManaAtLeast { .. } => self.state.mana = true,
             Condition::LifeAtLeast { .. }
             | Condition::AtMostHalfStartingLife
-            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => self.life = true,
+            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => self.state.life = true,
             Condition::SourceCountersAtLeast { .. } | Condition::AttachedCountersAtLeast { .. } => {
-                self.counters = true
+                self.state.counters = true
             }
             _ => {}
         }
@@ -318,7 +364,7 @@ impl SourcePlan {
                 Operation::Cda { cda, .. } => match cda.as_ref() {
                     PowerCda::CountersOnLandsYouControl => {
                         reads.fields |= CARD_TYPES;
-                        reads.counters = true;
+                        reads.state.counters = true;
                     }
                     PowerCda::CreaturesYouControl => {
                         reads.fields |= CARD_TYPES;
@@ -345,8 +391,7 @@ impl Node {
         part: (Layer, Operation),
     ) -> Self {
         Self {
-            source,
-            source_permanent: Some(target),
+            source: NodeSource::permanent(source, target),
             key,
             timestamp,
             targets: Some(vec![target]),
@@ -424,6 +469,11 @@ struct Instruction {
     operation: Operation,
 }
 
+fn push_node(reads: &mut StateReads, nodes: &mut Vec<Node>, node: Node) {
+    reads.merge(node.reads.state);
+    nodes.push(node);
+}
+
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
         Modification::SetName(_) => Layer::Name,
@@ -466,10 +516,7 @@ impl<'a> Context<'a> {
         let mut context = Self {
             game,
             objects: BTreeMap::new(),
-            reads_mana: false,
-            reads_tapped: false,
-            reads_life: false,
-            reads_counters: false,
+            reads: StateReads::default(),
         };
         let mut nodes = Vec::new();
         let mut known = BTreeSet::new();
@@ -496,11 +543,7 @@ impl<'a> Context<'a> {
             // (CR 702.26b); its own view still takes the records on it.
             if !game.is_phased_out(id) {
                 for node in &seed.nodes {
-                    context.reads_mana |= node.reads.mana;
-                    context.reads_tapped |= node.reads.tapped;
-                    context.reads_life |= node.reads.life;
-                    context.reads_counters |= node.reads.counters;
-                    nodes.push(node.clone());
+                    push_node(&mut context.reads, &mut nodes, node.clone());
                 }
             }
             for (kind, count) in p.counters.iter() {
@@ -546,12 +589,8 @@ impl<'a> Context<'a> {
                     timestamp: emblem.id,
                     ability: ability.clone(),
                 };
-                if let Some(node) = context.node(source, None, &entry) {
-                    context.reads_mana |= node.reads.mana;
-                    context.reads_tapped |= node.reads.tapped;
-                    context.reads_life |= node.reads.life;
-                    context.reads_counters |= node.reads.counters;
-                    nodes.push(node);
+                if let Some(node) = context.node(NodeSource::command(source), &entry) {
+                    push_node(&mut context.reads, &mut nodes, node);
                 }
             }
         }
@@ -672,7 +711,7 @@ impl<'a> Context<'a> {
         let nodes = object
             .statics
             .iter()
-            .filter_map(|entry| self.node(permanent.object, Some(id), entry))
+            .filter_map(|entry| self.node(NodeSource::permanent(permanent.object, id), entry))
             .collect();
         SourceSeed {
             source: source.clone(),
@@ -738,14 +777,11 @@ impl<'a> Context<'a> {
             }
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
-                    if let Some(node) =
-                        self.node(self.game.live_permanent(id).object, Some(id), entry)
-                    {
-                        self.reads_mana |= node.reads.mana;
-                        self.reads_tapped |= node.reads.tapped;
-                        self.reads_life |= node.reads.life;
-                        self.reads_counters |= node.reads.counters;
-                        nodes.push(node);
+                    if let Some(node) = self.node(
+                        NodeSource::permanent(self.game.live_permanent(id).object, id),
+                        entry,
+                    ) {
+                        push_node(&mut self.reads, nodes, node);
                     }
                 }
             }
@@ -857,11 +893,11 @@ impl<'a> Context<'a> {
 
     fn exists(&self, node: &Node) -> bool {
         node.targets.is_some()
-            || match node.source_permanent {
+            || match node.source.permanent {
                 Some(id) => self.objects[&id].statics.iter().any(|s| s.key == node.key),
                 None => {
                     debug_assert_eq!(
-                        self.game.state.zones.zone_of(node.source),
+                        self.game.state.zones.zone_of(node.source.object),
                         Some(ZoneType::Command)
                     );
                     true
@@ -872,14 +908,14 @@ impl<'a> Context<'a> {
         if let Some(targets) = &node.targets {
             return targets.clone();
         }
-        let source = node.source_permanent;
         if node
             .condition
             .as_ref()
-            .is_some_and(|c| !self.condition(c, node.source, source))
+            .is_some_and(|c| !self.condition(c, node.source))
         {
             return Vec::new();
         }
+        let source = node.source.permanent;
         match &node.scope {
             StaticScope::This => {
                 return source
@@ -897,8 +933,8 @@ impl<'a> Context<'a> {
             StaticScope::SpellsYouControl(_) => return Vec::new(),
             _ => {}
         }
-        let source_controller = self.controller_of(node.source, source);
-        let source_name = Some(self.source_name(node.source, source));
+        let source_controller = self.controller_of(node.source);
+        let source_name = Some(self.source_name(node.source));
         self.objects
             .iter()
             .filter_map(|(&id, object)| {
@@ -934,18 +970,15 @@ impl<'a> Context<'a> {
                                 cda,
                                 sets_toughness,
                             } => {
-                                let value = LayerValue::Fixed(self.cda(
-                                    cda,
-                                    self.controller_of(node.source, node.source_permanent),
-                                ));
+                                let value = LayerValue::Fixed(
+                                    self.cda(cda, self.controller_of(node.source)),
+                                );
                                 Operation::Modify(Modification::SetBasePt {
                                     power: Some(value.clone()),
                                     toughness: sets_toughness.then_some(value),
                                 })
                             }
-                            Operation::Buff(buff) => {
-                                self.buff(buff, node.source, node.source_permanent, id)
-                            }
+                            Operation::Buff(buff) => self.buff(buff, node.source, id),
                             op => op.clone(),
                         };
                         Instruction {
@@ -956,13 +989,7 @@ impl<'a> Context<'a> {
             })
             .collect()
     }
-    fn buff(
-        &self,
-        buff: &StaticPtBuff,
-        source: ObjectId,
-        source_permanent: Option<PermanentId>,
-        id: PermanentId,
-    ) -> Operation {
+    fn buff(&self, buff: &StaticPtBuff, source: NodeSource, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
             let view = &self.objects[&id].view;
             if view.has_all_creature_types() {
@@ -971,7 +998,7 @@ impl<'a> Context<'a> {
                 (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
             }
         });
-        let controller = self.controller_of(source, source_permanent);
+        let controller = self.controller_of(source);
         let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
             self.objects
                 .iter()
@@ -992,21 +1019,21 @@ impl<'a> Context<'a> {
             toughness: LayerValue::Fixed(buff.toughness * times),
         })
     }
-    fn controller_of(&self, source: ObjectId, permanent: Option<PermanentId>) -> PlayerId {
-        permanent.map_or_else(
+    fn controller_of(&self, source: NodeSource) -> PlayerId {
+        source.permanent.map_or_else(
             || {
                 self.game
                     .state
                     .zones
-                    .holder_in(source, ZoneType::Command)
+                    .holder_in(source.object, ZoneType::Command)
                     .expect("live command-zone source")
             },
             |id| self.controller(id),
         )
     }
-    fn source_name(&self, source: ObjectId, permanent: Option<PermanentId>) -> &str {
-        permanent.map_or_else(
-            || self.game.state[source].name.as_str(),
+    fn source_name(&self, source: NodeSource) -> &str {
+        source.permanent.map_or_else(
+            || self.game.state[source.object].name.as_str(),
             |id| self.objects[&id].view.name.as_str(),
         )
     }
@@ -1092,15 +1119,10 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn select_permanents(
-        &self,
-        selector: &ObjectSelector,
-        source: ObjectId,
-        source_permanent: Option<PermanentId>,
-    ) -> Vec<PermanentId> {
-        let controller = self.controller_of(source, source_permanent);
+    fn select_permanents(&self, selector: &ObjectSelector, source: NodeSource) -> Vec<PermanentId> {
+        let controller = self.controller_of(source);
         match selector {
-            ObjectSelector::This => source_permanent.into_iter().collect(),
+            ObjectSelector::This => source.permanent.into_iter().collect(),
             ObjectSelector::Each {
                 of,
                 predicate,
@@ -1110,10 +1132,10 @@ impl<'a> Context<'a> {
             } => {
                 let exact = exact_mana_value
                     .as_ref()
-                    .map(|n| self.comparison_value(n, source, source_permanent));
+                    .map(|n| self.comparison_value(n, source));
                 let max = max_mana_value
                     .as_ref()
-                    .map(|n| self.comparison_value(n, source, source_permanent));
+                    .map(|n| self.comparison_value(n, source));
                 self.objects
                     .keys()
                     .copied()
@@ -1125,7 +1147,7 @@ impl<'a> Context<'a> {
                                 Scope::Battlefield => true,
                                 _ => false,
                             }
-                            && !(self.game.live_permanent(id).object == source
+                            && !(source.permanent == Some(id)
                                 && matches!(except, Some(Except::This)))
                             && !matches!(
                                 except,
@@ -1133,9 +1155,9 @@ impl<'a> Context<'a> {
                                     controlled_by,
                                     predicate: excluded,
                                 }) if controlled_by.includes(controller, self.controller(id))
-                                    && self.matches(id, excluded, Some((source, source_permanent)))
+                                    && self.matches(id, excluded, Some(source))
                             )
-                            && self.matches(id, predicate, Some((source, source_permanent)))
+                            && self.matches(id, predicate, Some(source))
                             && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
                             && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
                     })
@@ -1146,44 +1168,37 @@ impl<'a> Context<'a> {
     }
 
     /// Static comparisons see the characteristics at this point in the layer system.
-    fn comparison_value(
-        &self,
-        value: &EffectValue,
-        source: ObjectId,
-        source_permanent: Option<PermanentId>,
-    ) -> i32 {
-        let controller = self.controller_of(source, source_permanent);
+    fn comparison_value(&self, value: &EffectValue, source: NodeSource) -> i32 {
+        let controller = self.controller_of(source);
         let controlled = || self.game.iter_battlefield_permanents(controller);
         match value {
-            EffectValue::Half(inner) => self
-                .comparison_value(inner, source, source_permanent)
-                .div_euclid(2),
+            EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
-                factor.saturating_mul(self.comparison_value(value, source, source_permanent))
+                factor.saturating_mul(self.comparison_value(value, source))
             }
-            EffectValue::SourcePower => {
-                source_permanent.map_or(0, |id| self.objects[&id].view.power)
-            }
+            EffectValue::SourcePower => source
+                .permanent
+                .map_or(0, |id| self.objects[&id].view.power),
             EffectValue::Property {
                 of,
                 property,
                 aggregate,
             } => aggregate.evaluate(
-                self.select_permanents(of, source, source_permanent)
+                self.select_permanents(of, source)
                     .into_iter()
                     .map(|id| self.property(id, *property)),
             ),
             EffectValue::Objects { of, predicate, .. } => self
-                .select_permanents(of, source, source_permanent)
+                .select_permanents(of, source)
                 .into_iter()
                 .filter(|&id| {
                     predicate
                         .as_ref()
-                        .is_none_or(|p| self.matches(id, p, Some((source, source_permanent))))
+                        .is_none_or(|p| self.matches(id, p, Some(source)))
                 })
                 .count() as i32,
             EffectValue::DistinctManaValues { of } => self
-                .select_permanents(of, source, source_permanent)
+                .select_permanents(of, source)
                 .into_iter()
                 .map(|id| self.game.permanent_mana_value(id))
                 .collect::<BTreeSet<_>>()
@@ -1235,25 +1250,20 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn condition(
-        &self,
-        condition: &Condition,
-        source: ObjectId,
-        source_permanent: Option<PermanentId>,
-    ) -> bool {
+    fn condition(&self, condition: &Condition, source: NodeSource) -> bool {
         match condition {
             Condition::Compare { left, op, right } => op.test(
-                self.comparison_value(left, source, source_permanent),
-                self.comparison_value(right, source, source_permanent),
+                self.comparison_value(left, source),
+                self.comparison_value(right, source),
             ),
             Condition::OpponentControlsMoreCreatures => {
-                let controller = self.controller_of(source, source_permanent);
+                let controller = self.controller_of(source);
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
                 self.objects
                     .keys()
-                    .filter(|&&id| self.matches(id, predicate, Some((source, source_permanent))))
+                    .filter(|&&id| self.matches(id, predicate, Some(source)))
                     .count()
                     >= *count
             }
@@ -1262,31 +1272,29 @@ impl<'a> Context<'a> {
                 predicate,
                 distinct_names,
             } => {
-                let controller = self.controller_of(source, source_permanent);
+                let controller = self.controller_of(source);
                 let matching = self.objects.keys().filter(|&&id| {
-                    self.controller(id) == controller
-                        && self.matches(id, predicate, Some((source, source_permanent)))
+                    self.controller(id) == controller && self.matches(id, predicate, Some(source))
                 });
                 super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
                     self.objects[id].view.name.as_str()
                 })
             }
-            Condition::SourceMatches(predicate) => source_permanent.map_or_else(
-                || self.game.off_battlefield_matches(source, predicate, || 0),
-                |id| self.matches(id, predicate, Some((source, source_permanent))),
+            Condition::SourceMatches(predicate) => source.permanent.map_or_else(
+                || {
+                    self.game
+                        .off_battlefield_matches(source.object, predicate, || 0)
+                },
+                |id| self.matches(id, predicate, Some(source)),
             ),
-            Condition::AllOf(conditions) => conditions
-                .iter()
-                .all(|c| self.condition(c, source, source_permanent)),
-            Condition::AnyOf(conditions) => conditions
-                .iter()
-                .any(|c| self.condition(c, source, source_permanent)),
-            Condition::Not(condition) => !self.condition(condition, source, source_permanent),
+            Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
+            Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),
+            Condition::Not(condition) => !self.condition(condition, source),
             // All other static conditions read state, not characteristics.
             _ => self.game.layer_state_condition(
                 condition,
-                self.controller_of(source, source_permanent),
-                source,
+                self.controller_of(source),
+                source.object,
             ),
         }
     }
@@ -1294,22 +1302,17 @@ impl<'a> Context<'a> {
         &self,
         id: PermanentId,
         predicate: &CardPredicate,
-        source: Option<(ObjectId, Option<PermanentId>)>,
+        source: Option<NodeSource>,
     ) -> bool {
         matches_view(
             self.game,
             id,
             predicate,
             &self.objects[&id].view,
-            source.map(|(s, permanent)| self.source_name(s, permanent)),
+            source.map(|s| self.source_name(s)),
         )
     }
-    fn node(
-        &self,
-        source: ObjectId,
-        source_permanent: Option<PermanentId>,
-        entry: &StaticEntry,
-    ) -> Option<Node> {
+    fn node(&self, source: NodeSource, entry: &StaticEntry) -> Option<Node> {
         let mut plan = SourcePlan::on_source(Vec::new());
         let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
@@ -1396,14 +1399,14 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let object = &self.game.state[source];
+                let object = &self.game.state[source.object];
                 let index = object
                     .attached_grants()
                     .position(|a| a == ability)
                     .unwrap_or(0);
                 let mut granted = ability.clone();
                 granted.granted_by = Some(AbilityGrant {
-                    grantor: source,
+                    grantor: source.object,
                     index,
                 });
                 add(
@@ -1434,7 +1437,6 @@ impl<'a> Context<'a> {
         }
         Some(Node {
             source,
-            source_permanent,
             key: entry.key.clone(),
             timestamp: entry.timestamp,
             targets: None,
@@ -1442,7 +1444,7 @@ impl<'a> Context<'a> {
         })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
-        let grantor = node.source_permanent;
+        let grantor = node.source.permanent;
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             condition.once_each_turn().then(|| GrantClock {

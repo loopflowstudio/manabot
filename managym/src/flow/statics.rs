@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context, SourceSeed},
+        layers::{matches_view, Context, SourceSeed, StateReads},
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -231,12 +231,10 @@ pub(super) struct LayerBoard {
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
     restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
-    reads_mana: bool,
-    reads_tapped: bool,
-    reads_life: bool,
-    reads_counters: bool,
+    reads: StateReads,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
-    /// fixed activations retain their finalized entry across pool/tap writes.
+    /// fixed activations retain their finalized entry across state writes
+    /// that leave the board unchanged.
     dynamic_activations: bool,
 }
 impl std::fmt::Debug for DerivedCache {
@@ -254,26 +252,23 @@ impl DerivedCache {
     }
 
     fn invalidate(&mut self, revisions: Revisions) {
-        let mana_changed = self.revisions.mana_pools != revisions.mana_pools;
-        let tapped_changed = self.revisions.tapped != revisions.tapped;
-        let life_changed = self.revisions.life != revisions.life;
-        let counters_changed = self.revisions.counters != revisions.counters;
+        let state_changed = StateReads {
+            mana: self.revisions.mana_pools != revisions.mana_pools,
+            tapped: self.revisions.tapped != revisions.tapped,
+            life: self.revisions.life != revisions.life,
+            counters: self.revisions.counters != revisions.counters,
+        };
         #[cfg(feature = "benchmark")]
-        if mana_changed {
+        if state_changed.mana {
             crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
         }
-        let characteristics_changed = self.revisions.characteristics != revisions.characteristics;
-        let board_changed = characteristics_changed
-            || (mana_changed && self.board.as_ref().is_some_and(|board| board.reads_mana))
-            || (tapped_changed && self.board.as_ref().is_some_and(|board| board.reads_tapped))
-            || (life_changed && self.board.as_ref().is_some_and(|board| board.reads_life))
-            || (counters_changed
-                && self
-                    .board
-                    .as_ref()
-                    .is_some_and(|board| board.reads_counters));
+        let board_changed = self.revisions.characteristics != revisions.characteristics
+            || self
+                .board
+                .as_ref()
+                .is_some_and(|board| board.reads.overlaps(state_changed));
         if board_changed
-            || ((mana_changed || tapped_changed || counters_changed || life_changed)
+            || (state_changed.any()
                 && self
                     .board
                     .as_ref()
@@ -350,10 +345,7 @@ impl Game {
             permissions.extra_land_plays += land_plays_each_player;
         }
         LayerBoard {
-            reads_mana: context.reads_mana,
-            reads_tapped: context.reads_tapped,
-            reads_life: context.reads_life,
-            reads_counters: context.reads_counters,
+            reads: context.reads,
             dynamic_activations,
             restrictions,
             objects,
@@ -1403,19 +1395,43 @@ mod cache_tests {
         player::PlayerConfig,
     };
 
+    fn grant_pt_static(
+        game: &mut Game,
+        on: PermanentId,
+        scope: StaticScope,
+        condition: Option<Condition>,
+        bonus: i32,
+    ) {
+        let affected = game.affected_permanent(on).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope,
+                condition,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(bonus),
+                    toughness: LayerValue::Fixed(bonus),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+    }
+
     /// A game whose cached board disagrees with its state at the same
     /// revisions, as a write that advanced no revision would leave it.
     #[cfg(debug_assertions)]
     fn with_stale_board(game: &Game) {
         let board = game.layer_board();
+        let mut reads = board.reads;
+        reads.mana = !reads.mana;
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
             play_permissions: board.play_permissions.clone(),
             restrictions: board.restrictions.clone(),
             objects: board.objects.clone(),
-            reads_mana: !board.reads_mana,
-            reads_tapped: board.reads_tapped,
-            reads_life: board.reads_life,
-            reads_counters: board.reads_counters,
+            reads,
             dynamic_activations: board.dynamic_activations,
         }));
     }
@@ -1568,23 +1584,14 @@ mod cache_tests {
 
         // A granted static whose nested condition reads mana must invalidate
         // layers, including when the condition was previously false.
-        let affected = branch.affected_permanent(id).unwrap();
-        branch.apply_continuous(
-            None,
-            PlayerId(0),
-            [affected],
-            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::AnyOf(vec![Condition::UnspentManaAtLeast {
-                    count: 3,
-                }])),
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(2),
-                    toughness: LayerValue::Fixed(2),
-                }],
-            }))),
-            EffectDuration::Indefinite,
+        grant_pt_static(
+            &mut branch,
+            id,
+            StaticScope::This,
+            Some(Condition::AnyOf(vec![Condition::UnspentManaAtLeast {
+                count: 3,
+            }])),
+            2,
         );
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR").into();
@@ -1726,26 +1733,16 @@ mod cache_tests {
                 }],
                 ..Default::default()
             };
-            let affected = branch.affected_permanent(id).unwrap();
-            branch.apply_continuous(
-                None,
-                PlayerId(0),
-                [affected],
-                Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                    scope: if in_scope {
-                        StaticScope::YouControl(tapped.clone())
-                    } else {
-                        StaticScope::This
-                    },
-                    condition: (!in_scope)
-                        .then(|| Condition::AnyOf(vec![Condition::SourceMatches(tapped)])),
-                    characteristic_defining: false,
-                    modifications: vec![Modification::ModifyPt {
-                        power: LayerValue::Fixed(2),
-                        toughness: LayerValue::Fixed(2),
-                    }],
-                }))),
-                EffectDuration::Indefinite,
+            grant_pt_static(
+                &mut branch,
+                id,
+                if in_scope {
+                    StaticScope::YouControl(tapped.clone())
+                } else {
+                    StaticScope::This
+                },
+                (!in_scope).then(|| Condition::AnyOf(vec![Condition::SourceMatches(tapped)])),
+                2,
             );
             assert_eq!(branch.characteristics(id).pt(), (2, 2));
             branch.state.tap(id);
@@ -1771,24 +1768,15 @@ mod cache_tests {
         );
         assert!(Arc::ptr_eq(&board, &game.layer_board()));
 
-        let affected = game.affected_permanent(id).unwrap();
-        game.apply_continuous(
+        grant_pt_static(
+            &mut game,
+            id,
+            StaticScope::YouControl(CardPredicate {
+                no_counters: true,
+                ..Default::default()
+            }),
             None,
-            PlayerId(0),
-            [affected],
-            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::YouControl(CardPredicate {
-                    no_counters: true,
-                    ..Default::default()
-                }),
-                condition: None,
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(2),
-                    toughness: LayerValue::Fixed(2),
-                }],
-            }))),
-            EffectDuration::Indefinite,
+            2,
         );
         let permanent = game.state.permanents[id].as_mut().unwrap();
         permanent.tapped = true;
@@ -1848,21 +1836,12 @@ mod cache_tests {
         assert!(Arc::ptr_eq(&board, &game.layer_board()));
 
         let mut life_loss_branch = game.clone();
-        let affected = life_loss_branch.affected_permanent(attacker).unwrap();
-        life_loss_branch.apply_continuous(
-            None,
-            PlayerId(0),
-            [affected],
-            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 4 }),
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(2),
-                    toughness: LayerValue::Fixed(2),
-                }],
-            }))),
-            EffectDuration::Indefinite,
+        grant_pt_static(
+            &mut life_loss_branch,
+            attacker,
+            StaticScope::This,
+            Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 4 }),
+            2,
         );
         assert_eq!(life_loss_branch.characteristics(attacker).pt(), (2, 2));
         assert!(
@@ -1919,52 +1898,34 @@ mod cache_tests {
         // Counter-reading statics (SourceCountersAtLeast, ObjectProperty::Counters,
         // and no_counters) set reads_counters and evict on non-P/T counter writes.
         let mut quest_branch = game.clone();
-        let affected = quest_branch.affected_permanent(attacker).unwrap();
-        quest_branch.apply_continuous(
-            None,
-            PlayerId(0),
-            [affected],
-            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::SourceCountersAtLeast {
-                    kind: CounterKind::Quest,
-                    count: 1,
-                }),
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(2),
-                    toughness: LayerValue::Fixed(2),
-                }],
-            }))),
-            EffectDuration::Indefinite,
+        grant_pt_static(
+            &mut quest_branch,
+            attacker,
+            StaticScope::This,
+            Some(Condition::SourceCountersAtLeast {
+                kind: CounterKind::Quest,
+                count: 1,
+            }),
+            2,
         );
         assert_eq!(quest_branch.characteristics(attacker).pt(), (3, 3));
         assert!(quest_branch.commit_counter_change(attacker_obj, CounterKind::Quest, 1, None));
         assert_eq!(quest_branch.characteristics(attacker).pt(), (5, 5));
 
         let mut loyalty_branch = game.clone();
-        let affected = loyalty_branch.affected_permanent(attacker).unwrap();
-        loyalty_branch.apply_continuous(
-            None,
-            PlayerId(0),
-            [affected],
-            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
-                scope: StaticScope::This,
-                condition: Some(Condition::compare(
-                    ObjectSelector::each(Scope::Battlefield, CardPredicate::default()).property(
-                        ObjectProperty::Counters(CounterKind::Loyalty),
-                        Aggregate::Sum,
-                    ),
-                    CompareOp::Ge,
-                    starting_loyalty - 1,
-                )),
-                characteristic_defining: false,
-                modifications: vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            }))),
-            EffectDuration::Indefinite,
+        grant_pt_static(
+            &mut loyalty_branch,
+            attacker,
+            StaticScope::This,
+            Some(Condition::compare(
+                ObjectSelector::each(Scope::Battlefield, CardPredicate::default()).property(
+                    ObjectProperty::Counters(CounterKind::Loyalty),
+                    Aggregate::Sum,
+                ),
+                CompareOp::Ge,
+                starting_loyalty - 1,
+            )),
+            1,
         );
         assert_eq!(loyalty_branch.characteristics(attacker).pt(), (4, 4));
         assert!(loyalty_branch.commit_counter_change(walker_obj, CounterKind::Loyalty, -1, None));
