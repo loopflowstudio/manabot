@@ -898,9 +898,9 @@ fn reach(root: &Env, label: &str) -> Env {
 /// Stop at the real response to a single stack object. In the Connoisseur
 /// position its first resolution must already have recorded the ordinal.
 fn before_resolution(mut env: Env, after_first: bool) -> Env {
-    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    let turn = env.fixture_game_mut().state.turn.turn_number;
     for _ in 0..32 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
         let ready = game.state.stack_objects.len() == 1
             && game.state.priority.consecutive_passes == 1
@@ -930,7 +930,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
-                        env.benchmark_game_mut()
+                        env.fixture_game_mut()
                             .create_token("token.ally", PlayerId(0), false)
                             .unwrap();
                     }
