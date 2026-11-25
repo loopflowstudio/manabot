@@ -38,6 +38,24 @@ function ev(
 }
 
 describe('walk stops over kept boards', () => {
+  it('tells each of two identical combat hits in one stop', () => {
+    const giant = (entity: number) => ({ objects: { [`${entity}:1`]: 'Hill Giant' } });
+    const events: PresentationEvent[] = [
+      ev(10, { kind: 'turn_started', player: 1, turn_number: 14 }),
+      ev(11, { kind: 'attack_group', attackers: [{ entity: 5, incarnation: 1 }, { entity: 6, incarnation: 1 }], defender: { kind: 'player', id: 0 } }, {
+        labels: { objects: { '5:1': 'Hill Giant', '6:1': 'Hill Giant' } },
+      }),
+      ev(12, { kind: 'damage', source: { kind: 'object', id: { entity: 5, incarnation: 1 } }, target: { kind: 'player', id: 0 }, amount: 3 }, { labels: giant(5) }),
+      ev(13, { kind: 'damage', source: { kind: 'object', id: { entity: 6, incarnation: 1 } }, target: { kind: 'player', id: 0 }, amount: 3 }, { labels: giant(6) }),
+    ];
+    const boards: StepBoard[] = [
+      { first: 11, last: 11, projection: obs('attack') },
+      { first: 12, last: 13, projection: obs('damage') },
+    ];
+    const stops = walkStops(buildHistory(events, () => EMPTY, PLAYERS), boards);
+    expect(stops.at(-1)?.caption).toBe('Hill Giant dealt 3 to you · Hill Giant dealt 3 to you');
+  });
+
   it('groups lines sharing one kept board into one stop and separates cast, damage, death and trigger', () => {
     const events: PresentationEvent[] = [
       ev(40, { kind: 'turn_started', player: 1, turn_number: 6 }),

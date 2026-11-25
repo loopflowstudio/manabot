@@ -186,7 +186,10 @@ export function walkStops(
       }
       if (!prev.lineIds.includes(line.id)) prev.lineIds.push(line.id);
       if (line.isMove) prev.moveStart = true;
-      if (line.sentence && !prev.caption.includes(line.sentence)) {
+      // Each line is its own fact: two creatures dealing the same damage read twice.
+      // Only a consequence its own parent's sentence already states is left out.
+      const statedByParent = parent !== null && prev.lineIds.includes(parent.id) && parent.sentence.includes(line.sentence);
+      if (line.sentence && !statedByParent) {
         prev.caption = prev.caption ? `${prev.caption} · ${line.sentence}` : line.sentence;
       }
       for (const subject of line.subjects) {

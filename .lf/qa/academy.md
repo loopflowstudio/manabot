@@ -10,6 +10,13 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   an opponent read-out only ends the read-out. If a click stalls while
   previewing an offer, check whether the rows move under the pointer.
 - Capture tapped lands with a `fullPage` screenshot.
+- Offer text starts with its shortcut number ("1 Play Forest"), so match
+  offers unanchored, never `/^Play/`. A game's presentation events are in
+  `<traces-dir>/play.sqlite`, `attempts.trace_json` → `events[].presentation`;
+  feed them to `walkStops`/`buildCombatTable` in a scratch Vitest to explain
+  a walk caption offline. Giant Spider (2/4) against Hill Giant + Lightning Bolt
+  (`--opponent search --sims 8 --seed 7`) gives surviving damaged creatures,
+  turn-boundary damage and 3–5-creature combats within 19 turns.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
