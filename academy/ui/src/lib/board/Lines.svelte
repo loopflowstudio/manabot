@@ -6,6 +6,7 @@
    * drawn, and never take pointer input. Each line is also said in words: the
    * stack entry, the blocker's accessible name and the log carry the same facts.
    */
+  import { LONGEST_TRAVEL_MS, prefersReducedMotion } from './motion';
   import type { Endpoint, BoardLine } from './recent';
 
   interface Props {
@@ -46,16 +47,23 @@
     });
   }
 
-  // Remeasure after the frame lays out, and again once cards have finished travelling.
+  // Remeasure every frame while cards travel, so a line follows its endpoints
+  // instead of pointing from where a card was, then on any resize.
   $effect(() => {
     void revision;
-    void lines;
     if (!root) return;
-    const first = requestAnimationFrame(measure);
-    const settled = window.setTimeout(measure, 360);
+    if (!lines.length) { drawn = []; return; }
+    const followFor = prefersReducedMotion() ? 0 : LONGEST_TRAVEL_MS;
+    const start = performance.now();
+    let frame = 0;
+    const follow = (now: number): void => {
+      measure();
+      if (followFor && now - start <= followFor) frame = requestAnimationFrame(follow);
+    };
+    frame = requestAnimationFrame(follow);
     const observer = new ResizeObserver(() => measure());
     observer.observe(root);
-    return () => { cancelAnimationFrame(first); window.clearTimeout(settled); observer.disconnect(); };
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   });
 </script>
 
@@ -79,7 +87,7 @@
 {/if}
 
 <style>
-  .lines { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 35; pointer-events: none; overflow: visible; }
+  .lines { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: var(--layer-lines); pointer-events: none; overflow: visible; }
   .line { fill: none; stroke-width: 2.25; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw calc(var(--motion-move) * 2) var(--motion-move-ease); }
   .line.target { stroke: var(--accent); }
   .line.block { stroke: var(--text-secondary); stroke-dasharray: 0.02 0.018; animation: none; }
