@@ -1,0 +1,17 @@
+at: e025de680c0b01d6efdb581a0dae1c7291553150
+first:
+  - path: docs/training.md
+    why: Recovery options and accepted checkpoint formats
+  - path: manabot/training/state/continuation.py
+    why: Reject old saves before reading portable tensors
+  - path: manabot/training/loops/self_play.py
+    why: Model and readings checks precede weight restoration
+  - path: manabot/belief/checkpoint.py
+    why: Both backends admit the same sampler bytes
+  - path: managym/replay.py
+    why: Source and native identity checks for replay
+  - path: tests/training/test_cross_backend_continuation.py
+    why: Old save refusal preserves live weights and disk state
+  - path: tests/belief/test_sampling_report.py
+    why: Real archives exercise both readers
+hide: []
