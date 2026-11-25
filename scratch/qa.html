@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><title>MTG-437 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;color:#222}pre{background:#f5f2ea;padding:.8em;overflow:auto;font-size:12px}h2{border-bottom:1px solid #ccc}</style></head><body>
+<h1>MTG-437 QA: jace on this branch at 1cfb00fe18</h1>
+<p>The compress commit (9e25b35ee1) changed Rust and Python after the earlier consumer proof, so every check below was rerun at HEAD. I rebuilt the cp313 release wheel once, replaced the checkout's extension atomically, and reinstalled manabot (non-editable) and managym into jace's isolated environment at jace 9d212cb. jace itself was not changed.</p>
+<h2>1. jace's own suite (the three fork regressions, GRU merge, learner, pool startup error)</h2>
+<pre>
+...................................                                      [100%]
+35 passed in 27.28s
+uv run --no-sync pytest tests/test_forks.py tests/test_fork_batch.py    -q -p  35.54s user 14.53s system 179% cpu 27.918 total
+</pre>
+<h2>2. Real spawn-queue collection through jace's MultiProcessCollector</h2>
+<p>Two spawned workers with one env each, seed 7. The first run is stateless self-play; the second uses a GRU snapshot opponent. Both batches end on a terminal row, and the chosen-action log probabilities match the gathered policy rows. Row counts match the pre-compress run.</p>
+<pre>
+memory='none' rows=332 terminals=4 prefixes=0
+memory='gru' rows=285 terminals=2 prefixes=669
+</pre>
+<h2>3. RolloutBatch.concatenate on the same worker output vs jace's dense merge</h2>
+<p>The driver wraps jace's <code>merge_rollout_batches</code> in the parent so both merges see identical unpacked worker batches. Actions, log probabilities, rewards, dones, values and the full <code>policy_rows</code> log-probability tables are bit-identical. The packed merge keeps <code>ObservationSelection</code> rows.</p>
+<pre>
+memory='none' rows=332 parts=[(96, 1), (236, 1)] prefixes=0 dense_merge=12.2ms concatenate=0.14ms identical=True
+memory='gru' rows=285 parts=[(158, 1), (127, 1)] prefixes=669 dense_merge=28.3ms concatenate=0.47ms identical=True
+</pre>
+<h2>4. Shim and error paths</h2>
+<pre>
+encoder.max_actions 512 | direct 512 | ObservationEncoder 512
+warnings: ['ObservationSpace.encoder is deprecated and removed in 0.3.0; ...', 'ObservationSpace.max_actions is deprecated and removed in 0.3.0']
+(ObservationEncoder itself warns at import: module __getattr__)
+unknown attr: AttributeError: ObservationSpace has no attribute 'not_a_field'
+empty: ValueError: cannot concatenate empty rollout batches
+memory vs none: ValueError: recorded memory capacities differ
+dense vs native: ValueError: cannot mix native and dense observations
+multi-column: ValueError: rollout concatenation requires packed [rows, 1] actions and dones
+deepcopy of a GRU worker batch: policy rows identical
+tampered restore (wrong batch size / truncated table): ValueError: invalid packed observation table action_focus
+</pre>
+<h2>5. What a worker pays on the wire (GRU worker, 158 learner rows, 405 recorded rows)</h2>
+<pre>
+whole part 5,234,906 B; jace pack_batch_for_ipc 5,231,630 B
+recorded.memory prefixes 1,176,749 B (archive 1,175,143 B)
+rows selection 3,988,978 B = coordinates 2,814,918 B + shared prefixes 1,168,887 B + space 637 B
+action_data 1,066,971 B; next_obs 10,357 B
+</pre>
+<p>That is about 7 KB per native row with one env per worker; prefixes are shared through pickle's memo table. Recorded rows outnumber learner rows here because the paired collector retains both seats, which is the known follow-up in questions.md.</p>
+<h2>6. In-repo acceptance with the rebuilt extension</h2>
+<pre>uv run --extra dev pytest tests/training/test_rollout_transport.py tests/env/test_named_observation_layout.py tests/test_package_boundaries.py -q
+85 passed in 17.77s</pre>
+<h2>Summary</h2>
+<ul>
+<li><b>Works:</b> everything in the outcome: unchanged jace passes, spawn-queue transfer with and without memory, packed and dense merges agree, and the shim answers with warnings naming 0.3.0.</li>
+<li><b>Fixed:</b> nothing needed fixing. The only change is the rebuilt extension in the checkout (an untracked binary).</li>
+<li><b>Not reached:</b> the Rust debug suite, clippy and Engine Budget (left to gate/CI); Linux/cp312 consumers.</li>
+<li><b>Still rough, minor:</b> restore errors from the sealed <code>_restore_observation_batch</code> name the table but not what failed (for example, a batch-size mismatch). That function is only reachable through corrupt pickles. Paired collection still ships both learners' rows (follow-up already filed in questions.md).</li>
+</ul></body></html>
