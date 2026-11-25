@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultStops } from '$lib/stops';
-import { emptyOnce, nextStopState, phaseTrack, pruneOnce, spentOnce, withStopState } from './phases';
+import { emptyOnce, nextHeldOnce, nextStopState, onceHeldAt, phaseTrack, pruneOnce, withStopState } from './phases';
 
 const turn = (step: string) => ({ turn_number: 3, active_player: 0, active_player_id: 1, agent_player: 0, step }) as never;
 
@@ -24,22 +24,39 @@ describe('stops per step, for both turns', () => {
     expect(stops.my).toContain('upkeep');
   });
 
-  it('spends a once stop only where the game stopped, on the turn it belongs to', () => {
+  it('holds a once stop only at a priority window on the turn it belongs to', () => {
     const { stops, once } = withStopState(defaultStops(), emptyOnce(), 'opponent', 'upkeep', 'once');
-    expect(spentOnce(turn('BEGINNING_UPKEEP'), false, stops, once)).toEqual({ side: 'opponent', step: 'upkeep' });
-    expect(spentOnce(turn('BEGINNING_UPKEEP'), true, stops, once)).toBeNull();
-    expect(spentOnce(turn('BEGINNING_DRAW'), false, stops, once)).toBeNull();
-    // An every-time stop is never spent.
-    expect(spentOnce(turn('ENDING_END'), false, stops, once)).toBeNull();
-    // In Full control every priority choice pauses; nothing is spent.
-    expect(spentOnce(turn('BEGINNING_UPKEEP'), false, { ...stops, auto_pass: false }, once)).toBeNull();
-    // Non-priority decisions (declaring attackers/blockers) never spend a once stop.
+    expect(onceHeldAt(turn('BEGINNING_UPKEEP'), false, stops, once)).toEqual({ side: 'opponent', step: 'upkeep' });
+    expect(onceHeldAt(turn('BEGINNING_UPKEEP'), true, stops, once)).toBeNull();
+    expect(onceHeldAt(turn('BEGINNING_DRAW'), false, stops, once)).toBeNull();
+    // An every-time stop is never held once.
+    expect(onceHeldAt(turn('ENDING_END'), false, stops, once)).toBeNull();
+    // In Full control every priority choice pauses; nothing is held once.
+    expect(onceHeldAt(turn('BEGINNING_UPKEEP'), false, { ...stops, auto_pass: false }, once)).toBeNull();
+    // Non-priority decisions (declaring attackers/blockers) never hold a once stop.
     const combatOnce = withStopState(defaultStops(), emptyOnce(), 'my', 'declare_attackers', 'once');
-    expect(spentOnce(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'DECLARE_ATTACKER')).toBeNull();
-    expect(spentOnce(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'PRIORITY')).toEqual({
+    expect(onceHeldAt(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'DECLARE_ATTACKER')).toBeNull();
+    expect(onceHeldAt(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'PRIORITY')).toEqual({
       side: 'my',
       step: 'declare_attackers',
     });
+  });
+
+  it('spends a held once stop when the person leaves its window, not on arrival', () => {
+    const attackers = { match: 'm', side: 'my' as const, step: 'declare_attackers' };
+    const arrived = { side: 'my' as const, step: 'declare_attackers' };
+    // Arriving holds it; nothing is spent while the person is still there.
+    let next = nextHeldOnce(null, attackers, arrived);
+    expect(next).toEqual({ held: attackers, spend: null });
+    // Casting, targeting and paying within the window keep it held.
+    next = nextHeldOnce(next.held, attackers, null);
+    expect(next).toEqual({ held: attackers, spend: null });
+    // Leaving for blockers spends it.
+    next = nextHeldOnce(next.held, { ...attackers, step: 'declare_blockers' }, null);
+    expect(next).toEqual({ held: null, spend: arrived });
+    // A new match or the other side's turn also leaves the window.
+    expect(nextHeldOnce(attackers, { ...attackers, match: 'n' }, null).spend).toEqual(arrived);
+    expect(nextHeldOnce(attackers, { ...attackers, side: 'opponent' }, null).spend).toEqual(arrived);
   });
 
   it('forgets once for a stop the Menu turned off', () => {

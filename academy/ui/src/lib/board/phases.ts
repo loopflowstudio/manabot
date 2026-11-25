@@ -4,8 +4,9 @@
  * A stop belongs to a step and a side (your turn or the opponent's, as
  * `StopsConfig` keeps them) and is in one of three states: off, every time,
  * or once. "Once" is the client's own automation over the same config: the
- * stop is set in `StopsConfig` and also listed in `OnceStops`; when the game
- * stops there the client clears it (`spentOnce`), and the move list says so.
+ * stop is set in `StopsConfig` and also listed in `OnceStops`; the game holds
+ * there for the person (`onceHeldAt`), and when they leave that window the
+ * client clears it and the move list says so.
  * The bar shows both sides' stops on every step, so a person can set the
  * opponent's end-step stop during their own turn; the side whose turn it is
  * decides which stop holds now.
@@ -95,11 +96,11 @@ export function stopStepOf(step: string): string | null {
 }
 
 /**
- * The once stop a decision spends: the game stopped for the person at a step
- * where the turn's side has a once stop. Clearing it is the client's
- * automation, so it is reported, never hidden.
+ * The once stop a decision is held at: the game stopped for the person at a
+ * priority window where the turn's side has a once stop. The client spends it
+ * when the person leaves that window, never on arrival.
  */
-export function spentOnce(
+export function onceHeldAt(
   turn: Observation['turn'],
   yourTurn: boolean,
   stops: StopsConfig,
@@ -111,6 +112,31 @@ export function spentOnce(
   const side: StopSide = yourTurn ? 'my' : 'opponent';
   if (!step || !stops.auto_pass || stateOf(stops, once, side, step) !== 'once') return null;
   return { side, step };
+}
+
+/** Where a frame is, as a once stop sees it: a match, a side, a stop window. */
+export interface OncePlace {
+  match: string;
+  side: StopSide;
+  step: string | null;
+}
+
+/**
+ * The once stop held after a frame at `here`, and the one it spends. A held
+ * stop is spent when the person leaves its window (another match, side or
+ * window); acting within it (casting, targeting, paying) keeps it held.
+ * Spending on arrival would tell the server the window no longer stops, and
+ * the server passes off such a window. `arrived` is `onceHeldAt` for a priority
+ * window the game stopped at for the person, else null.
+ */
+export function nextHeldOnce(
+  held: OncePlace | null,
+  here: OncePlace,
+  arrived: { side: StopSide; step: string } | null,
+): { held: OncePlace | null; spend: { side: StopSide; step: string } | null } {
+  const left = held !== null && (held.match !== here.match || held.side !== here.side || held.step !== here.step);
+  const spend = left && held.step !== null ? { side: held.side, step: held.step } : null;
+  return { held: arrived ? { match: here.match, ...arrived } : left ? null : held, spend };
 }
 
 export function stopLabel(step: string): string {

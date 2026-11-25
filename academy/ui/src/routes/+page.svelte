@@ -27,7 +27,7 @@
   import { gameResult } from '$lib/board/result';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
   import { logMarks } from '$lib/board/replay';
-  import { spentOnce } from '$lib/board/phases';
+  import { nextHeldOnce, onceHeldAt, stopStepOf, type OncePlace } from '$lib/board/phases';
   import {
     connect,
     disconnect,
@@ -295,33 +295,27 @@
     syncStopsToServer();
   }
 
-  // A stop set to hold once is spent when the game arrives at it for you: the
-  // client clears it and the move list says so (automation, not your move).
-  // Acting again within the step the game stopped at spends nothing.
+  // A stop set to hold once holds the game for you and is spent when you leave
+  // its window (`nextHeldOnce`): the client clears it and the move list says
+  // so (automation, not your move).
   let onceChecked = -1;
-  let arrivedAt = '';
+  let heldOnce: OncePlace | null = null;
   $effect(() => {
     const frame = gameStore.protocolFrame;
     if (!frame || frame.revision === onceChecked) return;
     onceChecked = frame.revision;
-    // Guard before recording `arrivedAt` so non-priority choices in the same
-    // step (e.g. DECLARE_ATTACKER) do not mark it visited before its priority window.
-    if (
-      gameStore.watchMode ||
-      frame.status === 'game_over' ||
-      frame.action_space !== 'PRIORITY' ||
-      frame.prompt?.actor !== frame.projection.agent.player_index
-    ) return;
+    if (gameStore.watchMode) return;
     const turn = frame.projection.turn;
-    const at = `${frame.match_id}:${turn.turn_number}:${turn.step}`;
-    if (at === arrivedAt) return;
-    arrivedAt = at;
+    const side: StopSide = turn.active_player_id === frame.projection.agent.id ? 'my' : 'opponent';
     untrack(() => {
-      const yourTurn = turn.active_player_id === frame.projection.agent.id;
-      const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops, frame.action_space);
-      if (!spent) return;
-      gameStore.spendOnce(spent.side, spent.step);
-      syncStopsToServer();
+      const yours = frame.status !== 'game_over' && frame.prompt?.actor === frame.projection.agent.player_index;
+      const arrived = yours ? onceHeldAt(turn, side === 'my', gameStore.stops, gameStore.onceStops, frame.action_space) : null;
+      const next = nextHeldOnce(heldOnce, { match: frame.match_id, side, step: stopStepOf(turn.step) }, arrived);
+      heldOnce = next.held;
+      if (next.spend && gameStore.onceStops[next.spend.side].includes(next.spend.step)) {
+        gameStore.spendOnce(next.spend.side, next.spend.step);
+        syncStopsToServer();
+      }
     });
   });
 

@@ -179,7 +179,7 @@ export class GameStore {
   // in memory by the server's effective-config echo.
   stops = $state<StopsConfig>(loadStoredStops());
   // Stops set to hold once: still ordinary stops in `stops`, cleared by the
-  // client when the game stops there (`spendOnce`).
+  // client when the person leaves a window the game held there (`spendOnce`).
   onceStops = $state<OnceStops>(loadStoredOnce());
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
@@ -353,7 +353,7 @@ export class GameStore {
     this.updateStops(next.stops);
   }
 
-  /** The game stopped at a once stop: clear it, and say so as automation. */
+  /** The person left a window a once stop held: clear it, and say so as automation. */
   spendOnce(side: StopSide, step: string): void {
     const next = withStopState(this.stops, this.onceStops, side, step, 'off');
     this.updateOnce(next.once);
