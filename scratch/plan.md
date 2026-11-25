@@ -733,25 +733,18 @@ change.
 
 ## Passes
 
-1. **Native layer with combat parity and the library kinds** — done (`b3ae75976c`).
-   Realign 2026-11-25: `tests/env/test_group.py` (2 tests) and
-   `scripts/public_api.py check` pass; the 7 Rust tests in
-   `managym/tests/rules/group.rs` were not rerun here (gate runs them in debug).
-2. **Academy authority & `testing-house-v1` schema** — done (`b510844e42`).
-   `tests/academy/test_group_command.py` (6 tests),
-   `tests/academy/test_shared_table_protocol.py` (4 tests),
-   `tests/academy/test_shared_table.py` (6 tests), and
-   `scripts/public_api.py check` pass.
-   Realign 2026-11-25: the server no longer serves `/combat-preview`, but the
-   browser still calls it (`socket.svelte.ts:1079` `fetchCombatPreview`,
-   `Board.svelte` `combatPreview` prop, `+page.svelte:554`, mocked in
-   `e2e/drag-play.spec.ts:345`). Live combat drafting in the browser is broken
-   until pass 3 replaces it; this branch must not ship without pass 3.
-3. **Browser and docs** — done (`c870fb9349`). `svelte-check` (0 errors, 0
-   warnings), unit tests (`design`, `socket`, `shared-table-protocol`, `group`,
-   `arrange`, `combat`), and Playwright acceptance specs
-   (`grouped-decisions`, `combat-presentation`, `drag-play`, `keyboard-play`,
-   34/34) pass. All passes complete; ready for gate.
+1. Native layer with combat parity and library kinds — done (`b3ae75976c`).
+2. Academy authority and `testing-house-v1` schema — done (`b510844e42`).
+3. Browser and docs — done (`c870fb9349`). Every `/combat-preview` caller,
+   `stepOffer`, the send loop and `Stop sending` are gone; `docs/academy.md`,
+   `managym/README.md` and AGENTS.md "Decision ownership" are updated. Recorded
+   as passing: `svelte-check`, the UI unit tests, and Playwright
+   `grouped-decisions`, `combat-presentation`, `drag-play` and `keyboard-play`
+   (34/34).
+
+Nothing remains to build. Deferred to gate: the Rust group and
+`combat_preview` tests in debug (never run on this branch), the full
+acceptance command above, and the demo.
 
 ## Done when
 
