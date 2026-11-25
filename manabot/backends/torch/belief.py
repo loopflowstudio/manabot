@@ -10,8 +10,7 @@ slots. This domain does not represent library order or other hidden state.
 
 from __future__ import annotations
 
-import io
-from typing import Any, Callable, Mapping, Sequence, cast
+from typing import Callable, Mapping, Sequence, cast
 
 import numpy as np
 import torch
@@ -265,27 +264,12 @@ _RECURRENT_NAMES = {
 }
 
 
-def canonical_sampler_parameters(
-    state: Mapping[str, torch.Tensor],
-) -> dict[str, np.ndarray]:
+def sampler_parameters(model: object) -> dict[str, np.ndarray]:
+    state = cast(AutoregressiveBeliefSampler, model).state_dict()
     return {
         _RECURRENT_NAMES.get(k, k): value.detach().cpu().numpy()
         for k, value in state.items()
     }
-
-
-def sampler_parameters(model: object) -> dict[str, np.ndarray]:
-    return canonical_sampler_parameters(
-        cast(AutoregressiveBeliefSampler, model).state_dict()
-    )
-
-
-def decode_legacy_sampler(data: bytes) -> dict[str, Any]:
-    payload = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
-    if not isinstance(payload, dict) or not isinstance(payload.get("state_dict"), dict):
-        raise ValueError("invalid legacy sampler checkpoint")
-    payload["state_dict"] = canonical_sampler_parameters(payload["state_dict"])
-    return payload
 
 
 def restore_sampler(

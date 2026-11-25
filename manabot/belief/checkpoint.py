@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import struct
 import tempfile
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
@@ -71,13 +72,12 @@ def read_belief_sampler(
     data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != expected_checkpoint_identity:
         raise ValueError("sampler checkpoint byte identity mismatch")
-    if data.startswith(b"PK\x03\x04"):
-        payload = codec.decode_legacy_sampler(data)
-        parameters = payload.pop("state_dict")
-    else:
+    try:
         parameters, metadata = decode_safetensors(data)
         payload = {key: json.loads(value) for key, value in metadata.items()}
-    if not isinstance(payload, dict) or payload.get("format") != FORMAT:
+    except (ValueError, TypeError, KeyError, AttributeError, struct.error) as error:
+        raise ValueError("unknown sampler checkpoint format") from error
+    if payload.get("format") != FORMAT:
         raise ValueError("unknown sampler checkpoint format")
     expected = {
         "dataset_identity": expected_dataset_identity,

@@ -13,7 +13,11 @@ import torch
 from manabot.backends import resolve
 from manabot.backends.torch import belief_fit
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
-from manabot.belief.checkpoint import SamplerIdentities, read_belief_sampler
+from manabot.belief.checkpoint import (
+    SamplerIdentities,
+    read_belief_sampler,
+    save_belief_sampler,
+)
 from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -22,7 +26,7 @@ from manabot.belief.sampling_data import (
     Split,
     save_dataset,
 )
-from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
+from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics, score_fit
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
 
@@ -60,31 +64,38 @@ def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
     )
 
 
-def _checkpoint(path: Path, dataset: SamplerDataset, seed: int | None = 19) -> str:
+def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(0 if seed is None else seed)
+        torch.manual_seed(seed)
         model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
         # Fixed nonzero corrections exercise learned inference without training.
         with torch.no_grad():
             model.correction.bias.copy_(
                 torch.linspace(-0.4, 0.4, dataset.schema.max_count + 1)
             )
-    torch.save(
-        {
-            "format": "manabot.autoregressive-belief-sampler/v1",
-            "schema": asdict(dataset.schema),
-            "schema_identity": dataset.schema.identity,
-            "dataset_identity": dataset.identity,
-            "policy_identity": dataset.policy_identity,
-            "world_identity": dataset.world_identity,
-            "hidden_size": 4,
-            "history_dropout": 0.0,
-            "state_dict": model.state_dict(),
-            "metrics": {} if seed is None else {"seed": seed},
-        },
-        path,
+    rows = {
+        split: tuple(
+            row
+            for game in dataset.games
+            if game.split == split
+            for row in game.examples
+        )
+        for split in ("train", "validation", "test")
+    }
+    result = score_fit(
+        model,
+        dataset,
+        rows,
+        belief_fit.evaluate_sampler,
+        steps=0,
+        batch_size=1,
+        seed=seed,
+        evaluation_samples=1,
+        check=None,
+        fit_seconds=0.0,
+        parameter_bytes=sum(p.nbytes for p in model.parameters()),
     )
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return save_belief_sampler(path, result, dataset, codec=resolve("torch").belief)
 
 
 def _statistical(report: object) -> object:
@@ -101,7 +112,7 @@ def _statistical(report: object) -> object:
 
 def test_saved_cli_reproduces_statistics_and_refuses_overwrite(tmp_path: Path) -> None:
     dataset = _dataset()
-    data, checkpoint = tmp_path / "data.json", tmp_path / "sampler.pt"
+    data, checkpoint = tmp_path / "data.json", tmp_path / "sampler.safetensors"
     save_dataset(dataset, data)
     digest = _checkpoint(checkpoint, dataset)
     args = [
@@ -158,7 +169,7 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     training = _dataset()
-    train_path, checkpoint = tmp_path / "train.json", tmp_path / "model.pt"
+    train_path, checkpoint = tmp_path / "train.json", tmp_path / "model.safetensors"
     save_dataset(training, train_path)
     digest = _checkpoint(checkpoint, training)
     reports = []
@@ -237,7 +248,7 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
 def test_wide_count_space_uses_bounded_sampling(tmp_path: Path) -> None:
     # 40 names x 80 copies, 80-card hand: enumerating support is infeasible.
     dataset = _dataset(40, 80)
-    data, checkpoint = tmp_path / "wide.json", tmp_path / "wide.pt"
+    data, checkpoint = tmp_path / "wide.json", tmp_path / "wide.safetensors"
     save_dataset(dataset, data)
     digest = _checkpoint(checkpoint, dataset)
     report = torch_report(
@@ -277,7 +288,7 @@ def test_report_scores_joint_presence_and_counts_invalid_hands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dataset = _dataset()
-    data, checkpoint = tmp_path / "data.json", tmp_path / "model.pt"
+    data, checkpoint = tmp_path / "data.json", tmp_path / "model.safetensors"
     save_dataset(dataset, data)
     digest = _checkpoint(checkpoint, dataset)
 
@@ -335,7 +346,7 @@ def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
     attempts: list[FitAttempt] = []
     reports = []
     for seed in (10, 11):
-        checkpoint = tmp_path / f"model-{seed}.pt"
+        checkpoint = tmp_path / f"model-{seed}.safetensors"
         digest = _checkpoint(checkpoint, dataset, seed)
         report = torch_report(
             data,
@@ -418,11 +429,28 @@ def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
     assert pooled.conjunction_brier is None
 
 
-def test_legacy_sampler_zip_requires_torch(tmp_path: Path) -> None:
-    pytest.importorskip("mlx.core")
+@pytest.mark.parametrize("reader", ["torch", "mlx"])
+def test_legacy_sampler_zip_is_refused(tmp_path: Path, reader: str) -> None:
+    if reader == "mlx":
+        pytest.importorskip("mlx.core")
     dataset = _dataset()
     path = tmp_path / "legacy.safetensors"
-    digest = _checkpoint(path, dataset, seed=None)
+    model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
+    torch.save(
+        {
+            "format": "manabot.autoregressive-belief-sampler/v1",
+            "schema": asdict(dataset.schema),
+            "schema_identity": dataset.schema.identity,
+            "dataset_identity": dataset.identity,
+            "policy_identity": dataset.policy_identity,
+            "world_identity": dataset.world_identity,
+            "hidden_size": model.hidden_size,
+            "history_dropout": model.history_dropout,
+            "state_dict": model.state_dict(),
+        },
+        path,
+    )
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
     assert path.read_bytes().startswith(b"PK\x03\x04")
     bindings = SamplerIdentities(
         expected_dataset_identity=dataset.identity,
@@ -431,7 +459,5 @@ def test_legacy_sampler_zip_requires_torch(tmp_path: Path) -> None:
         expected_world_identity=dataset.world_identity,
         expected_checkpoint_identity=digest,
     )
-    admitted = read_belief_sampler(path, codec=resolve("torch").belief, **bindings)
-    assert admitted.model.schema == dataset.schema and admitted.training_seed is None
-    with pytest.raises(ValueError, match="Torch"):
-        read_belief_sampler(path, codec=resolve("mlx").belief, **bindings)
+    with pytest.raises(ValueError, match="^unknown sampler checkpoint format$"):
+        read_belief_sampler(path, codec=resolve(reader).belief, **bindings)

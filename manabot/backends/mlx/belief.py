@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import cast
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -206,10 +206,6 @@ class PhysicalDistribution:
             return counts[0].tolist(), float(deals.log_prob(counts)[0])
 
         return draw_hand_batch(prepared, count, seed, check, draw)
-
-
-def decode_legacy_sampler(data: bytes) -> dict[str, Any]:
-    raise ValueError("legacy .pt belief samplers require the Torch backend")
 
 
 def sampler_parameters(model: object) -> dict[str, np.ndarray]:
