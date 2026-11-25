@@ -165,3 +165,24 @@ Slice 4 choices (2026-11-24, headless):
 - In the throwaway proof the default analysis did not start: the first
   registered descriptor (Heuristic) was the opponent, not the Reader. Not a bug
   in this slice.
+
+Slice 6 choices (2026-11-24, headless):
+
+- "Shown" means the reading's message was sent to the pilot's socket before
+  the commit. The server cannot see the screen. A reading sent while the
+  page was hidden still counts.
+- When the opponent cannot read the game, Show analysis picks the first
+  eligible policy rather than asking first. The policy menu appears once
+  the switch is on and more than one policy qualifies. With none, the switch
+  stays off and says "No registered policy can read this game." with the
+  managym.bots hint (there is no in-app policy setup page to link to).
+- Watchers of a shared table never receive readings; the switch is the
+  pilot's (`SUBMIT_LIVE_COMMAND`).
+- The live analysis stays open after game over until the next game or
+  session close; it reads nothing more.
+- The folded Strip's live value points are not drawn. Probabilities and
+  estimates are on the offers.
+- `analysis_shown` is counted in `GameNumbers` (saved at completion), so
+  Games and My record read it from `numbers_json` with no new column. A game
+  whose numbers cannot be computed shows no count, though the events keep
+  the mark.

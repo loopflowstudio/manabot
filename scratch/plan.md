@@ -622,6 +622,60 @@ Acceptance keeps it; build it after slice 6.
 
 Next: slice 6 (analysis while you play), then playing on from the line.
 
+## Status (2026-11-24, after slice 6)
+
+Built in this pass (three commits after 320c57885d):
+
+- **Server.** `analysis.LiveAnalysis`: a worker thread with its own walk.
+  It loads a fresh runner, catches up over the game so far
+  (`seat_decisions`, now shared with `analyse_game`, which also uses
+  `read_decision`), then applies each committed step and reads each decision
+  `_publish_current_prompt` publishes to the person. The shared-table request
+  `show_analysis {shown, policy}` (pilot; schema and conformance fixture
+  regenerated) answers `analysis_state`. Readings go to the pilot as their own
+  `analysis` message through `asyncio.run_coroutine_threadsafe`, never waiting.
+  A send that completes marks the event shown. `TraceEvent.analysis_shown` is
+  written only when true. Frames carry `analysis: {policy}` while it is on.
+  `GameNumbers.analysis_shown`, the position index's `analysis_shown`, and
+  `/api/traces/record` `with_analysis` read it.
+- **Client.** The rail's **Show analysis** switch, with a policy menu when
+  several can read the game. Live evidence goes through `analysedEvidence`
+  with no chosen offer, and only for the frame revision it was read at.
+  Review marks moves "analysis shown" (`analysisShownMoves`), Review's Menu
+  counts them, and Games rows and My record (**With analysis**) show them.
+- Tests: `test_shown_analysis_reads_each_decision_live_and_marks_it` (a live
+  reading equals the post-game analysis at the same events; only decisions
+  read while shown are marked; turning it off stops marking),
+  `test_a_game_played_without_analysis_stores_no_mark`,
+  `test_showing_analysis_needs_a_policy_that_can_read_the_game`;
+  `analysis.test.ts` (live state) and `replay.test.ts` (shown moves).
+- Browser proof: a static build on a throwaway server
+  (`scratch/probe/live_server.py`) with the Reader fixture policy as
+  opponent. Two choices were made with analysis off, three with it on, then it
+  was turned off and the game played out. Review showed 3 "analysis shown"
+  moves, the Menu said "Chosen with analysis shown: 3 decisions", the Games
+  row said "analysis shown at 3 decisions", and My record had 1 game with
+  analysis. Screenshots: `scratch/shots/{play,review,games}-analysis-shown-{light,dark}.png`.
+
+What it taught:
+
+- **The first reading took 6–11 s** on this machine with 23 discovered
+  checkpoints. Admitting every registered policy (`analysing_policies`) took
+  2.5–2.9 s and runs under the game lock. It is now cached once per match.
+  The rest is runner load and the catch-up walk, which run off the lock.
+  Review's `/analyses/policies` pays the same admission on every open.
+- The pre-existing `test_control_fixture_round_trips_through_checked_schema_and_python`
+  fails on the base commit too: `resume` and `rematch` dump default `None`
+  fields that the fixture omits. Not caused by this slice.
+
+Not built from §6 (questions.md, slice 6 choices): the folded Strip's live
+value points; the e2e acceptance spec `study-review.spec.ts`, including its
+second test (Show analysis mid-game → "analysis shown" in Review and Games).
+That spec still does not exist.
+
+Next: playing on from the line (slice 4's remainder), then the
+`study-review.spec.ts` acceptance spec.
+
 ## Slices
 
 1. **(built)** **A played game plays again.** `record_of`, the walk's self-check
@@ -656,9 +710,9 @@ Next: slice 6 (analysis while you play), then playing on from the line.
    moments. Remaining: play on yourself from it (after slice 6).
 5. **(built)** **Watch: revealed hands and branch boundaries** (MTG-423). Independent of
    slices 1–4; may go first if slice 1 stalls.
-6. **Analysis while you play.** The toggle, the catch-up walk, the live
-   message, `analysis_shown` and its marks. Built only after slices 1–3
-   work.
+6. **(built)** **Analysis while you play.** The toggle, the catch-up walk, the live
+   message, `analysis_shown` and its marks. Remaining: live points on the
+   folded Strip.
 
 Each slice updates `docs/academy.md` and `managym/academy/README.md` where
 it changes what they describe (slice 3 also `docs/engine-python.md` for the
