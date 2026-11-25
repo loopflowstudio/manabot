@@ -54,3 +54,10 @@ reversible before merge.
     position both input paths gave the same action logits with and without
     Lightning Bolt in the opponent's hand. At the first in-game choice the CLI
     reported a maximum probability change of 0.000002414.
+
+13. **Offline capture format.** Keep a single NumPy archive per collection call
+    or learner minibatch. Its `batch` entry holds the native bytes. The writer
+    records interned memory once per distinct chunk within the call and saves
+    the learner's actual reference probabilities with its other targets. Native
+    batch bytes bind the packed layout and producer byte order. Historical
+    dense captures replay at the revision that wrote them.

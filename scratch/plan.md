@@ -318,18 +318,23 @@ Docs were drafted ahead of the build (`0bb2c15c12`) and already describe
 `ObservationBatch.to_bytes()`/`from_bytes()`, `admit`, v11-only; each claim must
 be backed by code before gate.
 
+Done: **1. Native batch bytes and capture/parity.** Rust validates the packed
+schema, offset/capacity bounds, companion lengths and native joins before
+publishing a restored batch. Collection, learner parity and the MLX profiler
+reload batch bytes and retained memory chunks. On 64 opening decisions (eight
+seeds, eight choices per seed, default capacities with policy history), the
+archive occupied 130,397 bytes against 15,808,000 dense array bytes. Median
+of ten warm in-memory calls on this checkout was 0.29 ms to write and 0.39 ms
+to load. MLX profiling replayed two captured learner batches. The float32
+MLX parity CLI passed two learner batches and two collection calls, with a
+maximum post-Adam weight difference of 3.0e-08. Pass 4 must
+preserve the object-join descriptions used by the archive when deleting the
+dense extent scanner. Keep reading the Pass 1 v11 archive header when removing
+the legacy encoder configuration in Pass 3.
+
 Remaining:
 
-**1. Native batch bytes + capture/parity (next).** Rust `ObservationBatch.to_bytes()` /
-`from_bytes()` with full layout/CSR/join validation on load (truncated, bad
-offsets, out-of-bounds joins, non-v11 layout → `ValueError`); rebuild extension;
-stubs in `managym/__init__.pyi`. First consumers: `backends/torch/capture.py`,
-`backends/parity.py`, `scripts/profile_mlx_learner.py` save/load batch bytes
-(+ `MemoryArchive`). Teaches: whether a validated byte form is cheap enough to
-replace dense `.npz` everywhere offline (decision-memory probes in Pass 2).
-Shows: rejection tests, `tests/model/test_backend_capture.py`, parity tests.
-
-**2. One Python path.** Scalar `Env` returns `managym.Observation`;
+**2. One Python path (next).** Scalar `Env` returns `managym.Observation`;
 `TargetPracticeVector` on `observation_rows()`; delete `manabot/env/vector_env.py`;
 `RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`;
 `ObservationSelection` drops `Mapping`; `blank_decision_memory()` native;

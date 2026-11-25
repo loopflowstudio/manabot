@@ -1,21 +1,25 @@
-at: 993ac802961b5729679a0b65dd289836e6bf2c25
+at: 0cb9a7253292330ab907c9e835d608fce84e33ea
 first:
-  - path: manabot/README.md
-    why: Running the belief intervention on a real decision
+  - path: docs/engine.md
+    why: Encode, persist and reload a viewer batch
   - path: manabot/backends/README.md
-    why: Calling a policy with explicit viewer marginals
+    why: Reproduce learner and collection calls across backends
+  - path: managym/__init__.pyi
+    why: Public batch persistence API
+  - path: managym/src/python/observation_batch/archive.rs
+    why: Check layout, row boundaries and game-local joins
+  - path: manabot/backends/captured_observations.py
+    why: Reunite packed observations with retained viewer histories
+  - path: manabot/backends/torch/capture.py
+    why: Record the inputs and targets of actual calls
+  - path: manabot/backends/parity.py
+    why: Compare losses, gradients and optimizer steps on reload
+  - path: tests/env/test_observation_batch_archive.py
+    why: Reject invalid joins even under a valid checksum
+  - path: tests/model/test_backend_capture.py
+    why: Reproduce recorded losses with and without memory
   - path: manabot/belief/encoding.py
-    why: Schema-bound marginals become batched belief rows
-  - path: manabot/belief/agent.py
-    why: One decision path for generated and supplied beliefs
-  - path: manabot/belief/likelihood.py
-    why: Score possible worlds in bounded native batches
-  - path: manabot/policy/admission.py
-    why: Validate marginals against batch size and checkpoint
+    why: Bind external belief rows alongside native observations
   - path: manabot/policy/prepare.py
-    why: Preserve belief coordinates when compacting attention
-  - path: tests/model/test_prepare_rows.py
-    why: Check sparse belief masks and compact token coordinates
-  - path: tests/model/test_mlx_backend.py
-    why: Compare Torch and MLX through a learner step
+    why: Keep belief tokens through attention compaction
 hide: []
