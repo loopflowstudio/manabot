@@ -1,0 +1,17 @@
+at: 8076ce311aee0225867298c7af76134431aae6f6
+first:
+  - path: docs/training-loop.md
+    why: Worker transport and learner inputs
+  - path: managym/README.md
+    why: Packed table contract
+  - path: managym/src/python/layout_bindings.rs
+    why: Resolved row widths and capacity
+  - path: managym/src/python/observation_batch.rs
+    why: Frozen buffers and restore validation
+  - path: manabot/policy/spans.py
+    why: Selection coordinates across workers
+  - path: manabot/env/memory_store.py
+    why: Shared prefix chains and certificates
+  - path: tests/training/test_rollout_transport.py
+    why: Spawn queue and learner parity
+hide: []
