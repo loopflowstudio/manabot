@@ -1,9 +1,10 @@
 //! Urza's Saga.
 use managym_state::{
-    ability::{Effect, TargetRequirement, TargetSpec},
+    ability::{Actor, Effect, TargetRequirement, TargetSpec},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
-        PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
+        CardDefinition, CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform,
+        Keyword, Keywords, LayerCount, LayerValue, PrintedCharacteristics, ReplacementEffect,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -52,7 +53,20 @@ fn fog_bank() -> CardDefinition {
             power: Some(0),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Defender, Keyword::Flying]),
-            replacement_effects: vec![ReplacementEffect::PreventCombatDamageToOrFromSelf],
+            replacement_effects: vec![
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::any(Actor::AnyPlayer),
+                    recipient: DamageRecipient::this(),
+                    combat: Some(true),
+                    transform: DamageTransform::PreventAll,
+                },
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::this(),
+                    recipient: DamageRecipient::any(Actor::AnyPlayer),
+                    combat: Some(true),
+                    transform: DamageTransform::PreventAll,
+                },
+            ],
             text_box: "Defender (This creature can't attack.)\nFlying\nPrevent all combat damage that would be dealt to and dealt by this creature.".into(),
             ..Default::default()
         },

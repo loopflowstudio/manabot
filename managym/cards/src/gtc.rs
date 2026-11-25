@@ -5,8 +5,8 @@ use managym_state::ability::{
     TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords, LayerCount,
-    LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility,
+    CardDefinition, CardType, CardTypes, EntryScope, Keyword, Keywords, LayerCount, LayerValue,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -241,7 +241,9 @@ fn prime_speaker_zegana() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
                 on: EntryScope::This,
                 kind: CounterKind::PlusOnePlusOne,
-                count: EntryValue::GreatestPower(Box::new(CardPredicate::creature())),
+                count: EffectValue::GreatestPowerYouControl {
+                    predicate: CardPredicate::creature(),
+                },
                 condition: None,
             }],
             abilities: vec![Ability::when_enters(

@@ -275,18 +275,8 @@ impl Game {
     }
 
     pub(crate) fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        self.damage_source_facts(source)
-            .map(|(controller, _)| controller)
-    }
-
-    /// Read controller and creature status from the same incarnation of the source.
-    pub(crate) fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
         if let Ok(id) = self.lookup_current_permanent(source) {
-            let permanent = self.state.permanents[id].as_ref()?;
-            return Some((
-                permanent.controller,
-                self.permanent_is_battlefield_creature(id),
-            ));
+            return Some(self.state.permanents[id].as_ref()?.controller);
         }
         if let Some(controller) = self
             .spell_on_stack(source)
@@ -298,17 +288,11 @@ impl Game {
                     .map(|spell| spell.controller)
             })
         {
-            return Some((
-                controller,
-                self.state.source_base(source).1.types.is_creature(),
-            ));
+            return Some(controller);
         }
         self.object_lki(source)
-            .map(|lki| (lki.controller, lki.was_creature()))
-            .or_else(|| {
-                let (_, owner, _) = self.state.objects.provenance(source)?;
-                Some((owner, self.state.source_base(source).1.types.is_creature()))
-            })
+            .map(|lki| lki.controller)
+            .or_else(|| self.state.objects.provenance(source).map(|(_, owner, _)| owner))
     }
 
     #[cfg(test)]

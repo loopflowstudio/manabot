@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 use super::decision::Decision;
 use crate::state::{
-    ability::Actor,
+    ability::{Actor, EffectValue},
     card::{
-        DamageRecipient, DamageTransform, EntryScope, EntryValue, GraveyardMover, Redirect,
+        DamageRecipient, DamageSource, DamageTransform, EntryScope, GraveyardMover, Redirect,
         SpellProfile,
     },
 };
@@ -523,8 +523,12 @@ impl ReplacementCandidate {
             }
             ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::EntersPrepared => "Enter prepared".into(),
-            ReplacementEffect::PreventCombatDamageToOrFromSelf
-            | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
+            ReplacementEffect::PreventCombatDamage
+            | ReplacementEffect::ModifyDamage {
+                combat: Some(true),
+                transform: DamageTransform::PreventAll,
+                ..
+            } => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
                 transform: DamageTransform::PreventAll,
                 ..
@@ -539,19 +543,21 @@ impl ReplacementCandidate {
                 transform: DamageTransform::Double,
                 ..
             } => "Double the damage".into(),
+            ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::Add(_),
+                ..
+            } => "Increase the damage".into(),
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
             ReplacementEffect::EntersWithCounters { kind, count, .. } => {
                 let count = match count {
-                    EntryValue::Fixed(n) => n.to_string(),
-                    EntryValue::X => "X".into(),
-                    EntryValue::GreatestPower(_) => "greatest power".into(),
-                    EntryValue::ControlledAlready(_) => "number already controlled".into(),
+                    EffectValue::Fixed(n) => n.to_string(),
+                    EffectValue::X => "X".into(),
+                    EffectValue::GreatestPowerYouControl { .. } => "greatest power".into(),
+                    EffectValue::BattlefieldMatching { .. } => "number already controlled".into(),
+                    _ => "computed".into(),
                 };
                 format!("Enter with {count} {} counters", kind.name())
-            }
-            ReplacementEffect::OpponentDamagePlusCounters { kind } => {
-                format!("Increase damage by this source's {kind:?} counters")
             }
             ReplacementEffect::UnspentManaBecomesRed => "Unspent mana becomes red".into(),
             ReplacementEffect::MultiplyTokens { multiplier } => {
@@ -1631,8 +1637,7 @@ impl Game {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
-                let source_facts = damage_source.and_then(|id| self.damage_source_facts(id));
-                let source_controller = source_facts.map(|(controller, _)| controller);
+                let source_controller = damage_source.and_then(|id| self.source_controller(id));
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
                 // board read across the replacement scan.
@@ -1652,52 +1657,55 @@ impl Game {
                         continue;
                     };
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-
-                    let source_side = source_controller == Some(permanent.controller)
-                        && permanent.controller != affected_controller;
                     for (definition_index, effect) in self.state[permanent.object]
                         .replacement_effects
                         .iter()
                         .enumerate()
                     {
                         let applies = match effect {
-                            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
-                                *combat
-                                    && (*damage_source == Some(source)
-                                        || *target == ProposedDamageTarget::Object(source))
-                            }
                             ReplacementEffect::ModifyDamage {
-                                creature_source,
-                                source_by,
+                                source: dmg_source,
                                 recipient,
                                 combat: kind,
                                 ..
                             } => {
-                                (!*creature_source
-                                    || source_facts.is_some_and(|(_, creature)| creature))
-                                    && kind.is_none_or(|c| c == *combat)
-                                    && recipient
+                                let source_matches = if dmg_source.this {
+                                    *damage_source == Some(source)
+                                } else {
+                                    (dmg_source.by == Actor::AnyPlayer
+                                        || source_controller.is_some_and(|p| {
+                                            dmg_source.by.includes(permanent.controller, p)
+                                        }))
+                                        && dmg_source.predicate.as_ref().is_none_or(|predicate| {
+                                            damage_source.is_some_and(|dmg| {
+                                                self.spell_matches_predicate(dmg, predicate)
+                                            })
+                                        })
+                                };
+                                let recipient_matches = if recipient.this {
+                                    *target == ProposedDamageTarget::Object(source)
+                                } else {
+                                    recipient
                                         .by
                                         .includes(permanent.controller, affected_controller)
-                                    && match target {
-                                        ProposedDamageTarget::Player(_) => recipient.players,
-                                        ProposedDamageTarget::Object(object) => {
-                                            (!recipient.except_source || *object != source)
-                                                && recipient.permanents.as_ref().is_some_and(
-                                                    |predicate| {
-                                                        self.object_matches_predicate(
-                                                            *object, predicate,
-                                                        )
-                                                    },
-                                                )
+                                        && match target {
+                                            ProposedDamageTarget::Player(_) => recipient.players,
+                                            ProposedDamageTarget::Object(object) => {
+                                                (!recipient.except_source || *object != source)
+                                                    && recipient.permanents.as_ref().is_some_and(
+                                                        |predicate| {
+                                                            self.object_matches_predicate(
+                                                                *object, predicate,
+                                                            )
+                                                        },
+                                                    )
+                                            }
                                         }
-                                    }
-                                    && (*source_by == Actor::AnyPlayer
-                                        || source_controller.is_some_and(|p| {
-                                            source_by.includes(permanent.controller, p)
-                                        }))
+                                };
+                                kind.is_none_or(|c| c == *combat)
+                                    && source_matches
+                                    && recipient_matches
                             }
-                            ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
                             _ => false,
                         };
                         if applies {
@@ -1729,8 +1737,7 @@ impl Game {
                                 *object,
                                 index,
                                 ReplacementEffect::ModifyDamage {
-                                    creature_source: false,
-                                    source_by: Actor::AnyPlayer,
+                                    source: DamageSource::any(Actor::AnyPlayer),
                                     recipient: DamageRecipient::any(Actor::AnyPlayer),
                                     combat: None,
                                     transform: DamageTransform::PreventAll,
@@ -1997,33 +2004,6 @@ impl Game {
         }
     }
 
-    fn entry_value(&self, value: &EntryValue, object: ObjectId, entry: &ZoneEntry) -> i32 {
-        let controller = self.entry_controller(object, entry);
-        match value {
-            EntryValue::Fixed(n) => *n,
-            EntryValue::X => entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),
-            EntryValue::GreatestPower(predicate) | EntryValue::ControlledAlready(predicate) => {
-                let matching = self
-                    .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| {
-                        super::layers::matches_view(
-                            self,
-                            *id,
-                            predicate,
-                            view,
-                            None,
-                            entry.chosen_creature_type,
-                        )
-                    });
-                if matches!(value, EntryValue::GreatestPower(_)) {
-                    matching.map(|(_, view)| view.power).max().unwrap_or(0)
-                } else {
-                    matching.count() as i32
-                }
-            }
-        }
-    }
-
     /// Automatic and player-chosen replacements consume their identity together
     /// with the transformation, so neither path can offer it a second time.
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
@@ -2062,8 +2042,7 @@ impl Game {
             }
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventCombatDamageToOrFromSelf
-                | ReplacementEffect::PreventCombatDamage
+                ReplacementEffect::PreventCombatDamage
                 | ReplacementEffect::ModifyDamage {
                     transform: DamageTransform::PreventAll,
                     ..
@@ -2144,21 +2123,38 @@ impl Game {
                 },
                 ReplacementEffect::EntersWithCounters { kind, count, .. },
             ) => {
+                let mut frame = super::decision::EffectFrame::new(
+                    self.entry_controller(*object_id, entry),
+                    Vec::new(),
+                );
+                frame.x = entry.spell.as_ref().map_or(0, |spell| spell.x);
+                let bound = entry
+                    .chosen_creature_type
+                    .map(|chosen| count.bind_chosen_type(Some(chosen)));
+                let value = bound.as_ref().unwrap_or(count);
                 entry
                     .counters
-                    .change(*kind, self.entry_value(count, *object_id, entry).max(0));
+                    .change(*kind, self.effect_value(value, &frame).max(0));
             }
             // Damage reduced to zero is no longer dealt (release notes).
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::OpponentDamagePlusCounters { kind },
+                ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::Add(additional),
+                    ..
+                },
             ) if *amount > 0 => {
-                let counters = self
-                    .lookup_current_permanent(candidate.identity.source)
-                    .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(0, |permanent| permanent.counter_count(*kind));
-                *amount = amount.saturating_add(counters);
+                let mut frame = super::decision::EffectFrame::new(
+                    self.source_controller(candidate.identity.source)
+                        .unwrap_or(PlayerId(0)),
+                    Vec::new(),
+                );
+                frame.bind_source(
+                    Some(candidate.identity.source),
+                    Some(candidate.identity.source),
+                );
+                let added = self.effect_value(additional, &frame).max(0);
+                *amount = amount.saturating_add(added);
             }
             _ => {}
         }

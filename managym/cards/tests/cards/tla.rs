@@ -17054,7 +17054,7 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
     use managym::flow::event::DamageTarget;
     use managym::state::{
         ability::Actor,
-        card::{DamageRecipient, DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
     };
 
     // Preventing first absorbs the hit. Doubling first leaves two damage,
@@ -17078,15 +17078,13 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         let object = card_of(&s, shield);
         s.game_mut().state[object].replacement_effects = vec![
             ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::AnyPlayer,
+                source: DamageSource::any(Actor::AnyPlayer),
                 recipient: DamageRecipient::any(Actor::You),
                 combat: None,
                 transform: DamageTransform::Prevent(2),
             },
             ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::AnyPlayer,
+                source: DamageSource::any(Actor::AnyPlayer),
                 recipient: DamageRecipient::any(Actor::You),
                 combat: None,
                 transform: DamageTransform::Double,

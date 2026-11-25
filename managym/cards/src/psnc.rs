@@ -1,8 +1,9 @@
 //! Streets of New Capenna promos.
 use managym_state::{
+    ability::EffectValue,
     card::{
-        CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords,
-        ManaAbility, PrintedCharacteristics, ReplacementEffect,
+        CardDefinition, CardType, CardTypes, EntryScope, Keyword, Keywords, ManaAbility,
+        PrintedCharacteristics, ReplacementEffect,
     },
     mana::{Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
@@ -30,7 +31,7 @@ fn giada_font_of_hope() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
                 on: EntryScope::OtherYouControl(Box::new(angel.clone())),
                 kind: CounterKind::PlusOnePlusOne,
-                count: EntryValue::ControlledAlready(Box::new(angel)),
+                count: EffectValue::BattlefieldMatching { predicate: angel },
                 condition: None,
             }],
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),

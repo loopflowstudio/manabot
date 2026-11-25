@@ -458,11 +458,18 @@ pub enum Restriction {
     AttacksEachCombat,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DamageTransform {
     Double,
+    Add(Box<EffectValue>),
     Prevent(u32),
     PreventAll,
+}
+
+impl DamageTransform {
+    pub fn add(amount: EffectValue) -> Self {
+        Self::Add(Box::new(amount))
+    }
 }
 
 /// Which object a graveyard replacement applies to (CR 400.6).
@@ -490,17 +497,39 @@ pub enum EntryScope {
     OtherYouControl(Box<CardPredicate>),
 }
 
+/// A damage source filter, relative to the replacement's source permanent.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum EntryValue {
-    Fixed(i32),
-    X,
-    GreatestPower(Box<CardPredicate>),
-    ControlledAlready(Box<CardPredicate>),
+pub struct DamageSource {
+    pub by: super::ability::Actor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this: bool,
 }
 
-impl From<i32> for EntryValue {
-    fn from(value: i32) -> Self {
-        Self::Fixed(value)
+impl DamageSource {
+    pub fn any(by: super::ability::Actor) -> Self {
+        Self {
+            by,
+            predicate: None,
+            this: false,
+        }
+    }
+
+    pub fn matching(by: super::ability::Actor, predicate: CardPredicate) -> Self {
+        Self {
+            by,
+            predicate: Some(predicate),
+            this: false,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self {
+            by: super::ability::Actor::AnyPlayer,
+            predicate: None,
+            this: true,
+        }
     }
 }
 
@@ -510,6 +539,9 @@ pub struct DamageRecipient {
     pub by: super::ability::Actor,
     pub players: bool,
     pub permanents: Option<CardPredicate>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub except_source: bool,
 }
 
@@ -519,6 +551,17 @@ impl DamageRecipient {
             by,
             players: true,
             permanents: Some(CardPredicate::default()),
+            this: false,
+            except_source: false,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self {
+            by: super::ability::Actor::AnyPlayer,
+            players: false,
+            permanents: None,
+            this: true,
             except_source: false,
         }
     }
@@ -542,7 +585,6 @@ pub enum ReplacementEffect {
         to: ZoneType,
     },
     EntersPrepared,
-    PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is
     /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
     /// record offers it; no definition prints it.
@@ -552,9 +594,7 @@ pub enum ReplacementEffect {
         additional: i32,
     },
     ModifyDamage {
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        creature_source: bool,
-        source_by: super::ability::Actor,
+        source: DamageSource,
         recipient: DamageRecipient,
         #[serde(skip_serializing_if = "Option::is_none")]
         combat: Option<bool>,
@@ -570,15 +610,9 @@ pub enum ReplacementEffect {
     EntersWithCounters {
         on: EntryScope,
         kind: CounterKind,
-        count: EntryValue,
+        count: EffectValue,
         #[serde(skip_serializing_if = "Option::is_none")]
         condition: Option<Condition>,
-    },
-    /// Damage a source this permanent's controller controls would deal to
-    /// an opponent or a permanent an opponent controls is increased by the
-    /// number of `kind` counters on this permanent (CR 614.1a).
-    OpponentDamagePlusCounters {
-        kind: CounterKind,
     },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead

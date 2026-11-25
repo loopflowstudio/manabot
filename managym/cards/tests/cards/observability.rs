@@ -6792,10 +6792,13 @@ fn foundations_replacement_programs_identify_their_subject_and_amount() {
             "Giada, Font of Hope",
             &[
                 "EntryScope::OtherYouControl",
-                "EntryValue::ControlledAlready",
+                "EffectValue::BattlefieldMatching",
             ][..],
         ),
-        ("Prime Speaker Zegana", &["EntryValue::GreatestPower"][..]),
+        (
+            "Prime Speaker Zegana",
+            &["EffectValue::GreatestPowerYouControl"][..],
+        ),
         (
             "Banner of Kinship",
             &[
@@ -6803,7 +6806,7 @@ fn foundations_replacement_programs_identify_their_subject_and_amount() {
                 "EntryChoice::CreatureType",
             ][..],
         ),
-        ("Wildwood Scourge", &["EntryValue::X"][..]),
+        ("Wildwood Scourge", &["EffectValue::X"][..]),
         (
             "Angel of Vitality",
             &["ReplacementEffect::ModifyLifeGain"][..],

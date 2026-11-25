@@ -6,7 +6,7 @@ use managym::{
     },
     state::{
         ability::Actor,
-        card::{DamageRecipient, DamageTransform, EntryScope, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, EntryScope, ReplacementEffect},
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
@@ -38,11 +38,10 @@ fn resolve_bolt_with_drivers(
             s.game_mut().state[object]
                 .replacement_effects
                 .push(ReplacementEffect::ModifyDamage {
-                    creature_source: false,
-                    source_by: Actor::AnyPlayer,
+                    source: DamageSource::any(Actor::AnyPlayer),
                     recipient: DamageRecipient::any(Actor::You),
                     combat: None,
-                    transform: *transform,
+                    transform: transform.clone(),
                 });
         }
     }
@@ -256,8 +255,7 @@ fn lifelink_spell_uses_its_stack_controller_for_doubling_and_gain() {
             s.game_mut().state[object]
                 .replacement_effects
                 .push(ReplacementEffect::ModifyDamage {
-                    creature_source: false,
-                    source_by: Actor::AnyPlayer,
+                    source: DamageSource::any(Actor::AnyPlayer),
                     recipient: DamageRecipient::any(Actor::You),
                     combat: None,
                     transform: DamageTransform::Prevent(1),

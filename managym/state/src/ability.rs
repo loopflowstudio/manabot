@@ -1082,6 +1082,42 @@ pub enum EffectValue {
     ColorsSpentToCast,
 }
 
+impl EffectValue {
+    /// Bind any `chosen_type_of_source` predicate in this value to `chosen`.
+    pub fn bind_chosen_type(&self, chosen: Option<&str>) -> Self {
+        match self {
+            Self::BattlefieldMatching { predicate } => Self::BattlefieldMatching {
+                predicate: predicate.bind_chosen_type(chosen),
+            },
+            Self::GreatestPowerYouControl { predicate } => Self::GreatestPowerYouControl {
+                predicate: predicate.bind_chosen_type(chosen),
+            },
+            Self::GraveyardMatching { base, predicate } => Self::GraveyardMatching {
+                base: *base,
+                predicate: predicate.bind_chosen_type(chosen),
+            },
+            Self::AttackingMatching { predicate } => Self::AttackingMatching {
+                predicate: predicate.bind_chosen_type(chosen),
+            },
+            Self::Objects {
+                of,
+                predicate,
+                in_zone,
+            } => Self::Objects {
+                of: of.clone(),
+                predicate: predicate.as_ref().map(|p| p.bind_chosen_type(chosen)),
+                in_zone: *in_zone,
+            },
+            Self::Half(inner) => Self::Half(Box::new(inner.bind_chosen_type(chosen))),
+            Self::Scaled { factor, value } => Self::Scaled {
+                factor: *factor,
+                value: Box::new(value.bind_chosen_type(chosen)),
+            },
+            other => other.clone(),
+        }
+    }
+}
+
 /// A resolving obligation, distinct from the effects chosen by its outcome.
 /// Waterbend pays only generic mana; taps never count as mana production.
 /// Life is paid in one action by a player whose life total is at least the

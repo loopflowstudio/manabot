@@ -4,9 +4,8 @@ use managym_state::ability::{
     TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope, EntryValue,
-    Keyword, Keywords, PrintedCharacteristics, ReplacementEffect, StaticAbility,
-    StaticKeywordGrant, StaticScope,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope, Keyword, Keywords,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -236,7 +235,7 @@ fn wildwood_scourge() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
                 on: EntryScope::This,
                 kind: CounterKind::PlusOnePlusOne,
-                count: EntryValue::X,
+                count: EffectValue::X,
                 condition: None,
             }],
             abilities: vec![Ability::Triggered {

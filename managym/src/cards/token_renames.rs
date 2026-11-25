@@ -5,6 +5,11 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "ReplacementEffect::PreventCombatDamageToOrFromSelf", None),
+    (Variant, "ReplacementEffect::OpponentDamagePlusCounters", None),
+    (Structure, "/ReplacementEffect::OpponentDamagePlusCounters", None),
+    (Field, "creature_source", None),
+    (Field, "source_by", None),
     (Variant, "StaticAbility::PtBuff", None),
     (Structure, "StaticPtBuff", None),
     (Structure, "/StaticPtBuff", None),

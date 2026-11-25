@@ -7,7 +7,7 @@ use managym_state::ability::{
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
-    CardType, CardTypes, DamageRecipient, DamageTransform, EntryChoice, EntryScope, EntryValue,
+    CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform, EntryChoice, EntryScope,
     Keyword, Keywords, LayerCount, LayerValue, ManaAbility, PrintedCharacteristics,
     ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
     StaticAbility, StaticKeywordGrant, StaticRestriction, StaticScope, TargetCostReduction,
@@ -2030,8 +2030,7 @@ fn twinflame_tyrant() -> CardDefinition {
             toughness: Some(5),
             keywords: Keywords::of(&[Keyword::Flying]),
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::You,
+                source: DamageSource::any(Actor::You),
                 recipient: DamageRecipient::any(Actor::Opponent),
                 combat: None,
                 transform: DamageTransform::Double,
@@ -4129,13 +4128,13 @@ fn crystal_barricade() -> CardDefinition {
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Defender]),
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::AnyPlayer,
+                source: DamageSource::any(Actor::AnyPlayer),
                 combat: Some(false),
                 recipient: DamageRecipient {
                     by: Actor::You,
                     players: false,
                     permanents: Some(CardPredicate::creature()),
+                    this: false,
                     except_source: true,
                 },
                 transform: DamageTransform::PreventAll,
@@ -4246,7 +4245,9 @@ fn banner_of_kinship() -> CardDefinition {
                 ReplacementEffect::EntersWithCounters {
                     on: EntryScope::This,
                     kind: CounterKind::Fellowship,
-                    count: EntryValue::ControlledAlready(Box::new(chosen.clone())),
+                    count: EffectValue::BattlefieldMatching {
+                        predicate: chosen.clone(),
+                    },
                     condition: None,
                 },
             ],

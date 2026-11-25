@@ -3,7 +3,8 @@ use managym_state::{
     ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageRecipient,
-        DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
+        DamageSource, DamageTransform, Keyword, Keywords, PrintedCharacteristics,
+        ReplacementEffect,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -48,8 +49,7 @@ fn gratuitous_violence() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{R}{R}{R}")),
             types: CardTypes::new([CardType::Enchantment]),
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
-                creature_source: true,
-                source_by: Actor::You,
+                source: DamageSource::matching(Actor::You, CardPredicate::creature()),
                 recipient: DamageRecipient::any(Actor::AnyPlayer),
                 combat: None,
                 transform: DamageTransform::Double,

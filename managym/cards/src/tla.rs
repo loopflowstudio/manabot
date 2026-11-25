@@ -2,19 +2,20 @@
 //! Each card is one function returning its engine `CardDefinition`.
 use managym_state::{
     ability::{
-        Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
-        DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
-        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
-        SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Ability, Actor, Aggregate, AttackSize, Condition, DelayedEvent, DelayedExpiry,
+        DelayedFrequency, DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction,
+        LinkedChooser, LinkedExile, LinkedGrant, ObjectProperty, ObjectSelector, PaymentCost, Per,
+        PlayWindow, PlayerSelector, Scope, SpellTargetFilter, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
-        CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords,
-        LayerCount, LayerValue, ManaAbility, PrintedCharacteristics, ReplacementEffect,
-        Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
-        StaticKeywordGrant, StaticLandType, StaticRestriction, StaticScope, StaticTriggeredGrant,
-        StaticTypeGrant, TapCost, TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
+        CardDefinition, CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform,
+        EntryScope, Keyword, Keywords, LayerCount, LayerValue, ManaAbility, PrintedCharacteristics,
+        ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
+        StaticAbility, StaticKeywordGrant, StaticLandType, StaticRestriction, StaticScope,
+        StaticTriggeredGrant, StaticTypeGrant, TapCost, TargetCostReduction, TriggeredManaAbility,
+        TriggeredManaOutput,
     },
     effect::{CopyException, EffectDuration, Modification},
     mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
@@ -3599,11 +3600,18 @@ fn fated_firepower() -> CardDefinition {
                 ReplacementEffect::EntersWithCounters {
                     on: EntryScope::This,
                     kind: CounterKind::Fire,
-                    count: EntryValue::X,
+                    count: EffectValue::X,
                     condition: None,
                 },
-                ReplacementEffect::OpponentDamagePlusCounters {
-                    kind: CounterKind::Fire,
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::any(Actor::You),
+                    recipient: DamageRecipient::any(Actor::Opponent),
+                    combat: None,
+                    transform: DamageTransform::add(EffectValue::Property {
+                        of: Box::new(ObjectSelector::This),
+                        property: ObjectProperty::Counters(CounterKind::Fire),
+                        aggregate: Aggregate::Sum,
+                    }),
                 },
             ],
             text_box: text_box.into(),

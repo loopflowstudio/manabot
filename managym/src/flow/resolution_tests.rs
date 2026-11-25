@@ -2976,21 +2976,19 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     use crate::flow::combat::CombatState;
     use crate::state::{
         ability::Actor,
-        card::{DamageRecipient, DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
     };
     let defender = PlayerId(1);
     let (mut root, first, second) = fixture(defender);
     for effect in [
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
+            source: DamageSource::any(Actor::AnyPlayer),
             recipient: DamageRecipient::any(Actor::You),
             combat: None,
             transform: DamageTransform::Prevent(1),
         },
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
+            source: DamageSource::any(Actor::AnyPlayer),
             recipient: DamageRecipient::any(Actor::You),
             combat: None,
             transform: DamageTransform::Double,
