@@ -56,3 +56,9 @@
 - `Player.combat_mana_pool` and `PooledManaClassData.combat` are retained for
   patch-clean observation compatibility while `ManaClass.expiry` replaces
   `ManaClass.combat` inside the engine and payment search.
+- `put_into_graveyard_this_turn` is appended as column 56 on `agent_cards` /
+  `opponent_cards` for `InputLayout::OneToken` (v11), keeping `card_turn_state`
+  and `InputLayout::Legacy` (`CARD_DIM = 56`) untouched for saved checkpoints.
+  `TurnState::graveyard_arrivals` stores `(ObjectId, from_battlefield)` pairs so
+  both `from_battlefield_this_turn` and `put_into_graveyard_this_turn` share one
+  authority.

@@ -1,16 +1,14 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Thirty-two of the 56 scoped Foundations rows have directed implementation
-evidence. Slices 1, 2, 3, 4, 5, 6, 7 and 8 are complete. Demonic Pact and
-Maze’s End already had working definitions.
+All 56 of the 56 scoped Foundations rows have directed implementation evidence.
+Slices 1–10 are complete. Demonic Pact and Maze’s End already had working
+definitions.
 
-**Next pass: Slices 9 + 10** — the 23 compose-only cards and Abyssal
-Harvester, then the integrated validation below (24 cards).
+**Next step: Gate / Integrated validation** — run the full debug suite, rebuild
+the extension and Academy fixtures, run current-world admission and pinned-pilot
+checks, Engine Budget, stress states, and the cross-card synergies below.
 
-Remaining passes (32 implemented, 24 pending):
-
-1. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
-   integrated validation below.
+Remaining passes (56 implemented, 0 pending): none.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
 
@@ -73,63 +71,14 @@ Vocabulary edits that are table data, not primitives:
 6. `LibraryTop`/`Unselected` selectors, `SelectCards.max_mana_value`, `Effect::GrantPlay` (Gutless Plunderer, Strongbox Raider, Genesis Wave) — `460fe18685`.
 7. Last-known values and shared sacrifice (Tribute to Hunger, Deadly Brew) — `30fd60f499`.
 8. Kicked entries, composite ward, `ManaExpiry`, Changeling, `CardPredicate.keyword`, `CounterKind::Wish` (Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush) — `460fe18685`.
+9. 23 compose-only cards (`token.raccoon_3_3_g`, `token.cat_beast_2_2_w`, `Effect::double_counters`, graveyard trigger `intervening_if` and `source_present` fixes for Flamewake Phoenix and Gate Colossus) — `1eb342e57b`.
+10. Abyssal Harvester (`TurnState::graveyard_arrivals`, `CardPredicate.put_into_graveyard_this_turn`, `Except::CreatedThisWay`, `CardData.put_into_graveyard_this_turn`, v11 `card::PUT_INTO_GRAVEYARD_THIS_TURN` column 56) — `1eb342e57b`; `blocked_by` cleared on its ledger row.
 
 Known defect for the gate:
 `resolution_tests::retained_creation_precedes_allocation_and_preserves_copy_entry_terms`
 fails (`resolution_tests.rs:3866`, a token not on the battlefield) at
 `e0baeed8e8`, before Slice 4, and the same way after it. The full debug run
 must fix or explain it.
-
-## Remaining
-
-### Slice 9 — Cards that compose today (23 cards)
-
-Slice 5 delivered Bolt Bend and Teach by Example. Shapes and analogs come
-from the surveys:
-
-| Card | Shape |
-|---|---|
-| Primal Might | Pump X, then `up_to(1)` fight through Slice 4's `Fight` (Earth Rumble, `tla.rs:3143`) |
-| Slagstorm | `Modal`: `each(creature)` damage, or `DealDamageToPlayer { EachPlayer }` (one batch; first use, so test it) |
-| Zimone | `beginning_of(Combat)` with `up_to(2)` counters; activated `ForEachTarget { PutCountersFrom { from: Target, on: Target } }`. Add a `double_counters` constructor. |
-| Soul-Shackled Zombie | `same_graveyard` `up_to(2)` (`tdm.rs:703`); `Objects { of: Moved, creature, in Exile } ≥ 1` gives the drain |
-| Frenzied Goblin | Attack trigger targeting, then `OptionalPayment {R}` (Kalastria Highborn, `wwk.rs:23`) |
-| Squad Rallier | Water Tribe Rallier (`tla.rs:10916`) |
-| Cephalid Inkmage | `Surveil 3` with threshold `CantBeBlockedIf` |
-| Inspiration from Beyond | Mill 3, `SelectCards` from the graveyard, Flashback |
-| Finale of Revelation | Spirit Water Revival (`tla.rs:8768`); `SelectCards { Each land, max 5 }` untap (first use of `Each` there) |
-| Demolition Field | Price of Freedom (`tla.rs:7430`) |
-| Grow from the Ashes | Kicker `If` with 1 or 2 basics |
-| Springbloom Druid | `may_sacrifice(land)` with `if_you_do` search for two tapped basics |
-| Dragon Mage | Combat-damage trigger: each hand to the graveyard, then each player draws 7. Prefer one simultaneous discard batch (see questions). |
-| Sylvan Scavenging | End-step `TriggerModes`; the Raccoon mode is an `If ControlsAtLeast(power 4)` at resolution |
-| Felidar Retreat | Landfall `TriggerModes`: Cat Beast, or counters on each creature then vigilance until end of turn |
-| Arbiter of Woe | `AdditionalCost::Sacrifice` on a creature spell (first creature use, so test it) |
-| Vampire Gourmand | `may_sacrifice(another creature)` with `if_you_do` draw and can't be blocked |
-| Perforating Artist | Raid end step; per opponent: discard, or sacrifice a nonland permanent, or lose 3. A nested optional; never `Modal`, which would offer impossible modes. |
-| Desecration Demon | Each combat, the opponent's optional sacrifice; `If Moved` taps and puts a counter |
-| Flamewake Phoenix | Attacks each combat; graveyard ferocious trigger with `OptionalPayment {R}` (Wolfbat, `tla.rs:11197`) |
-| Arcane Epiphany | `CostsLess 1` if you control a Wizard |
-| Gate Colossus | `CostsLessPerPermanent(Gate)`, `CantBeBlockedBy { max_power: 2 }`, graveyard Gate-entry trigger with optional move to library top (first graveyard entry trigger, so test it) |
-| Koma, World-Eater | Koma, Cosmos Serpent shapes (`khm.rs:29`) with `token.komas_coil` |
-
-The remaining 23 compose-only cards land as one pass with one directed test
-each in their set files. Add `observability.rs` rows where a card is the first
-real user of a static or cost row.
-
-### Slice 10 — Abyssal Harvester (MTG-420 merged)
-
-- A per-turn "put into a graveyard this turn" record that generalizes
-  `from_battlefield_this_turn` (`turn.rs:282`, `statics.rs:573`), exposed as a
-  `CardPredicate` field.
-- `Except::CreatedThisWay` for "exile all other Nightmare tokens you control".
-- The rest is `CreateTokenCopy { exceptions: [AddSubtypes(Nightmare)] }` on
-  MTG-420's copiable snapshot.
-- Checks:
-  - A creature milled this turn is a legal target; one from a previous turn
-    is not.
-  - The new token survives while older Nightmares are exiled.
-  - Copying a transformed or face-down card follows MTG-420's rules.
 
 ## Integrated validation
 
@@ -164,4 +113,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-24 scoped rows remain pending, including Abyssal Harvester.
+All 56 scoped rows are `implemented` (0 pending), including Abyssal Harvester (`blocked_by` cleared).
