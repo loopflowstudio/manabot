@@ -464,6 +464,11 @@ the semantic executor. Recording preserves the original native Command and
 its object preconditions; Academy's presentation Command has a separate
 revision scope.
 
+Native snapshot v1 cold replay reads action indices or Commands. Issued object
+candidates bind the entire action-aligned offer projection, and the final state
+digest includes the current action space. When changing declaration offers,
+exercise a recorded object-bound Command through cold restore.
+
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
 JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent
