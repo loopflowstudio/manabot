@@ -48,8 +48,8 @@ const STATES: &[(&str, &str)] = &[
     ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
-    ("angel-life-gain", "Food's gain under N Angels of Vitality, measured through the first replacement-order decision"),
-    ("giada-entry", "Rise of the Dark Realms returns N Angels under four Giadas and Sakashima, measured through the first replacement-order decision"),
+    ("angel-life-gain", "Food's gain under N Angels of Vitality, including the last choice that commits the batch"),
+    ("giada-entry", "Rise of the Dark Realms returns N Angels under four Giadas and Sakashima, including the last choice that commits the batch"),
     ("banner-choice", "Banner of Kinship enters beside N Elves and offers every creature type in two decisions"),
     ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
     ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
@@ -1074,6 +1074,17 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             let resolved = follow(&resolution, &[("resolve", 0)]);
             if recipe.state == "banner-choice" {
                 result.push(("type-group".into(), follow(&resolved, &[("choice", 0)])));
+            }
+            if matches!(recipe.state.as_str(), "giada-entry" | "angel-life-gain") {
+                let mut current = resolved.fork().unwrap();
+                while current.action_space_kind() == Some(ActionSpaceKind::Modal) {
+                    let next = follow(&current, &[("choice", 0)]);
+                    if next.action_space_kind() != Some(ActionSpaceKind::Modal) {
+                        result.push(("last-replacement".into(), current));
+                        break;
+                    }
+                    current = next;
+                }
             }
             result.push(("resolution".into(), resolution));
             result.push(("after-resolution".into(), resolved));
