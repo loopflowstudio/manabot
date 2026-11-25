@@ -345,7 +345,14 @@ Done:
   `BufferedStreams` still implement `write_observations_for_players`, because
   the runtime-checkable vector protocol names it and `RecordedVectorEnv`
   supplies `observations_for_players` only through `__getattr__`; Pass 4
-  changes that protocol together with `recording.py`.
+  changes that protocol together with `recording.py`. Tests: ~110 files move
+  to native batches (`d752654715`..`e14c986b64`); tests of deleted dense
+  validation are deleted. Scoped runs: model 673 passed, 1 strict xfail
+  (questions 18: native memory details emit program tokens absent from the
+  record vocabulary, which dense lookup had hidden); training/sim 823 passed,
+  21 failed, all failing at `95fa222b07`; env/verify/semantic/academy/eval
+  1517 passed, 50 failed, all failing at `95fa222b07`. Native-transport
+  tests stay on `space.layout.allocate` + `step_buffers` for Pass 4.
 
 Remaining:
 
