@@ -1,6 +1,7 @@
 """Fixture-only direct sampling, replay and lifecycle checks; no optimizer runs."""
 
 from dataclasses import asdict, dataclass, replace
+import json
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
@@ -10,11 +11,13 @@ import torch
 
 from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
+from manabot.belief.checkpoint import FORMAT
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.policy.checkpoint import encode_safetensors
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import observation_spans
 from manabot.sim.search.branch import BranchSession
@@ -51,19 +54,21 @@ def saved_sampler(teacher: LocalUpdateTeacher, path: Path) -> SamplerArtifact:
     model = AutoregressiveBeliefSampler(schema, hidden_size=8)
     identity = teacher.likelihood.checkpoint_sha256
     world = sampling_digest(teacher.agent.world_binding)
-    torch.save(
-        {
-            "format": "manabot.autoregressive-belief-sampler/v1",
-            "schema": asdict(schema),
-            "schema_identity": schema.identity,
-            "dataset_identity": "untrained-fixture",
-            "policy_identity": identity,
-            "world_identity": world,
-            "hidden_size": 8,
-            "history_dropout": 0.0,
-            "state_dict": model.state_dict(),
-        },
-        path,
+    metadata = {
+        "format": FORMAT,
+        "schema": asdict(schema),
+        "schema_identity": schema.identity,
+        "dataset_identity": "untrained-fixture",
+        "policy_identity": identity,
+        "world_identity": world,
+        "hidden_size": model.hidden_size,
+        "history_dropout": model.history_dropout,
+    }
+    path.write_bytes(
+        encode_safetensors(
+            resolve("torch").belief.sampler_parameters(model),
+            {key: json.dumps(value) for key, value in metadata.items()},
+        )
     )
     return SamplerArtifact(
         path=path,
@@ -80,7 +85,9 @@ def test_direct_search_lifecycle_and_receipt(
     tmp_path: Path, learned: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     original, env = make_teacher(tmp_path)
-    artifact = saved_sampler(original, tmp_path / "sampler.pt") if learned else None
+    artifact = (
+        saved_sampler(original, tmp_path / "belief.safetensors") if learned else None
+    )
     teacher = LocalUpdateTeacher(
         original.likelihood.checkpoint,
         original.likelihood.checkpoint_sha256,
@@ -218,7 +225,7 @@ def test_learned_arena_replay_without_fitting(
             teacher.likelihood.checkpoint,
             teacher.likelihood.checkpoint_sha256,
             teacher.config.model_copy(update={"sampling": "learned"}),
-            sampler=saved_sampler(teacher, directory / "saved-sampler.pt"),
+            sampler=saved_sampler(teacher, directory / "belief.safetensors"),
             backend=resolve("torch"),
         )
 

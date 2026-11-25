@@ -335,9 +335,9 @@ def test_value_search_failure_keeps_sampled_pool_actions(
         agent = None
 
     def invalid_actions(
-        buffers: dict[str, np.ndarray], rows: np.ndarray, rng: np.random.Generator
+        batch: managym.ObservationBatch, rng: np.random.Generator
     ) -> np.ndarray:
-        return np.full(len(rows), -1, dtype=np.int64)
+        return np.full(len(batch.action_counts), -1, dtype=np.int64)
 
     monkeypatch.setattr(value, "_random_valid_actions", invalid_actions)
     scope = CaptureScope(tmp_path)
