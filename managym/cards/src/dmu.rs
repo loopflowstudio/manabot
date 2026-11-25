@@ -20,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         balmor_battlemage_captain(),
         magnigoth_sentry(),
         resolute_reinforcements(),
+        prayer_of_binding(),
     ]
 }
 
@@ -244,6 +245,35 @@ fn micromancer() -> CardDefinition {
                     ],
                 }],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn prayer_of_binding() -> CardDefinition {
+    let text_box = "Flash\nWhen this enchantment enters, exile up to one target nonland permanent an opponent controls until this enchantment leaves the battlefield. You gain 2 life.";
+    CardDefinition {
+        key: "dmu.prayer_of_binding",
+        scryfall_id: "322f90b6-6b49-458d-9d5b-b601bfdd0af8",
+        printed: PrintedCharacteristics {
+            name: "Prayer of Binding".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::enters(vec![
+                Effect::exile_until_source_leaves(
+                    TargetSpec::PermanentOpponentControls {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    },
+                    0,
+                ),
+                Effect::gain_life(2),
+            ])],
             text_box: text_box.into(),
             ..Default::default()
         },

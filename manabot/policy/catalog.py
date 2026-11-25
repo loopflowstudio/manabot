@@ -96,8 +96,6 @@ def catalog_tables(
     )
 
     def definition_tokens(row: int, ancestors: tuple[int, ...] = ()) -> list[int]:
-        if row in ancestors:
-            raise ValueError("cyclic semantic definition reference is not admitted")
         start, stop = catalog.definition_offsets[row : row + 2]
         spans = [(int(start), int(stop))]
         for program in pack.program_rows(row):
@@ -107,10 +105,12 @@ def catalog_tables(
         for start, stop in spans:
             for offset in range(start, stop):
                 tokens.append(vocabulary[pairs[offset]])
-                if offset in references:
-                    tokens.extend(
-                        definition_tokens(references[offset], (*ancestors, row))
-                    )
+                # A referenced definition is inlined once per path. Meld
+                # partners name each other, so a reference back to a definition
+                # being written keeps only its reference token.
+                target = references.get(offset)
+                if target is not None and target not in (*ancestors, row):
+                    tokens.extend(definition_tokens(target, (*ancestors, row)))
         return tokens
 
     # Structure, execution order, program boundaries and referenced token

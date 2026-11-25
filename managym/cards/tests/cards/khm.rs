@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::five_color_setup,
-    inspect::keywords,
+    inspect::{keywords, offered_targets},
     play::{activate, offers_ability, settle},
 };
 use managym::{
@@ -24,7 +24,8 @@ fn coils(s: &crate::support::game::Scenario) -> usize {
 }
 
 /// Koma makes a Coil at each player's upkeep. Sacrificing one taps a target
-/// whose other abilities then stay unusable until the turn ends; the other
+/// (Koma itself included) whose other abilities then stay unusable until the
+/// turn ends; the other
 /// mode makes Koma indestructible.
 #[test]
 fn koma_coils_each_upkeep_and_sacrifices_them_to_lock_or_protect() {
@@ -39,6 +40,10 @@ fn koma_coils_each_upkeep_and_sacrifices_them_to_lock_or_protect() {
     assert!(offers_ability(&mut s, clue, 0));
 
     activate(&mut s, koma, 0);
+    assert!(
+        offered_targets(&s).contains(&Target::Permanent(koma)),
+        "\"tap target permanent\" may name Koma itself"
+    );
     assert!(s.choose_target(Target::Permanent(clue)));
     settle(&mut s);
     assert_eq!(coils(&s), 0);

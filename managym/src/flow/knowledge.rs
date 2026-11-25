@@ -76,6 +76,29 @@ impl Game {
         LibraryKnowledge::bound(&mut knowledge.own);
     }
 
+    /// Cards put into one library position together: their owner arranges
+    /// them and need not reveal the order (CR 401.4), so neither position
+    /// stays public while the owner remembers both.
+    pub(crate) fn arrange_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        let positions = self.library_positions_of(owner, objects);
+        let knowledge = self.state.known_library_mut(owner);
+        for (position, _) in positions {
+            knowledge.public.remove(&position);
+        }
+        self.remember_library_objects(owner, objects);
+    }
+
+    /// Both seats learn the top position even if the revealed card stays there.
+    pub(crate) fn reveal_library_top(&mut self, owner: PlayerId) -> Option<ObjectId> {
+        let object = self.state.zones.top(ZoneType::Library, owner)?;
+        let definition = self.state[object].definition_id;
+        let knowledge = self.state.known_library_mut(owner);
+        knowledge.public.insert(0, definition);
+        LibraryKnowledge::bound(&mut knowledge.public);
+        self.emit(crate::flow::event::GameEvent::CardRevealed { owner, definition });
+        Some(object)
+    }
+
     pub(crate) fn refresh_visible_library_tops(&mut self) {
         let visible = self.visible_library_tops();
         for owner in [PlayerId(0), PlayerId(1)] {
@@ -135,7 +158,8 @@ impl Game {
                 .iter()
                 .enumerate()
                 .filter(|(_, object)| {
-                    self.state[**object].definition_id == definition && !commitments.pins(**object)
+                    self.state[**object].retained_base().0 == definition
+                        && !commitments.pins(**object)
                 })
                 .min_by_key(|(_, object)| object.slot())
                 .map(|(index, _)| index)?;

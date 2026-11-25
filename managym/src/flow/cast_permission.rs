@@ -227,10 +227,10 @@ const AIRBEND_COST: &str = "{2}";
 pub(crate) const FORETELL_ACTION_COST: &str = "{2}";
 
 impl Game {
-    /// Airbend a permanent or spell. Only a card that reaches exile gets the grant.
-    pub(crate) fn airbend(&mut self, object_id: ObjectId) {
+    /// Each surviving card of an airbent object can be cast independently.
+    pub(super) fn grant_airbend_cast(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, ZoneEntry::default(), |object| PlayGrant {
+        self.grant_if_exiled(object_id, |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..PlayGrant::new(object, owner)
         });
@@ -403,7 +403,7 @@ impl Game {
             .partition(|object| self.is_foretold(*object));
         let bearers = pool
             .iter()
-            .filter(|object| self.state[**object].foretell().is_some())
+            .filter(|object| self.state[**object].retained_base().1.foretell().is_some())
             .count();
         if bearers < foretold_slots.len()
             || pool.len() < foretold_slots.len() + face_down_slots.len()
@@ -412,8 +412,8 @@ impl Game {
         }
         let mut foretold = Vec::with_capacity(foretold_slots.len());
         pool.retain(|object| {
-            let take =
-                foretold.len() < foretold_slots.len() && self.state[*object].foretell().is_some();
+            let take = foretold.len() < foretold_slots.len()
+                && self.state[*object].retained_base().1.foretell().is_some();
             if take {
                 foretold.push(*object);
             }
@@ -432,22 +432,18 @@ impl Game {
         true
     }
 
-    /// Exile `card` linked to `source`: while `player` controls `source`,
-    /// they may cast it during their turn as `linked` allows (Hama, Azula).
-    /// Without a source the card is only exiled.
-    pub(crate) fn exile_linked(
+    /// Link the exiled arrival `exiled` to `source`: while `player` controls
+    /// `source`, they may cast it during their turn as `linked` allows (Hama,
+    /// Azula). Each arrival of a melded pair costs its own mana value.
+    pub(crate) fn grant_exile_linked(
         &mut self,
-        object_id: ObjectId,
+        exiled: ObjectId,
         player: PlayerId,
-        source: Option<ObjectId>,
+        source: ObjectId,
         linked: LinkedGrant,
     ) {
-        let Some(source) = source else {
-            self.move_object(object_id, ZoneType::Exile);
-            return;
-        };
-        let mana_value = self.object_mana_value(object_id);
-        self.exile_with_play_grant(object_id, ZoneEntry::default(), |object| {
+        let mana_value = self.object_mana_value(exiled);
+        self.grant_if_exiled(exiled, |object| {
             let base = PlayGrant {
                 source: Some(source),
                 own_turn_only: true,
@@ -479,12 +475,18 @@ impl Game {
         grant: impl FnOnce(ObjectId) -> PlayGrant,
     ) {
         let exiled = self.move_object_with_entry(object, ZoneType::Exile, entry);
-        if self.state.zones.zone_of(exiled) != Some(ZoneType::Exile)
-            || !self.state[exiled].is_card()
+        self.grant_if_exiled(exiled, grant);
+    }
+
+    /// Add the grant `grant` builds for the exiled `object_id`. A token, or a
+    /// card a replacement kept out of exile, receives no grant.
+    fn grant_if_exiled(&mut self, object_id: ObjectId, grant: impl FnOnce(ObjectId) -> PlayGrant) {
+        if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile)
+            || !self.state[object_id].is_card()
         {
             return;
         }
-        self.state.cast_permissions.grant(grant(exiled));
+        self.state.cast_permissions.grant(grant(object_id));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2), and "until the

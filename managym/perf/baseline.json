@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "f299750a45c3d7183a7ed889090fa26e885e8754",
-    "date": "2026-11-24",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45433601964",
-    "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "Foundations cards, combat damage assignment, prevention shields, and first-strike timing"
+    "commit": "7d3ac1eb1c30488e4a54b9bb1b0213e44c5f6d55",
+    "date": "2026-11-25",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45532634475",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
+    "reason": "Battlefield forms, copiable snapshots and persistent ability sources (MTG-420): one effective characteristics projection per permanent costs 4-12% headless step throughput depending on runner CPU; digests unchanged"
   },
   "bench_search": {
-    "worst_s": 2.8107935250000002,
-    "total_s": 117.205,
+    "worst_s": 3.9820356529999996,
+    "total_s": 163.988,
     "seeds": {
       "1": {
-        "worst_s": 2.801099598,
-        "total_s": 37.6837941015,
+        "worst_s": 3.9820356529999996,
+        "total_s": 52.033968216500014,
         "digest": 13638875039089371439
       },
       "2": {
-        "worst_s": 2.8107935250000002,
-        "total_s": 45.2203466835,
+        "worst_s": 3.8323289794999997,
+        "total_s": 63.374016876000006,
         "digest": 5466143068363283977
       },
       "3": {
-        "worst_s": 2.543827267,
-        "total_s": 34.3010955765,
+        "worst_s": 3.554504098,
+        "total_s": 48.580169143000006,
         "digest": 9998925852575961750
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 25163.34530111193,
+    "steps_per_s": 15227.727781353018,
     "steps": 118559,
     "games": 512,
     "digest": 10601622128491155944

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from conformance.authored_match_receipt import (
-    CASTING_RECEIPT_PATH,
+    AUTHORITY_RECEIPT_PATH,
     DeterministicServerOfferPolicy,
     _program_index,
     generate_authored_match_receipt,
@@ -12,7 +12,7 @@ from conformance.authored_match_receipt import (
 
 
 def test_release_stack_authored_match_receipt_is_terminal_and_authoritative() -> None:
-    checked = json.loads(CASTING_RECEIPT_PATH.read_text(encoding="utf-8"))
+    checked = json.loads(AUTHORITY_RECEIPT_PATH.read_text(encoding="utf-8"))
     generated = generate_authored_match_receipt()
     assert generated == checked
 

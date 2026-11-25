@@ -285,7 +285,10 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
     let old: std::collections::BTreeSet<_> = pack
         .definition_entries()
         .filter(|(id, definition)| {
-            !definition.is_token && (!definition.key.is_empty() || pack.front_face(*id).is_some())
+            !definition.is_token
+                && (definition.scryfall_id.is_some()
+                    || !definition.key.is_empty()
+                    || pack.front_face(*id).is_some())
         })
         // An inset can supply a name without its own registered definition.
         .flat_map(|(_, definition)| {

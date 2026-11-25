@@ -52,6 +52,7 @@ pub enum CounterKind {
     /// No rules meaning of its own; Tinybones lets its controller play the
     /// exiled cards that have one.
     Stash,
+    Revival,
 }
 
 impl CounterKind {
@@ -74,6 +75,7 @@ impl CounterKind {
             CounterKind::Ice => "ice",
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
+            CounterKind::Revival => "revival",
             CounterKind::Incubation => "incubation",
             CounterKind::Page => "page",
             CounterKind::Soul => "soul",
@@ -91,7 +93,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 22] = [
+    pub const ALL: [CounterKind; 23] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -114,6 +116,7 @@ impl CounterKind {
         CounterKind::Soul,
         CounterKind::Bait,
         CounterKind::Stash,
+        CounterKind::Revival,
     ];
 }
 
@@ -171,11 +174,50 @@ impl serde::Serialize for Counters {
     }
 }
 
+/// Casting choices retained by the permanent a spell becomes (CR 400.7d).
+/// A spell copy keeps kicker and X but paid nothing. A cast for zero has
+/// an empty payment receipt.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpellEntry {
+    pub kicked: bool,
+    pub x: u8,
+    pub payment: Option<crate::payment::PaymentReceipt>,
+}
+
+// Keep the field names and order used by recorded game digests.
+fn serialize_spell_entry<S: serde::Serializer>(
+    spell: &Option<std::sync::Arc<SpellEntry>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(None)?;
+    map.serialize_entry(
+        "was_cast",
+        &spell.as_ref().is_some_and(|entry| entry.payment.is_some()),
+    )?;
+    let Some(entry) = spell else { return map.end() };
+    if entry.x != 0 {
+        map.serialize_entry("cast_x", &entry.x)?;
+    }
+    if let Some(payment) = entry.payment.as_ref().filter(|paid| !paid.is_empty()) {
+        map.serialize_entry("cast_spent", payment)?;
+    }
+    if entry.kicked {
+        map.serialize_entry("kicked", &true)?;
+    }
+    map.end()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
+    /// Entered by manifest: the permanent's public id stays its viewer id
+    /// through reveal, never the deck-order id of the card it hid. Whether
+    /// it is face down now is `Object::is_face_down`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manifested: bool,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,
@@ -204,25 +246,19 @@ pub struct Permanent {
     /// continuous-effect records.
     pub timestamp: PublicId,
     pub attacking: bool,
-    /// True only for this incarnation entering as a resolving cast spell.
-    pub was_cast: bool,
-    /// The X announced for that spell (CR 107.3m), read by its own
-    /// entering-the-battlefield triggers; 0 otherwise.
-    #[serde(skip_serializing_if = "crate::is_zero")]
-    pub cast_x: u8,
-    /// The mana spent to cast that spell (CR 601.2h), read by its own
-    /// entering-the-battlefield triggers; empty otherwise.
-    #[serde(skip_serializing_if = "crate::payment::PaymentReceipt::is_empty")]
-    pub cast_spent: crate::payment::PaymentReceipt,
+    /// Present only when a spell resolved into this permanent. Forks share it.
+    #[serde(flatten, serialize_with = "serialize_spell_entry")]
+    pub spell_entry: Option<std::sync::Arc<SpellEntry>>,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
     pub attached_to: Option<ObjectId>,
-    /// Exhaust abilities (indices into the card's activated abilities) this
-    /// object has activated; a new object starts fresh (CR 400.7).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub exhausted: Vec<usize>,
+    /// Once-per-object abilities (indices into the effective activated
+    /// abilities) this object has activated; a new object starts fresh
+    /// (CR 400.7).
+    #[serde(rename = "exhausted", skip_serializing_if = "Vec::is_empty")]
+    pub spent_abilities: Vec<usize>,
     /// "Once each turn" abilities this object has activated this turn,
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -240,17 +276,18 @@ impl Permanent {
             .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
     }
 
-    /// Whether this object has used up the ability: exhaust once ever
-    /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
+    /// Whether this object has used up the ability: a once-per-object
+    /// ability ever (CR 702.177a, 602.5b), "once each turn" already this
+    /// turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        ((ability.exhaust || ability.power_up) && self.exhausted.contains(&index))
+        (ability.once_per_object() && self.spent_abilities.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
-        if ability.exhaust || ability.power_up {
-            self.exhausted.push(index);
+        if ability.once_per_object() {
+            self.spent_abilities.push(index);
         }
         if ability.once_each_turn {
             self.activated_this_turn.push(index);
@@ -260,14 +297,15 @@ impl Permanent {
     pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
             transforms: 0,
+            manifested: false,
             id,
             object: object_id,
             controller: object.owner,
             tapped: false,
-            // CR 302.6 applies to any permanent that is a creature; only
-            // creatures and Vehicles can attack or pay {T} as creatures here.
-            summoning_sick: (object.types.is_creature() || object.has_subtype("Vehicle"))
-                && !object.keywords.has(Keyword::Haste),
+            // CR 302.6: control since the turn began, whatever the
+            // permanent is now; `permanent_can_tap` reads whether it is a
+            // creature without haste when that matters.
+            summoning_sick: true,
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,
@@ -276,11 +314,9 @@ impl Permanent {
             counters: Counters::default(),
             keyword_counter_timestamps: Default::default(),
             attacking: false,
-            was_cast: false,
-            cast_x: 0,
-            cast_spent: Default::default(),
+            spell_entry: Default::default(),
             attached_to: None,
-            exhausted: Vec::new(),
+            spent_abilities: Vec::new(),
             activated_this_turn: Vec::new(),
         }
     }
