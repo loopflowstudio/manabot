@@ -523,6 +523,7 @@ def _source_manifest() -> dict[str, Any]:
         "scripts/verify-public-commitment-parity",
         "tests/belief/test_player.py",
         "tests/belief/test_tracker.py",
+        "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
     )
     files = [

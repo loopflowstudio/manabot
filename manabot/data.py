@@ -36,7 +36,6 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field
 
 from manabot.infra.artifacts import (
-    MissingCredentials,
     StoredArtifact,
     download_artifact,
     publish_artifact,
@@ -278,8 +277,7 @@ def _download(entries: list[DataFile], manifest: DataManifest, cache: Path) -> N
         for entry in entries:
             reference = manifest.stored(entry)
             _admit(cache, entry, lambda partial: download_artifact(reference, partial))
-    # No credentials, endpoint or connection.
-    except (BotoCoreError, MissingCredentials) as error:
+    except BotoCoreError as error:  # no credentials, endpoint or connection
         raise DataUnavailable(str(error)) from error
     except ClientError as error:
         if error.response["ResponseMetadata"]["HTTPStatusCode"] not in (401, 403):

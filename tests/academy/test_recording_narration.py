@@ -1,6 +1,5 @@
 """A recorded Play game names the opponent's moves as the person saw them."""
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -16,15 +15,8 @@ CONFIG: dict[str, Any] = {
 }
 
 
-def play_passing(
-    game: server.GameSession,
-    commands: int,
-    *,
-    stop_when: Callable[[], bool] | None = None,
-) -> None:
+def play_passing(game: server.GameSession, commands: int) -> None:
     for index in range(commands):
-        if stop_when is not None and stop_when():
-            return
         frame = game.current_message()["frame"]
         if frame["status"] == "game_over":
             return

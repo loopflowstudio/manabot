@@ -27,18 +27,40 @@ use crate::{
     },
 };
 
+/// A spell's choices through targeting, division and payment (CR 601.2b–h).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AnnouncedSpell {
+    #[serde(rename = "card")]
+    pub object: ObjectId,
+    #[serde(flatten)]
+    pub cast: CastChoices,
+    pub mode: Option<usize>,
+    pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_shares: Vec<u8>,
+}
+
+impl AnnouncedSpell {
+    /// Each target gets at least one. The last gets the remaining amount.
+    pub fn shares(&self, total: u8) -> std::ops::RangeInclusive<usize> {
+        let remaining = usize::from(total)
+            - self
+                .target_shares
+                .iter()
+                .copied()
+                .map(usize::from)
+                .sum::<usize>();
+        let later = self.targets.len() - self.target_shares.len() - 1;
+        let minimum = if later == 0 { remaining } else { 1 };
+        minimum..=remaining - later
+    }
+}
+
 /// A fully announced spell or activation (CR 601.2a-e, 602.2).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Operation {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    },
+    Spell(AnnouncedSpell),
     Activation {
         source: ActivationSource,
         ability_index: usize,
@@ -53,7 +75,7 @@ impl Operation {
     /// The spell being cast, if this is a cast.
     pub fn spell(&self) -> Option<ObjectId> {
         match self {
-            Self::Spell { object, .. } => Some(*object),
+            Self::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Self::Activation { .. } => None,
         }
     }
@@ -136,20 +158,28 @@ impl CostComponent {
     }
 
     /// What a resolving effect's `cost` owes as its payment decision is
-    /// made: the one place a definition's `PaymentCost` becomes a component.
+    /// made: the one place a definition's `PaymentCost` becomes components.
     /// A waterbend cost is its generic mana, all of which taps may pay.
-    pub fn resolving(cost: &PaymentCost) -> Self {
+    pub fn resolving(cost: &PaymentCost) -> Vec<Self> {
         match cost {
-            PaymentCost::Mana(cost) => Self::mana(cost.clone()),
-            PaymentCost::Waterbend { generic } => Self::Mana {
+            PaymentCost::Mana(cost) => vec![Self::mana(cost.clone())],
+            PaymentCost::Waterbend { generic } => vec![Self::Mana {
                 cost: ManaCost::default().with_generic(*generic),
                 help: Help {
                     waterbend: *generic,
                     ..Help::default()
                 },
-            },
-            PaymentCost::Discard => Self::Discard,
-            PaymentCost::Life(life) => Self::Life(*life),
+            }],
+            PaymentCost::Discard => vec![Self::Discard],
+            PaymentCost::Life(life) => vec![Self::Life(*life)],
+            PaymentCost::All(parts) => {
+                let components: Vec<_> = parts.iter().flat_map(Self::resolving).collect();
+                if components.is_empty() {
+                    vec![Self::mana(ManaCost::default())]
+                } else {
+                    components
+                }
+            }
         }
     }
 }
@@ -328,18 +358,23 @@ impl Payment {
 
 /// What one payment made during resolution still owes, what has paid toward
 /// it and the branches its outcome selects. Mana activation costs commit
-/// immediately through the mana authority. Only a waterbend contribution
-/// closes the decline branch (the existing contract). The receipt names the
-/// exact objects that paid, as evidence; they are never followed or untapped.
+/// immediately through the mana authority. Only a waterbend contribution or a
+/// paid component closes the decline branch (the existing contract). The
+/// receipt names the exact objects that paid, as evidence; they are never
+/// followed or untapped.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentProgress {
     /// Acceptance of an optional payment precedes choosing its sources in auto mode.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub committed: bool,
+    /// Set once a waterbend mana component has been paid, so finishing a
+    /// composite payment still records waterbending even without taps.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
     pub player: PlayerId,
-    /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
-    /// `Life` or `Discard` (`CostComponent::resolving`).
-    pub owed: CostComponent,
+    /// Remaining components in payment order: `Mana` (whose help allows
+    /// waterbend taps), `Life`, or `Discard` (`CostComponent::resolving`).
+    pub owed: Vec<CostComponent>,
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
@@ -358,7 +393,7 @@ pub struct PaymentProgress {
 impl PaymentProgress {
     pub fn new(
         player: PlayerId,
-        owed: CostComponent,
+        owed: Vec<CostComponent>,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     ) -> Self {
@@ -367,6 +402,7 @@ impl PaymentProgress {
             owed,
             receipt: PaymentReceipt::default(),
             committed: false,
+            waterbend: false,
             if_paid,
             if_declined,
             spends: None,
@@ -374,17 +410,68 @@ impl PaymentProgress {
         }
     }
 
+    pub fn current(&self) -> Option<&CostComponent> {
+        self.owed.first()
+    }
+
     pub fn can_decline(&self) -> bool {
         !self.committed && self.receipt.contributions().is_empty()
     }
 
-    /// Whether the cost is a waterbend cost, however it is paid.
+    /// Whether the current cost is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
-        matches!(self.owed, CostComponent::Mana { help, .. } if help.waterbend > 0)
+        matches!(self.current(), Some(CostComponent::Mana { help, .. }) if help.waterbend > 0)
     }
 }
 
 impl Game {
+    /// Whether `payment.player` can pay every remaining component after the
+    /// front one (e.g. a composite ward's life component after its mana).
+    pub(crate) fn can_pay_remaining_tail(&self, payment: &PaymentProgress) -> bool {
+        let mut life = 0u32;
+        let mut discards = 0usize;
+        for component in payment.owed.get(1..).unwrap_or(&[]) {
+            match component {
+                CostComponent::Life(amount) => life = life.saturating_add(*amount),
+                CostComponent::Discard => discards += 1,
+                CostComponent::Mana { cost, .. } => {
+                    if !self.can_pay_mana_cost(payment.player, cost) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        (life == 0 || self.can_pay_life(payment.player, life))
+            && (discards == 0 || self.discard_candidates(payment.player, None).len() >= discards)
+    }
+
+    /// Record that `payment`'s front component was paid and advance.
+    /// Once committed, trailing no-choice life components pay immediately.
+    pub(crate) fn advance_resolution_payment(
+        &mut self,
+        mut payment: PaymentProgress,
+        frame: EffectFrame,
+    ) {
+        if payment.waterbends() {
+            payment.waterbend = true;
+        }
+        payment.owed.remove(0);
+        payment.committed = true;
+        while !payment.can_decline() {
+            let Some(&CostComponent::Life(life)) = payment.owed.first() else {
+                break;
+            };
+            payment.owed.remove(0);
+            self.pay_life_cost(payment.player, life, &mut payment.receipt);
+        }
+        if payment.owed.is_empty() {
+            self.finish_resolution_payment(payment, frame);
+        } else {
+            self.continue_resolution(frame, Some(Decision::Payment(payment)));
+        }
+    }
+
     /// The cost of a resolution payment is paid: spend its once-each-turn
     /// option, then run the "if paid" branch before the rest of `frame`.
     pub(crate) fn finish_resolution_payment(
@@ -395,7 +482,7 @@ impl Game {
         if let Some(key) = payment.spends {
             self.spend_once_each_turn(key);
         }
-        if payment.waterbends() {
+        if payment.waterbend || payment.waterbends() {
             self.record_bending(payment.player, crate::flow::turn::Bending::Water);
         }
         frame.prepend_effects(payment.if_paid.into_iter());
@@ -424,7 +511,7 @@ impl Game {
         player: PlayerId,
         payment: &Payment,
     ) -> Vec<ObjectId> {
-        let Operation::Spell { object, cast, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object, cast, .. }) = payment.operation else {
             unreachable!("an exile alternative pays for a spell")
         };
         self.exile_alternative_objects(player, object, cast)
@@ -448,7 +535,7 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id)),
             );
         }
-        let Operation::Spell { object: spell, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object: spell, .. }) = payment.operation else {
             unreachable!("forage pays for a spell")
         };
         let mut graveyard = self.graveyard_payers(player, spell);
@@ -596,12 +683,12 @@ impl Game {
     ) -> Vec<CostComponent> {
         let mut owed = Vec::new();
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 targets,
                 ..
-            } => {
+            }) => {
                 if self.uses_exile_alternative(*object, *cast) {
                     owed.push(CostComponent::ExileFromHand);
                 }
@@ -1193,7 +1280,7 @@ impl Game {
         // The source's own discard or exile; its sacrifice is on the receipt.
         let mut source_costs = Vec::new();
         let activated = match &payment.operation {
-            Operation::Spell { .. } => None,
+            Operation::Spell(_) => None,
             Operation::Activation {
                 source,
                 ability_index,
@@ -1356,7 +1443,7 @@ impl Game {
     /// The card whose spell or ability `payment` pays for.
     pub(crate) fn payment_source_object(&self, operation: &Operation) -> Option<ObjectId> {
         match operation {
-            Operation::Spell { object, .. } => Some(*object),
+            Operation::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Operation::Activation {
                 source: ActivationSource::Card(card),
                 ..

@@ -31,7 +31,7 @@ from managym.experience_projection import redact_observation
 # Native decision-context stages that continue announcing a spell or ability
 # (`managym/src/decision_context.rs`): the move is named once it is on the stack.
 ANNOUNCING_STAGES = frozenset(
-    {"payment", "additional_cost", "targets", "mode", "announcement"}
+    {"payment", "additional_cost", "targets", "target_shares", "mode", "announcement"}
 )
 # Stages of a choice made while a spell or ability resolves, or while combat
 # damage is assigned (the suspended decisions of `decision_context.rs`). Mana
@@ -45,6 +45,8 @@ RESOLVING_STAGES = frozenset(
         "surveil",
         "order_library_bottom",
         "order_library_top",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
@@ -59,8 +61,11 @@ RESOLVING_STAGES = frozenset(
         "retarget",
         "choose_to_exile",
         "keep_creatures",
+        "keep_permanents",
         "linked_exile",
         "split_revealed",
+        "partition_piles",
+        "choose_pile",
     }
 )
 

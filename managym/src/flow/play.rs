@@ -20,7 +20,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionCastOffer},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{bargain_cost, Help, Operation, Payment},
+        payment::{bargain_cost, AnnouncedSpell, Help, Operation, Payment},
         proposed_event::{EntryFace, EventBinding, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
@@ -937,7 +937,11 @@ impl Game {
         let alternative = self.alternative_cost_available(player, object, cast);
         let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
-            if self.can_pay_cast(player, object, cast) {
+            if self.can_pay_cast(player, object, cast)
+                && self
+                    .cast_with_available_targets(player, object, cast)
+                    .is_some_and(|available| !available.kicked)
+            {
                 None
             } else {
                 Some(kicked)
@@ -968,6 +972,35 @@ impl Game {
             || card
                 .alternative_mana()
                 .is_some_and(|(_, condition)| self.check_static_condition(condition, player))
+    }
+
+    /// Some kicker costs replace a mandatory target with “any number”. With
+    /// no such target available, only the kicked announcement can be made.
+    pub(crate) fn cast_with_available_targets(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        mut cast: CastChoices,
+    ) -> Option<CastChoices> {
+        let requirements = cast.spell(&self.state[object]).target_requirements();
+        for (index, requirement) in requirements.iter().enumerate() {
+            if requirement.min == 0 || (cast.kicked && requirement.up_to_if_kicked.is_some()) {
+                continue;
+            }
+            // A clause with its own relation is checked from the clause it
+            // names, whose candidates must leave it a partner.
+            let candidates = |requirement: &TargetRequirement| {
+                self.legal_targets_for_requirement(player, object, requirement)
+            };
+            if !candidates(requirement).into_iter().any(|target| {
+                requirement.relation.is_some()
+                    || self.relations_admit(&requirements, index, target, &[], candidates)
+            }) {
+                requirement.up_to_if_kicked?;
+                cast.kicked = true;
+            }
+        }
+        Some(cast)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -1080,11 +1113,11 @@ impl Game {
                         .target_requirements_for_mode(Some(*mode))
                         .iter()
                         .all(|req| {
-                            req.min == 0
+                            req.min_for(cast.x, cast.kicked) == 0
                                 || self
                                     .legal_targets_for_requirement(player, object, req)
                                     .len()
-                                    >= req.min
+                                    >= req.min_for(cast.x, cast.kicked)
                         })
                 })
                 .collect()
@@ -1157,13 +1190,10 @@ impl Game {
                 .remaining_legal_targets(
                     player,
                     object,
-                    requirement,
-                    &chosen
-                        .iter()
-                        .zip(&chosen_req_indices)
-                        .filter(|(_, index)| **index == requirement_index)
-                        .map(|(target, _)| *target)
-                        .collect::<Vec<_>>(),
+                    &requirements,
+                    requirement_index,
+                    &chosen,
+                    &chosen_req_indices,
                     cast.x,
                 )
                 .into_iter()
@@ -1171,8 +1201,8 @@ impl Game {
                     self.target_leaves_cost_payable(player, object, cast, &chosen, *target)
                 })
                 .collect::<Vec<_>>();
-            if legal.is_empty() || requirement.max_for(cast.x) == 0 {
-                if requirement.min_for(cast.x) == 0 {
+            if legal.is_empty() || requirement.max_for(cast.x, cast.kicked) == 0 {
+                if requirement.min_for(cast.x, cast.kicked) == 0 {
                     requirement_index += 1;
                     continue;
                 }
@@ -1213,18 +1243,36 @@ impl Game {
         self.can_pay_cast_with_targets(player, object, cast, Some(&targets))
     }
 
+    /// Candidates for clause `clause` of a spell being cast, given every
+    /// target chosen so far and the clause each went to.
+    #[allow(clippy::too_many_arguments)]
     fn remaining_legal_targets(
         &self,
         player: PlayerId,
         object: ObjectId,
-        requirement: &TargetRequirement,
+        requirements: &[TargetRequirement],
+        clause: usize,
         chosen: &[Target],
+        chosen_req_indices: &[usize],
         x: u8,
     ) -> Vec<Target> {
+        let requirement = &requirements[clause];
+        let pairs: Vec<(usize, Target)> = chosen_req_indices
+            .iter()
+            .copied()
+            .zip(chosen.iter().copied())
+            .collect();
+        let in_clause = pairs
+            .iter()
+            .filter(|(index, _)| *index == clause)
+            .map(|(_, target)| *target);
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.can_add_clause_target(requirement, x, chosen.iter().copied(), *target)
+                self.can_add_clause_target(requirement, x, in_clause.clone(), *target)
+                    && self.relations_admit(requirements, clause, *target, &pairs, |later| {
+                        self.legal_targets_for_requirement(player, object, later)
+                    })
             })
             .collect()
     }
@@ -1290,7 +1338,7 @@ impl Game {
             .filter(|i| **i == requirement_index)
             .count();
 
-        if chosen_in_req >= requirement.max_for(cast.x) {
+        if chosen_in_req >= requirement.max_for(cast.x, cast.kicked) {
             return self.advance_target_selection(
                 player,
                 object,
@@ -1307,13 +1355,10 @@ impl Game {
         let legal = self.remaining_legal_targets(
             player,
             object,
-            requirement,
-            &chosen
-                .iter()
-                .zip(&chosen_req_indices)
-                .filter(|(_, index)| **index == requirement_index)
-                .map(|(target, _)| *target)
-                .collect::<Vec<_>>(),
+            &requirements,
+            requirement_index,
+            &chosen,
+            &chosen_req_indices,
             cast.x,
         );
         if legal.is_empty() {
@@ -1380,7 +1425,7 @@ impl Game {
             .iter()
             .filter(|i| **i == requirement_index)
             .count();
-        if chosen_in_req < requirement.min_for(cast.x) {
+        if chosen_in_req < requirement.min_for(cast.x, cast.kicked) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 object,
@@ -1417,16 +1462,54 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        self.begin_payment(
-            player,
-            Operation::Spell {
-                object,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-            },
-        )
+        let division = cast.spell(&self.state[object]).division;
+        let spell = AnnouncedSpell {
+            object,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+            target_shares: Vec::new(),
+        };
+        if division > 0 && !spell.targets.is_empty() {
+            self.pending_choice = Some(PendingChoice::DivideAmongTargets {
+                player,
+                spell: Box::new(spell),
+            });
+            Ok(())
+        } else {
+            self.begin_payment(player, Operation::Spell(spell))
+        }
+    }
+
+    pub(crate) fn divide_target_action(
+        &mut self,
+        player: PlayerId,
+        amount: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::DivideAmongTargets {
+            player: chooser,
+            spell,
+        }) = self.pending_choice.as_mut()
+        else {
+            return Err(AgentError("no target division pending".into()));
+        };
+        if *chooser != player
+            || !spell
+                .shares(spell.cast.spell(&self.state[spell.object]).division)
+                .contains(&amount)
+        {
+            return Err(AgentError("illegal target share".into()));
+        }
+        spell.target_shares.push(amount as u8);
+        if spell.target_shares.len() == spell.targets.len() {
+            let Some(PendingChoice::DivideAmongTargets { spell, .. }) = self.pending_choice.take()
+            else {
+                unreachable!()
+            };
+            self.begin_payment(player, Operation::Spell(*spell))?;
+        }
+        Ok(())
     }
 
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
@@ -1465,13 +1548,14 @@ impl Game {
     }
 
     pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
-        let Operation::Spell {
+        let Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode,
             targets,
             target_req_indices,
-        } = payment.operation
+            target_shares,
+        }) = payment.operation
         else {
             unreachable!("activation prepared before costs")
         };
@@ -1494,6 +1578,7 @@ impl Game {
             unreachable!("just pushed spell")
         };
         let paid = u32::from(payment.receipt.total());
+        spell.target_shares = target_shares;
         spell.mode = mode;
         spell.spent = payment.receipt;
         let total = &mut self.state.turn.history[player.0].mana_spent_casting;
@@ -1570,7 +1655,9 @@ impl Game {
                 "ability does not function on the battlefield".into(),
             ));
         }
-        if self.activations_prohibited(permanent_id) {
+        if self.activations_prohibited(permanent_id)
+            || (!ability.is_mana_ability() && self.nonmana_activation_prohibited(permanent.object))
+        {
             return Err(AgentError(
                 "its activated abilities can't be activated".into(),
             ));
@@ -1769,13 +1856,19 @@ impl Game {
                 .state
                 .zones
                 .contains(self.state.object_of(card), ability.zone.zone(), player)
+            || (!ability.is_mana_ability()
+                && self.nonmana_activation_prohibited(self.state.object_of(card)))
         {
             return None;
         }
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
+            source: SpendingObject::new(
+                definition.subtypes.iter().map(String::as_str),
+                false,
+                definition.types.is_creature(),
+            ),
         };
         self.price_activation(player, &mut ability);
         Some(ability)
@@ -1927,10 +2020,25 @@ impl Game {
         let Some(ability_source) = self.activation_ability_source(source) else {
             return Vec::new();
         };
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return Vec::new();
+        };
+        let requirements = ability.target_requirements();
+        let pairs: Vec<(usize, Target)> = ability
+            .target_clause_indices(chosen.len())
+            .into_iter()
+            .zip(chosen.iter().copied())
+            .collect();
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
             .legal_clause_targets(&clause, player, ability_source)
             .filter(|target| !chosen.contains(target))
+            .filter(|target| {
+                self.relations_admit(&requirements, requirement, *target, &pairs, |later| {
+                    self.legal_clause_targets(later, player, ability_source)
+                        .collect()
+                })
+            })
             .collect();
         if !clause.shares_creature_type {
             return candidates;

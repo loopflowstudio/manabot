@@ -376,3 +376,64 @@ fn foundations_5f_twinblade_paladin() {
     assert_eq!(s.life(0), 22);
     assert!(!keywords(&s, paladin).has(Keyword::DoubleStrike));
 }
+
+/// Drakuseth's attack trigger deals 4 damage to one target and 3 to each
+/// of up to two other targets: the primary target is never offered again,
+/// and with 16 creatures a side plus both players each clause is still one
+/// short sequence of choices.
+#[test]
+fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
+    use crate::support::{
+        game::{clear_summoning_sickness, deck, Scenario},
+        inspect::offered_targets,
+        play::{attack_with, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind, flow::turn::StepKind, state::game_object::PlayerId,
+    };
+    // Enough Ogres for 16 a side beyond the opening hand.
+    let cards = deck(&[
+        ("Mountain", 10),
+        ("Gray Ogre", 30),
+        ("Hill Giant", 2),
+        ("Drakuseth, Maw of Flames", 1),
+    ]);
+    let mut s = Scenario::new(cards.clone(), cards, 161);
+    s.advance_to_active_step(0, StepKind::Main);
+    let drakuseth = s.force_permanent_on_battlefield(0, "Drakuseth, Maw of Flames");
+    clear_summoning_sickness(&mut s, drakuseth);
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let ogres: Vec<_> = (0..16)
+        .flat_map(|_| {
+            [
+                s.force_permanent_on_battlefield(0, "Gray Ogre"),
+                s.force_permanent_on_battlefield(1, "Gray Ogre"),
+            ]
+        })
+        .collect();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, drakuseth);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let started = std::time::Instant::now();
+    // Drakuseth, the Giant, 32 Ogres and both players.
+    assert_eq!(offered_targets(&s).len(), 36);
+    let opponent = Target::Player(PlayerId(1));
+    assert!(s.choose_target(opponent));
+    let secondary = offered_targets(&s);
+    assert_eq!(secondary.len(), 35);
+    assert!(!secondary.contains(&opponent));
+    assert!(s.choose_target(Target::Permanent(giant)));
+    let last = offered_targets(&s);
+    assert!(!last.contains(&opponent) && !last.contains(&Target::Permanent(giant)));
+    assert!(s.choose_target(Target::Permanent(ogres[1])));
+    eprintln!(
+        "Drakuseth target choices with 16 creatures a side: {:?}",
+        started.elapsed()
+    );
+    let life = s.life(1);
+    settle(&mut s);
+    assert_eq!(s.life(1), life - 4);
+    assert!(s.game().state.permanents[giant].is_none());
+    assert!(s.game().state.permanents[ogres[1]].is_none());
+    assert!(s.game().state.permanents[ogres[3]].is_some());
+}

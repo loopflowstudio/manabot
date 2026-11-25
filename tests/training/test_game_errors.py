@@ -921,10 +921,7 @@ def test_arena_lost_worker_retains_acknowledged_command(
         "tests.training.game_error_fixtures:_lost_payment_worker",
     )
     journal = tmp_path / "attempt.jsonl"
-    # The deadline covers worker startup (spawn, debug-extension import, source
-    # hashing). A hung worker sleeps 60 s, so its allowance stays below that.
-    game_seconds = 30 if hang else 60
-    result = simulation.play_game(game, players, {}, 1000, game_seconds, journal)
+    result = simulation.play_game(game, players, {}, 1000, 5, journal)
     assert result["termination_reason"] == ("timeout" if hang else "crash")
     assert result["pending_decision"]["revision"] == 0
     retained = read_game_journal(journal)

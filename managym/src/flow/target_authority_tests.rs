@@ -918,6 +918,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
         source,
         vec![Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
@@ -1241,6 +1242,77 @@ fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
     );
 }
 
+/// New targets are judged as one assignment (CR 115.7e). A copy of
+/// "4 damage to any target and 3 to another target" may swap its two
+/// targets, which a check of each slot against the others' old targets
+/// would reject; once the first slot takes the second's object, the second
+/// must change. "Change the target" keeps the other slots, so it never
+/// offers an object another slot holds.
+#[test]
+fn copy_targets_change_as_one_assignment() {
+    use crate::state::ability::TargetRelation;
+    let (mut game, source, _, Target::Permanent(a), _) = fixture() else {
+        unreachable!()
+    };
+    let b = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let (a, b) = (Target::Permanent(a), Target::Permanent(b));
+    game.state.pending_triggers.push(trigger(
+        source,
+        vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::Creature),
+                effects: vec![],
+            },
+            Effect::TargetClause {
+                requirement: TargetRequirement {
+                    relation: Some(TargetRelation::DistinctFromEarlier),
+                    ..TargetRequirement::up_to(1, TargetSpec::Creature)
+                },
+                effects: vec![],
+            },
+        ],
+        0,
+    ));
+    assert!(game.flush_triggers().is_some());
+    game.choose_trigger_target(PlayerId(0), a).unwrap();
+    // The second clause no longer offers the first clause's target.
+    assert_eq!(
+        game.flush_triggers().unwrap().actions,
+        [
+            crate::agent::action::Action::ChooseTarget {
+                player: PlayerId(0),
+                target: b,
+            },
+            crate::agent::action::Action::Decline {
+                player: PlayerId(0)
+            },
+        ]
+    );
+    assert!(game.choose_trigger_target(PlayerId(0), a).is_err());
+    game.choose_trigger_target(PlayerId(0), b).unwrap();
+    assert!(game.flush_triggers().is_none());
+    let original = game.state.stack_objects.last().unwrap().as_target();
+
+    // "Change the target" of one slot: the other slot's object is taken.
+    assert_eq!(game.retarget_offer(original, &[], false), (vec![], false));
+
+    let copy = game.copy_stack_object(original, PlayerId(0)).unwrap();
+    assert_eq!(game.retarget_offer(copy, &[], true), (vec![b], true));
+    assert_eq!(game.retarget_offer(copy, &[b], true), (vec![a], false));
+    assert_eq!(game.retarget_offer(copy, &[a], true), (vec![], true));
+    assert!(game
+        .next_retarget(PlayerId(0), copy, vec![b], true)
+        .is_some());
+    // Publishing writes both targets at once.
+    assert!(game
+        .next_retarget(PlayerId(0), copy, vec![b, a], true)
+        .is_none());
+    let copied = &game.state.stack_objects[game.stack_index_of(copy).unwrap()];
+    assert_eq!(copied.targets(), [b, a]);
+}
+
 #[test]
 fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
     use crate::state::{game_object::AbilitySource, permanent::CounterKind};
@@ -1279,7 +1351,9 @@ fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     let stack = game.state.stack_objects.last().unwrap().as_target();
-    assert!(game.next_retarget(player, stack, 0, true).is_some());
+    assert!(game
+        .next_retarget(player, stack, Vec::new(), true)
+        .is_some());
     assert_eq!(
         game.retarget_candidates(stack, 0),
         vec![Target::GraveyardCard(second)]

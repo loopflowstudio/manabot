@@ -64,7 +64,7 @@ import builtins
 import json
 import sys
 
-blocked = {'torch', 'pandas', 'psutil', 'gymnasium'}
+blocked = {'numpy', 'torch', 'pandas', 'psutil', 'gymnasium'}
 real_import = builtins.__import__
 
 def guarded(name, globals=None, locals=None, fromlist=(), level=0):
@@ -87,6 +87,7 @@ with TemporaryDirectory() as directory:
     game.close('test')
     assert game.attempt_store.load(game.trace_id)['events']
 assert 'manabot.sim.search.conditional' not in sys.modules
+assert 'numpy' not in sys.modules
 """
     subprocess.run(
         [sys.executable, "-c", script, json.dumps(decks)], check=True, timeout=60

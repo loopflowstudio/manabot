@@ -97,6 +97,7 @@ export interface ContinuousEffect {
 export interface PermanentState {
   types?: CardTypes;
   is_token?: boolean;
+  chosen?: string;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
@@ -184,8 +185,10 @@ export interface PlayerTurnHistory {
   mana_spent_casting?: number;
 }
 
+export type ManaExpiry = 'step' | 'end_of_combat' | 'end_of_turn';
+
 export interface PlayerState {
-  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean }[];
+  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean; expiry?: ManaExpiry }[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */

@@ -28,7 +28,6 @@ from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.flat_mc import make_player
 from manabot.training.state.backend import FreshPolicies
 from manabot.verify.games import INTERACTIVE_DECK
-from manabot.verify.text_observation import keep_opening_index
 from managym import GameSetup
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
@@ -64,8 +63,6 @@ def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
         enable_behavior_tracking=False,
     )
     observation, _ = env.reset(seed=19)
-    while env.last_raw_obs.turn.turn_number == 0:
-        observation, *_ = env.step(keep_opening_index(env.last_raw_obs))
     return env, observation
 
 

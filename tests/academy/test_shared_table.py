@@ -322,23 +322,6 @@ def test_watcher_branch_is_owner_only_while_pilot_advances_live_match(
             pilot_grant = initial["table"]["access"]["grant_revision"]
             watcher_grant = joined["table"]["access"]["grant_revision"]
             frame = joined["recovery"]["frame"]
-            if frame["action_space"] == "MODAL":
-                pilot_socket.send_json(
-                    {
-                        "type": "command",
-                        "grant_revision": pilot_grant,
-                        "command": {
-                            "command_id": "pilot-keep",
-                            "match_id": frame["match_id"],
-                            "expected_revision": frame["revision"],
-                            "prompt_id": frame["prompt"]["id"],
-                            "offer_id": frame["offers"][0]["id"],
-                            "answers": [],
-                        },
-                    }
-                )
-                frame = settled_message(pilot_socket)["update"]["frame"]
-                settled_message(watcher_socket)
             pilot_socket.send_json(
                 {
                     "type": "command",

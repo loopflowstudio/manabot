@@ -3,90 +3,316 @@
 //!
 //! A copy is a new stack object with the original's choices; a copied spell
 //! is a new `ObjectKind::SpellCopy` object that ceases to exist off the
-//! stack (CR 704.5e), or becomes a token as a permanent spell resolves. Each
-//! new or changed target is chosen through `Decision::Retarget`, one target
-//! slot at a time, from the targeted object's controller's perspective.
+//! stack (CR 704.5e), or becomes a token as a permanent spell resolves.
+//!
+//! New targets are chosen through `Decision::Retarget`, one slot at a time,
+//! from the stack object's controller's perspective, but judged as one
+//! assignment (CR 115.7e): an unchanged target may stay even if illegal,
+//! and every change must be legal and leave each target that was legal
+//! still legal. A slot offers a change, or keeping its target, only when
+//! some choice for the later slots completes a legal assignment, so swaps
+//! and coupled changes are reachable. The stack object keeps its original
+//! targets until the last slot is decided; the final assignment and its
+//! targeting events are then published together.
 
 use crate::{
     flow::{decision::Decision, game::Game},
     state::{
-        game_object::{PlayerId, Target},
+        ability::TargetRequirement,
+        game_object::{AbilitySource, Object, PlayerId, Target},
         stack_object::StackObject,
     },
 };
 
+/// A stack object's targets as a change of targets sees them.
+struct TargetChange {
+    original: Vec<Target>,
+    /// The targeting clause of each slot.
+    clauses: Vec<usize>,
+    requirements: Vec<TargetRequirement>,
+    x: u8,
+    /// The legal objects each slot could change to, other than its own
+    /// target and the stack object itself.
+    candidates: Vec<Vec<Target>>,
+    /// Whether each original target was legal in the original assignment.
+    originally_legal: Vec<bool>,
+}
+
 impl Game {
-    /// The targets slot `slot` of the stack object could change to: legal for
-    /// its requirement from its controller's perspective, not its current
-    /// target, not chosen for another slot of the same requirement, and not
-    /// its own source when the requirement says "another".
-    pub(crate) fn retarget_candidates(&self, object: Target, slot: usize) -> Vec<Target> {
-        let Some(index) = self.stack_index_of(object) else {
-            return Vec::new();
-        };
-        let stacked = &self.state.stack_objects[index];
-        let targets = stacked.targets();
-        let Some(&current) = targets.get(slot) else {
-            return Vec::new();
-        };
+    fn target_change(&self, object: Target) -> Option<TargetChange> {
+        let stacked = &self.state.stack_objects[self.stack_index_of(object)?];
+        let original = stacked.targets().to_vec();
         let indices = stacked.target_req_indices();
-        let clause = match indices.get(slot) {
-            Some(&clause) => clause,
-            // Single-clause activations store no indices.
-            None if matches!(stacked, StackObject::ActivatedAbility(_)) => 0,
-            None => return Vec::new(),
-        };
+        // Single-clause activations store no indices.
+        let clauses: Vec<usize> = (0..original.len())
+            .map(|slot| indices.get(slot).copied().unwrap_or(0))
+            .collect();
         let requirements = self.stack_target_requirements(stacked);
-        let Some(requirement) = requirements.get(clause) else {
+        let controller = stacked.controller();
+        let source: AbilitySource = stacked.effect_source();
+        let candidates = original
+            .iter()
+            .zip(&clauses)
+            .map(|(current, clause)| {
+                requirements
+                    .get(*clause)
+                    .map_or_else(Vec::new, |requirement| {
+                        self.legal_clause_targets(requirement, controller, source)
+                            .filter(|target| target != current && *target != object)
+                            .collect()
+                    })
+            })
+            .collect();
+        let mut change = TargetChange {
+            original,
+            clauses,
+            requirements,
+            x: stacked.x(),
+            candidates,
+            originally_legal: Vec::new(),
+        };
+        change.originally_legal = (0..change.original.len())
+            .map(|slot| {
+                change
+                    .requirements
+                    .get(change.clauses[slot])
+                    .is_some_and(|requirement| {
+                        self.target_fits_clause(
+                            change.original[slot],
+                            requirement,
+                            controller,
+                            source,
+                        )
+                    })
+                    && self.slot_rules_hold(&change, &change.original, slot)
+            })
+            .collect();
+        Some(change)
+    }
+
+    /// The clause rules and relation of `slot` against the other slots
+    /// `assignment` already holds.
+    fn slot_rules_hold(&self, change: &TargetChange, assignment: &[Target], slot: usize) -> bool {
+        let clause = change.clauses[slot];
+        let Some(requirement) = change.requirements.get(clause) else {
+            return false;
+        };
+        let target = assignment[slot];
+        let others = || {
+            assignment
+                .iter()
+                .enumerate()
+                .filter(move |(other, _)| *other != slot)
+                .map(|(other, target)| (change.clauses[other], *target))
+        };
+        let mates = others()
+            .filter(|(other, _)| *other == clause)
+            .map(|(_, target)| target);
+        self.can_add_clause_target(requirement, change.x, mates, target)
+            && self.relation_admits(requirement, clause, target, others())
+    }
+
+    /// Whether `slot` of `assignment` is acceptable: a change obeys every
+    /// rule, and an unchanged target that was legal stays legal.
+    fn slot_acceptable(&self, change: &TargetChange, assignment: &[Target], slot: usize) -> bool {
+        (assignment[slot] == change.original[slot] && !change.originally_legal[slot])
+            || self.slot_rules_hold(change, assignment, slot)
+    }
+
+    fn assignment_acceptable(&self, change: &TargetChange, assignment: &[Target]) -> bool {
+        (0..assignment.len()).all(|slot| self.slot_acceptable(change, assignment, slot))
+    }
+
+    /// Whether some choice for the remaining slots completes `assignment`.
+    /// Keeping is tried first, so the usual answer is found at once; each
+    /// prefix is pruned by its last slot, as every rule is pairwise or
+    /// grows with the clause.
+    fn completes(&self, change: &TargetChange, assignment: &mut Vec<Target>) -> bool {
+        let slot = assignment.len();
+        if slot == change.original.len() {
+            return self.assignment_acceptable(change, assignment);
+        }
+        for option in
+            std::iter::once(change.original[slot]).chain(change.candidates[slot].iter().copied())
+        {
+            assignment.push(option);
+            let found = self.slot_acceptable(change, assignment, slot)
+                && self.completes(change, assignment);
+            assignment.pop();
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn candidate_admits_completion(
+        &self,
+        change: &TargetChange,
+        chosen: &[Target],
+        candidate: Target,
+        may_keep: bool,
+    ) -> bool {
+        let slot = chosen.len();
+        let mut assignment: Vec<Target> = chosen.iter().copied().chain([candidate]).collect();
+        if may_keep {
+            self.slot_acceptable(change, &assignment, slot)
+                && self.completes(change, &mut assignment)
+        } else {
+            assignment.extend_from_slice(&change.original[slot + 1..]);
+            self.assignment_acceptable(change, &assignment)
+        }
+    }
+
+    /// The changes slot `chosen.len()` admits after `chosen`. With
+    /// `may_keep` ("choose new targets") the later slots may change too;
+    /// otherwise ("change the target") they keep their targets.
+    fn retarget_changes(
+        &self,
+        change: &TargetChange,
+        chosen: &[Target],
+        may_keep: bool,
+    ) -> Vec<Target> {
+        let slot = chosen.len();
+        let Some(candidates) = change.candidates.get(slot) else {
             return Vec::new();
         };
-        // The clause rules apply only to the other targets of this clause,
-        // never to the slot being replaced.
-        let other_targets = targets
+        candidates
             .iter()
-            .enumerate()
-            .filter(|(other, _)| {
-                *other != slot && indices.get(*other).copied().unwrap_or(0) == clause
-            })
-            .map(|(_, target)| *target);
-        self.legal_clause_targets(requirement, stacked.controller(), stacked.effect_source())
-            .filter(|target| *target != current && *target != object)
-            .filter(|target| {
-                self.can_add_clause_target(requirement, stacked.x(), other_targets.clone(), *target)
+            .copied()
+            .filter(|&candidate| {
+                self.candidate_admits_completion(change, chosen, candidate, may_keep)
             })
             .collect()
     }
 
-    /// The first `Decision::Retarget` for `object` from `slot` on that has a
-    /// candidate; `may_keep` lets each target stay.
-    pub(crate) fn next_retarget(
-        &self,
-        player: PlayerId,
-        object: Target,
-        slot: usize,
-        may_keep: bool,
-    ) -> Option<Decision> {
-        let index = self.stack_index_of(object)?;
-        let count = self.state.stack_objects[index].targets().len();
-        (slot..count)
-            .find(|slot| !self.retarget_candidates(object, *slot).is_empty())
-            .map(|slot| Decision::Retarget {
-                player,
-                object,
-                slot,
-                may_keep,
-            })
+    fn keep_admits_completion(&self, change: &TargetChange, chosen: &[Target]) -> bool {
+        self.candidate_admits_completion(change, chosen, change.original[chosen.len()], true)
     }
 
-    /// Change slot `slot` of the stack object to `target`; the newly
-    /// targeted permanent sees it become a target (ward, CR 702.21).
-    pub(crate) fn change_stack_target(&mut self, object: Target, slot: usize, target: Target) {
-        let Some(index) = self.stack_index_of(object) else {
-            return;
+    /// The targets slot `slot` of the stack object could change to while
+    /// the earlier slots keep theirs and the later ones may change.
+    pub(crate) fn retarget_candidates(&self, object: Target, slot: usize) -> Vec<Target> {
+        let Some(change) = self.target_change(object) else {
+            return Vec::new();
         };
+        if slot >= change.original.len() {
+            return Vec::new();
+        }
+        self.retarget_changes(&change, &change.original[..slot], true)
+    }
+
+    /// The actions of `Decision::Retarget` after `chosen`: the changes the
+    /// next slot admits, and whether it may keep its target.
+    pub(crate) fn retarget_offer(
+        &self,
+        object: Target,
+        chosen: &[Target],
+        may_keep: bool,
+    ) -> (Vec<Target>, bool) {
+        let Some(change) = self.target_change(object) else {
+            return (Vec::new(), false);
+        };
+        if chosen.len() >= change.original.len() {
+            return (Vec::new(), false);
+        }
+        let keep = may_keep && self.keep_admits_completion(&change, chosen);
+        (self.retarget_changes(&change, chosen, may_keep), keep)
+    }
+
+    /// Whether `target` is a legal change for slot `chosen.len()`.
+    pub(crate) fn retarget_accepts(
+        &self,
+        object: Target,
+        chosen: &[Target],
+        target: Target,
+        may_keep: bool,
+    ) -> bool {
+        let Some(change) = self.target_change(object) else {
+            return false;
+        };
+        change
+            .candidates
+            .get(chosen.len())
+            .is_some_and(|candidates| candidates.contains(&target))
+            && self.candidate_admits_completion(&change, chosen, target, may_keep)
+    }
+
+    /// Whether keeping slot `chosen.len()`'s current target admits a legal
+    /// completion for the remaining slots.
+    pub(crate) fn retarget_may_keep(&self, object: Target, chosen: &[Target]) -> bool {
+        let Some(change) = self.target_change(object) else {
+            return false;
+        };
+        chosen.len() < change.original.len() && self.keep_admits_completion(&change, chosen)
+    }
+
+    /// The next `Decision::Retarget` after `chosen`, keeping each slot that
+    /// offers no change. Once every slot of a copy (`may_keep`) is decided,
+    /// publishes them and emits targeting events (CR 707.10c) for every target,
+    /// including kept ones. "Change the target" (`may_keep` false) changes
+    /// only the first slot that can change and leaves the rest untouched.
+    pub(crate) fn next_retarget(
+        &mut self,
+        player: PlayerId,
+        object: Target,
+        mut chosen: Vec<Target>,
+        may_keep: bool,
+    ) -> Option<Decision> {
+        let change = self.target_change(object)?;
+        while chosen.len() < change.original.len() {
+            if !self.retarget_changes(&change, &chosen, may_keep).is_empty() {
+                return Some(Decision::Retarget {
+                    player,
+                    object,
+                    chosen,
+                    may_keep,
+                });
+            }
+            chosen.push(change.original[chosen.len()]);
+        }
+        if may_keep {
+            self.publish_targets(object, chosen, true);
+        }
+        None
+    }
+
+    /// Continue after a slot is decided: "choose new targets" moves to the
+    /// next slot; "change the target" keeps every later target.
+    pub(crate) fn retarget_after(
+        &mut self,
+        player: PlayerId,
+        object: Target,
+        mut chosen: Vec<Target>,
+        may_keep: bool,
+    ) -> Option<Decision> {
+        if may_keep {
+            return self.next_retarget(player, object, chosen, true);
+        }
+        let index = self
+            .stack_index_of(object)
+            .expect("retargeted stack object");
+        chosen.extend_from_slice(&self.state.stack_objects[index].targets()[chosen.len()..]);
+        self.publish_targets(object, chosen, false);
+        None
+    }
+
+    /// Write the final targets of `object` and emit targeting events: for
+    /// every target of a new copy, or for each changed target.
+    pub(crate) fn publish_targets(&mut self, object: Target, targets: Vec<Target>, copy: bool) {
+        let index = self
+            .stack_index_of(object)
+            .expect("retargeted stack object");
         let controller = self.state.stack_objects[index].controller();
-        self.state.stack_objects[index].targets_mut()[slot] = target;
-        self.emit_permanents_targeted(&[target], object, controller);
+        let slots = self.state.stack_objects[index].targets_mut();
+        let targeted: Vec<Target> = targets
+            .iter()
+            .zip(slots.iter())
+            .filter(|(new, old)| copy || new != old)
+            .map(|(new, _)| *new)
+            .collect();
+        slots.copy_from_slice(&targets);
+        self.emit_permanents_targeted(&targeted, object, controller);
     }
 
     /// Copy a spell or ability on the stack under `controller` (CR 707.10);
@@ -96,11 +322,24 @@ impl Game {
         object: Target,
         controller: PlayerId,
     ) -> Option<Target> {
-        let index = self.stack_index_of(object)?;
+        let (original, departed) = match self.stack_index_of(object) {
+            Some(index) => (self.state.stack_objects[index].clone(), None),
+            None => {
+                let Target::StackSpell(object) = object else {
+                    return None;
+                };
+                let lki = self.state.spell_lki.get(&object)?;
+                let saved = lki.copiable.as_ref()?;
+                let source =
+                    Object::from_copiable_values(saved.spell.id, controller, &saved.values);
+                (StackObject::Spell(saved.spell.clone()), Some(source))
+            }
+        };
         let id = self.state.id_gen_mut().next_id();
-        let copy = match self.state.stack_objects[index].clone() {
+        let copy = match original {
             StackObject::Spell(mut spell) => {
-                spell.object = self.create_spell_copy(spell.object, id, controller);
+                let source = departed.unwrap_or_else(|| self.state[spell.object].clone());
+                spell.object = self.create_spell_copy(source, id, controller);
                 // A stack copy was never cast using the original’s permission.
                 spell.flashback = false;
                 spell.from_prepared = false;

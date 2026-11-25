@@ -33,7 +33,6 @@ from manabot.sim.search.conditional import (
     validate_result,
 )
 from manabot.verify.games import INTERACTIVE_DECK
-from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -76,13 +75,12 @@ def _build_root_env(seed: int = 42) -> managym.Env:
     """Construct the same mid-game Priority position as the fixture generator."""
 
     env = managym.Env(seed=seed, skip_trivial=True)
-    obs, _ = env.reset(
+    env.reset(
         [
             managym.PlayerConfig("hero", dict(INTERACTIVE_DECK)),
             managym.PlayerConfig("villain", dict(INTERACTIVE_DECK)),
         ]
     )
-    keep_opening_hands(env, obs)
     env.scenario_clear_hand(HERO_SEAT)
     env.scenario_clear_hand(VILLAIN_SEAT)
     for card in ("Wind Drake", "Man-o'-War"):
@@ -169,24 +167,24 @@ def _run_search_fast(seed: int = SEED) -> ConditionalStrategyResult:
     return result
 
 
-@pytest.mark.experiment_data(
-    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
-)
 def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> None:
-    """Keep INT-13 evidence frozen while checking live schema and prior/plan parity."""
+    """Keep INT-13 evidence frozen while checking its behavioral payload."""
 
     first = _run_search()
+    second = _run_search()
+    assert canonical_result_json(first) == canonical_result_json(second)
 
     fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     regenerated = serialize_result(first)
 
-    # The frozen w2 fixture remains pinned verbatim; live playouts diverge once
-    # engine rules advance (opening hands, payment rules), so assert the live
-    # result keeps the same serialized shape, planner, prior and query plan.
-    assert set(regenerated) <= set(fixture)
-    assert regenerated["planner"] == fixture["planner"] == "determinized_puct"
-    assert regenerated["prior_sha256"] == fixture["prior_sha256"] == first.prior_sha256
-    assert regenerated["plan_sha256"] == fixture["plan_sha256"] == first.plan_sha256
+    # The root digest hashes the engine's full state serialization, so engine
+    # changes move it; the frozen value stays pinned below and the runtime
+    # value is checked for determinism above.
+    for key in set(regenerated) - {"identities", "root_state_digest"}:
+        assert key in fixture, f"key {key!r} missing from checked fixture"
+        assert fixture[key] == regenerated[key], (
+            f"key {key!r} differs between regenerated and checked fixture"
+        )
 
     # Engine source and content identities move with every engine or card
     # change; the frozen ones stay pinned through `fixture_sha256` below.
@@ -195,12 +193,15 @@ def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> Non
     assert frozen_identities.keys() == runtime_identities.keys()
     assert frozen_identities["world"] == runtime_identities["world"]
 
+    assert fixture["planner"] == "determinized_puct"
     assert fixture["fixture_sha256"] == (
         "97f01c893af7da31c6a340c482eef1ae9def8616dcd6b95c1efedfd55dc9f4e4"
     )
     assert fixture["root_state_digest"] == (
         "77b2fe368d2cb561a257b00af124d32ca8f300cb8050c5f63d7d84863df4069e"
     )
+    assert fixture["prior_sha256"] == first.prior_sha256
+    assert fixture["plan_sha256"] == first.plan_sha256
 
 
 # ---------------------------------------------------------------------------

@@ -1049,6 +1049,7 @@ fn completed_private_capture(player: PlayerId) -> Game {
         vec![Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             // Two occurrences alias one selected subject; they must receive one
@@ -1187,6 +1188,7 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
         vec![Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             if_declined: Vec::new(),
@@ -1294,6 +1296,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
         trigger.effects = crate::flow::trigger::DelayedEffects::new(vec![Effect::SelectCards {
             from: ObjectSelector::Remembered,
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 1,
             max: 1.into(),
             if_declined: Vec::new(),
@@ -1966,7 +1969,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
             },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 player,
-                CostComponent::mana(ManaCost::parse("{1}")),
+                vec![CostComponent::mana(ManaCost::parse("{1}"))],
                 vec![Effect::gain_life(2)],
                 vec![],
             )))),
@@ -2401,6 +2404,7 @@ fn destruction_count_survives_a_child_returning_one_of_the_destroyed_creatures()
             Effect::SelectCards {
                 from: ObjectSelector::Moved,
                 predicate: CardPredicate::creature(),
+                max_mana_value: None,
                 min: 1,
                 max: EffectValue::Fixed(1),
                 effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -2431,6 +2435,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
         let (mut game, _, _) = fixture(player);
         let milled = game.library_top_objects(player, 3);
         let select = |min, max, effects| Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::CardsThisWay,
             predicate: CardPredicate::default(),
             min,
@@ -2907,7 +2912,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
         decision: Decision::Payment(PaymentProgress::new(
             player,
-            CostComponent::mana(ManaCost::parse("{U}")),
+            vec![CostComponent::mana(ManaCost::parse("{U}"))],
             vec![Effect::gain_life(2)],
             vec![],
         )),
@@ -3205,6 +3210,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             Effect::SelectCards {
                 from: ObjectSelector::Zone(ZoneType::Hand),
                 predicate: CardPredicate::default(),
+                max_mana_value: None,
                 min: 1,
                 max: 1.into(),
                 effects: vec![
@@ -3555,6 +3561,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
             vec![Effect::SelectCards {
                 from: ObjectSelector::Zone(zone),
                 predicate: CardPredicate::creature(),
+                max_mana_value: None,
                 min: 0,
                 max: 1.into(),
                 effects: vec![Effect::return_to_battlefield(
@@ -4043,6 +4050,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 "iteration" => {
                     frame.iteration = Some(TargetIteration {
                         remaining: vec![ResolutionTarget {
+                            share: 0,
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
@@ -4784,13 +4792,11 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         panic!("expected a spell copy");
     };
     spell(&mut game, "Time Stop");
-    game.exile_top_cards_to_play(
+    let grant_frame = crate::flow::decision::EffectFrame::new(
         player,
-        1,
-        crate::state::ability::PlayWindow::ThisTurn,
-        false,
-        None,
+        Effect::exile_top_to_play(1, crate::state::ability::PlayWindow::ThisTurn),
     );
+    game.run_frame(grant_frame);
     let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
@@ -5019,6 +5025,7 @@ fn snapshot_constrained_determinize_retry_preserves_live_capture() {
     game.run_frame(EffectFrame::new(
         owner,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate {
                 card_type: Some(CardType::Instant),
@@ -5191,6 +5198,7 @@ fn hidden_selection_manifest_fill_leaves_the_committed_library_cards() {
     root.run_frame(EffectFrame::new(
         player,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate: CardPredicate {
                 card_type: Some(CardType::Creature),
@@ -5287,6 +5295,7 @@ fn sole_forest_manifest_selecting(card_type: CardType, library: &[&str], picked:
     root.run_frame(EffectFrame::new(
         player,
         vec![Effect::SelectCards {
+            max_mana_value: None,
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate: CardPredicate {
                 card_type: Some(card_type),
@@ -5568,6 +5577,7 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
     let mut frame = EffectFrame::new(player, vec![]);
     frame.source_identity = Some(AbilitySource::new(source, Some(source)));
     frame.targets = vec![ResolutionTarget {
+        share: 0,
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,
@@ -5650,7 +5660,7 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
         game.move_object(object, ZoneType::Battlefield)
     });
     let id = game.state.id_gen.next_id();
-    let unrelated = game.create_spell_copy(sources[0], id, player);
+    let unrelated = game.create_spell_copy(game.state[sources[0]].clone(), id, player);
     let unrelated = game.move_object(unrelated, ZoneType::Exile);
     game.finish_action_step();
     assert_eq!(game.state.zones.zone_of(unrelated), None);
@@ -6178,13 +6188,16 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                 for card in casts {
                     let object = fixture_card(&game, player, card);
                     let payment = crate::flow::payment::Payment {
-                        operation: crate::flow::payment::Operation::Spell {
-                            object,
-                            cast: Default::default(),
-                            mode: None,
-                            targets: Vec::new(),
-                            target_req_indices: Vec::new(),
-                        },
+                        operation: crate::flow::payment::Operation::Spell(
+                            crate::flow::payment::AnnouncedSpell {
+                                object,
+                                cast: Default::default(),
+                                mode: None,
+                                targets: Vec::new(),
+                                target_req_indices: Vec::new(),
+                                target_shares: Vec::new(),
+                            },
+                        ),
                         owed: Vec::new(),
                         receipt: Default::default(),
                     };

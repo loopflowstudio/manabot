@@ -14,15 +14,8 @@ from managym.payment import PaymentPreview, preview_payment
 from tests.academy.socket_messages import settled_message
 
 
-def _keep_hands(env: managym.Env, obs: managym.Observation) -> managym.Observation:
-    while obs.turn.turn_number == 0:
-        obs, *_ = env.step(0)
-    return obs
-
-
 def _root(game: server.GameSession) -> ExperienceFrame:
-    assert game.env is not None and game.obs is not None
-    game.obs = _keep_hands(game.env, game.obs)
+    assert game.env is not None
     game.env.scenario_clear_hand(0)
     game.env.scenario_force_card_in_hand(0, "Ancestral Recall")
     for _ in range(2):
@@ -181,7 +174,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
     None
 ):
     env = managym.Env(seed=165)
-    obs, _ = env.reset(
+    env.reset(
         [
             managym.PlayerConfig(
                 "payer",
@@ -199,7 +192,6 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
             ),
         ]
     )
-    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     for card in ("Wan Shi Tong, Librarian", "Firebending Lesson", "Swampsnare Trap"):
         env.scenario_force_card_in_hand(0, card)
@@ -236,13 +228,12 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
 
 def test_unaffordable_kicker_does_not_hide_the_exact_base_payment() -> None:
     env = managym.Env(seed=165)
-    obs, _ = env.reset(
+    env.reset(
         [
             managym.PlayerConfig("payer", {"Mountain": 32, "Firebending Lesson": 8}),
             managym.PlayerConfig("other", {"Forest": 32, "Llanowar Elves": 8}),
         ]
     )
-    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     env.scenario_force_card_in_hand(0, "Firebending Lesson")
     env.scenario_force_battlefield(0, "Mountain", ready=True)
@@ -283,13 +274,12 @@ def test_preview_preserves_followups_and_reserves_activation_source(
     expected: list[str],
 ) -> None:
     env = managym.Env(seed=165)
-    obs, _ = env.reset(
+    env.reset(
         [
             managym.PlayerConfig("payer", dict.fromkeys(hand + lands, 8)),
             managym.PlayerConfig("other", {"Island": 32, "Spectral Sailor": 8}),
         ]
     )
-    _keep_hands(env, obs)
     # A real response on the stack keeps forced passes from reaching untap.
     env.scenario_force_card_in_hand(1, "Spectral Sailor")
     env.scenario_force_battlefield(1, "Island", ready=True)

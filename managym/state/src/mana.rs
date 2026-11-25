@@ -28,6 +28,7 @@ pub enum Color {
 }
 
 impl Color {
+    pub const COLORS: [Color; 5] = [Self::White, Self::Blue, Self::Black, Self::Red, Self::Green];
     pub fn symbol(self) -> &'static str {
         match self {
             Color::White => "W",
@@ -43,6 +44,12 @@ impl Color {
 
 pub type Colors = BTreeSet<Color>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CreatureManaPurpose {
+    Cast,
+    Activate,
+}
+
 /// One purpose mana may be spent on (CR 106.6), as a restriction names it.
 /// Subtypes are printed names from any vocabulary; none is privileged.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
@@ -51,19 +58,99 @@ pub enum SpendPredicate {
     CastSubtype(String),
     /// Activating an ability of a source with this subtype.
     ActivateSubtype(String),
+    CastCreatureSubtype(String),
+    ActivateCreatureSubtype(String),
 }
 
 impl SpendPredicate {
     pub fn matches(&self, context: &SpendingContext) -> bool {
         match (self, context) {
+            (Self::CastCreatureSubtype(name), SpendingContext::Cast { spell, .. }) => {
+                spell.0.types.is_creature() && spell.0.has_subtype(name)
+            }
+            (Self::ActivateCreatureSubtype(name), SpendingContext::Activate { source, .. }) => {
+                source.creature && source.has_subtype(name)
+            }
             (Self::CastSubtype(name), SpendingContext::Cast { spell, .. }) => {
-                spell.0.subtypes.iter().any(|subtype| subtype == name)
+                spell.0.has_subtype(name)
             }
             (Self::ActivateSubtype(name), SpendingContext::Activate { source, .. }) => {
                 source.has_subtype(name)
             }
             _ => false,
         }
+    }
+}
+
+/// Sorted, deduplicated spending predicates with a precomputed hash digest,
+/// shared across cloned pools and payment-search states.
+#[derive(Clone, Debug)]
+pub struct SpendPredicates(Arc<SpendPredicatesInner>);
+
+#[derive(Debug)]
+struct SpendPredicatesInner {
+    predicates: BTreeSet<SpendPredicate>,
+    digest: u64,
+}
+
+impl SpendPredicates {
+    pub fn new(predicates: BTreeSet<SpendPredicate>) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        predicates.hash(&mut hasher);
+        Self(Arc::new(SpendPredicatesInner {
+            predicates,
+            digest: hasher.finish(),
+        }))
+    }
+
+    pub fn iter(&self) -> std::collections::btree_set::Iter<'_, SpendPredicate> {
+        self.0.predicates.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.predicates.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.predicates.is_empty()
+    }
+}
+
+impl PartialEq for SpendPredicates {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.0.digest == other.0.digest && self.0.predicates == other.0.predicates)
+    }
+}
+
+impl Eq for SpendPredicates {}
+
+impl PartialOrd for SpendPredicates {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SpendPredicates {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if Arc::ptr_eq(&self.0, &other.0) {
+            std::cmp::Ordering::Equal
+        } else {
+            self.0.predicates.cmp(&other.0.predicates)
+        }
+    }
+}
+
+impl std::hash::Hash for SpendPredicates {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.0.digest);
+    }
+}
+
+impl serde::Serialize for SpendPredicates {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.predicates.serialize(serializer)
     }
 }
 
@@ -74,7 +161,7 @@ impl SpendPredicate {
 pub enum ManaRestriction {
     /// Spend only on a purpose matching one of these ("spend this mana only
     /// to cast a Lesson spell"). Resolving costs match none of them.
-    Only(BTreeSet<SpendPredicate>),
+    Only(SpendPredicates),
     /// Spend on anything but casting a nonartifact spell (Powerstone),
     /// resolving costs included.
     ExceptNonartifactSpells,
@@ -84,6 +171,11 @@ pub enum ManaRestriction {
 }
 
 impl ManaRestriction {
+    /// Spend only on one of `predicates`.
+    pub fn only_predicates(predicates: BTreeSet<SpendPredicate>) -> Self {
+        Self::Only(SpendPredicates::new(predicates))
+    }
+
     /// Spend only to cast spells with `spell_subtypes` or to activate
     /// abilities of sources with `ability_source_subtypes`.
     pub fn only<'a>(
@@ -100,7 +192,7 @@ impl ManaRestriction {
             )
             .collect::<BTreeSet<_>>();
         assert!(!predicates.is_empty(), "a restriction names a purpose");
-        Self::Only(predicates)
+        Self::only_predicates(predicates)
     }
 
     /// Spend only to cast spells with one of these subtypes.
@@ -130,7 +222,7 @@ impl ManaRestriction {
     pub fn spell_subtypes(&self) -> impl Iterator<Item = &str> {
         self.predicates().filter_map(|predicate| match predicate {
             SpendPredicate::CastSubtype(name) => Some(name.as_str()),
-            SpendPredicate::ActivateSubtype(_) => None,
+            _ => None,
         })
     }
 
@@ -139,13 +231,13 @@ impl ManaRestriction {
     pub fn source_subtypes(&self) -> impl Iterator<Item = &str> {
         self.predicates().filter_map(|predicate| match predicate {
             SpendPredicate::ActivateSubtype(name) => Some(name.as_str()),
-            SpendPredicate::CastSubtype(_) => None,
+            _ => None,
         })
     }
 
     fn predicates(&self) -> impl Iterator<Item = &SpendPredicate> {
         match self {
-            Self::Only(predicates) => Some(predicates),
+            Self::Only(predicates) => Some(predicates.iter()),
             Self::ExceptNonartifactSpells | Self::ExceptSpellsFromHand => None,
         }
         .into_iter()
@@ -168,6 +260,20 @@ impl ManaRestriction {
         let sources = self.source_subtypes().collect::<Vec<_>>();
         if !sources.is_empty() {
             parts.push(format!("abilities of {} sources", sources.join(" or ")));
+        }
+        for p in self.predicates() {
+            match p {
+                SpendPredicate::CastCreatureSubtype(s) => {
+                    parts.push(format!("{s} creature spells"))
+                }
+                SpendPredicate::ActivateCreatureSubtype(s) => {
+                    parts.push(format!("abilities of {s} creature sources"))
+                }
+                _ => {}
+            }
+        }
+        if parts.is_empty() {
+            return "no eligible purpose".into();
         }
         parts.join(" or ")
     }
@@ -204,8 +310,7 @@ impl SpendEffect {
         let spell = &*spell.0;
         match self {
             Self::CreatureEntersWithPlusOneCounter { without_subtype } => {
-                spell.types.is_creature()
-                    && !spell.subtypes.iter().any(|name| name == without_subtype)
+                spell.types.is_creature() && !spell.has_subtype(without_subtype)
             }
             Self::SpellGainsKeyword {
                 spell: predicate, ..
@@ -217,15 +322,38 @@ impl SpendEffect {
     }
 }
 
+/// When unspent mana of a class empties from its pool (CR 106.4).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub enum ManaExpiry {
+    #[default]
+    Step,
+    EndOfCombat,
+    EndOfTurn,
+}
+
+impl ManaExpiry {
+    pub fn is_step(&self) -> bool {
+        *self == Self::Step
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Step => "step",
+            Self::EndOfCombat => "end_of_combat",
+            Self::EndOfTurn => "end_of_turn",
+        }
+    }
+}
+
 /// Every rule-visible property that tells pooled mana apart from ordinary
-/// mana of its type: a spending restriction, a spend effect, and combat expiry
-/// in the combined pool. Mana merges only within one class; its units are
-/// indistinguishable.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+/// mana of its type: a spending restriction, a spend effect, and expiry
+/// duration in the combined pool. Mana merges only within one class; its
+/// units are indistinguishable.
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ManaClass {
-    /// Until-end-of-combat mana remains distinct during payment search.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub combat: bool,
+    /// Non-step expiry remains distinct during payment search.
+    #[serde(skip_serializing_if = "ManaExpiry::is_step")]
+    pub expiry: ManaExpiry,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restriction: Option<ManaRestriction>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -248,7 +376,7 @@ pub enum SpendOrder {
 impl From<ManaRestriction> for ManaClass {
     fn from(restriction: ManaRestriction) -> Self {
         Self {
-            combat: false,
+            expiry: ManaExpiry::Step,
             restriction: Some(restriction),
             effect: None,
         }
@@ -258,9 +386,19 @@ impl From<ManaRestriction> for ManaClass {
 impl From<SpendEffect> for ManaClass {
     fn from(effect: SpendEffect) -> Self {
         Self {
-            combat: false,
+            expiry: ManaExpiry::Step,
             restriction: None,
             effect: Some(effect),
+        }
+    }
+}
+
+impl From<ManaExpiry> for ManaClass {
+    fn from(expiry: ManaExpiry) -> Self {
+        Self {
+            expiry,
+            restriction: None,
+            effect: None,
         }
     }
 }
@@ -274,7 +412,7 @@ impl ManaClass {
     }
 
     /// This class's place in the automatic payer's order for a cost spent
-    /// in `context`. Until-end-of-combat mana has no place of its own.
+    /// in `context`. Non-step expiry has no place of its own.
     pub fn spend_order(&self, context: &SpendingContext) -> SpendOrder {
         if self
             .effect
@@ -297,6 +435,8 @@ impl ManaClass {
 /// witnesses and forks; it never follows the live object.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct SpendingObject {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub creature: bool,
     /// Sorted and deduplicated.
     pub subtypes: Vec<String>,
     /// It has all creature types (CR 205.3m) beyond those listed.
@@ -310,7 +450,8 @@ pub struct SpendingObject {
 
 impl PartialEq for SpendingObject {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest
+        self.creature == other.creature
+            && self.digest == other.digest
             && self.all_creature_types == other.all_creature_types
             && self.subtypes == other.subtypes
     }
@@ -328,6 +469,7 @@ impl SpendingObject {
     pub fn new<'a>(
         subtypes: impl IntoIterator<Item = &'a str>,
         all_creature_types: bool,
+        creature: bool,
     ) -> Arc<Self> {
         use std::hash::{Hash, Hasher};
         let mut subtypes = subtypes.into_iter().map(String::from).collect::<Vec<_>>();
@@ -336,7 +478,9 @@ impl SpendingObject {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         subtypes.hash(&mut hasher);
         all_creature_types.hash(&mut hasher);
+        creature.hash(&mut hasher);
         Arc::new(Self {
+            creature,
             subtypes,
             all_creature_types,
             digest: hasher.finish(),
@@ -352,13 +496,14 @@ impl SpendingObject {
 
     /// Whether this snapshot names exactly these subtypes (in any order, with
     /// repeats), so a rebuilt view can keep sharing it without allocating.
-    pub fn describes(&self, subtypes: &[String], all_creature_types: bool) -> bool {
+    pub fn describes(&self, subtypes: &[String], all_creature_types: bool, creature: bool) -> bool {
         let distinct = subtypes
             .iter()
             .enumerate()
             .filter(|(i, name)| !subtypes[..*i].contains(name))
             .count();
-        all_creature_types == self.all_creature_types
+        creature == self.creature
+            && all_creature_types == self.all_creature_types
             && distinct == self.subtypes.len()
             && subtypes
                 .iter()
@@ -393,6 +538,9 @@ impl serde::Serialize for SpellSnapshot {
         use serde::ser::SerializeStruct;
         let mut out = serializer.serialize_struct("SpellSnapshot", 2)?;
         out.serialize_field("subtypes", &self.0.subtypes)?;
+        if self.0.keywords.has(Keyword::Changeling) {
+            out.serialize_field("all_creature_types", &true)?;
+        }
         out.serialize_field("types", &self.0.types)?;
         out.end()
     }
@@ -437,7 +585,7 @@ impl SpendingContext {
     pub fn ability<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Self {
         Self::Activate {
             zone: ZoneType::Battlefield,
-            source: SpendingObject::new(subtypes, false),
+            source: SpendingObject::new(subtypes, false, false),
         }
     }
 
@@ -1061,21 +1209,51 @@ impl Mana {
         self.prune();
     }
 
-    /// Combine combat mana without losing which units survive a step end.
-    pub fn add_combat(&mut self, combat: &Mana) {
-        self.add_class(
-            &ManaClass {
-                combat: true,
-                restriction: None,
-                effect: None,
-            },
-            combat.mana,
-        );
-        for (class, amounts) in combat.classes() {
-            let mut class = class.clone();
-            class.combat = true;
-            self.add_class(&class, *amounts);
+    /// Whether every unit in `unit` is present in `self`.
+    pub fn contains(&self, unit: &Mana) -> bool {
+        self.mana
+            .iter()
+            .zip(unit.mana)
+            .all(|(available, needed)| *available >= needed)
+            && unit.classes().iter().all(|(class, needed)| {
+                let available = self.class_of(class);
+                available
+                    .iter()
+                    .zip(needed)
+                    .all(|(have, need)| *have >= *need)
+            })
+    }
+
+    /// Tag every unit in `self` with `expiry`.
+    pub fn with_expiry(self, expiry: ManaExpiry) -> Self {
+        if expiry == ManaExpiry::Step {
+            return self;
         }
+        let mut out = Self::default();
+        if self.mana != [0; 6] {
+            out.add_class(&ManaClass::from(expiry), self.mana);
+        }
+        for (class, amounts) in self.classes() {
+            let mut class = class.clone();
+            class.expiry = expiry;
+            out.add_class(&class, *amounts);
+        }
+        out
+    }
+
+    /// Total mana in this pool whose expiry matches `expiry`.
+    pub fn expiry_total(&self, expiry: ManaExpiry) -> u16 {
+        let mut total: u16 = if expiry == ManaExpiry::Step {
+            self.mana.iter().map(|&n| u16::from(n)).sum()
+        } else {
+            0
+        };
+        for (class, amounts) in self.classes() {
+            if class.expiry == expiry {
+                total += amounts.iter().map(|&n| u16::from(n)).sum::<u16>();
+            }
+        }
+        total
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions
@@ -1260,6 +1438,43 @@ impl ManaPool {
             source: pooled.origin,
             effect,
         }
+    }
+
+    /// Partition pooled units into `(surviving, expiring)`. Expiring units
+    /// drop their special expiry duration so any retention (Ozai, keep-red)
+    /// treats them as ordinary step-scoped mana thereafter.
+    pub fn split_expiring(self, expires: impl Fn(ManaExpiry) -> bool) -> (Self, Self) {
+        let mut surviving = Self::default();
+        let mut expiring = Self::default();
+        let push = |pool: &mut Self, unit: PooledUnit| {
+            let mut amounts = [0u8; 6];
+            amounts[unit.color as usize] = 1;
+            match &unit.class {
+                Some(c) => pool.mana.add_class(c, amounts),
+                None => {
+                    pool.mana.mana[unit.color as usize] =
+                        pool.mana.mana[unit.color as usize].saturating_add(1);
+                }
+            }
+            pool.units.push(unit);
+        };
+        for mut unit in self.units {
+            let expiry = unit.class.as_ref().map_or(ManaExpiry::Step, |c| c.expiry);
+            if expires(expiry) {
+                unit.class = unit.class.and_then(|mut c| {
+                    c.expiry = ManaExpiry::Step;
+                    (c.restriction.is_some() || c.effect.is_some()).then_some(c)
+                });
+                push(&mut expiring, unit);
+            } else {
+                push(&mut surviving, unit);
+            }
+        }
+        surviving.drop_uncounted_units();
+        expiring.drop_uncounted_units();
+        surviving.check();
+        expiring.check();
+        (surviving, expiring)
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions and
@@ -1451,7 +1666,9 @@ mod tests {
         .into();
         let mut pool = Mana::parse("WU");
         pool.add(&Mana::of_class(rider.clone(), [1, 0, 0, 0, 0, 0]));
-        pool.add_combat(&Mana::of_class(rider, [1, 0, 0, 0, 0, 0]));
+        pool.add(
+            &Mana::of_class(rider, [1, 0, 0, 0, 0, 0]).with_expiry(super::ManaExpiry::EndOfCombat),
+        );
         pool.add(&Mana::restricted_to(
             ManaRestriction::spell(["Lesson"]),
             [0, 0, 0, 0, 2, 0],

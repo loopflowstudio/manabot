@@ -155,12 +155,7 @@ def test_full_game_vs_random_villain(isolated_traces):
     with TestClient(app) as client:
         payload = _play_full_game(
             client,
-            {
-                "villain_type": "random",
-                "hero_deck": {"Mountain": 8, "Lightning Bolt": 4, "Gray Ogre": 4},
-                "villain_deck": {"Mountain": 8, "Gray Ogre": 8},
-                "seed": 11,
-            },
+            {"villain_type": "random", "seed": 11},
             hero_seed=2,
         )
     assert payload["type"] == "game_over"
@@ -333,9 +328,7 @@ def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
             "auto_pass": False,
         }
     )
-    assert session.env is not None and session.obs is not None
-    while session.obs.turn.turn_number == 0:
-        session.obs, *_ = session.env.step(0)
+    assert session.env is not None
     session.env.scenario_clear_hand(0)
     session.env.scenario_clear_hand(1)
     session.env.scenario_force_battlefield(0, "Otter-Penguin", True)
@@ -444,9 +437,7 @@ def test_projection_states_combat_assignments_only_while_they_hold(
             "auto_pass": False,
         }
     )
-    assert session.env is not None and session.obs is not None
-    while session.obs.turn.turn_number == 0:
-        session.obs, *_ = session.env.step(0)
+    assert session.env is not None
     session.env.scenario_clear_hand(0)
     session.env.scenario_clear_hand(1)
     session.env.scenario_force_battlefield(0, "Otter-Penguin", True)

@@ -34,7 +34,6 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
     # The eight-card library loses to the sixteen-card library from either seat.
     # Cross both reset directions, including a batch starting on the draw.
     run = play_probed_games if probed else play_games
-    kwargs = {"backend": resolve("torch")} if probed else {}
     result = run(
         {"kind": "random"},
         {"kind": "random"},
@@ -43,7 +42,6 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
         num_games=4,
         seed=0,
         game_offset=game_offset,
-        **kwargs,
     )
     if probed:
         seats = [row["hero_seat"] for row in result["records"]]

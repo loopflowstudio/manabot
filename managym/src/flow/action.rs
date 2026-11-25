@@ -13,7 +13,7 @@ use crate::{
     flow::{
         decision::Decision,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{CostComponent, Operation, Payment, TapPayment},
+        payment::{AnnouncedSpell, CostComponent, Operation, Payment, TapPayment},
         play::CastAuthority,
     },
     state::{
@@ -363,6 +363,17 @@ impl Game {
     }
 
     fn mode_description(&self, mode: usize) -> Option<String> {
+        if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {
+            let target = spell.targets[spell.target_shares.len()];
+            let name = self
+                .target_object(target)
+                .map(|id| self.observed_object_name(id))
+                .unwrap_or_else(|| format!("{target:?}"));
+            return Some(format!(
+                "Assign {mode} to {name} (target {})",
+                spell.target_shares.len() + 1
+            ));
+        }
         match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
             Some(Decision::AssignCombatDamage {
                 attacker,
@@ -384,6 +395,32 @@ impl Game {
                 ))
             }
             _ if self.announces_x() => Some(format!("X = {mode}")),
+            Some(Decision::PartitionPiles { looked, next, .. }) => {
+                let pile = ["face-up", "face-down"].get(mode)?;
+                Some(format!(
+                    "Put {} in the {pile} pile",
+                    self.observed_object_name(looked[*next])
+                ))
+            }
+            Some(Decision::ChoosePile {
+                looked, face_up, ..
+            }) => Some(match mode {
+                0 if face_up.is_empty() => "Choose empty face-up pile".into(),
+                0 => format!(
+                    "Choose face-up pile ({})",
+                    face_up
+                        .iter()
+                        .map(|id| self.observed_object_name(*id))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                1 => {
+                    let count = looked.len() - face_up.len();
+                    let unit = if count == 1 { "card" } else { "cards" };
+                    format!("Choose face-down pile ({count} {unit})")
+                }
+                _ => return None,
+            }),
             Some(Decision::OrderMeldedCards { cards, .. }) => {
                 let card = self.state.cards[*cards.get(mode)?];
                 Some(format!(
@@ -407,6 +444,31 @@ impl Game {
                     );
                 Some(format!("{name}: {}", candidate.description()))
             }
+            Some(Decision::OrderEntryChoices { questions, .. }) => {
+                let card = self.state.entry_object(questions.get(mode)?.object);
+                Some(format!("Choose for {}", card.name))
+            }
+            Some(Decision::ChooseEntryValue {
+                question, scope, ..
+            }) => {
+                use crate::state::{
+                    card::EntryChoiceKind, mana::Color, subtype::creature_type_names,
+                };
+                Some(match (question.kind, scope.option(mode)?) {
+                    (EntryChoiceKind::Color, NameOption::Name(row)) => {
+                        format!("Choose {:?}", Color::COLORS[row])
+                    }
+                    (EntryChoiceKind::CreatureType, NameOption::Name(row)) => {
+                        format!("Choose {}", creature_type_names()[row])
+                    }
+                    (EntryChoiceKind::CreatureType, NameOption::Group(group)) => format!(
+                        "Types {} through {}",
+                        creature_type_names()[group.start],
+                        creature_type_names()[group.end - 1]
+                    ),
+                    _ => return None,
+                })
+            }
             Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
                 NameOption::Group(group) => Some(format!(
                     "Names {} through {}",
@@ -418,7 +480,13 @@ impl Game {
             Some(Decision::ManaSpend { player, cost, .. }) => {
                 let choices = self.mana_spend_choices(*player, cost);
                 let unit = &choices.get(mode)?.unit;
-                let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                // Non-step expiry (`EndOfCombat`, `EndOfTurn`) is already written by
+                // `mana_description`; add the explicit step-end label only for step mana.
+                let expiry = if unit
+                    .classes()
+                    .iter()
+                    .any(|(class, _)| class.expiry != crate::state::mana::ManaExpiry::Step)
+                {
                     ""
                 } else {
                     " (expires at step end)"
@@ -640,6 +708,8 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
+                    || (!ability.is_mana_ability()
+                        && self.nonmana_activation_prohibited(permanent.object))
                     || !self.activation_targets_available(player, source, ability_index)
                 {
                     continue;
@@ -853,16 +923,7 @@ impl Game {
         {
             return None;
         }
-        // Every mandatory targeting requirement needs a legal target.
-        for requirement in spell.target_requirements() {
-            if requirement.min > 0
-                && self
-                    .legal_targets_for_requirement(player, object, &requirement)
-                    .is_empty()
-            {
-                return None;
-            }
-        }
+        let cast = self.cast_with_available_targets(player, object, cast)?;
 
         // Permission opens the zone. An absent payable cost is distinct from {0}.
         let cost = self.effective_spell_cost(player, object, cast, None)?;
@@ -883,13 +944,14 @@ impl Game {
                 ))
             .then_some(0);
         };
-        let operation = Operation::Spell {
+        let operation = Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode: None,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
-        };
+            target_shares: Vec::new(),
+        });
         (self
             .payment_candidates(player, &operation, additional)
             .into_iter()
@@ -943,6 +1005,25 @@ impl Game {
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
                     focus: Vec::new(),
+                })
+            }
+            PendingChoice::DivideAmongTargets { player, spell } => {
+                let target = spell.targets[spell.target_shares.len()];
+                Some(ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Modal,
+                    actions: spell
+                        .shares(spell.cast.spell(&self.state[spell.object]).division)
+                        .map(|mode| Action::ChooseMode {
+                            player: *player,
+                            mode,
+                        })
+                        .collect(),
+                    focus: self
+                        .target_object(target)
+                        .map(|object| self.observed_object_id(object))
+                        .into_iter()
+                        .collect(),
                 })
             }
             PendingChoice::SpellMode {
@@ -1018,8 +1099,8 @@ impl Game {
                     .filter(|i| **i == *requirement_index)
                     .count();
                 let min_met = requirements.get(*requirement_index).is_some_and(|req| {
-                    chosen_in_req >= req.min_for(cast.x)
-                        && req.max_for(cast.x) > req.min_for(cast.x)
+                    chosen_in_req >= req.min_for(cast.x, cast.kicked)
+                        && req.max_for(cast.x, cast.kicked) > req.min_for(cast.x, cast.kicked)
                 });
                 if min_met {
                     actions.push(Action::Decline { player: *player });
@@ -1291,7 +1372,7 @@ impl Game {
                 frame.bind_source(Some(*object), Some(*object));
                 frame.completion = FrameCompletion::TurnFaceUp(*object);
                 let mut payment =
-                    PaymentProgress::new(*player, CostComponent::mana(cost), vec![], vec![]);
+                    PaymentProgress::new(*player, vec![CostComponent::mana(cost)], vec![], vec![]);
                 payment.committed = true;
                 *self.state.suspended_decision_mut() = Some(SuspendedResolution {
                     frame,
@@ -1369,6 +1450,14 @@ impl Game {
                     ) =>
             {
                 self.remove_counter_kind_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::DivideAmongTargets { .. })
+                ) =>
+            {
+                self.divide_target_action(*player, *mode)
             }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>

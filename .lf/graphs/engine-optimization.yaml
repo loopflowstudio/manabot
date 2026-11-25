@@ -1,6 +1,8 @@
 - engine-measure
 - loop:
     - loop:
+        - implement                    # one measured improvement
         - cmd: sync
-        - engine-implement             # one measured improvement; updates scratch/plan.md and decides: next slice or review
+        - realign                 # decides: next slice, or on
+    - compress
     - engine-performance-review        # decides: another bottleneck, or done

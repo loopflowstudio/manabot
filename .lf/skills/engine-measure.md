@@ -24,7 +24,3 @@ Measure where the engine spends time on this change's workloads, and plan only i
 4. If the profile leaves no bottleneck worth attacking, record the numbers
    and plan no slices; passing the 10% budget floor alone doesn't prove that.
    Leave unavailable hardware as an exact deferred command with no speed claim.
-5. When `card-perf` already recorded baseline numbers and a branch-scoped
-   target in `scratch/plan.md`, reuse those baseline readings and plan fixes
-   only for overhead introduced by this branch or superlinear new-card paths;
-   note pre-existing global hotspots as follow-ups for `engine-performance`.

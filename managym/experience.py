@@ -420,6 +420,7 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_token: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    chosen: str | None = Field(default=None, exclude_if=lambda value: value is None)
     temp_subtypes: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -504,6 +505,9 @@ class PooledManaView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     combat: bool
+    expiry: Literal["step", "end_of_combat", "end_of_turn"] = Field(
+        default="step", exclude_if=lambda value: value == "step"
+    )
 
 
 class LegacyPlayerView(ProtocolModel):

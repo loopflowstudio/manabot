@@ -1,0 +1,9 @@
+- card-batch
+- loop:
+    - loop:
+        - implement               # one cohort slice of the batch
+        - cmd: sync
+        - realign               # decides: next slice, or on
+    - compress
+    - concept-review
+    - coverage-behavior-review    # decides: the whole batch works, or back to implement

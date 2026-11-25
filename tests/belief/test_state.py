@@ -191,56 +191,84 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     sparse = BeliefState.from_probabilities(
         space, "gate-sparse", weights / weights.sum()
     )
-    # Retain historical receipts from earlier catalogs and world schemas: equal
-    # marginal shapes must not collide across content or schema bindings.
+    # Retain the prior catalog and v1 receipts: equal marginal shapes do not
+    # make their content/world bindings compatible with the expanded w4 catalog.
     cases = (
-        prior,
-        condition_belief(prior, WorldQuery.has("Lightning Bolt")),
-        condition_belief(prior, WorldQuery.lacks("Lightning Bolt")),
-        sparse,
+        (
+            prior,
+            "bc3f76b056b3ea407a0f29dc6be016afa71caffa5981676d42da6a06963ef658",
+            "a1eb600dcff770a09068a6c10ac88ad2e1c0defec6bb58d994cd2b23a3637d54",
+        ),
+        (
+            condition_belief(prior, WorldQuery.has("Lightning Bolt")),
+            "bf3b9c99e099acff2a3dbf378786b043bca3df2512850ac1fdaf0fdb6f9f1c61",
+            "9accbfbdd2ec7ab43603174d936eafaf1902987550c596b42d5b3d2d10922b7e",
+        ),
+        (
+            condition_belief(prior, WorldQuery.lacks("Lightning Bolt")),
+            "4315578f9d88cd0d3b5003ac0f003af3099923453e1ad9aec32b44e3c3c08a52",
+            "8ca3b0255053ed9374cacbbce43c52671068d067b2148e78c75e8e7d7419cb27",
+        ),
+        (
+            sparse,
+            "eeafd72124a2d263b86db076022efd53020da2bf98c79a4fa456305f9531b125",
+            "47a02fa6551b43ad3de4d38ac66042d079e99a4aef2998a348a1c13cb206a723",
+        ),
     )
     old_schema = replace(
         schema, world_schema_identity="managym.possible-world-space/v1"
     )
-    historical_receipts = frozenset(
-        {
-            # Prior catalog and v1 receipts.
-            "bc3f76b056b3ea407a0f29dc6be016afa71caffa5981676d42da6a06963ef658",
-            "a1eb600dcff770a09068a6c10ac88ad2e1c0defec6bb58d994cd2b23a3637d54",
-            "bf3b9c99e099acff2a3dbf378786b043bca3df2512850ac1fdaf0fdb6f9f1c61",
-            "9accbfbdd2ec7ab43603174d936eafaf1902987550c596b42d5b3d2d10922b7e",
-            "4315578f9d88cd0d3b5003ac0f003af3099923453e1ad9aec32b44e3c3c08a52",
-            "8ca3b0255053ed9374cacbbce43c52671068d067b2148e78c75e8e7d7419cb27",
-            "eeafd72124a2d263b86db076022efd53020da2bf98c79a4fa456305f9531b125",
-            "47a02fa6551b43ad3de4d38ac66042d079e99a4aef2998a348a1c13cb206a723",
-            # w4 and w7 receipts.
-            "55322cc163dde888e3f9c493d9742c0901eab6673e022ee65baf48b3e87a5fe8",
-            "e663aa5279ff57836824dce86418091740d241d370e35835def0e1cf2a8b1bd3",
-            "5a73465a8502d7d658ac625bf6d402ce65eeb024711759666ef125407926dcef",
-            "71b27f9f081d668ff9209c2cd94935bdd194f4fe1114d8d985d8b07219817803",
-            "2493ddd10a0bb40ac15b84fe08a07abf40a37faea7a720b769d51bc21416f8d9",
-            "164755ad7ecb497d52c35ed2f3a45f1c9a4b45a8c0ecf2534eecef9a1059f538",
-            "66c0b6e1c90034a2dd0db3e5724413e12f9abe29082ba6bf6f1c2ddd3db23f7f",
-            "95c66ac66e1f977466c8e4df1d4f06acdbda29499de1be2bde73490897940fe4",
-            # Earlier v3 (foretold-slot) receipts before open w17 content moves.
-            "252b45487a8552a39fbb7472736de3bb2ae1e70a53e16c3301d515e5094c384e",
-            "7c02d8d0dda790d5257da840c5526e951bcf2f130cba1422b5f672c26b592b77",
-            "e73afe04643845d1d0aa28ac82e560c47a2d062e9fec2babe1b714e0b32ad4d5",
-            "3da731e0fb463aa1f4bb368bbcf254d7e5a5ebf0d9062ce65e95b573876ea08d",
-            "59374684538913559587a5147f732683b41bfec4df7f7bfaf7a34517d1e876a8",
-            "78b6c7acd0a990f4193f2cf57b2c98ee31488a7265a35af0ad0e7b40666f6388",
-            "2365b7f4de989c2b9d4b42a73aa17aa05b51c86a027be4565d029ac6e8dfad31",
-            "0a61f966cfcec26aed0e217b9118d1e182ce4fdee5aeff69a63785f51b3079cc",
-        }
+    current_w4_receipts = (
+        "55322cc163dde888e3f9c493d9742c0901eab6673e022ee65baf48b3e87a5fe8",
+        "e663aa5279ff57836824dce86418091740d241d370e35835def0e1cf2a8b1bd3",
+        "5a73465a8502d7d658ac625bf6d402ce65eeb024711759666ef125407926dcef",
+        "71b27f9f081d668ff9209c2cd94935bdd194f4fe1114d8d985d8b07219817803",
     )
-    seen_receipts: set[str] = set()
-    for belief in cases:
+    w7_receipts = (
+        "2493ddd10a0bb40ac15b84fe08a07abf40a37faea7a720b769d51bc21416f8d9",
+        "164755ad7ecb497d52c35ed2f3a45f1c9a4b45a8c0ecf2534eecef9a1059f538",
+        "66c0b6e1c90034a2dd0db3e5724413e12f9abe29082ba6bf6f1c2ddd3db23f7f",
+        "95c66ac66e1f977466c8e4df1d4f06acdbda29499de1be2bde73490897940fe4",
+    )
+    # Possible-world space v3 (foretold slots) changes the schema identity hash;
+    # the schema also binds the open w17 content digest, so these receipts move
+    # whenever w17 content does.
+    prior_v3_receipts = (
+        "252b45487a8552a39fbb7472736de3bb2ae1e70a53e16c3301d515e5094c384e",
+        "7c02d8d0dda790d5257da840c5526e951bcf2f130cba1422b5f672c26b592b77",
+        "e73afe04643845d1d0aa28ac82e560c47a2d062e9fec2babe1b714e0b32ad4d5",
+        "3da731e0fb463aa1f4bb368bbcf254d7e5a5ebf0d9062ce65e95b573876ea08d",
+    )
+    current_v3_receipts = (
+        "59374684538913559587a5147f732683b41bfec4df7f7bfaf7a34517d1e876a8",
+        "78b6c7acd0a990f4193f2cf57b2c98ee31488a7265a35af0ad0e7b40666f6388",
+        "2365b7f4de989c2b9d4b42a73aa17aa05b51c86a027be4565d029ac6e8dfad31",
+        "0a61f966cfcec26aed0e217b9118d1e182ce4fdee5aeff69a63785f51b3079cc",
+    )
+    for (
+        (belief, prior_catalog_receipt, historical_receipt),
+        w4_receipt,
+        w7_receipt,
+        prior_v3_receipt,
+        receipt,
+    ) in zip(
+        cases,
+        current_w4_receipts,
+        w7_receipts,
+        prior_v3_receipts,
+        current_v3_receipts,
+        strict=True,
+    ):
+        assert isinstance(belief, BeliefState)
         encoded = encode_belief(belief, schema)
-        assert (
-            encoded.encoding_receipt == encode_belief(belief, schema).encoding_receipt
+        assert encoded.encoding_receipt == receipt
+        assert encoded.encoding_receipt not in (
+            prior_catalog_receipt,
+            historical_receipt,
+            w4_receipt,
+            w7_receipt,
+            prior_v3_receipt,
         )
-        seen_receipts.add(encoded.encoding_receipt)
-        assert encoded.encoding_receipt not in historical_receipts
         with pytest.raises(BeliefError, match="world schema"):
             encode_belief(belief, old_schema)
         # Independent scalar accumulation checks numerical meaning as well as
@@ -257,7 +285,6 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         np.testing.assert_array_equal(
             encoded.count_probabilities, expected.astype(np.float32)
         )
-    assert len(seen_receipts) == len(cases)
 
 
 def test_schema_rejects_only_duplicate_full_row_keys() -> None:

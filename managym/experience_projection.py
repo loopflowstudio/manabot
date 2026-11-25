@@ -218,6 +218,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
     values: dict[str, Any] = {
         "counters": counters or None,
         "attached_to": permanent.attached_to,
+        "chosen": permanent.chosen,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
@@ -385,6 +386,7 @@ def _serialize_player(
                         else {}
                     ),
                     "combat": p.combat,
+                    **({"expiry": p.expiry} if p.expiry != "step" else {}),
                 }
                 for p in player.pooled_mana_classes
             ],

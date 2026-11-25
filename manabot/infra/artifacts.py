@@ -25,10 +25,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 Scheme = Literal["s3", "r2"]
 
 
-class MissingCredentials(RuntimeError):
-    """R2 access was requested without its credentials in the environment."""
-
-
 def split_bucket_uri(uri: str) -> tuple[Scheme, str, str]:
     """The scheme, bucket and key of an `s3://` or `r2://` location."""
     parsed = urlsplit(uri)
@@ -244,5 +240,5 @@ def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
 def _environment(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise MissingCredentials(f"R2 access needs {name} in the environment")
+        raise RuntimeError(f"R2 access needs {name} in the environment")
     return value

@@ -16,7 +16,6 @@ from managym.disclosure import DecklistSampling
 
 from . import _managym
 from ._managym import *  # noqa: F403 — expose the native API described by the stub.
-from ._managym import __version__ as __version__
 from ._managym import format
 
 # PyO3 submodules are attributes, not importable modules; registering the

@@ -71,22 +71,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Stall checks: `"stall_seconds": 0.3` in the local recipe config and
   `touch <out>/diagnostics.request` exercise the watchdog without load; read
   `escalations.jsonl` for one line per real stall.
-- Source launch (no installed `managym` distribution, as `scripts/play` runs):
-  `UV_PROJECT_ENVIRONMENT=<ignored .runs dir>/play-venv uv run --python 3.13
-  --locked --only-group play-runtime python -c 'import importlib.metadata as m;
-  m.version("managym")'` raises `PackageNotFoundError` there, so that venv
-  reproduces it. Start the API from it with `ACADEMY_CARD_ART_DIR=<empty .runs
-  dir>` and curl `/api/card-art/art/<slug>.jpg`: a cold card must return 200
-  JPEG and write `<scryfall id>-art.jpg` plus its credit JSON. On the table,
-  art is CSS backgrounds, not `<img>`: count `/api/card-art` responses and
-  `requestfailed` events instead of `document.images`. The same venv runs the
-  release Playwright config as `VIRTUAL_ENV` (the dev `.venv` lacks uvicorn);
-  scope it with `ACADEMY_RELEASE_API_PORT`, `ACADEMY_RELEASE_FRONTEND_PORT`
-  and `ACADEMY_RELEASE_PROOF_DIR`. `opponent-beats.spec.ts` took 2.3–3.1 min
-  per run at load ~200.
-- The landing card of a fresh dev-server visit reads "Ready to play" with one
-  **Play** button (no "Start game" there); "Set up a different game" opens the
-  New game page.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Start game, play a land and Pass Turn.

@@ -47,7 +47,7 @@ use managym::{
         card::{Keyword, Keywords, SpellProfile, StaticAbility},
         effect::{CopyEffect, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
-        mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
+        mana::{Color, Mana, ManaCost, ManaExpiry, ManaRestriction, SpendingContext},
         payment::{Contribution, How, Toward},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -1562,7 +1562,7 @@ fn fire_nation_attacks_soldiers_add_red_when_attacking() {
         s.pass_priority();
     }
     assert_eq!(s.current_step(), StepKind::DeclareAttackers);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+    assert_eq!(combat_red(&s), 1);
 }
 
 /// Activation is restricted to its controller's turn; blockers with current
@@ -2029,8 +2029,9 @@ fn iroh_grand_lotus_firebends_two_when_attacking() {
         s.pass_priority();
     }
     assert_eq!(
-        s.game().state.players[0].combat_mana_pool,
+        s.game().state.players[0].mana_pool,
         managym::state::mana::Mana::parse("RR")
+            .with_expiry(managym::state::mana::ManaExpiry::EndOfCombat)
     );
 }
 
@@ -2327,7 +2328,7 @@ fn rough_rhino_cavalry_firebends_two_and_exhausts_for_counters_and_trample() {
     while !s.game().state.stack_objects.is_empty() {
         s.pass_priority();
     }
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 2);
+    assert_eq!(combat_red(&s), 2);
 }
 
 /// Cycling is an activated ability, so it is available at instant speed on
@@ -3531,9 +3532,9 @@ fn dragon_and_soldier_tokens_firebend_their_printed_amount() {
         );
         pass_until(&mut s, ActionSpaceKind::Priority);
         settle(&mut s);
-        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), amount);
+        assert_eq!(combat_red(&s), amount);
         s.advance_to_active_step(0, StepKind::PostcombatMain);
-        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+        assert_eq!(combat_red(&s), 0);
     }
 }
 
@@ -4132,7 +4133,7 @@ fn firebending_only_triggers_with_lesson_in_graveyard() {
     attack_with(&mut s, cadets);
     // No Lesson: the granted ability does not exist, no trigger fires.
     assert!(s.game().state.pending_triggers.is_empty());
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    assert_eq!(combat_red(&s), 0);
 }
 
 #[test]
@@ -4145,11 +4146,7 @@ fn firebending_mana_lasts_until_end_of_combat_and_casts_spells() {
     s.pass_priority();
     s.pass_priority(); // firebending trigger resolves
 
-    assert_eq!(
-        s.game().state.players[0].combat_mana_pool.total(),
-        2,
-        "firebending 2 added {{R}}{{R}}"
-    );
+    assert_eq!(combat_red(&s), 2, "firebending 2 added {{R}}{{R}}");
 
     // The mana survives into the declare-blockers step (a normal pool
     // would have emptied at the step boundary)...
@@ -4157,7 +4154,7 @@ fn firebending_mana_lasts_until_end_of_combat_and_casts_spells() {
     while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
         s.decline_block();
     }
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 2);
+    assert_eq!(combat_red(&s), 2);
 
     // ...and casts an instant with no lands at all (Firebending Lesson,
     // {R}, unkicked — kicker {4} is unaffordable).
@@ -4166,15 +4163,11 @@ fn firebending_mana_lasts_until_end_of_combat_and_casts_spells() {
     s.pass_priority();
     s.pass_priority();
     assert_eq!(permanent(&s, wall).damage, 2);
-    assert_eq!(
-        s.game().state.players[0].combat_mana_pool.total(),
-        1,
-        "one {{R}} spent from the combat pool"
-    );
+    assert_eq!(combat_red(&s), 1, "one {{R}} spent from the combat pool");
 
     // Whatever's left empties as combat ends.
     s.advance_to_active_step(0, StepKind::PostcombatMain);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    assert_eq!(combat_red(&s), 0);
 }
 
 #[test]
@@ -4209,7 +4202,7 @@ fn cadets_keep_announced_firebending_after_last_lesson_leaves() {
     move_card(&mut s, lesson, ZoneType::Exile);
     settle(&mut s);
     // The ability existed when attacking. Losing it cannot remove its trigger.
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 2);
+    assert_eq!(combat_red(&s), 2);
 }
 
 #[test]
@@ -4232,11 +4225,11 @@ fn fire_sages_counter_cost_and_firebending_mana_lifetime() {
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
     settle(&mut s);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+    assert_eq!(combat_red(&s), 1);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+    assert_eq!(combat_red(&s), 1);
     s.advance_to_active_step(0, StepKind::PostcombatMain);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    assert_eq!(combat_red(&s), 0);
 }
 
 /// Firebending Lesson in hand at player 0's main phase, with a Wall of Stone to target.
@@ -4752,8 +4745,7 @@ fn sozins_comet_grants_firebending_five_until_end_of_turn() {
         s.pass_priority();
     }
     assert_eq!(s.current_step(), StepKind::DeclareAttackers);
-    let pool = &s.game().state.players[0].combat_mana_pool;
-    assert_eq!(pool.total(), 5);
+    assert_eq!(combat_red(&s), 5);
 }
 
 /// Each firebending instance a continuous effect grants is its own attack
@@ -4789,7 +4781,7 @@ fn sozins_comet_grants_firebending_as_ordinary_attack_triggers_katara_doubles() 
         while !s.game().state.stack_objects.is_empty() {
             s.pass_priority();
         }
-        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), mana);
+        assert_eq!(combat_red(&s), mana);
     }
 }
 
@@ -5131,9 +5123,11 @@ fn fire_nation_palace_grants_firebending_four_to_one_creature() {
         s.pass_priority();
     }
     assert_eq!(s.current_step(), StepKind::DeclareAttackers);
-    let pool = &s.game().state.players[0].combat_mana_pool;
-    assert_eq!(pool.mana[Color::Red as usize], 4);
-    assert_eq!(pool.total(), 4);
+    let pool = &s.game().state.players[0].mana_pool;
+    let combat_class =
+        managym::state::mana::ManaClass::from(managym::state::mana::ManaExpiry::EndOfCombat);
+    assert_eq!(pool.class_of(&combat_class)[Color::Red as usize], 4);
+    assert_eq!(combat_red(&s), 4);
 }
 
 #[test]
@@ -6414,30 +6408,36 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
 
     declare_attackers(&mut s, &[ozai]);
     settle(&mut s);
+    let combat_class =
+        managym::state::mana::ManaClass::from(managym::state::mana::ManaExpiry::EndOfCombat);
     assert_eq!(
-        s.game().state.players[0].combat_mana_pool,
-        Mana::parse("RRRR")
+        s.game().state.players[0].mana_pool.class_of(&combat_class),
+        [0, 0, 0, 4, 0, 0]
     );
     let keywords = observed_keywords(&s, ozai);
     assert!(keywords.flying && keywords.indestructible, "eight unspent");
     // Firebending's mana names Ozai, the source of the effect that added it.
     let ozai_object = s.game().state.permanents[ozai].as_ref().unwrap().object;
-    let from_ozai = |pool: &managym::state::mana::ManaPool| {
-        pool.origins(None, Color::Red)
+    let from_ozai = |pool: &managym::state::mana::ManaPool,
+                     class: Option<&managym::state::mana::ManaClass>| {
+        pool.origins(class, Color::Red)
             .filter(|origin| origin.is_some_and(|origin| origin.object == ozai_object))
             .count()
     };
-    assert_eq!(from_ozai(&s.game().state.players[0].combat_mana_pool), 4);
+    assert_eq!(
+        from_ozai(&s.game().state.players[0].mana_pool, Some(&combat_class)),
+        4
+    );
 
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     let mut red = Mana::parse("RRRRRRR");
     red.add(&Mana::restricted_to(lesson, [0, 0, 0, 1, 0, 0]));
     assert_eq!(*pool(&s), red);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
-    // Becoming red and outliving combat changes a unit's color and pool,
+    assert_eq!(combat_red(&s), 0);
+    // Becoming red and outliving combat changes a unit's color and expiry,
     // never where it came from: Ozai's four, beside the fixture's three.
     let regular = &s.game().state.players[0].mana_pool;
-    assert_eq!(from_ozai(regular), 4);
+    assert_eq!(from_ozai(regular, None), 4);
     assert_eq!(regular.origins(None, Color::Red).flatten().count(), 4);
     assert!(observed_keywords(&s, ozai).indestructible);
 
@@ -9104,8 +9104,8 @@ fn ran_and_shaw_firebend_and_pump_only_the_dragons_present_until_end_of_turn() {
         s.pass_priority();
     }
     assert_eq!(
-        s.game().state.players[0].combat_mana_pool,
-        Mana::parse("RR"),
+        s.game().state.players[0].mana_pool,
+        Mana::parse("RR").with_expiry(managym::state::mana::ManaExpiry::EndOfCombat),
         "firebending 2"
     );
 
@@ -9752,11 +9752,11 @@ fn uncle_iroh_firebending_survives_steps_and_expires_after_combat() {
     );
     pass_until(&mut s, ActionSpaceKind::Priority);
     settle(&mut s);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+    assert_eq!(combat_red(&s), 1);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+    assert_eq!(combat_red(&s), 1);
     s.advance_to_active_step(0, StepKind::PostcombatMain);
-    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    assert_eq!(combat_red(&s), 0);
 }
 
 #[test]
@@ -11583,7 +11583,9 @@ fn attack_and_settle(s: &mut Scenario, attackers: &[PermanentId], target: Option
 }
 
 fn combat_red(s: &Scenario) -> u16 {
-    s.game().state.players[0].combat_mana_pool.total()
+    s.game().state.players[0]
+        .mana_pool
+        .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat)
 }
 
 /// Sacrifice player 0's `victim` to Weaponize the Monsters' "{2}, Sacrifice
@@ -14175,7 +14177,11 @@ fn firebender_ascension_counts_attack_triggers_and_copies_them_at_four() {
     assert!(s.take_action_by_type(ActionType::PayCost));
     resolve_until_priority(&mut s);
     assert_eq!(
-        s.game().state.players[0].combat_mana_pool.mana[Color::Red as usize],
+        s.game().state.players[0]
+            .mana_pool
+            .class_of(&managym::state::mana::ManaClass::from(
+                managym::state::mana::ManaExpiry::EndOfCombat
+            ),)[Color::Red as usize],
         2,
         "firebending and its copy"
     );
@@ -14273,6 +14279,35 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         !s.game().characteristics(forest).abilities_lost,
         "basic lands keep theirs"
     );
+}
+
+/// CR 614.12 and 305.7: with Zhao's Mountain effect active, the entering
+/// land has no printed replacement ability. Zhao still makes it enter tapped.
+#[test]
+fn zhao_removes_dark_depths_ice_counter_ability_before_entry() {
+    for loses_abilities in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Dark Depths"]);
+        let zhao = s.force_permanent_on_battlefield(1, "Zhao, the Moon Slayer");
+        set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
+        if loses_abilities {
+            // Layer 6 removes "nonbasic lands enter tapped" after layer 4
+            // has already made the land a Mountain.
+            until_end_of_turn(&mut s, zhao, Modification::LoseAllAbilities);
+        }
+        let depths = play_land(&mut s, "Dark Depths");
+        assert_eq!(tapped(&s, depths), !loses_abilities);
+        assert!(s.game().characteristics(depths).has_subtype("Mountain"));
+        assert_eq!(counters_of(&s, depths, CounterKind::Ice), 0);
+    }
+}
+
+#[test]
+fn zhao_taps_a_modal_land_played_on_its_back_face() {
+    let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Tidal Errand"]);
+    s.force_permanent_on_battlefield(1, "Zhao, the Moon Slayer");
+    let haven = play_land(&mut s, "Tidal Errand");
+    assert_eq!(s.game().characteristics(haven).name, "Tidal Haven");
+    assert!(tapped(&s, haven));
 }
 
 /// Land-type effects follow counters and departure independently in each fork;
@@ -15211,14 +15246,18 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
     attack_with(&mut s, azula);
     settle(&mut s);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    s.set_player_mana_pool(0, "R");
+    s.game_mut().state.players[0]
+        .mana_pool
+        .add(&Mana::parse("R"), None);
     cast(&mut s, "Lightning Bolt");
     target_opponent(&mut s);
     // Spend firebending mana before regular red; both expiries are offered.
     spend_named(&mut s, |label| {
         label == "Spend {R} (expires at end of combat)"
     });
-    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("R"));
+    let mut expected = Mana::parse("R");
+    expected.add(&Mana::parse("R").with_expiry(ManaExpiry::EndOfCombat));
+    assert_eq!(s.game().state.players[0].mana_pool, expected);
     // The copy keeps the opponent as its target.
     for _ in 0..10 {
         if s.action_space().kind == ActionSpaceKind::ChooseTarget {
@@ -15506,7 +15545,11 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
     attack_with(&mut s, koh);
     settle(&mut s);
     assert_eq!(
-        s.game().state.players[0].combat_mana_pool.mana[3],
+        s.game().state.players[0]
+            .mana_pool
+            .class_of(&managym::state::mana::ManaClass::from(
+                managym::state::mana::ManaExpiry::EndOfCombat
+            ),)[3],
         2,
         "Azula's firebending 2, from Koh"
     );

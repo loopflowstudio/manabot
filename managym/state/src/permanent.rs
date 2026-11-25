@@ -53,6 +53,7 @@ pub enum CounterKind {
     /// exiled cards that have one.
     Stash,
     Revival,
+    Wish,
 }
 
 impl CounterKind {
@@ -76,6 +77,7 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Revival => "revival",
+            CounterKind::Wish => "wish",
             CounterKind::Incubation => "incubation",
             CounterKind::Page => "page",
             CounterKind::Soul => "soul",
@@ -93,7 +95,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 23] = [
+    pub const ALL: [CounterKind; 24] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -117,6 +119,7 @@ impl CounterKind {
         CounterKind::Bait,
         CounterKind::Stash,
         CounterKind::Revival,
+        CounterKind::Wish,
     ];
 }
 
@@ -208,8 +211,18 @@ fn serialize_spell_entry<S: serde::Serializer>(
     map.end()
 }
 
+/// The answer belonging to this battlefield incarnation (CR 614.12a).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum EntryChoice {
+    Color(crate::mana::Color),
+    CreatureType(String),
+    CardName(String),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<std::sync::Arc<EntryChoice>>,
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
@@ -257,8 +270,8 @@ pub struct Permanent {
     /// Once-per-object abilities (indices into the effective activated
     /// abilities) this object has activated; a new object starts fresh
     /// (CR 400.7).
-    #[serde(rename = "exhausted", skip_serializing_if = "Vec::is_empty")]
-    pub spent_abilities: Vec<usize>,
+    #[serde(rename = "exhausted", skip_serializing_if = "<[usize]>::is_empty")]
+    pub spent_abilities: Box<[usize]>,
     /// "Once each turn" abilities this object has activated this turn,
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -287,7 +300,9 @@ impl Permanent {
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
         if ability.once_per_object() {
-            self.spent_abilities.push(index);
+            let mut spent = std::mem::take(&mut self.spent_abilities).into_vec();
+            spent.push(index);
+            self.spent_abilities = spent.into_boxed_slice();
         }
         if ability.once_each_turn {
             self.activated_this_turn.push(index);
@@ -296,6 +311,7 @@ impl Permanent {
 
     pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
+            chosen: None,
             transforms: 0,
             manifested: false,
             id,
@@ -316,7 +332,7 @@ impl Permanent {
             attacking: false,
             spell_entry: Default::default(),
             attached_to: None,
-            spent_abilities: Vec::new(),
+            spent_abilities: Default::default(),
             activated_this_turn: Vec::new(),
         }
     }

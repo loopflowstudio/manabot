@@ -223,6 +223,9 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("name", &value.name)?;
         map.serialize_entry("owner_id", &value.owner_id)?;
         map.serialize_entry("power", &value.power)?;
+        if value.put_into_graveyard_this_turn {
+            map.serialize_entry("put_into_graveyard_this_turn", &true)?;
+        }
         map.serialize_entry("registry_key", &value.registry_key)?;
         map.serialize_entry("text_box", &value.text_box)?;
         map.serialize_entry("toughness", &value.toughness)?;
@@ -787,9 +790,13 @@ pub(super) struct WireCardData {
     #[serde(default)]
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
-    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    /// (`TurnState::graveyard_arrivals`); policy input v10.
     #[serde(default)]
     pub from_battlefield_this_turn: bool,
+    /// A graveyard card that was put there from any zone this turn
+    /// (`TurnState::graveyard_arrivals`); policy input v11.
+    #[serde(default)]
+    pub put_into_graveyard_this_turn: bool,
     /// Counters on the card off the battlefield, by kind name.
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
@@ -798,6 +805,8 @@ pub(super) struct WireCardData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WirePermanentData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<crate::state::permanent::EntryChoice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub front_mana_value: Option<u8>,
     /// Effective colors when a layer changes the copiable colors.
@@ -981,6 +990,7 @@ impl From<WireCardData> for CardData {
                 .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
+            put_into_graveyard_this_turn: w.put_into_graveyard_this_turn,
             counters: w.counters,
             characteristics: CharacteristicsData {
                 name: w.name,
@@ -1006,6 +1016,7 @@ impl From<WirePermanentData> for PermanentData {
     fn from(w: WirePermanentData) -> Self {
         let card = w.card;
         Self {
+            chosen: w.chosen,
             front_mana_value: w.front_mana_value,
             colors: w.colors,
             keyword_counter_timestamps: w.keyword_counter_timestamps,
@@ -1073,6 +1084,7 @@ impl PermanentData {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         })
@@ -1082,6 +1094,7 @@ impl PermanentData {
 impl Serialize for PermanentData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         WirePermanentData {
+            chosen: self.chosen.clone(),
             front_mana_value: self.front_mana_value,
             colors: self.colors.clone(),
             keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),
@@ -1188,6 +1201,7 @@ impl SpellData {
             cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         }

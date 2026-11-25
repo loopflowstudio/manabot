@@ -33,6 +33,7 @@
   const facts = $derived(permanent ? [
     permanent.tapped ? 'Tapped' : 'Untapped',
     permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
+    permanent.chosen ? `chosen ${permanent.chosen}` : '',
     permanent.first_strike_participant ? 'first-strike participant' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',

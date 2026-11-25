@@ -50,7 +50,6 @@ def test_merchant_payment_reconnect_vector_and_fork(
         "villain_deck": {"Plains": 40},
         "villain_type": "passive",
         "auto_pass": False,
-        "mana_floats": "all",
         "seed": seed,
     }
     with TestClient(server.app) as client:
