@@ -33,7 +33,9 @@
     }
     try {
       const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
-      draft[seat] = { source, filename: file.name };
+      const stem = file.name.replace(/\.(txt|dek)$/i, '').trim();
+      const generic = ['deck', 'hero', 'villain'].includes(stem.toLowerCase());
+      draft[seat] = { source, filename: file.name, ...(stem && !generic ? { name: stem } : {}) };
       update();
     } catch {
       messages = ['Could not read this file as UTF-8 text.'];

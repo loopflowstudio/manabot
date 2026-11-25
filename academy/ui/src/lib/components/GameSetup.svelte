@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GameStore } from '$lib/game.svelte';
-  import { DECK_CHOICES, type DeckChoice } from '$lib/decks';
+  import { DECK_CHOICES, isPoolDeckChoice, type DeckChoice, type DeckPoolSummary } from '$lib/decks';
   import type { OpponentCatalog, TrainedOpponent } from '$lib/types';
   import PlayerPicker from './PlayerPicker.svelte';
   import DeckSelector from './DeckSelector.svelte';
@@ -17,6 +17,7 @@
   }
   let { setup, onStart, disabled = false, opponentOnly = false, humanActionLabel = 'Start game', showStart = true }: Props = $props();
   let trained = $state<TrainedOpponent[]>([]);
+  let deckPools = $state<DeckPoolSummary[]>([]);
   let catalogError = $state<string | null>(null);
   let extension = $state<string | null | undefined>(undefined);
   onMount(() => {
@@ -25,6 +26,11 @@
       const catalog: OpponentCatalog = await response.json();
       trained = catalog.opponents; catalogError = catalog.catalog_error; extension = catalog.extension;
     }).catch(error => catalogError = error.message);
+    void fetch('/api/deck-pools').then(async response => {
+      if (!response.ok) return;
+      const data = await response.json() as { pools?: DeckPoolSummary[] };
+      deckPools = data.pools ?? [];
+    }).catch(() => {});
   });
   function controller(seat: number, human: boolean): void {
     if (human) {
@@ -59,9 +65,18 @@
               </select>
             </label>
             <label class="flex flex-col gap-1">Deck
-              {#if setup.deckImport}<span class="text-sm">Imported · {hero ? setup.deckImport.hero.filename : setup.deckImport.villain.filename}</span>
+              {#if setup.deckImport}<span class="text-sm">Imported · {hero ? (setup.deckImport.hero.name ?? setup.deckImport.hero.filename) : (setup.deckImport.villain.name ?? setup.deckImport.villain.filename)}</span>
               {:else}<select aria-label={`Seat ${seat + 1} deck`} class="rounded border border-line bg-panel p-2" value={hero ? setup.decks.hero : setup.decks.villain} onchange={e => hero ? setup.setHeroDeck(e.currentTarget.value as DeckChoice) : setup.setVillainDeck(e.currentTarget.value as DeckChoice)}>
-                {#each DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
+                {#if deckPools.length > 0}
+                  <optgroup label="Deck pools">
+                    {#each deckPools as pool}<option value={pool.key}>{pool.label} ({pool.count} decks)</option>{/each}
+                  </optgroup>
+                  <optgroup label="Bundled decks">
+                    {#each DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
+                  </optgroup>
+                {:else}
+                  {#each DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
+                {/if}
               </select>{/if}
             </label>
           {/if}
@@ -98,7 +113,7 @@
       {#if setup.dealMode === 'repeat'}<label class="flex flex-col gap-1">Seed<input class="rounded border border-line bg-field p-2" inputmode="numeric" bind:value={setup.seed} /></label>{/if}
       <DecklistsSelector value={setup.decklists} opponent={setup.opponentChoice} {disabled} onChange={value => setup.setDecklists(value)} />
     </div>
-    {#if !setup.deckImport}<details><summary class="cursor-pointer">Browse decks and cards</summary>
+    {#if !setup.deckImport && !isPoolDeckChoice(setup.decks.hero) && !isPoolDeckChoice(setup.decks.villain)}<details><summary class="cursor-pointer">Browse decks and cards</summary>
       <DeckSelector hero={setup.decks.hero} villain={setup.decks.villain} {disabled} heroLabel={`Seat ${setup.humanSeat + 1} deck`} villainLabel={`Seat ${2 - setup.humanSeat} deck`} onHeroChange={value => setup.setHeroDeck(value)} onVillainChange={value => setup.setVillainDeck(value)} />
     </details>{/if}
     {#key setup.humanSeat}<DeckImport {setup} heroLabel={setup.watchMode ? `Seat ${setup.humanSeat + 1} deck` : 'Your deck'} villainLabel={setup.watchMode ? `Seat ${2 - setup.humanSeat} deck` : 'Opponent deck'} />{/key}

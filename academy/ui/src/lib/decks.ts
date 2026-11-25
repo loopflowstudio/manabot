@@ -1,7 +1,20 @@
 import { CURATED_PACK, ELEMENTAL_WORLD_PACK, JEONG_INCREMENT_PACK } from './curated-pack';
 
 export type ElementalDeckChoice = `elemental_${'gr' | 'gw' | 'ur' | 'ub' | 'uw' | 'ug' | 'wr' | 'wb' | 'rb' | 'bg'}`;
-export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'gw_allies_jeong' | 'interactive' | ElementalDeckChoice;
+export type PoolDeckChoice = `pool:${string}`;
+export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'gw_allies_jeong' | 'interactive' | ElementalDeckChoice | PoolDeckChoice;
+
+export interface DeckPoolSummary {
+  id: string;
+  key: PoolDeckChoice;
+  label: string;
+  count: number;
+  default_decklists: 'open' | 'closed';
+}
+
+export function isPoolDeckChoice(value: unknown): value is PoolDeckChoice {
+  return typeof value === 'string' && value.startsWith('pool:') && value.length > 5;
+}
 
 // The two curated choices and their defaults are derived from the installed
 // manifest. Interactive remains a backwards-compatible, uncurated option.
@@ -44,8 +57,8 @@ export function sanitizeDeckSelection(raw: unknown): DeckSelection | null {
   if (
     typeof candidate.hero !== 'string' ||
     typeof candidate.villain !== 'string' ||
-    !DECK_KEYS.has(candidate.hero) ||
-    !DECK_KEYS.has(candidate.villain)
+    (!DECK_KEYS.has(candidate.hero) && !isPoolDeckChoice(candidate.hero)) ||
+    (!DECK_KEYS.has(candidate.villain) && !isPoolDeckChoice(candidate.villain))
   ) {
     return null;
   }
