@@ -673,8 +673,29 @@ value points; the e2e acceptance spec `study-review.spec.ts`, including its
 second test (Show analysis mid-game → "analysis shown" in Review and Games).
 That spec still does not exist.
 
-Next: playing on from the line (slice 4's remainder), then the
-`study-review.spec.ts` acceptance spec.
+## Remaining (realign, 2026-11-25)
+
+1. **Playing on from the line** (slice 4's remainder; approved in the
+   chess.com table). A playable branch rooted in a re-executed position: a
+   `StudyForkProvider` over `agent_line`'s walk, or a Play game whose opening
+   moves are the record's (questions.md, slice 4 choices). Review opens it at
+   any analysed decision; the person plays on or lets the policy keep
+   choosing in their seat.
+2. **`academy/ui/e2e/study-review.spec.ts`**, the acceptance spec, with both
+   tests (§ Acceptance check), added to `playwright.policy.config.ts`'s
+   `testMatch`. Gate runs it but nothing has written it yet.
+3. **Policy admission cost.** `analysing_policies` / `analysis_choices`
+   admit every registered policy (2.5–2.9 s with 23 checkpoints). Play pays
+   it once per game, on the first Show analysis and under the game lock;
+   Review pays it on every open of `/analyses/policies`. Admission depends on
+   the world and the two setups, not the game, so one cache keyed by those
+   would serve both. Take it off the game lock either way.
+4. Not built, by headless choice: live value points on the folded Strip
+   (§6). Probabilities and estimates are on the offers.
+
+Next: items 1 and 2 together in one pass. The spec's second test exercises
+slice 6 end to end, and the line's playable branch gets its browser proof in
+the same run.
 
 ## Slices
 
@@ -707,7 +728,7 @@ Next: playing on from the line (slice 4's remainder), then the
    table with intervals.
 4. **(built, read-only)** **See its line.** From an analysed decision, the
    agent's choice played and its line to the end of the next turn, plus key
-   moments. Remaining: play on yourself from it (after slice 6).
+   moments. Remaining: play on yourself from it (Remaining, item 1).
 5. **(built)** **Watch: revealed hands and branch boundaries** (MTG-423). Independent of
    slices 1–4; may go first if slice 1 stalls.
 6. **(built)** **Analysis while you play.** The toggle, the catch-up walk, the live
