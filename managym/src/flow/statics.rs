@@ -11,7 +11,7 @@ use crate::{
         turn::RecordedCast,
     },
     state::{
-        ability::{AbilitySource, Condition, EffectValue, PaymentCost},
+        ability::{AbilityOrigin, Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             SpellProfile, StaticAbility, StaticRestriction, StaticScope,
@@ -84,7 +84,7 @@ pub struct Characteristics {
     /// Layer 6 keywords.
     pub keywords: Keywords,
     /// Sources of effective keywords supplied from outside the permanent.
-    pub keyword_grants: Vec<(Keyword, AbilitySource)>,
+    pub keyword_grants: Vec<(Keyword, AbilityOrigin)>,
     /// Firebending N granted by records after any ability loss, summed.
     pub firebending: u8,
     /// Whether it has lost all abilities (a record, or a characteristic-

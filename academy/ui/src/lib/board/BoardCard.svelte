@@ -14,8 +14,9 @@
    * blended left to right as printed hybrid frames are. A tapped permanent
    * lies on its side: its footprint and art turn a quarter, while the name
    * bar stays across the top so it still reads. State chips (counters,
-   * abilities, summoning sickness, restrictions, damage) sit on their
-   * own row above power and toughness. Rules text lives in the inspect view.
+   * abilities, summoning sickness, restrictions, damage) pack across the foot
+   * of the art, sharing the bottom row beside power and toughness unless a
+   * recorded policy pill occupies it. Rules text lives in the inspect view.
    *
    * Lift + Quiet: a card a legal offer acts on is raised with a soft shadow;
    * the selected card rises higher with a thin ink edge. While the person
@@ -115,8 +116,9 @@
   const showCost = $derived(!field && width >= 58);
   const plate = $derived(upright >= 110 ? 14 : 12);
   const hasPt = $derived(creature && power !== null);
-  const showPolicy = $derived(recorded && (recorded.p !== null || recorded.chosen));
+  const showPolicy = $derived(Boolean(recorded && (recorded.p !== null || recorded.chosen)));
   const besidePlate = $derived(hasPt && !showPolicy);
+  const foot = $derived(besidePlate ? LINE[plate] : 16);
   let plateWidth = $state(0);
   const below = $derived(showPolicy ? Math.max(18, hasPt ? LINE[plate] : 0) + 5 : 3);
   const badges = $derived(permanent ? badgesOf(permanent, face, blocks) : []);
@@ -129,15 +131,14 @@
       chipFont = `12px ${getComputedStyle(document.documentElement).getPropertyValue('--font-sans')}`;
     });
   });
-  const fullWidth = $derived(boxWidth - 6);
   const rowWidths = $derived.by(() => {
     const available = artHeight - below;
     if (available < 16) return [];
-    const foot = besidePlate ? LINE[plate] : 16;
+    const fullWidth = boxWidth - 6;
     const upperRows = Math.max(0, Math.floor((available - foot) / 18));
     return [...Array<number>(upperRows).fill(fullWidth), besidePlate ? fullWidth - plateWidth - 4 : fullWidth];
   });
-  const chips = $derived(fitBadges(badges, rowWidths, fullWidth, text => chipWidth(text, chipFont)));
+  const chips = $derived(fitBadges(badges, rowWidths, text => chipWidth(text, chipFont)));
   const overflowTitle = $derived(chips.hidden.map(badgeReading).join(' · '));
   const titleOverflow = $derived(field && !chips.rows.length && chips.hidden.length > 0);
 
@@ -176,7 +177,7 @@
     recorded?.chosen ? 'chosen' : '',
   ].filter(Boolean).join(', '));
   const label = $derived([
-    `${name}${creature && power !== null ? ` ${power}/${toughness}` : ''}`,
+    `${name}${hasPt ? ` ${power}/${toughness}` : ''}`,
     facts,
     note ?? '',
     offers.length === 1 ? `${offers[0].offer.label} (${offers[0].number})`
@@ -252,7 +253,7 @@
         {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
       </span>
       {#if field && chips.rows.length}
-        <span class="chips" style:bottom={`${below}px`} style:--foot={`${besidePlate ? LINE[plate] : 16}px`}>
+        <span class="chips" style:bottom={`${below}px`} style:--foot={`${foot}px`}>
           {#each chips.rows as row}
             <span class="chip-row">
               {#each row as { badge: chip, label: boardLabel }}

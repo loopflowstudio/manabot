@@ -45,7 +45,7 @@ const recordStatuses: Record<string, string> = {
 
 function abilitiesOf(p: PermanentState, face: CardFace | null): Badge[] {
   const effects = p.effects ?? [];
-  const fromRecord = (timestamp: number | null | undefined): string => {
+  const fromRecord = (timestamp: number | undefined): string => {
     const record = effects.find(effect => effect.timestamp === timestamp);
     return record ? effectLabel(record) : 'Another ability';
   };
@@ -159,12 +159,13 @@ interface Position {
 
 /** Each width describes a physical row from top to bottom. The P/T plate can
  * narrow the final row. Inspect keeps the full reading of every compact chip. */
-export function fitBadges(badges: Badge[], widths: number[], fullWidth: number, measure: (text: string) => number) {
+export function fitBadges(badges: Badge[], widths: number[], measure: (text: string) => number) {
   const board = badges.filter(b => !b.inspectOnly);
   if (!board.length || !widths.length) return { rows: [], hidden: board };
+  const widest = Math.max(...widths);
   const chips = board.map(badge => {
     const full = badge.kind === 'sick' ? 16 : measure(badge.label);
-    if (full > fullWidth && badge.shortLabel) {
+    if (full > widest && badge.shortLabel) {
       return { badge, label: badge.shortLabel, width: measure(badge.shortLabel) };
     }
     return { badge, label: badge.label, width: full };
@@ -184,7 +185,7 @@ export function fitBadges(badges: Badge[], widths: number[], fullWidth: number, 
     let remaining = chips.length;
     for (const chip of chips) {
       const next = position(cursor, chip.width);
-      if (next && (!reserveCount || remaining === 1 || position(next, measure(`+${remaining - 1}`)))) {
+      if (next && (!reserveCount || position(next, measure(`+${remaining - 1}`)))) {
         cursor = next;
         rows[cursor.row].push(chip);
         remaining--;

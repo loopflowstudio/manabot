@@ -120,7 +120,7 @@ export interface RestrictionView {
 }
 
 export interface PermanentState {
-  /** Effective evergreen grants, keyed by keyword. A record grant names its timestamp. */
+  /** Effective evergreen grants, keyed by keyword: granting permanent, effect timestamp, or counter. */
   keyword_grants?: Record<string, AbilityGrantView>;
   keyword_abilities?: KeywordAbilityView[];
   attacks_despite_defender?: boolean;

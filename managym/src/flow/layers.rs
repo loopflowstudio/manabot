@@ -6,7 +6,7 @@ use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
         ability::{
-            Ability, AbilitySource, Condition, Effect, EffectValue, EffectiveTrigger, Except,
+            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
             GrantClock, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
@@ -67,7 +67,7 @@ impl Layer {
 
 #[derive(Clone, Debug, PartialEq)]
 struct StaticEntry {
-    origin: AbilitySource,
+    origin: AbilityOrigin,
     key: Vec<usize>,
     timestamp: PublicId,
     ability: StaticAbility,
@@ -92,7 +92,7 @@ pub(super) struct Context<'a> {
 /// first application to objects (CR 613.6). Resolved records already own targets.
 #[derive(Clone)]
 struct Node {
-    origin: AbilitySource,
+    origin: AbilityOrigin,
     source: PermanentId,
     key: Vec<usize>,
     timestamp: PublicId,
@@ -312,7 +312,7 @@ impl Node {
     /// Counters and resolved records already bind one affected object; their
     /// existence and membership no longer depend on a generating static ability.
     fn resolved(
-        origin: AbilitySource,
+        origin: AbilityOrigin,
         source: PermanentId,
         key: Vec<usize>,
         timestamp: PublicId,
@@ -477,7 +477,7 @@ impl<'a> Context<'a> {
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
                     nodes.push(Node::resolved(
-                        AbilitySource::Counter(kind),
+                        AbilityOrigin::Counter,
                         id,
                         vec![slot, usize::MAX - 1, kind as usize],
                         p.keyword_counter_timestamps
@@ -501,7 +501,7 @@ impl<'a> Context<'a> {
                     Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
                 };
                 nodes.push(Node::resolved(
-                    AbilitySource::Effect(record.timestamp),
+                    AbilityOrigin::Effect(record.timestamp),
                     id,
                     vec![slot, usize::MAX, i],
                     record.timestamp,
@@ -604,7 +604,7 @@ impl<'a> Context<'a> {
                     .iter()
                     .cloned()
                     .map(|ability| EffectiveTrigger {
-                        source: AbilitySource::Own,
+                        origin: AbilityOrigin::Own,
                         clock: None,
                         ability,
                         program: false,
@@ -617,7 +617,7 @@ impl<'a> Context<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, ability)| StaticEntry {
-                    origin: AbilitySource::Own,
+                    origin: AbilityOrigin::Own,
                     key: vec![id.0, i],
                     timestamp: permanent.timestamp,
                     ability: ability.clone(),
@@ -1309,10 +1309,10 @@ impl<'a> Context<'a> {
         };
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
-            let source = if id == node.source {
+            let origin = if id == node.source {
                 node.origin
             } else {
-                AbilitySource::Permanent(node.source)
+                AbilityOrigin::Permanent(node.source)
             };
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
@@ -1336,7 +1336,7 @@ impl<'a> Context<'a> {
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
-                                    source,
+                                    origin,
                                     clock: clock(&ability, index),
                                     ability,
                                     program: false,
@@ -1347,7 +1347,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
-                        source,
+                        origin,
                         clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
@@ -1424,12 +1424,12 @@ impl<'a> Context<'a> {
                     Modification::SetColors(colors) => view.colors = colors.clone(),
                     Modification::AddColors(colors) => view.colors.extend(colors),
                     Modification::AddKeywords(keywords) => {
-                        if source != AbilitySource::Own {
+                        if origin != AbilityOrigin::Own {
                             view.keyword_grants.extend(
                                 keywords
                                     .without(view.keywords)
                                     .iter()
-                                    .map(|keyword| (keyword, source)),
+                                    .map(|keyword| (keyword, origin)),
                             );
                         } else {
                             view.keyword_grants
@@ -1449,7 +1449,7 @@ impl<'a> Context<'a> {
                     Modification::Firebending(n) => {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
-                            source,
+                            origin,
                             clock: None,
                             ability: Ability::firebending(*n),
                             program: true,
@@ -1460,7 +1460,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
-                            source,
+                            origin,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
@@ -1470,7 +1470,7 @@ impl<'a> Context<'a> {
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
-                                source,
+                                origin,
                                 clock: None,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,
@@ -1479,7 +1479,7 @@ impl<'a> Context<'a> {
                         let mut key = node.key.clone();
                         key.extend([id.0, ordinal]);
                         object.statics.push(StaticEntry {
-                            origin: source,
+                            origin,
                             key,
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),

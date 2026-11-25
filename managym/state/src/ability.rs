@@ -3192,10 +3192,10 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
 
 /// Origin of a layer-six ability on its current recipient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AbilitySource {
+pub enum AbilityOrigin {
     Own,
     Effect(PublicId),
-    Counter(CounterKind),
+    Counter,
     Permanent(PermanentId),
 }
 
@@ -3203,9 +3203,9 @@ pub enum AbilitySource {
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectiveTrigger {
-    /// Battlefield inspection uses the live source before this trigger leaves play.
+    /// Battlefield inspection uses the live origin before this trigger leaves play.
     #[serde(skip)]
-    pub source: AbilitySource,
+    pub origin: AbilityOrigin,
     /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<GrantClock>,

@@ -415,7 +415,7 @@ pub struct ContinuousEffectView {
     pub timestamp: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AbilityGrantView {
     #[serde(default, skip_serializing_if = "Option::is_none")]

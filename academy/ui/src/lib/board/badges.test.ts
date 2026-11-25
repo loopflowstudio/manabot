@@ -82,31 +82,32 @@ describe('whole-chip fitting', () => {
   const measure = (s: string) => s.length * 8 + 10;
   it('keeps a shorter ability beside overflow when a longer ability would displace it', () => {
     const badges = labels('First strike', 'Prowess', 'Ward {2}');
-    const result = fitBadges(badges, [108], 108, measure);
+    const result = fitBadges(badges, [108], measure);
     expect(result.rows.map(row => row.map(chip => chip.label))).toEqual([['Prowess', '+2']]);
     expect(result.hidden.map(b => b.label)).toEqual(['First strike', 'Ward {2}']);
   });
   it('reserves space for the actual number of hidden chips', () => {
     const badges = labels('AA', 'BB', ...Array(9).fill('Exceeds width'));
-    const result = fitBadges(badges, [60], 60, measure);
+    const result = fitBadges(badges, [60], measure);
     expect(result.rows[0].map(chip => chip.label)).toEqual(['+11']);
     expect(result.hidden).toEqual(badges);
   });
   it('places two full labels on a turned card and compacts only at narrow full widths', () => {
     const tyLee = board(creature({ restrictions: [{ kind: 'doesnt_untap' }], keyword_abilities: [{ label: 'Prowess' }] }));
     const textWidth = (s: string) => 6 * s.length + 10;
-    expect(fitBadges(tyLee, [106, 70], 106, textWidth).rows.map(row => row.map(c => c.label)))
+    expect(fitBadges(tyLee, [106, 70], textWidth).rows.map(row => row.map(c => c.label)))
       .toEqual([["Doesn't untap"], ['Prowess']]);
     const cadets = board(creature({ keyword_abilities: [{ label: 'Firebending 2' }] }));
-    expect(fitBadges(cadets, [74, 42], 74, textWidth).rows[0][0].label).toBe('Firebend 2');
-    expect(fitBadges(cadets, [106], 106, textWidth).rows[0][0].label).toBe('Firebending 2');
+    expect(fitBadges(cadets, [74, 42], textWidth).rows[0][0].label).toBe('Firebend 2');
+    expect(fitBadges(cadets, [74], textWidth).rows[0][0].label).toBe('Firebend 2');
+    expect(fitBadges(cadets, [106], textWidth).rows[0][0].label).toBe('Firebending 2');
   });
   it('fits the spiral at 16px; the name takes overflow when the plate fills the last row', () => {
     const sick: Badge = { kind: 'sick', label: 'Summoning sick' };
     const badges = [sick, ...labels('Ward {2}'), { kind: 'ability', label: 'Flash', inspectOnly: true } satisfies Badge];
-    expect(fitBadges(badges, [74, 74], 74, measure).rows.map(row => row.map(c => c.badge))).toEqual([[sick], [badges[1]]]);
+    expect(fitBadges(badges, [74, 74], measure).rows.map(row => row.map(c => c.badge))).toEqual([[sick], [badges[1]]]);
     for (const widths of [[], [10]]) {
-      expect(fitBadges(badges, widths, 74, measure)).toEqual({ rows: [], hidden: badges.slice(0, 2) });
+      expect(fitBadges(badges, widths, measure)).toEqual({ rows: [], hidden: badges.slice(0, 2) });
     }
   });
 });

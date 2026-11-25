@@ -10,7 +10,7 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AbilitySource, Condition, Effect, EffectValue, PaymentCost, Per,
+            Ability, AbilityOrigin, Condition, Effect, EffectValue, PaymentCost, Per,
             TriggerCondition, TriggerSubject,
         },
         card::{Keywords, Restriction},
@@ -91,31 +91,36 @@ impl Game {
         let ids = sides
             .into_iter()
             .flat_map(|side| self.iter_battlefield_including_phased_out(side));
+        let grant = |origin| match origin {
+            AbilityOrigin::Permanent(id) => AbilityGrantView {
+                source: Some(self.characteristics(id).name.clone()),
+                ..Default::default()
+            },
+            AbilityOrigin::Effect(timestamp) => AbilityGrantView {
+                effect_timestamp: Some(timestamp.0),
+                ..Default::default()
+            },
+            AbilityOrigin::Counter => AbilityGrantView {
+                counter: true,
+                ..Default::default()
+            },
+            AbilityOrigin::Own => AbilityGrantView::default(),
+        };
         self.characteristics_many(ids)
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 let controller = permanent.controller;
-                let grant = |source| AbilityGrantView {
-                    source: match source {
-                        AbilitySource::Permanent(id) => Some(self.characteristics(id).name.clone()),
-                        _ => None,
-                    },
-                    effect_timestamp: match source {
-                        AbilitySource::Effect(timestamp) => Some(timestamp.0),
-                        _ => None,
-                    },
-                    counter: matches!(source, AbilitySource::Counter(_)),
-                };
                 let keyword_abilities = view
                     .triggered_abilities
                     .iter()
                     .filter_map(|trigger| {
-                        let origin = grant(trigger.source);
+                        let label = keyword_label(&trigger.ability, |condition| {
+                            self.check_static_condition(condition, controller)
+                        })?;
+                        let origin = grant(trigger.origin);
                         Some(KeywordAbilityView {
-                            label: keyword_label(&trigger.ability, |condition| {
-                                self.check_static_condition(condition, controller)
-                            })?,
-                            granted: trigger.source != AbilitySource::Own,
+                            label,
+                            granted: trigger.origin != AbilityOrigin::Own,
                             effect_timestamp: origin.effect_timestamp,
                             source: origin.source,
                         })
