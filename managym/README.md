@@ -547,6 +547,11 @@ countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
 
+Thousand-Year Storm counts earlier instant and sorcery casts by its controller,
+including spells cast before it entered. Each copy offers its own target choices.
+If the original was countered, the copy takes the spell's last targets, mode and X.
+Keeping a target with ward triggers ward for the copy.
+
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)
 covers both ordinary mana and waterbend without a card-specific decision.

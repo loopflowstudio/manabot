@@ -325,6 +325,13 @@ pub struct TurnState {
 }
 
 impl TurnState {
+    /// Earlier casts by this player, bounded by the exact stack appearance.
+    pub fn casts_before(&self, caster: PlayerId, spell: ObjectId) -> Option<&[RecordedCast]> {
+        let casts = &self.spells_cast[caster.0];
+        let index = casts.iter().position(|cast| cast.object == spell)?;
+        Some(&casts[..index])
+    }
+
     pub fn creature_died_this_turn(&self) -> bool {
         self.history.iter().any(|seat| seat.creatures_died > 0)
     }

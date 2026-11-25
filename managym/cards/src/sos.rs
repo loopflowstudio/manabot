@@ -2,9 +2,8 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect,
-        EffectValue, LibraryEnd, ObjectSelector, PaymentCost, Per, PlayerSelector, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, Condition, Effect, EffectValue, LibraryEnd, ObjectSelector, PaymentCost,
+        Per, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
@@ -686,16 +685,9 @@ fn pigment_wrangler() -> CardDefinition {
                 mana_cost: Some(ManaCost::parse("{R}")),
                 types: CardTypes::new([CardType::Sorcery]),
                 text_box: spell_text.into(),
-                spell_effects: vec![Effect::CreateDelayedTrigger {
-                    remember: None,
-                    event: DelayedEvent::YouCastSpell(Box::new(CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    })),
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::ThisTurn,
-                    effects: vec![Effect::CopyTriggeringObject],
-                }],
+                spell_effects: vec![Effect::copy_next_spell_this_turn(
+                    CardPredicate::instant_or_sorcery(),
+                )],
                 ..Default::default()
             })
         },

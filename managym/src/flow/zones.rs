@@ -438,11 +438,11 @@ impl Game {
     /// creation without emitting a rules zone-change event.
     pub(crate) fn create_spell_copy(
         &mut self,
-        source: ObjectId,
+        source: Object,
         id: PublicId,
         controller: PlayerId,
     ) -> ObjectId {
-        let copy = Object::spell_copy(self.state[source].clone(), id, controller);
+        let copy = Object::spell_copy(source, id, controller);
         let object = self.add_object(copy);
         self.state.place_object(object, controller, ZoneType::Stack);
         self.capture_object_move(object, None, Some(ZoneType::Stack), controller);
@@ -764,7 +764,25 @@ impl Game {
             .map(|index| self.state.stack_objects_mut().remove(index))
         {
             Some(StackObject::Spell(spell)) => {
-                let lki = self.spell_lki(&spell);
+                let mut lki = self.spell_lki(&spell);
+                // Only triggers still referring to this stack appearance can copy it.
+                // Capture after any retargets, before the zone change restores its face.
+                let context = Some(Target::StackSpell(spell.object));
+                if self
+                    .unplaced_triggers()
+                    .any(|trigger| trigger.context == context)
+                    || self.state.stack_objects.iter().any(|item| {
+                        matches!(item,
+                        StackObject::TriggeredAbility(trigger) if trigger.context == context)
+                    })
+                {
+                    lki.copiable = Some(std::sync::Arc::new(
+                        crate::state::stack_object::CopiableSpell {
+                            spell: spell.clone(),
+                            values: self.state[spell.object].copiable_values(),
+                        },
+                    ));
+                }
                 self.state.spell_lki_mut().insert(spell.object, lki);
                 (to_zone == ZoneType::Battlefield).then_some(CastFacts {
                     x: spell.x,
@@ -1079,6 +1097,7 @@ impl Game {
     fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
         let object = &self.state[spell.object];
         SpellLki {
+            copiable: None,
             object: spell.object,
             definition_id: object.definition_id,
             controller: spell.controller,

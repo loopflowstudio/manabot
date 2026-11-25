@@ -1493,6 +1493,18 @@
       "B"
     ]
   },
+  "Bolt Bend": {
+    "name": "Bolt Bend",
+    "mana_cost": "{3}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {3} less to cast if you control a creature with power 4 or greater.\nChange the target of target spell or ability with a single target.",
+    "colors": [
+      "R"
+    ]
+  },
   "Boltwave": {
     "name": "Boltwave",
     "mana_cost": "{R}",
@@ -10178,6 +10190,19 @@
       "G"
     ]
   },
+  "Teach by Example": {
+    "name": "Teach by Example",
+    "mana_cost": "{U/R}{U/R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({U/R} can be paid with either {U} or {R}.)\nWhen you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
   "Team Avatar": {
     "name": "Team Avatar",
     "mana_cost": "{2}{W}",
@@ -10674,6 +10699,19 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {G} or {U}.",
     "colors": []
+  },
+  "Thousand-Year Storm": {
+    "name": "Thousand-Year Storm",
+    "mana_cost": "{4}{U}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you cast an instant or sorcery spell, copy it for each other instant and sorcery spell you've cast before it this turn. You may choose new targets for the copies.",
+    "colors": [
+      "R",
+      "U"
+    ]
   },
   "Thranduil, Sindarin Liege": {
     "name": "Thranduil, Sindarin Liege",

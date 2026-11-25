@@ -127,6 +127,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "last known definition",
     "last known spell",
     "last known spell profile",
+    "last known kicker",
     "legend group",
     "legends kept",
     "library end",
@@ -368,6 +369,15 @@ impl<'a> Projection<'a> {
         );
         if !spell.profile.is_front() {
             self.field("last known spell profile", &spell.profile);
+        }
+        if let Some(copy) = &spell.copiable {
+            self.field("X", &copy.spell.x);
+            self.field("last known kicker", &copy.spell.kicked);
+            self.field("mode", &copy.spell.mode);
+            self.field("target clauses", &copy.spell.target_req_indices);
+            for target in &copy.spell.targets {
+                self.target("target", *target);
+            }
         }
         let game = self.game;
         self.summary(|| {

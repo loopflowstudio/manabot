@@ -1196,6 +1196,10 @@ fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
         EffectValue::PermanentsSacrificedThisTurn => {
             "the number of permanents you have sacrificed this turn".into()
         }
+        EffectValue::SpellsCastBeforeTriggering(predicate) => format!(
+            "the number of {} you cast before the triggering spell this turn",
+            predicate_description(predicate, "spells")
+        ),
         EffectValue::SpellsCastThisTurn => "the number of spells you've cast this turn".into(),
     }
 }
@@ -1475,6 +1479,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         GainLife { amount } => format!("You gain life equal to {}", value_description(triggering, amount)),
         FightLastTarget => "The first target fights the last target".into(),
         ShuffleLibrary => "Shuffle your library".into(),
+        Repeat { count, effect } => format!("Repeat {} times: {}", value_description(triggering, count), effects_description_in(triggering, std::slice::from_ref(effect))),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         Surveil { count } => format!("Surveil {count}"),

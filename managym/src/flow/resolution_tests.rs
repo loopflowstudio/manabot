@@ -5146,7 +5146,7 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
         game.move_object(object, ZoneType::Battlefield)
     });
     let id = game.state.id_gen.next_id();
-    let unrelated = game.create_spell_copy(sources[0], id, player);
+    let unrelated = game.create_spell_copy(game.state[sources[0]].clone(), id, player);
     let unrelated = game.move_object(unrelated, ZoneType::Exile);
     game.finish_action_step();
     assert_eq!(game.state.zones.zone_of(unrelated), None);

@@ -11,7 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{AbilitySource, PlayerId, Target},
+        game_object::{AbilitySource, Object, PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -123,15 +123,27 @@ impl Game {
             })
     }
 
-    /// Change slot `slot` of the stack object to `target`; the newly
-    /// targeted permanent sees it become a target (ward, CR 702.21).
-    pub(crate) fn change_stack_target(&mut self, object: Target, slot: usize, target: Target) {
-        let Some(index) = self.stack_index_of(object) else {
-            return;
-        };
-        let controller = self.state.stack_objects[index].controller();
-        self.state.stack_objects[index].targets_mut()[slot] = target;
-        self.emit_permanents_targeted(&[target], object, controller);
+    /// A copy becomes a source of targeting events once its final targets have
+    /// been chosen (CR 707.10c), including targets the controller kept.
+    pub(crate) fn next_copy_target(
+        &mut self,
+        player: PlayerId,
+        copy: Target,
+        slot: usize,
+    ) -> Option<Decision> {
+        let next = self.next_retarget(player, copy, slot, true);
+        if next.is_none() {
+            self.emit_copy_targets(copy);
+        }
+        next
+    }
+
+    pub(crate) fn emit_copy_targets(&mut self, copy: Target) {
+        let index = self.stack_index_of(copy).expect("newly created stack copy");
+        let stacked = &self.state.stack_objects[index];
+        let targets = stacked.targets().to_vec();
+        let controller = stacked.controller();
+        self.emit_permanents_targeted(&targets, copy, controller);
     }
 
     /// Copy a spell or ability on the stack under `controller` (CR 707.10);
@@ -141,11 +153,31 @@ impl Game {
         object: Target,
         controller: PlayerId,
     ) -> Option<Target> {
-        let index = self.stack_index_of(object)?;
+        let (original, departed) = match self.stack_index_of(object) {
+            Some(index) => (self.state.stack_objects[index].clone(), None),
+            None => {
+                let Target::StackSpell(object) = object else {
+                    return None;
+                };
+                let lki = self.state.spell_lki.get(&object)?;
+                let saved = lki.copiable.as_ref()?;
+                let mut source = Object::from_definition(
+                    saved.spell.id,
+                    controller,
+                    lki.definition_id,
+                    saved.values.printed.clone(),
+                    false,
+                );
+                source.set_front_face(saved.values.front.clone());
+                source.copy = saved.values.copy.clone();
+                (StackObject::Spell(saved.spell.clone()), Some(source))
+            }
+        };
         let id = self.state.id_gen_mut().next_id();
-        let copy = match self.state.stack_objects[index].clone() {
+        let copy = match original {
             StackObject::Spell(mut spell) => {
-                spell.object = self.create_spell_copy(spell.object, id, controller);
+                let source = departed.unwrap_or_else(|| self.state[spell.object].clone());
+                spell.object = self.create_spell_copy(source, id, controller);
                 // A stack copy was never cast using the original’s permission.
                 spell.flashback = false;
                 spell.from_prepared = false;

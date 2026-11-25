@@ -279,6 +279,20 @@ impl Game {
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
+            EffectValue::SpellsCastBeforeTriggering(predicate) => {
+                let Some(Target::StackSpell(spell)) = frame.context_target else {
+                    return 0;
+                };
+                self.state
+                    .turn
+                    .casts_before(controller, spell)
+                    .map_or(0, |casts| {
+                        casts
+                            .iter()
+                            .filter(|cast| self.recorded_cast_matches_predicate(**cast, predicate))
+                            .count() as i32
+                    })
+            }
             EffectValue::SpellsCastThisTurn => {
                 self.state.turn.spells_cast[controller.0].len() as i32
             }
@@ -1293,7 +1307,7 @@ impl Game {
             }
             Effect::CopyTriggeringObject => {
                 let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
-                self.next_retarget(frame.controller, copy, 0, true)
+                self.next_copy_target(frame.controller, copy, 0)
             }
             Effect::ChangeTarget { .. } => {
                 let object = self.present_primary_target(frame)?;
@@ -1314,8 +1328,6 @@ impl Game {
             }
             Effect::CopyTriggeringSpellForEach { each } => {
                 let spell = frame.context_target?;
-                let index = self.stack_index_of(spell)?;
-                let slots = self.state.stack_objects[index].targets().len();
                 let legal = self.retarget_candidates_for(spell, 0);
                 let onto: Vec<Target> = self
                     .selected_permanents(each, frame)
@@ -1327,9 +1339,13 @@ impl Game {
                     let Some(copy) = self.copy_stack_object(spell, frame.controller) else {
                         break;
                     };
-                    for slot in 0..slots {
-                        self.change_stack_target(copy, slot, target);
-                    }
+                    self.state
+                        .stack_objects_mut()
+                        .last_mut()
+                        .expect("new stack copy")
+                        .targets_mut()
+                        .fill(target);
+                    self.emit_copy_targets(copy);
                 }
                 None
             }
@@ -2150,6 +2166,19 @@ impl Game {
             Effect::GainLife { amount } => {
                 let amount = self.effect_value(amount, frame);
                 self.gain_life(frame.controller, amount);
+                None
+            }
+            Effect::Repeat { count, effect } => {
+                let count = self.effect_value(count, frame);
+                if count > 1 {
+                    frame.queue.push_front(Effect::Repeat {
+                        count: (count - 1).into(),
+                        effect: effect.clone(),
+                    });
+                }
+                if count > 0 {
+                    frame.queue.push_front((**effect).clone());
+                }
                 None
             }
             Effect::OnNthResolutionThisTurn { n, effect } => {

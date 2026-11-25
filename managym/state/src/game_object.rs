@@ -282,9 +282,9 @@ pub enum ObjectLookupError {
     WrongZone,
 }
 
-/// Copiable values changed by a copy effect or by turning a back face up.
+/// The printed characteristics, front face and copy effect an object can pass to a copy.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct ChangedCopiableValues {
+pub struct CopiableValues {
     pub printed: Arc<PrintedCharacteristics>,
     pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
     pub copy: Option<crate::effect::CopyEffect>,
@@ -298,7 +298,7 @@ pub struct ChangedCopiableValues {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub copiable: Option<Arc<ChangedCopiableValues>>,
+    pub copiable: Option<Arc<CopiableValues>>,
     /// The exact object this permanent was attached to immediately before departure.
     #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
     pub attached_to: Option<ObjectId>,
@@ -642,6 +642,14 @@ impl Object {
             definition,
             front: None,
             printed: None,
+        }
+    }
+
+    pub fn copiable_values(&self) -> CopiableValues {
+        CopiableValues {
+            printed: self.copiable_definition(),
+            front: self.front.clone(),
+            copy: self.copy.clone(),
         }
     }
 

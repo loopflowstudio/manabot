@@ -1443,6 +1443,17 @@ impl Game {
         }
     }
 
+    /// All occurrences waiting to join the stack, including the group being ordered.
+    pub(crate) fn unplaced_triggers(&self) -> impl Iterator<Item = &PendingTrigger> {
+        let placing = self
+            .state
+            .trigger_placement
+            .as_deref()
+            .into_iter()
+            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
+        self.state.pending_triggers.iter().chain(placing)
+    }
+
     /// CR 603.8: a state trigger doesn't trigger again while that exact
     /// source's occurrence waits to be put on the stack or is on it.
     fn state_trigger_waiting(&self, source: Option<ObjectId>, ability_index: usize) -> bool {
@@ -1453,13 +1464,7 @@ impl Game {
                 && trigger.ability_index == ability_index
                 && trigger.inline_effects.is_none()
         };
-        let placing = self
-            .state
-            .trigger_placement
-            .as_deref()
-            .into_iter()
-            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
-        self.state.pending_triggers.iter().chain(placing).any(same)
+        self.unplaced_triggers().any(same)
             || self.state.stack_objects.iter().any(|item| {
                 matches!(item, StackObject::TriggeredAbility(trigger)
                     if trigger.source_ref() == source
@@ -1517,12 +1522,15 @@ impl Game {
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
         if replicated > 0 {
-            let copies = vec![Effect::CopyTriggeringObject; usize::from(replicated)];
+            let copies = Effect::Repeat {
+                count: i32::from(replicated).into(),
+                effect: Box::new(Effect::CopyTriggeringObject),
+            };
             self.enqueue_inline_trigger(
                 object,
                 source_ref,
                 caster,
-                copies,
+                vec![copies],
                 Some(Target::StackSpell(object)),
             );
         }
@@ -2033,9 +2041,10 @@ impl Game {
                         }
                     }
                     && nth.is_none_or(|n| {
-                        self.state.turn.spells_cast[caster.0]
-                            .iter()
-                            .position(|cast| cast.object == *object)
+                        self.state
+                            .turn
+                            .casts_before(caster, *object)
+                            .map(<[_]>::len)
                             == Some(n as usize - 1)
                     })
             }

@@ -41,12 +41,21 @@ pub struct SpellOnStack {
     pub spent: PaymentReceipt,
 }
 
+/// The choices and face to copy if the triggering spell has left the stack.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CopiableSpell {
+    pub spell: SpellOnStack,
+    pub values: super::game_object::CopiableValues,
+}
+
 /// A spell as it is on the stack or last existed there (CR 608.2h): what
 /// "its controller", "the mana spent to cast that spell" and "its mana value"
 /// read after the spell is countered, resolves or otherwise leaves. Copies of
 /// spells are spells too (CR 707.10); one cast without paying mana spent none.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellLki {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copiable: Option<std::sync::Arc<CopiableSpell>>,
     #[serde(serialize_with = "super::game_object::exact")]
     pub object: ObjectId,
     pub definition_id: CardDefId,

@@ -766,3 +766,68 @@ fn foundations_5f_campus_guide() {
     assert_eq!(known.public.get(&0), Some(&definition));
     assert_eq!(known.own.get(&0), Some(&definition));
 }
+
+#[test]
+fn foundations_stack_copy_teach_waits_for_the_next_instant_or_sorcery() {
+    use crate::support::play::resolve_top;
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Gray Ogre", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut s);
+    assert_eq!((s.life(0), s.life(1)), (17, 17));
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(s.life(1), 14);
+}
+
+#[test]
+fn foundations_stack_copy_retained_ward_target_can_counter_the_copy() {
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Lightning Bolt", "Waterfall Aerialist"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let aerialist = s.force_permanent_on_battlefield(1, "Waterfall Aerialist");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(aerialist)));
+    // Opponent's ward goes above the active player's delayed copy trigger.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(1, "Waterfall Aerialist"),
+        [aerialist]
+    );
+}
+
+#[test]
+fn foundations_stack_copy_teach_and_storm_do_not_count_their_copies_as_casts() {
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Thousand-Year Storm", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Thousand-Year Storm");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    // The first Bolt has one copy from each trigger. The second has two
+    // from Storm, counting only Teach and the first Bolt as earlier casts.
+    for life in [11, 2] {
+        cast(&mut s, "Lightning Bolt");
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(&mut s);
+        assert_eq!(s.life(1), life);
+    }
+}

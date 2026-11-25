@@ -49,6 +49,7 @@ const STATES: &[(&str, &str)] = &[
     ("blast-discard", "Incinerating Blast damages an Ogre; N individually selectable cards remain in hand beside decline"),
     ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
     ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
+    ("storm-copies", "Thousand-Year Storm after N earlier Pillar Launch casts, with 2N creatures available for each copy"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
@@ -207,6 +208,14 @@ fn recipe(name: &str, size: usize) -> Recipe {
                     }
                 }
             }
+        }
+        "storm-copies" => {
+            for seat in &mut seats {
+                seat.cycle(&["token.spirit"], size);
+            }
+            seats[0].add("Forest", size + 2);
+            seats[0].hand = vec!["Pillar Launch".into(); size + 2];
+            seats[0].graveyard.push("Thousand-Year Storm".into());
         }
         "collector-food" | "mixed-life-gain" => {
             let seat = &mut seats[0];
@@ -851,6 +860,7 @@ fn reach(root: &Env, label: &str) -> Env {
         let game = env.benchmark_game_mut();
         let decision = game.state.suspended_decision.as_ref().map(|p| &p.decision);
         let reached = match label {
+            "retarget" => matches!(decision, Some(Decision::Retarget { .. })),
             "name" => matches!(decision, Some(Decision::NameCard { .. })),
             "object" => matches!(decision, Some(Decision::ChooseObject { .. })),
             "order" => env.action_space_kind() == Some(ActionSpaceKind::OrderTriggers),
@@ -988,7 +998,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
         activated.step(index as i64).unwrap();
         result.push(("object".into(), reach(&activated, "object")));
     }
-    if recipe.state == "zones" {
+    if matches!(recipe.state.as_str(), "zones" | "storm-copies") {
         let mut stack = root.fork().unwrap();
         for _ in 0..recipe.size {
             let index =
@@ -997,6 +1007,28 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             while stack.action_space_kind() != Some(ActionSpaceKind::Priority) {
                 stack.step(0).unwrap();
             }
+        }
+        if recipe.state == "storm-copies" {
+            stack
+                .scenario_force_battlefield(0, "Thousand-Year Storm", true)
+                .unwrap();
+            stack.scenario_refresh().unwrap();
+            let index = first_action(&mut stack, "cast").expect("triggering Pillar Launch");
+            stack.step(index as i64).unwrap();
+            let mut copy = reach(&stack, "retarget");
+            for ordinal in 1..=recipe.size {
+                assert_eq!(
+                    copy.action_space_kind(),
+                    Some(ActionSpaceKind::ChooseTarget)
+                );
+                result.push((format!("retarget-{ordinal}"), copy.fork().unwrap()));
+                let keep = actions(&mut copy)
+                    .iter()
+                    .position(|a| matches!(a, Action::Decline { .. }))
+                    .expect("keep the copied target");
+                copy.step(keep as i64).unwrap();
+            }
+            return result;
         }
         result.push(("stack".into(), stack));
     }

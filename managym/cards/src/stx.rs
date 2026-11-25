@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        teach_by_example(),
         campus_guide(),
         burrog_befuddler(),
         divide_by_zero(),
@@ -334,6 +335,22 @@ fn campus_guide() -> CardDefinition {
                 }],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn teach_by_example() -> CardDefinition {
+    CardDefinition {
+        key: "stx.teach_by_example",
+        scryfall_id: "aa7fbb9b-50a8-4d18-a667-fe965468ca16",
+        printed: PrintedCharacteristics {
+            name: "Teach by Example".into(),
+            mana_cost: Some(ManaCost::parse("{U/R}{U/R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::copy_next_spell_this_turn(CardPredicate::instant_or_sorcery())],
+            text_box: "({U/R} can be paid with either {U} or {R}.)\nWhen you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.".into(),
             ..Default::default()
         },
         ..Default::default()

@@ -971,6 +971,8 @@ pub enum EffectValue {
     PermanentsSacrificedThisTurn,
     /// "The number of spells you've cast this turn."
     SpellsCastThisTurn,
+    /// Matching casts by the controller strictly before the triggering spell.
+    SpellsCastBeforeTriggering(CardPredicate),
     /// The total power of the creatures tapped to pay the resolving
     /// ability's cost ("charge counters equal to its power", station, CR
     /// 702.184a), each read as the ability resolves or from its last known
@@ -1797,6 +1799,11 @@ pub enum Effect {
     GainLife {
         amount: EffectValue,
     },
+    /// Evaluate the count once, then perform the instruction that many times.
+    Repeat {
+        count: EffectValue,
+        effect: Box<Effect>,
+    },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
     /// ability has resolved this turn, ...").
@@ -2243,6 +2250,7 @@ impl Effect {
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
             Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
             Self::If { condition, .. } if condition.reads(read) => true,
+            Self::Repeat { count, .. } if count.reads(read) => true,
             Self::SelectCards { max, .. } if max.reads(read) => true,
             Self::TriggerModes {
                 up_to: Some(limit), ..
@@ -2298,7 +2306,9 @@ impl Effect {
     /// inspect their programs when those abilities resolve.
     fn any_child_effect(&self, mut test: impl FnMut(&Effect) -> bool) -> bool {
         match self {
-            Self::OnNthResolutionThisTurn { effect, .. } => test(effect),
+            Self::Repeat { effect, .. } | Self::OnNthResolutionThisTurn { effect, .. } => {
+                test(effect)
+            }
             Self::If {
                 then, otherwise, ..
             }
@@ -2463,7 +2473,9 @@ impl Effect {
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target, .. }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
-            Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
+            Effect::Repeat { effect, .. } | Effect::OnNthResolutionThisTurn { effect, .. } => {
+                effect.target_spec()
+            }
             Effect::OptionalPayment {
                 if_paid: then,
                 if_declined: otherwise,
@@ -2631,6 +2643,17 @@ impl Effect {
             until,
             face_down: false,
             condition: None,
+        }
+    }
+
+    /// Copy the next matching spell its controller casts this turn.
+    pub fn copy_next_spell_this_turn(predicate: CardPredicate) -> Self {
+        Self::CreateDelayedTrigger {
+            remember: None,
+            event: DelayedEvent::YouCastSpell(Box::new(predicate)),
+            frequency: DelayedFrequency::Once,
+            expiry: DelayedExpiry::ThisTurn,
+            effects: vec![Self::CopyTriggeringObject],
         }
     }
 
@@ -2854,9 +2877,9 @@ impl EffectValue {
             }
             Self::SourcePower => read == ContextRead::SourcePower,
             Self::PowerTappedToPay => read == ContextRead::PaidCost,
-            Self::TriggeringPower | Self::TriggeringManaValue => {
-                read == ContextRead::TriggeringObject
-            }
+            Self::TriggeringPower
+            | Self::TriggeringManaValue
+            | Self::SpellsCastBeforeTriggering(_) => read == ContextRead::TriggeringObject,
             Self::Half(inner) | Self::Scaled { value: inner, .. } => inner.reads(read),
             Self::Property { of, .. }
             | Self::Objects { of, .. }
@@ -2935,6 +2958,7 @@ impl EffectValue {
             | Self::TriggeringPower
             | Self::TriggeringManaValue
             | Self::TargetPower
+            | Self::SpellsCastBeforeTriggering(_)
             | Self::TargetToughness => true,
             _ => false,
         }

@@ -1,6 +1,7 @@
 //! Guilds of Ravnica.
 use managym_state::ability::{
-    Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition, TriggerSubject,
+    Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
+    TriggerSubject,
 };
 use managym_state::card::{
     CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -10,6 +11,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        thousand_year_storm(),
         healer_s_hawk(),
         midnight_reaper(),
         burglar_rat(),
@@ -145,6 +147,29 @@ fn circuitous_route() -> CardDefinition {
                 )],
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn thousand_year_storm() -> CardDefinition {
+    CardDefinition {
+        key: "grn.thousand_year_storm",
+        scryfall_id: "270a0863-7d07-43f0-925d-a8ce0383a1cb",
+        printed: PrintedCharacteristics {
+            name: "Thousand-Year Storm".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::instant_or_sorcery()),
+                intervening_if: None,
+                effects: vec![Effect::Repeat {
+                    count: EffectValue::SpellsCastBeforeTriggering(CardPredicate::instant_or_sorcery()),
+                    effect: Box::new(Effect::CopyTriggeringObject),
+                }],
+            }],
+            text_box: "Whenever you cast an instant or sorcery spell, copy it for each other instant and sorcery spell you've cast before it this turn. You may choose new targets for the copies.".into(),
             ..Default::default()
         },
         ..Default::default()

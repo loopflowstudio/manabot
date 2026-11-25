@@ -225,6 +225,9 @@ life or high of poison for a player who can lose ends the game as
 `draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
 permanents never repeats a fingerprint, so it is never drawn; 10,000
 resolutions draw a loop that grows something without bound.
+Version 32 includes the last copiable face and casting choices of a departed
+spell when a trigger still refers to it. A suspended repeated instruction
+records the remaining count in its resolution frame.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.

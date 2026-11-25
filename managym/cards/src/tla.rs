@@ -5506,15 +5506,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 effects: vec![
                     Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                    Effect::CreateDelayedTrigger {
-                        remember: None,
-                        event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::subtype(
-                            "Lesson",
-                        ))),
-                        frequency: DelayedFrequency::Once,
-                        expiry: DelayedExpiry::ThisTurn,
-                        effects: vec![Effect::CopyTriggeringObject],
-                    },
+                    Effect::copy_next_spell_this_turn(CardPredicate::subtype("Lesson")),
                 ],
                 ..Default::default()
             }],

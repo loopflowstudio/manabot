@@ -2631,10 +2631,15 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }
-                self.change_stack_target(object, slot, *target);
-                let next = self
-                    .next_retarget(player, object, slot + 1, may_keep)
-                    .filter(|_| may_keep);
+                let index = self.stack_index_of(object).expect("validated retarget");
+                let controller = self.state.stack_objects[index].controller();
+                self.state.stack_objects[index].targets_mut()[slot] = *target;
+                let next = if may_keep {
+                    self.next_copy_target(player, object, slot + 1)
+                } else {
+                    self.emit_permanents_targeted(&[*target], object, controller);
+                    None
+                };
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2647,7 +2652,7 @@ impl Game {
                 },
                 Action::Decline { .. },
             ) => {
-                let next = self.next_retarget(*player, *object, *slot + 1, true);
+                let next = self.next_copy_target(*player, *object, *slot + 1);
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }

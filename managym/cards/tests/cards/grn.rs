@@ -133,3 +133,87 @@ fn foundations_5f_circuitous_route() {
         assert!(tapped(&s, permanent));
     }
 }
+
+#[test]
+fn foundations_stack_copy_storm_counts_only_earlier_matching_casts() {
+    use crate::support::{
+        game::{move_card, move_to_hand},
+        inspect::{now, offered_targets},
+        play::{cast_card, resolve_top},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{game_object::Target, zone::ZoneType},
+    };
+
+    for (prior, counter_original) in [(0, false), (1, false), (3, true), (8, true)] {
+        let mut s = five_color_setup(&[
+            "Thousand-Year Storm",
+            "Giant Growth",
+            "Lightning Bolt",
+            "Gray Ogre",
+            "Counterspell",
+        ]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        cast(&mut s, "Gray Ogre");
+        settle(&mut s);
+        let ogre = s.battlefield_permanents_named(0, "Gray Ogre")[0];
+        let growth = move_to_hand(&mut s, "Giant Growth");
+        for _ in 0..prior {
+            s.set_player_mana_pool(0, "G");
+            let appearance = move_card(&mut s, growth, ZoneType::Hand);
+            cast_card(&mut s, appearance);
+            assert!(s.choose_target(Target::Permanent(ogre)));
+            settle(&mut s);
+        }
+        s.set_player_mana_pool(0, "10UURRR");
+        let storm = s.force_permanent_on_battlefield(0, "Thousand-Year Storm");
+        let spirits: Vec<_> = (0..16)
+            .map(|_| {
+                s.game_mut()
+                    .create_token("token.spirit", PlayerId(1), false)
+                    .unwrap()
+            })
+            .collect();
+        let bolt = cast(&mut s, "Lightning Bolt");
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        if counter_original {
+            // A later instant by the same caster does not contribute. Removing
+            // Storm first leaves just the original Storm trigger on the stack.
+            let source = s.game().permanent_object(storm).unwrap();
+            s.game_mut().move_object(source, ZoneType::Graveyard);
+            cast(&mut s, "Counterspell");
+            assert!(s.choose_target(Target::StackSpell(now(&s, bolt))));
+            resolve_top(&mut s);
+        }
+        resolve_top(&mut s);
+        let mut fork = s.clone();
+        for state in [&mut s, &mut fork] {
+            for spirit in spirits.iter().take(prior) {
+                assert_eq!(state.action_space().kind, ActionSpaceKind::ChooseTarget);
+                assert!(spirits
+                    .iter()
+                    .all(|id| offered_targets(state).contains(&Target::Permanent(*id))));
+                assert!(state.choose_target(Target::Permanent(*spirit)));
+            }
+            assert_eq!(
+                state.game().state.stack_objects.len(),
+                prior + usize::from(!counter_original)
+            );
+            settle(state);
+            assert_eq!(state.life(1), if counter_original { 20 } else { 17 });
+            assert_eq!(
+                state.battlefield_permanents_named(1, "Spirit").len(),
+                16 - prior
+            );
+            assert_eq!(
+                state.game().state.turn.spells_cast[0].len(),
+                prior + 2 + usize::from(counter_original)
+            );
+        }
+        assert_eq!(
+            s.game().state.deterministic_hash(),
+            fork.game().state.deterministic_hash()
+        );
+    }
+}

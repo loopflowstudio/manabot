@@ -801,6 +801,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::RemoveAllCounters { .. } => "Effect::RemoveAllCounters",
         Effect::GivePlayerCounters { .. } => "Effect::GivePlayerCounters",
         Effect::GainLife { .. } => "Effect::GainLife",
+        Effect::Repeat { .. } => "Effect::Repeat",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
         Effect::Surveil { .. } => "Effect::Surveil",
@@ -858,7 +859,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 94;
+const EFFECT_VARIANTS: usize = 95;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -970,6 +971,10 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::create_tokens("token.clue", value()),
         Effect::gain_life(value()),
+        Effect::Repeat {
+            count: value(),
+            effect: Box::new(Effect::CopyTriggeringObject),
+        },
         Effect::OnNthResolutionThisTurn {
             n: 2,
             effect: Box::new(Effect::DrawCards {
