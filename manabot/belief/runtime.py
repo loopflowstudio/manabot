@@ -180,6 +180,3 @@ class ManabotPlayer:
             observation,
             acting=acting,
         )
-
-
-__all__ = ["ManabotPlayer", "viewer_decision_from_engine"]

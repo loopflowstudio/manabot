@@ -27,6 +27,14 @@ from manabot.policy.decision_memory import (
     record_chunks,
 )
 
+__all__ = [
+    "MemoryArchive",
+    "MemoryCapacities",
+    "Prefix",
+    "archive_memory",
+    "restore_memory",
+]
+
 if TYPE_CHECKING:
     from manabot.policy.decision_memory import MemoryFeatures
 

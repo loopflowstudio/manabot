@@ -111,6 +111,15 @@ from manabot.training.state.game_errors import (
 from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig, SlotLoad
 from managym.recording import DecisionAnnotation
 
+__all__ = [
+    "open_collector",
+    "collect",
+    "close_collector",
+    "Collector",
+    "RolloutBatch",
+    "RecordedObservations",
+]
+
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
 # -----------------------------------------------------------------------------
