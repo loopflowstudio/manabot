@@ -1,26 +1,38 @@
-at: 74d1830899934dd23a0fdd21cb621431d5ac20f2
+at: 2ae267f3a80e275a0e5105653e8a25e4d327a46b
 first:
   - path: docs/academy.md
-    why: Battlefield experience and examples the browser pass will render
-  - path: managym/academy/README.md
-    why: Which projection carries effective abilities
+    why: How a player reads and inspects battlefield state
+  - path: academy/ui/DESIGN.md
+    why: Chip priority, colours, spiral and overflow
   - path: managym/src/experience.rs
-    why: Optional permanent fields accepted by historical frame readers
+    why: Optional permanent fields carried by Academy frames
+  - path: managym/src/flow/layers.rs
+    why: Preserves grant provenance through ability loss and regrant
   - path: managym/src/permanent_details.rs
-    why: Ability instances and provenance from effective characteristics
+    why: Projects effective triggers, Defender and restrictions
   - path: managym/src/flow/combat_actions.rs
-    why: Combat legality shares the projected restrictions
+    why: Shares restriction checks with combat legality
   - path: managym/experience_projection.py
-    why: Both seats join details by public permanent ID
+    why: Joins visible permanents by public ID
+  - path: academy/ui/src/lib/board/badges.ts
+    why: One vocabulary for board, speech, inspection and piles
+  - path: academy/ui/src/lib/board/BoardCard.svelte
+    why: Fits whole chips in the measured art area
+  - path: academy/ui/src/lib/board/Inspect.svelte
+    why: Full explanations include every hidden chip
+  - path: academy/ui/src/lib/board/view.ts
+    why: Distinct battlefield states stay in separate piles
   - path: managym/cards/tests/cards/tla.rs
-    why: Conditions, tokens, grants, ability loss and hidden identities
+    why: Conditions, grants, tokens and hidden identities
   - path: tests/academy/test_decision_surface.py
-    why: A resolved Lesson changes both seats’ recovery frames
+    why: Reconnected viewers see the resolved Lesson
+  - path: academy/ui/e2e/card-badges.spec.ts
+    why: Both themes, face outage and crowded boards
   - path: protocol/advice-v1.schema.json
-    why: Regeneration also captures previously omitted advice fields
+    why: Exporter also captures previously omitted advice fields
 hide:
   - path: protocol/experience-v1.schema.json
-    why: Generated from the Rust wire types
+    why: Generated from Rust wire types
   - path: protocol/canonical-replay-v1.schema.json
     why: Same embedded permanent schema
   - path: protocol/study-index-v1.schema.json
@@ -30,4 +42,4 @@ hide:
   - path: protocol/study-v1.schema.json
     why: Same embedded permanent schema
   - path: tests/public_api.json
-    why: Additive snapshot of the new Env method
+    why: Additive snapshot of the Env method
