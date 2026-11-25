@@ -12,6 +12,14 @@ import { possessive } from './view';
 /** Minimum number of participating creatures (attackers + blockers) required to show the table. */
 export const COMBAT_TABLE_MIN_CREATURES = 3;
 
+const NON_COMBAT_BREAK_KINDS = new Set([
+  'cast',
+  'activated',
+  'land_played',
+  'resolved',
+  'ability_resolved',
+]);
+
 export interface CombatParticipant {
   entity: number;
   name: string;
@@ -133,8 +141,11 @@ export function buildCombatTable(
   const combatants = new Set<number>([...attackerSet, ...blockerSet]);
   if (combatants.size < COMBAT_TABLE_MIN_CREATURES) return null;
 
-  // Identify combat damage events (source is a combatant) and deaths caused by them.
+  // Identify authoritative combat damage events (root-caused, non-burn damage from a
+  // combatant) and combat SBA deaths caused by them. Allow uncaused legacy/non-damage
+  // combat SBAs only before any intervening non-combat move or resolution.
   const combatDamageSeqs = new Set<number>();
+  let uncausedCombatSbaOpen = false;
   let hasActiveCombatEvent = false;
   const dealtBySource = new Map<number, { targetName: string; amount: number; isPlayer: boolean }[]>();
   const tookByTarget = new Map<number, number>();
@@ -143,10 +154,17 @@ export function buildCombatTable(
   for (let i = attackIdx + 1; i <= endIdx; i += 1) {
     const event = events[i];
     const kind = event.kind;
-    if (kind.kind === 'damage' && kind.source?.kind === 'object' && combatants.has(kind.source.id.entity)) {
+    if (
+      kind.kind === 'damage'
+      && kind.source?.kind === 'object'
+      && combatants.has(kind.source.id.entity)
+      && event.cause === undefined
+      && event.sound !== 'damage.fire'
+    ) {
       const srcEntity = kind.source.id.entity;
       recordName(event, i, kind.source.id);
       combatDamageSeqs.add(event.seq);
+      uncausedCombatSbaOpen = true;
       if (activeSeqs.has(event.seq)) hasActiveCombatEvent = true;
 
       const list = dealtBySource.get(srcEntity) ?? [];
@@ -160,8 +178,9 @@ export function buildCombatTable(
       }
       dealtBySource.set(srcEntity, list);
     } else if (kind.kind === 'died') {
-      const isCombatDeath = (event.cause !== undefined && combatDamageSeqs.has(event.cause))
-        || (combatDamageSeqs.size > 0 && kind.objects.some(o => combatants.has(o.entity)));
+      const isCombatDeath = event.cause !== undefined
+        ? combatDamageSeqs.has(event.cause)
+        : (uncausedCombatSbaOpen && kind.objects.some(o => combatants.has(o.entity)));
       if (!isCombatDeath) continue;
       if (activeSeqs.has(event.seq)) hasActiveCombatEvent = true;
       const ruleText = event.rule ? tellRule(event.rule) : 'died';
@@ -169,6 +188,8 @@ export function buildCombatTable(
         recordName(event, i, obj);
         diedRule.set(obj.entity, ruleText);
       }
+    } else if (NON_COMBAT_BREAK_KINDS.has(kind.kind)) {
+      uncausedCombatSbaOpen = false;
     }
   }
 

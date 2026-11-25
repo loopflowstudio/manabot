@@ -87,6 +87,7 @@ export interface StopDelta {
 
 export interface StopDeltas {
   objects: Map<number, StopDelta[]>;
+  /** Signed net life delta per player index (`< 0` damage/life loss, `> 0` life gain). */
   players: Map<number, number>;
 }
 
@@ -95,7 +96,7 @@ export function stopHasSeq(stop: Pick<WalkStop, 'seq' | 'seqs'>, seq: number): b
   return stop.seq === seq || stop.seqs.includes(seq);
 }
 
-/** Per-stop damage and counter badges drawn on cards and player plates while walking or looking back. */
+/** Per-stop damage, life, P/T and counter badges drawn on cards and player plates while walking or looking back. */
 export function computeStopDeltas(
   events: readonly PresentationEvent[],
   activeSeqs: ReadonlySet<number>,
@@ -113,8 +114,11 @@ export function computeStopDeltas(
         objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
       } else if (event.kind.target.kind === 'player') {
         const idx = playerIndex(projection, event.kind.target.id);
-        if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
+        if (idx !== null) players.set(idx, (players.get(idx) ?? 0) - event.kind.amount);
       }
+    } else if (event.kind.kind === 'life') {
+      const idx = playerIndex(projection, event.kind.player);
+      if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
     } else if (event.kind.kind === 'counters') {
       const id = event.kind.object.entity;
       const list = objects.get(id) ?? [];
@@ -134,6 +138,9 @@ export function computeStopDeltas(
     const list = objects.get(id) ?? [];
     list.unshift({ kind: 'damage', text: `−${amount}` });
     objects.set(id, list);
+  }
+  for (const [idx, delta] of players) {
+    if (delta === 0) players.delete(idx);
   }
   return { objects, players };
 }

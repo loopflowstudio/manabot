@@ -17,8 +17,8 @@
     live: boolean;
     /** Damage this player was dealt since your last move. */
     damage?: number;
-    /** Damage dealt to this player at the active historical/walk stop. */
-    stopDamage?: number;
+    /** Signed net life change for this player at the active historical/walk stop (`< 0` loss/damage, `> 0` gain). */
+    stopLifeDelta?: number;
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
     /** Highlighted while hovering a target choice naming this player. */
@@ -30,7 +30,7 @@
     deckOpen?: boolean;
   }
 
-  let { player, name, caption, offers, live, damage = 0, stopDamage = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { player, name, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -70,7 +70,7 @@
     {#if caption}<span class="type-caption caption text-ink-2">{caption}</span>{/if}
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
-      {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{:else if stopDamage}{#key stopDamage}<span class="dealt" data-testid="stop-delta" data-delta-kind="damage">−{stopDamage}</span>{/key}{/if}</span>
+      {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{:else if stopLifeDelta !== 0}{#key stopLifeDelta}<span class="dealt" class:gain={stopLifeDelta > 0} data-testid="stop-delta" data-delta-kind={stopLifeDelta > 0 ? 'gain' : 'damage'}>{stopLifeDelta > 0 ? `+${stopLifeDelta}` : `−${Math.abs(stopLifeDelta)}`}</span>{/key}{/if}</span>
     {#if counters}<span class="type-caption">{counters}</span>{/if}
   </button>
   <ul class="zones">
@@ -136,6 +136,7 @@
     font: 600 16px/24px var(--font-sans); color: var(--bg); background: var(--damage);
     animation: land var(--motion-move) var(--motion-move-ease);
   }
+  .dealt.gain { background: var(--gain); }
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }

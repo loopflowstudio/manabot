@@ -810,3 +810,210 @@ fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
         "expected Clue token_created in {control_facts:#?}"
     );
 }
+
+/// Slice 8: CR 608.2b illegal-target fizzles (for both spells and targeted
+/// abilities) carry `rule: Some(IllegalTargets)` and `cause: None`, while real
+/// counterspells carry `rule: None` and `cause: Some(counterspell_resolution)`.
+#[test]
+fn illegal_target_fizzles_for_spells_and_abilities_are_separate_from_counterspells() {
+    use managym::{
+        agent::action::Action,
+        experience::{PresentationKind, PresentationRule},
+        state::{game_object::PlayerId, target::Target},
+    };
+
+    let cast_named = |scenario: &mut Scenario, name: &str| {
+        let index = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(a, Action::CastSpell { object, .. } if scenario.game().state[*object].name == name)
+            })
+            .unwrap_or_else(|| panic!("CastSpell {name} not offered"));
+        scenario.step_action(index);
+    };
+    let choose_target = |scenario: &mut Scenario, target: Target| {
+        let index = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseTarget { target: t, .. } if *t == target))
+            .unwrap_or_else(|| panic!("ChooseTarget {target:?} not offered"));
+        scenario.step_action(index);
+    };
+    let pay_if_prompted = |scenario: &mut Scenario| {
+        for _ in 0..4 {
+            if let Some(pay) = scenario
+                .action_space()
+                .actions
+                .iter()
+                .position(|a| matches!(a, Action::PayCost { .. }))
+            {
+                scenario.step_action(pay);
+            } else {
+                break;
+            }
+        }
+    };
+
+    // 1. Double-Bolt on the same Gray Ogre: top Bolt kills it, bottom Bolt fizzles.
+    let mut fizzle_s = five_color_setup(&["Lightning Bolt", "Gray Ogre"]);
+    let ogre = fizzle_s.force_permanent_on_battlefield(1, "Gray Ogre");
+    force_new_card_in_hand(&mut fizzle_s, 0, "Lightning Bolt");
+    force_new_card_in_hand(&mut fizzle_s, 0, "Lightning Bolt");
+    fizzle_s.game_mut().scenario_refresh_priority().unwrap();
+    fizzle_s.game_mut().enable_presentation();
+
+    cast_named(&mut fizzle_s, "Lightning Bolt");
+    choose_target(&mut fizzle_s, Target::Permanent(ogre));
+    pay_if_prompted(&mut fizzle_s);
+    cast_named(&mut fizzle_s, "Lightning Bolt");
+    choose_target(&mut fizzle_s, Target::Permanent(ogre));
+    pay_if_prompted(&mut fizzle_s);
+    for _ in 0..16 {
+        let told = fizzle_s.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Countered { .. }))
+        {
+            break;
+        }
+        fizzle_s.advance_default_action();
+    }
+    let fizzle_facts = fizzle_s.game().presentation_facts(PlayerId(0));
+    let spell_fizzle = fizzle_facts
+        .iter()
+        .find(|f| {
+            f.lines
+                .iter()
+                .any(|l| matches!(l.kind, PresentationKind::Countered { .. }))
+        })
+        .expect("expected spell fizzle fact");
+    assert_eq!(spell_fizzle.rule, Some(PresentationRule::IllegalTargets));
+    assert_eq!(spell_fizzle.cause, None);
+    assert!(spell_fizzle.position.is_some());
+    assert!(spell_fizzle
+        .lines
+        .iter()
+        .any(|l| l.labels.stacks.values().any(|n| n == "Lightning Bolt")));
+
+    // 2. Real Counterspell counters Lightning Bolt with `rule: None` and `cause: Some(resolved)`.
+    let mut counter_s = five_color_setup(&["Lightning Bolt", "Counterspell", "Gray Ogre"]);
+    let ogre2 = counter_s.force_permanent_on_battlefield(1, "Gray Ogre");
+    counter_s.force_card_in_hand(0, "Lightning Bolt");
+    counter_s.force_card_in_hand(1, "Counterspell");
+    counter_s.set_player_mana_pool(1, "10UU");
+    counter_s.game_mut().scenario_refresh_priority().unwrap();
+    counter_s.game_mut().enable_presentation();
+
+    cast_named(&mut counter_s, "Lightning Bolt");
+    choose_target(&mut counter_s, Target::Permanent(ogre2));
+    pay_if_prompted(&mut counter_s);
+    // Player 0 passes priority so Player 1 can cast Counterspell.
+    assert!(counter_s.take_action_by_type(managym::agent::action::ActionType::PriorityPassPriority));
+    cast_named(&mut counter_s, "Counterspell");
+    pay_if_prompted(&mut counter_s);
+    for _ in 0..16 {
+        let told = counter_s.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Countered { .. }))
+        {
+            break;
+        }
+        counter_s.advance_default_action();
+    }
+    let counter_facts = counter_s.game().presentation_facts(PlayerId(0));
+    let counter_resolved = counter_facts
+        .iter()
+        .find(|f| {
+            f.lines.iter().any(|l| {
+                matches!(l.kind, PresentationKind::Resolved { .. })
+                    && l.labels.stacks.values().any(|n| n == "Counterspell")
+            })
+        })
+        .expect("expected Counterspell resolved fact");
+    let countered = counter_facts
+        .iter()
+        .find(|f| {
+            f.lines
+                .iter()
+                .any(|l| matches!(l.kind, PresentationKind::Countered { .. }))
+        })
+        .expect("expected countered spell fact");
+    assert_eq!(countered.rule, None);
+    assert_eq!(countered.cause, Some(counter_resolved.id));
+    assert!(countered
+        .lines
+        .iter()
+        .any(|l| l.labels.stacks.values().any(|n| n == "Lightning Bolt")));
+
+    // 3. Targeted triggered ability fizzles when its target leaves before resolution.
+    let mut ability_s =
+        five_color_setup(&["Earth Kingdom Jailer", "Lightning Bolt", "Gray Ogre"]);
+    let ogre3 = ability_s.force_permanent_on_battlefield(1, "Gray Ogre");
+    ability_s.force_card_in_hand(0, "Earth Kingdom Jailer");
+    ability_s.force_card_in_hand(0, "Lightning Bolt");
+    ability_s.game_mut().scenario_refresh_priority().unwrap();
+    ability_s.game_mut().enable_presentation();
+
+    cast_named(&mut ability_s, "Earth Kingdom Jailer");
+    // Resolve Earth Kingdom Jailer and target Gray Ogre with its ETB trigger.
+    for _ in 0..16 {
+        let actions = ability_s.action_space().actions.clone();
+        if let Some(target) = actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseTarget { target: Target::Permanent(p), .. } if *p == ogre3))
+        {
+            ability_s.step_action(target);
+            break;
+        }
+        ability_s.advance_default_action();
+    }
+    // In response to the Jailer's ETB trigger, Bolt Gray Ogre so the trigger fizzles.
+    cast_named(&mut ability_s, "Lightning Bolt");
+    choose_target(&mut ability_s, Target::Permanent(ogre3));
+    pay_if_prompted(&mut ability_s);
+    for _ in 0..16 {
+        let told = ability_s.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Countered { .. }))
+        {
+            break;
+        }
+        ability_s.advance_default_action();
+    }
+    let ability_facts = ability_s.game().presentation_facts(PlayerId(0));
+    let trigger_stack = ability_facts
+        .iter()
+        .flat_map(|f| &f.lines)
+        .find_map(|l| match l.kind {
+            PresentationKind::Triggered { stack, .. } => Some(stack),
+            _ => None,
+        })
+        .expect("expected Earth Kingdom Jailer trigger");
+    let ability_fizzle = ability_facts
+        .iter()
+        .find(|f| {
+            f.lines.iter().any(|l| {
+                matches!(l.kind, PresentationKind::Countered { stack } if stack == trigger_stack)
+            })
+        })
+        .expect("expected fizzled ability fact");
+    assert_eq!(ability_fizzle.rule, Some(PresentationRule::IllegalTargets));
+    assert_eq!(ability_fizzle.cause, None);
+    assert!(ability_fizzle.position.is_some());
+    assert_eq!(
+        ability_fizzle.lines[0]
+            .labels
+            .stacks
+            .get(&trigger_stack.0.to_string())
+            .map(String::as_str),
+        Some("Earth Kingdom Jailer")
+    );
+}

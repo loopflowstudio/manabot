@@ -408,6 +408,8 @@ impl Game {
                     object_id: spell.object,
                     by: None,
                 });
+            } else {
+                self.presentation_ability_fizzled(&stacked);
             }
             return;
         };

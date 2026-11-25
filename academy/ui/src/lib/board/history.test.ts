@@ -200,6 +200,84 @@ describe('buildHistory', () => {
       ['you', 'You', 'Play Mountain'],
     ]);
   });
+
+  it('wires sourceSeq, absorbs passes, and words illegal-target fizzles separately from counterspells', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 0, turn_number: 4 }),
+      // Spell fizzle (with preceding priority passes absorbed).
+      ev(2, { kind: 'cast', object: { entity: 10, incarnation: 1 }, controller: 0, stack: 10 }, {
+        caused_by: 'c1',
+        labels: { objects: { '10:1': 'Lightning Bolt' }, stacks: { '10': 'Lightning Bolt' } },
+      }),
+      ev(3, { kind: 'targeted', source: { kind: 'stack', id: 10 }, target: { kind: 'object', id: { entity: 20, incarnation: 1 } } }, {
+        cause: 2,
+        labels: { objects: { '20:1': 'Gray Ogre' }, stacks: { '10': 'Lightning Bolt' } },
+      }),
+      ev(4, { kind: 'passed', player: 1 }),
+      ev(5, { kind: 'countered', stack: 10 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '10': 'Lightning Bolt' } },
+      }),
+      // Triggered ability fizzle.
+      ev(6, { kind: 'triggered', source: { entity: 30, incarnation: 1 }, controller: 1, stack: 90 }, {
+        labels: { objects: { '30:1': 'Vengeful Bloodwitch' }, stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      ev(7, { kind: 'passed', player: 1 }),
+      ev(8, { kind: 'countered', stack: 90 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      // Activated ability fizzle.
+      ev(9, { kind: 'activated', source: { entity: 40, incarnation: 1 }, controller: 0, stack: 91 }, {
+        caused_by: 'c2',
+        labels: { objects: { '40:1': 'Prodigal Pyromancer' }, stacks: { '91': 'Prodigal Pyromancer' } },
+      }),
+      ev(10, { kind: 'passed', player: 1 }),
+      ev(11, { kind: 'countered', stack: 91 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '91': 'Prodigal Pyromancer' } },
+      }),
+      // Real counterspell keeps "was countered" indented under the counterspell cast.
+      ev(12, { kind: 'cast', object: { entity: 50, incarnation: 1 }, controller: 0, stack: 50 }, {
+        caused_by: 'c3',
+        labels: { objects: { '50:1': 'Gray Ogre' }, stacks: { '50': 'Gray Ogre' } },
+      }),
+      ev(13, { kind: 'cast', object: { entity: 51, incarnation: 1 }, controller: 1, stack: 51 }, {
+        labels: { objects: { '51:1': 'Counterspell' }, stacks: { '51': 'Counterspell' } },
+      }),
+      ev(14, { kind: 'targeted', source: { kind: 'stack', id: 51 }, target: { kind: 'stack', id: 50 } }, {
+        cause: 13,
+        labels: { stacks: { '50': 'Gray Ogre', '51': 'Counterspell' } },
+      }),
+      ev(15, { kind: 'resolved', stack: 51 }, { labels: { stacks: { '51': 'Counterspell' } } }),
+      ev(16, { kind: 'countered', stack: 50 }, {
+        cause: 15,
+        labels: { stacks: { '50': 'Gray Ogre' } },
+      }),
+    ];
+
+    const turns = buildHistory(events, () => EMPTY, PLAYERS);
+    expect(turns[0].lines.map(line => ({
+      text: segmentText(line.segments),
+      sourceSeq: line.sourceSeq,
+      rule: line.rule,
+      children: line.children.map(child => ({ text: segmentText(child.segments), sourceSeq: child.sourceSeq, rule: child.rule })),
+    }))).toEqual([
+      { text: 'Cast Lightning Bolt, targeting Gray Ogre', sourceSeq: null, rule: null, children: [] },
+      { text: 'Lightning Bolt did not resolve · illegal targets', sourceSeq: 2, rule: 'illegal_targets', children: [] },
+      { text: 'Trigger · Vengeful Bloodwitch', sourceSeq: null, rule: null, children: [] },
+      { text: "Vengeful Bloodwitch's trigger did not resolve · illegal targets", sourceSeq: 6, rule: 'illegal_targets', children: [] },
+      { text: 'Activate Prodigal Pyromancer', sourceSeq: null, rule: null, children: [] },
+      { text: "Prodigal Pyromancer's ability did not resolve · illegal targets", sourceSeq: 9, rule: 'illegal_targets', children: [] },
+      { text: 'Cast Gray Ogre', sourceSeq: null, rule: null, children: [] },
+      {
+        text: 'Cast Counterspell, targeting Gray Ogre',
+        sourceSeq: null,
+        rule: null,
+        children: [{ text: 'Gray Ogre was countered', sourceSeq: 12, rule: null }],
+      },
+    ]);
+  });
 });
 
 describe('isMoveEvent, hasTrackHistory and trackMarks', () => {

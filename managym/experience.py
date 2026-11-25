@@ -972,6 +972,7 @@ PresentationRule: TypeAlias = Literal[
     "zero_life",
     "empty_library",
     "poison",
+    "illegal_targets",
 ]
 
 

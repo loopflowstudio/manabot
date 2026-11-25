@@ -276,6 +276,22 @@ impl Game {
         vec![labels.line(kind)]
     }
 
+    pub(super) fn ability_fizzled_line(
+        &self,
+        stacked: &StackObject,
+        viewer: PlayerId,
+    ) -> Vec<PresentationLine> {
+        let mut labels = PresentationLabels::default();
+        let object = stacked.source_object();
+        let stack = StackRenderId(stacked.id().0.into());
+        if self.can_name_object(object, viewer) && self.object_event_ref(object).is_some() {
+            labels
+                .stacks
+                .insert(stack.0.to_string(), self.observed_object_name(object));
+        }
+        vec![labels.line(Kind::Countered { stack })]
+    }
+
     pub(super) fn event_lines(&self, event: &GameEvent, viewer: PlayerId) -> Vec<PresentationLine> {
         use GameEvent::*;
         let mut labels = PresentationLabels::default();

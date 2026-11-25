@@ -9,6 +9,7 @@ import {
   OFFER_VERBS,
   PRESENTATION_IMPORTANCES,
   PRESENTATION_KIND_NAMES,
+  PRESENTATION_RULES,
   PROTOCOL_VERSION,
   RECOVERY_REASONS,
   type Command,
@@ -224,6 +225,7 @@ describe('experience protocol v1 conformance', () => {
     expect(definition('OfferVerb').enum).toEqual(OFFER_VERBS);
     expect(definition('AuthorityStatus').enum).toEqual(AUTHORITY_STATUSES);
     expect(definition('PresentationImportance').enum).toEqual(PRESENTATION_IMPORTANCES);
+    expect(definition('PresentationRule').enum).toEqual(PRESENTATION_RULES);
     expect(definition('RecoveryReason').enum).toEqual(RECOVERY_REASONS);
 
     const interfaceSchemas = {

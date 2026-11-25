@@ -144,10 +144,61 @@ describe('tell', () => {
       ['zero_life', '0 life'],
       ['empty_library', 'drew from an empty library'],
       ['poison', '10 poison counters'],
+      ['illegal_targets', 'illegal targets'],
     ];
     for (const [rule, words] of rules) {
       expect(tellRule(rule)).toBe(words);
     }
+  });
+
+  it('distinguishes counterspells from illegal-target fizzles for spells, triggers and abilities', () => {
+    const counteredSpell = tell(
+      event(1, { kind: 'countered', stack: 10 }, { labels: { stacks: { '10': 'Lightning Bolt' } } }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(counteredSpell)).toBe('Lightning Bolt was countered');
+    expect(counteredSpell.find(s => s.card === 'Lightning Bolt')).toBeDefined();
+
+    const fizzledSpell = tell(
+      event(2, { kind: 'countered', stack: 10 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '10': 'Lightning Bolt' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(fizzledSpell)).toBe('Lightning Bolt did not resolve · illegal targets');
+    expect(fizzledSpell.find(s => s.card === 'Lightning Bolt')).toBeDefined();
+
+    const fizzledTrigger = tell(
+      event(3, { kind: 'countered', stack: 90 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      EMPTY,
+      PLAYERS,
+      { trigger: true },
+    );
+    expect(segmentText(fizzledTrigger)).toBe("Vengeful Bloodwitch's trigger did not resolve · illegal targets");
+
+    const fizzledAbility = tell(
+      event(4, { kind: 'countered', stack: 91 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '91': 'Prodigal Pyromancer' } },
+      }),
+      EMPTY,
+      PLAYERS,
+      { ability: true },
+    );
+    expect(segmentText(fizzledAbility)).toBe("Prodigal Pyromancer's ability did not resolve · illegal targets");
+
+    expect(segmentText(tell(event(5, { kind: 'countered', stack: 92 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS)))
+      .toBe('A spell did not resolve · illegal targets');
+    expect(segmentText(tell(event(6, { kind: 'countered', stack: 93 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS, { trigger: true })))
+      .toBe('A trigger did not resolve · illegal targets');
+    expect(segmentText(tell(event(7, { kind: 'countered', stack: 94 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS, { ability: true })))
+      .toBe('An ability did not resolve · illegal targets');
   });
 
   it('words searched, looked (scry/surveil), sacrificed and lost with rules', () => {

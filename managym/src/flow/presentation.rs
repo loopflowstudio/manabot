@@ -104,6 +104,27 @@ pub struct PresentationSink {
 }
 
 impl PresentationSink {
+    /// Push a root fact with no cause (e.g., a CR 608.2b illegal-target fizzle).
+    fn push_root(
+        &mut self,
+        rule: Option<PresentationRule>,
+        note: Note,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.facts.push(Fact {
+            id,
+            cause: None,
+            rule,
+            note,
+            lines,
+            position: None,
+        });
+        self.uncut = true;
+        id
+    }
+
     /// Push a fact whose cause, absent a trigger's or a resolution's, is
     /// `fallback`.
     fn push_caused(
@@ -278,7 +299,16 @@ impl Game {
         ) {
             sink.land_play = None;
         }
-        let id = sink.push_caused(damage, rule, Note::Event(event.clone()), lines);
+        let id = if matches!(event, GameEvent::SpellCountered { by: None, .. }) {
+            sink.resolution = None;
+            sink.push_root(
+                Some(PresentationRule::IllegalTargets),
+                Note::Event(event.clone()),
+                lines,
+            )
+        } else {
+            sink.push_caused(damage, rule, Note::Event(event.clone()), lines)
+        };
         if let Some(object) = damaged {
             sink.damaged.push((object, id));
         }
@@ -329,6 +359,22 @@ impl Game {
         sink.resolution = None;
         let id = sink.push_caused(None, None, Note::Stack, lines);
         sink.resolution = Some(id);
+    }
+
+    /// Note an activated or triggered ability leaving the stack without
+    /// resolving because all of its targets became illegal (CR 608.2b).
+    pub(crate) fn presentation_ability_fizzled(&mut self, stacked: &StackObject) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines =
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.ability_fizzled_line(stacked, viewer));
+        if lines.iter().all(Vec::is_empty) {
+            return;
+        }
+        let sink = self.presentation.as_deref_mut().unwrap();
+        sink.resolution = None;
+        sink.push_root(Some(PresentationRule::IllegalTargets), Note::Stack, lines);
     }
 
     /// Attach the hand appearance to the CardDrawn fact before another effect can move it.

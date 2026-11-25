@@ -952,7 +952,7 @@ pub enum PresentationKind {
         source: ObjectRenderId,
         stack: StackRenderId,
     },
-    /// A spell left the stack without resolving (CR 701.6a, 608.2b).
+    /// A spell or ability left the stack without resolving (CR 701.6a, 608.2b).
     Countered {
         stack: StackRenderId,
     },
@@ -1026,8 +1026,8 @@ pub enum LookAction {
     Surveil,
 }
 
-/// The state-based or turn-based action (CR 704.5, 504, 514) that did what an
-/// event tells, when no player chose it.
+/// The state-based, turn-based, or resolution rule (CR 704.5, 504, 514,
+/// 608.2b) that did what an event tells, when no player chose it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PresentationRule {
@@ -1042,6 +1042,7 @@ pub enum PresentationRule {
     ZeroLife,
     EmptyLibrary,
     Poison,
+    IllegalTargets,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]

@@ -552,8 +552,9 @@ export const PRESENTATION_RULES = [
   'zero_life',
   'empty_library',
   'poison',
+  'illegal_targets',
 ] as const;
-/** The state-based or turn-based action (CR 704.5, 504, 514) that did what an event tells. */
+/** The state-based, turn-based, or resolution rule (CR 704.5, 504, 514, 608.2b) that did what an event tells. */
 export type PresentationRule = (typeof PRESENTATION_RULES)[number];
 
 export type LookAction = 'scry' | 'surveil';
@@ -645,7 +646,7 @@ export type PresentationKind =
       stack: number;
     }
   | {
-      /** A spell left the stack without resolving. */
+      /** A spell or ability left the stack without resolving. */
       kind: 'countered';
       stack: number;
     }

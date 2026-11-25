@@ -46,8 +46,10 @@ export interface TellOptions {
   form?: 'move' | 'sentence';
   /** True when indented directly under the spell or ability that caused it. */
   indented?: boolean;
-  /** True when an `ability_resolved` came from a `triggered` ability. */
+  /** True when an `ability_resolved` or `countered` came from a `triggered` ability. */
   trigger?: boolean;
+  /** True when a `countered` came from an `activated` ability. */
+  ability?: boolean;
   /** Targets folded onto a `cast`, `activated` or `triggered` event. */
   targets?: readonly FoldedTarget[];
 }
@@ -64,6 +66,7 @@ const RULE_WORDS: Record<PresentationRule, string> = {
   zero_life: '0 life',
   empty_library: 'drew from an empty library',
   poison: '10 poison counters',
+  illegal_targets: 'illegal targets',
 };
 
 const COUNTER_WORDS: Record<string, string> = {
@@ -257,8 +260,16 @@ export function tell(
         : [txt(`An ${noun} resolved`)];
     }
     case 'countered': {
-      const spell = cardOr(eventStackName(event, kind.stack, fallbackLabels), 'A spell');
-      return [spell, txt(' was countered')];
+      const name = eventStackName(event, kind.stack, fallbackLabels);
+      const subject: Segment[] = options.trigger
+        ? (name ? [cardSeg(name), txt("'s trigger")] : [txt('A trigger')])
+        : options.ability
+          ? (name ? [cardSeg(name), txt("'s ability")] : [txt('An ability')])
+          : [cardOr(name, 'A spell')];
+      if (event.rule === 'illegal_targets') {
+        return [...subject, txt(' did not resolve'), ...ruleClause(event.rule)];
+      }
+      return [...subject, txt(' was countered'), ...ruleClause(event.rule)];
     }
     case 'damage': {
       const target = subjectSegment(kind.target, event, fallbackLabels, players, null);

@@ -205,16 +205,29 @@ describe('walk stops over kept boards', () => {
     expect(sharedLaterCount(turns, 2, 6)).toBe(2);
   });
 
-  it('computes per-stop deltas for P/T pumps and shrinks', () => {
+  it('computes per-stop deltas for P/T pumps, shrinks, player damage, and life changes', () => {
     const events: PresentationEvent[] = [
       ev(1, { kind: 'pt_changed', objects: [{ entity: 10, incarnation: 0 }, { entity: 11, incarnation: 0 }], power: 1, toughness: 0 }),
       ev(2, { kind: 'pt_changed', objects: [{ entity: 12, incarnation: 0 }], power: -2, toughness: -2 }),
+      ev(3, { kind: 'damage', source: { kind: 'object', id: { entity: 10, incarnation: 0 } }, target: { kind: 'player', id: 0 }, amount: 3 }),
+      ev(4, { kind: 'life', player: 1, amount: 3, total: 23 }),
+      ev(5, { kind: 'life', player: 0, amount: -1, total: 16 }),
+      ev(6, { kind: 'life', player: 1, amount: -3, total: 20 }),
     ];
     const proj = { agent: { id: 0, player_index: 0 }, opponent: { id: 1, player_index: 1 } } as unknown as Observation;
-    const deltas = computeStopDeltas(events, new Set([1, 2]), proj);
+    const deltas = computeStopDeltas(events, new Set([1, 2, 3, 4]), proj);
     expect(deltas.objects.get(10)).toEqual([{ kind: 'pump', text: '+1/+0' }]);
     expect(deltas.objects.get(11)).toEqual([{ kind: 'pump', text: '+1/+0' }]);
     expect(deltas.objects.get(12)).toEqual([{ kind: 'damage', text: '−2/−2' }]);
+    expect(deltas.players.get(0)).toBe(-3);
+    expect(deltas.players.get(1)).toBe(3);
+
+    // Non-damage life loss produces a negative delta; cancelling gain + loss omits zero.
+    const drain = computeStopDeltas(events, new Set([5, 4]), proj);
+    expect(drain.players.get(0)).toBe(-1);
+    expect(drain.players.get(1)).toBe(3);
+    const netZero = computeStopDeltas(events, new Set([4, 6]), proj);
+    expect(netZero.players.has(1)).toBe(false);
   });
 });
 describe('the turn an event happened in', () => {

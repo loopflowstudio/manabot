@@ -167,10 +167,12 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   await page.keyboard.press('1');
   await expect.poll(() => sent.count, { timeout: 15_000 }).toBe(beforeNum + 1);
   await expect(main).not.toHaveAttribute('data-frame-revision', revBeforeNum!, { timeout: 15_000 });
-  // Once any resulting walk finishes (or is skipped with Space), the recap is visible at now.
-  if (await page.getByTestId('walk-bar').getAttribute('data-walking') === 'true') {
-    await page.keyboard.press('Space');
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true', { timeout: 15_000 });
+  // Once any resulting walk finishes (or is skipped with Esc), the recap is visible at now.
+  if (await board.getAttribute('data-board') === 'step') {
+    await page.keyboard.press('Escape');
   }
+  await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('recent')).toBeVisible();
 
   // Pace control defaults to Study (1.4s), switches to Quick (0.7s) and Off.

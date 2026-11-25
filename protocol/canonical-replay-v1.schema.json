@@ -2647,7 +2647,7 @@
           ]
         },
         {
-          "description": "A spell left the stack without resolving (CR 701.6a, 608.2b).",
+          "description": "A spell or ability left the stack without resolving (CR 701.6a, 608.2b).",
           "type": "object",
           "properties": {
             "kind": {
@@ -2975,7 +2975,7 @@
       "additionalProperties": false
     },
     "PresentationRule": {
-      "description": "The state-based or turn-based action (CR 704.5, 504, 514) that did what an\nevent tells, when no player chose it.",
+      "description": "The state-based, turn-based, or resolution rule (CR 704.5, 504, 514,\n608.2b) that did what an event tells, when no player chose it.",
       "type": "string",
       "enum": [
         "draw_step",
@@ -2988,7 +2988,8 @@
         "unattached_aura",
         "zero_life",
         "empty_library",
-        "poison"
+        "poison",
+        "illegal_targets"
       ]
     },
     "PromptView": {

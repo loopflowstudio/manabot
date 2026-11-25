@@ -225,8 +225,10 @@ interface TrackFold {
   foldedResolution: Map<number, { resolvedIndex: number; passIndices: number[] }>;
   /** Passes immediately preceding a standalone resolution, keyed by resolution index. */
   absorbedBeforeResolution: Map<number, number[]>;
-  /** Stack ids created by `triggered` events (so `ability_resolved` reads "trigger"). */
+  /** Stack ids created by `triggered` events (so `ability_resolved` / `countered` read "trigger"). */
   stackTriggers: Set<number>;
+  /** Stack ids created by `activated` events (so `countered` reads "ability"). */
+  stackAbilities: Set<number>;
   /** Stack id -> seq of the `cast` / `activated` / `triggered` event that put it on the stack. */
   stackSourceSeq: Map<number, number>;
 }
@@ -237,6 +239,7 @@ function foldTrackEvents(
   labelsAt: (index: number) => PresentationLabels,
 ): TrackFold {
   const stackTriggers = new Set<number>();
+  const stackAbilities = new Set<number>();
   const stackSourceSeq = new Map<number, number>();
   const consumed = new Set<number>();
   const foldedTargets = new Map<number, (FoldedTarget & { seq: number })[]>();
@@ -249,7 +252,10 @@ function foldTrackEvents(
     if (kind.kind === 'triggered') {
       stackTriggers.add(kind.stack);
       stackSourceSeq.set(kind.stack, event.seq);
-    } else if (kind.kind === 'cast' || kind.kind === 'activated') {
+    } else if (kind.kind === 'activated') {
+      stackAbilities.add(kind.stack);
+      stackSourceSeq.set(kind.stack, event.seq);
+    } else if (kind.kind === 'cast') {
       stackSourceSeq.set(kind.stack, event.seq);
     } else if (kind.kind === 'destroyed') {
       const next = events[i + 1];
@@ -309,12 +315,14 @@ function foldTrackEvents(
     }
   }
 
-  // Absorb passes that immediately precede a standalone resolution so
-  // "Trigger · X" -> "X's trigger resolved" is not split by a pass line.
+  // Absorb passes that immediately precede a standalone resolution or illegal-target
+  // fizzle so "Trigger · X" -> "X's trigger resolved" is not split by a pass line.
   for (let i = 0; i < events.length; i += 1) {
     if (consumed.has(i)) continue;
-    const kind = events[i].kind.kind;
-    if (kind !== 'resolved' && kind !== 'ability_resolved') continue;
+    const event = events[i];
+    const kind = event.kind.kind;
+    const isFizzle = kind === 'countered' && event.rule === 'illegal_targets';
+    if (kind !== 'resolved' && kind !== 'ability_resolved' && !isFizzle) continue;
     const passIndices: number[] = [];
     for (let back = i - 1; back >= 0; back -= 1) {
       if (consumed.has(back)) continue;
@@ -331,7 +339,7 @@ function foldTrackEvents(
     }
   }
 
-  return { consumed, foldedTargets, foldedResolution, absorbedBeforeResolution, stackTriggers, stackSourceSeq };
+  return { consumed, foldedTargets, foldedResolution, absorbedBeforeResolution, stackTriggers, stackAbilities, stackSourceSeq };
 }
 
 function sideForEvent(
@@ -405,6 +413,7 @@ export function buildHistory(
     foldedResolution,
     absorbedBeforeResolution,
     stackTriggers,
+    stackAbilities,
     stackSourceSeq,
   } = foldTrackEvents(events, labelsAt);
 
@@ -530,23 +539,31 @@ export function buildHistory(
     ];
 
     const indented = !move && event.cause !== undefined && openBlock !== null && openBlock.seqs.has(event.cause);
-    const isTrigger = event.kind.kind === 'ability_resolved' && stackTriggers.has(event.kind.stack);
+    const isTrigger =
+      (event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered')
+      && stackTriggers.has(event.kind.stack);
+    const isAbility =
+      event.kind.kind === 'countered'
+      && !isTrigger
+      && stackAbilities.has(event.kind.stack);
     const segments = tell(event, labels, players, {
       form: 'move',
       indented,
       trigger: isTrigger,
+      ability: isAbility,
       targets,
     });
     const sentenceSegments = tell(event, labels, players, {
       form: 'sentence',
       indented: false,
       trigger: isTrigger,
+      ability: isAbility,
       targets,
     });
     const sentence = segmentText(sentenceSegments);
 
     const sourceSeq =
-      (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved')
+      (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered')
         ? (stackSourceSeq.get(event.kind.stack) ?? null)
         : null;
     const actor: HistoryActor = move ? actorForMove(event, players, currentOwner) : 'note';

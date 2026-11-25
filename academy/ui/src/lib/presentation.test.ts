@@ -96,6 +96,13 @@ describe('Lightning Bolt presentation fixture', () => {
       cause: undefined,
       rule: undefined,
     });
+    events.push({
+      ...died,
+      seq: died.seq + 106,
+      kind: { kind: 'countered', stack: 40 },
+      cause: undefined,
+      rule: 'illegal_targets',
+    });
     expect(() => validatePresentationEvents(events)).not.toThrow();
 
     const forward = structuredClone(events);

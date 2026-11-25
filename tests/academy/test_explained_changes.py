@@ -781,4 +781,155 @@ def test_spell_and_ability_results_exile_destroy_tokens_pump_and_control_change(
     assert "Gray Ogre" in ret["labels"]["objects"].values()
 
 
+def test_illegal_target_fizzles_for_spells_and_abilities_through_session(
+    tmp_path: Path,
+) -> None:
+    """Real GameSession games distinguish CR 608.2b illegal-target fizzles
+    (both spells and triggered abilities) from counterspells."""
+
+    def advance_until(
+        session: GameSession, start: int, predicate: Any, prefix: str, limit: int = 24
+    ) -> None:
+        for step in range(limit):
+            if predicate(session.presentation_events[start:]):
+                return
+            prompt = session._publish_current_prompt()
+            if prompt is None:
+                return
+            descriptions = [a["description"] for a in prompt.actions]
+            pick = next(
+                (
+                    d
+                    for d in descriptions
+                    if d.startswith("Pay") or d == "Pass priority"
+                ),
+                descriptions[0],
+            )
+            _command(session, pick, f"{prefix}-{step}")
+
+    deck = {
+        "Plains": 15,
+        "Mountain": 15,
+        "Lightning Bolt": 15,
+        "Earth Kingdom Jailer": 15,
+    }
+    session = GameSession(trace_dir=tmp_path)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": deck,
+            "villain_deck": {"Mountain": 30, "Gray Ogre": 30},
+            "auto_pass": False,
+            "seed": 41,
+        }
+    )
+    assert session.env is not None
+    _command(session, "Keep hand", "keep-fizzle")
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    for _ in range(5):
+        session.env.scenario_force_battlefield(0, "Plains", True)
+        session.env.scenario_force_battlefield(0, "Mountain", True)
+    session.env.scenario_force_battlefield(1, "Gray Ogre", True)
+    session.env.scenario_force_battlefield(1, "Gray Ogre", True)
+    session.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    session.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    session.env.scenario_force_card_in_hand(0, "Earth Kingdom Jailer")
+    session.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+
+    # 1. Double-Bolt the same Gray Ogre so the first Bolt fizzles with `illegal_targets`.
+    start = len(session.presentation_events)
+    _command(session, "Cast Lightning Bolt", "bolt1-cast")
+    prompt = session._publish_current_prompt()
+    assert prompt is not None
+    ogre_target_idx = next(
+        i for i, a in enumerate(prompt.actions) if a["description"] == "Target Gray Ogre"
+    )
+    session.hero_command(
+        {
+            "command_id": "bolt1-target",
+            "match_id": session.match_id,
+            "expected_revision": prompt.revision,
+            "prompt_id": prompt.prompt_id,
+            "offer_id": ogre_target_idx,
+            "answers": [],
+        }
+    )
+    advance_until(
+        session,
+        start,
+        lambda _evs: any(
+            a["description"] == "Cast Lightning Bolt"
+            for a in (session._publish_current_prompt().actions if session._publish_current_prompt() else [])
+        ),
+        "bolt1-pay",
+    )
+    _command(session, "Cast Lightning Bolt", "bolt2-cast")
+    prompt = session._publish_current_prompt()
+    assert prompt is not None
+    ogre_target_idx2 = next(
+        i for i, a in enumerate(prompt.actions) if a["description"] == "Target Gray Ogre"
+    )
+    session.hero_command(
+        {
+            "command_id": "bolt2-target",
+            "match_id": session.match_id,
+            "expected_revision": prompt.revision,
+            "prompt_id": prompt.prompt_id,
+            "offer_id": ogre_target_idx2,
+            "answers": [],
+        }
+    )
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "countered" for e in evs),
+        "bolt-fizzle",
+    )
+    bolt_events = list(session.presentation_events[start:])
+    bolt_fizzle = _first(bolt_events, "countered")
+    assert bolt_fizzle["rule"] == "illegal_targets"
+    assert "cause" not in bolt_fizzle
+    assert (
+        bolt_fizzle["labels"]["stacks"][str(bolt_fizzle["kind"]["stack"])]
+        == "Lightning Bolt"
+    )
+
+    # 2. Earth Kingdom Jailer ETB trigger targets the remaining Gray Ogre; Bolt kills it in response.
+    tstart = len(session.presentation_events)
+    _command(session, "Cast Earth Kingdom Jailer", "cast-jailer")
+    for step in range(16):
+        prompt = session._publish_current_prompt()
+        assert prompt is not None
+        descriptions = [a["description"] for a in prompt.actions]
+        if "Target Gray Ogre" in descriptions:
+            _command(session, "Target Gray Ogre", "jailer-target")
+            break
+        pick = next(
+            (d for d in descriptions if d.startswith("Pay") or d == "Pass priority"),
+            descriptions[0],
+        )
+        _command(session, pick, f"jailer-{step}")
+    _command(session, "Cast Lightning Bolt", "bolt3-cast")
+    _command(session, "Target Gray Ogre", "bolt3-target")
+    advance_until(
+        session,
+        tstart,
+        lambda evs: any(e["kind"]["kind"] == "countered" for e in evs),
+        "trigger-fizzle",
+    )
+    trigger_events = list(session.presentation_events[tstart:])
+    trig = _first(trigger_events, "triggered")
+    trig_fizzle = _first(trigger_events, "countered")
+    assert trig_fizzle["kind"]["stack"] == trig["kind"]["stack"]
+    assert trig_fizzle["rule"] == "illegal_targets"
+    assert "cause" not in trig_fizzle
+    assert (
+        trig_fizzle["labels"]["stacks"][str(trig["kind"]["stack"])]
+        == "Earth Kingdom Jailer"
+    )
+
+
 
