@@ -914,7 +914,7 @@
 
 <div class="game" class:with-sidebar={sidebarOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
-  <header class="topbar">
+  <header class="topbar chrome-bar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
     <p class="matchup type-caption" data-testid="deck-names">
       <span class="text-ink">{you.name}</span>{#if you.deck}<span class="text-ink-3">{' · '}{you.deck}</span>{/if}
