@@ -204,6 +204,14 @@ class TraceEvent:
     analysis_observation: dict[str, Any] | None = None
     # When the step was committed, UTC ISO 8601. None in traces that predate it.
     committed_at: str | None = None
+    # How an imported record re-dealt the position before this step
+    # (`BRANCHING_INTERVENTIONS` kinds, in order); never its seeds or viewers.
+    branched: list[str] | None = None
+
+
+# Record interventions that branch the recorded position from the game it came
+# from: hidden cards re-dealt, libraries reshuffled, randomness reseeded.
+BRANCHING_INTERVENTIONS = ("determinize", "shuffle_libraries", "reseed")
 
 
 def academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:

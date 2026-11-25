@@ -45,7 +45,11 @@ export interface Position {
   label?: string | null;
   /** The chooser's recorded value at a choice, when one was retained. */
   value?: number | null;
+  /** How an imported record re-dealt the position before this choice, in order. */
+  branched?: BranchKind[] | null;
 }
+/** A record intervention that branches the position from the game it came from. */
+export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed';
 export interface RecordingIndex {
   id: string;
   positions: Position[];

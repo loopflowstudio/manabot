@@ -239,8 +239,12 @@ digests wherever the source retained them, and saves what it verified to this tr
 directory as a finished recording. A snapshot replay carries its final digest.
 It opens as a **Recorded game**. The acting view hides the opponent’s hand.
 **Show both hands** includes both hands in the spectator response. The board
-draws the bottom seat’s cards and shows the top seat’s hand count. Branch
-seeds stay private in either view.
+draws the bottom seat’s cards; the top seat’s **Hand** count opens a list of
+its cards, by pointer or keyboard, as the graveyard does. Where the record
+re-dealt the position before a decision, the move list shows a neutral note
+in its place, such as **Branch · libraries reshuffled** or **Branch · hidden
+cards re-dealt**, which jumps to that decision. Branch seeds stay private in
+either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the

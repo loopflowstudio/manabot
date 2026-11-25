@@ -482,6 +482,10 @@ class Recording:
             if position.kind == "choice" and row
             else self._description(position),
             "value": self._value(position),
+            # How an imported record re-dealt the position before this choice.
+            "branched": self.payload["events"][position.event_index].get("branched")
+            if position.kind == "choice"
+            else None,
         }
 
     def _description(self, position: Position) -> str | None:

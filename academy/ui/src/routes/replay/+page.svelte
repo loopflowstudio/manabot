@@ -29,7 +29,7 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, bottomSeat, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, scoreName, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { createReplayStore } from '$lib/replay.svelte';
@@ -284,7 +284,8 @@
     if (replayStore.playing) replayStore.pause();
     else replayStore.playing = true;
   }
-  function jump(key: string): void {
+  function jump(id: string): void {
+    const key = entryPosition(id);
     const at = positions.findIndex(position => position.key === key);
     if (at >= 0) seek(at);
   }

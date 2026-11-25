@@ -638,6 +638,7 @@ def test_watch_publishes_the_determinized_offers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from managym.academy import trace
+    from managym.academy.recording import Recording
     from managym.academy.watch import import_game, inspect_watch
 
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
@@ -652,6 +653,17 @@ def test_watch_publishes_the_determinized_offers(
     shown = inspect_watch(imported["id"], imported["count"] - 1, imported["token"])
     assert len(shown["decision"]["frame"]["offers"]) == len(offers)
     assert shown["decision"]["offer"]["label"] == "Pass priority"
+    # Review marks the re-dealt decision, and only it, without the seed.
+    recording = Recording(imported["id"], trace.load_trace(imported["id"]))
+    choices = [
+        recording.metadata(position)
+        for position in recording.positions
+        if position.kind == "choice"
+    ]
+    assert [choice["branched"] for choice in choices] == [None] * (
+        len(choices) - 1
+    ) + [["determinize"]]
+    assert "35" not in json.dumps(choices[-1]["branched"])
 
 
 def test_standalone_snapshot_replay_and_unterminated_journal_row(

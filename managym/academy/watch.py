@@ -491,7 +491,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
     from managym.decision import Command
     from managym.replay import RecordedDecision, walk
 
-    from .trace import GameConfig, RecordingImport
+    from .trace import BRANCHING_INTERVENTIONS, GameConfig, RecordingImport
 
     if not record.skip_trivial:
         raise ValueError("Academy requires forced-decision skipping")
@@ -575,6 +575,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
             if isinstance(native, Command):
                 bound["command_id"] = native.command_id
                 bound["answers"] = list(native.answers)
+            step = len(session.trace.events)
             session._apply_bound_command(
                 context,
                 bound,
@@ -583,6 +584,15 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
                 if isinstance(native, Command)
                 else None,
             )
+            branched = [
+                item.op
+                for item in decision.interventions
+                if item.op in BRANCHING_INTERVENTIONS
+            ]
+            if branched:
+                # Replaced, not edited: the trace re-encodes replaced events only.
+                events = session.trace.events
+                events[step] = replace(events[step], branched=branched)
 
         for _ in replay.run(apply):
             pass

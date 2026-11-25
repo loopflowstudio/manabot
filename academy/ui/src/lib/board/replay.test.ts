@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
-import { analysedEvidence, analysedMarks, bottomSeat, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { analysedEvidence, analysedMarks, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -135,6 +135,20 @@ describe('the move list and strip read the index', () => {
       position('choice', { key: 't2', actor: 0, label: 'Target Hero', revision: 4 }),
     ], 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
     expect(targets.map(entry => entry.text)).toEqual(['Target Heuristic', 'Target yourself']);
+  });
+
+  it('notes where an imported record branched, without seeds, and jumps to that choice', () => {
+    const branched = replayLog([
+      position('choice', { key: 'd1', actor: 1, label: 'Play Island', revision: 3 }),
+      position('choice', { key: 'd2', actor: 0, label: 'Pass priority', revision: 4, branched: ['determinize', 'shuffle_libraries'] }),
+    ], 0, seat => (seat === 0 ? 'Seat 1' : 'Seat 2'));
+    expect(branched.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
+      ['d1', 'villain', 'Play Island'],
+      ['branch:d2', 'system', 'Branch · hidden cards re-dealt, libraries reshuffled'],
+      ['d2', 'hero', 'Pass priority'],
+    ]);
+    expect(entryPosition('branch:d2')).toBe('d2');
+    expect(entryPosition('d1')).toBe('d1');
   });
 
   it('finds the move a consequence belongs to', () => {

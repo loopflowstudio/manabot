@@ -141,6 +141,18 @@ test('a snapshot opens as a recorded game with optional spectator reveal', async
   await page.goto(addresses.snapshot_replay);
   await expect(page.getByTestId('recording-heading')).toHaveText('Recorded game');
   await expect(page.getByTestId('replay-perspective')).toContainText('Acting view');
+  // The record reshuffled the libraries before its first decision: a neutral note, no seed.
+  const note = page.getByTestId('log-entry').filter({ hasText: 'Branch · libraries reshuffled' });
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveAttribute('data-actor', 'note');
   await page.getByRole('checkbox', { name: 'Show both hands' }).check();
   await expect(page.getByTestId('replay-perspective')).toContainText('Both hands');
+  // The top seat's revealed hand opens by keyboard and names its cards.
+  const hand = page.locator('[data-plate-side="opponent"]').getByTestId('shown-hand');
+  await hand.focus();
+  await page.keyboard.press('Enter');
+  const shown = page.getByRole('dialog', { name: /· Hand$/ });
+  await expect(shown).toContainText('Mountain');
+  await page.keyboard.press('Escape');
+  await expect(shown).toHaveCount(0);
 });

@@ -22,7 +22,7 @@
  * stays the acting viewer's recorded track: labels come from the index, never
  * from a spectator reveal.
  */
-import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
+import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
 import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark } from '$lib/analysis';
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
 import { possessive } from './view';
@@ -192,6 +192,18 @@ export function analysedEvidence(frame: ExperienceFrame, decision: AnalysedDecis
  * game names its chosen offer. `heroSeat` is the seat
  * named as "you"; `seatName` names the players the narration calls "Seat N".
  */
+const BRANCHES: Record<BranchKind, string> = {
+  determinize: 'hidden cards re-dealt',
+  shuffle_libraries: 'libraries reshuffled',
+  reseed: 'randomness reseeded',
+};
+const BRANCH_ENTRY = 'branch:';
+
+/** The position a log entry jumps to: a branch note jumps to the choice it precedes. */
+export function entryPosition(id: string): string {
+  return id.startsWith(BRANCH_ENTRY) ? id.slice(BRANCH_ENTRY.length) : id;
+}
+
 export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatName?: (seat: 0 | 1) => string): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
   // The first of the person's own steps in this step of the turn whose move
@@ -199,6 +211,15 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
   let begun: Position | null = null;
   positions.forEach((position, i) => {
     if (position.kind === 'state') return;
+    // A neutral note where an imported record branched from its source game.
+    if (position.kind === 'choice' && position.branched?.length) {
+      entries.push({
+        id: BRANCH_ENTRY + position.key,
+        actor: 'system',
+        turn: position.turn,
+        text: `Branch · ${position.branched.map(kind => BRANCHES[kind]).join(', ')}`,
+      });
+    }
     if (position.kind === 'consequences' && positions[i - 1]?.kind === 'choice') return;
     if (position.kind === 'consequences' && position.label === null) return;
     // The recorded person's own choice reads as its narrated move, as the
