@@ -15,6 +15,9 @@
    * supplies where the recap starts (`since`), the move list (`moves`, which
    * may jump), the recorded policy (`evidence`, shown on each offer's card and
    * row) and a bottom edge (`bottom`: the transport and the decision strip).
+   *
+   * Live play also takes pointer drags (`drag.ts`): each drop goes where a
+   * click goes, so a drag adds no choice a click or key cannot make.
    */
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import type { PreviewState } from '$lib/payment-preview';
@@ -24,7 +27,8 @@
   import Inspect from './Inspect.svelte';
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
-  import { prefersReducedMotion, Travel } from './motion';
+  import { prefersReducedMotion, settle, Travel } from './motion';
+  import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, move as moveGesture, playable, press, promote, release, type Gesture } from './drag';
   import { region } from './region';
   import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
@@ -42,7 +46,7 @@
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
   import { decidesBy, shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handFan, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
+  import { CARD_RATIO, footprint, handFan, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type HandItem, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -75,6 +79,8 @@
     /** Ask for the payment preview of this offer, or of none. Asking sends no action. */
     onpreview?: (offer: InteractionOffer | null) => void;
     onact: (offer: InteractionOffer) => void;
+    /** A Command the person sent is awaiting the authority's answer. */
+    pending?: boolean;
     onpassturn?: () => void;
     /** Where "since your last move" starts, when the caller knows (a recording); else the person's last commit. */
     since?: number | null;
@@ -107,7 +113,7 @@
 
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
-    presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
+    presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
@@ -307,6 +313,17 @@
       : frame.prompt.actor === projection.agent.player_index
         ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${possessive(you.name)} decision`
         : `${possessive(said)} decision`));
+  // ———————————————— Dragging
+
+  // The pointer gesture in progress (`drag.ts`). It is drawn only at the
+  // revision it started at, so a new frame ends it in the same update.
+  let gesture = $state.raw<Gesture>(IDLE);
+  const current = $derived(gesture.phase !== 'idle' && gesture.revision === frame.revision ? gesture : IDLE);
+  /** The card carried from hand, while it is drawn away from its slot. */
+  const carried = $derived(current.phase === 'dragging' || current.phase === 'holding' ? current.drag : null);
+  const carriedPoint = $derived(carriedAt(current));
+  const dragging = $derived(current.phase === 'dragging');
+
   // ———————————————— Payment preview
 
   // The offer the board previews: the one a person points at or focuses, when
@@ -316,8 +333,10 @@
   const payOffer = $derived(view.primary?.offer.verb === 'pay' ? view.primary : null);
   // Pointing at the pending payment's own row is still that payment: the
   // prompt keeps its plan and note, so nothing shifts under the pointer.
-  const previewing = $derived(!live ? null
-    : pointed && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer);
+  // A card carried toward the battlefield previews its single offer for the whole drag, touch included.
+  const carriedOffer = $derived(carried?.offers.length === 1 && previewable(carried.offers[0].offer) ? carried.offers[0] : null);
+  const previewing = $derived(!live ? null : carriedOffer
+    ?? (pointed && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer));
   $effect(() => { onpreview(previewing?.offer ?? null); });
   const answered = $derived(payment && previewing && payment.offer === previewing.offer.id && !payment.loading ? payment.preview : null);
   const payPlanned = $derived(paymentPlan(answered, frame));
@@ -345,6 +364,7 @@
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
   function point(offers: PlacedOffer[] | null): void {
+    if (dragging) return;
     pointed = offers?.length === 1 ? offers[0] : null;
   }
 
@@ -434,7 +454,10 @@
   const acting = $derived(live && !readingOut && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
   /** The pointer press that ended a read-out; its click acts on nothing. */
   let endedByPress = false;
+  /** The click that ends a drag is the drop, not a press of what it lands on. */
+  let swallowClick = false;
   function onPress(event: PointerEvent): void {
+    swallowClick = false;
     if (event.button !== 0) return;
     endedByPress = readingOut;
     if (endedByPress) {
@@ -443,6 +466,12 @@
     }
   }
   function onClick(event: MouseEvent): void {
+    if (swallowClick) {
+      swallowClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const endedByPointer = event.detail > 0 && endedByPress;
     if (event.detail > 0) endedByPress = false;
     if (!readingOut && !endedByPointer) return;
@@ -546,6 +575,7 @@
   function send(offer: InteractionOffer): void {
     if (!live) return;
     endReadOut();
+    gesture = promote(gesture);
     menuAt = null;
     stopNote = null;
     hush();
@@ -567,12 +597,13 @@
     if (opener?.isConnected) opener.focus({ preventScroll: true });
     opener = null;
   }
-  function activate(title: string, offers: PlacedOffer[], element: HTMLElement): void {
+  /** Commit a single offer, or open several beside `element` (or at `at`, where a card was dropped). */
+  function activate(title: string, offers: PlacedOffer[], element: HTMLElement, at?: DOMRect): void {
     hush();
     if (!live || !offers.length) return;
     if (offers.length === 1) { act(offers[0]); return; }
     opener = element;
-    const rect = element.getBoundingClientRect();
+    const rect = at ?? element.getBoundingClientRect();
     menuAt = { title, offers, x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
   }
 
@@ -598,6 +629,7 @@
     dwell = null;
   }
   function show(subject: Subject | null, element: HTMLElement | null): void {
+    if (dragging) return;
     stopDwell();
     if (!subject || !element) { hovered = null; return; }
     docked = subject;
@@ -692,6 +724,88 @@
   // Shrunk cards give the strip's spare height back to the board.
   const handTrack = $derived(board.hand.length === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
 
+  // ———————————————— Dragging from hand
+
+  // Press a playable card in hand and drag it: it follows the pointer while
+  // its slot steps back, and releasing it over the battlefield is a click on
+  // it. Released anywhere else, or on Escape, it settles back with nothing sent.
+  function pressHand(event: PointerEvent, item: HandItem): void {
+    if (!live || readingOut || drafting || running || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
+    const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
+    if (!opener) return;
+    const rect = opener.getBoundingClientRect();
+    gesture = press({ kind: 'play', card: item.card, offers: item.offers, width: fan.card, grab: { x: event.clientX - rect.left, y: event.clientY - rect.top }, opener },
+      event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
+  }
+  function overField(x: number, y: number): boolean {
+    return document.elementFromPoint(x, y)?.closest('.board .half') != null;
+  }
+  function onDragMove(event: PointerEvent): void {
+    if (current.phase !== 'pressed' && current.phase !== 'dragging') return;
+    const next = moveGesture(current, event.pointerId, { x: event.clientX, y: event.clientY }, overField(event.clientX, event.clientY));
+    if (next === current) return;
+    if (current.phase === 'pressed') {
+      // Now a drag: inspect closes and stays closed, and no text selection follows the pointer.
+      hush();
+      pointed = null;
+      window.getSelection()?.removeAllRanges();
+    }
+    gesture = next;
+  }
+  /** The carried card's box at `at`, as the hand draws it. */
+  function carriedRect(at: { x: number; y: number }, width: number): DOMRect {
+    return new DOMRect(at.x, at.y, width, footprint(width, true));
+  }
+  /** A carried card goes back to its slot in hand, from where it was let go. */
+  function settleHome(drag: { opener: HTMLElement; width: number }, at: { x: number; y: number }): void {
+    gesture = IDLE;
+    if (drag.opener.isConnected) settle(drag.opener, carriedRect(at, drag.width), prefersReducedMotion());
+  }
+  function onDragEnd(event: PointerEvent): void {
+    if (current.phase !== 'pressed' && current.phase !== 'dragging') return;
+    if (event.pointerId !== current.pointerId) return;
+    if (event.type === 'pointercancel') { endDrag(); return; }
+    const ended = release(current, event.pointerId);
+    const result = ended.release;
+    if (result.outcome === 'click' || result.outcome === 'none') { gesture = ended.gesture; return; }
+    // The click that follows this release is part of the drag.
+    swallowClick = true;
+    setTimeout(() => { swallowClick = false; }, 0);
+    if (result.outcome === 'cancel') { settleHome(result.drag, result.at); return; }
+    gesture = ended.gesture;
+    if (result.outcome === 'commit') act(result.drag.offers[0]);
+    else activate(result.drag.card.name, result.drag.offers, result.drag.opener, carriedRect(result.at, result.drag.width));
+  }
+  /** Ends an unreleased gesture with nothing sent; a card already dropped stays held. */
+  function endDrag(): void {
+    if (current.phase === 'dragging') { settleHome(current.drag, carriedAt(current)!); return; }
+    gesture = cancelGesture(gesture);
+  }
+  // A read-out or the board going read-only ends an unreleased drag. A hold
+  // stays: committing a drop makes the board read-only until its answer.
+  $effect(() => {
+    if (!live || readingOut) untrack(endDrag);
+  });
+  // A gesture from an earlier revision is gone: its frame was replaced.
+  $effect(() => {
+    const at = frame.revision;
+    untrack(() => { if (gesture.phase !== 'idle' && gesture.revision !== at) gesture = IDLE; });
+  });
+  // Refused at the same revision: the dropped card goes back to hand, and the notice says why.
+  $effect(() => {
+    if (current.phase === 'holding' && current.reason === 'pending' && !pending) {
+      const held = current;
+      untrack(() => settleHome(held.drag, held.at));
+    }
+  });
+  // A dropped card's choices closed without one chosen (Cancel, Escape, or another card's menu): it goes back to hand.
+  $effect(() => {
+    if (current.phase === 'holding' && current.reason === 'menu' && menuAt?.offers !== current.drag.offers) {
+      const held = current;
+      untrack(() => settleHome(held.drag, held.at));
+    }
+  });
+
   // ———————————————— Keyboard
 
   // The board's keys, as the sheet `?` opens lists them. A recording has its
@@ -715,7 +829,7 @@
           { key: '← → ↑ ↓', does: 'Move within a region' },
           { key: 'F6', does: 'Pass turn: pass every priority window until it ends' },
         ]),
-    { key: 'Esc', does: recording ? 'Close a menu or preview' : "Close a menu or preview; skip the opponent's moves" },
+    { key: 'Esc', does: recording ? 'Close a menu or preview' : "Cancel a drag; close a menu or preview; skip the opponent's moves" },
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
     { key: '?', does: 'Show or hide these keys' },
   ]);
@@ -769,6 +883,14 @@
       endReadOut();
       return;
     }
+    // Escape during a drag ends the drag and nothing else.
+    if (event.key === 'Escape' && (current.phase === 'pressed' || current.phase === 'dragging')) {
+      event.preventDefault();
+      // A press cancelled before it moved must not click when it is released.
+      if (current.phase === 'pressed') swallowClick = true;
+      endDrag();
+      return;
+    }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
@@ -790,10 +912,10 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointermove={onPointerMove}
+<svelte:window onkeydown={onKeydown} onpointermove={event => { onPointerMove(event); onDragMove(event); }} onpointerup={onDragEnd} onpointercancel={onDragEnd}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
-<div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
+<div class="game" class:dragging data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
@@ -840,15 +962,25 @@
       <span class="type-heading hand-label text-ink-2">Hand · {board.hand.length}</span>
       <div class="hand-cards" style:width={`${fan.card + Math.max(0, board.hand.length - 1) * fan.step}px`}>
         {#each board.hand as item, index (item.card.id)}
-          <div class="hand-card" class:playable={live && item.offers.length > 0} style:left={`${index * fan.step}px`}>
+          {@const away = carried?.card.id === item.card.id}
+          <!-- svelte-ignore a11y_no_static_element_interactions (the press starts a pointer drag; the card's button is the control) -->
+          <div class="hand-card" class:playable={live && item.offers.length > 0} class:draggable={live && playable(item.offers)} style:left={`${index * fan.step}px`}
+            onpointerdown={event => pressHand(event, item)}>
             <BoardCard name={item.card.name} width={fan.card} slice={fan.covered && index < board.hand.length - 1 ? fan.step : null} card={item.card} offers={item.offers} {live} asked={board.asked.has(item.card.id)}
-              dim={acting && item.offers.length === 0 ? 'hand' : null}
+              dim={away || (acting && item.offers.length === 0) ? 'hand' : null} travel={!away}
               onactivate={element => activate(item.card.name, item.offers, element)}
               onpreview={element => previewCard(element ? item.card : null, element)} />
           </div>
         {/each}
       </div>
     </section>
+
+    {#if dragging && carried}
+      <!-- Where releasing plays the card, and what it does: the battlefield above the hand. -->
+      <div class="drop-zone" class:over={carried.overField} style:bottom={handTrack} data-testid="drop-zone" data-over={carried.overField} aria-hidden="true">
+        <span class="drop-label type-caption">{dropLabel(carried)}</span>
+      </div>
+    {/if}
 
     {#if finished}
       <!-- Over the board, not over the screen: the final position stays readable around it. -->
@@ -947,6 +1079,13 @@
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
   <Lines {lines} {root} revision={frame.revision} />
+  {#if carried && carriedPoint}
+    <!-- The carried card: a copy for the eye, following the pointer; the card in hand stays the control. -->
+    <div class="carried" inert aria-hidden="true" data-testid="drag-ghost" data-holding={current.phase === 'holding' ? current.reason : undefined}
+      style:translate={`${carriedPoint.x}px ${carriedPoint.y}px`}>
+      <BoardCard name={carried.card.name} width={carried.width} card={carried.card} />
+    </div>
+  {/if}
 </div>
 
 {#if menuAt}
@@ -1007,14 +1146,15 @@
 <style>
   /*
    * The board's one layering order, lowest first: cards, the lines between
-   * cards and their targets, floating panels (the tray and the result card).
+   * cards and their targets, floating panels (the tray and the result card),
+   * then what a drag draws (the carried card, the drop zone and the marquee).
    * Each row of permanents and the hand keep their own stacking, so a raised,
    * attacking or lifted card orders only among its neighbours and never climbs
    * over a line or a panel. Above the whole game (itself at 10) float the inspect
    * preview (250), then card menus and the keys sheet (300). Add no other z-index.
    */
   .game {
-    --layer-lines: 1; --layer-panel: 2;
+    --layer-lines: 1; --layer-panel: 2; --layer-drag: 3;
     position: fixed; inset: 0; z-index: 10; display: grid;
     grid-template-columns: minmax(0, 1fr) clamp(250px, 21vw, 300px);
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
@@ -1051,6 +1191,24 @@
   .hand-cards { position: relative; height: 100%; }
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
   .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
+  /* A playable card is dragged, never panned; while a card is carried, its neighbours stay still. */
+  .hand-card.draggable { touch-action: none; }
+  .dragging { user-select: none; }
+  .dragging .hand-card:hover, .dragging .hand-card:focus-within { transform: none; }
+
+  .carried { position: fixed; left: 0; top: 0; z-index: var(--layer-drag); pointer-events: none; }
+  .carried :global(.tcard) { box-shadow: var(--lift-selected); }
+  .drop-zone {
+    position: absolute; left: 0; right: 0; top: 0; z-index: var(--layer-drag); pointer-events: none;
+    display: flex; justify-content: center; align-items: flex-start; padding-top: 12px;
+    border: 2px dashed var(--border-strong); border-radius: var(--radius-md);
+  }
+  .drop-zone.over { border-color: var(--accent); }
+  .drop-label {
+    padding: 2px 10px; border-radius: var(--radius-full); border: 1px solid var(--border-strong);
+    background: var(--bg-surface); color: var(--text-secondary); box-shadow: var(--shadow-raised);
+  }
+  .drop-zone.over .drop-label { border-color: var(--accent); color: var(--text); }
 
   .tray {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: var(--layer-panel);

@@ -81,6 +81,8 @@
     draft?: 'can' | 'in' | 'armed' | null;
     /** What pressing it does in a combat draft, for its accessible name. */
     note?: string | null;
+    /** It takes part in travel between frames; a card in hand being carried leaves that to the carried copy. */
+    travel?: boolean;
     onactivate?: (element: HTMLElement) => void;
     onpreview?: (element: HTMLElement | null) => void;
   }
@@ -88,7 +90,7 @@
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
     toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null,
-    count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
+    count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, travel = true, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -219,8 +221,8 @@
     class:sliced={slice !== null}
     class:paid={paid !== null}
     data-testid="board-card"
-    data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
-    data-travel-name={name}
+    data-travel-id={!travel ? undefined : permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
+    data-travel-name={travel ? name : undefined}
     data-travel-side={side}
     data-object-id={permanent?.id ?? card?.id}
     data-offer-count={offers.length}

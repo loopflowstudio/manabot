@@ -453,6 +453,7 @@
       onpreview={previewPayment}
       combatPreview={canSubmitLive && !participantStudying ? fetchCombatPreview : undefined}
       onact={handleActionSelect}
+      pending={gameStore.commandPending}
       onpassturn={handlePassTurn}
       {notices}
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
