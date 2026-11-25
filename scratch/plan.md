@@ -609,10 +609,18 @@ Built in 9308d9f73a (docs in the commit after it):
 
 What it taught: the existing Study branch cannot be reused for finished games
 (its roots live in the live session for 15 minutes), so the line is a
-read-only play-out. Playing on yourself from the line is not built
-(questions.md, slice 4 choices); the plan's "the person plays on" is open.
+read-only play-out.
 
-Next: slice 6 (analysis while you play).
+Remaining from slice 4 (realign, 2026-11-24): **playing on from the line.**
+The approved chess.com table (`scratch/chesscom.html`, answered "1a yes / 2
+yes / 3 sure") brings "Analysis board: Study's branch, opened from Review at
+any decision", and the direction says "the person plays on or lets the agent
+keep choosing in their seat". Not built: a playable branch rooted in a
+re-executed position (a `StudyForkProvider` over `agent_line`'s walk, or a
+Play game whose prefix is the record's; questions.md, slice 4 choices).
+Acceptance keeps it; build it after slice 6.
+
+Next: slice 6 (analysis while you play), then playing on from the line.
 
 ## Slices
 
@@ -645,7 +653,7 @@ Next: slice 6 (analysis while you play).
    table with intervals.
 4. **(built, read-only)** **See its line.** From an analysed decision, the
    agent's choice played and its line to the end of the next turn, plus key
-   moments. Playing on yourself from it is not built.
+   moments. Remaining: play on yourself from it (after slice 6).
 5. **(built)** **Watch: revealed hands and branch boundaries** (MTG-423). Independent of
    slices 1–4; may go first if slice 1 stalls.
 6. **Analysis while you play.** The toggle, the catch-up walk, the live
