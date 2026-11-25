@@ -1089,7 +1089,9 @@ or phase, as any floating mana does. There is no undo.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
   taps and direct taps use the `TapForCost` policy action with the
   permanent as focus, told apart by `pays_directly`.
-  Choice-output abilities use their activation action. Omitting both fields
+  Choice-output abilities use their activation action. Both fixed-source taps
+  and mana-producing activated abilities set `Action.is_mana_ability` to
+  `True`, distinguishing mana abilities from non-mana plays. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
 

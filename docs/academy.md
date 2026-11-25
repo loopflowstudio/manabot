@@ -905,7 +905,9 @@ Under **Mana floats**, **Off** is the default. Choose **Only when the mana could
 can trigger an ability. Usable also offers an activation that pays life,
 sacrifices a permanent or has another effect. **All** offers every legal
 mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you swap sides.
-Your priority stops still determine which windows pause for a decision.
+Your priority stops still determine which windows pause for a decision: with
+**Auto-pass outside stops** on, priority pauses only when you also have a
+non-mana play; turn it off for **Full control** to pause solely to float mana.
 
 **When there is no plan to draw.** The primary button then shows only the
 cost, and a line under it says why when the game does:
@@ -1020,33 +1022,51 @@ it; there is no general browser undo.
 
 ### Choosing priority stops
 
-To hold up a response during the opponent's upkeep, press the lower stop in the
-**Upkeep** cell of the step bar, or open **Menu**, keep **Use priority stops**
-checked and check **Upkeep** under **Opponent turn**; the two are the same
-setting. Academy pauses at a priority window there when you have a real choice.
+Attack with Savannah Lions while holding Razor Rings and the mana to cast it:
+with default stops, Academy pauses in **Declare attackers** (and again in
+**Declare blockers** after blocks, while creatures are still attacking) and
+offers **Cast Razor Rings**. The step bar along the bottom shows filled squares
+on **Attackers** and **Blockers** for both turns. On a turn where nobody
+attacks, or when you have no legal non-mana play, combat runs straight through
+and each automated pass is marked **auto** in the move list.
+
+To hold up a response at another step — such as the opponent's upkeep — press
+the lower stop in the **Upkeep** cell of the step bar, or open **Menu**, keep
+**Auto-pass outside stops** checked, and check **Upkeep** under **Opponent
+turn**; the two are the same setting. Press an active stop such as **Attackers**
+or **Blockers** on the step bar to change it to **Once** or **Off**.
 
 Each stop on the step bar has three states, and a press moves to the next:
 **Off** (a hollow square), **Every time** (filled) and **Once** (a dot inside).
-A once stop pauses the next time the game arrives at that step on that turn and
-then turns itself off; the moves list says so ("Stopped once at Upkeep on the
-opponent's turn; that stop is now off"), marked as automation like the passes
-Academy makes for you. The Menu shows a once stop as checked. The stops are one
-Tab stop: arrow keys move between them, up and down between the two turns, and
-Space or Enter presses one. Stops are a setting of live play: a recording's
-bar shows only the steps of the turn, with the current one marked.
+A once stop pauses the next time the game arrives at an eligible window for that
+step on that turn and then turns itself off; the moves list says so ("Stopped
+once at Upkeep on the opponent's turn; that stop is now off"), marked as
+automation like the passes Academy makes for you. A once stop on **Attackers**
+or **Blockers** waits for a combat with attacking creatures before spending
+itself. The Menu shows a once stop as checked. The stops are one Tab stop: arrow
+keys move between them, up and down between the two turns, and Space or Enter
+presses one. Stops are a setting of live play: a recording's bar shows only the
+steps of the turn, with the current one marked.
 
-**Your turn** and **Opponent turn** say whose turn contains the window. A checked
-step stops automatic priority passing there; an unchecked step allows it unless
-the stack-response setting requires a stop. The available steps are upkeep,
-draw, first main, beginning of combat, declare attackers, declare blockers,
-combat damage, second main and end step.
+**Your turn** and **Opponent turn** say whose turn contains the window. The
+available steps are upkeep, draw, first main, beginning of combat, declare
+attackers, declare blockers, combat damage, second main and end step. With
+**Auto-pass outside stops** on, a priority window pauses only when you have at
+least one legal play other than passing priority and activating mana abilities
+(untapped lands or mana-producing abilities alone never hold priority, even with
+**Mana floats** enabled), and either the stack is nonempty (with stack stops on)
+or the current step is checked. **Declare attackers** and **Declare blockers**
+stops hold only while creatures are attacking; if no creatures attack, or if the
+only attacker leaves combat before blockers, those steps auto-pass without
+phantom prompts. To pause before combat on an empty board, set a stop on
+**Beginning of combat** or turn on **Full control**.
 
 | Setting | Default and effect |
 |---|---|
-| **Use priority stops** | On. Automatically passes priority outside configured stops. Turn it off to see every priority window with a real choice. |
-| **Your turn** | Stops in both main phases. |
-| **Opponent turn** | Stops in the end step. |
-| **Stop when the stack offers a response choice** | On. Stops for a response when the stack is nonempty, even at an unchecked step. |
+| **Auto-pass outside stops** | On. Automatically passes priority outside active stops, and whenever your only legal actions are passing and mana abilities. Turn it off for **Full control** (the Menu badge reads **full control** and the step bar reads **Full control: every priority choice pauses**): every priority window with more than one legal action pauses, including empty combat and mana floats. |
+| **Your turn** | Stops in **First main**, **Declare attackers** (while attacking), **Declare blockers** (while attacking) and **Second main**. |
+| **Opponent turn** | Stops in **Declare attackers** (while attacking), **Declare blockers** (while attacking) and **End step**. |
+| **Stop when the stack offers a response choice** | On. Pauses whenever the stack is nonempty and you have a non-mana play, even at an unchecked step. |
 | **Reset to defaults** | Restores these settings. |
 
 Changing a stop can immediately advance the game. Target, payment, Learn,
@@ -1057,9 +1077,10 @@ game's server settings.
 
 When **Pass Turn (F6)** is available, activating it yields through priority
 windows, including checked stops and stack responses, until the turn ends or
-a non-priority decision needs you. With **Use priority stops** off, priority
-windows continue to appear. Automatic passes are marked **auto** in the
-move list and recording. Pausing narration does not change these settings.
+a non-priority decision needs you. In **Full control** (with **Auto-pass
+outside stops** off), priority windows continue to appear. Automatic passes are
+marked **auto** in the move list and recording. Pausing narration does not
+change these settings.
 
 ### Reading consequences
 
@@ -1786,10 +1807,10 @@ browser. The invariants that follow:
   like every game runner: a sole legal action, for
   either seat, never reaches a person or policy.
 - **Automation stays identifiable.** Priority-stop and F6 automation retain
-  their Commands and appear as **Auto** in live and replay logs. Disabling
-  **Use priority stops** in the Stops panel surfaces every priority window with a
-  real choice. Traces from before native skipping keep their recorded forced
-  Auto steps.
+  their Commands and appear as **Auto** in live and replay logs. Turning off
+  **Auto-pass outside stops** in the Stops panel enters **Full control** and
+  surfaces every priority window with a real choice. Traces from before native
+  skipping keep their recorded forced Auto steps.
 - **Replay and fork identity.** Live, Watch, Replay and Study use one decision
   renderer. Study executes one exact semantic offer on a retained isolated root
   (a full clone of the native game; the engine has no undo) and **Return to
