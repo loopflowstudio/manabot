@@ -1,6 +1,27 @@
 <!doctype html><meta charset="utf-8"><title>MTG-389 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc;margin:.5em 0}h2{margin-top:2em}code{background:#f3f3f3;padding:0 3px}</style>
-<h1>MTG-389 Study — QA, 2026-11-25</h1>
+<h1>MTG-389 Study — QA after the Review rail pass, 2026-11-25</h1>
+<p>The real product again: <code>managym academy --policy qa_bot.json play --opponent qa_bot</code> on the static build, the same persistent browser profile and game store as the first pass below (so earlier games were present), 1280×800. A new 23-turn game against the trained bot (145 steps, 63 of your decisions) was played to the end, then opened from Games.</p>
+<h2>5. Review rail at a real decision</h2>
+<p>Review opened with the analysis already done (it ran during the game's end), 38 move marks. Checked: no priority-stop toggles, no empty Stack, no "Space to …", no grade words; Next key moment sits in the transport and jumped to "Its expected score moved 69 → 82 by your next decision"; arrow keys step positions.</p>
+<p><b>Found and fixed:</b> at a 9-option Learn decision with Pop Quiz on the stack, the analysis list showed <b>one</b> option. Its rows wrapped to four lines of 16 px serif ("✓Discard / Firebending / Lesson, then draw / a card"), 78–102 px each. The spec's Bolt game never met long option names. Now a recording's option row keeps one line like its move (14 px, ellipsis, the full choice as its title and accessible name; "you" / "its choice" outside the ellipsis), and the list's column is bounded so the row cannot widen the rail. Same position: 3 of 9 options fully shown, every row 32 px.</p>
+<img src="shots/qa-rail-9-options-light.png"><img src="shots/qa-rail-9-options-dark.png">
+<p>At this position Moves shows 6 rows, not 8: the stack item and Try another line (this game is still inside Study's retention window) take the height. The ≥8 bound holds at positions without them (spec).</p>
+<h2>6. See its line</h2>
+<p><b>Found and fixed:</b> while a policy's line was shown, the rail went back to Play's layout: an empty Stack block, "Waiting", an empty "All legal choices 0" box, and Moves squeezed into the bottom quarter. The rail decided "read-only" from whether moves jump, and a line disables jumping. Board now takes <code>readOnly</code> (default: moves jump); Replay passes it everywhere except a live Study branch, which still answers. A read-only position without a decision also drops the empty choices box.</p>
+<img src="shots/qa-line-rail.png">
+<h2>Checks</h2>
+<p><code>npm test</code> 667 passed; <code>npm run check</code> 0 errors. Policy e2e (<code>study-review</code>, <code>policy-runtime</code>, <code>input-recovery</code>): 14 passed. Release config, the replay-facing specs (<code>unified-replay</code>, <code>watch</code>, <code>game-history</code>, <code>stops</code>, <code>laptop-comfort</code>): 20 passed.</p>
+<h2>Still wrong or unreached, worst first</h2>
+<ul>
+<li><code>playwright.study.config.ts</code> (<code>study.spec.ts</code>) fails at setup with "Study source omitted its participant credential" — identically with this pass's changes reverted. Its helper speaks the old <code>observation</code>/<code>action</code> socket protocol; no CI job runs the config. Not caused by this Task's recent work; not fixed.</li>
+<li>Option names truncate hard in the narrow rail ("Discard Fire…"); two identical labels are distinguishable only by their numbers. The full text is in the title and accessible name.</li>
+<li>Moves shows 6 rows at a decision with a stack item and Try another line.</li>
+<li>Policy display names like <code>policies/00000002-raw</code> fill the who column and headings; that is the registered name of the local checkpoint, not this change.</li>
+<li>Still not reached: a strong current-world checkpoint (the chart stays nearly flat with the local-recipe policy), the 69-decision Elemental branched snapshot.</li>
+</ul>
+<hr>
+<h1>First QA pass, 2026-11-25</h1>
 <p>The real product throughout: <code>managym academy --policy qa_bot.json play</code> (the CLI, built static client), with a real checkpoint from <code>etude train manabot/recipes/local.py</code> as the opponent and analysing policy, default UR Lessons v GW Allies decks. A headless Chromium drove one persistent profile, as a returning person would. Origin <code>automated_validation</code>; everything under ignored <code>.runs/qa/</code>.</p>
 
 <h2>1. Returning user: games played before this change</h2>

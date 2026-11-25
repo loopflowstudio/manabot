@@ -275,3 +275,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   read-out (the click is swallowed by design); click again, as a person
   would. A real checkpoint from `etude train manabot/recipes/local.py`
   analysed a 130-event game in about 5–60 s depending on load.
+  The Bolt-deck acceptance spec never meets long option names or a stack
+  item; check Review's rail at a Lessons v Allies decision (Learn has nine
+  options) and with **See its line** open, which passes no `onjump`.
+  `playwright.study.config.ts` (`study.spec.ts`) fails at setup on this
+  branch's base protocol ("Study source omitted its participant
+  credential") and runs in no CI job; do not read its failure as a
+  regression without reverting the change first.

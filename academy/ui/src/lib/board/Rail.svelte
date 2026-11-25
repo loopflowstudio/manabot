@@ -69,6 +69,8 @@
     recapTitle?: string;
     /** Moves jump to their position when set. */
     onjump?: (id: string) => void;
+    /** Read-only (a recording, or a policy's line): no empty stack and no answer buttons beside the list. */
+    recording?: boolean;
     currentMove?: string | null;
     /** A combat draft's controls, in place of the per-creature buttons. */
     draft?: Snippet;
@@ -79,7 +81,7 @@
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
   const readingOut = $derived(reading !== undefined);
@@ -95,8 +97,6 @@
   const context = $derived(frame.projection.decision_context);
   const paid = $derived(committed(frame));
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
-  /** A recording (moves jump to positions): read-only, so no empty stack and no answer buttons beside the list. */
-  const recording = $derived(onjump !== undefined);
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
   const resolved = $derived(new Map(recent.resolved.map(spell => [spell.id, spell])));
@@ -292,8 +292,8 @@
     <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over'} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
-  <!-- A finished game has no choices to list; the result card says what happened. -->
-  {#if !over || frame.offers.length}
+  <!-- A finished game has no choices to list; the result card says what happened. Read-only, a position without a decision lists none. -->
+  {#if (!over && !recording) || frame.offers.length}
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
       <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices')}</span>
@@ -310,7 +310,8 @@
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} />{#if evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
+            <span class="label" title={recording ? placed.offer.label : undefined}>{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} />{#if !recording && evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
+            {#if recording && evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}
             {#if estimateOf(placed) !== undefined}<span class="estimate" aria-hidden="true" data-testid="offer-estimate" title="Estimate after this choice, 0–100 from your seat: the next decision's reading, in a world re-dealt from what you knew">{formatScore(estimateOf(placed)!)}</span>{/if}
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
@@ -329,7 +330,7 @@
       {#each moves as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
           <!-- A recording numbers the turn in its first row's gutter; the heading stays for screen readers. -->
-          <p class="turn-head type-label" class:sr-only={recording}><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
+          <p class="turn-head type-label" class:sr-only={onjump !== undefined}><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
             {#each turn.moves as move, at (move.id)}
               {#if onjump}
@@ -428,7 +429,7 @@
   .status { min-height: 16px; }
   .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
-  .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
@@ -440,6 +441,9 @@
   .prompt [aria-disabled] { opacity: 0.55; cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
+  /* Reviewing, a choice keeps one line like its move, so the bounded list shows several; the whole choice is its title. */
+  .recording .row .label { font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recording .row .who-chose { flex: none; margin-left: 0; }
   .hidden-key { visibility: hidden; }
   .log { flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
   /* Reviewing, the moves are what you read: they take the remaining height, and the choices list keeps a bounded share. */

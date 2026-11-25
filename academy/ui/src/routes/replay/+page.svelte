@@ -736,6 +736,7 @@
     heading={branched || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
     {moves}
     onjump={locked ? undefined : jump}
+    readOnly={!studying}
     {currentMove}
     {evidence}
     moveMarks={marksByMove}

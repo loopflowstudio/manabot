@@ -83,6 +83,8 @@
     moves?: MoveTurn[];
     /** Jump to the position a move names; moves are buttons when set. */
     onjump?: (id: string) => void;
+    /** Nothing here can be answered (a recording, or a policy's line through it): the rail drops its answer buttons and empty stack. Defaults to `onjump` being set. */
+    readOnly?: boolean;
     /** The move the shown position belongs to. */
     currentMove?: string | null;
     /** The recorded policy at a recorded choice. */
@@ -113,7 +115,7 @@
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu,
+    since: sinceGiven, moves: movesGiven, onjump, readOnly = onjump !== undefined, currentMove = null, evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
 
@@ -895,7 +897,7 @@
     <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
+      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 
