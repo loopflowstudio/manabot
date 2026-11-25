@@ -1,4 +1,4 @@
-at: 73d93c963ec109fe82fd6d2d9c4613679bc85651
+at: dbda3a656ed0b695869d01e0e56e253fb700357b
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -11,7 +11,7 @@ first:
   - path: managym/state/src/permanent.rs
     why: EntryChoice stored per battlefield incarnation; Wish counters
   - path: managym/state/src/mana.rs
-    why: Unified ManaExpiry classes, ManaClass::from, and by-value expiry split
+    why: Unified ManaExpiry classes and digest-cached SpendPredicates restrictions
   - path: managym/src/state/player.rs
     why: Single unified mana_pool replacing separate combat_mana_pool
   - path: managym/src/state/hash.rs
@@ -37,11 +37,11 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Target shares, LibraryTop/Unselected, GrantPlay, Repeat, Fight, expiry mana
   - path: managym/src/flow/layers.rs
-    why: Chosen creature type, Changeling, and PredicateSource matching
+    why: Chosen types, Changeling, dirty finish_object bits, fast targets
   - path: managym/src/flow/statics.rs
-    why: Source-relative predicates, graveyard arrivals, and Spyglass bans
+    why: Guarded source-relative predicates, graveyard arrivals, Spyglass bans
   - path: managym/src/flow/mana.rs
-    why: Chosen-color/type mana and single-pool step/combat/turn expiry clearing
+    why: Chosen-value mana, expiry clearing, memoized payment supply bounds
   - path: managym/src/flow/turn.rs
     why: Unified graveyard arrivals and casts-before-triggering lookup
   - path: managym/src/flow/zones.rs
@@ -88,6 +88,10 @@ first:
     why: Heraldic Banner, Charming Prince, Run Away Together, Wishclaw
   - path: managym/src/flow/target_authority_tests.rs
     why: Whole-assignment target swaps vs single-slot retargeting
+  - path: managym/src/flow/mana/tests.rs
+    why: Optimistic supply, ManaChoices, and payment search bound tests
+  - path: managym/examples/bench_states.rs
+    why: Entry-choice, Changeling, Genesis Wave, and Ventmaw stress states
   - path: managym/cards/tests/cards/fdn.rs
     why: Directed tests for Curator, Harvester, keep_permanents, and FDN tail
   - path: managym/cards/tests/cards/rna.rs
