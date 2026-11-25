@@ -55,6 +55,7 @@ const STATES: &[(&str, &str)] = &[
     ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
     ("venom-team", "Venom Connoisseur with N Gray Ogres and two entering Allies; resolve the second ability and grant the whole team deathtouch"),
     ("blast-discard", "Incinerating Blast damages an Ogre; N individually selectable cards remain in hand beside decline"),
+    ("myojin-discard", "Myojin of Night's Reach makes an opponent simultaneously discard N Wilt-Leaf Lieges and N Gray Ogres"),
     ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
     ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
@@ -328,6 +329,15 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 .extend(GRAVEYARD.iter().cycle().take(size).map(|s| s.to_string()));
             seats[1].add("Gray Ogre", 1);
         }
+        "myojin-discard" => {
+            seats[0].add("Myojin of Night's Reach", 1);
+            seats[1]
+                .hand
+                .extend(std::iter::repeat_n("Wilt-Leaf Liege".into(), size));
+            seats[1]
+                .hand
+                .extend(std::iter::repeat_n("Gray Ogre".into(), size));
+        }
         "lathril-elves" => {
             seats[0].add("Lathril, Blade of the Elves", 1);
             seats[0].cycle(&["token.elf_warrior_1_1_g"], size);
@@ -586,6 +596,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
             | "fumigate-panda"
             | "venom-team"
             | "blast-discard"
+            | "myojin-discard"
             | "militant-mill"
     ) {
         seats[1].add("Mountain", 1);
@@ -755,6 +766,24 @@ fn build(recipe: &Recipe) -> Env {
             .as_mut()
             .unwrap()
             .change_counters(CounterKind::Lore, 1);
+    }
+    if recipe.state == "myojin-discard" {
+        let game = env.fixture_game_mut();
+        let id = game
+            .state
+            .permanents
+            .iter()
+            .enumerate()
+            .find_map(|(i, p)| {
+                p.as_ref()
+                    .filter(|p| game.state[p.object].name == "Myojin of Night's Reach")
+                    .map(|_| i)
+            })
+            .unwrap();
+        game.state.permanents[managym::state::game_object::PermanentId(id)]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::Divinity, 1);
     }
     if recipe.state == "herald-statics" {
         env.fixture_game_mut().state.players[0].life = 0;
@@ -1049,10 +1078,10 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
         }
         "angel-life-gain" | "giada-entry" | "banner-choice" | "collector-food"
         | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
-        | "control-auras" | "militant-mill" => {
+        | "myojin-discard" | "control-auras" | "militant-mill" => {
             let env = match recipe.state.as_str() {
                 "militant-mill" => follow(root, &[("cast", 0), ("choice", 8)]),
-                "angel-life-gain" | "collector-food" | "mixed-life-gain" => {
+                "angel-life-gain" | "collector-food" | "mixed-life-gain" | "myojin-discard" => {
                     follow(root, &[("activate", 0)])
                 }
                 "venom-team" => {
