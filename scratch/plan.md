@@ -61,111 +61,15 @@ What jace actually does (`/tmp/jace-audit-437/src`, the audited commit):
 
 ## Design
 
-### 1. `managym.ObservationBatch` pickles through a sealed native hook, preserving its certificate contract
+### 1–2. Transport — built in `8076ce311a`
 
-`ObservationBatch` stays unconstructible from raw bytes in the public API (no
-public `#[new]`, no raw-bytes constructor added to `managym/__init__.pyi`).
-`admit_native` relies on `ObservationBatch` originating from native encoding;
-pickle is a trusted-process IPC transport, not a public raw-bytes builder.
-
-`managym/src/python/observation_batch.rs`:
-
-- Add `ObservationBatch.__reduce__` returning
-  `(managym._restore_observation_batch, (self.layout, self.batch_size, self.tables()))`
-  (works across all pickle protocols), plus O(1) `__copy__` and `__deepcopy__`
-  cloning the immutable `Py` references (matching `Deck`).
-- Export `#[pyfunction] fn _restore_observation_batch(py, layout, batch_size, tables) -> PyResult<ObservationBatch>`
-  on the native module (not in `__init__.pyi`, standard Python pickle hook).
-- Hand the `bytes` objects to pickle by reference and keep them by reference on
-  restore: zero copy, no densifying, and pickle's memo preserves the sharing
-  that `blank_decision_memory` creates between two batches.
-- Define one shared Rust helper for a table's exact packed row byte stride and
-  per-span capacity from `ArrayLayout`, used by `freeze`, `gather`, and
-  `_restore_observation_batch`:
-  - `seat_axis = array.axes[0] == "viewer_relative_seat" && key != "player_turn_state"`
-    (same rule as `PackedRows::new`); `axis = if seat_axis { 1 } else { 0 }`;
-    `capacity = array.shape[axis].unwrap()`.
-  - If `array.element.is_some()` (e.g. `action_focus` with shape
-    `[max_actions, max_focus_objects]`, `semantic_cards`, `card_turn_state`):
-    `stride = elem_storage_bytes * prod(array.shape[axis + 1..])`
-    (so `action_focus` is `4 * max_focus_objects`, not `4`).
-  - Otherwise (feature tables): `stride = sum(f.storage.bytes() for f in array.packed_fields(key))`
-    (`Storage::Uint8 => 1`, `Storage::Int32 | Storage::Float32 => 4`).
-  - `freeze` uses this helper directly instead of `values.len().checked_div(count).unwrap_or(0)`,
-    so empty tables still carry their true stride and `gather` needs no `stride.max(...)` workaround.
-- `_restore_observation_batch` validates every table before constructing
-  `ObservationBatch`, raising `ValueError` on any violation:
-  - `layout.config.layout == InputLayout::OneToken` (v11 only);
-  - table key set equals the layout's CSR tables (`!key.ends_with("_valid")`) and
-    each table's `seat_axis` matches;
-  - `offsets.len() == 4 * (1 + batch_size * groups)` using checked arithmetic;
-  - `offsets[0] == 0`, and for every consecutive pair `(prev, curr)`,
-    `curr >= prev` and `(curr - prev) as usize <= capacity`;
-  - `values.len() == (*offsets.last() as usize).checked_mul(stride)`.
-  After this, `gather`, `action_counts`, `spans.scatter`, and `PackedActions`
-  cannot panic or index out of bounds on a restored batch.
-- Update `ObservationBatch`'s doc comment to say it is produced by native
-  encoding and preserved across pickle transport.
-
-Choice made for review (`concept-review.html` #1a): keep `ObservationBatch`
-sealed behind `_restore_observation_batch` rather than exposing a public
-`ObservationBatch(layout, batch_size, tables)` constructor in `0.2.6`, because
-`admit_native` skips join/fact-kind/effect-partition checks on the assumption
-that batches come from native encoding.
-
-### 2. Compact, cache-free pickling for `ObservationSelection`, `ObservationSpace`, and `Prefix`
-
-Every holder that carries caches or derived buffers drops them on pickle while
-preserving memo sharing across the whole `RolloutBatch` graph:
-
-- **`ObservationSpace.__reduce__`** (`manabot/env/observation.py`):
-  returns `(ObservationSpace, (self.config,))`. Shrinks pickled spaces from
-  627 KB of `gym.spaces.Box` `-inf`/`+inf` arrays to ~350 B (matching
-  `ObservationLayout.__getnewargs_ex__`). Checkpoints never pickle
-  `ObservationSpace` (they write `ObservationConfig` JSON into safetensors),
-  and `__reduce__` stays 100% compatible with loading any older pickle.
-  Choice made for review (`concept-review.html` #2a).
-- **`ObservationSelection.__reduce__`** (`manabot/policy/spans.py`):
-  returns `(ObservationSelection, (self.space, self.coordinates, self.memory))`.
-  Drops ephemeral `@cached_property` entries (`batch`, `action_counts`,
-  `spans`) stored in `__dict__`, preventing 2–3× payload bloat when a selection
-  was inspected before pickling, while keeping `coordinates` memo-shared with
-  `PackedActions.native`.
-- **`Chunk`, `Tail`, `Prefix`, `PrefixObservation`, `CompactObservation`**
-  (`manabot/env/memory_store.py`):
-  - `Chunk.__reduce__` -> `(Chunk, (self.key, self.rows))`.
-  - Give `Tail.features` `default_factory=ChunkFeatures`;
-    `Tail.__reduce__` -> `(Tail, (self.key, self.previous, self.chunk))`.
-  - `Prefix.__reduce__` -> `(restore_prefix, (self.identity, tuple(self.tail.chunks()) if self.tail is not None else ()))`
-    oldest-first. `restore_prefix(identity, chain)` returns
-    `Prefix(identity, None)` when `chain` is empty; otherwise checks
-    `isinstance(node, Tail)` for every node, `chain[0].previous is None`, and
-    `node.previous is prev` for each step, raising `ValueError` on any
-    mismatch, and returns `Prefix(identity, chain[-1])`.
-    Oldest-first puts each predecessor into pickle's memo before its successor,
-    keeping recursion depth O(1) regardless of game length, while running
-    `Chunk.__post_init__` (shape, dtype, SHA-256) and `Tail.__post_init__`
-    (chain certificate + `admit_chunk`). Caches, `native_epoch`, and `serving`
-    are dropped, matching `MemoryArchive`.
-  - `PrefixObservation.__reduce__` ->
-    `(PrefixObservation, (dict(self), self.prefixes, self.memory_capacities))`
-    so unpickling runs `__init__`'s capacity and batch-length checks instead of
-    bypassing them via `dict.__new__`.
-  - `CompactObservation.__reduce__` ->
-    `(_restore_compact_observation, ({k: v for k, v in self.items() if k not in MEMORY_FIELDS}, self.prefixes, self.memory_capacities, {k: self[k] for k in MEMORY_FIELDS}))`
-    so post-capture edits on `CompactObservation` survive round-trip and still
-    validate through `__init__`.
-
-Because the leaves and `ObservationSelection` drop caches and preserve memo
-sharing, `RecordedObservations`, `PackedActions`, and `RolloutBatch` pickle via
-default dataclass pickling with all shared `ObservationBatch`es and `Prefix`es
-written once across `recorded.rows`, `recorded.memory`, `action_data.native`,
-and `next_obs`.
-
-Passed over: eagerly gathering inside `ObservationSelection.__reduce__` (would
-duplicate every row shared between `recorded.rows` and `action_data.native`),
-and per-holder `MemoryArchive` (would triple archive/restore work across
-`recorded.memory`, `rows.memory`, and `next_obs.memory`).
+`ObservationBatch.__reduce__` -> sealed `managym._restore_observation_batch`
+(full table validation, shared stride helper in `freeze`/`gather`);
+cache-free `__reduce__` on `ObservationSpace` (from `config`),
+`ObservationSelection`, `Chunk`/`Tail`/`Prefix` (oldest-first `restore_prefix`),
+`PrefixObservation`, `CompactObservation`. Default dataclass pickling of
+`RolloutBatch` shares every batch and prefix once. Tests 1–3 below pass in
+`tests/training/test_rollout_transport.py`.
 
 ### 3. `concatenate` for packed `[rows, 1]` batches
 
@@ -373,22 +277,22 @@ in `manabot/env/observation.py` so rollover deletes them with `encoder`.
 
 ## Passes
 
-1. **Transport — built and verified.** A complete `collect()` game and a
-   memory-enabled `collect_pair()[0]` game crossed a real spawn queue and
-   prepared identically to independent local collections. The five transport
-   tests passed on CPython 3.13. The deep-chain and malformed-table checks
-   passed again after their failure cases were strengthened.
-   A four-stream interactive-deck run (seed 7, Torch seed 71) produced 960
-   rows. The complete batch took 8,346,219 bytes, 6 ms to pickle and 40 ms
-   to restore in one local run. Its memory prefixes took 3,037,646 bytes.
-   Reading the gathered batch, spans and action counts left the selection
-   pickle at 8,171,210 bytes. Its space took 633 bytes.
-2. **Merge and shim — next implementation slice**:
-   `PackedActions.concatenate` guards, `RecordedObservations.concatenate`,
-   `RolloutBatch.concatenate` (including empty-bootstrap snapshot workers and
-   `branch_group_id` re-offsetting), `ObservationSpace.__getattr__` shim table,
-   test items 4–5 and shim tests, existing boundary/pilot tests, then the jace
-   verification run.
+1. **Transport — done** (`8076ce311a`, notes `35237fe704`). Spawn-queue
+   round trip with and without memory prepares identically to local
+   collection. One local run (seed 7, Torch seed 71, 960 rows): batch pickle
+   8,346,219 B (6 ms dump / 40 ms load), memory prefixes 3,037,646 B,
+   selection after reading caches 8,171,210 B, space 633 B.
+2. **Merge and shim — next.** Design §3 and §4: `PackedActions.concatenate`
+   guards, `RecordedObservations.concatenate`, `RolloutBatch.concatenate`
+   (empty-bootstrap snapshot workers, `branch_group_id` re-offset), the
+   `ObservationSpace.__getattr__` shim table; tests 4–5 and the shim tests in
+   `tests/env/test_named_observation_layout.py`; existing boundary/pilot
+   tests. Docs already describe these APIs (`00f1bd645c`:
+   `docs/training-loop.md:87-133`, `docs/engine.md:761`) — the code must
+   match them, or the docs are corrected in the same pass.
+3. **Consumer proof.** The jace run described under the acceptance check
+   (throwaway env outside the checkout, jace `9d212cb`); report anything
+   failing outside this change.
 
 ## Done when
 
