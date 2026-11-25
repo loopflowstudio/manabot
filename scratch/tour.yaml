@@ -1,0 +1,33 @@
+at: 74d1830899934dd23a0fdd21cb621431d5ac20f2
+first:
+  - path: docs/academy.md
+    why: Battlefield experience and examples the browser pass will render
+  - path: managym/academy/README.md
+    why: Which projection carries effective abilities
+  - path: managym/src/experience.rs
+    why: Optional permanent fields accepted by historical frame readers
+  - path: managym/src/permanent_details.rs
+    why: Ability instances and provenance from effective characteristics
+  - path: managym/src/flow/combat_actions.rs
+    why: Combat legality shares the projected restrictions
+  - path: managym/experience_projection.py
+    why: Both seats join details by public permanent ID
+  - path: managym/cards/tests/cards/tla.rs
+    why: Conditions, tokens, grants, ability loss and hidden identities
+  - path: tests/academy/test_decision_surface.py
+    why: A resolved Lesson changes both seats’ recovery frames
+  - path: protocol/advice-v1.schema.json
+    why: Regeneration also captures previously omitted advice fields
+hide:
+  - path: protocol/experience-v1.schema.json
+    why: Generated from the Rust wire types
+  - path: protocol/canonical-replay-v1.schema.json
+    why: Same embedded permanent schema
+  - path: protocol/study-index-v1.schema.json
+    why: Same embedded permanent schema
+  - path: protocol/study-recorded-decisions-v1.schema.json
+    why: Same embedded permanent schema
+  - path: protocol/study-v1.schema.json
+    why: Same embedded permanent schema
+  - path: tests/public_api.json
+    why: Additive snapshot of the new Env method
