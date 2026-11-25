@@ -3969,6 +3969,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
+        is_mana_ability => [Excluded("implied by action_type/pays_directly and the permanent's activated ability definition")],
         spell_profile => [column(Action, action::SPELL_PROFILE)],
         route_mana_value => [column(Action, action::HAS_ROUTE_COST), column(Action, action::ROUTE_MANA_VALUE)],
         quota_type => [column(Action, action::QUOTA_TYPE)],

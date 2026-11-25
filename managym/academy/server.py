@@ -268,7 +268,7 @@ MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
 
-# MTGO-style priority stops. Stop keys are the human-facing step names; they
+# Arena-style priority stops. Stop keys are the human-facing step names; they
 # map onto the engine's StepEnum names (serialize_observation reports the same
 # strings in turn.step). Steps without a stop key (untap, cleanup, end of
 # combat) can never be stopped on and always auto-pass unless the stack rule
@@ -289,12 +289,15 @@ ENGINE_STEP_TO_STOP_STEP = {
     "COMBAT_FIRST_STRIKE_DAMAGE": "combat_damage",
 }
 STOP_SIDES = ("my", "opponent")
-# Defaults chosen for the INTERACTIVE_DECK matchup: act in your own main
-# phases, hold instants at the opponent's end step, and always stop when the
-# stack is non-empty (that is how you get to counter things).
+# Combat steps whose stops only hold while at least one creature is attacking,
+# matching Arena and CR 508.8 without altering engine step progression.
+ACTIVE_COMBAT_STOP_STEPS = frozenset({"declare_attackers", "declare_blockers"})
+# Arena-style defaults: act in your own main phases, pause in active combat
+# steps when you have a non-mana play, hold instants at the opponent's end
+# step, and stop when the stack is non-empty.
 DEFAULT_STOPS: dict[str, list[str]] = {
-    "my": ["main1", "main2"],
-    "opponent": ["end_step"],
+    "my": ["main1", "declare_attackers", "declare_blockers", "main2"],
+    "opponent": ["declare_attackers", "declare_blockers", "end_step"],
 }
 app = FastAPI(title="Academy")
 
@@ -587,6 +590,22 @@ def _is_hero_turn(obs: managym.Observation, human_seat: int = 0) -> bool:
 
 def _is_priority_space(obs: managym.Observation) -> bool:
     return obs.action_space.action_space_type == managym.ActionSpaceEnum.PRIORITY
+
+
+def _has_non_mana_play(obs: managym.Observation) -> bool:
+    """Whether the priority window offers a legal action beyond pass and mana abilities."""
+    return any(
+        action.action_type != managym.ActionEnum.PRIORITY_PASS_PRIORITY
+        and not action.is_mana_ability
+        for action in obs.action_space.actions
+    )
+
+
+def _has_attackers(obs: managym.Observation) -> bool:
+    """Whether at least one permanent on either battlefield is currently attacking."""
+    return any(permanent.attacking for permanent in obs.agent_permanents) or any(
+        permanent.attacking for permanent in obs.opponent_permanents
+    )
 
 
 def _hero_is_active_player(obs: managym.Observation, human_seat: int = 0) -> bool:
@@ -2304,6 +2323,8 @@ class GameSession:
         if self._f6_turn is not None:
             # F6 yields through stops and stack alike until the turn ends.
             return False
+        if not _has_non_mana_play(obs):
+            return False
         if self.stop_on_stack and len(obs.stack_objects) > 0:
             return True
 
@@ -2313,7 +2334,11 @@ class GameSession:
             # Untap/cleanup/end-of-combat: no stop exists for these steps.
             return False
         side = "my" if _hero_is_active_player(obs, self.human_seat) else "opponent"
-        return stop_step in self.stops.get(side, [])
+        if stop_step not in self.stops.get(side, []):
+            return False
+        if stop_step in ACTIVE_COMBAT_STOP_STEPS and not _has_attackers(obs):
+            return False
+        return True
 
     def _stops_payload(self) -> dict[str, Any]:
         return {

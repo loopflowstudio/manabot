@@ -241,6 +241,9 @@ def play_fixed_authored_match(
             "villain_type": "random",
             "seed": seed,
             "auto_pass": False,
+            # Pin the stops echoed in the retained authority receipt's frame_hash
+            # (auto_pass=False keeps stops inert during the match).
+            "stops": {"my": ["main1", "main2"], "opponent": ["end_step"]},
         }
     )
     frame = message["frame"]

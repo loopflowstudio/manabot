@@ -1272,6 +1272,9 @@
           "focus": {
             "kind": "attribute"
           },
+          "is_mana_ability": {
+            "kind": "attribute"
+          },
           "mode_index": {
             "kind": "attribute"
           },
