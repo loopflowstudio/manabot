@@ -1,7 +1,8 @@
-# Narrow code fork for Academy UI/play work: builtin plan, academy-implement
-# build loop, single compress + qa, ship-review and deliver.
+# Narrow feature fork for Academy UI/play work: interactive explore, builtin
+# plan, academy-implement build loop, single compress + qa, ship-review and deliver.
+- interactive: explore
+- graph: plan
 - loop:
-    - graph: plan
     - loop:
         - loop:
             - cmd: sync

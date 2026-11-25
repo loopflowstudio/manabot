@@ -202,8 +202,9 @@ def _performance(
 
 
 def _academy(academy: list[Step]) -> None:
-    """Check the Academy code fork: builtin plan, academy-implement loop, qa, deliver."""
-    assert [step.label for step in academy[:4]] == [
+    """Check the Academy feature fork: interactive explore, plan, academy-implement loop, qa, deliver."""
+    assert academy[0].label == "explore" and academy[0].interactive
+    assert [step.label for step in academy[1:5]] == [
         "kickoff",
         "concept-review",
         "realign",
@@ -211,7 +212,7 @@ def _academy(academy: list[Step]) -> None:
     ]
     position = _phase(
         academy,
-        3,
+        4,
         "write-docs",
         "concept-review",
         worker="academy-implement",
@@ -223,7 +224,7 @@ def _academy(academy: list[Step]) -> None:
         "pr-publish",
         "ship-review",
     ]
-    _delivery(academy, academy[0].key, review="ship-review")
+    _delivery(academy, academy[5].key, review="ship-review")
 
 
 def main() -> None:
