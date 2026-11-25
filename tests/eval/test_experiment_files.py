@@ -37,6 +37,7 @@ from experiments import (
     batched_baseline,
     belief,
     elemental,
+    h100_throughput,
     llm_claude,
     mana_taps,
     opponent_memory,
@@ -76,6 +77,17 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     (tla_trophies, (), {"trophy-w64-raw": 3}),
     (tla_trophies_colab, (), {"w64": 1, "w160l8": 1}),
     (
+        h100_throughput,
+        (),
+        {
+            "w160l8": 1,
+            "w384l8": 1,
+            "w512l12": 1,
+            "w768l12": 1,
+            "w1024l16": 1,
+        },
+    ),
+    (
         tla_trophies_floor,
         (),
         {
@@ -112,6 +124,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "belief",
         "elemental",
         "etude_execution",
+        "h100_throughput",
         "mana_taps",
         "opponent_memory",
         "seat_comparison",
