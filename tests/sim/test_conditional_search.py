@@ -169,6 +169,9 @@ def _run_search_fast(seed: int = SEED) -> ConditionalStrategyResult:
     return result
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> None:
     """Keep INT-13 evidence frozen while checking live schema and prior/plan parity."""
 
