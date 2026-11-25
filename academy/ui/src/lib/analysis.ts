@@ -6,7 +6,7 @@
  * policy's first choice and "differs" otherwise; the two estimates after your
  * choice and after its own sit on one 0–100 scale from your seat.
  */
-import type { PolicyRuntimeIdentity } from './types';
+import type { ExperienceFrame, PolicyRuntimeIdentity } from './types';
 
 export interface AnalysedDecision {
   /** The trace event the decision is (`Position.event`). */
@@ -91,4 +91,71 @@ export function analysisStatus(analysis: Analysis): string | null {
   if (analysis.status === 'running') return `Analysing ${analysis.decisions.length} of ${analysis.total}`;
   if (analysis.status === 'stopped') return `Analysis stopped after ${analysis.decisions.length} of ${analysis.total} decisions${analysis.reason ? `: ${analysis.reason}` : ''}`;
   return null;
+}
+
+// ———————————————— Key moments
+
+export interface KeyMoment {
+  /** The trace event of the decision. */
+  event: number;
+  kind: 'differs' | 'moved';
+  /** What makes it a key moment, in words: a difference, never a grade. */
+  reason: string;
+}
+
+/** Up to this many of each kind of key moment. */
+export const KEY_MOMENTS = { differs: 5, moved: 3 };
+/** Smaller differences and movements are no key moment (an untrained policy's flat 50/50). */
+const LEAST = 0.05;
+
+/**
+ * Where reading the game beside the policy is most worth a look, in game
+ * order: the decisions where its first choice had the most probability over
+ * yours, and where its estimate from your seat moved most between one of your
+ * decisions and the next. A decision that is both is listed once, as a difference.
+ */
+export function keyMoments(analysis: Analysis): KeyMoment[] {
+  const differs: (KeyMoment & { size: number })[] = [];
+  const moved: (KeyMoment & { size: number })[] = [];
+  analysis.decisions.forEach((decision, i) => {
+    const p = decision.annotation.probabilities;
+    const first = firstChoice(decision);
+    if (p && first !== null && first !== decision.played) {
+      const size = p[first] - (p[decision.played] ?? 0);
+      if (size >= LEAST) differs.push({ event: decision.event, kind: 'differs', size, reason: `Differs · ${percent(p[first])} on its first choice, ${percent(p[decision.played] ?? 0)} on yours` });
+    }
+    const next = analysis.decisions[i + 1];
+    const here = score(decision.annotation.value, decision.semantic);
+    const then = next ? score(next.annotation.value, next.semantic) : null;
+    if (here !== null && then !== null && Math.abs(then - here) >= LEAST) {
+      const name = scoreName(decision.semantic)?.toLowerCase() ?? 'estimate';
+      moved.push({ event: decision.event, kind: 'moved', size: Math.abs(then - here), reason: `Its ${name} moved ${formatScore(here)} → ${formatScore(then)} by your next decision` });
+    }
+  });
+  const largest = <T extends { size: number }>(items: T[], count: number): T[] => [...items].sort((a, b) => b.size - a.size).slice(0, count);
+  const chosen = largest(differs, KEY_MOMENTS.differs);
+  const taken = new Set(chosen.map(moment => moment.event));
+  chosen.push(...largest(moved.filter(moment => !taken.has(moment.event)), KEY_MOMENTS.moved));
+  return chosen.sort((a, b) => a.event - b.event).map(({ event, kind, reason }) => ({ event, kind, reason }));
+}
+
+function percent(p: number): string { return `${Math.round(p * 100)}%`; }
+
+// ———————————————— Its line
+
+/** A move of a line (`managym/academy/analysis.py` `LineStep`); `projection` is your own view after it. */
+export interface LineStep {
+  actor: 'agent' | 'opponent';
+  description: string;
+  projection: ExperienceFrame['projection'];
+}
+
+/** The policy's first choice at a decision, played on (`AgentLine`): one play-out, nothing saved. */
+export interface AgentLine {
+  event: number;
+  /** The offer index the policy chose. */
+  offer: number;
+  steps: LineStep[];
+  end: 'game_over' | 'turn' | 'limit';
+  winner: number | null;
 }

@@ -6,7 +6,10 @@
    * offer on its card and row with the recorded policy beside it; elsewhere
    * the recorded board. "Try another line" opens Study on the same board: the
    * historical offers become live against an isolated rules branch, and Return
-   * restores the recorded decision.
+   * restores the recorded decision. At an analysed decision "See its line"
+   * draws the analysing policy's own line from there (its first choice, then
+   * the policy and the game's opponent to the end of the next turn) on the
+   * same board, and "Next key moment" walks the analysis's key moments.
    *
    * The address is the state: `trace`, `position`, `near` (0, 1 or chooser),
    * `view` (acting or spectator), plus `review` to start from the first
@@ -31,7 +34,7 @@
   import {
     analysedEvidence, analysedMarks, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
-  import { analysisStatus, byEvent, scoreName, type Analysis, type AnalysisChoices } from '$lib/analysis';
+  import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, type GameNumbers } from '$lib/numbers';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
@@ -62,7 +65,11 @@
   const retrySearch = $derived(!!index?.mirror_retry && (index.mirror_retry.code.startsWith('search_') || index.mirror_retry.code.startsWith('mirror_')));
   const atLiveEdge = $derived(replayStore.selected === positions.length - 1 && current?.key === selectedKey);
   const inStudy = $derived(studyStore.phase !== 'score');
-  const locked = $derived(inStudy || studyStore.busy);
+  // The analysing policy's line from one decision, drawn in place of the recording.
+  let line = $state.raw<{ line: AgentLine; base: ExperienceFrame; from: number } | null>(null);
+  let lineAt = $state(0);
+  let lineBusy = $state(false);
+  const locked = $derived(inStudy || studyStore.busy || !!line || lineBusy);
 
   // ———————————————— Seats and names
 
@@ -109,9 +116,14 @@
     const branch = studyStore.preview?.projection ?? studyStore.branchObservation;
     return branch ? { ...restored.frame, projection: branch, offers: [], prompt: null } : restored.frame;
   });
-  const frame = $derived(studyFrame ?? recorded);
+  const lineFrame = $derived.by<ExperienceFrame | null>(() => {
+    const step = line?.line.steps[lineAt];
+    return line && step ? { ...line.base, projection: step.projection, offers: [], prompt: null } : null;
+  });
+  const frame = $derived(studyFrame ?? lineFrame ?? recorded);
   const studying = $derived(studyFrame !== null);
-  const viewerSeat = $derived(studying ? (studyFrame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
+  const branched = $derived(studying || lineFrame !== null);
+  const viewerSeat = $derived(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);
@@ -129,7 +141,7 @@
     return `${analysisName}'s ${name.toLowerCase()} from your seat · ${analysis.decisions.length} of ${analysis.total} decisions`;
   });
   const analysedHere = $derived(current?.kind === 'choice' && current.event !== undefined ? analysed.get(current.event) ?? null : null);
-  const evidence = $derived(!studying && current?.decision && recorded
+  const evidence = $derived(!branched && current?.decision && recorded
     ? analysedHere ? analysedEvidence(recorded, analysedHere, current.decision.offer_id, analysisName) : offerEvidence(recorded, current.outputs, current.decision.offer_id)
     : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
@@ -156,9 +168,42 @@
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
   const marks = $derived(analysis ? analysedMarks(stripMarks(positions, heroSeat), positions, analysed) : stripMarks(positions, heroSeat));
   const marksByMove = $derived(moveMarks(entries, positions, analysed));
-  const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
+  const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
 
-  const ending = $derived(frame && !studying && frame.projection.game_over && index
+  // ———————————————— Key moments and its line
+
+  const moments = $derived(analysis ? keyMoments(analysis) : []);
+  const positionOf = (event: number): number => positions.findIndex(position => position.kind === 'choice' && position.event === event);
+  const momentHere = $derived(current?.kind === 'choice' ? moments.find(moment => moment.event === current.event) ?? null : null);
+  const nextMoment = $derived(moments.map(moment => positionOf(moment.event)).find(at => at > replayStore.selected) ?? null);
+  const lineEnd = $derived.by(() => {
+    if (!line) return '';
+    const { end, winner } = line.line;
+    if (end === 'turn') return 'to the end of the next turn';
+    if (end === 'limit') return 'until its length limit';
+    return winner === null ? 'to a draw' : winner === heroSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
+  });
+
+  async function seeLine(): Promise<void> {
+    const id = index?.id;
+    if (!id || !analysis || !analysedHere || !recorded) return;
+    const base = recorded;
+    const from = replayStore.selected;
+    replayStore.pause(); lineBusy = true; analysisError = '';
+    try {
+      const read = await replayStore.api<AgentLine>(`/api/traces/${encodeURIComponent(id)}/analyses/${encodeURIComponent(analysis.id)}/line`, { event: analysedHere.event });
+      if (replayStore.index?.id !== id || replayStore.selected !== from) return;
+      line = { line: read, base, from }; lineAt = 0;
+    } catch (reason) { analysisError = reason instanceof Error ? reason.message : String(reason); }
+    finally { lineBusy = false; }
+  }
+  async function returnFromLine(): Promise<void> {
+    line = null; lineAt = 0;
+    await tick();
+    document.querySelector<HTMLButtonElement>('[data-testid="see-line"]')?.focus();
+  }
+
+  const ending = $derived(frame && !branched && frame.projection.game_over && index
     ? gameResult(frame, { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
     : null);
 
@@ -309,6 +354,12 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
+    if (line && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const last = line.line.steps.length - 1;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); lineAt = Math.max(0, Math.min(last, lineAt + (event.key === 'ArrowLeft' ? -1 : 1))); }
+      else if (event.key === 'Escape') { event.preventDefault(); void returnFromLine(); }
+      return;
+    }
     if (event.metaKey || event.ctrlKey || event.altKey || locked || !index) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
@@ -488,12 +539,39 @@
       <WorkStatus work={replayStore.work} connected={!replayStore.workDisconnected} />
     </section>
   {/if}
-  {#if studying && studyStore.restored}
+  {#if line}
+    <section class="line" aria-label="Its line" data-testid="agent-line">
+      <p class="type-label text-ink-2">{analysisName}'s line from here</p>
+      <p class="type-caption text-ink-2">One play-out, {lineEnd}: {analysisName}'s first choice in your seat, {saidOf(1 - heroSeat)} in theirs. The game as played is unchanged.</p>
+      <ol class="line-moves type-caption">
+        {#each line.line.steps as step, at (at)}
+          <li><button class:current={at === lineAt} aria-current={at === lineAt ? 'step' : undefined} data-testid="line-move" onclick={() => (lineAt = at)}>
+            <span class="text-ink-3">{step.actor === 'agent' ? analysisName : saidOf(1 - heroSeat)}</span> {step.description}</button></li>
+        {/each}
+      </ol>
+      <p class="line-controls">
+        <button class="btn btn-ghost btn-sm" disabled={lineAt === 0} onclick={() => (lineAt -= 1)}>Previous</button>
+        <button class="btn btn-ghost btn-sm" disabled={lineAt === line.line.steps.length - 1} onclick={() => (lineAt += 1)}>Next</button>
+        <button class="btn btn-secondary btn-sm" data-testid="line-return" onclick={() => void returnFromLine()}>Return to the game</button>
+      </p>
+    </section>
+  {:else if studying && studyStore.restored}
     <StudyPanel phase={studyStore.phase} restored={studyStore.restored} plans={studyStore.plans} selectedPlan={studyStore.selectedPlan} busy={studyStore.busy}
       errorMessage={studyStore.errorMessage} onReveal={() => void revealStudy()} onReturn={() => void returnToScore()} onPreview={plan => void previewStudyPlan(plan)} />
   {:else if current}
     {#if studyStore.errorMessage}<p role="alert" class="notice error">{studyStore.errorMessage}</p>{/if}
     {#if current.description}<p class="type-caption text-ink-2" data-testid="position-description">After · {current.description}</p>{/if}
+    {#if momentHere}<p class="type-caption text-ink-2" data-testid="key-moment">Key moment · {momentHere.reason}</p>{/if}
+    {#if moments.length || (analysedHere && index?.can_feedback)}
+      <p class="analysis-actions">
+        {#if analysedHere && index?.can_feedback && analysis}
+          <button class="btn btn-secondary btn-sm" data-testid="see-line" disabled={lineBusy || replayStore.busy} onclick={() => void seeLine()}>{lineBusy ? 'Playing its line…' : 'See its line'}</button>
+        {/if}
+        {#if moments.length}
+          <button class="btn btn-ghost btn-sm" data-testid="next-key-moment" disabled={nextMoment === null || replayStore.busy} onclick={() => { if (nextMoment !== null) seek(nextMoment); }}>Next key moment</button>
+        {/if}
+      </p>
+    {/if}
     {#if current.decision}
       <button class="btn btn-secondary btn-sm study" data-testid="study-open" disabled={!index?.can_study || studyStore.busy || replayStore.busy || !!index?.mirror_retry}
         onclick={() => void openStudyDecision()} bind:this={studyButton}>Try another line</button>
@@ -642,8 +720,8 @@
     interrupted={false}
     onact={offer => void retryStudyOffer(offer)}
     {since}
-    recapTitle={studying ? 'This line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
-    heading={studying || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
+    recapTitle={studying ? 'This line' : line ? 'Its line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
+    heading={branched || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
     {moves}
     onjump={locked ? undefined : jump}
     {currentMove}
@@ -709,6 +787,11 @@
   .analysis-menu select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 220px; }
   .analyse-with { display: flex; gap: 6px; align-items: center; }
   .numbers { display: grid; gap: 4px; }
+  .analysis-actions, .line-controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .line { display: grid; gap: 6px; }
+  .line-moves { display: grid; gap: 1px; max-height: 180px; overflow-y: auto; }
+  .line-moves button { text-align: left; padding: 1px 6px; border-radius: 4px; width: 100%; }
+  .line-moves button.current { background: var(--bg-field); color: var(--text); }
   .numbers table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
   .numbers th, .numbers td { padding: 1px 8px 1px 0; text-align: right; font-weight: normal; }
   .numbers th[scope='row'] { text-align: left; color: var(--text-secondary); }

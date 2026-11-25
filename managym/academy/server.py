@@ -87,7 +87,15 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
-from .analysis import AnalysisChoices, analysed_events, analysis_choices, run_analysis
+from .analysis import (
+    AnalysedDecision,
+    AnalysisChoices,
+    AnalysisStop,
+    agent_line,
+    analysed_events,
+    analysis_choices,
+    run_analysis,
+)
 from .append_json import encode_list, splice
 from .attempts import (
     CLOSED_RECORD_ENDINGS,
@@ -106,6 +114,7 @@ from .curated_pack import (
     curated_pack_for_matchup,
 )
 from .deck_import import DeckImportInput
+from .numbers import game_numbers, wilson_interval
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -170,7 +179,6 @@ from .shared_table_protocol import (
     ViewerRole,
 )
 from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
-from .numbers import game_numbers, wilson_interval
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -4419,6 +4427,57 @@ def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
 
     threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
     return {"id": analysis}
+
+
+class LineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event: int
+
+
+@app.post("/api/traces/{trace_id}/analyses/{analysis_id}/line")
+def see_line(trace_id: str, analysis_id: str, request: LineRequest) -> dict[str, Any]:
+    """The analysing policy's line from one of its decisions (`agent_line`):
+    its first choice played, then the policy and the game's opponent on to the
+    end of the next turn. Computed on each request; nothing is saved."""
+    store, attempt = _analysed_attempt(trace_id)
+    if attempt.trace["end_reason"] == "active":
+        raise HTTPException(409, "analysis_game_active")
+    saved = next((a for a in store.analyses(trace_id) if a["id"] == analysis_id), None)
+    if saved is None:
+        raise HTTPException(404, "analysis_not_found")
+    evidence = next(
+        (d for d in saved["decisions"] if d.get("event") == request.event), None
+    )
+    if evidence is None:
+        raise HTTPException(404, "line_decision_not_analysed")
+    config = GameConfig(**attempt.trace["config"])
+    registry = policy_registry()
+    seat = int(saved["seat"])
+    runner: PolicyRunner | None = None
+    opponent: BotPolicy | None = None
+    try:
+        runner = registry.load(
+            saved["policy"]["id"],
+            config.to_rust(),
+            seat=seat,
+            seed=int(config.seed or 0) + request.event,
+        )
+        opponent = build_villain_policy(config, seat=1 - seat)
+    except (ImportError, OSError, ValueError, KeyError) as exc:
+        close_policies((runner, opponent))
+        raise HTTPException(409, "line_policy_unavailable") from exc
+    try:
+        line = agent_line(
+            attempt, AnalysedDecision.model_validate(evidence), seat, runner, opponent
+        )
+    except AnalysisStop as stop:
+        raise HTTPException(409, str(stop)) from None
+    except (ValueError, managym.AgentError) as exc:
+        # Native errors may name private cards: keep only the kind.
+        raise HTTPException(409, f"The line failed: {type(exc).__name__}") from exc
+    finally:
+        close_policies((runner, opponent))
+    return line.model_dump(mode="json")
 
 
 @app.get("/api/traces/{trace_id}/decisions")

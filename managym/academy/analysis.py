@@ -20,14 +20,16 @@ Scores are on one 0–1 scale from the analysed seat: `signed_outcome` values
 map to expected score ((v + 1) / 2, a draw half a win) and `win_logit` values
 to a win chance. An undeclared semantic has no scale, so its offers have no
 estimate. Entry points: `analyse_game`, a generator of decisions;
-`run_analysis`, which saves them (`AttemptStore.analyses`) as they come; and
-`analysis_choices`, the policies that may analyse a game.
+`run_analysis`, which saves them (`AttemptStore.analyses`) as they come;
+`analysis_choices`, the policies that may analyse a game; and `agent_line`,
+the policy's own line from one analysed decision.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 import logging
 import math
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -35,7 +37,9 @@ import managym
 from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import Opponent
 from managym.academy.recording import record_of, recorded_build, step_matches
-from managym.academy.trace import GameConfig
+from managym.academy.trace import GameConfig, academy_actions
+from managym.bots import BotPolicy, choose_bot
+from managym.experience_projection import decision_surface_view
 from managym.policy import PolicyRegistry, PolicyRunner
 from managym.recording import DecisionAnnotation
 from managym.replay import walk
@@ -269,3 +273,141 @@ def run_analysis(
     finally:
         runner.close()
         store.end_analysis(analysis, reason)
+
+
+# ———————————————— Its line: the policy's first choice, played on
+
+# A line runs to the end of the turn after the one its decision is in.
+LINE_TURNS = 1
+# A guard against a line that never reaches a turn's end.
+MAX_LINE_STEPS = 400
+
+
+class LineStep(BaseModel):
+    """One move of a line: who made it, its name, and the analysed seat's
+    board after it (`decision_surface_view`, the seat's own view)."""
+
+    model_config = ConfigDict(extra="forbid")
+    actor: Literal["agent", "opponent"]
+    description: str
+    projection: dict[str, Any]
+
+
+class AgentLine(BaseModel):
+    """What might have followed one decision had the policy chosen: its first
+    choice at `event` (`offer`), then the policy in the seat and the game's own
+    opponent in theirs. `end` says why the line stops; `winner` is set when the
+    line ends the game. A sample, not a forecast: the opponent's choices and
+    every later card come from one play-out of the real game's world."""
+
+    model_config = ConfigDict(extra="forbid")
+    event: int
+    offer: int
+    steps: list[LineStep]
+    end: Literal["game_over", "turn", "limit"]
+    winner: int | None
+
+
+def agent_line(
+    attempt: RetainedAttempt,
+    decision: AnalysedDecision,
+    seat: int,
+    runner: PolicyRunner,
+    opponent: BotPolicy,
+) -> AgentLine:
+    """The policy's line from `decision`, one of `seat`'s analysed decisions.
+
+    Walks the record to the decision, plays the policy's first choice on a
+    copy and continues: the policy's first choice at each of the seat's
+    decisions, the opponent's own choice at theirs, to the end of the next
+    turn. A recurrent policy (either seat's) is shown the history it would
+    have had: it is asked at each of its seat's decisions on the way and its
+    answer discarded. Priority passes fold into the move before them.
+    The opponent's moves are named by their actions only once the game is
+    complete, when both hands may show; before that they are "Opponent's move".
+    Raises AnalysisStop where the game stops re-executing as recorded.
+    """
+    first = first_choice(decision.annotation.probabilities)
+    if first is None:
+        raise AnalysisStop("This decision has no probabilities to follow.")
+    events = attempt.trace["events"]
+    human = attempt.trace["config"].get("human_seat", 0)
+    complete = attempt.trace["end_reason"] == "game_over"
+    replayed = [
+        policy
+        for policy in (runner, opponent)
+        if isinstance(policy, PolicyRunner) and policy.base_descriptor.recurrent
+    ]
+    try:
+        walker = walk(record_of(attempt))
+    except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+        raise AnalysisStop(f"This game cannot be re-executed here: {error}") from None
+    steps = iter(walker)
+    for index in range(decision.event):
+        observation = walker.observation
+        if not step_matches(observation, events[index], human):
+            raise AnalysisStop(f"Step {index + 1} re-executed differently.")
+        for policy in replayed:
+            if policy.seat == int(observation.agent.player_index):
+                policy(walker.env, observation)
+        if next(steps, None) is None:
+            raise AnalysisStop(f"Step {index + 1} re-executed differently.")
+    observation = walker.observation
+    if (
+        not step_matches(observation, events[decision.event], human)
+        or int(observation.agent.player_index) != seat
+    ):
+        raise AnalysisStop(f"Step {decision.event + 1} re-executed differently.")
+    env = walker.env.clone_env()
+    start = int(observation.turn.turn_number)
+    moves: list[LineStep] = []
+    action = first
+    end: Literal["game_over", "turn", "limit"] = "limit"
+    for _ in range(MAX_LINE_STEPS):
+        actor = int(observation.agent.player_index)
+        row = academy_actions(observation, human)[action]
+        env.step(action)
+        passed = row["type"] == "PRIORITY_PASS_PRIORITY"
+        if moves and passed:
+            # A pass belongs to the move before it, which shows the board after it.
+            moves[-1] = moves[-1].model_copy(
+                update={"projection": decision_surface_view(env, seat)}
+            )
+        else:
+            moves.append(
+                LineStep(
+                    actor="agent" if actor == seat else "opponent",
+                    description=row["description"]
+                    if actor == seat or complete
+                    else "Opponent's move",
+                    projection=decision_surface_view(env, seat),
+                )
+            )
+        if env.is_game_over():
+            end = "game_over"
+            break
+        chooser = env.current_agent_index()
+        assert chooser is not None
+        observation = env.observation_for_player(chooser)
+        if int(observation.turn.turn_number) > start + LINE_TURNS:
+            end = "turn"
+            break
+        if chooser == seat:
+            runner(env, observation)
+            chosen = runner.last_decision
+            assert chosen is not None
+            action = first_choice(chosen.probabilities)
+            action = chosen.action if action is None else action
+        else:
+            action = choose_bot(opponent, env, observation).action
+    winner = env.winner_index() if end == "game_over" else None
+    return AgentLine(
+        event=decision.event, offer=first, steps=moves, end=end, winner=winner
+    )
+
+
+def first_choice(probabilities: Sequence[float] | None) -> int | None:
+    """The offer with the most probability (the first on a tie), or None without any."""
+    if not probabilities:
+        return None
+    return max(range(len(probabilities)), key=probabilities.__getitem__)

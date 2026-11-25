@@ -17,6 +17,8 @@ from managym.academy import analysis as analysis_module, server, trace
 from managym.academy.analysis import AnalysisStop, analyse_game, analysed_events
 from managym.academy.attempts import AttemptStore, RetainedAttempt, participant_id
 from managym.academy.opponent import set_policy_registry
+from managym.academy.recording import record_of
+from managym.academy.trace import academy_actions
 from managym.policy import (
     PolicyDecision,
     PolicyDescriptor,
@@ -25,6 +27,7 @@ from managym.policy import (
     PolicyView,
     ValueEstimate,
 )
+from managym.replay import walk
 from managym.search import SearchConfig, search_descriptor
 from tests.academy.test_played_replay import BOLT, play
 
@@ -300,3 +303,53 @@ def test_an_analysis_left_running_by_a_stopped_server_reads_as_stopped(
     (read,) = store.analyses(trace_id)
     assert read["status"] == "stopped" and read["reason"]
     assert read["decisions"] == [{}]
+
+
+def test_see_its_line_plays_the_policys_first_choice_on_from_a_decision(
+    tmp_path: Path, registry: PolicyRegistry
+) -> None:
+    key = registry.register(ReadingFactory())
+    attempt = finished(tmp_path, villain_type="policy", opponent_sha256=key)
+    store = AttemptStore(tmp_path / "play.sqlite")
+    with store.connect() as db:
+        trace_id, before = db.execute("SELECT id, trace_json FROM attempts").fetchone()
+    client = TestClient(server.app)
+    client.post(
+        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
+    )
+    analysis = wait_complete(client, trace_id)["analyses"][-1]
+    # A decision where the person did not play the Reader's first choice (its last offer).
+    decision = next(
+        d
+        for d in analysis["decisions"]
+        if d["played"] != len(d["annotation"]["probabilities"]) - 1
+    )
+    path = f"/api/traces/{trace_id}/analyses/{analysis['id']}/line"
+    assert client.post(path, json={"event": decision["event"]}).status_code == 403
+    line = client.post(path, json={"event": decision["event"]}, headers=headers())
+    assert line.status_code == 200, line.text
+    body = line.json()
+    first = len(decision["annotation"]["probabilities"]) - 1
+    assert body["offer"] == first
+    walker = walk(record_of(attempt))
+    steps = iter(walker)
+    for _ in range(decision["event"]):
+        next(steps)
+    offers = academy_actions(walker.observation, 0)
+    # The line opens with the policy's choice, not the one that was played.
+    assert body["steps"][0]["actor"] == "agent"
+    assert body["steps"][0]["description"] == offers[first]["description"]
+    assert body["end"] in {"turn", "game_over"}
+    assert {step["actor"] for step in body["steps"]} <= {"agent", "opponent"}
+    # Every board is your own view; a finished game names the opponent's moves.
+    assert all(
+        step["projection"]["agent"]["player_index"] == 0 for step in body["steps"]
+    )
+    assert all(step["description"] != "Opponent's move" for step in body["steps"])
+    # A line saves nothing beside the game.
+    with store.connect() as db:
+        (after,) = db.execute("SELECT trace_json FROM attempts").fetchone()
+    assert after == before
+    assert len(client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"]) == 1
+    unanalysed = client.post(path, json={"event": -1}, headers=headers())
+    assert unanalysed.status_code == 404
