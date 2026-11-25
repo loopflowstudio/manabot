@@ -1445,6 +1445,10 @@ class GameSession:
             )
         source = self.attempt_store.load(trace_id)
         assert source is not None
+        if source["config"].get("watch_players") is not None:
+            raise ValueError(
+                "played_from_unavailable: A watched game has no seat of yours."
+            )
         if source["end_reason"] == "active":
             raise ValueError("played_from_active: That game is still being played.")
         events = source["events"]
@@ -4142,14 +4146,23 @@ async def play_socket(websocket: WebSocket) -> None:
                     failed = True
                     dispatched = False
                     try:
-                        response, broadcast = await asyncio.to_thread(
-                            _dispatch_table_request,
-                            record,
-                            participant,
-                            parsed,
-                            committed,
-                            publish_analysis,
-                        )
+                        if isinstance(parsed, ShowAnalysisMessage):
+                            response, broadcast = await asyncio.to_thread(
+                                _dispatch_table_request,
+                                record,
+                                participant,
+                                parsed,
+                                committed,
+                                publish_analysis,
+                            )
+                        else:
+                            response, broadcast = await asyncio.to_thread(
+                                _dispatch_table_request,
+                                record,
+                                participant,
+                                parsed,
+                                committed,
+                            )
                         failed = record.game.mirror_retry is not None
                         dispatched = True
                     finally:
@@ -4684,6 +4697,24 @@ def _recorded_mirrors(players: list[dict[str, Any]]) -> list[dict[str, Any] | No
     return [by_seat.get(seat) for seat in (0, 1)]
 
 
+def _played_from_index(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Source game and starting turn for a game played on from another."""
+    played_from = payload.get("played_from")
+    if not played_from:
+        return None
+    event = played_from["event"]
+    events = payload["events"]
+    observation = (
+        events[event]["observation"]
+        if 0 <= event < len(events)
+        else payload["final_observation"]
+        if event == len(events)
+        else None
+    )
+    turn = observation["turn"].get("turn_number") if observation else None
+    return {**played_from, "turn": turn}
+
+
 @app.get("/api/traces/{trace_id}/recording")
 def get_recording_index(
     trace_id: str,
@@ -4767,14 +4798,7 @@ def get_recording_index(
         "players": players,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
         # A game played on from another: its source and the turn it starts at.
-        "played_from": {
-            **payload["played_from"],
-            "turn": payload["events"][payload["played_from"]["event"]]["observation"][
-                "turn"
-            ].get("turn_number"),
-        }
-        if payload.get("played_from")
-        else None,
+        "played_from": _played_from_index(payload),
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -4890,25 +4914,36 @@ def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
     with _ANALYSING_LOCK:
         if trace_id in _ANALYSING:
             raise HTTPException(409, "analysis_running")
+        _ANALYSING.add(trace_id)
+    runner: PolicyRunner | None = None
+    try:
         try:
             runner = registry.load(
                 descriptor.id, config.to_rust(), seat=seat, seed=int(config.seed or 0)
             )
         except (ImportError, OSError, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
-        _ANALYSING.add(trace_id)
-    analysis = store.start_analysis(
-        trace_id, seat, descriptor.record(), len(analysed_events(attempt.trace, seat))
-    )
+        analysis = store.start_analysis(
+            trace_id,
+            seat,
+            descriptor.record(),
+            len(analysed_events(attempt.trace, seat)),
+        )
 
-    def run() -> None:
-        try:
-            run_analysis(store, analysis, attempt, seat, runner)
-        finally:
-            with _ANALYSING_LOCK:
-                _ANALYSING.discard(trace_id)
+        def run() -> None:
+            try:
+                run_analysis(store, analysis, attempt, seat, runner)
+            finally:
+                with _ANALYSING_LOCK:
+                    _ANALYSING.discard(trace_id)
 
-    threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+        threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+    except BaseException:
+        if runner is not None:
+            runner.close()
+        with _ANALYSING_LOCK:
+            _ANALYSING.discard(trace_id)
+        raise
     return {"id": analysis}
 
 

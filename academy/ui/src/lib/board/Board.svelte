@@ -361,9 +361,9 @@
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, onjump === undefined));
+      : promptLine(frame, view, !readOnly));
   // How to answer with the live input; a recording has none.
-  const hint = $derived(drafting || running || onjump !== undefined ? null : promptHint(frame, view));
+  const hint = $derived(drafting || running || readOnly ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);

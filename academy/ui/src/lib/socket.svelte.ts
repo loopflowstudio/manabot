@@ -280,6 +280,7 @@ export class GameSocketController {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
+      if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
         return;
@@ -292,6 +293,7 @@ export class GameSocketController {
 
   disconnect(): void {
     this.intentionallyClosed = true;
+    if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -666,7 +668,6 @@ export class GameSocketController {
         writeTabValue(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
       }
       this.pendingResume = false;
-      if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if (!this.pendingCommand) gameStore.endCommand();
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
@@ -703,7 +704,8 @@ export class GameSocketController {
         this.persistResumeState(message.session_id, message.resume_token);
       }
       // A first/replacement recovery resets match state. Its runner metadata
-      // belongs to the recovered frame and must survive that reset.
+      // and live-analysis flag belong to the recovered frame and must survive that reset.
+      if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       this.flushQueue();
@@ -741,6 +743,7 @@ export class GameSocketController {
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
       this.interrupt(message.message);

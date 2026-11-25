@@ -110,22 +110,27 @@
   .key .turn { margin: 0; font-weight: 600; color: var(--text); }
   .key:has(.turn) { gap: 0; font-size: 12px; line-height: 16px; }
   .key:has(.turn) .turn { font-size: 14px; line-height: 20px; }
-  /* Arena's pairing: your turn is blue, the opponent's orange. The whole bar takes a faint wash of the side's colour. */
+  /* Arena's pairing: your turn is blue, the opponent's orange. The whole bar takes a faint wash of the side's colour;
+     the current step's solid block mixes toward --text so --bg ink stays above 4.5:1 in both light and dark themes. */
   .stopbar[data-turn-side='my'] { --side: var(--vivid-u); }
   .stopbar[data-turn-side='opponent'] { --side: var(--vivid-r); }
-  .stopbar[data-turn-side] { --side-text: color-mix(in srgb, var(--side) 72%, var(--text)); background: color-mix(in srgb, var(--side) 8%, var(--bg-surface)); }
+  .stopbar[data-turn-side] {
+    --side-text: color-mix(in srgb, var(--side) 72%, var(--text));
+    --side-block: color-mix(in srgb, var(--side) 78%, var(--text));
+    background: color-mix(in srgb, var(--side) 8%, var(--bg-surface));
+  }
   .cell { display: grid; grid-template-rows: minmax(0, 1fr) 20px minmax(0, 1fr); row-gap: 1px; min-width: 0; border-left: 1px solid transparent; }
   .cell.rule { border-left-color: var(--border); }
-  /* The current step is a solid block of the side's colour; its name and stops are drawn in the ground's colour on it. */
-  .cell.current { background: var(--side, var(--bg-muted)); }
+  /* The current step is a solid block of the side's colour; its name and stops are drawn in the page ground's colour on it. */
+  .cell.current { background: var(--side-block, var(--bg-muted)); }
   .name { font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .current .name { color: var(--text); font-weight: 600; }
-  .stopbar[data-turn-side] .current .name { color: var(--bg-surface); }
-  .stopbar[data-turn-side] .current .stop i { box-shadow: inset 0 0 0 1.5px var(--bg-surface); }
-  .stopbar[data-turn-side] .current .stop.every i { background: var(--bg-surface); }
-  .stopbar[data-turn-side] .current .stop.once i::after { background: var(--bg-surface); }
-  .stopbar[data-turn-side] .current button.stop:hover { background: color-mix(in srgb, var(--bg-surface) 22%, transparent); }
-  .stopbar[data-turn-side] .current button.stop:focus-visible { outline-color: var(--bg-surface); }
+  .stopbar[data-turn-side] .current .name { color: var(--bg); }
+  .stopbar[data-turn-side] .current .stop i { box-shadow: inset 0 0 0 1.5px var(--bg); }
+  .stopbar[data-turn-side] .current .stop.every i { background: var(--bg); }
+  .stopbar[data-turn-side] .current .stop.once i::after { background: var(--bg); }
+  .stopbar[data-turn-side] .current button.stop:hover { background: color-mix(in srgb, var(--bg) 22%, transparent); }
+  .stopbar[data-turn-side] .current button.stop:focus-visible { outline-color: var(--bg); }
 
   /* A stop is a small square: hollow when off, filled every time, a dot inside once. */
   .stop { display: grid; justify-items: center; align-items: end; min-height: 0; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); }

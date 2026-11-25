@@ -682,10 +682,11 @@ extended permanent details still render plain `Defender`, effective keywords,
 recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane at the top of the rail
-instead, showing the last card you inspected. The top bar shows the turn. Along
-the bottom of the screen runs the step bar: one cell per step, a line between
-phases, the current step shaded, and in each cell the stop for your turn above
+until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane in the left sidebar
+instead, showing the last card you inspected. Along
+the bottom of the screen runs the step bar: the turn number and whose turn it is,
+then one cell per step, a line between
+phases, the current step shaded in that side's colour, and in each cell the stop for your turn above
 the step's name and the stop for the opponent's turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
@@ -1216,14 +1217,14 @@ The moves before the decision are not listed in the new game's live move list;
 its Review lists them all. If this build no longer plays the old game the same
 way, Play says which step differs and nothing starts.
 
-**Analyse with…** in **Menu** runs any other registered trained policy; each
+**Analyse with…** in **Settings** runs any other registered trained policy; each
 run is saved beside the game, and **Shown** switches between them. Analyses
 are never part of the game's recording or its exports. Readers of a shared
 finished game see its saved analyses; only you can start one.
 
 | You see | Why | What to do |
 |---|---|---|
-| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
+| **No analysis yet · Analyse with… in Settings** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
 | **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
 | **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
 | A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
@@ -1271,7 +1272,7 @@ never unmarks a choice. A game you play without it saves exactly as before.
 
 The result card of a game you played ends with one line of its numbers, such as
 **9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
-2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
+2 times**. In Review, **This game** in **Settings** gives turns, whether you were on
 the play or the draw and how long the game took, and a table of both seats:
 
 | Count | What it counts |
