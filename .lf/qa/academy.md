@@ -5,10 +5,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   even from another checkout. Set `VIRTUAL_ENV` to the checkout's `.venv`
   for the backend's `uv run --active`. Tab enters an unused board region on
   its first control with an offer. Use arrow keys to move within the region.
-- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
-  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
-  the panel is not an offer). Tapped lands show only in a `fullPage`
-  screenshot, not in the board's text.
+- Academy browser scripts can wait for a ready offer with
+  `[data-testid=action-option]:enabled:not([aria-disabled])`. A press during
+  an opponent read-out only ends the read-out. If a click stalls while
+  previewing an offer, check whether the rows move under the pointer.
+- Capture tapped lands with a `fullPage` screenshot.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
@@ -161,6 +162,8 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Compare `[data-payment-source]` ids with the frame's tapped permanent ids
   after the commit. `trigger_order_server` with `payment_fixture: true` in the
   `new_game` config gives a ready Lightning Strike payment with nine offers.
+  Playwright's release configuration starts the fixture server for
+  `e2e/mana-payment.spec.ts`.
   Rebuilding the SPA stops running `npm run preview` servers; restart them.
   For a fixture-free game, `managym academy play --deck <f> --opponent-deck
   <f> --opponent passive --seed 7` with `18 Mountain / 18 Forest / 12

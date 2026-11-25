@@ -3,8 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
-import { shortName } from '$lib/opponent-name';
+import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import { decidesBy, shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -364,8 +364,37 @@ describe('names in sentences', () => {
   it('drops the kind and takes a plain apostrophe after a final s', () => {
     expect(shortName('Heuristic · scripted')).toBe('Heuristic');
     expect(possessive(shortName('Heuristic · scripted'))).toBe("Heuristic's");
+    expect(decidesBy('Heuristic · scripted')).toBe('Scripted');
+    expect(decidesBy('Search 1 · search 1×1')).toBe('Search 1×1');
+    expect(decidesBy('You')).toBeNull();
     expect(possessive('Invasion Reinforcements')).toBe("Invasion Reinforcements'");
     expect(possessive('You')).toBe('your');
+  });
+});
+
+describe('handFan', () => {
+  const card = { min: 98, max: 150 };
+
+  it('keeps a short hand at full size, apart', () => {
+    expect(handFan(5, 900, card, 10)).toEqual({ card: 150, step: 160, covered: false });
+  });
+
+  it('shrinks cards before they overlap', () => {
+    const fan = handFan(7, 900, card, 10);
+    expect(fan.covered).toBe(false);
+    expect(fan.card).toBeLessThan(150);
+    expect(fan.card).toBeGreaterThanOrEqual(98);
+    expect(fan.card * 7 + 10 * 6).toBeLessThanOrEqual(900);
+  });
+
+  it('overlaps only at the floor, filling the strip', () => {
+    const fan = handFan(12, 900, card, 10);
+    expect(fan).toMatchObject({ card: 98, covered: true });
+    expect(fan.card + fan.step * 11).toBeCloseTo(900);
+  });
+
+  it('never covers more than the slice that shows a name and cost', () => {
+    expect(handFan(40, 900, card, 10).step).toBe(24);
   });
 });
 
