@@ -275,3 +275,26 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Battlefield badges in a real game (`managym academy play` with imported
+  `--deck`/`--opponent-deck` files and `--opponent passive`): drive it with a
+  Node Playwright script copied into `academy/ui` (move it out afterwards).
+  Hand cards also carry `data-testid=board-card`, so scope by aria-label.
+  In Play, clicking a permanent with one offer commits it (Fire Nation
+  Cadets' pump), so open Inspect by hovering and waiting about one second,
+  then read `[data-testid=inspect-card]`. Read the turn from
+  `getByText(/^Turn \d+/)`. Each new context replays the same seeded deal, so
+  use a different `--seed` or deck to reach other cards. After game over,
+  "Review this game" opens the replay at position 1. Press End, then the
+  "Previous" button, to reach the final board. With
+  `UV_PROJECT_ENVIRONMENT` and `--only-group play-runtime`, managym is not
+  installed, so uncached card art returns 500 (`PackageNotFoundError` in
+  `card_art.py`). Use a cached card, or install the wheel, when art matters.
+  Start several launch servers from Python `subprocess.Popen(...,
+  start_new_session=True)`; macOS has no `setsid`. Attacking cards are
+  rotated, so `getBoundingClientRect` overlap checks between chips and `.pt`
+  report false overlaps on them; confirm those in a screenshot. Watch with
+  `--player random` twice shows no `.policy` pill; the pill case is covered by
+  `e2e/card-badges.spec.ts` ("recorded Watch badges") or a trained policy.
+  Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
+  themselves as a restriction source), Tiger-Dillo (own conditional
+  restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).
