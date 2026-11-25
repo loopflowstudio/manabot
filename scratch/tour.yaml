@@ -1,4 +1,4 @@
-at: 384e717f6a836190c2ac1be0f585139d54e08be1
+at: 4fe56d3ff8961679d95bfdfc3b0bf28628a142fd
 first:
   - path: managym/README.md
     why: Find the player choices and their observable outcomes.
@@ -7,11 +7,13 @@ first:
   - path: managym/state/src/card.rs
     why: Read unified LayerCount/LayerValue, DamageSource/DamageRecipient, EntersWithCounters, and SourceQuality.
   - path: managym/state/src/ability.rs
-    why: See the unified CastFrom condition and EffectValue::bind_chosen_type.
+    why: See the unified CastFrom condition.
   - path: managym/src/flow/layers.rs
     why: Follow unified layer-7 count evaluation and dependency summaries.
   - path: managym/src/flow/statics.rs
     why: Follow control, creature types, off-battlefield CDA reading, and CastFrom.
+  - path: managym/src/flow/resolution.rs
+    why: Follow effect_value evaluation with optional entry chosen_type.
   - path: managym/src/flow/combat.rs
     why: Track blocked attackers directly in CombatState.
   - path: managym/src/flow/block_requirements.rs

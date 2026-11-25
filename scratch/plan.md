@@ -232,7 +232,7 @@ creature type already had one path each. Three fused axes were unified:
   Deleted `PtCount`, `PowerCda`, `StaticPtBuff`, `StaticAbility::{PtBuff,
   CharacteristicPower, CharacteristicPt}`, `Operation::{Cda, Buff}`, `Game::cda_value`.
 - **D2** entry quantity: `EntersWithCounters.count: EffectValue` on a pending-entry
-  frame (`bind_chosen_type` for Banner). Deleted `EntryValue`, `Game::entry_value`.
+  frame (`effect_value_with_chosen_type` for Banner). Deleted `EntryValue`, `Game::entry_value`.
 - **D3** damage replacement: `DamageSource { by, predicate, this }`,
   `DamageRecipient.this`, `DamageTransform::Add(Box<EffectValue>)`. Deleted
   `PreventCombatDamageToOrFromSelf`, `OpponentDamagePlusCounters`,
