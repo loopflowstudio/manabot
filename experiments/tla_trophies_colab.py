@@ -53,7 +53,10 @@ HALF_TRAINING_EXTRA_SEATINGS = tuple(
     f"Colab half-training deal {i + 1}" for i in EXTRA_PAIRS
 )
 LAG_200 = "tla-trophies-colab-lag-200-32"
+LAG_200_EXTRA = "tla-trophies-colab-lag-200-extra-128"
+LAG_200_EXTRA_MIN_UPDATES = 1_000
 LAG_200_SEATINGS = tuple(f"Colab -200 updates deal {i + 1}" for i in range(32))
+LAG_200_EXTRA_SEATINGS = tuple(f"Colab -200 updates deal {i + 1}" for i in EXTRA_PAIRS)
 LARGE_VS_SMALL = "tla-trophies-colab-w160l8-vs-w64-32"
 LARGE_VS_SMALL_EXTRA = "tla-trophies-colab-w160l8-vs-w64-extra-128"
 LARGE_VS_SMALL_SEATINGS = tuple(f"Colab w160l8 vs w64 deal {i + 1}" for i in range(32))
@@ -73,6 +76,7 @@ LARGE_VS_SMALL_EQUAL_TIME_EXTRA_SEATINGS = tuple(
 EXTRA_PREFIXES = (
     f"{HELD_OUT_EXTRA}-",
     f"{HALF_TRAINING_EXTRA}-",
+    f"{LAG_200_EXTRA}-",
     f"{LARGE_VS_SMALL_EXTRA}-",
     f"{LARGE_VS_SMALL_EQUAL_TIME_EXTRA}-",
 )
@@ -243,9 +247,10 @@ def size_evaluations(
         seating_names: tuple[str, ...] | None = None,
         opponent: Fraction | Aligned | CheckpointPlayer | None = None,
         tags: tuple[str, ...] = (),
+        min_updates: int = EXTRA_AFTER_UPDATES + 1,
     ) -> list[EvalJob]:
         eligible = sorted(
-            (c for c in checkpoints if c.at.get("updates", 0) > EXTRA_AFTER_UPDATES),
+            (c for c in checkpoints if c.at.get("updates", 0) >= min_updates),
             key=lambda c: c.at["updates"],
             reverse=True,
         )
@@ -394,6 +399,16 @@ def size_evaluations(
                         checkpoint_player(partner.ref),
                     )
                 )
+    if lag_200_checkpoints:
+        jobs.extend(
+            extra_against(
+                f"{LAG_200_EXTRA}-{size}",
+                lag_200_checkpoints,
+                LAG_200_EXTRA_SEATINGS,
+                lag_200,
+                min_updates=LAG_200_EXTRA_MIN_UPDATES,
+            )
+        )
     return jobs
 
 
@@ -447,7 +462,7 @@ def report() -> Report:
             ),
             head_to_head(
                 "Against itself 200 updates earlier",
-                LAG_200_SEATINGS,
+                (*LAG_200_SEATINGS, *LAG_200_EXTRA_SEATINGS),
             ),
             head_to_head(
                 "Large (w160l8) against Small (w64) at equal training time",
