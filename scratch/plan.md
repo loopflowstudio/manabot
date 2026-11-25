@@ -154,53 +154,25 @@ cache parity assertions run.
 `managym/README.md` (`### Automatic source preference`, `### Manual mana
 sources`, `### Inspecting automatic payment`) and `docs/academy.md`
 (`### Previewing payments`). 
-- Pass 5 (ship-review decisions, 2026-11-25):
-  - **Hot-path performance (`interchangeable.rs`, `mana.rs`):** cached
-    `announced_mana_actions` across `advance_payment` -> `payment_action_space`
-    with debug recomputation checks; shared one `payment_model`/`pooled_mana`
-    and `FixedOnly` check across `can_pay` and `useful_payment_taps`; added
-    `min_opt = spare + 1` definition-count pre-filter before
-    `unbound_mana_source` and `fixed_only` arithmetic in
-    `determined_source_counts`; added dead-work output short-circuit,
-    `fixed_only` fast path, lazy single `after_tap`, and failed-generic-color
-    deduplication in `useful_payment_taps`. Local release `bench_steps` dropped
-    from `12.698 s` (`9,045 steps/s`) to `2.945 s` (`39,363 steps/s`, 512
-    games, `115,941` steps); `bench_search` ran `83.443 s` total / `2.720 s`
-    worst across `22,848` simulations.
-  - **Resolution payments (`3b`, `decision.rs`, `mana.rs`, `action.rs`):**
-    `Decision::Payment` (`TurnFaceUp`, `Ward`) now uses
-    `resolution_mana_actions` with per-source manual taps for both basics and
-    simple choice sources on real choices, the same forced/interchangeable skip
-    and `equivalent_mana_choices` color-modal skip rules, `Tap <Name> for ...`
-    labels for fixed taps, and `may_name_mana_source` handling for
-    `ManaChoice { resume: Some(Decision::Payment) }`. Updated
-    `managym/README.md` and `managym/tests/source_taps.rs` (32/32 debug green).
-  - **LLM text observation (`4b`, `manabot/semantic/text_observation.py`):**
-    simple choice-of-color mana taps now use native `action.description` with
-    permanent alias (`"Tap Kyoshi Village for {G}/{W} (P1); ability 1"`,
-    `"Tap Hermitic Herbalist for any color (P1); ability 1"`) instead of
-    `"Activate ability of ..."`, while non-simple mana abilities keep
-    `"Activate ability of ..."`.
-  - **Academy Moves log (`5c`, `academy/ui/src/lib/board/Rail.svelte`,
-    `managym/academy/recording.py`):** Moves log renders mana symbols via
-    `ManaText` pips in both live play and replay; `recording.py` holds
-    `mana_color` as a continuing stage and narrates the resolved mana color
-    added (`"Tap Kyoshi Village for {W}"`, `"Waterfall Aerialist: tap Kyoshi
-    Village for {W}, pay the cost"`) instead of leaking the raw offer label.
-  - **CI test/fixture updates:** updated the 3 Rust card tests (`ori`, `tla`,
-    `woe`), Python integration tests (`test_text_observation.py`,
-    `test_casting_profiles.py`, `test_game_snapshot.py`,
-    `test_snapshot_rollouts.py`), capacity fixture
-    (`tests/fixtures/current-capacity-w17-smart-payment.json`), heuristic
-    parity fixture (`tests/fixtures/native_heuristic_smart_payment_parity.json`),
-    authored match authority + parity receipts (174 -> 170 commands, identical
-    terminal state digest), Academy fixtures (`scripts/refresh_academy_fixtures.py`),
-    and Academy E2E multi-offer card locator (`choice-navigation.spec.ts`).
+## Pass 5 (`7e5f5b48c4`, ship-review decisions 2026-11-25)
+
+Hot-path caching/pruning in `mana.rs`/`interchangeable.rs`; resolution
+payments (`TurnFaceUp`, `Ward`) via `resolution_mana_actions` with the same
+skip rules (3b); LLM text uses native `action.description` for simple choice
+taps (4b); Academy Moves log renders pips and narrates the resolved color (5c);
+all PR #616 CI tests and parity fixtures updated (authored match 174 -> 170
+commands, same terminal digest). Recorded: debug `source_taps` 32/32; local
+release `bench_steps` 2.945 s / 115,941 steps; `bench_search` 83.443 s total.
+Not recorded: a same-machine `bench_search` on base `3be5a0cfb2`, so Pass 5
+has not yet shown that search got faster (Jack Heart: "this should make search
+go FASTER if done right").
 
 ## Remaining — Gate / CI only
 
-- After CI runs on the updated PR, verify `Engine Budget` timings and adopt the
-  moved digest in `managym/perf/baseline.json` via
+- CI run `45679810831` on `70921eb079` was pending at realign. Read
+  `Engine Budget`: search total must not exceed base (+10% cap fails; the
+  goal is faster). If slower, profile `bench_search` against base before
+  adopting anything. Only then adopt the moved digest in `managym/perf/baseline.json` via
   `uv run scripts/engine_budget.py record --reason "..."`.
 
 ## Acceptance check at gate
