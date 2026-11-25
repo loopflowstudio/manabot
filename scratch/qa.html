@@ -1,0 +1,85 @@
+<!doctype html><meta charset=utf-8><title>MTG-434 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:1em;overflow:auto;font-size:12px}img{max-width:100%;border:1px solid #ccc}h2{margin-top:2em}</style>
+<h1>MTG-434 QA: removed managym APIs, turn steps in rules order, no top-level <code>academy</code></h1>
+<p>Run 2026-11-24 on HEAD 57f1d30497 with a freshly built CPython 3.13 extension. The last cleanup commit had changed <code>bindings.rs</code> after the previous build.</p>
+
+<h2>1. Library user: demo, 0.2.x captures, removed names</h2>
+<p>I ran the plan's demo, then decoded every <code>managym/tests/fixtures/observation_json</code> capture (integer steps). I fed integer step 12 and invalid values to <code>Observation.from_json</code> and called each removed name. Native and Python <code>StepEnum</code> agree member by member.</p>
+<pre>== demo
+PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+True
+7 8
+learning_catalog False
+learning_token_value False
+LearningCatalog False
+WORLD_VERSION False
+== native and python StepEnum agree
+ok [&#x27;BEGINNING_UNTAP&#x27;, &#x27;BEGINNING_UPKEEP&#x27;, &#x27;BEGINNING_DRAW&#x27;, &#x27;PRECOMBAT_MAIN_STEP&#x27;, &#x27;COMBAT_BEGIN&#x27;, &#x27;COMBAT_DECLARE_ATTACKERS&#x27;, &#x27;COMBAT_DECLARE_BLOCKERS&#x27;, &#x27;COMBAT_FIRST_STRIKE_DAMAGE&#x27;, &#x27;COMBAT_DAMAGE&#x27;, &#x27;COMBAT_END&#x27;, &#x27;POSTCOMBAT_MAIN_STEP&#x27;, &#x27;ENDING_END&#x27;, &#x27;ENDING_CLEANUP&#x27;]
+== 0.2.x captures with integer steps
+acting.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+empty.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+pending-0-0.json (0, 1) -&gt; BEGINNING BEGINNING_UPKEEP
+pending-0-1.json (0, 1) -&gt; BEGINNING BEGINNING_UPKEEP
+pending-1-0.json (0, 1) -&gt; BEGINNING BEGINNING_UPKEEP
+pending-1-1.json (0, 1) -&gt; BEGINNING BEGINNING_UPKEEP
+populated.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+provenance.json ERR ValueError unknown field `capture_description`, expected one of `decklists_closed`, `shared_effects`, `game_over`, `won`, `turn`, `action_space`, `agent`, `agent_cards`, `agent_sideboard`, `agent_permanents`, `opponent`, `opponent_cards`, `opponent_permanents`, `stack_objects`, `recent_events`, `decision_memory`, `policy_history`
+sparse-optionals.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+terminal.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+viewer-0.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+viewer-1.json (1, 3) -&gt; PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+== first strike from integer 12
+COMBAT COMBAT_FIRST_STRIKE_DAMAGE
+13 -&gt; ValueError unsupported enum value 13
+-1 -&gt; ValueError unsupported enum value -1
+&#x27;FirstStrikeCombatDamage&#x27; -&gt; ValueError unsupported enum value FirstStrikeCombatDamage
+1.0 -&gt; ValueError data did not match any variant of untagged enum TurnField
+True -&gt; ValueError data did not match any variant of untagged enum TurnField
+None -&gt; ValueError data did not match any variant of untagged enum TurnField
+named COMBAT_FIRST_STRIKE_DAMAGE
+== removed names fail plainly
+PlayerConfig(disclosure=) -&gt; TypeError PlayerConfig.__new__() got an unexpected keyword argument &#x27;disclosure&#x27;
+VectorEnv(opponent_policy=) -&gt; TypeError VectorEnv.__new__() got an unexpected keyword argument &#x27;opponent_policy&#x27;
+Env(enable_behavior_tracking=) -&gt; TypeError Env.__new__() got an unexpected keyword argument &#x27;enable_behavior_tracking&#x27;
+Permanent {&#x27;card&#x27;: False, &#x27;name&#x27;: True, &#x27;power&#x27;: False, &#x27;toughness&#x27;: False, &#x27;card_types&#x27;: False} characteristics True
+card_records False
+recording.evidence False
+recording.FailureEvidence False
+recording.read_failure False
+recording.CapturedVector False
+RecordedGame.deal_seed False
+RecordedGame.leg False
+RecordedGame.game_trace_sha256 False
+RecordedGame.decks False
+</pre>
+<p><code>provenance.json</code> is the capture index, not an observation, so its error is expected. <code>Permanent.name</code> is the effect name override, which stays (out of scope).</p>
+<p>Decklist modes after the cleanup inlined the disclosure parser: open, closed and mixed all reset a game. Mixed varies by seed (<code>open, closed, closed, open, …</code>), and <code>"bogus"</code> raises <code>ValueError</code>.</p>
+
+<h2>2. Academy table: a real first-strike attack</h2>
+<p>I launched <code>managym academy play</code> with 20 Mountain / 20 Mindsparker / 20 Lightning Bolt against 60 Plains (passive, seed 7) and drove it with Playwright. I set the Damage stop on my turn, played lands, cast Mindsparkers and attacked. The WebSocket frames carried <code>COMBAT_FIRST_STRIKE_DAMAGE</code> (2 frames) alongside <code>COMBAT_DAMAGE</code>. The bar marked Damage as current and the primary action read “To regular damage”. Three first strikers took Passive from 11 to 2 before regular damage. There were no page errors or console errors, and the game ran to its end.</p>
+<img src="qa-shots/table-first-strike.png" alt="Table at first-strike damage">
+
+<h2>3. Replay of that game in the browser</h2>
+<p>I opened <code>/replay?trace=…</code> in the owning context and stepped with Next. Position 228/275 is the first-strike damage decision. It shows the Damage cell and the same “To regular damage” choice, with no page errors.</p>
+<img src="qa-shots/replay-first-strike.png" alt="Replay at first-strike damage">
+
+<h2>4. Returning user: games saved by an older build</h2>
+<p>I copied a <code>play.sqlite</code> holding 66 games saved on 2026-11-19 by another checkout through a read-only backup. A server ran on that copy, and <code>/api/traces</code> listed them. Replay links are owner-gated to that browser's credential, so I read every game in-process through Academy's own <code>Recording</code>. All 66 opened, and each position returned metadata and a board. Today's 4 first-strike games read the same way, with 8 <code>COMBAT_FIRST_STRIKE_DAMAGE</code> positions.</p>
+
+<h2>5. Removed <code>villain_type: "checkpoint"</code> on the live API</h2>
+<pre>POST /api/policies/check villain_type=checkpoint → {"compatible":false,"reason":"villain_type must be one of: passive, policy, random, search."}
+POST /api/policies/check villain_type=passive    → {"compatible":true}</pre>
+<p>No stored browser state can still send it. The UI stopped sending <code>checkpoint</code> on 2026-11-15, and the saved last-matchup key only appeared on 2026-11-19. Session drafts stored the already-translated <code>policy</code>.</p>
+
+<h2>6. Packaging</h2>
+<p>The freshly built wheel has 0 <code>academy/</code> entries. Packaging files have not changed since pass 3, whose staged sdists and wheels passed <code>validate.py</code>. In a clean install, <code>import academy</code> raised <code>ModuleNotFoundError</code>. I did not repeat that clean-venv install.</p>
+
+<h2>Tests</h2>
+<p>I ran the decklist disclosure, observation, native player policy, game record writer, package boundary and pinned pilot tests: 158 passed, 2 skipped.</p>
+
+<h2>Result</h2>
+<ul>
+<li><b>Works:</b> everything above. Nothing needed fixing in the change.</li>
+<li><b>Not reached:</b> browser replay of another person's saved games (owner credential); the full release matrix, debug nextest and Engine Budget, which run in CI at gate.</li>
+<li><b>Still wrong, unrelated to this change:</b> during automatic passes the stop bar's current cell can show the previous frame's step (for example “Upkeep” while main-phase offers are up). The mapping for those steps is unchanged here, and I did not investigate further.</li>
+</ul>

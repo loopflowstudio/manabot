@@ -27,7 +27,24 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
-  SIGINT is ignored and the server looks hung.
+  SIGINT is ignored and the server looks hung (SIGTERM the Python child then).
+  The dev `.venv` serves it with `uv run --extra play managym academy play …`.
+- Turn steps in the table: to stop where skip_trivial would pass, press a
+  `[data-testid=bar-stop-<my|opponent>-<step>]` cell until `data-state=every`.
+  First-strike damage: `20 Mountain / 20 Mindsparker / 20 Lightning Bolt`
+  against `60 Plains`, `--opponent passive --seed 7`, a `combat_damage` stop
+  and attacking Mindsparkers reach `COMBAT_FIRST_STRIKE_DAMAGE` on turn 19
+  (about 3 min); the Damage cell is `aria-current=step` and the primary reads
+  "To regular damage". Read the step from WebSocket frames (`"step":"…"`); the
+  bar's current cell can lag the offers by a frame.
+- Replay a configured launch's games in the browser: open the launch URL
+  first in the same context (it owns the records), then `/replay?trace=<id>`
+  (ids from `/api/traces`; `replay_available` is owner-gated) and press
+  `Next`. Games saved by another checkout's browser are not yours: copy its
+  `play.sqlite` with `sqlite3 -readonly <src> ".backup <dst>"` (the WAL holds
+  recent rows) and read each in-process with
+  `Recording(id, load_trace(id, dir))`, calling `metadata` and `read` on every
+  position.
 - Checkpoints as Academy opponents: launch `managym academy play` with
   `MANABOT_RUNS_DIR=<folder of .pt/.safetensors>` and `ETUDE_HOME=<home of an
   etude train run>`; `GET /api/opponents` lists what the picker shows (an
@@ -84,8 +101,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
   `npm ci` there, about a minute; Chromium is cached; delete the script
-  afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a game. Triggered abilities
+  afterwards). Click only `[data-testid=action-option]:not([disabled])`
+  offers (the configured-launch table has no `action-panel` wrapper; a
+  mulligan's "Keep hand" is an offer too): other buttons open the deck picker
+  or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   The configured-launch table (`managym academy play`) has no Rematch in its
