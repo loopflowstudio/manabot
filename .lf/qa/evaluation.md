@@ -2,7 +2,12 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
 
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
-  seconds that receipts still equal main's, field for field; the
+  seconds that receipts still equal main's, field for field. `--reference`
+  executes the reference's modules against this checkout's imports, so it
+  fails with `ImportError` across a change that removes a name they import
+  (MTG-433's dense transport), and at `3be5a0cfb2` even its default reference
+  failed on `manabot.belief.sampling`; then run the default mode on each tree
+  and compare its `parity` blocks; the
   `--rollout-evidence`/`--native-encoder` arms check that full evidence and
   per-row encoding still match the compact, batched defaults. To play
   games, build two players per arm with `make_player` and drive `act`,

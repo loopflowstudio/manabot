@@ -47,7 +47,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   **Start game** on the New game page and **Start next game** raise a browser
   confirm ("Stop the current game and start a new session?"). Playwright
   dismisses it by default and the click then does nothing: register
-  `page.on('dialog', d => d.accept())` first. Check the header names the
+  `page.on('dialog', d => d.accept())` first. The launch root shows a "Ready to play"
+  card; its "Set up a different game" link opens the picker with
+  `[data-testid=opponent-select]`. Check the header names the
   chosen policy before reading the opponent's plays. When this checkout has no
   `academy/ui/node_modules`, keep the script under `.runs/` and load Playwright
   from a sibling checkout with `createRequire('<sibling>/academy/ui/')('playwright')`.

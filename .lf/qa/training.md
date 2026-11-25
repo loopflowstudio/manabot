@@ -280,6 +280,12 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+  A scalar `managym.Env` captures no decision log unless built with
+  `decision_memory=True` (manabot's `Env` sets it from `max_decision_records`);
+  without it every batch's `decision_*` tables are empty and
+  `batch.blank_decision_memory()` changes nothing. With it, a four-update GRU
+  policy on Gray Ogre differed from its blanked log on 58 of 60 decisions
+  (by about 1e-8, its gate still near zero).
 - Portable continuation and backend switching (`out/state/save-*/` with
   `learner.safetensors`, `sampling.safetensors`, `continuation.json`):
   `etude continue` needs a launched parent (on an `etude train` run it says
@@ -307,7 +313,7 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   `resolve("torch").load_policy`, build a wide `ActorCritic` (for example
   `hidden_dim=384`, 8 heads) and play scalar `Env(Match(selected_match()), space,
   Reward(RewardConfig()))` games by CPU argmax, keeping each encoded decision.
-  Stack them into 64- and 256-row dense dicts and compare CPU `prepare(rows,
+  Encode 64 and 256 of them with `managym.encode_observation_batch` and compare CPU `prepare(rows,
   inference=True)`, MPS `prepare(rows, inference=True)` and the same MPS batch
   with `dataclasses.replace(batch, attention_columns=None)`. Choose moves with
   the trained policy and use the same wide model weights in each forward

@@ -16,7 +16,11 @@ Read when the change touches checkpoint loading, input readings or files an earl
   `uv run python -m manabot.backends.convert` must accept both a
   PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
   always writes a container); convert a v11 PyTorch zip and load its `.safetensors`. A v9 or
-  v10 checkpoint must report v0.2.5 as its last supporting release.
+  v10 checkpoint must report v0.2.5 as its last supporting release. The repository
+  no longer holds one: take the v9 pilot from the last 0.2.x tag
+  (`git show v0.2.6:tests/fixtures/pinned_pilot/v9/pilot.pt > .runs/…/v9-pilot.pt`)
+  and check `load_policy`, `manabot.eval.local` as either seat and
+  `/api/opponents` (listed with `available: false` and the reason).
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
   Write returning-user checkpoints on `main` as in "Files a returning user
   wrote". For a column append, cover both `deck_world` and `checkpoint_world`
