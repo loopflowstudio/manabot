@@ -1,4 +1,5 @@
 //! Coldsnap.
+use managym_state::card::EntryScope;
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
     card::{
@@ -23,11 +24,9 @@ fn dark_depths() -> CardDefinition {
             name: "Dark Depths".into(),
             types: CardTypes::new([CardType::Land]),
             supertypes: vec!["Legendary".into(), "Snow".into()],
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
-                if_cast: false,
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, condition: None,
                 kind: CounterKind::Ice,
-                count: 10,
-            }],
+                count: 10.into(), }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 effects: vec![Effect::RemoveCounters {

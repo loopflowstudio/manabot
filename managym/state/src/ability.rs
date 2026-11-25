@@ -467,6 +467,8 @@ pub enum Condition {
     CreatureDiedThisTurn,
     /// The spell or the spell that became this permanent was kicked (CR 702.33).
     Kicked,
+    /// The entering card was cast, optionally from a particular zone.
+    EntryCastFrom(Option<ZoneType>),
     /// The resolving spell was cast from a graveyard. A spell copy was never cast.
     CastFromGraveyard,
     /// Resolution only: the frame's primary target is still a permanent and
@@ -667,7 +669,7 @@ impl Condition {
             Condition::Compare { left, right, .. } => {
                 left.is_resolution_only() || right.is_resolution_only()
             }
-            Condition::CastFromGraveyard
+            Condition::EntryCastFrom(_) | Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
             | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
@@ -1578,6 +1580,8 @@ pub enum Effect {
         #[serde(skip_serializing_if = "is_one")]
         count: usize,
     },
+    /// Discard the selected hands as one simultaneous event.
+    DiscardHand { who: PlayerSelector },
     /// Destroy each permanent `what` names (CR 701.7), as one simultaneous
     /// event: leave-the-battlefield abilities look back at the permanents
     /// as they all were before (CR 603.10a).
@@ -2554,7 +2558,8 @@ impl Effect {
             return Some(spec);
         }
         match self {
-            Effect::GivePlayerCounters { player, .. }
+            Effect::DiscardHand { who: player }
+            | Effect::GivePlayerCounters { player, .. }
             | Effect::LoseLife { player, .. }
             | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),

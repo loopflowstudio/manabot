@@ -1,3 +1,4 @@
+use managym::state::card::EntryScope;
 use managym::{
     agent::action::ActionType,
     flow::{
@@ -6,7 +7,7 @@ use managym::{
     },
     state::{
         ability::Actor,
-        card::{DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageTransform, ReplacementEffect},
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
@@ -40,7 +41,8 @@ fn resolve_bolt_with_drivers(
                 .push(ReplacementEffect::ModifyDamage {
                     creature_source: false,
                     source_by: Actor::AnyPlayer,
-                    recipient_by: Actor::You,
+                    recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
                     transform: *transform,
                 });
         }
@@ -166,10 +168,8 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     let object = move_card(&mut s, object, ZoneType::Hand);
     s.game_mut().state[object].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters {
-            count: 2,
-            condition: None,
-        },
+        ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 2.into(),
+            condition: None, kind: CounterKind::PlusOnePlusOne, },
     ];
     let _ = s.drain_events();
 
@@ -201,6 +201,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
         face_down: false,
+ discarded: false,
     }));
 }
 
@@ -214,10 +215,8 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
     let driver = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
     s.game_mut().state[driver].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters {
-            count: 2,
-            condition: None,
-        },
+        ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 2.into(),
+            condition: None, kind: CounterKind::PlusOnePlusOne, },
     ];
     let driver = move_card(&mut s, driver, ZoneType::Graveyard);
     assert_eq!(permanent_of(&s, driver), None);
@@ -252,7 +251,8 @@ fn lifelink_spell_uses_its_stack_controller_for_doubling_and_gain() {
                 .push(ReplacementEffect::ModifyDamage {
                     creature_source: false,
                     source_by: Actor::AnyPlayer,
-                    recipient_by: Actor::You,
+                    recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
                     transform: DamageTransform::Prevent(1),
                 });
         }

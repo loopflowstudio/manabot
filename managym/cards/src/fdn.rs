@@ -1,4 +1,5 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
+use managym_state::card::EntryScope;
 use managym_state::ability::{
     Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind, DamageRecipientFilter,
     Effect, EffectValue, EntryCounters, KeywordAction, ObjectProperty, ObjectSelector, PaymentCost,
@@ -7,7 +8,7 @@ use managym_state::ability::{
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
-    CardType, CardTypes, DamageTransform, Keyword, Keywords, ManaAbility, PrintedCharacteristics,
+    CardType, CardTypes, DamageRecipient, DamageTransform, Keyword, Keywords, ManaAbility, PrintedCharacteristics,
     ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
     StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
     TargetCostReduction,
@@ -1312,10 +1313,8 @@ fn goblin_boarders() -> CardDefinition {
             subtypes: vec!["Goblin".into(), "Pirate".into()],
             power: Some(3),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
-                count: 1,
-                condition: Some(Condition::AttackedThisTurn),
-            }],
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 1.into(),
+                condition: Some(Condition::AttackedThisTurn), kind: CounterKind::PlusOnePlusOne, }],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -2029,7 +2028,8 @@ fn twinflame_tyrant() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
                 creature_source: false,
                 source_by: Actor::You,
-                recipient_by: Actor::Opponent,
+                recipient: DamageRecipient::any(Actor::Opponent),
+                    combat: None,
                 transform: DamageTransform::Double,
             }],
             text_box: "Flying\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals double that damage instead.".into(),
@@ -3818,11 +3818,9 @@ fn nine_lives_familiar() -> CardDefinition {
             subtypes: vec!["Cat".into()],
             power: Some(1),
             toughness: Some(1),
-            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
-                kind: CounterKind::Revival,
-                count: 8,
-                if_cast: true,
-            }],
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::Revival,
+                count: 8.into(),
+                condition: Some(Condition::EntryCastFrom(None)), }],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,

@@ -1296,6 +1296,7 @@ fn run(
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),
                                 face_down: false,
+ discarded: false,
                             },
                         );
                     }

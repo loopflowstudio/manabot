@@ -23,7 +23,8 @@ use crate::{
     state::{
         ability::ObjectSelector,
         binding::{ObjectBinding, ZoneSelection},
-        card::{CardDefId, GraveyardMover, ReplacementEffect},
+        card::CardDefId,
+        predicate::CardPredicate,
         game_object::{ObjectId, PlayerId},
         stack_object::StackObject,
         zone::ZoneType,
@@ -450,6 +451,15 @@ impl Game {
             })
             .map(|(object, ..)| object)
             .collect();
+        for batch in self.pending_batches() {
+            for pending in batch.events.iter().take(batch.cursor + 1) {
+                if let ProposedEvent::ZoneMove { from: Some(ZoneType::Hand), object_id, entry, .. } = &pending.event {
+                    if entry.discard.is_some() && self.hand_replacements(*object_id, entry.discard).iter().any(|candidate| candidate.names_card(*object_id)) {
+                        pinned.push(*object_id);
+                    }
+                }
+            }
+        }
         pinned.extend(
             self.captured_bindings()
                 .filter(|binding| {
@@ -588,35 +598,29 @@ impl Game {
                     ResolutionRef::Decision(_) => {}
                 }
             }
-            // An ordering choice commits a hidden discard to the offered
-            // replacements' predicates. Either sampler may substitute another
-            // matching hand card, including a different printing.
-            if let (Decision::OrderReplacement { candidates, .. }, Some(batch)) =
-                (&suspended.decision, &suspended.frame.batch)
-            {
-                let pending = &batch.events[batch.cursor];
-                if let ProposedEvent::ZoneMove {
-                    from: Some(ZoneType::Hand),
-                    object_id,
-                    ..
-                } = &pending.event
-                {
-                    for candidate in candidates {
-                        if let ReplacementEffect::GraveyardInstead {
-                            what: GraveyardMover::Matching(predicate),
-                            ..
-                        } = &candidate.effect
-                        {
-                            retain(
-                                &Some(ZoneSelection {
-                                    owner: self.state[*object_id].owner,
-                                    zone: ZoneType::Hand,
-                                    predicate: predicate.clone(),
-                                }),
-                                std::slice::from_ref(object_id),
-                            );
+            // Every not-yet-committed discard needs a distinct hand slot.
+            // At and before the cursor its replacement options have already
+            // been evaluated. A substitute must reproduce those options; later
+            // members will be evaluated using their newly assigned printing.
+            for batch in self.pending_batches() {
+                for (index, pending) in batch.events.iter().enumerate() {
+                    let ProposedEvent::ZoneMove { from: Some(ZoneType::Hand), object_id, entry, .. } = &pending.event else { continue };
+                    if entry.discard.is_none() { continue; }
+                    let owner = self.state[*object_id].owner;
+                    if self.shares_information(viewer, owner) || pinned.binary_search(object_id).is_ok() { continue; }
+                    let predicate = if index <= batch.cursor {
+                        let original = self.hand_replacements(*object_id, entry.discard);
+                        let mut names = std::collections::BTreeSet::new();
+                        for candidate in unseen_objects(self, owner, viewer, &pinned) {
+                            if self.hand_replacements(candidate, entry.discard) == original {
+                                names.insert(self.state[candidate].retained_base().1.name.clone());
+                            }
                         }
-                    }
+                        CardPredicate { any_of: names.into_iter().map(|name| CardPredicate { named: Some(name), ..Default::default() }).collect(), ..Default::default() }
+                    } else {
+                        CardPredicate::default()
+                    };
+                    retain(&Some(ZoneSelection { owner, zone: ZoneType::Hand, predicate }), std::slice::from_ref(object_id));
                 }
             }
             for decision in suspended.decisions() {

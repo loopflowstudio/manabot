@@ -1,6 +1,7 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
+use crate::state::card::EntryScope;
 use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
@@ -2733,10 +2734,8 @@ fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> ObjectId {
         .unwrap()
         .0;
     let object = game.move_object(object, ZoneType::Exile);
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
-        condition: None,
-    }];
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 1.into(),
+        condition: None, kind: CounterKind::PlusOnePlusOne, }];
     object
 }
 
@@ -2975,7 +2974,7 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     use crate::flow::combat::CombatState;
     use crate::state::{
         ability::Actor,
-        card::{DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageTransform, ReplacementEffect},
     };
     let defender = PlayerId(1);
     let (mut root, first, second) = fixture(defender);
@@ -2983,13 +2982,15 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         ReplacementEffect::ModifyDamage {
             creature_source: false,
             source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
             transform: DamageTransform::Prevent(1),
         },
         ReplacementEffect::ModifyDamage {
             creature_source: false,
             source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
             transform: DamageTransform::Double,
         },
     ] {
@@ -3784,10 +3785,8 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
-        condition: None,
-    }];
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, count: 1.into(),
+        condition: None, kind: CounterKind::PlusOnePlusOne, }];
     for multiplier in [2, 3] {
         let id = game
             .scenario_force_battlefield(player, "Mountain", true)

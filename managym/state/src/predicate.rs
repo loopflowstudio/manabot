@@ -24,6 +24,8 @@ use super::mana::Color;
 )]
 #[serde(default)]
 pub struct CardPredicate {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chosen_type_of_source: bool,
     /// Shares the asking source permanent's layered name. Requires a source;
     /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -168,7 +170,7 @@ impl CardPredicate {
 
     /// Whether matching needs the asking ability's source permanent.
     pub fn reads_source(&self) -> bool {
-        self.namesake || self.any_of.iter().any(CardPredicate::reads_source)
+        self.namesake || self.chosen_type_of_source || self.any_of.iter().any(CardPredicate::reads_source)
     }
 
     /// Whether matching compares power, here or in an alternative.
@@ -210,7 +212,7 @@ impl CardPredicate {
         added_types: &[CardType],
     ) -> bool {
         let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
-        if self.namesake
+        if self.chosen_type_of_source || self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped

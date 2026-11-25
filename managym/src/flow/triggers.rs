@@ -209,11 +209,8 @@ fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
                 Bending::Air => KeywordAction::Airbend,
             },
         )),
-        // The engine discards by moving a card from hand to its owner's
-        // graveyard, the event's controller.
         GameEvent::CardMoved {
-            from: Some(ZoneType::Hand),
-            to: ZoneType::Graveyard,
+            discarded: true,
             controller,
             ..
         } => Some((*controller, KeywordAction::Discard)),

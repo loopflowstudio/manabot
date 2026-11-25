@@ -246,7 +246,7 @@ fn silencer_requires_combat_damage_to_the_player() {
         agent::action::ActionSpaceKind,
         state::{
             ability::Actor,
-            card::{DamageTransform, ReplacementEffect},
+            card::{DamageRecipient, DamageTransform, ReplacementEffect},
         },
     };
 
@@ -261,7 +261,8 @@ fn silencer_requires_combat_damage_to_the_player() {
                 vec![ReplacementEffect::ModifyDamage {
                     creature_source: false,
                     source_by: Actor::AnyPlayer,
-                    recipient_by: Actor::You,
+                    recipient: DamageRecipient::any(Actor::You),
+                    combat: None,
                     transform: DamageTransform::Prevent(2),
                 }];
         }

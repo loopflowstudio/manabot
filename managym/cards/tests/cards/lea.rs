@@ -1,5 +1,6 @@
 //! Tests for cards filed in `src/lea.rs`, in card order.
 
+use managym::state::card::EntryScope;
 use crate::support::{
     game::{deck, deck_of, five_color_setup, move_card, ready, Scenario},
     inspect::{card_of, current_object, library_card, now, permanent_named, permanent_of, zone_of},
@@ -284,11 +285,9 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     let source = s.game().state.permanents[villager].as_ref().unwrap().object;
     s.game_mut().state[source].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithCounters {
-            if_cast: false,
+        ReplacementEffect::EntersWithCounters { on: EntryScope::This, condition: None,
             kind: CounterKind::PlusOnePlusOne,
-            count: 2,
-        },
+            count: 2.into(), },
     ];
     let clone = crate::support::game::move_to_hand(&mut s, "Clone");
     s.game_mut().state[clone].power = Some(3);

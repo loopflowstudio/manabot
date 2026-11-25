@@ -53,6 +53,8 @@ pub enum CounterKind {
     /// exiled cards that have one.
     Stash,
     Revival,
+    Divinity,
+    Fellowship,
 }
 
 impl CounterKind {
@@ -76,6 +78,8 @@ impl CounterKind {
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
             CounterKind::Revival => "revival",
+            CounterKind::Divinity => "divinity",
+            CounterKind::Fellowship => "fellowship",
             CounterKind::Incubation => "incubation",
             CounterKind::Page => "page",
             CounterKind::Soul => "soul",
@@ -93,7 +97,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 23] = [
+    pub const ALL: [CounterKind; 25] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -117,6 +121,8 @@ impl CounterKind {
         CounterKind::Bait,
         CounterKind::Stash,
         CounterKind::Revival,
+        CounterKind::Divinity,
+        CounterKind::Fellowship,
     ];
 }
 

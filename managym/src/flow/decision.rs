@@ -21,7 +21,7 @@ use crate::{
         game::Game,
         payment::{CostComponent, Payment, PaymentProgress},
         play::CastAuthority,
-        proposed_event::{
+        proposed_event::{DiscardCause, 
             BatchProgress, EntryFace, EventBatch, EventBinding, EventResult, ReplacementCandidate,
             ZoneEntry,
         },
@@ -537,6 +537,7 @@ pub enum Decision {
     /// balanced child groups, and choosing one narrows `scope` without
     /// committing anything. Only choosing a name in a leaf scope materializes
     /// an effect. Clones retain constant-size bookkeeping.
+    ChooseCreatureType { player: PlayerId, #[serde(serialize_with = "crate::state::game_object::exact")] object_id: ObjectId, scope: crate::cards::names::NameScope },
     NameCard {
         player: PlayerId,
         count: usize,
@@ -789,6 +790,7 @@ impl Decision {
             | Decision::OrderReplacement { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
+            | Decision::ChooseCreatureType { player, .. }
             | Decision::NameCard { player, .. }
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
@@ -863,6 +865,7 @@ impl Decision {
     pub fn revealed_objects(&self) -> &[ObjectId] {
         match self {
             Decision::ChoosePaymentX { .. }
+            | Decision::ChooseCreatureType { .. }
             | Decision::NameCard { .. }
             | Decision::SearchNamed { .. }
             | Decision::ManaUpfront { .. }
@@ -1524,6 +1527,7 @@ impl Game {
                                     ZoneType::Battlefield,
                                     ZoneEntry {
                                         attached_to: attach_to,
+                                        cast_from: self.spell_on_stack(object).filter(|_| self.state[object].is_card()).map(|spell| spell.cast_from),
                                         face: EntryFace::played_as(profile),
                                         ..ZoneEntry::from_spell(frame.controller, spell)
                                     },
@@ -1663,11 +1667,12 @@ impl Game {
                     .unwrap_or(0);
             }
             EventBinding::Moved { shuffle, .. } => {
-                if batch.events.iter().any(|event| event.discard) {
+                let is_discard = |event: &super::proposed_event::PendingEvent| matches!(&event.event, super::proposed_event::ProposedEvent::ZoneMove { entry, .. } if entry.discard.is_some());
+                if batch.events.iter().any(is_discard) {
                     frame.this_way = results
                         .iter()
                         .zip(&batch.events)
-                        .filter(|(_, event)| event.discard)
+                        .filter(|(_, event)| is_discard(event))
                         .flat_map(|(result, _)| result.arrivals())
                         .collect();
                 }
@@ -2200,7 +2205,7 @@ impl Game {
                     focus: self.object_focus(looked),
                 }
             }
-            Decision::NameCard { player, scope, .. } => ActionSpace {
+            Decision::NameCard { player, scope, .. } | Decision::ChooseCreatureType { player, scope, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 focus: source_focus,
@@ -2315,6 +2320,22 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::ChooseCreatureType { scope, .. }, Action::ChooseMode { mode, .. }) => {
+                match scope.option(*mode) {
+                    Some(NameOption::Group(group)) => {
+                        *scope = group;
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                    }
+                    Some(NameOption::Name(index)) => {
+                        let batch = suspended.frame.batch.as_mut().expect("pending entry");
+                        let super::proposed_event::ProposedEvent::ZoneMove { entry, .. } = &mut batch.events[batch.cursor].event else { unreachable!("pending entry") };
+                        entry.chosen_creature_type = Some(crate::state::subtype::creature_type_names()[index]);
+                        self.run_frame(suspended.frame);
+                    }
+                    None => { *self.state.suspended_decision_mut() = Some(suspended); return Err(AgentError("creature type option out of range".into())); }
+                }
+                Ok(())
+            }
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
                 let of = match choice {
                     Action::ChooseTarget {
@@ -2811,11 +2832,12 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
-                suspended.frame.batch = Some(self.graveyard_batch(
+                suspended.frame.batch = Some(self.discard_batch(
                     EventBinding::Discard {
                         player: *player,
                         remaining: *remaining - 1,
                     },
+                    if suspended.frame.source_identity.is_some() { DiscardCause::effect(&suspended.frame) } else { DiscardCause::Cleanup },
                     [*object_id],
                 ));
                 self.run_frame(suspended.frame);
@@ -3046,7 +3068,7 @@ impl Game {
                     ));
                 }
                 suspended.frame.batch =
-                    Some(self.graveyard_batch(EventBinding::None, [*object_id]));
+                    Some(self.discard_batch(EventBinding::None, DiscardCause::effect(&suspended.frame), [*object_id]));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3354,7 +3376,7 @@ impl Game {
                     return Err(err);
                 }
                 self.run_frame(EffectFrame {
-                    batch: Some(self.graveyard_batch(EventBinding::None, [*object_id])),
+                    batch: Some(self.discard_batch(EventBinding::None, DiscardCause::effect(&suspended.frame), [*object_id])),
                     completion: FrameCompletion::Frame(Box::new(suspended.frame)),
                     ..EffectFrame::new(player, vec![Effect::DrawCards { count: 1.into() }])
                 });

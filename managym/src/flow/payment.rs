@@ -12,7 +12,7 @@ use crate::{
         cast_permission::PlayRoute,
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        proposed_event::{CounterProvenance, EventBinding, EventCause, ProposedEvent},
+        proposed_event::{DiscardCause, CounterProvenance, EventBinding, EventCause, ProposedEvent},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -889,7 +889,7 @@ impl Game {
         completion: FrameCompletion,
     ) -> Result<(), AgentError> {
         self.run_payment_frame(EffectFrame {
-            batch: Some(self.graveyard_batch(EventBinding::ThisWay, [object])),
+            batch: Some(self.discard_batch(EventBinding::ThisWay, match &completion { FrameCompletion::DiscardDuringResolution(caller) => DiscardCause::effect(&caller.frame), _ => DiscardCause::Cost(player) }, [object])),
             completion,
             ..EffectFrame::new(player, Vec::new())
         })

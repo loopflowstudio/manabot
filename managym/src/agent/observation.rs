@@ -693,6 +693,7 @@ pub const MODIFICATION_NAMES: [&str; 43] = [
     "ProtectionFromEverything",
     "PhasedOut",
     "Control",
+    "ChosenCreatureType",
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
@@ -818,6 +819,11 @@ impl ContinuousEffectData {
             Modification::ProtectionFromEverything => "ProtectionFromEverything",
             Modification::PhasedOut => "PhasedOut",
             Modification::Control => "Control",
+            Modification::ChosenCreatureType(name) => {
+                data.subtypes.push(name.clone());
+                data.description = Some(format!("chosen type: {name}"));
+                "ChosenCreatureType"
+            }
             Modification::ModeChosen { mode } => {
                 data.amount = Some(i32::from(*mode));
                 "ModeChosen"

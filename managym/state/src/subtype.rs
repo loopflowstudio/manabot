@@ -459,6 +459,14 @@ pub fn subtypes() -> impl Iterator<Item = &'static str> {
     SUBTYPES.iter().map(|(name, _)| *name)
 }
 
+/// Sorted CR 205.3m names for "choose a creature type" (CR 205.3e).
+pub fn creature_type_names() -> &'static [&'static str] {
+    static NAMES: std::sync::LazyLock<Vec<&str>> = std::sync::LazyLock::new(||
+        SUBTYPES.iter().filter_map(|&(name, kind)| (kind == Creature).then_some(name)).collect()
+    );
+    &NAMES
+}
+
 /// The list `subtype` is on, or `None` for a name outside the table.
 pub fn subtype_category(subtype: &str) -> Option<SubtypeCategory> {
     SUBTYPES

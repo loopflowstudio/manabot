@@ -2,7 +2,7 @@
 use managym_state::{
     ability::{Actor, Effect, ObjectSelector, PlayerSelector, Scope},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageTransform, Keyword,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, DamageRecipient, DamageTransform, Keyword,
         Keywords, PrintedCharacteristics, ReplacementEffect,
     },
     effect::{EffectDuration, Modification},
@@ -50,7 +50,8 @@ fn gratuitous_violence() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
                 creature_source: true,
                 source_by: Actor::You,
-                recipient_by: Actor::AnyPlayer,
+                recipient: DamageRecipient::any(Actor::AnyPlayer),
+                    combat: None,
                 transform: DamageTransform::Double,
             }],
             text_box: "If a creature you control would deal damage to a permanent or player, it deals double that damage instead.".into(),

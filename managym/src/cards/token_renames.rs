@@ -5,6 +5,10 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "ReplacementEffect::EntersWithXCounters", None),
+    (Structure, "/ReplacementEffect::EntersWithXCounters", None),
+    (Variant, "ReplacementEffect::EntersWithPlusOneCounters", None),
+    (Structure, "/ReplacementEffect::EntersWithPlusOneCounters", None),
     (Variant, "ReplacementEffect::ExileInsteadOfGraveyard", None),
     (
         Structure,

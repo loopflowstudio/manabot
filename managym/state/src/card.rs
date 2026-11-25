@@ -548,6 +548,43 @@ pub enum Redirect {
     OwnerLibraryShuffled { reveal: bool },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryChoice { CreatureType }
+
+/// Which prospective permanent receives entry counters (CR 614.12).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryScope {
+    This,
+    OtherYouControl(CardPredicate),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryValue {
+    Fixed(i32),
+    X,
+    GreatestPower(CardPredicate),
+    ControlledAlready(CardPredicate),
+}
+
+impl From<i32> for EntryValue {
+    fn from(value: i32) -> Self { Self::Fixed(value) }
+}
+
+/// A damage recipient, relative to the replacement's source.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct DamageRecipient {
+    pub by: super::ability::Actor,
+    pub players: bool,
+    pub permanents: Option<CardPredicate>,
+    pub except_source: bool,
+}
+
+impl DamageRecipient {
+    pub fn any(by: super::ability::Actor) -> Self {
+        Self { by, players: true, permanents: Some(CardPredicate::default()), except_source: false }
+    }
+}
+
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
@@ -560,17 +597,22 @@ pub enum ReplacementEffect {
         what: GraveyardMover,
         to: Redirect,
     },
+    AsEntersChoose(EntryChoice),
+    DiscardedInstead { by: super::ability::Actor, to: ZoneType },
     EntersPrepared,
     PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is
     /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
     /// record offers it; no definition prints it.
     PreventCombatDamage,
+    ModifyLifeGain { who: super::ability::Actor, additional: i32 },
     ModifyDamage {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         creature_source: bool,
         source_by: super::ability::Actor,
-        recipient_by: super::ability::Actor,
+        recipient: DamageRecipient,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        combat: Option<bool>,
         transform: DamageTransform,
     },
     /// This object enters the battlefield tapped (CR 614.1c).
@@ -580,26 +622,12 @@ pub enum ReplacementEffect {
     EntersTappedUnlessControls {
         predicate: CardPredicate,
     },
-    /// This object enters with +1/+1 counters already present (CR 614.1c),
-    /// if `condition` holds for its entering controller as it enters
-    /// ("enters with a +1/+1 counter on it if you attacked this turn").
-    EntersWithPlusOneCounters {
-        count: i32,
+    EntersWithCounters {
+        on: EntryScope,
+        kind: CounterKind,
+        count: EntryValue,
         #[serde(skip_serializing_if = "Option::is_none")]
         condition: Option<Condition>,
-    },
-    /// This object enters with X counters of `kind`, X being the value
-    /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
-    EntersWithXCounters {
-        kind: CounterKind,
-    },
-    /// This object enters with `count` counters of `kind` (CR 614.1c).
-    EntersWithCounters {
-        kind: CounterKind,
-        count: i32,
-        /// "If you cast it": check the entering controller against the cast spell.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        if_cast: bool,
     },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the

@@ -1255,6 +1255,7 @@ impl Game {
             Condition::Not(condition) => {
                 !self.condition_holds(condition, controller, frame, source, triggering)
             }
+            Condition::EntryCastFrom(zone) => source.and_then(|object| self.spell_on_stack(object)).is_some_and(|spell| self.state[spell.object].is_card() && spell.controller == controller && zone.is_none_or(|z| z == spell.cast_from)),
             Condition::CastFromGraveyard => source
                 .and_then(|object| self.spell_on_stack(object))
                 .is_some_and(|spell| self.was_cast_from_graveyard(spell)),

@@ -83,6 +83,9 @@ pub enum GameEvent {
         from: Option<ZoneType>,
         to: ZoneType,
         controller: PlayerId,
+        /// This move committed a discard, including one with a replaced destination.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        discarded: bool,
         /// The card arrived face down: its identity is not public.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         face_down: bool,

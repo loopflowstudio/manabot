@@ -407,6 +407,13 @@ impl Game {
                     );
                 Some(format!("{name}: {}", candidate.description()))
             }
+            Some(Decision::ChooseCreatureType { scope, .. }) => {
+                let names = crate::state::subtype::creature_type_names();
+                Some(match scope.option(mode)? {
+                    NameOption::Group(group) => format!("Creature types {} through {}", names[group.start], names[group.end-1]),
+                    NameOption::Name(index) => names[index].into(),
+                })
+            }
             Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
                 NameOption::Group(group) => Some(format!(
                     "Names {} through {}",

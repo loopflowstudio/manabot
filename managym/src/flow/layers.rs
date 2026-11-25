@@ -147,7 +147,7 @@ impl ReadSet {
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
             self.fields |= CARD_TYPES;
         }
-        if p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+        if p.chosen_type_of_source || p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
             self.fields |= SUBTYPES;
         }
         if p.supertype.is_some() {
@@ -1214,6 +1214,10 @@ impl<'a> Context<'a> {
         predicate: &CardPredicate,
         source: Option<PermanentId>,
     ) -> bool {
+        if predicate.chosen_type_of_source && !source.and_then(|source| self.game.effects_on(source).find_map(|effect| match &effect.modification {
+            Modification::ChosenCreatureType(name) => Some(name.as_str()),
+            _ => None,
+        })).is_some_and(|name| self.objects[&id].view.has_subtype(name)) { return false; }
         matches_view(
             self.game,
             id,
