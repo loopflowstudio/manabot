@@ -29,7 +29,6 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
     step_buffers,
 )
 from manabot.infra.config import MatchConfig
@@ -43,8 +42,6 @@ from manabot.sim.search.flat_mc import (
 )
 import managym
 from managym import SlotLoad
-
-allocate_buffers = allocate_vector_buffers
 
 # -----------------------------------------------------------------------------
 # Batched action selection

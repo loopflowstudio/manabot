@@ -27,7 +27,6 @@ from manabot.backends.mlx.checkpoint import (
 )
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
-from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
@@ -258,30 +257,19 @@ def capture_incident(
                 "slots": packed.slots,
                 "capacity": np.array(packed.capacity),
                 "log_probabilities": packed.log_probabilities,
-                **packed.fields,
             }.items():
                 retain(f"packed_actions/{name}", value, value)
         source = batch.recorded.rows
-        if isinstance(source, ObservationSelection):
-            selected_obs = source.select(batch.recorded.index[rows])
-        for name in (
-            source.fields if isinstance(source, ObservationSelection) else source
-        ):
-            if isinstance(source, ObservationSelection):
-                size = (
-                    np.prod(source.space.shapes[name])
-                    * np.dtype(source.space.dtypes[name]).itemsize
-                )
-            else:
-                size = source[name][0].nbytes
+        selected_obs = source.select(batch.recorded.index[rows])
+        for name in source.fields:
+            size = (
+                np.prod(source.space.shapes[name])
+                * np.dtype(source.space.dtypes[name]).itemsize
+            )
             if len(rows) * size > remaining:
                 shapes[f"observation/{name}"] = {"omitted": "evidence byte budget"}
                 continue
-            sample = (
-                selected_obs.project(name)
-                if isinstance(source, ObservationSelection)
-                else source[name][batch.recorded.index[rows]]
-            )
+            sample = selected_obs.project(name)
             retain(f"observation/{name}", sample, sample)
 
     state = IncidentTensors(

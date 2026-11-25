@@ -11,8 +11,6 @@ from typing import Protocol
 
 import numpy as np
 
-from manabot.env.memory_store import select_rows
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
@@ -31,17 +29,13 @@ class SampledRows:
 
 
 def prepared_chunks[A](
-    observation: ObservationBuffers | ObservationSelection,
+    observation: ObservationSelection,
     execution_rows: int | None,
-    prepare: Callable[[ObservationBuffers | ObservationSelection], Prepared[A]],
+    prepare: Callable[[ObservationSelection], Prepared[A]],
     profiler: Profiler,
 ) -> Iterator[Prepared[A]]:
     """Prepare borrowed rows in order. The caller samples once across all chunks."""
-    count = (
-        len(observation.coordinates)
-        if isinstance(observation, ObservationSelection)
-        else len(observation["actions_valid"])
-    )
+    count = len(observation.coordinates)
     width = count if execution_rows is None else execution_rows
     if width < 1:
         raise ValueError("execution rows must be positive")
@@ -50,7 +44,7 @@ def prepared_chunks[A](
             rows = (
                 observation
                 if width >= count
-                else select_rows(observation, slice(start, start + width))
+                else observation.select(slice(start, start + width))
             )
             prepared = prepare(rows)
         yield prepared
@@ -61,14 +55,14 @@ def prepared_chunks[A](
 class CollectionScope(Protocol):
     def sample(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         profiler: Profiler,
         *,
         execution_rows: int | None = None,
     ) -> SampledRows: ...
     def opponent_actions(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         *,
         execution_rows: int | None = None,
     ) -> np.ndarray: ...

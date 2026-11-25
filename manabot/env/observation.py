@@ -1,27 +1,26 @@
 """The policy input: named arrays, their shapes and the columns the model reads.
 
-Native code owns the policy input. `managym.encode_observation_into` (one
-observation), `managym.encode_observations_into` (many) and the vector env
-write it against a resolved `managym.ObservationLayout`, and
+Native code owns the policy input. `managym.encode_observation_batch` and the
+vector env encode packed `managym.ObservationBatch` rows against a resolved
+`managym.ObservationLayout`, and
 `managym.observation_layout()` publishes its schema: array names, axes, fixed
 extents, dtypes, named columns and row-kind maps. Nothing here is a second copy
 of that layout:
 
 - `ObservationSpace` is one `ObservationConfig` plus `space.layout`
   (`managym.ObservationLayout` at the config's input version, history, memory
-  and capacities), from which `shapes`, `dtypes` and `allocate` come;
-- `encode_observation(space, obs)` returns fresh buffers for one observation;
+  and capacities), from which `shapes` and `dtypes` come;
+- `encode_policy_batch(space, observations)` encodes viewer projections;
 - the column constants below (`PERMANENT_DEFINITION_INDEX`, `FACT_VALUE_INDEX`,
   ...) and fact kinds are looked up by name in the native layout at import, so
   a renamed native column fails the import instead of being read from the
   wrong place.
 
-Native checks every buffer key, shape and dtype against the supplied layout
-before writing, so every buffer is derived from the space the caller supplies,
-never a native default.
+Every batch is encoded under the layout the caller's space supplies, never a
+native default.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any, ItemsView, KeysView, ValuesView
 import warnings
 
@@ -42,11 +41,7 @@ from managym.enums import (  # noqa: F401
     ZoneEnum,
 )
 
-# Host observations at policy, simulation and rollout boundaries.
-type ObservationBuffers = Mapping[str, np.ndarray]
-
-# Release that removes `ObservationSpace.encode`, `space.encoder` and
-# `ObservationEncoder`.
+# Release that removes the `PolicyObservation` alias here.
 REMOVAL_RELEASE = "0.3.0"
 
 # Input v11 with public history and decision memory: every array a v11
@@ -192,7 +187,7 @@ class ObservationSpace(gym.spaces.Space):
 
     `shapes` and `dtypes` come from the configured native `layout`.
     Construction refuses a configuration whose decision-memory
-    capacities are incomplete. The space writes nothing; `encode_observation` does.
+    capacities are incomplete. The space writes nothing; `encode_policy_batch` encodes.
     """
 
     def __init__(self, config: ObservationConfig | None = None) -> None:
@@ -229,44 +224,8 @@ class ObservationSpace(gym.spaces.Space):
             }
         )
 
-    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
-        """Zeroed dense buffers for this space, with `leading_dims` before each shape.
-
-        Dense transport helper; removed in 0.3.0 with dense `set_buffers` / `encode_observation_into`.
-        """
-        return self.layout.allocate(*leading_dims)
-
-    @property
-    def encoder(self) -> "ObservationSpace":
-        """Deprecated: the space is its own layout."""
-        warnings.warn(
-            "ObservationSpace.encoder is deprecated and removed in "
-            f"{REMOVAL_RELEASE}; read config, shapes, dtypes and allocate from "
-            "the space",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self
-
-    def encode(self, obs: managym.Observation) -> ObservationBuffers:
-        """Deprecated: call `encode_observation(space, obs)`."""
-        warnings.warn(
-            "ObservationSpace.encode is deprecated and removed in "
-            f"{REMOVAL_RELEASE}; call "
-            "manabot.env.observation.encode_observation(space, obs)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return encode_observation(self, obs)
-
     def sample(self, mask: Any = None) -> dict[str, np.ndarray]:
         return self.spaces.sample()
-
-    def contains(self, x: ObservationBuffers) -> bool:
-        return all(
-            name in x and x[name].shape == self.shapes[name]
-            for name in self.spaces.keys()
-        )
 
     def __getitem__(self, key: str) -> gym.spaces.Space:
         return self.spaces[key]
@@ -288,45 +247,13 @@ class ObservationSpace(gym.spaces.Space):
         )
 
 
-def allocate_vector_buffers(
-    obs_space: ObservationSpace, n: int
-) -> dict[str, np.ndarray]:
-    """Allocate dense observation and step-result arrays for n native vector streams.
-
-    Dense transport helper; removed in 0.3.0 (use `step_buffers` with `set_observation_layout`).
-    """
-    return {
-        **obs_space.allocate(n),
-        **step_buffers(n),
-    }
-
-
 def step_buffers(n: int) -> dict[str, np.ndarray]:
-    """Per-stream outcomes written by both native observation transports."""
+    """Per-stream outcomes the native vector writes beside its observation rows."""
     return {
         "rewards": np.zeros(n, dtype=np.float64),
         "terminated": np.zeros(n, dtype=np.uint8),
         "truncated": np.zeros(n, dtype=np.uint8),
     }
-
-
-def encode_observation(
-    space: ObservationSpace, obs: managym.Observation
-) -> dict[str, np.ndarray]:
-    """Fresh dense buffers for `obs` in `space`, written by the native encoder.
-
-    Dense dict transport helper; removed in 0.3.0 (use `managym.encode_observation_batch`).
-
-    Any observation encodes: live, restored with ``Observation.from_json`` or
-    a viewer projection. Raises ``managym.ObservationCapacity`` when it does
-    not fit the space and ``ValueError`` for state the configured input cannot
-    represent.
-    """
-    out = space.allocate()
-    managym.encode_observation_into(
-        obs, space.layout, out, space.config.action_overflow
-    )
-    return out
 
 
 def encode_policy_batch(
@@ -352,12 +279,4 @@ def __getattr__(name: str) -> Any:
             stacklevel=2,
         )
         return PolicyObservation
-    if name == "ObservationEncoder":
-        warnings.warn(
-            f"ObservationEncoder is deprecated and removed in {REMOVAL_RELEASE}; "
-            "ObservationSpace(config) holds the layout",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return ObservationSpace
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

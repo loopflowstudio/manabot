@@ -113,31 +113,6 @@ class BufferedStreams:
                 stack.enter_context(shard.native.reconstructing())
             yield
 
-    def set_buffers(
-        self,
-        buffers: dict[str, Array],
-        action_overflow: str = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> None:
-        """Deprecated dense buffer registration; use `set_observation_layout` for v11. Removed in 0.3.0."""
-        self._check()
-        for value in buffers.values():
-            self._rows(len(value))
-            if not value.flags.c_contiguous or not value.flags.writeable:
-                raise ValueError("producer buffers must be writable and contiguous")
-        self._run(
-            [
-                partial(
-                    shard.native.set_buffers,
-                    {key: value[shard.rows] for key, value in buffers.items()},
-                    action_overflow,
-                    layout=layout,
-                )
-                for shard in self._shards
-            ]
-        )
-
     def set_observation_layout(
         self,
         buffers: dict[str, Array],

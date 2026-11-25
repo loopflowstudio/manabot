@@ -10,26 +10,22 @@ from typing import TYPE_CHECKING, Protocol
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.env.memory_store import PrefixObservation, select_rows
 from manabot.policy.spans import ObservationSelection
 
 if TYPE_CHECKING:
-    from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Prepared
     from manabot.training.rollout.actions import ActionRows
     from manabot.training.rollout.collection import RolloutBatch
 
 
 class RowPolicy(Protocol):
-    def check_observation(
-        self, obs: ObservationBuffers | ObservationSelection
-    ) -> np.ndarray | None: ...
+    def check_observation(self, obs: ObservationSelection) -> np.ndarray | None: ...
     def prepare(
-        self, obs: ObservationBuffers | ObservationSelection, *, inference: bool = False
+        self, obs: ObservationSelection, *, inference: bool = False
     ) -> Prepared[np.ndarray]: ...
     def prepare_admitted(
         self,
-        obs: ObservationBuffers | ObservationSelection,
+        obs: ObservationSelection,
         *,
         needs: np.ndarray | None = None,
     ) -> Prepared[np.ndarray]: ...
@@ -77,13 +73,6 @@ class AdmittedRows:
         if needs is not None and (needs < 0).any():
             needs = None
         prepared = self.agent.prepare_admitted(rows.observation, needs=needs)
-        # Behavior/reference calculations need ordinary action fields, not a
-        # second raw memory owner beside Prepared (including in the prefetch).
-        if isinstance(rows.observation, PrefixObservation):
-            raw = rows.observation
-            rows.observation = PrefixObservation(
-                raw, raw.memory.prefixes, raw.memory.capacities
-            )
         return prepared, rows
 
     @contextmanager
@@ -129,5 +118,5 @@ class AdmittedRows:
         for start in range(0, count, size):
             indexes = slice(start, start + size)
             yield self.agent.prepare(
-                select_rows(self.batch.next_obs, indexes), inference=True
+                self.batch.next_obs.select(indexes), inference=True
             )

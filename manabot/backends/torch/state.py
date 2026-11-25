@@ -26,7 +26,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import archive_memory
 from manabot.policy.checkpoint import canonical_name
-from manabot.policy.decision_memory import retained_memory
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
@@ -167,12 +166,6 @@ def capture_incident(
                 getattr(packed, name)
             )
         batch_tensors["packed_actions/capacity"] = torch.tensor(packed.capacity)
-        batch_tensors.update(
-            {
-                f"packed_actions/{key}": torch.as_tensor(value)
-                for key, value in packed.fields.items()
-            }
-        )
         gathered = batch.recorded.gather(selected)
         for group, source in (
             ("observation", gathered),
@@ -182,11 +175,11 @@ def capture_incident(
                 if group == "next_observation" and key in MEMORY_FIELDS:
                     continue
                 batch_tensors[f"{group}/{key}"] = torch.tensor(source.project(key))
-        memory = retained_memory(gathered)
+        memory = gathered.memory
         if memory is not None:
             prefixes = list(memory.prefixes)
             next_count = 0
-            next_memory = retained_memory(batch.next_obs)
+            next_memory = batch.next_obs.memory
             if next_memory is not None:
                 next_prefixes = next_memory.prefixes[:max_rows]
                 next_count = len(next_prefixes)
