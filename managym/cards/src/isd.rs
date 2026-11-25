@@ -1,40 +1,56 @@
 //! Innistrad.
-use managym_state::{
-    ability::{
-        Ability, Actor, Effect, ObjectSelector, Per, Scope, TriggerCondition, TriggerSubject,
-    },
-    card::{
-        BlockRestriction, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, ReplacementEffect, StaticAbility,
-    },
-    mana::ManaCost,
-    permanent::CounterKind,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Effect, EffectValue, ObjectSelector, PaymentCost, Per, Scope, TriggerCondition,
+    TriggerSubject,
 };
+use managym_state::card::{
+    BlockRestriction, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, ReplacementEffect, StaticAbility,
+};
+use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        blasphemous_act(),
+        mentor_of_the_meek(),
+        typhoid_rats(),
         stromkirk_noble(),
         vampire_interloper(),
-        blasphemous_act(),
         diregraf_ghoul(),
-        typhoid_rats(),
     ]
 }
 
-fn diregraf_ghoul() -> CardDefinition {
+fn mentor_of_the_meek() -> CardDefinition {
+    let text_box = "Whenever another creature you control with power 2 or less enters, you may pay {1}. If you do, draw a card.";
     CardDefinition {
-        key: "isd.diregraf_ghoul",
-        scryfall_id: "4ed5790a-3354-49c2-89b6-3fc0de8dcc7c",
+        key: "isd.mentor_of_the_meek",
+        scryfall_id: "bd8f179a-f6ab-4d4c-8195-ed077a7770d3",
         printed: PrintedCharacteristics {
-            name: "Diregraf Ghoul".into(),
-            mana_cost: Some(ManaCost::parse("{B}")),
+            name: "Mentor of the Meek".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
             types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Zombie".into()],
+            subtypes: vec!["Human".into(), "Soldier".into()],
             power: Some(2),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersTapped],
-            text_box: "This creature enters tapped.".into(),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        max_power: Some(2),
+                        ..CardPredicate::creature()
+                    }),
+                },
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::parse("{1}")),
+                    if_paid: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    if_declined: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()
@@ -80,6 +96,25 @@ fn blasphemous_act() -> CardDefinition {
                 ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn diregraf_ghoul() -> CardDefinition {
+    CardDefinition {
+        key: "isd.diregraf_ghoul",
+        scryfall_id: "4ed5790a-3354-49c2-89b6-3fc0de8dcc7c",
+        printed: PrintedCharacteristics {
+            name: "Diregraf Ghoul".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(2),
+            toughness: Some(2),
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: "This creature enters tapped.".into(),
             ..Default::default()
         },
         ..Default::default()

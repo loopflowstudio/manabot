@@ -63,8 +63,6 @@ impl Game {
         };
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
-            let attacker = permanent.controller;
-            self.state.turn.history[attacker.0].attacked = true;
         }
         if !has_vigilance {
             // CR 508.1f — Attackers without vigilance become tapped, which
@@ -282,9 +280,7 @@ impl Game {
                 });
             }
         }
-        let mut batch = self.event_batch(events);
-        batch.binding = EventBinding::Combat;
-        Ok(batch)
+        Ok(self.event_batch(EventBinding::Combat, events))
     }
 
     fn creature_deals_damage_in_pass(

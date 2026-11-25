@@ -205,12 +205,29 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest. Version 19 records the winning seat for a card-instructed victory.
-The game procedure also records private opening progress and simultaneous
-loss causes. The struct is destructured without
-`..`, so a new field fails to compile until its canonical treatment is chosen;
-pointers, capacities, timings and observation projections are excluded, and
-the RNG is represented by eight draws from a clone, never advanced.
+digest. Version 26 records each life gain's ordinal when it happens. An ability
+that reads its resolution count keeps it for that turn under the source
+incarnation, printed face and ability index. A trigger still on the stack
+keeps that identity after the source leaves. A countered trigger adds zero.
+It also records the winning seat for a card-instructed victory, private
+opening progress and simultaneous loss causes. Version 30 adds a
+`PermanentUntapped` event to the hashed event ledger for each permanent that
+becomes untapped. Version 31 hashes the draw-by-mandatory-loop watch (CR
+104.4b) on `PriorityState`. It counts each forced resolution after state-based
+actions finish and waiting triggers reach the stack. A win or loss at that
+point takes precedence over a loop draw. An empty stabilized stack, a new step, a
+successful non-pass priority action, or a decision with several choices ends
+the watch and cancels any pending count. After 64 resolutions it fingerprints
+the state with life and poison totals, event logs, priority and identity allocation masked
+(`GameState::loop_fingerprint`). A repeated fingerprint with no new low of
+life or high of poison for a player who can lose ends the game as
+`GameOutcome::Draw { mandatory_loop: true }`, and Env reports
+`draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
+permanents never repeats a fingerprint, so it is never drawn; 10,000
+resolutions draw a loop that grows something without bound.
+Destructuring the state without `..` makes every new field an explicit decision
+in the hash contract. The digest excludes pointers, capacities, timings and
+observation projections. It reads eight draws from a clone of the RNG.
 `cargo test --test match_state_hash_tests` in `managym/` proves clone and
 allocation independence, mutation sensitivity and RNG non-mutation. Consumers
 compare version and digest together; a content change changes the hash on
@@ -925,6 +942,12 @@ Moving the permanent to the graveyard restores Monica Rambeau.
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- Later instructions can read what an earlier instruction accomplished.
+  Fumigate counts the creatures its destruction moved, including a creature
+  exiled by a finality counter. Exsanguinate reads `LifeLostThisWay` after
+  each opponent loses X life. A player whose life total cannot change
+  contributes zero. A selection's child effects have their own results, and
+  completing the selection restores the caller's results.
 - A trigger is "whenever X does Y": an event over its actor, with the event's
   own parameters as fields. Monastery Swiftspear's prowess
   ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
@@ -950,10 +973,23 @@ Moving the permanent to the graveyard restores Monica Rambeau.
   (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
   instead, whose controller is the same kind of `Actor` ("a creature an
   opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
-  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
-  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }`,
+  `DealsCombatDamage { subject, to, per }` and
+  `DealsDamage { kind, source, to }`, where `per` says whether "one or
   more" creatures trigger once per batch or once each, and `attackers` says
-  whether the attack is alone or with at least one other creature. The ability
+  whether the attack is alone or with at least one other creature.
+  `DealsDamage` fires once per damage event of its `DamageKind` (any,
+  combat or noncombat) to a `DamageRecipientFilter` (a player actor, or
+  anything). Its source is any object, a spell included, matched as it is
+  or last was with its controller ("a source you control" is
+  `TriggerSubject::you_control(CardPredicate::default())`), and the damage
+  dealt is "that many". `BecomesTapped` and `BecomesUntapped` fire on a
+  transition only: every untap, the untap step's included, goes through
+  `Game::untap_permanent`, and a stun counter removed instead is no untapping.
+  A state trigger (CR 603.8) is `State(Condition)` ("when there are four or
+  more page counters on this artifact"): it is asked of its source whenever a
+  player would receive priority, never of an event, and doesn't trigger again
+  while its occurrence waits or is on the stack. The ability
   description ("Whenever an opponent draws their second card each turn, ...")
   and the learning tokens come from one template per event, so a card that
   needs a new actor or count needs no new variant.
@@ -1020,6 +1056,14 @@ assert_eq!(game.object_lki(ogre).unwrap().from_zone, ZoneType::Battlefield);
 The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
+
+Fiendish Panda’s death trigger compares each eligible graveyard card’s mana
+value with the Panda’s power when it died, including its counters. The same
+comparison applies when choosing a new target and when resolving the trigger.
+Returning the Panda to the battlefield leaves that bound intact. If the chosen
+card leaves the graveyard and returns before resolution, it has a new object
+ID and stays in the graveyard. Heartfire Immolator likewise deals damage using
+its power when sacrificed, including bonuses from prowess.
 
 A token is an object with no card behind it. Take one Spirit token through a
 turn:
@@ -1136,7 +1180,11 @@ the id for what its rules text means:
   after it has already moved** is a `CardId`; `object_of` finds where it is.
 - **What something was when it left** (power when it died, its controller,
   its counters) is `Game::object_lki(old_id)`, the `ObjectLkiLog` entry
-  recorded as the object departs.
+  recorded as the object departs. Its name and supertypes come from the face
+  it last showed (`Game::lki_face_printing`, a copy's or back face's when they
+  changed) and its mana value from its front face
+  (`Game::lki_mana_printing`, CR 712.8e); the entry stores a name only when an
+  effect changed it (`renamed`).
 
 An `ObjectId` is opaque. It cannot be built from a number, and tests take ids
 from the game (a permanent's `object`, a zone list, a move's return value)

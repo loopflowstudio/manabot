@@ -117,6 +117,7 @@ fn stack(
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            triggering_amount: 0,
             program: false,
             remembered: Vec::new(),
             source_transforms: 0,
@@ -133,6 +134,7 @@ fn stack(
             target_req_indices: indices,
             context: None,
             player: None,
+            chosen_modes: Vec::new(),
             inline_effects: Some(effects),
             x: 0,
             spent: Default::default(),
@@ -694,6 +696,7 @@ fn counter_spell_cannot_affect_an_ability() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let id = game.state.id_gen.next_id();
     game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        triggering_amount: 0,
         program: false,
         remembered: Vec::new(),
         source_transforms: 0,
@@ -710,6 +713,7 @@ fn counter_spell_cannot_affect_an_ability() {
         target_req_indices: Vec::new(),
         context: Some(Target::StackAbility(ability)),
         player: None,
+        chosen_modes: Vec::new(),
         inline_effects: Some(vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
@@ -940,6 +944,9 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.emit(GameEvent::SpellCast {
             object_id: cast,
             targets: vec![],
+            caster: controller,
+            spend_before: 0,
+            spend_after: 0,
         });
         game.process_game_events();
         assert!(game.state.delayed_triggers.is_empty());
@@ -1395,6 +1402,46 @@ fn delay_life_gain(
         vec![],
     );
     game.resolve_top_of_stack();
+}
+
+#[test]
+fn copied_island_death_uses_departure_type_for_morbid_and_delayed_watchers() {
+    let deck = BTreeMap::from([("Island".into(), 20), ("Gray Ogre".into(), 20)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        418,
+        false,
+    );
+    let ogre = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let island = game
+        .scenario_force_battlefield(PlayerId(1), "Island", true)
+        .unwrap();
+    let object = game.state.permanents[island].as_ref().unwrap().object;
+    let original = game.state[game.state.permanents[ogre].as_ref().unwrap().object].clone();
+    game.state[object].become_copy_of(&original, &[]);
+    delay_life_gain(
+        &mut game,
+        DelayedEvent::CreatureDies,
+        DelayedFrequency::Once,
+        DelayedExpiry::ThisTurn,
+    );
+    for zone in [ZoneType::Exile, ZoneType::Graveyard] {
+        let mut branch = game.clone();
+        branch.move_object(object, zone);
+        branch.process_game_events();
+        assert!(branch.flush_triggers().is_none());
+        let died = zone == ZoneType::Graveyard;
+        assert_eq!(branch.state.turn.creature_died_this_turn(), died);
+        assert_eq!(branch.state.stack_objects.len(), usize::from(died));
+        let hash = branch.state.deterministic_hash();
+        branch.state.turn.history[1].creatures_died = u32::from(!died);
+        assert_ne!(branch.state.deterministic_hash(), hash);
+    }
 }
 
 /// The same matcher composes with either firing policy and either expiry.
@@ -2331,6 +2378,49 @@ fn library_keyword_completion_handles_empty_libraries_and_zero_counts() {
 }
 
 #[test]
+fn destruction_count_survives_a_child_returning_one_of_the_destroyed_creatures() {
+    use crate::state::ability::Scope;
+
+    let player = PlayerId(0);
+    let (mut game, first, _) = fixture(player);
+    let victim = game.permanent_object(first).unwrap();
+    stack(
+        &mut game,
+        Entry::Spell,
+        player,
+        vec![
+            Effect::destroy(ObjectSelector::each(
+                Scope::Battlefield,
+                CardPredicate::creature(),
+            )),
+            Effect::SelectCards {
+                from: ObjectSelector::Moved,
+                predicate: CardPredicate::creature(),
+                min: 1,
+                max: EffectValue::Fixed(1),
+                effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                if_declined: vec![],
+            },
+            Effect::gain_life(ObjectSelector::Moved.count()),
+        ],
+        vec![],
+        vec![],
+    );
+    game.resolve_top_of_stack();
+    let choice = Action::SelectCard {
+        player,
+        object: game.state.now(victim),
+    };
+    game.publish_action_space(game.suspended_decision_action_space().unwrap());
+    checked_command(&mut game, choice);
+    assert_eq!(
+        game.state.zones.zone_of(game.state.now(victim)),
+        Some(ZoneType::Hand)
+    );
+    assert_eq!(game.state.players[player.0].life, 22);
+}
+
+#[test]
 fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
     for player in [PlayerId(0), PlayerId(1)] {
         let (mut game, _, _) = fixture(player);
@@ -2351,6 +2441,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
                 Effect::MillCards {
                     count: EffectValue::Fixed(3),
                     target: None,
+                    player: None,
                 },
                 select(
                     1,
@@ -2550,6 +2641,7 @@ fn retained_batch_counter_order_is_affected_players_choice_and_commits_once() {
                         },
                         except: None,
                         max_mana_value: None,
+                        exact_mana_value: None,
                     },
                     CounterKind::PlusOnePlusOne,
                     1,
@@ -2919,7 +3011,17 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
             },
         );
         assert_eq!(game.state.players[defender.0].life, life);
-        assert_eq!(game.state.events.iter().filter(|event| matches!(event, GameEvent::CombatDamageToPlayers { creatures } if creatures == &[first, second])).count(), 1);
+        let mut batches = game.state.events.iter().filter_map(|event| match event {
+            GameEvent::CombatDamageToPlayers { hits } => Some(hits),
+            _ => None,
+        });
+        let expected = [first, second].map(|id| crate::flow::event::CombatPlayerHit {
+            source: game.permanent_object(id).unwrap(),
+            recipient: defender,
+            amount: (20 - life) / 2,
+        });
+        assert_eq!(batches.next().unwrap().as_slice(), expected);
+        assert!(batches.next().is_none());
     }
 }
 
@@ -3956,27 +4058,31 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                     }
                 }
                 "counter_cause" => {
-                    frame.batch = Some(game.event_batch(vec![ProposedEvent::CounterChange {
-                        provenance: CounterProvenance::new(if choice == 0 {
-                            EventCause::Effect
-                        } else {
-                            EventCause::TurnAction
-                        }),
-                        target: game.permanent_object(first).unwrap(),
-                        kind: CounterKind::PlusOnePlusOne,
-                        delta: 1,
-                        by: Some(player),
-                    }]))
+                    frame.batch = Some(game.event_batch(
+                        EventBinding::None,
+                        [ProposedEvent::CounterChange {
+                            provenance: CounterProvenance::new(if choice == 0 {
+                                EventCause::Effect
+                            } else {
+                                EventCause::TurnAction
+                            }),
+                            target: game.permanent_object(first).unwrap(),
+                            kind: CounterKind::PlusOnePlusOne,
+                            delta: 1,
+                            by: Some(player),
+                        }],
+                    ))
                 }
                 "token_count" => {
-                    let mut batch = game.event_batch(vec![ProposedEvent::CreateTokens {
-                        definition: Box::new(TokenSource::Registered("token.food".into())),
-                        controller: player,
-                        count: choice + 1,
-                        entry: ZoneEntry::default(),
-                    }]);
-                    batch.binding = EventBinding::Created { attacking: false };
-                    frame.batch = Some(batch);
+                    frame.batch = Some(game.event_batch(
+                        EventBinding::Created { attacking: false },
+                        [ProposedEvent::CreateTokens {
+                            definition: Box::new(TokenSource::Registered("token.food".into())),
+                            controller: player,
+                            count: choice + 1,
+                            entry: ZoneEntry::default(),
+                        }],
+                    ));
                 }
                 "departed_source" => {
                     let object = game.state.permanents[first].as_ref().unwrap().object;
@@ -4471,6 +4577,147 @@ fn hidden_knowledge_search_reveals_do_not_displace_a_known_top() {
     }
 }
 
+/// Resolve through the printed ability, with the same stack placement and
+/// counter operations that priority uses.
+fn history_game(name: &str) -> (Game, PermanentId) {
+    let deck = BTreeMap::from([(name.to_owned(), 12), ("Forest".to_owned(), 28)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        608_2026,
+        false,
+    );
+    game.keep_opening_hands();
+    let permanent = game
+        .scenario_force_battlefield(PlayerId(0), name, true)
+        .unwrap();
+    (game, permanent)
+}
+
+#[test]
+fn cat_collector_two_gains_before_matching_create_one_cat() {
+    let (mut game, _) = history_game("Cat Collector");
+    let player = PlayerId(0);
+    game.state.turn.active_player = player;
+    assert_eq!(game.commit_life_change(player, 3), 3);
+    assert_eq!(game.commit_life_change(player, 2), 2);
+    let ordinals: Vec<_> = game
+        .state
+        .pending_events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::LifeChanged { gain_ordinal, .. } => Some(*gain_ordinal),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ordinals, [1, 2]);
+    game.process_game_events();
+    assert_eq!(game.state.turn.history[0].life_gains, 2);
+    assert_eq!(game.state.pending_triggers.len(), 1);
+    assert!(game.flush_triggers().is_none());
+    game.resolve_top_of_stack();
+    assert_eq!(
+        game.iter_battlefield_permanents(player)
+            .filter(|&id| game.state[game.permanent_object(id).unwrap()].name == "Cat")
+            .count(),
+        1
+    );
+
+    for (active, expected_triggers) in [(PlayerId(1), 0), (player, 1)] {
+        while game.active_player() != active {
+            game.state.turn.advance_step();
+        }
+        assert_eq!(game.state.turn.history[player.0].life_gains, 0);
+        game.gain_life(player, 1);
+        assert_eq!(game.state.pending_triggers.len(), expected_triggers);
+    }
+}
+
+#[test]
+fn venom_connoisseur_only_resolved_triggers_advance_their_source() {
+    let (mut game, source) = history_game("Venom Connoisseur");
+    let player = PlayerId(0);
+    let original = game.permanent_object(source).unwrap();
+    let trigger = |game: &mut Game| {
+        game.create_token("token.ally", player, false);
+        game.process_game_events();
+        assert!(game.flush_triggers().is_none());
+        game.state.stack_objects.last().unwrap().id()
+    };
+    let countered = trigger(&mut game);
+    game.counter_ability(countered, None);
+    assert!(game.state.turn.ability_resolutions_this_turn.is_empty());
+    trigger(&mut game);
+    game.resolve_top_of_stack();
+    assert!(game
+        .characteristics(source)
+        .keywords
+        .has(Keyword::Deathtouch));
+    trigger(&mut game);
+    let exiled = game.move_object(original, ZoneType::Exile);
+    let returned = game.move_object(exiled, ZoneType::Battlefield);
+    let countered = trigger(&mut game);
+    game.counter_ability(countered, None);
+    let counts = &game.state.turn.ability_resolutions_this_turn;
+    assert_eq!(counts.len(), 1);
+    assert_eq!(
+        counts[&(original, game.state[returned].definition_id, 0)],
+        1
+    );
+    trigger(&mut game);
+    let observation = crate::agent::observation::Observation::for_player(&game, player);
+    assert_eq!(
+        observation
+            .stack_objects
+            .iter()
+            .map(|row| row.ability_resolutions)
+            .collect::<Vec<_>>(),
+        [0, 1]
+    );
+    assert_ne!(
+        observation.stack_objects[0].source_permanent_id,
+        observation.stack_objects[1].source_permanent_id
+    );
+    game.resolve_top_of_stack();
+    let ability = game.state[returned].definition_id;
+    let count =
+        |game: &Game, source| game.state.turn.ability_resolutions_this_turn[&(source, ability, 0)];
+    assert_eq!((count(&game, original), count(&game, returned)), (1, 1));
+    let ally = game
+        .iter_battlefield_permanents(player)
+        .find(|&id| game.state[game.permanent_object(id).unwrap()].name == "Ally")
+        .unwrap();
+    assert!(!game.characteristics(ally).keywords.has(Keyword::Deathtouch));
+    game.resolve_top_of_stack();
+    assert_eq!((count(&game, original), count(&game, returned)), (2, 1));
+    assert!(game.characteristics(ally).keywords.has(Keyword::Deathtouch));
+}
+
+#[test]
+fn separate_printed_abilities_on_one_source_each_resolve_for_the_first_time() {
+    let (mut game, permanent) = history_game("Venom Connoisseur");
+    let source = game.permanent_object(permanent).unwrap();
+    let original = game.state[source].abilities[0].clone();
+    game.state[source].abilities.push(original);
+    game.create_token("token.ally", PlayerId(0), false);
+    game.process_game_events();
+    let choices = game
+        .flush_triggers()
+        .expect("two printed triggers to order");
+    assert_eq!(choices.actions.len(), 2);
+    game.publish_action_space(choices.clone());
+    checked_command(&mut game, choices.actions[0].clone());
+    while !game.state.stack_objects.is_empty() {
+        game.resolve_top_of_stack();
+    }
+    let face = game.state[source].definition_id;
+    let counts = &game.state.turn.ability_resolutions_this_turn;
+    assert_eq!(counts.get(&(source, face, 0)), Some(&1));
+    assert_eq!(counts.get(&(source, face, 1)), Some(&1));
+}
+
 /// CR 725.1a-f. A loss-of-toughness or lethal-damage SBA must happen
 /// before cleanup can clear damage, even when a legend choice interrupts
 /// that batch. Only the second of these identical death triggers survives.
@@ -4806,6 +5053,59 @@ fn snapshot_shuffle_preserves_a_declined_library_cast() {
     assert_eq!(game.library_top_objects(owner, 1), [object]);
 }
 
+#[test]
+fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
+    use super::{AbilitySource, EffectFrame, ResolutionTarget};
+    use crate::state::ability::{Aggregate, ObjectProperty};
+    let player = PlayerId(0);
+    let (mut game, first, other) = fixture(PlayerId(1));
+    let source = game.permanent_object(first).unwrap();
+    let target = game.permanent_object(other).unwrap();
+    let mut frame = EffectFrame::new(player, vec![]);
+    frame.source_identity = Some(AbilitySource::new(source, Some(source)));
+    frame.targets = vec![ResolutionTarget {
+        target: Target::Permanent(other),
+        requirement: 0,
+        legal: true,
+    }];
+    game.apply_continuous(
+        None,
+        player,
+        [game.affected_permanent(other).unwrap()],
+        Modification::ModifyPt {
+            power: 2,
+            toughness: 1,
+        },
+        EffectDuration::EndOfTurn,
+    );
+    let namesakes = ObjectSelector::each_other_you_control(CardPredicate {
+        namesake: true,
+        ..CardPredicate::default()
+    });
+    assert_eq!(
+        game.effect_value(
+            &namesakes.property(ObjectProperty::Toughness, Aggregate::Max),
+            &frame
+        ),
+        3
+    );
+    let object = game.move_object(target, ZoneType::Graveyard);
+    game.move_object(object, ZoneType::Battlefield);
+    for (property, expected) in [
+        (ObjectProperty::Power, 4),
+        (ObjectProperty::Toughness, 3),
+        (ObjectProperty::ManaValue, 3),
+    ] {
+        assert_eq!(
+            game.effect_value(
+                &ObjectSelector::Target(TargetSpec::Creature).property(property, Aggregate::Sum),
+                &frame
+            ),
+            expected
+        );
+    }
+}
+
 fn fixture_card(game: &Game, owner: PlayerId, name: &str) -> ObjectId {
     game.state
         .latest_objects()
@@ -4951,6 +5251,48 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
             1
         );
     }
+}
+
+/// A departed copy is the face it copied (CR 603.10a, 707.2): a Clone that
+/// left as a Gray Ogre matches mana value 3, not Clone's 4, and its last
+/// known name is the copy's without a separate record.
+#[test]
+fn departed_copy_matches_predicates_as_the_copied_face() {
+    let deck = BTreeMap::from([
+        ("Gray Ogre".into(), 12),
+        ("Clone".into(), 4),
+        ("Mountain".into(), 24),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        707_2026,
+        false,
+    );
+    game.keep_opening_hands();
+    let ogre = game
+        .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+        .unwrap();
+    let clone = game
+        .scenario_force_battlefield(PlayerId(0), "Clone", true)
+        .unwrap();
+    let ogre = game.permanent_object(ogre).unwrap();
+    let clone = game.permanent_object(clone).unwrap();
+    let copied = game.state[ogre].clone();
+    game.state[clone].become_copy_of(&copied, &[]);
+    game.move_object(clone, ZoneType::Graveyard);
+    let lki = game.object_lki(clone).expect("departed copy").clone();
+    assert_eq!(lki.renamed, None);
+    assert_eq!(game.lki_face_printing(&lki).name, "Gray Ogre");
+    let mana_value = |min: u8, max: u8| CardPredicate {
+        min_mana_value: Some(min),
+        max_mana_value: Some(max),
+        ..CardPredicate::creature()
+    };
+    assert!(game.lki_matches_predicate(&lki, &mana_value(3, 3)));
+    assert!(!game.lki_matches_predicate(&lki, &mana_value(4, 4)));
 }
 
 #[test]
@@ -5252,6 +5594,12 @@ fn preparation_resolution_upkeep_checks_each_sources_live_link_twice() {
         let player = game.active_player();
         let permanent = game.scenario_force_battlefield(player, name, true).unwrap();
         let source = game.permanent_object(permanent).unwrap();
+        let crate::state::ability::Ability::Triggered { effects, .. } =
+            &mut game.state[source].abilities[0];
+        effects.push(Effect::OnNthResolutionThisTurn {
+            n: 1,
+            effect: Box::new(Effect::gain_life(1)),
+        });
         game.emit(GameEvent::StepStarted {
             step: StepKind::Upkeep,
         });
@@ -5265,7 +5613,7 @@ fn preparation_resolution_upkeep_checks_each_sources_live_link_twice() {
         assert_eq!(prepared.state.cast_permissions.grants, grants);
         // Idempotent preparation alone would also preserve the grant. The
         // rules count a resolution only on the branch passing the second check.
-        let ability = (source.slot(), 0);
+        let ability = (source, game.state[source].definition_id, 0);
         assert!(!prepared
             .state
             .turn
@@ -5330,8 +5678,18 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                 };
                 for card in casts {
                     let object = fixture_card(&game, player, card);
-                    game.cast_spell(player, object, vec![], vec![], Default::default())
-                        .unwrap();
+                    let payment = crate::flow::payment::Payment {
+                        operation: crate::flow::payment::Operation::Spell {
+                            object,
+                            cast: Default::default(),
+                            mode: None,
+                            targets: Vec::new(),
+                            target_req_indices: Vec::new(),
+                        },
+                        owed: Vec::new(),
+                        receipt: Default::default(),
+                    };
+                    game.commit_spell_payment(player, payment);
                     game.collect_waiting_triggers();
                 }
             }

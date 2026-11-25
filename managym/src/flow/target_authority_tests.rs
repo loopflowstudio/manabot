@@ -73,6 +73,7 @@ fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
 
 fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        triggering_amount: 0,
         program: false,
         remembered: Vec::new(),
         source_identity: crate::state::game_object::AbilitySource::new(source, None),
@@ -87,6 +88,7 @@ fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger
         context: None,
         player: None,
         chosen_modes: Vec::new(),
+        modes_chosen: false,
         attacker: None,
         inline_effects: Some(effects),
         x: 0,
@@ -108,7 +110,6 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     let object = game.move_object(object, ZoneType::Battlefield);
     assert!(object.generation() > 0);
     let source = TriggerSourceSnapshot {
-        controller: PlayerId(0),
         lki: game.snapshot_current_permanent(object).unwrap(),
     };
     let expected = format!(
@@ -164,8 +165,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     let object = game.move_object(object, ZoneType::Graveyard);
     assert_ne!(first, second);
     assert_eq!(
-        game.triggering_permanent(&event),
-        Some(Target::Permanent(first))
+        game.object_lki(original).map(|lki| lki.permanent),
+        Some(first)
     );
     let sources = game.trigger_ability_sources(&event);
     assert!(sources.iter().any(|source| source.lki.object == original));
@@ -173,8 +174,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
     assert_eq!(
-        fork.triggering_permanent(&event),
-        Some(Target::Permanent(first))
+        fork.object_lki(original).map(|lki| lki.permanent),
+        Some(first)
     );
 
     let object = game.move_object(object, ZoneType::Hand);
@@ -983,10 +984,11 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     );
 }
 
-/// The identity cut preserves the historical departed-source base predicate,
-/// even if the same physical card later enters as a different copy.
+/// A departed source is matched as it last existed (CR 603.10a): an Ogre
+/// copying a land left as a land, whatever its printing, and a later copy
+/// of the same physical card does not change that.
 #[test]
-fn retained_departure_predicate_uses_base_after_copy_reentry() {
+fn retained_departure_predicate_uses_last_known_copy_after_reentry() {
     use crate::flow::triggers::TriggerSourceSnapshot;
     use crate::state::card::{CardType, StaticAbility};
     let (mut game, bolt, _, Target::Permanent(ogre), Target::Permanent(land)) = fixture() else {
@@ -997,13 +999,12 @@ fn retained_departure_predicate_uses_base_after_copy_reentry() {
     game.state[grantor]
         .statics
         .push(StaticAbility::TriggersAdditionalTime(CardPredicate {
-            card_type: Some(CardType::Creature),
+            card_type: Some(CardType::Land),
             ..Default::default()
         }));
     let template = game.state[grantor].clone();
     game.state[object].become_copy_of(&template, &[]);
     let source = TriggerSourceSnapshot {
-        controller: PlayerId(0),
         lki: game.snapshot_current_permanent(object).unwrap(),
     };
     let graveyard = game.move_object(object, ZoneType::Graveyard);
@@ -1048,9 +1049,11 @@ fn retained_departure_modes_targets_and_description_use_source_face() {
     let current = game.move_object(graveyard, ZoneType::Battlefield);
     let template = game.state[bolt].clone();
     game.state[current].become_copy_of(&template, &[]);
+    assert_eq!(game.unchosen_trigger_modes(&pending).unwrap().len(), 1);
+    assert!(game.trigger_requirements(&pending).is_some());
     let trigger_id = pending.id;
     game.state.trigger_placement = Some(Box::new(crate::flow::trigger::TriggerPlacement {
-        remaining: vec![pending],
+        remaining: vec![pending.clone()],
         active: PlayerId(0),
         group: 0,
         placing: None,
@@ -1192,6 +1195,58 @@ fn retained_departure_recorded_card_and_spell_predicates_ignore_later_copy() {
     ));
     assert!(game.recorded_object_matches_predicate(bolt, &predicate));
     assert!(!game.object_matches_predicate(later, &predicate));
+}
+
+#[test]
+fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
+    use crate::state::{game_object::AbilitySource, permanent::CounterKind};
+    let (mut game, _, _, Target::Permanent(ogre), _) = fixture() else {
+        unreachable!()
+    };
+    let player = PlayerId(0);
+    let source = game.permanent_object(ogre).unwrap();
+    let mut bury_ogre = || {
+        let id = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        game.move_object(game.permanent_object(id).unwrap(), ZoneType::Graveyard)
+    };
+    let first = bury_ogre();
+    let second = bury_ogre();
+    game.state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::PlusOnePlusOne, 1);
+    let spec = TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+        predicate: CardPredicate::creature(),
+    };
+    let mut pending = trigger(
+        source,
+        vec![Effect::return_to_battlefield(
+            ObjectSelector::Target(spec),
+            false,
+        )],
+        0,
+    );
+    pending.source_identity = AbilitySource::new(source, Some(source));
+    game.state.pending_triggers.push(pending);
+    assert_eq!(game.flush_triggers().unwrap().actions.len(), 2);
+    game.choose_trigger_target(player, Target::GraveyardCard(first))
+        .unwrap();
+    assert!(game.flush_triggers().is_none());
+    let stack = game.state.stack_objects.last().unwrap().as_target();
+    let decision = game.next_retarget(player, stack, 0, true).unwrap();
+    assert_eq!(
+        game.retarget_candidates(&decision),
+        vec![Target::GraveyardCard(second)]
+    );
+    game.state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::PlusOnePlusOne, -1);
+    assert!(game.retarget_candidates(&decision).is_empty());
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.zones.zone_of(first), Some(ZoneType::Graveyard));
 }
 
 #[test]

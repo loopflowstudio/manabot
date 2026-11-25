@@ -1,28 +1,27 @@
 //! Kaldheim.
-use managym_state::{
-    ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
-        TriggerSubject, TurnStep,
-    },
-    card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticScope,
-    },
-    effect::{EffectDuration, Modification},
-    mana::ManaCost,
-    permanent::CounterKind,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TargetRequirement, TargetSpec,
+    TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+    Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticScope,
+};
+use managym_state::effect::{EffectDuration, Modification};
+use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fynn_the_fangbearer(),
+        immersturm_predator(),
+        koma_cosmos_serpent(),
+        seize_the_spoils(),
         axgard_cavalry(),
         goldvein_pick(),
         youthful_valkyrie(),
         snakeskin_veil(),
-        fynn_the_fangbearer(),
-        koma_cosmos_serpent(),
-        seize_the_spoils(),
     ]
 }
 
@@ -85,6 +84,62 @@ fn koma_cosmos_serpent() -> CardDefinition {
     }
 }
 
+fn immersturm_predator() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature becomes tapped, exile up to one target card from a graveyard and put a +1/+1 counter on this creature.\nSacrifice another creature: This creature gains indestructible until end of turn. Tap it.";
+    let card = TargetSpec::GraveyardCard {
+        predicate: CardPredicate::default(),
+    };
+    CardDefinition {
+        key: "khm.immersturm_predator",
+        scryfall_id: "0d83d2d9-b9d0-47f5-989b-f2c726401ade",
+        printed: PrintedCharacteristics {
+            name: "Immersturm Predator".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Dragon".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BecomesTapped {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, card.clone()),
+                    effects: vec![
+                        Effect::exile(ObjectSelector::Target(card)),
+                        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                    ],
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sacrifice: Some(SacrificeCost {
+                    predicate: CardPredicate::creature(),
+                    another: true,
+                    or_mana: None,
+                }),
+                effects: vec![
+                    Effect::ApplyContinuous {
+                        affected: ObjectSelector::This,
+                        modification: Modification::AddKeywords(Keywords::of(&[
+                            Keyword::Indestructible,
+                        ])),
+                        duration: EffectDuration::EndOfTurn,
+                    },
+                    Effect::Tap {
+                        what: ObjectSelector::This,
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn seize_the_spoils() -> CardDefinition {
     let text_box = "As an additional cost to cast this spell, discard a card.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
     CardDefinition {
@@ -100,33 +155,6 @@ fn seize_the_spoils() -> CardDefinition {
                     count: EffectValue::Fixed(2),
                 },
                 Effect::create_tokens("token.treasure", 1),
-            ],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn snakeskin_veil() -> CardDefinition {
-    let text_box = "Put a +1/+1 counter on target creature you control. It gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)";
-    CardDefinition {
-        key: "khm.snakeskin_veil",
-        scryfall_id: "e692c208-c171-4964-9207-43c2cbc62845",
-        printed: PrintedCharacteristics {
-            name: "Snakeskin Veil".into(),
-            mana_cost: Some(ManaCost::parse("{G}")),
-            types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
-                ),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -161,6 +189,33 @@ fn fynn_the_fangbearer() -> CardDefinition {
                 }],
             }],
             text_box: "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhenever a creature you control with deathtouch deals combat damage to a player, that player gets two poison counters. (A player with ten or more poison counters loses the game.)".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn snakeskin_veil() -> CardDefinition {
+    let text_box = "Put a +1/+1 counter on target creature you control. It gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)";
+    CardDefinition {
+        key: "khm.snakeskin_veil",
+        scryfall_id: "e692c208-c171-4964-9207-43c2cbc62845",
+        printed: PrintedCharacteristics {
+            name: "Snakeskin Veil".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
+                ),
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

@@ -5,7 +5,9 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::Game,
+        game::{Game, GameOutcome, GameProcedure},
+        priority::LoopSample,
+        proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
     state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
@@ -106,6 +108,10 @@ impl Game {
                     continue;
                 }
                 if !self.skip_trivial || space.actions.len() > 1 {
+                    if space.kind != ActionSpaceKind::Priority && space.actions.len() > 1 {
+                        // A player chooses: the chain is no longer mandatory.
+                        self.state.priority_mut().clear_loop_watch();
+                    }
                     self.publish_action_space(space);
                     return false;
                 }
@@ -210,6 +216,7 @@ impl Game {
 
     fn on_step_start(&mut self, step: StepKind) {
         self.restart_priority_round();
+        self.state.priority_mut().clear_loop_watch();
         if step == StepKind::Untap {
             let player = self.active_player();
             if let Some(exposure) = self.exposure_mut() {
@@ -235,6 +242,7 @@ impl Game {
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_default();
+                combat.already_attacking = combat.attackers.len();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
@@ -298,10 +306,9 @@ impl Game {
                             delta: 1,
                             by: Some(active),
                         },
-                    )
-                    .collect();
+                    );
                 let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
-                frame.batch = Some(self.event_batch(events));
+                frame.batch = Some(self.event_batch(EventBinding::None, events));
                 frame.completion = crate::flow::decision::FrameCompletion::Continue;
                 self.run_frame(frame);
                 None
@@ -323,8 +330,15 @@ impl Game {
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
-                    let attackers = combat.attackers.clone();
+                    let first = std::mem::take(&mut combat.already_attacking);
+                    let attackers = combat.attackers[first..].to_vec();
                     if !attackers.is_empty() {
+                        self.state.turn.history[active.0].attacked = true;
+                        for &attacker in &attackers {
+                            let object =
+                                self.permanent_object(attacker).expect("declared attacker");
+                            self.state.turn.record_attack(object);
+                        }
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
                             attackers: attackers.clone(),
@@ -485,6 +499,14 @@ impl Game {
             if self.is_game_over() {
                 return None;
             }
+            if self.state.priority.resolution_owed {
+                // CR 117.5: state-based losses and newly stacked triggers
+                // determine whether the resolution ended the game or the chain.
+                self.state.priority_mut().resolution_owed = false;
+                if self.end_mandatory_loop() {
+                    return None;
+                }
+            }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
                 self.restart_priority_round();
@@ -495,7 +517,7 @@ impl Game {
                         // A turn-ending resolution leaves this priority round.
                         return None;
                     }
-                    self.restart_priority_round();
+                    self.state.priority_mut().resolution_owed = true;
                     stabilized = false;
                     continue;
                 }
@@ -514,5 +536,39 @@ impl Game {
 
             return Some(space);
         }
+    }
+
+    /// Count one finished resolution toward the CR 104.4b watch, ending the
+    /// game in a draw once it shows a mandatory loop; true if it did. An
+    /// emptied stabilized stack ends any chain, so it ends the watch instead.
+    fn end_mandatory_loop(&mut self) -> bool {
+        if self.stack_is_empty() {
+            self.state.priority_mut().clear_loop_watch();
+            return false;
+        }
+        // Taken out of the state so the sample can read the whole state.
+        let mut watch = self
+            .state
+            .priority_mut()
+            .loop_watch
+            .take()
+            .unwrap_or_default();
+        let looped = watch.repeats(|| {
+            let seats = [PlayerId(0), PlayerId(1)];
+            LoopSample {
+                fingerprint: self.state.loop_fingerprint(),
+                life: seats.map(|seat| self.state.players[seat.0].life),
+                poison: seats
+                    .map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
+                can_lose: seats.map(|seat| !self.protected_from_loss(seat)),
+            }
+        });
+        self.state.priority_mut().loop_watch = Some(watch);
+        if looped {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true,
+            });
+        }
+        looped
     }
 }

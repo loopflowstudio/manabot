@@ -149,6 +149,7 @@ impl Game {
                 permanents: PermanentVec::default(),
                 object_to_permanent,
                 object_lki: Default::default(),
+                spell_lki: Default::default(),
                 players,
                 disclosure,
                 zones,

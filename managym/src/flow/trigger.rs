@@ -52,6 +52,7 @@ impl TriggerPlacement {
 pub struct PendingTrigger {
     /// An inline program granted by a continuous effect, without catalog identity.
     pub program: bool,
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     pub remembered: Vec<ObjectBinding>,
     pub source_identity: crate::state::game_object::AbilitySource,
@@ -79,8 +80,10 @@ pub struct PendingTrigger {
     pub spent: crate::state::payment::PaymentReceipt,
     /// The attacking creature whose attack triggered its own ability.
     pub attacker: Option<crate::state::game_object::PermanentId>,
-    /// The modes of a "choose up to" ability chosen so far.
+    /// The modes of a printed modal ability chosen so far.
     pub chosen_modes: Vec<usize>,
+    /// Its modes are chosen: a printed modal trigger proceeds to targets.
+    pub modes_chosen: bool,
     /// Delayed triggers carry their effects inline instead of referencing
     /// `Object::abilities` (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
@@ -152,11 +155,49 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl PendingTrigger {
+    pub fn new(
+        id: TriggerId,
+        controller: PlayerId,
+        source_identity: crate::state::game_object::AbilitySource,
+        source_lki: Option<ObjectLki>,
+        ability_index: usize,
+    ) -> Self {
+        Self {
+            program: false,
+            triggering_amount: 0,
+            remembered: Vec::new(),
+            source_identity,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
+            source_lki,
+            ability_index,
+            controller,
+            id,
+            ordering_class: TriggerOrderingClass::Ordinary,
+            context: None,
+            player: None,
+            x: 0,
+            spent: Default::default(),
+            attacker: None,
+            chosen_modes: Vec::new(),
+            modes_chosen: false,
+            inline_effects: None,
+        }
+    }
+
     pub fn source_object(&self) -> ObjectId {
         self.source_identity.object()
     }
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.reference()
+    }
+    pub fn current_clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
     }
 }
 
@@ -171,12 +212,6 @@ impl DelayedTrigger {
 
 // The pending record historically separated its two source projections with
 // target progress. Preserve that field order in v16's streamed state bytes.
-struct ExactReference(Option<ObjectId>);
-impl serde::Serialize for ExactReference {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        crate::state::game_object::exact(&self.0, serializer)
-    }
-}
 impl serde::Serialize for PendingTrigger {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
@@ -191,10 +226,8 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("targets", &self.targets)?;
         map.serialize_entry("target_req_indices", &self.target_req_indices)?;
         map.serialize_entry("requirement_index", &self.requirement_index)?;
-        map.serialize_entry(
-            "source_ref",
-            &ExactReference(self.source_identity.reference()),
-        )?;
+        let source_ref = self.source_identity.reference();
+        map.serialize_entry("source_ref", &crate::state::game_object::Exact(&source_ref))?;
         map.serialize_entry("source_lki", &self.source_lki)?;
         map.serialize_entry("ability_index", &self.ability_index)?;
         map.serialize_entry("controller", &self.controller)?;
@@ -203,6 +236,9 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("context", &self.context)?;
         if self.player.is_some() {
             map.serialize_entry("player", &self.player)?;
+        }
+        if self.triggering_amount != 0 {
+            map.serialize_entry("triggering_amount", &self.triggering_amount)?;
         }
         if self.x != 0 {
             map.serialize_entry("x", &self.x)?;
@@ -215,6 +251,9 @@ impl serde::Serialize for PendingTrigger {
         }
         if !self.chosen_modes.is_empty() {
             map.serialize_entry("chosen_modes", &self.chosen_modes)?;
+        }
+        if self.modes_chosen {
+            map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
         map.end()

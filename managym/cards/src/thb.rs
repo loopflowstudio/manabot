@@ -1,18 +1,60 @@
 //! Theros Beyond Death.
-use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject},
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
-    },
-    effect::Modification,
-    mana::ManaCost,
-    predicate::CardPredicate,
-    zone::ZoneType,
+use managym_state::ability::{
+    Ability, Actor, CompareOp, Condition, Effect, ObjectSelector, PlayerSelector, TargetSpec,
+    TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::ManaCost;
+use managym_state::permanent::CounterKind;
+use managym_state::predicate::CardPredicate;
+use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![terror_of_mount_velus(), soul_guide_lantern()]
+    vec![
+        nessian_hornbeetle(),
+        terror_of_mount_velus(),
+        soul_guide_lantern(),
+    ]
+}
+
+fn nessian_hornbeetle() -> CardDefinition {
+    let text_box = "At the beginning of combat on your turn, if you control another creature with power 4 or greater, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "thb.nessian_hornbeetle",
+        scryfall_id: "8200fcda-e30c-460f-9964-47e657b7c758",
+        printed: PrintedCharacteristics {
+            name: "Nessian Hornbeetle".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Insect".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_other_you_control(CardPredicate {
+                        min_power: Some(4),
+                        ..CardPredicate::creature()
+                    })
+                    .count(),
+                    CompareOp::Ge,
+                    1,
+                )),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn soul_guide_lantern() -> CardDefinition {

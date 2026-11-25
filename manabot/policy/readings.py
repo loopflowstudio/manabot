@@ -35,9 +35,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from manabot.env.observation import (
+    FACT_ABILITY_RESOLUTION,
     FACT_CONTINUATION_PROGRAM,
     FACT_EFFECT_PROGRAM,
     FACT_TRANSFORMS,
+    FACT_TRIGGERING_AMOUNT,
 )
 
 if TYPE_CHECKING:
@@ -136,7 +138,11 @@ NUMERIC = frozenset(
 # Fact kinds whose payload `fact_value` reads as zero (their content is a
 # looked-up program), and as a count.
 PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
-FACT_COUNT_KINDS = (FACT_TRANSFORMS,)
+FACT_COUNT_KINDS = (
+    FACT_TRANSFORMS,
+    FACT_ABILITY_RESOLUTION,
+    FACT_TRIGGERING_AMOUNT,
+)
 
 # Fresh readings determined by a column's role in its row.
 PLACED_READINGS: Mapping[tuple[str, str], Reading] = {

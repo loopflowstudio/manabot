@@ -129,6 +129,7 @@ fn cr_616_affected_player_chooses_replacement_order() {
         player: PlayerId(0),
         old: 20,
         new: 16,
+        gain_ordinal: 0,
     }));
 
     let (reverse_life, reverse_events) =

@@ -329,6 +329,14 @@ pub enum PowerCda {
     /// "This creature's power is equal to the number of [predicate] cards
     /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
     GraveyardMatching(Box<CardPredicate>),
+    /// The number of [predicate] cards in the graveyards of every player
+    /// `who` names ("cards in your opponents' graveyards", Consuming
+    /// Aberration). `who` is relative to the object's controller, or its
+    /// owner off the battlefield and stack (CR 109.5).
+    GraveyardMatchingBy {
+        who: crate::ability::Actor,
+        predicate: Box<CardPredicate>,
+    },
 }
 
 /// Which battlefield permanents a static P/T buff applies to.
@@ -585,6 +593,50 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
     ) && effect.target_spec().is_none()
 }
 
+/// A single fixed immediate mana output (CR 605.1a).
+fn fixed_mana_output(effect: &Effect) -> Option<&Mana> {
+    match effect {
+        Effect::AddMana {
+            mana,
+            amount: EffectValue::Fixed(1),
+            until_end_of_combat: false,
+        } => Some(mana),
+        _ => None,
+    }
+}
+
+/// Whether `effect` has concrete fixed mana outputs (`mana_choices` is `Some`).
+fn is_static_mana_output(effect: &Effect) -> bool {
+    fixed_mana_output(effect).is_some()
+        || matches!(
+            effect,
+            Effect::Modal { modes }
+                if modes
+                    .iter()
+                    .all(|effects| matches!(effects.as_slice(), [e] if fixed_mana_output(e).is_some()))
+        )
+}
+
+/// A leading effect that adds mana now (CR 605.1a): fixed or counted mana, X
+/// mana of one color, a branch between two such outputs, or a choice among
+/// fixed outputs.
+fn is_mana_output(effect: &Effect) -> bool {
+    match effect {
+        Effect::AddMana {
+            until_end_of_combat,
+            ..
+        } => !until_end_of_combat,
+        Effect::AddOneColorManaValue { .. } => true,
+        Effect::If {
+            then, otherwise, ..
+        } => [then, otherwise]
+            .iter()
+            .all(|branch| matches!(branch.as_slice(), [effect @ Effect::AddMana { .. }] if is_mana_output(effect))),
+        Effect::Modal { .. } => is_static_mana_output(effect),
+        _ => false,
+    }
+}
+
 impl ActivatedAbilityDefinition {
     /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
     pub fn equip(mana_cost: ManaCost) -> Self {
@@ -598,29 +650,47 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// The outputs of a mana ability (CR 605.1a): an untargeted activation
-    /// whose leading effect adds one of these mana, optionally followed by
-    /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
-    /// for an ability that uses the stack.
+    /// Whether this is a mana ability (CR 605.1a): an untargeted activation
+    /// whose leading effect could add mana, optionally followed by the
+    /// untargeted non-mana instructions of [`Self::mana_suffix`]. Its output
+    /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
+    /// mana ability never uses the stack.
+    pub fn is_mana_ability(&self) -> bool {
+        let Some((effect, suffix)) = self.effects.split_first() else {
+            return false;
+        };
+        suffix.iter().all(is_mana_suffix_effect) && is_mana_output(effect)
+    }
+
+    /// A mana ability whose output reads the game ("Add {G} for each Elf you
+    /// control", a conditional branch, X mana of one color). Characteristics
+    /// finalize it to concrete [`Self::mana_choices`] when they are read.
+    pub fn has_dynamic_mana_output(&self) -> bool {
+        let Some((effect, suffix)) = self.effects.split_first() else {
+            return false;
+        };
+        suffix.iter().all(is_mana_suffix_effect)
+            && is_mana_output(effect)
+            && !is_static_mana_output(effect)
+    }
+
+    /// The concrete outputs of a mana ability: a leading effect adding one of
+    /// these mana. `None` for an ability that uses the stack and for a mana
+    /// ability whose output has not been finalized against the game
+    /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
         let (effect, suffix) = self.effects.split_first()?;
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
         }
+        if let Some(mana) = fixed_mana_output(effect) {
+            return Some(vec![mana.clone()]);
+        }
         match effect {
-            Effect::AddMana {
-                mana,
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: false,
-            } => Some(vec![mana.clone()]),
             Effect::Modal { modes } => modes
                 .iter()
                 .map(|effects| match effects.as_slice() {
-                    [Effect::AddMana {
-                        mana,
-                        amount: EffectValue::Fixed(1),
-                        until_end_of_combat: false,
-                    }] => Some(mana.clone()),
+                    [effect] => fixed_mana_output(effect).cloned(),
                     _ => None,
                 })
                 .collect(),
@@ -655,8 +725,14 @@ impl ActivatedAbilityDefinition {
         self.tap_cost.clone().map(|cost| (cost, Toward::Printed))
     }
 
+    /// Whether part of the cost is paid by the permanent that granted this
+    /// ability (exiling or tapping it), which the activation then names.
+    pub fn has_grantor_cost(&self) -> bool {
+        self.exile_grantor || self.tap_grantor
+    }
+
     /// Whether paying the cost removes the source permanent from the
-    /// battlefield (sacrificed or exiled).
+    /// battlefield (sacrificed, exiled, or returned to hand).
     pub fn source_leaves(&self) -> bool {
         self.sacrifice_source || self.exile_source || self.return_source
     }
@@ -665,6 +741,8 @@ impl ActivatedAbilityDefinition {
     /// paying mana, tapping its own source and producing its output?
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
+            || self.remove_counters.is_some()
+            || self.add_counters.is_some()
             || self.source_leaves()
             || self.sacrifice.is_some()
             || self.discard_source
@@ -672,6 +750,7 @@ impl ActivatedAbilityDefinition {
             || self.tap_cost.is_some()
             || self.tap_power().is_some()
             || self.station
+            || self.has_grantor_cost()
             || self.effects.len() > 1
     }
 
@@ -679,9 +758,10 @@ impl ActivatedAbilityDefinition {
     /// resolving with it, off the stack, once per activation (CR 605.3b).
     /// Empty for an ability that is not a mana ability.
     pub fn mana_suffix(&self) -> &[Effect] {
-        match self.mana_choices() {
-            Some(_) => &self.effects[1..],
-            None => &[],
+        if self.is_mana_ability() {
+            &self.effects[1..]
+        } else {
+            &[]
         }
     }
 
@@ -693,13 +773,6 @@ impl ActivatedAbilityDefinition {
             return Vec::new();
         }
         effect_target_requirements(&self.effects)
-    }
-
-    /// The activation cannot proceed without choosing a target.
-    pub fn requires_target(&self) -> bool {
-        self.target_requirements()
-            .iter()
-            .any(|requirement| requirement.min > 0)
     }
 
     /// The clause of each of the first `count` chosen targets; empty for a
@@ -801,6 +874,12 @@ pub struct ActivatedAbilityDefinition {
     /// {T} cost, CR 302.6).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tap_cost: Option<TapCost>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove_counters: Option<(CounterKind, u16)>,
+    /// "Put N [kind] counters on this" as an activation cost (CR 118.3,
+    /// 602.2b): paid with the other costs, before the ability is on the stack.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add_counters: Option<(CounterKind, u16)>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
@@ -816,10 +895,20 @@ pub struct ActivatedAbilityDefinition {
     pub reduce_by_source_power: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exile_grantor: bool,
+    /// "Tap [the permanent granting this ability]" as an activation cost
+    /// (Fishing Pole). Not a {T} cost, so summoning sickness doesn't matter
+    /// (CR 302.6); the grantor must be untapped.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tap_grantor: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
+    /// "Activate only if [condition]" (CR 602.5b), asked of the activating
+    /// player when the ability is offered and activated, never again on
+    /// resolution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<Condition>,
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
@@ -829,10 +918,6 @@ pub struct ActivatedAbilityDefinition {
     pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
-    /// "Activate only if [condition]" (CR 602.5b), asked of the
-    /// activating player.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub condition: Option<Condition>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
     pub mana_cost: ManaCost,
@@ -971,6 +1056,14 @@ pub enum StaticAbility {
     /// among [predicate] you control" (The Great Henge); functions while
     /// casting, generic floor 0.
     CostsLessByGreatestPower(CardPredicate),
+    /// "This spell costs {amount} less to cast [if condition]" (CR 601.2f):
+    /// generic mana only, floor 0, read as total cost is determined, before
+    /// targets would change it.
+    CostsLess {
+        amount: EffectValue,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<Condition>,
+    },
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
     FlashIf(Condition),
@@ -1012,6 +1105,10 @@ pub enum StaticAbility {
     /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
     /// ignored.
     CharacteristicPower(PowerCda),
+    /// Characteristic-defining power and toughness, each equal to the same
+    /// count ("power and toughness are each equal to", CR 604.3, layer 7a);
+    /// printed `power` and `toughness` are ignored in every zone.
+    CharacteristicPt(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
     /// target" trigger, "counter it unless that player pays [cost]".
     Ward(PaymentCost),
@@ -1707,9 +1804,12 @@ impl PrintedCharacteristics {
         })
     }
 
-    pub fn power_cda(&self) -> Option<&PowerCda> {
+    /// The characteristic-defining P/T ability, and whether it also defines
+    /// toughness (`CharacteristicPt`) rather than power alone.
+    pub fn pt_cda(&self) -> Option<(&PowerCda, bool)> {
         self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CharacteristicPower(cda) => Some(cda),
+            StaticAbility::CharacteristicPower(cda) => Some((cda, false)),
+            StaticAbility::CharacteristicPt(cda) => Some((cda, true)),
             _ => None,
         })
     }

@@ -19,7 +19,7 @@ use crate::{
     flow::{
         event::GameEvent,
         game::Game,
-        payment::{CostComponent, Operation, Payment, PaymentProgress},
+        payment::{CostComponent, Payment, PaymentProgress},
         play::CastAuthority,
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
@@ -142,6 +142,8 @@ pub struct EffectFrame {
     /// this turn, counting this resolution. Zero for spells and activated
     /// abilities.
     pub resolutions_this_turn: u32,
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub triggering_amount: i32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
@@ -155,6 +157,9 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
+    /// Committed loss across all players in the scope's latest LoseLife.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub life_lost: i32,
     /// The cards the resolution's latest discard or mill moved ("this way").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -207,6 +212,8 @@ pub struct EffectFrame {
     /// which keys its "do this only once each turn" use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability_face: Option<crate::state::card::CardDefId>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub completion: FrameCompletion,
@@ -255,10 +262,12 @@ impl EffectFrame {
             source_identity: None,
             controller,
             resolutions_this_turn: 0,
+            triggering_amount: 0,
             kicked: false,
             x: 0,
             spent: Default::default(),
             excess_damage: 0,
+            life_lost: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
             selected_revealed: false,
@@ -272,6 +281,7 @@ impl EffectFrame {
             triggering_player: None,
             grantor: None,
             ability: None,
+            ability_face: None,
             queue: effects.into(),
             completion: FrameCompletion::Priority,
         }
@@ -288,6 +298,7 @@ impl EffectFrame {
             source_transforms: self.source_transforms,
             source_identity: self.source_identity,
             resolutions_this_turn: self.resolutions_this_turn,
+            triggering_amount: self.triggering_amount,
             kicked: self.kicked,
             x: self.x,
             spent: self.spent.clone(),
@@ -297,6 +308,7 @@ impl EffectFrame {
             triggering_player: self.triggering_player,
             grantor: self.grantor,
             ability: self.ability,
+            ability_face: self.ability_face,
             ..Self::new(self.controller, effects)
         }
     }
@@ -670,7 +682,7 @@ pub enum Decision {
         /// is cast without paying its mana cost.
         #[serde(skip_serializing_if = "std::ops::Not::not", default)]
         paid: bool,
-        /// The once-each-turn option (exact source, ability index) casting
+        /// The once-each-turn option `(exact source, printed face, ability index)` casting
         /// spends ("Do this only once each turn"); declining keeps it.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -1097,13 +1109,13 @@ impl Game {
         }
         frame.batch = Some(
             self.event_batch(
+                EventBinding::None,
                 chosen
                     .iter()
                     .filter_map(|id| self.permanent_object(*id))
                     .map(|object| {
                         self.zone_move_proposal(object, ZoneType::Exile, Default::default())
-                    })
-                    .collect(),
+                    }),
             ),
         );
         None
@@ -1133,9 +1145,8 @@ impl Game {
             .flat_map(|player| self.battlefield_permanents(player))
             .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .filter_map(|id| self.permanent_object(id))
-            .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target })
-            .collect();
-        frame.batch = Some(self.event_batch(events));
+            .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target });
+        frame.batch = Some(self.event_batch(EventBinding::None, events));
         None
     }
 
@@ -1324,7 +1335,7 @@ impl Game {
                         // instruction's next simultaneous event; its bound
                         // results are already its own.
                         if !followups.is_empty() {
-                            frame.batch = Some(self.event_batch(followups));
+                            frame.batch = Some(self.event_batch(EventBinding::None, followups));
                             continue;
                         }
                     }
@@ -1368,24 +1379,7 @@ impl Game {
                         return;
                     }
                     FrameCompletion::Paid { player, payment } => {
-                        let Operation::Spell {
-                            object,
-                            cast,
-                            mode,
-                            targets,
-                            target_req_indices,
-                        } = payment.operation
-                        else {
-                            unreachable!("activation prepared before costs")
-                        };
-                        self.cast_spell(player, object, targets, target_req_indices, cast)
-                            .expect("announced spell");
-                        if let Some(crate::state::stack_object::StackObject::Spell(spell)) =
-                            self.state.stack_objects_mut().last_mut()
-                        {
-                            spell.mode = mode;
-                            spell.spent = payment.receipt;
-                        }
+                        self.commit_spell_payment(player, payment);
                         if let Some(caller) = self.state.cast_caller_mut().take() {
                             let caller = *caller;
                             match &caller.decision {
@@ -1438,7 +1432,7 @@ impl Game {
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
                             let index = self
-                                .find_spell_on_stack_index(object)
+                                .stack_index_of(Target::StackSpell(object))
                                 .expect("resolving spell on stack");
                             let crate::state::stack_object::StackObject::Spell(spell) =
                                 &self.state.stack_objects[index]
@@ -1481,14 +1475,17 @@ impl Game {
                                     },
                                 )
                             };
-                            let mut batch =
-                                self.event_batch(vec![self.zone_move_proposal(object, to, entry)]);
-                            if profile == SpellProfile::Omen {
-                                batch.binding = EventBinding::Shuffle {
+                            let binding = if profile == SpellProfile::Omen {
+                                EventBinding::Shuffle {
                                     player: self.state[object].owner,
-                                };
-                            }
-                            frame.batch = Some(batch);
+                                }
+                            } else {
+                                EventBinding::None
+                            };
+                            frame.batch = Some(self.event_batch(
+                                binding,
+                                [self.zone_move_proposal(object, to, entry)],
+                            ));
                             frame.completion = FrameCompletion::Spell { object, attach_to };
                             continue;
                         }
@@ -1555,6 +1552,12 @@ impl Game {
         let moved = results.iter().filter_map(|result| result.moved);
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
+            EventBinding::Destroyed => frame.moved = moved.collect(),
+            EventBinding::LifeLost => {
+                frame.life_lost = results.iter().fold(0_i32, |lost, result| {
+                    lost.saturating_sub(result.life_delta.min(0))
+                });
+            }
             EventBinding::Bending { player, kind } => self.record_bending(player, kind),
             EventBinding::Shuffle { player } => self.shuffle_library(player),
             EventBinding::PlaceInLibrary { second_from_top } => {
@@ -1577,21 +1580,21 @@ impl Game {
             }
             EventBinding::Created { attacking } => {
                 frame.created = moved.collect();
-                for object in frame.created.clone() {
+                for &object in &frame.created {
                     self.finish_created_token(object, attacking);
                 }
             }
             EventBinding::Damage { result: measured } => {
-                if let Some(excess) = batch
+                // Each damage instruction measures its own excess: prevented
+                // or redirected damage leaves none, never an earlier one's.
+                frame.excess_damage = batch
                     .events
                     .iter()
                     .zip(results)
                     .filter(|(pending, _)| measured.is_none_or(|index| index == pending.ordinal))
                     .filter_map(|(_, result)| result.excess_damage)
                     .next_back()
-                {
-                    frame.excess_damage = excess;
-                }
+                    .unwrap_or(0);
             }
             EventBinding::Moved { shuffle, .. } => {
                 let is_discard = |event: &crate::flow::proposed_event::PendingEvent| {
@@ -1614,8 +1617,7 @@ impl Game {
                 }
                 frame.moved = moved.collect();
                 let mut owners = Vec::new();
-                for object in &frame.moved {
-                    let object_id = *object;
+                for &object_id in &frame.moved {
                     let owner = self.state[object_id].owner;
                     match self.state.zones.zone_of(object_id) {
                         Some(ZoneType::Library) if shuffle => {
@@ -2687,8 +2689,9 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
-                let batch = self.event_batch(vec![
-                    crate::flow::proposed_event::ProposedEvent::CounterChange {
+                let batch = self.event_batch(
+                    EventBinding::None,
+                    [crate::flow::proposed_event::ProposedEvent::CounterChange {
                         provenance: crate::flow::proposed_event::CounterProvenance::new(
                             crate::flow::proposed_event::EventCause::Effect,
                         ),
@@ -2696,8 +2699,8 @@ impl Game {
                         kind: *kind,
                         delta: 1,
                         by: Some(*player),
-                    },
-                ]);
+                    }],
+                );
                 let next = self.distribute_counters(*player, *kind, *remaining - 1);
                 suspended.frame.batch = Some(batch);
                 self.continue_resolution(suspended.frame, next);
@@ -2803,11 +2806,14 @@ impl Game {
                 looked.retain(|c| c != object_id);
                 *selected += 1;
                 suspended.frame.batch = if *to_battlefield {
-                    Some(self.event_batch(vec![self.zone_move_proposal(
-                        *object_id,
-                        ZoneType::Battlefield,
-                        Default::default(),
-                    )]))
+                    Some(self.event_batch(
+                        EventBinding::None,
+                        [self.zone_move_proposal(
+                            *object_id,
+                            ZoneType::Battlefield,
+                            Default::default(),
+                        )],
+                    ))
                 } else {
                     if *reveal {
                         self.reveal_object_to_hand(*object_id, player, ZoneEntry::default());
@@ -3066,22 +3072,18 @@ impl Game {
                     return Ok(());
                 }
                 let owner = *owner;
-                let events = std::mem::take(revealed)
-                    .into_iter()
-                    .map(|object_id| {
-                        self.zone_move_proposal(
-                            object_id,
-                            ZoneType::Battlefield,
-                            crate::flow::proposed_event::ZoneEntry {
-                                tapped: true,
-                                ..Default::default()
-                            },
-                        )
-                    })
-                    .collect();
-                let mut batch = self.event_batch(events);
-                batch.binding = EventBinding::Shuffle { player: owner };
-                suspended.frame.batch = Some(batch);
+                let events = std::mem::take(revealed).into_iter().map(|object_id| {
+                    self.zone_move_proposal(
+                        object_id,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            tapped: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+                suspended.frame.batch =
+                    Some(self.event_batch(EventBinding::Shuffle { player: owner }, events));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3650,20 +3652,17 @@ impl Game {
                 .public
                 .retain(|position, _| *position >= looked.len());
         }
-        let events = graveyard
-            .iter()
-            .map(|object| {
-                self.zone_move_proposal(
-                    *object,
-                    ZoneType::Graveyard,
-                    ZoneEntry {
-                        inspected_library_departure: true,
-                        ..Default::default()
-                    },
-                )
-            })
-            .collect();
-        let batch = self.event_batch(events);
+        let events = graveyard.iter().map(|object| {
+            self.zone_move_proposal(
+                *object,
+                ZoneType::Graveyard,
+                ZoneEntry {
+                    inspected_library_departure: true,
+                    ..Default::default()
+                },
+            )
+        });
+        let batch = self.event_batch(EventBinding::None, events);
         looked.retain(|object| !graveyard.contains(object));
         // A single kept card is already in order. The batch shifts its known
         // position when the selected cards actually leave the library.

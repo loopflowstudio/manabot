@@ -24,10 +24,14 @@ use super::mana::Color;
 )]
 #[serde(default)]
 pub struct CardPredicate {
-    /// Shares the asking source permanent's layered name. Requires a source
-    /// (currently ControlsAtLeast); card-only matching cannot answer it.
+    /// Shares the asking source permanent's layered name. Requires a source;
+    /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
+    /// "named [name]": the object's name as it is (or last was) equals this
+    /// one (CR 201.2). An empty name names nothing (CR 201.2a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub named: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
     /// "without flying", as the object's characteristics are now.
@@ -49,7 +53,7 @@ pub struct CardPredicate {
     /// "with a +1/+1 counter on it": only permanents carry counters.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub with_counter: bool,
-    /// "attacking": only permanents declared as attackers this combat.
+    /// "attacking": all currently attacking permanents, including those put in attacking.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
     /// "tapped": only permanents are tapped.
@@ -196,6 +200,14 @@ impl CardPredicate {
         )
     }
 
+    /// Whether an object named `name` satisfies `named` (CR 201.2); an empty
+    /// name names nothing (CR 201.2a).
+    pub fn accepts_name(&self, name: &str) -> bool {
+        self.named
+            .as_deref()
+            .is_none_or(|named| !named.is_empty() && named == name)
+    }
+
     /// Match the selected spell's printed characteristics before it goes on the stack.
     pub fn matches_printed_spell(&self, spell: &PrintedCharacteristics, kind: ObjectKind) -> bool {
         self.matches_printing(
@@ -217,6 +229,7 @@ impl CardPredicate {
         power: i32,
         added_types: &[CardType],
     ) -> bool {
+        let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
         if self.namesake
             || self.with_counter
             || self.attacking
@@ -229,6 +242,9 @@ impl CardPredicate {
                 .min_toughness
                 .is_some_and(|min| object.toughness.unwrap_or(0) < i32::from(min))
         {
+            return false;
+        }
+        if !self.accepts_name(&object.name) {
             return false;
         }
         if self
@@ -283,9 +299,6 @@ impl CardPredicate {
         if self.min_power.is_some_and(|min| power < min) {
             return false;
         }
-        let has_type = |card_type: CardType| {
-            object.types.types.contains(&card_type) || added_types.contains(&card_type)
-        };
         if let Some(card_type) = self.card_type {
             if !has_type(card_type) {
                 return false;

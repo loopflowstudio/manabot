@@ -181,7 +181,7 @@ def test_precision_forced_treasure_payment(tmp_path: Path) -> None:
         # The other viewer receives public pools, no pending private context,
         # private hand, or inspection candidates from the acting player.
         other = viewer_view(
-            session.env.observation_for_player(1), 1, include_details=True
+            session.env.observation_for_player(1), 1, winner=None, include_details=True
         )
         assert other["opponent"]["hand"] == []
         assert not other["opponent"].get("inspected")

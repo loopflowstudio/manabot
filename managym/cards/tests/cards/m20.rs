@@ -139,6 +139,105 @@ fn brought_back_returns_only_cards_put_into_the_graveyard_from_the_battlefield_t
     }
 }
 
+/// Brineborn Cutthroat has flash and grows only from spells its controller
+/// casts during an opponent's turn.
+#[test]
+fn brineborn_cutthroat_grows_only_from_spells_cast_on_an_opponents_turn() {
+    use crate::support::{
+        game::{force_new_card_in_hand, Scenario},
+        inspect::counters_of,
+        play::{cast_card, castable},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, permanent::CounterKind, player::ManaPayment},
+    };
+    let bolt = |s: &mut Scenario| {
+        let card = force_new_card_in_hand(s, 0, "Lightning Bolt");
+        cast_card(s, card);
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(s);
+    };
+    let mut s = five_color_setup(&["Brineborn Cutthroat", "Lightning Bolt", "Gray Ogre"]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let flashed = force_new_card_in_hand(&mut s, 0, "Brineborn Cutthroat");
+    cast_card(&mut s, ogre);
+    assert!(castable(&mut s, flashed), "flash");
+    settle(&mut s);
+    let cutthroat = s.force_permanent_on_battlefield(0, "Brineborn Cutthroat");
+    bolt(&mut s);
+    assert_eq!(counters_of(&s, cutthroat, CounterKind::PlusOnePlusOne), 0);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(0, "R");
+    s.pass_priority();
+    bolt(&mut s);
+    assert_eq!(counters_of(&s, cutthroat, CounterKind::PlusOnePlusOne), 1);
+    s.assert_life(1, 14);
+}
+
+/// Gnarlback Rhino draws when its controller casts a spell targeting it;
+/// not for a spell aimed elsewhere, nor for an opponent's spell targeting it.
+#[test]
+fn gnarlback_rhino_draws_when_you_cast_a_spell_targeting_it() {
+    use crate::support::{game::force_new_card_in_hand, inspect::hand, play::cast_card};
+    use managym::state::{game_object::PlayerId, player::ManaPayment};
+    let mut s = five_color_setup(&[
+        "Gnarlback Rhino",
+        "Lightning Bolt",
+        "Gray Ogre",
+        "Fancy Footwork",
+    ]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let rhino = s.force_permanent_on_battlefield(0, "Gnarlback Rhino");
+    let bolt_at = |s: &mut crate::support::game::Scenario, player: usize, target: Target| {
+        let card = force_new_card_in_hand(s, player, "Lightning Bolt");
+        cast_card(s, card);
+        assert!(s.choose_target(target));
+        settle(s);
+    };
+    bolt_at(&mut s, 0, Target::Player(PlayerId(1)));
+    assert!(hand(&s, 0).is_empty());
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let footwork = force_new_card_in_hand(&mut s, 0, "Fancy Footwork");
+    cast_card(&mut s, footwork);
+    assert!(s.choose_target(Target::Permanent(other)));
+    assert!(s.choose_target(Target::Permanent(rhino)));
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 1);
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    cast_card(&mut s, ogre);
+    s.pass_priority();
+    bolt_at(&mut s, 1, Target::Permanent(rhino));
+    assert_eq!(hand(&s, 0).len(), 1);
+    assert!(hand(&s, 1).is_empty());
+}
+
+/// Cryptic Caves' draw ability is offered only while its controller
+/// controls five or more lands, Caves included, and sacrifices it.
+#[test]
+fn cryptic_caves_draws_only_with_five_lands() {
+    use crate::support::{
+        game::{five_color_setup, force_lands},
+        inspect::hand,
+        play::{activate, offers_ability, settle},
+    };
+    let mut s = five_color_setup(&["Cryptic Caves"]);
+    let caves = s.force_permanent_on_battlefield(0, "Cryptic Caves");
+    let lands = s.zone_size(0, managym::state::zone::ZoneType::Battlefield);
+    force_lands(&mut s, 0, "Island", 4usize.saturating_sub(lands));
+    force_lands(&mut s, 1, "Island", 5);
+    s.set_player_mana_pool(0, "1");
+    assert!(!offers_ability(&mut s, caves, 0), "four lands");
+    s.force_permanent_on_battlefield(0, "Island");
+    assert!(offers_ability(&mut s, caves, 0), "five lands");
+    let before = hand(&s, 0).len();
+    activate(&mut s, caves, 0);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 1);
+    assert!(s.game().state.permanents[caves].is_none(), "sacrificed");
+}
+
 #[test]
 fn token_producer_rapacious_dragon() {
     use crate::support::{game::five_color_setup, play::enter_and_settle};

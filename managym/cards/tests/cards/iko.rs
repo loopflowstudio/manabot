@@ -85,7 +85,7 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 21); // Inspector -1, Weaponize lifelink +2.
     assert_eq!(s.game().state.players[1].life, 18);
-    assert!(s.game().state.events.iter().any(|event|matches!(event,managym::flow::event::GameEvent::DamageDealt {source:Some(object),target:managym::flow::event::DamageTarget::Player(PlayerId(1)),amount:2} if *object==weapon)));
+    assert!(s.game().state.events.iter().any(|event|matches!(event,managym::flow::event::GameEvent::DamageDealt {source:Some(object),target:managym::flow::event::DamageTarget::Player(PlayerId(1)),amount:2,..} if *object==weapon)));
 }
 
 #[test]

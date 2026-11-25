@@ -3,7 +3,7 @@
 Current-world (w17) corpora with executable consumers:
 
 - `semantic-kernel-w17-v6/` — seeded cases (`manifest.json`) whose regenerated
-  traces must match `evidence-casting-v1.json`'s per-case `trace_sha256`, plus property and
+  traces must match `evidence-casting-history-v1.json`'s per-case `trace_sha256`, plus property and
   Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
   A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v6/`;
   inspect it with `cargo run --manifest-path managym/Cargo.toml --bin
@@ -18,10 +18,11 @@ Current-world (w17) corpora with executable consumers:
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
 
-The shared casting catalog binds `evidence-casting-v1.json` and the
-authored-match authority and parity receipts ending in `-casting.json`.
-`evidence-opening-v1.json` and the first `-opening.json` receipts retain the
-opening-hand rules evidence. The authored trace
+The current catalog and event history bind `evidence-casting-history-v1.json`
+and the authored-match authority and parity receipts ending in
+`-casting-history.json`. The `-casting` receipts, `evidence-casting-v1.json`
+and the opening-hand evidence retain their original recording revisions.
+The authored trace
 takes two explicit keep Commands, then follows the seeded priority line.
 Generate its authority with `scripts/generate_authored_match_receipt.py`
 and its parity with `uv run --extra dev python -m conformance.authored_match_parity write`.
@@ -44,8 +45,8 @@ Semantic-kernel w17-v5 records the default priority surface with choice-output
 mana floats disabled and automatic payment from simple choice-output sources.
 The v4 corpus retains its original commands and evidence.
 
-Semantic-kernel w17-v6 hashes states under `MATCH_STATE_HASH_VERSION` 17,
-which adds the object that produced each pooled unit of mana and each unit a
+The first semantic-kernel w17-v6 corpus used `MATCH_STATE_HASH_VERSION` 17,
+which added the object that produced each pooled unit of mana and each unit a
 payment spent. Mana made while a cost is being paid pays toward it at once,
 so a pending payment's owed cost and receipt, and the offers after a tap made
 during it, differ from v5's; the v5 corpus is retained unchanged.

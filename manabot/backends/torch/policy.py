@@ -39,6 +39,7 @@ from manabot.backends.torch.semantic_cards import (
 )
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
+    FACT_KINDS,
     ObservationBuffers,
     ObservationSpace,
     PolicyObservation,
@@ -142,6 +143,7 @@ class ActorCritic(nn.Module):
         config: ModelConfig,
         *,
         readings: Readings | None = None,
+        fact_kinds: int = FACT_KINDS,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -168,6 +170,7 @@ class ActorCritic(nn.Module):
             Layout(self.readings),
             token_rows=tables.token_rows,
             name_rows=len(tables.definitions),
+            fact_kinds=fact_kinds,
         )
         self.turn_state = observation_space.turn_state
         self.stack_tokens = observation_space.one_token
@@ -354,6 +357,7 @@ class ActorCritic(nn.Module):
         )
         self.facts = FactEncoder(
             embed_dim,
+            fact_kinds=dims.fact_kinds,
             numeric=dims.fact,
             vocabulary=record_vocabulary,
         )
@@ -472,7 +476,11 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(buffers, Layout(self.readings)),
+                Tables.from_buffers(
+                    buffers,
+                    Layout(self.readings),
+                    fact_kinds=self.facts.kind.num_embeddings - 1,
+                ),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings

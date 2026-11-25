@@ -29,6 +29,7 @@ import numpy as np
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     ACTION_TYPE_DIM,
+    FACT_ABILITY_RESOLUTION,
     FACT_COMBAT_RESTRICTION,
     FACT_CONTINUATION_PROGRAM,
     FACT_COPY_EXCEPTION,
@@ -37,11 +38,13 @@ from manabot.env.observation import (
     FACT_EFFECT,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
+    FACT_KINDS,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
     FACT_SET_NAME,
     FACT_SOURCE_INDEX,
     FACT_TRANSFORMS,
+    FACT_TRIGGERING_AMOUNT,
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
@@ -101,6 +104,8 @@ class RecordNamespace(IntEnum):
 # Fact kinds by how admission and preparation read their id and detail words.
 ORDINAL_ID_KINDS = (
     FACT_TRANSFORMS,
+    FACT_ABILITY_RESOLUTION,
+    FACT_TRIGGERING_AMOUNT,
     FACT_USED_ABILITY,
     FACT_CONTINUATION_PROGRAM,
     FACT_COMBAT_RESTRICTION,
@@ -207,6 +212,7 @@ class Tables:
     name_program_rows: Array  # [names + 1] catalog row + 1 per name
     is_agent: Array  # [N] bool ownership of each object slot
     layout: Layout
+    fact_kinds: int = FACT_KINDS
     record_buckets: int = 4096
     # Preserve a backend's existing tie order while sorting only host lengths.
     order_lengths: Callable[[Array], Array] | None = None
@@ -279,7 +285,13 @@ class Tables:
     }
 
     @classmethod
-    def from_buffers(cls, buffers: Mapping[str, Array], layout: Layout) -> "Tables":
+    def from_buffers(
+        cls,
+        buffers: Mapping[str, Array],
+        layout: Layout,
+        *,
+        fact_kinds: int = FACT_KINDS,
+    ) -> "Tables":
         required = {"name_definitions", "is_agent"}
         catalog = {
             "definition_rows",
@@ -309,7 +321,7 @@ class Tables:
         if cls.BUFFERS["definition_rows"] not in buffers:
             values["definition_rows"] = None
         values["is_agent"] = values["is_agent"].reshape(-1).astype(bool)
-        return cls(**values, layout=layout)
+        return cls(**values, layout=layout, fact_kinds=fact_kinds)
 
     def rows(self, ids: Array) -> Array:
         """Catalog rows + 1 of admitted transport ids (`definition_rows`)."""
@@ -1175,6 +1187,12 @@ def _facts(
     `R` with zero (unlinked) rows to a power of two, at least
     `MIN_LIVE_FACT_ROWS`.
     """
+    # A checkpoint with fewer fact kinds reads none of the kinds added after it.
+    known = live[..., FACT_KIND_INDEX] <= tables.fact_kinds
+    if not known.all():
+        valid = valid.copy()
+        valid[valid] = known
+        live = live[known]
     word = record_word if native is None else full_word
     compact = layout in ("live_rows", "bucketed_live_rows")
     owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]

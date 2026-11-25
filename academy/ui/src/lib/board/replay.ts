@@ -59,7 +59,7 @@ export function bottomSeat(perspective: Perspective, positions: readonly Positio
  */
 export function recordedFrame(position: RecordedPosition, index: Pick<RecordingIndex, 'id' | 'revision' | 'winner'>, seat: 0 | 1): ExperienceFrame {
   const decision = position.kind === 'choice' ? position.decision : null;
-  const observation = orientBoard(position.observation, seat);
+  const observation = orientBoard(position.observation, seat, index.winner);
   if (decision) return { ...decision.frame, projection: observation };
   return {
     protocol: PROTOCOL_VERSION,

@@ -2,7 +2,7 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, effects_description, mana_description, trigger_description,
+    counter_description, effects_description, mana_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -132,12 +132,18 @@ impl Game {
             } => {
                 let view = self.characteristics(*permanent);
                 let ability = view.activated_abilities.get(*ability_index)?;
-                if !ability.exile_grantor {
+                if !ability.has_grantor_cost() {
                     return None;
                 }
                 let grantor = self.state.permanent_of(ability.granted_by?.grantor)?;
+                // Two grantors of one ability differ only by the grantor named.
+                let (also_tap, grantor_cost) = match (ability.exile_grantor, ability.tap_source) {
+                    (true, _) => ("", "exile"),
+                    (false, true) => (", {T},", "tap"),
+                    (false, false) => ("", "tap"),
+                };
                 Some(format!(
-                    "Activate ability of {}: pay {} and exile {} (permanent {}) — {}",
+                    "Activate ability of {}: pay {}{also_tap} and {grantor_cost} {} (permanent {}) — {}",
                     view.name,
                     crate::agent::ability_description::cost_description(&ability.mana_cost),
                     self.characteristics(grantor).name,
@@ -153,15 +159,9 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let record = self.trigger_source_face(trigger)?;
                 let mut label = format!(
                     "Put on stack next — {}",
-                    trigger_description(
-                        record,
-                        trigger.ability_index,
-                        trigger.inline_effects.as_deref(),
-                        trigger.x,
-                    )
+                    self.pending_trigger_description(trigger)?
                 );
                 if let Some(event) = trigger
                     .context
@@ -267,8 +267,11 @@ impl Game {
                     | CostComponent::Mana { .. }
                     | CostComponent::TapPays { .. }
                     | CostComponent::Life(_)
+                    | CostComponent::RemoveSourceCounters(..)
+                    | CostComponent::AddCounters(..)
                     | CostComponent::Source(_)
-                    | CostComponent::ExileGrantor(_) => None,
+                    | CostComponent::ExileGrantor(_)
+                    | CostComponent::TapGrantor(_) => None,
                 });
                 if paying.is_some() {
                     paying
@@ -468,12 +471,7 @@ impl Game {
                     cast.spell(&self.state[*object]).spell_modes()?
                 } else {
                     let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                    let Effect::TriggerModes { modes, .. } =
-                        self.pending_trigger_mode_rule(trigger)?
-                    else {
-                        return None;
-                    };
-                    modes
+                    self.unchosen_trigger_modes(trigger)?
                 };
                 Some(effects_description(modes.get(mode)?))
             }
@@ -597,6 +595,7 @@ impl Game {
                     continue;
                 }
                 if self.check_activation_terms(player, ability).is_err()
+                    || !permanent.can_pay_counters(ability)
                     || permanent.activation_used(ability_index, ability)
                     || (ability.discard_card
                         && self
@@ -649,7 +648,9 @@ impl Game {
                         continue;
                     }
                 }
-                if ability.tap_source && !self.permanent_can_tap(permanent_id) {
+                if (ability.tap_source && !self.permanent_can_tap(permanent_id))
+                    || !self.can_tap_grantor(ability)
+                {
                     continue;
                 }
                 if ability.tap_power().is_some_and(|(power, _)| {
@@ -664,8 +665,8 @@ impl Game {
                         receipt: Default::default(),
                     };
                     self.tap_activation_payment_possible(player, &payment, None)
-                } else if ability.waterbend {
-                    self.can_pay_waterbend_activation(player, permanent_id, ability)
+                } else if ability.waterbend || ability.mana_cost.x > 0 {
+                    self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
                 };
@@ -1131,7 +1132,12 @@ impl Game {
                     .collect(),
                 vec![self.state[*tapped].id],
             ),
-            CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) => {
+            CostComponent::Life(_)
+            | CostComponent::RemoveSourceCounters(..)
+            | CostComponent::AddCounters(..)
+            | CostComponent::Source(_)
+            | CostComponent::ExileGrantor(_)
+            | CostComponent::TapGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         };
@@ -1154,6 +1160,23 @@ impl Game {
         if self.state.opening().is_some() {
             return self.choose_opening(action);
         }
+        self.dispatch_action(action)?;
+        if matches!(
+            action,
+            Action::PlayLand { .. }
+                | Action::CastSpell { .. }
+                | Action::ActivateAbility { .. }
+                | Action::ActivateCardAbility { .. }
+                | Action::Foretell { .. }
+        ) {
+            // CR 104.4b: a player who acts at priority has broken any loop.
+            // A rejected action changed nothing, so it leaves the watch.
+            self.state.priority_mut().clear_loop_watch();
+        }
+        Ok(())
+    }
+
+    fn dispatch_action(&mut self, action: &Action) -> Result<(), AgentError> {
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)

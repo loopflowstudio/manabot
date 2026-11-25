@@ -45,6 +45,22 @@ pub struct VisibleReference {
     pub player: Option<usize>,
 }
 
+impl VisibleReference {
+    pub(crate) fn definition(definition: Option<u32>) -> Self {
+        Self {
+            definition,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn player(player: usize) -> Self {
+        Self {
+            player: Some(player),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
@@ -141,6 +157,8 @@ pub struct ContinuationFrame {
     pub can_decline: bool,
     pub mana_outputs: Vec<ManaOutput>,
     pub resolutions_this_turn: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub triggering_amount: i32,
     /// The announced value of X (CR 107.3) of the spell or ability this frame
     /// casts, activates or resolves; zero when it has none.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -209,7 +227,7 @@ impl ContinuationFrame {
 
 /// The receipt a stack object carries, when its frame shows any of it
 /// (`effect_execution::receipt_matters`).
-fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
+pub(super) fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
         StackObject::Spell(spell) => &spell.spent,
         StackObject::TriggeredAbility(ability) => &ability.spent,
@@ -331,19 +349,26 @@ impl Game {
 
     pub(crate) fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
         match target {
-            Target::Player(player) => VisibleReference {
-                player: Some(player.0),
-                ..VisibleReference::default()
+            Target::Player(player) => VisibleReference::player(player.0),
+            // A departed permanent keeps its public definition (CR 603.10a).
+            Target::Permanent(id) => match self.permanent_object(id) {
+                Some(object) => self.visible_reference(object, viewer),
+                None => VisibleReference::definition(
+                    self.departed_permanent_lki(id)
+                        .map(|lki| lki.definition_id.0),
+                ),
             },
-            Target::Permanent(id) => self
-                .permanent_object(id)
-                .map(|object| self.visible_reference(object, viewer))
-                .unwrap_or_default(),
+            // A departed spell keeps its public definition (CR 608.2h).
             Target::StackSpell(object_id) => {
                 if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
                     self.object_reference(object_id, viewer)
                 } else {
-                    VisibleReference::default()
+                    VisibleReference::definition(
+                        self.state
+                            .spell_lki
+                            .get(&object_id)
+                            .map(|spell| spell.definition_id.0),
+                    )
                 }
             }
             Target::StackAbility(id) => self
@@ -553,7 +578,7 @@ impl Game {
                     .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(self.trigger_source_definition(trigger).0);
+                source.definition = Some(self.pending_trigger_definition(trigger).0);
                 let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing
@@ -573,6 +598,7 @@ impl Game {
                     },
                     ability: Some(trigger.ability_index),
                     x: trigger.x,
+                    triggering_amount: trigger.triggering_amount,
                     source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
                     active_clause: Some(trigger.requirement_index),
                     targets: self.clause_targets(
@@ -587,6 +613,10 @@ impl Game {
                 if trigger.program {
                     frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
                 }
+                if trigger.modes_chosen {
+                    frame.mode = super::observation::single_chosen_mode(&trigger.chosen_modes);
+                }
+                super::effect_execution::project_pending_trigger(self, trigger, viewer, &mut frame);
                 frames.push(frame);
             }
         }
@@ -649,8 +679,16 @@ impl Game {
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                frame.triggering_amount = ability.triggering_amount;
                 if ability.program {
                     frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                }
+                frame.mode = super::observation::single_chosen_mode(&ability.chosen_modes);
+                // Several chosen modes project as the program they will run.
+                if ability.chosen_modes.len() > 1 {
+                    if let Some(effects) = self.stacked_trigger_effects(ability) {
+                        frame.program(&effects);
+                    }
                 }
                 frame.inherited_from = ability
                     .source_lki
@@ -674,16 +712,7 @@ impl Game {
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
-        if let Some(spent) = stack_receipt(object) {
-            super::effect_execution::project_receipt(
-                self,
-                spent,
-                object.source_object(),
-                viewer,
-                &mut frame,
-                false,
-            );
-        }
+        super::effect_execution::project_stack_object(self, object, viewer, &mut frame, false);
         frame
     }
 
@@ -705,7 +734,7 @@ impl Game {
                     CostComponent::Mana { .. } => {
                         frame.sacrifice = payment
                             .receipt
-                            .sacrificed()
+                            .paid_as(How::Sacrificed)
                             .find_map(|object| self.state.permanent_of(object))
                             .map(|id| self.target_reference(Target::Permanent(id), viewer));
                         frame.waterbend = payment.waterbends();
@@ -829,6 +858,7 @@ impl Game {
             x: effect.x,
             source_transforms: effect.source_transforms,
             resolutions_this_turn: effect.resolutions_this_turn,
+            triggering_amount: effect.triggering_amount,
             active_clause: Some(effect.active_requirement),
             targets: effect
                 .targets
@@ -862,16 +892,7 @@ impl Game {
         // Stack frames lead, top to bottom; their receipts are public.
         for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
             debug_assert!(matches!(frame.kind, 1..=3));
-            if let Some(spent) = stack_receipt(object) {
-                super::effect_execution::project_receipt(
-                    self,
-                    spent,
-                    object.source_object(),
-                    viewer,
-                    frame,
-                    true,
-                );
-            }
+            super::effect_execution::project_stack_object(self, object, viewer, frame, true);
         }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()

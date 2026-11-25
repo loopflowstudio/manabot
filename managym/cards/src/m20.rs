@@ -1,29 +1,30 @@
 //! Core Set 2020.
-use managym_state::{
-    ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
-    },
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
-    },
-    effect::{EffectDuration, Modification},
-    mana::{Color, ManaCost},
-    permanent::CounterKind,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+    SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    ManaAbility, PrintedCharacteristics, StaticAbility, StaticScope,
+};
+use managym_state::effect::{EffectDuration, Modification};
+use managym_state::mana::{Color, Mana, ManaCost};
+use managym_state::permanent::CounterKind;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        cryptic_caves(),
+        agent_of_treachery(),
+        brought_back(),
+        spectral_sailor(),
+        brineborn_cutthroat(),
+        gnarlback_rhino(),
         twinblade_paladin(),
         goblin_smuggler(),
         devout_decree(),
         empyrean_eagle(),
         rapacious_dragon(),
-        agent_of_treachery(),
-        brought_back(),
-        spectral_sailor(),
     ]
 }
 
@@ -116,6 +117,108 @@ fn brought_back() -> CardDefinition {
                 true,
             )],
             targeting: vec![TargetRequirement::up_to(2, spec)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn brineborn_cutthroat() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhenever you cast a spell during an opponent's turn, put a +1/+1 counter on this creature.";
+    CardDefinition {
+        key: "m20.brineborn_cutthroat",
+        scryfall_id: "0857765f-afd7-418a-a93b-c0bd1b1f037e",
+        printed: PrintedCharacteristics {
+            name: "Brineborn Cutthroat".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Merfolk".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::not(Condition::YourTurn),
+                    condition: Box::new(TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate::default(),
+                    )),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gnarlback_rhino() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever you cast a spell that targets this creature, draw a card.";
+    CardDefinition {
+        key: "m20.gnarlback_rhino",
+        scryfall_id: "68a69558-aca0-413d-9762-2fa115b44abd",
+        printed: PrintedCharacteristics {
+            name: "Gnarlback Rhino".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rhino".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: CardPredicate::default(),
+                    nth: None,
+                    targets: SpellTargetFilter::TargetsThis,
+                },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cryptic_caves() -> CardDefinition {
+    let text_box = "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Draw a card. Activate only if you control five or more lands.";
+    CardDefinition {
+        key: "m20.cryptic_caves",
+        scryfall_id: "fde9e9cb-68ab-4856-8ad6-30f66666dd93",
+        printed: PrintedCharacteristics {
+            name: "Cryptic Caves".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                sacrifice_source: true,
+                condition: Some(Condition::ControlsAtLeast {
+                    count: 5,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                    distinct_names: false,
+                }),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

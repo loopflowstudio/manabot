@@ -510,6 +510,7 @@ fn mill_then_recover(count: i32, predicate: CardPredicate, min: usize, max: i32)
         Effect::MillCards {
             count: EffectValue::Fixed(count),
             target: None,
+            player: None,
         },
         Effect::SelectCards {
             from: ObjectSelector::CardsThisWay,
@@ -648,6 +649,7 @@ fn glamdring_foe_hammer() -> CardDefinition {
             Effect::MillCards {
                 count: EffectValue::Fixed(6),
                 target: None,
+                player: None,
             },
             Effect::return_to_hand(ObjectSelector::Matching {
                 of: Box::new(ObjectSelector::CardsThisWay),

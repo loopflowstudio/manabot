@@ -2,7 +2,8 @@
 //! selects dense compatibility buffers or immutable typed CSR records.
 
 use super::observation_layout::{
-    action, action_columns, card, decklist, event, fact, name, permanent, player, stack, turn_state,
+    action, action_columns, card, decklist, event, fact, name, permanent, player, relation, stack,
+    turn_state,
 };
 use super::observation_rows::{Cell, RowWriter, Table};
 use Cell::{Integer, Scalar, Word};
@@ -69,6 +70,8 @@ pub enum FactKind {
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
+    AbilityResolution = 15,
+    TriggeringAmount = 16,
 }
 
 impl FactKind {
@@ -80,7 +83,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 13] = [
+    pub const ALL: [FactKind; 15] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -94,6 +97,8 @@ impl FactKind {
         FactKind::EffectiveColor,
         FactKind::KeywordCounterTimestamp,
         FactKind::ContinuationProgram,
+        FactKind::AbilityResolution,
+        FactKind::TriggeringAmount,
     ];
 }
 
@@ -256,10 +261,15 @@ impl ObservationEncoderConfig {
         super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
     }
 
-    /// Two seat rows of v10 player turn state; empty for v9.
+    /// Columns in one seat's v10/v11 player turn state row.
+    pub fn turn_state_dim(&self) -> usize {
+        super::observation_layout::turn_state_columns(self.layout).len()
+    }
+
+    /// Two seat rows of v10/v11 player turn state; empty for v9.
     pub fn player_turn_state_len(&self) -> usize {
         if self.turn_state {
-            2 * TURN_STATE_DIM
+            2 * self.turn_state_dim()
         } else {
             0
         }
@@ -1004,6 +1014,10 @@ pub fn encode_rows(
         )
     };
     let ranks = timestamp_ranks(obs);
+    let combat_damage_flags = |seats: &[usize]| {
+        [obs.agent.player_index, obs.opponent.player_index]
+            .map(|seat| flag(seats.contains(&(seat as usize))))
+    };
     let context = CardContext {
         viewer_id: obs.agent.id,
         turn_number: obs.turn.turn_number,
@@ -1018,7 +1032,13 @@ pub fn encode_rows(
         // The deprecated v9/v10 rows end before the first-strike step flag.
         out.write(player_table, 0, 0, &row[..config.player_dim()])?;
         if config.turn_state {
-            out.write(Table::PlayerTurnState, 0, seat, &turn_state_row(player))?;
+            let row = turn_state_row(player, config.layout);
+            out.write(
+                Table::PlayerTurnState,
+                0,
+                seat,
+                &row[..config.turn_state_dim()],
+            )?;
         }
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
@@ -1062,6 +1082,12 @@ pub fn encode_rows(
             let mut row = [Cell::ZERO; PERMANENT_DIM];
             let row = &mut row[..config.permanent_dim()];
             encode_permanent_features(permanent, mine, config.layout, row);
+            if config.layout == InputLayout::OneToken {
+                [
+                    row[permanent::COMBAT_DAMAGE_TO_ME],
+                    row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
+                ] = combat_damage_flags(&permanent.combat_damage_to_players);
+            }
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
             row[permanent::TIMESTAMP] = Integer(ranks[&permanent.timestamp()]);
@@ -1112,6 +1138,10 @@ pub fn encode_rows(
         for (slot, object) in obs.stack_objects.iter().enumerate() {
             let mut row = [Cell::ZERO; STACK_DIM];
             encode_stack_features(object, obs.agent.id, &mut row);
+            [
+                row[stack::COMBAT_DAMAGE_TO_ME],
+                row[stack::COMBAT_DAMAGE_TO_OPPONENT],
+            ] = combat_damage_flags(&object.combat_damage_to_players);
             row[stack::SOURCE] = link(object.source_permanent_id);
             out.write(Table::Stack, 0, slot, &row)?;
         }
@@ -1124,13 +1154,36 @@ pub fn encode_rows(
         config.effect_details_len() / super::shared_effects::DETAIL_DIM,
         out,
     )?;
-    super::continuation::write_rows(
+    let continuation_rows = super::continuation::write_rows(
         &obs.continuation,
         obs.agent.player_index as usize,
         &objects,
         config.relation_dim(),
         out,
     )?;
+
+    if config.layout == InputLayout::OneToken {
+        let mut next = continuation_rows;
+        for source in obs.agent_permanents.iter().chain(&obs.opponent_permanents) {
+            for &target in &source.damaged_permanents {
+                check_capacity(
+                    "damage relations",
+                    next + 1,
+                    super::continuation::RELATION_ROWS,
+                )?;
+                let mut row = [Cell::ZERO; relation::WIDTH];
+                // A standalone pair owns its pooling group, separate from pending work.
+                row[relation::FRAME] =
+                    Integer((obs.continuation.len() + next - continuation_rows + 1) as i64);
+                row[relation::KIND] = Integer(11);
+                row[relation::SOURCE] = link(Some(source.id));
+                row[relation::REFERENCE] = link(Some(target));
+                row[relation::VALID] = Integer(1);
+                out.write(Table::Relations, 0, next, &row)?;
+                next += 1;
+            }
+        }
+    }
     encode_actions(obs, config, out, &objects)?;
     if config.policy_history {
         let rows = match config.layout {
@@ -1166,8 +1219,19 @@ pub(super) fn check_capacity(
     }
 }
 
-fn turn_state_row(player: &PlayerData) -> [Cell; TURN_STATE_DIM] {
+fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE_DIM] {
     let mut row = [Cell::ZERO; TURN_STATE_DIM];
+    if layout == InputLayout::OneToken {
+        let history = &player.turn_history;
+        row[turn_state::LIFE_GAINS] = Integer(i64::from(history.life_gains));
+        row[turn_state::LIFE_GAINED] = Integer(i64::from(history.life_gained));
+        row[turn_state::MANA_SPENT_CASTING] = Integer(i64::from(history.mana_spent_casting));
+        row[turn_state::CREATURES_DIED] = Integer(i64::from(history.creatures_died));
+        row[turn_state::PERMANENTS_LEFT] = Integer(i64::from(history.permanents_left));
+        row[turn_state::NONLAND_PERMANENTS_LEFT] =
+            Integer(i64::from(history.nonland_permanents_left));
+        row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
+    }
     row[turn_state::LIFE_LOST] = Scalar(player.turn_history.life_lost as f32 / 20.0);
     row[turn_state::SPELLS_CAST] = Scalar(player.spells_cast as f32 / 10.0);
     for class in player
@@ -1198,7 +1262,9 @@ impl TurnStateReads {
                 serde_json::Value::Object(map) => {
                     for (key, value) in map {
                         match key.as_str() {
-                            "OpponentLostLifeThisTurnAtLeast" => reads.life_lost = true,
+                            "OpponentLostLifeThisTurnAtLeast" | "LifeLostThisTurn" => {
+                                reads.life_lost = true
+                            }
                             "from_battlefield_this_turn" if *value == true => {
                                 reads.from_battlefield = true
                             }
@@ -1544,6 +1610,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
         out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
         out[permanent::IS_LAND] = flag(card.card_types.is_land);
@@ -1598,6 +1665,10 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
     out[stack::KICKED] = flag(object.kicked);
     out[stack::FROM_PREPARED] = flag(object.from_prepared);
     out[stack::FLASHBACK] = flag(object.flashback);
+    out[stack::MANA_SPENT] = Integer(i64::from(object.mana_spent));
+    out[stack::SOURCE_POWER] = Scalar(object.source_power.unwrap_or_default() as f32 / 10.0);
+    out[stack::PAID_AMOUNT] = Scalar(object.paid_amount.unwrap_or_default() as f32 / 10.0);
+    out[stack::ABILITY_RESOLUTIONS] = Integer(i64::from(object.ability_resolutions));
     if let Some(card) = &object.spell {
         out[stack::IS_COPY] = flag(card.is_copy);
         out[stack::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
@@ -1736,20 +1807,40 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         if permanent.transforms > 0 {
             push(object, FactKind::Transforms, 0, permanent.transforms as i64);
         }
+        if layout == InputLayout::OneToken {
+            for &(index, count) in &permanent.ability_resolutions {
+                push(
+                    object,
+                    FactKind::AbilityResolution,
+                    index as i32,
+                    i64::from(count),
+                );
+            }
+        }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1);
         }
     }
+    let frame_controller = |frame: &super::continuation::ContinuationFrame| {
+        if frame.controller == obs.agent.player_index as usize {
+            obs.agent.id
+        } else {
+            obs.opponent.id
+        }
+    };
     for (index, frame) in obs.continuation.iter().enumerate() {
+        let controller = frame_controller(frame);
+        if layout == InputLayout::OneToken && frame.triggering_amount > 0 {
+            push(
+                controller,
+                FactKind::TriggeringAmount,
+                (index + 1) as i32,
+                i64::from(frame.triggering_amount),
+            );
+        }
         if frame.source_transforms > 0 {
             push(
-                frame.source.object.unwrap_or(
-                    if frame.controller == obs.agent.player_index as usize {
-                        obs.agent.id
-                    } else {
-                        obs.opponent.id
-                    },
-                ),
+                frame.source.object.unwrap_or(controller),
                 FactKind::Transforms,
                 (index + 1) as i32,
                 frame.source_transforms as i64,
@@ -1757,14 +1848,11 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     for (index, frame) in obs.continuation.iter().enumerate() {
+        let controller = frame_controller(frame);
         for program in [&frame.program, &frame.effect_execution] {
             for (ordinal, &(kind, value)) in program.iter().enumerate() {
                 out.push(Fact {
-                    object: if frame.controller == obs.agent.player_index as usize {
-                        obs.agent.id
-                    } else {
-                        obs.opponent.id
-                    },
+                    object: controller,
                     kind: FactKind::ContinuationProgram,
                     id: (index + 1) as i32,
                     detail: value,
@@ -1775,11 +1863,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
         if let Some(attackers) = &frame.attackers {
             out.push(Fact {
-                object: if frame.controller == obs.agent.player_index as usize {
-                    obs.agent.id
-                } else {
-                    obs.opponent.id
-                },
+                object: controller,
                 kind: FactKind::CombatRestriction,
                 id: (index + 1) as i32,
                 detail: name_value(attackers),
@@ -2397,6 +2481,7 @@ mod tests {
             game_over: false,
             won: false,
             turn: TurnData {
+                creature_died_this_turn: false,
                 turn_number: 1,
                 phase: PhaseKind::Combat,
                 step: StepKind::DeclareAttackers,
@@ -2778,6 +2863,11 @@ mod tests {
         let spell = make_card(555, ZoneType::Stack, false, 0, 0, 3);
         obs.stack_objects = vec![
             StackObjectData {
+                combat_damage_to_players: Vec::new(),
+                source_power: None,
+                paid_amount: None,
+                mana_spent: 0,
+                ability_resolutions: 0,
                 description: None,
                 stack_object_id: 600,
                 kind: StackObjectKindData::Spell,
@@ -2797,6 +2887,11 @@ mod tests {
                 )),
             },
             StackObjectData {
+                combat_damage_to_players: Vec::new(),
+                source_power: None,
+                paid_amount: None,
+                mana_spent: 0,
+                ability_resolutions: 0,
                 description: None,
                 stack_object_id: 601,
                 kind: StackObjectKindData::ActivatedAbility,

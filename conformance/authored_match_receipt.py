@@ -21,7 +21,7 @@ DEFAULT_RECEIPT_PATH = (
 )
 CASTING_RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-casting.json"
+    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-casting-history.json"
 )
 FIXED_TIME = "2026-11-24T00:00:00+00:00"
 MATCH_SEED = 0

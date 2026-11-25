@@ -115,6 +115,7 @@ def build(player: object, leaves: Mapping[str, Forward]) -> GamePlayer:
         tables = Tables.from_buffers(
             {key: value.copy() for key, value in checkpoint.buffers.items()},
             Layout(checkpoint.readings),
+            fact_kinds=checkpoint.fact_kinds,
         )
         spec = Spec(
             checkpoint.model,

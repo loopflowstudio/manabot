@@ -20,7 +20,8 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionCastOffer},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{bargain_cost, Help, Operation},
+        payment::{bargain_cost, Help, Operation, Payment},
+        proposed_event::EventBinding,
         turn::{PhaseKind, StepKind},
     },
     state::{
@@ -29,7 +30,7 @@ use crate::{
             ActivatedAbilityDefinition, ActivationZone, AdditionalCost, PrintedCharacteristics,
             SpellProfile, StaticAbility,
         },
-        game_object::{CardId, Object, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{AbilitySource, CardId, Object, ObjectId, PermanentId, PlayerId, Target},
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
         predicate::CardPredicate,
@@ -561,6 +562,15 @@ impl Game {
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
                 }
+                StaticAbility::CostsLess { amount, condition } => {
+                    if condition
+                        .as_ref()
+                        .is_some_and(|condition| !self.check_condition(condition, player, None))
+                    {
+                        continue;
+                    }
+                    self.controller_value(amount, player).max(0) as usize
+                }
                 StaticAbility::CostsLessByGreatestPower(predicate) => {
                     self.controller_value(
                         &EffectValue::GreatestPowerYouControl {
@@ -691,16 +701,19 @@ impl Game {
         self.spend_play_route(player, cast.route);
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
-            object,
-            ZoneType::Battlefield,
-            crate::flow::proposed_event::ZoneEntry {
-                controller,
-                transformed: profile == SpellProfile::BackFace,
-                library_top_departure: self.is_library_top(object),
-                ..Default::default()
-            },
-        )]));
+        frame.batch = Some(self.event_batch(
+            EventBinding::None,
+            [self.zone_move_proposal(
+                object,
+                ZoneType::Battlefield,
+                crate::flow::proposed_event::ZoneEntry {
+                    controller,
+                    transformed: profile == SpellProfile::BackFace,
+                    library_top_departure: self.is_library_top(object),
+                    ..Default::default()
+                },
+            )],
+        ));
         frame.completion = FrameCompletion::Continue;
         self.run_frame(frame);
         Ok(())
@@ -1452,14 +1465,17 @@ impl Game {
             .collect()
     }
 
-    pub(crate) fn cast_spell(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-        cast: CastChoices,
-    ) -> Result<(), AgentError> {
+    pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
+        let Operation::Spell {
+            object,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+        } = payment.operation
+        else {
+            unreachable!("activation prepared before costs")
+        };
         // Recorded before the move, so its invalidation precedes the move's
         // board reads; the move then names the stack appearance.
         self.state.turn.spells_cast[player.0].push(crate::flow::turn::RecordedCast {
@@ -1473,12 +1489,26 @@ impl Game {
         let object =
             self.push_spell_to_stack(object, player, targets.clone(), target_req_indices, cast);
         self.state.name_last_cast(player, object);
+        let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+            self.state.stack_objects_mut().last_mut()
+        else {
+            unreachable!("just pushed spell")
+        };
+        let paid = u32::from(payment.receipt.total());
+        spell.mode = mode;
+        spell.spent = payment.receipt;
+        let total = &mut self.state.turn.history[player.0].mana_spent_casting;
+        let spend_before = *total;
+        *total = total.saturating_add(paid);
+        let spend_after = *total;
         self.emit(GameEvent::SpellCast {
+            caster: player,
+            spend_before,
+            spend_after,
             object_id: object,
             targets: targets.clone(),
         });
         self.emit_permanents_targeted(&targets, Target::StackSpell(object), player);
-        Ok(())
     }
 
     /// Ward (CR 702.21) — each targeted permanent sees, once, the spell or
@@ -1550,11 +1580,17 @@ impl Game {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
         self.check_activation_terms(player, &ability)?;
+        if !permanent.can_pay_counters(&ability) {
+            return Err(AgentError("cannot pay counter cost".into()));
+        }
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }
         if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
+        }
+        if !self.can_tap_grantor(&ability) {
+            return Err(AgentError("grantor cannot tap".into()));
         }
         if ability.mana_cost.x > 0 {
             if self
@@ -1591,8 +1627,7 @@ impl Game {
         )
     }
 
-    /// Values of X from the ability's least X that its waterbend cost can
-    /// pay (CR 602.2b, 601.2f).
+    /// Payable announcements from the ability's least X (CR 602.2b, 601.2f).
     pub(crate) fn legal_activation_x_values(
         &self,
         player: PlayerId,
@@ -1608,7 +1643,7 @@ impl Game {
             return Vec::new();
         };
         payable_x_values(ability.x_min, |x| {
-            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x), None)
+            self.activation_x_payable(player, permanent, ability_index, x)
         })
     }
 
@@ -1680,7 +1715,9 @@ impl Game {
         )
     }
 
-    /// The turn and life terms every activation shares, whatever its source.
+    /// The turn, life and condition terms every activation shares, whatever
+    /// its source, mana abilities included: the one authority for "activate
+    /// only ..." restrictions (CR 602.5).
     pub(crate) fn check_activation_terms(
         &self,
         player: PlayerId,
@@ -1892,23 +1929,19 @@ impl Game {
             return Vec::new();
         };
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
-        let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&clause.spec, player)
-            .into_iter()
-            .filter(|target| {
-                // Only "another target" excludes the source; "target creature
-                // you control" may name the source itself.
-                let is_source = match source {
-                    ActivationSource::Permanent(permanent) => {
-                        *target == Target::Permanent(permanent)
-                    }
-                    ActivationSource::Card(_) => false,
+        let identity = match source {
+            ActivationSource::Permanent(id) => {
+                let Some(object) = self.permanent_object(id) else {
+                    return Vec::new();
                 };
-                !(clause.another && is_source)
-                    && !chosen.contains(target)
-                    && (!clause.same_graveyard
-                        || self.fits_target_clause(&clause, 0, chosen.iter().copied(), *target))
-            })
+                AbilitySource::new(object, Some(object))
+            }
+            ActivationSource::Card(card) => AbilitySource::new(self.state.object_of(card), None),
+        };
+        let candidates: Vec<_> = self
+            .targets_for_source(&clause, player, identity)
+            .filter(|target| !chosen.contains(target))
+            .filter(|target| self.fits_target_clause(&clause, 0, chosen.iter().copied(), *target))
             .collect();
         if !clause.shares_creature_type {
             return candidates;
@@ -2191,8 +2224,7 @@ impl Game {
         object: ObjectId,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        self.legal_targets_for_spec(&requirement.spec, player)
-            .into_iter()
+        self.targets_for_source(requirement, player, AbilitySource::new(object, None))
             .filter(|target| *target != Target::StackSpell(object))
             .collect()
     }

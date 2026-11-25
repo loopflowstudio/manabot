@@ -43,6 +43,12 @@ pub enum CounterKind {
     Charge,
     Poison,
     Plan,
+    Incubation,
+    /// No rules meaning of their own; cards count them (Mazemind Tome,
+    /// Ravenous Amulet, Fishing Pole).
+    Page,
+    Soul,
+    Bait,
     /// No rules meaning of its own; Tinybones lets its controller play the
     /// exiled cards that have one.
     Stash,
@@ -68,6 +74,10 @@ impl CounterKind {
             CounterKind::Ice => "ice",
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
+            CounterKind::Incubation => "incubation",
+            CounterKind::Page => "page",
+            CounterKind::Soul => "soul",
+            CounterKind::Bait => "bait",
             CounterKind::Charge => "charge",
             CounterKind::Stash => "stash",
         }
@@ -81,7 +91,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 18] = [
+    pub const ALL: [CounterKind; 22] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -99,6 +109,10 @@ impl CounterKind {
         CounterKind::Charge,
         CounterKind::Poison,
         CounterKind::Plan,
+        CounterKind::Incubation,
+        CounterKind::Page,
+        CounterKind::Soul,
+        CounterKind::Bait,
         CounterKind::Stash,
     ];
 }
@@ -220,6 +234,12 @@ impl Permanent {
         turn != 0 && self.entry_turn == turn
     }
 
+    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        ability
+            .remove_counters
+            .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
+    }
+
     /// Whether this object has used up the ability: exhaust once ever
     /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
@@ -267,12 +287,14 @@ impl Permanent {
 
     /// CR 122.1d: a tapped permanent with a stun counter that would become
     /// untapped stays tapped and loses one stun counter instead. Every untap
-    /// path (untap step, effects, costs) goes through here.
-    pub fn untap(&mut self) {
+    /// path (untap step, effects, costs) goes through here. Returns whether
+    /// it went from tapped to untapped.
+    pub fn untap(&mut self) -> bool {
         if self.tapped && self.counters.get(CounterKind::Stun) > 0 {
             self.counters.change(CounterKind::Stun, -1);
+            false
         } else {
-            self.tapped = false;
+            std::mem::replace(&mut self.tapped, false)
         }
     }
 

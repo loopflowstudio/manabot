@@ -1,27 +1,25 @@
 //! Magic Origins.
-use std::sync::Arc;
-
-use managym_state::{
-    ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
-        TriggerSubject, TurnStep,
-    },
-    card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics,
-    },
-    mana::{Color, Mana, ManaCost, SpendEffect},
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
+    TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+    Keywords, PrintedCharacteristics,
+};
+use managym_state::mana::{Color, Mana, ManaCost, SpendEffect};
+use managym_state::predicate::CardPredicate;
+use std::sync::Arc;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
-        skyraker_giant(),
+        dwynens_elite(),
         boggart_brute(),
         demonic_pact(),
         harbinger_of_the_tides(),
         elemental_bond(),
         pyromancers_goggles(),
+        skyraker_giant(),
     ]
 }
 
@@ -105,26 +103,6 @@ fn pyromancers_goggles() -> CardDefinition {
     }
 }
 
-fn skyraker_giant() -> CardDefinition {
-    let text_box = "Reach (This creature can block creatures with flying.)";
-    CardDefinition {
-        key: "ori.skyraker_giant",
-        scryfall_id: "c5f0d87a-8f37-4598-9106-c3545dadf6fd",
-        printed: PrintedCharacteristics {
-            name: "Skyraker Giant".into(),
-            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
-            types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Giant".into()],
-            power: Some(4),
-            toughness: Some(3),
-            keywords: Keywords::of(&[Keyword::Reach]),
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
 fn demonic_pact() -> CardDefinition {
     CardDefinition {
         key: "ori.demonic_pact",
@@ -148,6 +126,56 @@ fn demonic_pact() -> CardDefinition {
                     ],
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dwynens_elite() -> CardDefinition {
+    let text_box = "When this creature enters, if you control another Elf, create a 1/1 green Elf Warrior creature token.";
+    CardDefinition {
+        key: "ori.dwynens_elite",
+        scryfall_id: "c203722b-3f16-4b6c-9b2e-18169d3f80c9",
+        printed: PrintedCharacteristics {
+            name: "Dwynen's Elite".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_other_you_control(CardPredicate::subtype("Elf")).count(),
+                    CompareOp::Ge,
+                    1,
+                )),
+                effects: vec![Effect::create_tokens("token.elf_warrior_1_1_g", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skyraker_giant() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)";
+    CardDefinition {
+        key: "ori.skyraker_giant",
+        scryfall_id: "c5f0d87a-8f37-4598-9106-c3545dadf6fd",
+        printed: PrintedCharacteristics {
+            name: "Skyraker Giant".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

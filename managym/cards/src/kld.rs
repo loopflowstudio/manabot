@@ -1,47 +1,26 @@
 //! Kaladesh.
-use managym_state::{
-    ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-    },
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility,
-    },
-    effect::Modification,
-    mana::{Mana, ManaCost},
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Scope,
+    TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, StaticAbility,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::{Mana, ManaCost};
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        cultivators_caravan(),
+        dramatic_reversal(),
+        fumigate(),
+        noxious_gearhulk(),
         cloudblazer(),
         brazen_scourge(),
         authority_of_the_consuls(),
-        cultivators_caravan(),
-        dramatic_reversal(),
-        noxious_gearhulk(),
     ]
-}
-
-fn authority_of_the_consuls() -> CardDefinition {
-    CardDefinition {
-        key: "kld.authority_of_the_consuls",
-        scryfall_id: "324b2f55-1e09-490e-8f7e-bfde85a91ac4",
-        printed: PrintedCharacteristics {
-            name: "Authority of the Consuls".into(),
-            mana_cost: Some(ManaCost::parse("{W}")),
-            types: CardTypes::new([CardType::Enchantment]),
-            statics: vec![StaticAbility::OpponentsEnterTapped(CardPredicate::creature())],
-            abilities: vec![Ability::when_enters(
-                TriggerSubject::matching(Actor::Opponent, CardPredicate::creature(), false),
-                vec![Effect::gain_life(1)],
-            )],
-            text_box: "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.".into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
 }
 
 fn cultivators_caravan() -> CardDefinition {
@@ -102,6 +81,29 @@ fn dramatic_reversal() -> CardDefinition {
     }
 }
 
+fn fumigate() -> CardDefinition {
+    let text_box = "Destroy all creatures. You gain 1 life for each creature destroyed this way.";
+    CardDefinition {
+        key: "kld.fumigate",
+        scryfall_id: "f00f27a7-9e92-4fbf-baa8-f47a5eee48a6",
+        printed: PrintedCharacteristics {
+            name: "Fumigate".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::each(
+                    Scope::Battlefield,
+                    CardPredicate::creature(),
+                )),
+                Effect::gain_life(ObjectSelector::Moved.count()),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn noxious_gearhulk() -> CardDefinition {
     let text_box = "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, you may destroy another target creature. If a creature is destroyed this way, you gain life equal to its toughness.";
     CardDefinition {
@@ -141,6 +143,26 @@ fn noxious_gearhulk() -> CardDefinition {
                 }],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn authority_of_the_consuls() -> CardDefinition {
+    CardDefinition {
+        key: "kld.authority_of_the_consuls",
+        scryfall_id: "324b2f55-1e09-490e-8f7e-bfde85a91ac4",
+        printed: PrintedCharacteristics {
+            name: "Authority of the Consuls".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::OpponentsEnterTapped(CardPredicate::creature())],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::matching(Actor::Opponent, CardPredicate::creature(), false),
+                vec![Effect::gain_life(1)],
+            )],
+            text_box: "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.".into(),
             ..Default::default()
         },
         ..Default::default()

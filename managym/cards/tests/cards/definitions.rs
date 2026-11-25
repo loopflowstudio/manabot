@@ -3,8 +3,9 @@
 //! as the condition of an `Effect::If`, never in a static, an `ActiveIf` or an
 //! intervening-if clause, where no resolution exists to ask. A source
 //! question (one that reads the ability's source permanent) may also be an
-//! intervening-if or the "as long as" of a static the source projects on
-//! itself (a type grant, a land-type overwrite), never a scoped static's
+//! intervening-if, a state trigger's condition or the "as long as" of a
+//! static the source projects on itself (a type grant, a land-type
+//! overwrite), never a scoped static's
 //! condition or an `ActiveIf`.
 
 use managym::state::{
@@ -79,6 +80,8 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                         }
                     }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
+                    // A state trigger (CR 603.8) asks its condition of its source.
+                    ("State", _) => walk(field, child, Place::SourceStatic, found),
                     (
                         "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant" | "Continuous",
                         Value::Object(ability),

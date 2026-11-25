@@ -23,7 +23,7 @@ use crate::{
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        turn::TurnState,
+        turn::{DamageHistory, TurnState},
     },
     state::{
         card::{ActivatedAbilityDefinition, CardDefId},
@@ -34,7 +34,7 @@ use crate::{
         knowledge::LibraryKnowledge,
         mana::{Mana, ManaPool},
         permanent::{CounterKind, Permanent},
-        stack_object::StackObject,
+        stack_object::{SpellLki, StackObject},
         zone::{ZoneManager, ZoneType},
     },
 };
@@ -49,8 +49,17 @@ pub enum GameProcedure {
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum GameOutcome {
-    Losses { losses: [LossCauses; 2] },
-    Victory { winner: PlayerId },
+    Losses {
+        losses: [LossCauses; 2],
+    },
+    Victory {
+        winner: PlayerId,
+    },
+    /// Neither player won. `mandatory_loop`: the game repeated mandatory
+    /// actions with no way to stop (CR 104.4b).
+    Draw {
+        mandatory_loop: bool,
+    },
 }
 
 /// Loss conditions committed for one seat.
@@ -98,11 +107,13 @@ pub struct GameState {
     pub object_to_permanent: ObjectVec<Option<PermanentId>>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
+    /// Each spell that has left the stack, as it last existed there.
+    pub spell_lki: BTreeMap<ObjectId, SpellLki>,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
     /// Physical appearances whose library rank was observed or chosen since the
     /// last rules shuffle. Private branch sampling reads these, rules play does not.
-    pub(crate) library_order_pins: [BTreeSet<ObjectId>; 2],
+    pub(crate) library_order_pins: Box<[BTreeSet<ObjectId>; 2]>,
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
@@ -157,6 +168,16 @@ impl GameState {
 
     pub(crate) fn is_game_over(&self) -> bool {
         matches!(self.procedure, GameProcedure::Finished(_))
+    }
+
+    /// The game ended in a draw by a mandatory loop (CR 104.4b).
+    pub fn mandatory_loop_draw(&self) -> bool {
+        matches!(
+            self.procedure,
+            GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true
+            })
+        )
     }
 
     /// Put the same appearance in a zone without a zone change. Callers own
@@ -563,6 +584,10 @@ impl TrackedState {
         &mut self.state.object_lki
     }
 
+    pub(crate) fn spell_lki_mut(&mut self) -> &mut BTreeMap<ObjectId, SpellLki> {
+        &mut self.state.spell_lki
+    }
+
     /// Life totals feed `life` only.
     pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {
         self.revisions.life += 1;
@@ -620,16 +645,24 @@ impl TrackedState {
     }
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
-    pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+    /// Returns whether the permanent went from tapped to untapped.
+    pub(crate) fn untap(&mut self, permanent_id: PermanentId) -> bool {
         self.revisions.tapped += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
-            return;
+            return false;
         };
         let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
-        permanent.untap();
+        let untapped = permanent.untap();
         if removes_stun {
             self.revisions.characteristics += 1;
         }
+        untapped
+    }
+
+    /// Trigger matching and resolution read hits directly. Neither the layer
+    /// board nor the index of potential trigger sources depends on them.
+    pub(crate) fn damage_history_mut(&mut self) -> &mut DamageHistory {
+        &mut self.state.turn.damage_pairs
     }
 
     pub(crate) fn mark_damage(&mut self, permanent_id: PermanentId, amount: i32, deathtouch: bool) {

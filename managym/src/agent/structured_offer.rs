@@ -1828,7 +1828,7 @@ impl Game {
                 }),
             BoundTarget::StackSpell(object_id) => Ok(Target::StackSpell(object_id)),
             BoundTarget::StackAbility(id) => self
-                .find_ability_on_stack_index(id)
+                .stack_index_of(Target::StackAbility(id))
                 .map(|_| Target::StackAbility(id))
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {

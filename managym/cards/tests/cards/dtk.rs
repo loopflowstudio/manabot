@@ -103,6 +103,86 @@ fn dragonlords_servant_reduces_only_dragon_spells() {
     assert_eq!(top_spell(&s).spent.total(), 4);
 }
 
+/// Inspiring Call draws one card for each creature its caster controls with
+/// a +1/+1 counter and makes exactly those creatures indestructible.
+#[test]
+fn inspiring_call_draws_for_and_protects_creatures_with_counters() {
+    use crate::support::{
+        game::{five_color_setup, set_counters},
+        inspect::{hand, keywords},
+        play::{cast, settle},
+    };
+    use managym::state::{card::Keyword, permanent::CounterKind};
+    let mut s = five_color_setup(&["Inspiring Call", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let plain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for id in [first, second, theirs] {
+        set_counters(&mut s, id, CounterKind::PlusOnePlusOne, 1);
+    }
+    let before = hand(&s, 0).len();
+    cast(&mut s, "Inspiring Call");
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 2);
+    for (id, protected) in [
+        (first, true),
+        (second, true),
+        (plain, false),
+        (theirs, false),
+    ] {
+        assert_eq!(keywords(&s, id).has(Keyword::Indestructible), protected);
+    }
+}
+
+#[test]
+fn surrak_sums_signed_power_and_rechecks_after_targeting() {
+    use crate::support::{
+        game::{set_counters, until_end_of_turn},
+        inspect::offered_targets,
+    };
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::{effect::Modification, game_object::Target, permanent::CounterKind};
+    let name = "Surrak, the Hunt Caller";
+    let mut s = five_color_setup(&[name, "Hill Giant", "Gray Ogre"]);
+    let surrak = s.force_permanent_on_battlefield(0, name);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: -3,
+            toughness: 0,
+        },
+    );
+    let root = s.game().clone(); // 5 + 3 - 1
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(s.game().state.stack_objects.is_empty());
+    *s.game_mut() = root;
+    set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 1);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    let offered = offered_targets(&s);
+    assert_eq!(offered.len(), 3);
+    assert!([surrak, giant, ogre]
+        .iter()
+        .all(|&id| offered.contains(&Target::Permanent(id))));
+    s.choose_target_named("Gray Ogre");
+    let pending = s.game().clone();
+    for meets in [false, true] {
+        *s.game_mut() = pending.clone();
+        if !meets {
+            set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 0);
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.game().characteristics(ogre).keywords.has(Keyword::Haste),
+            meets
+        );
+    }
+}
+
 #[test]
 fn impact_tremors_triggers_for_each_goblin() {
     use crate::support::{

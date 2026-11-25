@@ -118,6 +118,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
     let p1_source = owned_card(&s, 1, "Man-o'-War");
     s.game_mut().state.pending_triggers = vec![
         PendingTrigger {
+            triggering_amount: 0,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -132,12 +133,14 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             context: None,
             player: None,
             chosen_modes: Vec::new(),
+            modes_chosen: false,
             attacker: None,
             inline_effects: None,
             x: 0,
             spent: Default::default(),
         },
         PendingTrigger {
+            triggering_amount: 0,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -152,6 +155,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             context: None,
             player: None,
             chosen_modes: Vec::new(),
+            modes_chosen: false,
             attacker: None,
             inline_effects: None,
             x: 0,
@@ -270,6 +274,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
 
     let source = owned_card(&s, 0, "Man-o'-War");
     s.game_mut().state.pending_triggers.push(PendingTrigger {
+        triggering_amount: 0,
         program: false,
         remembered: Vec::new(),
         targets: Vec::new(),
@@ -284,6 +289,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         context: None,
         player: None,
         chosen_modes: Vec::new(),
+        modes_chosen: false,
         attacker: None,
         inline_effects: None,
         x: 0,

@@ -1010,6 +1010,13 @@ class PlayerTurnHistory:
     # Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     bent: int
     # Life lost this turn (CR 119.3).
+    life_gains: int
+    mana_spent_casting: int
+    life_gained: int
+    creatures_died: int
+    permanents_left: int
+    nonland_permanents_left: int
+    warped_this_turn: bool
     life_lost: int
 
 class RestrictedMana:
@@ -1199,8 +1206,12 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    combat_damage_to_players: list[int]
+    damaged_permanents: list[int]
+    ability_resolutions: list[tuple[int, int]]
     used_abilities: list[int]
     entered_this_turn: bool
+    attacked_this_turn: bool
     dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]
@@ -1214,6 +1225,7 @@ class Permanent:
     def card(self) -> Card | None: ...
 
 class Turn:
+    creature_died_this_turn: bool
     turn_number: int
     phase: PhaseEnum
     step: StepEnum
@@ -1258,6 +1270,11 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    combat_damage_to_players: list[int]
+    mana_spent: int
+    source_power: int | None
+    paid_amount: int | None
+    ability_resolutions: int
     # Spells own characteristics; abilities own only their source reference.
     characteristics: ObservationCharacteristics | None
     object_id: int | None
@@ -1383,6 +1400,7 @@ class ContinuationFrame:
     waterbend: bool
     can_decline: bool
     mana_outputs: list[ManaOutput]
+    triggering_amount: int
     resolutions_this_turn: int
     x: int
     granted_keywords: list[bool]

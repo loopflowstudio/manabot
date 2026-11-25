@@ -158,7 +158,7 @@ fn encoded_to_dict<'py>(
         put(
             "player_turn_state",
             &encoded.player_turn_state,
-            &[2, enc::TURN_STATE_DIM],
+            &[2, config.turn_state_dim()],
         )?;
         put(
             "card_turn_state",
@@ -1139,7 +1139,7 @@ pub struct PyPlayer {
     pub keeps_red_mana: bool,
     /// What this player has done this turn.
     #[pyo3(get, set)]
-    pub turn_history: PyPlayerTurnHistory,
+    pub turn_history: PlayerTurnHistory,
     /// Spells this player cast this turn.
     #[pyo3(get, set)]
     pub spells_cast: u32,
@@ -1265,61 +1265,12 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
     }
 }
 
-/// What a player has done this turn.
-#[cfg(feature = "python")]
-#[pyclass(name = "PlayerTurnHistory")]
-#[derive(Clone, Default)]
-pub struct PyPlayerTurnHistory {
-    #[pyo3(get, set)]
-    pub attacked: bool,
-    #[pyo3(get, set)]
-    pub permanents_sacrificed: u32,
-    #[pyo3(get, set)]
-    pub land_entered: bool,
-    #[pyo3(get, set)]
-    pub cards_drawn: u32,
-    /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
-    #[pyo3(get, set)]
-    pub bent: u8,
-    /// Life lost this turn (CR 119.3).
-    #[pyo3(get, set)]
-    pub life_lost: u32,
-}
-
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyPlayerTurnHistory {
+impl PlayerTurnHistory {
     #[new]
     fn py_new() -> Self {
         Self::default()
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
-    fn from(value: PlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
-    fn from(value: PyPlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-        }
     }
 }
 
@@ -1471,7 +1422,7 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -1516,7 +1467,7 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -1542,6 +1493,8 @@ impl From<PyPlayer> for PlayerData {
 #[derive(Clone)]
 pub struct PyTurn {
     #[pyo3(get, set)]
+    pub creature_died_this_turn: bool,
+    #[pyo3(get, set)]
     pub turn_number: i32,
     #[pyo3(get, set)]
     pub phase: PhaseEnum,
@@ -1557,6 +1510,7 @@ pub struct PyTurn {
 impl From<TurnData> for PyTurn {
     fn from(value: TurnData) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number as i32,
             phase: value.phase.into(),
             step: value.step.into(),
@@ -1570,6 +1524,7 @@ impl From<TurnData> for PyTurn {
 impl From<PyTurn> for TurnData {
     fn from(value: PyTurn) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),
@@ -2478,12 +2433,28 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
+    fn damaged_permanents(&self) -> Vec<i32> {
+        self.data.damaged_permanents.clone()
+    }
+    #[getter]
+    fn ability_resolutions(&self) -> Vec<(usize, u32)> {
+        self.data.ability_resolutions.clone()
+    }
+    #[getter]
     fn used_abilities(&self) -> Vec<usize> {
         self.data.used_abilities.clone()
     }
     #[setter]
     fn set_used_abilities(&mut self, value: Vec<usize>) {
         self.data.used_abilities = value;
+    }
+    #[getter]
+    fn attacked_this_turn(&self) -> bool {
+        self.data.attacked_this_turn
     }
     #[getter]
     fn entered_this_turn(&self) -> bool {
@@ -2868,6 +2839,26 @@ impl PyStackObject {
     #[setter]
     fn set_description(&mut self, value: Option<String>) {
         self.data.description = value;
+    }
+    #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
+    fn mana_spent(&self) -> u16 {
+        self.data.mana_spent
+    }
+    #[getter]
+    fn source_power(&self) -> Option<i32> {
+        self.data.source_power
+    }
+    #[getter]
+    fn paid_amount(&self) -> Option<i32> {
+        self.data.paid_amount
+    }
+    #[getter]
+    fn ability_resolutions(&self) -> u32 {
+        self.data.ability_resolutions
     }
     #[getter]
     fn stack_object_id(&self) -> i32 {
@@ -5605,7 +5596,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PyPooledManaClass>()?;
-    m.add_class::<PyPlayerTurnHistory>()?;
+    m.add_class::<PlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;

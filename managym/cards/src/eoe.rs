@@ -4,8 +4,8 @@
 //! conditioned on its charge counters.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, Per,
+        PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -19,9 +19,11 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        plasma_bolt(),
         lumen_class_frigate(),
         virulent_silencer(),
         the_dominion_bracelet(),
+        unravel(),
     ]
 }
 
@@ -153,6 +155,72 @@ Equip {1}"#;
                     ..Default::default()
                 }),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn unravel() -> CardDefinition {
+    let text_box = "Counter target spell. If the amount of mana spent to cast that spell was less than its mana value, you draw a card.";
+    let that_spell = || Box::new(ObjectSelector::Target(TargetSpec::Spell));
+    CardDefinition {
+        key: "eoe.unravel",
+        scryfall_id: "e8978214-c853-453d-872d-af56bdaaa3d7",
+        printed: PrintedCharacteristics {
+            name: "Unravel".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            // Both amounts are the countered spell's as it last existed on
+            // the stack (CR 608.2h).
+            spell_effects: vec![
+                Effect::CounterSpell {
+                    what: ObjectSelector::Target(TargetSpec::Spell),
+                    exile: false,
+                },
+                Effect::If {
+                    condition: Condition::compare(
+                        EffectValue::SpellManaSpent(that_spell()),
+                        CompareOp::Lt,
+                        EffectValue::SpellManaValue(that_spell()),
+                    ),
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn plasma_bolt() -> CardDefinition {
+    let text_box = "Plasma Bolt deals 2 damage to any target.\nVoid — Plasma Bolt deals 3 damage instead if a nonland permanent left the battlefield this turn or a spell was warped this turn.";
+    let target = || ObjectSelector::Target(TargetSpec::AnyTarget);
+    CardDefinition {
+        key: "eoe.plasma_bolt",
+        scryfall_id: "a1a1834b-76c2-4496-b8c5-18b69ab34c4c",
+        printed: PrintedCharacteristics {
+            name: "Plasma Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::If {
+                condition: Condition::AnyOf(vec![
+                    Condition::PermanentLeftThisTurn {
+                        who: Actor::AnyPlayer,
+                        nonland: true,
+                    },
+                    Condition::WarpedThisTurn {
+                        who: Actor::AnyPlayer,
+                    },
+                ]),
+                then: vec![Effect::deal_damage(3, target())],
+                otherwise: vec![Effect::deal_damage(2, target())],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -11,54 +11,43 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{PlayerId, Target},
+        game_object::{AbilitySource, PlayerId, Target},
         stack_object::StackObject,
     },
 };
 
-impl Game {
-    /// The stack index of a spell or ability target.
-    pub(crate) fn stack_index_of(&self, object: Target) -> Option<usize> {
-        match object {
-            Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id),
-            Target::StackAbility(id) => self.find_ability_on_stack_index(id),
-            _ => None,
+/// Activated abilities without an explicit slot mapping use their first clause.
+fn requirement_index(stacked: &StackObject, slot: usize) -> Option<usize> {
+    match stacked {
+        StackObject::Spell(spell) => spell.target_req_indices.get(slot).copied(),
+        StackObject::TriggeredAbility(trigger) => trigger.target_req_indices.get(slot).copied(),
+        StackObject::ActivatedAbility(ability) => {
+            Some(ability.target_req_indices.get(slot).copied().unwrap_or(0))
         }
     }
+}
 
+impl Game {
     /// The targeting requirement a stack object's target slot was chosen for.
     pub(crate) fn stack_target_requirement(
         &self,
         index: usize,
         slot: usize,
     ) -> Option<TargetRequirement> {
-        match &self.state.stack_objects[index] {
+        let stacked = &self.state.stack_objects[index];
+        let clause = requirement_index(stacked, slot)?;
+        match stacked {
             StackObject::Spell(spell) => {
                 let requirements =
                     self.state[spell.object].target_requirements_for_mode(spell.mode);
-                requirements
-                    .get(*spell.target_req_indices.get(slot)?)
-                    .cloned()
+                requirements.get(clause).cloned()
             }
             StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
-                .get(ability.target_req_indices.get(slot).copied().unwrap_or(0))
+                .get(clause)
                 .cloned(),
             StackObject::TriggeredAbility(triggered) => {
-                let effects = match &triggered.inline_effects {
-                    Some(effects) => effects.as_slice(),
-                    None => {
-                        let object = triggered
-                            .source_lki
-                            .as_ref()
-                            .map_or(triggered.source_object(), |lki| lki.object);
-                        self.source_face(object, triggered.source_definition_id)?
-                            .abilities
-                            .get(triggered.ability_index)?
-                            .effects()
-                    }
-                };
-                effect_target_requirements(effects)
-                    .get(*triggered.target_req_indices.get(slot)?)
+                effect_target_requirements(&self.stacked_trigger_effects(triggered)?)
+                    .get(clause)
                     .cloned()
             }
         }
@@ -69,56 +58,46 @@ impl Game {
     /// target, not chosen for another slot of the same requirement, and not
     /// its own source when the requirement says "another".
     pub(crate) fn retarget_candidates(&self, decision: &Decision) -> Vec<Target> {
-        let Decision::Retarget { object, slot, .. } = decision else {
+        match decision {
+            Decision::Retarget { object, slot, .. } => self.retarget_candidates_for(*object, *slot),
+            _ => Vec::new(),
+        }
+    }
+
+    pub(crate) fn retarget_candidates_for(&self, object: Target, slot: usize) -> Vec<Target> {
+        let Some(index) = self.stack_index_of(object) else {
             return Vec::new();
         };
-        let Some(index) = self.stack_index_of(*object) else {
-            return Vec::new();
-        };
-        let Some(requirement) = self.stack_target_requirement(index, *slot) else {
+        let Some(requirement) = self.stack_target_requirement(index, slot) else {
             return Vec::new();
         };
         let stacked = &self.state.stack_objects[index];
         let controller = stacked.controller();
         let targets = stacked.targets();
-        let indices: Vec<usize> = match stacked {
-            StackObject::Spell(spell) => spell.target_req_indices.clone(),
-            StackObject::TriggeredAbility(triggered) => triggered.target_req_indices.clone(),
-            StackObject::ActivatedAbility(ability) => (0..targets.len())
-                .map(|slot| ability.target_req_indices.get(slot).copied().unwrap_or(0))
-                .collect(),
-        };
-        let x = match stacked {
-            StackObject::Spell(s) => s.x,
-            StackObject::ActivatedAbility(a) => a.x,
-            StackObject::TriggeredAbility(t) => t.x,
-        };
-        let current = targets.get(*slot).copied();
-        let source = stacked.source_ref();
-        let source_object = stacked.source_object();
+        let clause = requirement_index(stacked, slot);
+        let x = stacked.x();
+        let current = targets.get(slot).copied();
+        let source = AbilitySource::new(stacked.source_object(), stacked.source_ref());
         let self_target = stacked.as_target();
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
-        let other_targets = targets
+        let other_targets: Vec<Target> = targets
             .iter()
-            .zip(&indices)
             .enumerate()
-            .filter(|(other, (_, req))| *other != *slot && **req == indices[*slot])
-            .map(|(_, (target, _))| *target);
-        self.legal_targets_for_spec(&requirement.spec, controller)
-            .into_iter()
-            .filter(|target| Some(*target) != current && *target != self_target)
+            .filter(|(other, _)| *other != slot && requirement_index(stacked, *other) == clause)
+            .map(|(_, target)| *target)
+            .collect();
+        self.targets_for_source(&requirement, controller, source)
             .filter(|target| {
-                self.fits_target_clause(&requirement, x, other_targets.clone(), *target)
-            })
-            .filter(|target| !other_targets.clone().any(|chosen| chosen == *target))
-            .filter(|target| {
-                !requirement.another
-                    || !matches!((target, source), (Target::Permanent(id), Some(source))
-                        if self.permanent_object(*id) == Some(source))
-            })
-            .filter(|target| {
-                self.within_source_bound(*target, &requirement.spec, source_object, source)
+                Some(*target) != current
+                    && *target != self_target
+                    && !other_targets.contains(target)
+                    && self.fits_target_clause(
+                        &requirement,
+                        x,
+                        other_targets.iter().copied(),
+                        *target,
+                    )
             })
             .collect()
     }
@@ -135,13 +114,13 @@ impl Game {
         let index = self.stack_index_of(object)?;
         let count = self.state.stack_objects[index].targets().len();
         (slot..count)
+            .find(|&slot| !self.retarget_candidates_for(object, slot).is_empty())
             .map(|slot| Decision::Retarget {
                 player,
                 object,
                 slot,
                 may_keep,
             })
-            .find(|decision| !self.retarget_candidates(decision).is_empty())
     }
 
     /// Change slot `slot` of the stack object to `target`; the newly
@@ -151,11 +130,7 @@ impl Game {
             return;
         };
         let controller = self.state.stack_objects[index].controller();
-        match &mut self.state.stack_objects[index] {
-            StackObject::Spell(spell) => spell.targets[slot] = target,
-            StackObject::ActivatedAbility(ability) => ability.targets[slot] = target,
-            StackObject::TriggeredAbility(triggered) => triggered.targets[slot] = target,
-        }
+        self.state.stack_objects[index].targets_mut()[slot] = target;
         self.emit_permanents_targeted(&[target], object, controller);
     }
 

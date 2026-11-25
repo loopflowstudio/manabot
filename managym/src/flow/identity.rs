@@ -47,6 +47,13 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            copiable: (definition.copy.is_some() || definition.front_face().is_some()).then(|| {
+                std::sync::Arc::new(crate::state::game_object::ChangedCopiableValues {
+                    printed: definition.copiable_definition(),
+                    front: definition.front_face().cloned(),
+                    copy: definition.copy.clone(),
+                })
+            }),
             attached_to: permanent.attached_to,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
@@ -61,10 +68,17 @@ impl Game {
                 .cloned()
                 .collect(),
             keywords: characteristics.keywords,
-            creature_types: characteristics.creature_types.clone(),
+            renamed: (characteristics.name != definition.name)
+                .then(|| characteristics.name.clone()),
+            types: characteristics.types.clone(),
+            subtypes: characteristics.subtypes.clone(),
+            colors: characteristics.colors.clone(),
+            is_legendary: characteristics.is_legendary,
             permanent: permanent_id,
-            was_creature: characteristics.is_creature(),
             animated_creature: characteristics.is_animated,
+            was_attacking: permanent.attacking,
+            was_in_combat: self.permanent_in_combat(permanent_id),
+            was_tapped: permanent.tapped,
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             power: characteristics.power,

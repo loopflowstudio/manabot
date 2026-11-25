@@ -235,7 +235,9 @@ class Recording:
         index = position.event_index + (position.kind == "consequences")
         if index not in self._boards:
             self._boards[index] = person_board(
-                self._raw_board(position), self.human_seat
+                self._raw_board(position),
+                self.human_seat,
+                winner=self.payload.get("winner"),
             )
         return self._boards[index]
 
@@ -537,11 +539,13 @@ read_cache = ReadCache()
 # ———————————————— Narrating a move
 
 
-def person_board(observation: dict[str, Any], human_seat: int) -> dict[str, Any]:
+def person_board(
+    observation: dict[str, Any], human_seat: int, *, winner: int | None
+) -> dict[str, Any]:
     """A retained board as the person saw it: hero-oriented and redacted (the
     established viewer boundary, `prepare_trace_payload`)."""
     board = deepcopy(observation)
-    normalize_observation_to_hero(board, human_seat)
+    normalize_observation_to_hero(board, human_seat, winner=winner)
     redact_observation(board)
     return board
 

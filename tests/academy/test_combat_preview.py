@@ -52,6 +52,11 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
             record = server.SESSION_REGISTRY[initial["session_id"]]
             game = record.game
             assert game.env is not None
+            frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
+            while keep := next(
+                (o for o in frame.offers if o.label == "Keep hand"), None
+            ):
+                frame = _command(game, frame, keep.id)
             for _ in range(3):
                 game.env.scenario_force_battlefield(0, "Gray Ogre", ready=True)
             game.obs = game.env.scenario_refresh()

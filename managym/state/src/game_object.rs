@@ -69,7 +69,7 @@ pub trait ExactIds {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
 }
 
-pub(crate) struct Exact<'a, T: ?Sized>(pub(crate) &'a T);
+pub struct Exact<'a, T: ?Sized>(pub &'a T);
 
 impl<T: ExactIds + ?Sized> serde::Serialize for Exact<'_, T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -145,6 +145,12 @@ impl AbilitySource {
         Self {
             object: reference.unwrap_or(object),
             captured: reference.is_some(),
+        }
+    }
+    pub fn exact(object: ObjectId) -> Self {
+        Self {
+            object,
+            captured: true,
         }
     }
     pub fn object(self) -> ObjectId {
@@ -276,6 +282,14 @@ pub enum ObjectLookupError {
     WrongZone,
 }
 
+/// Copiable values changed by a copy effect or by turning a back face up.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ChangedCopiableValues {
+    pub printed: Arc<PrintedCharacteristics>,
+    pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
+    pub copy: Option<crate::effect::CopyEffect>,
+}
+
 /// Battlefield facts retained for a departed exact object.
 ///
 /// This deliberately stores identity and mutable facts, not a cloned card
@@ -283,6 +297,8 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub copiable: Option<Arc<ChangedCopiableValues>>,
     /// The exact object this permanent was attached to immediately before departure.
     #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
     pub attached_to: Option<ObjectId>,
@@ -294,17 +310,35 @@ pub struct ObjectLki {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
     pub keywords: crate::card::Keywords,
-    /// Its creature types as it last existed (CR 608.2h), sorted; read when
-    /// a departed target's partners must share one (Secret Tunnel).
+    /// Its layered name when an effect changed it from its copiable values
+    /// (a face-down permanent's empty name, an effect that names it);
+    /// otherwise its name is its copiable printing's
+    /// (`Game::lki_face_printing`). Its card types, subtypes, colors and
+    /// legendary supertype are as it last existed (CR 603.10a, 608.2h): the
+    /// same view a live permanent's predicates read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub renamed: Option<String>,
+    pub types: crate::card::CardTypes,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub creature_types: Vec<String>,
+    pub subtypes: Vec<String>,
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub colors: crate::mana::Colors,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_legendary: bool,
     /// The battlefield slot it occupied, so a departed `Target::Permanent`
     /// finds its last known information.
     pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
-    /// Effective creature status at departure, for damage from a stacked ability.
-    pub was_creature: bool,
+    /// Combat and tap status immediately before departure: an attacking
+    /// creature that dies "was attacking" (Garna, Bloodfist of Keld).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub was_attacking: bool,
+    /// Attacking or blocking (CR 506.4).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub was_in_combat: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub was_tapped: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
@@ -328,6 +362,34 @@ pub struct ObjectLki {
     pub controller: PlayerId,
     pub definition_id: CardDefId,
     pub presentation_id: PublicId,
+}
+
+impl ObjectLki {
+    /// Whether it was a creature immediately before departure (CR 603.10a).
+    pub fn was_creature(&self) -> bool {
+        self.types.is_creature()
+    }
+
+    pub fn was_land(&self) -> bool {
+        self.types.is_land()
+    }
+
+    /// Its distinct creature types as it last existed (CR 205.3m), sorted;
+    /// read when a departed target's partners must share one (Secret Tunnel).
+    pub fn creature_types(&self) -> Vec<String> {
+        if !self.was_creature() {
+            return Vec::new();
+        }
+        let mut types: Vec<String> = self
+            .subtypes
+            .iter()
+            .filter(|subtype| crate::subtype::is_creature_type(subtype))
+            .cloned()
+            .collect();
+        types.sort();
+        types.dedup();
+        types
+    }
 }
 
 fn serialize_lki_object<S: serde::Serializer>(
@@ -693,6 +755,12 @@ impl Object {
             Some((_, front)) if !front.modal_back => front.mana_cost.as_ref(),
             _ => self.mana_cost.as_ref(),
         }
+    }
+
+    /// Mana value with the spell's announced X, or zero for X outside the stack.
+    pub fn mana_value_with_x(&self, x: u8) -> u8 {
+        self.mana_value_cost()
+            .map_or(0, |cost| cost.mana_value_at(x))
     }
 
     /// Whether its back face is up (CR 712.8).

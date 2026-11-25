@@ -1,26 +1,41 @@
-//! Dark Ascension card behavior.
-use crate::support::{
-    game::{clear_summoning_sickness, five_color_setup, move_card, until_end_of_turn},
-    inspect::{card_of, hand},
-    play::{attack_with, command, pass_until, resolve_top},
+//! Dark Ascension through ordinary combat and spell resolution.
+use crate::support::game::{
+    clear_summoning_sickness, five_color_setup, move_card, until_end_of_turn,
 };
-use managym::{
-    agent::{
-        action::{Action, ActionSpaceKind},
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
-        observation_layout::{permanent, player},
-    },
-    cards::tokens::{name_value, TokenKind},
-    flow::turn::StepKind,
-    state::{
-        card::{Keyword, Keywords},
-        effect::Modification,
-        game_object::PlayerId,
-        player::DecklistDisclosure,
-        zone::ZoneType,
-    },
-};
+use crate::support::inspect::{card_of, hand};
+use crate::support::play::{attack_with, cast, command, pass_until, resolve_top, settle};
+use managym::agent::action::{Action, ActionSpaceKind};
+use managym::agent::observation::Observation;
+use managym::agent::observation_encoder::{encode, ObservationEncoderConfig};
+use managym::agent::observation_layout::{permanent, player};
+use managym::cards::tokens::{name_value, TokenKind};
+use managym::flow::turn::StepKind;
+use managym::state::card::{Keyword, Keywords};
+use managym::state::effect::Modification;
+use managym::state::game_object::PlayerId;
+use managym::state::player::DecklistDisclosure;
+use managym::state::zone::ZoneType;
+
+#[test]
+fn predator_ooze_grows_on_attack_and_when_its_surviving_blocker_dies() {
+    let mut s = five_color_setup(&["Predator Ooze", "Hill Giant", "Fumigate"]);
+    let ooze = s.force_permanent_on_battlefield(0, "Predator Ooze");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    clear_summoning_sickness(&mut s, ooze);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, ooze);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    assert_eq!(s.game().characteristics(ooze).pt(), (2, 2));
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().state.permanents[giant].as_ref().unwrap().damage, 2);
+    s.set_player_mana_pool(0, "3WW");
+    cast(&mut s, "Fumigate");
+    settle(&mut s);
+    assert!(s.game().state.permanents[giant].is_none());
+    assert_eq!(s.game().characteristics(ooze).pt(), (3, 3));
+    s.assert_life(0, 21);
+}
 
 #[test]
 fn drogskol_reaver_draws_once_in_each_damage_step() {

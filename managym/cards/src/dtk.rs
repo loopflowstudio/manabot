@@ -1,24 +1,25 @@
 //! Dragons of Tarkir.
-use managym_state::{
-    ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, Scope,
-        TargetSpec, TriggerSubject,
-    },
-    card::{
-        CardDefinition, CardType, CardTypes, PrintedCharacteristics, SpellCostReduction,
-        StaticAbility,
-    },
-    mana::{Color, ManaCost},
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Aggregate, CompareOp, Condition, Effect, EffectValue, ObjectProperty,
+    ObjectSelector, PlayerSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+    SpellCostReduction, StaticAbility,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::{Color, ManaCost};
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
-        seismic_rupture(),
+        inspiring_call(),
+        surrak_the_hunt_caller(),
         clone_legion(),
         dragonlords_servant(),
-        impact_tremors(),
         rending_volley(),
+        seismic_rupture(),
+        impact_tremors(),
     ]
 }
 
@@ -89,6 +90,71 @@ fn dragonlords_servant() -> CardDefinition {
                 condition: Condition::Always,
                 generic: EffectValue::Fixed(1),
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn surrak_the_hunt_caller() -> CardDefinition {
+    let text_box = "Formidable — At the beginning of combat on your turn, if creatures you control have total power 8 or greater, target creature you control gains haste until end of turn. (It can attack and {T} no matter when it came under your control.)";
+    CardDefinition {
+        key: "dtk.surrak_the_hunt_caller",
+        scryfall_id: "b374446d-44bc-4ac5-9829-8c49f0cca173",
+        printed: PrintedCharacteristics {
+            name: "Surrak, the Hunt Caller".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(5),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_you_control(CardPredicate::creature())
+                        .property(ObjectProperty::Power, Aggregate::Sum),
+                    CompareOp::Ge,
+                    8,
+                )),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn inspiring_call() -> CardDefinition {
+    let text_box = "Draw a card for each creature you control with a +1/+1 counter on it. Those creatures gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)";
+    let countered = || {
+        ObjectSelector::each_you_control(CardPredicate {
+            card_type: Some(CardType::Creature),
+            with_counter: true,
+            ..Default::default()
+        })
+    };
+    CardDefinition {
+        key: "dtk.inspiring_call",
+        scryfall_id: "c565b991-7021-4b81-b9c0-f7231daae360",
+        printed: PrintedCharacteristics {
+            name: "Inspiring Call".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: countered().count(),
+                },
+                Effect::until_end_of_turn(
+                    countered(),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

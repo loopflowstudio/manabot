@@ -174,6 +174,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             source,
             target,
             amount,
+            ..
         } => {
             let target = match target {
                 DamageTarget::Player(id) => Target::Player(*id),
@@ -186,7 +187,9 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
                 vec![target_reference(game, target)],
             )
         }
-        GameEvent::LifeChanged { player, old, new } => (
+        GameEvent::LifeChanged {
+            player, old, new, ..
+        } => (
             Life,
             new - old,
             unknown,
@@ -195,6 +198,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         GameEvent::SpellCast {
             object_id: object,
             targets,
+            ..
         } => (
             Cast,
             0,
@@ -360,6 +364,9 @@ mod tests {
         game.emit(GameEvent::SpellCast {
             object_id: object,
             targets: vec![Target::Permanent(target)],
+            caster: PlayerId(0),
+            spend_before: 0,
+            spend_after: 0,
         });
         let initial = Observation::for_player(&game, PlayerId(0));
         let cast = initial.policy_history.back().unwrap();
@@ -445,6 +452,7 @@ mod tests {
                 player: PlayerId(1),
                 old: 20,
                 new: 20 - index,
+                gain_ordinal: 0,
             });
             let object = game.state.zones.latest().nth(index as usize).unwrap();
             game.move_object(object, ZoneType::Hand);
@@ -476,6 +484,7 @@ mod tests {
             source: Some(token),
             target: DamageTarget::Permanent(permanent),
             amount: 1,
+            combat: false,
         });
         let root = game.policy_history.clone();
         for _ in 0..2048 {
@@ -529,6 +538,9 @@ mod tests {
             game.emit(GameEvent::SpellCast {
                 object_id: source,
                 targets: vec![Target::Permanent(target)],
+                caster: PlayerId(0),
+                spend_before: 0,
+                spend_after: 0,
             });
             Observation::for_player(&game, PlayerId(0))
         };

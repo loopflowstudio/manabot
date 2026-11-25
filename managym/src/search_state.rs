@@ -235,6 +235,21 @@ mod tests {
         object_lki.state.object_lki.insert(lki);
         assert_authority_change(&baseline, &object_lki, "object LKI");
 
+        let mut spell_lki = game.clone();
+        spell_lki.state.spell_lki.insert(
+            object,
+            crate::state::stack_object::SpellLki {
+                object,
+                definition_id: game.state[object].definition_id,
+                controller: PlayerId(0),
+                profile: Default::default(),
+                mana_value: 3,
+                spent: 3,
+                colors: Default::default(),
+            },
+        );
+        assert_authority_change(&baseline, &spell_lki, "spell LKI");
+
         let mut rng = game.clone();
         rng.reseed(0x197_5eed);
         assert_authority_change(&baseline, &rng, "RNG continuation");
