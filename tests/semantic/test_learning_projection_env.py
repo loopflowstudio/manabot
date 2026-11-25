@@ -5,17 +5,19 @@ import pytest
 
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.semantic.learning import BoundSemanticPack
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 
 def _engine() -> managym.Env:
     engine = managym.Env(seed=215, skip_trivial=True)
-    engine.reset(
+    obs, _ = engine.reset(
         [
             managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
             for key in ("gw_allies", "ur_lessons")
         ]
     )
+    keep_opening_hands(engine, obs)
     return engine
 
 

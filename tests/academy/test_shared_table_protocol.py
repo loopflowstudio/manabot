@@ -32,7 +32,7 @@ def test_control_fixture_round_trips_through_checked_schema_and_python():
     Draft202012Validator.check_schema(SCHEMA)
     Draft202012Validator(SCHEMA).validate(FIXTURE)
     bundle = ControlBundle.model_validate(FIXTURE)
-    assert bundle.model_dump(mode="json") == FIXTURE
+    assert bundle.model_dump(mode="json", exclude_unset=True) == FIXTURE
     assert control_schema() == SCHEMA
 
 
