@@ -787,9 +787,23 @@ each land you may tap is raised.
    press Space to finish. When your tap leaves no choice for the rest, the game
    finishes the payment at once, tapping what the plan showed.
 
-A cost that every available source is needed for has no source choice. The
-game pays it as soon as you cast, with no payment prompt, so the marks you see
-while pointing at the spell are where you see those taps beforehand.
+A cost with no strategic source choice pays as soon as you cast, with no
+payment prompt, so the marks you see while pointing at the spell are where you
+see those taps beforehand. That applies to dual lands and other simple
+choice-of-color sources just like basics — casting a `{1}{W}` spell with
+Kyoshi Village and one Plains, `{2}{R}` with four identical Mountains, or
+`{1}{G}` with Kyoshi Village and two Plains all finish without stopping
+(tapping only Kyoshi Village and one Plains in the last case).
+
+When a real choice stays open — such as Kyoshi Village and three Plains for
+`{1}{W}` — **All legal choices** labels simple choice-of-color taps to match
+basics: `Tap Kyoshi Village for {G}/{W}` (or `Tap Birds of Paradise for any
+color`) beside `Tap Plains for {W}` and `Pay the cost`. Selecting a
+choice-of-color source asks you to pick a color only when its colors lead to
+different remaining options or floating mana; if every color finishes the same
+way, the color prompt is skipped. Non-simple mana abilities (sacrificing a
+Treasure, paying life, or paying a filter fee) keep `Activate ability: <Name>`
+and always stop.
 
 **Mana payment** defaults to **Manual**. Choose **Automatic** to have the engine select sources, colors and spending after you accept a cost. You still choose whether to pay optional costs, which spells to cast, and which abilities to activate.
 
@@ -804,10 +818,10 @@ cost, and a line under it says why when the game does:
 
 | The game says | Meaning |
 | --- | --- |
-| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. Nothing is marked until that choice is made; the plan returns at the completing target or at the payment prompt when there is one. When the announced cost needs every useful source there is no prompt, and the cost is paid as soon as the last choice is made. |
+| A choice is needed first | X, an optional or alternative cost, an additional cost or a target can still change the price. Nothing is marked until that choice is made; the plan returns at the completing target or at the payment prompt when there is one. When the announced cost leaves no real source choice there is no prompt, and the cost is paid as soon as the last choice is made. |
 | No sources needed | The cost is zero or your floating mana already covers it; the button reads "· floating mana". |
 | No automatic payment | The automatic payer cannot fund this cost with its available taps. Use an offered mana ability and make its choices first. |
-| Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Mana abilities with their own fee also have no preview. |
+| Nothing | There is no automatic payment to preview. When choosing which floating mana to spend, choose the unit directly. Choice-output mana abilities and mana abilities with their own fee also have no preview. |
 
 Mana with a spending restriction, an effect when spent or an end-of-combat
 expiry is written under the pips on your plate. Restricted amounts are part of
