@@ -951,9 +951,13 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   payment can fund the cost, no choice source floats unspent mana, spent-color
   counts cannot differ (converge spells keep the prompt when a source can
   contribute more than one color), useful modes on each source share one spend
-  effect, and either every useful source is needed or every optional tap comes
-  from a single class of game-indistinguishable, unreferenced, single-mana
-  permanents. Any distinguishing state — a land targeted on the stack,
+  effect, and the useful sources produce exactly the mana needed. A payment
+  with spare sources can also skip when each useful tap produces one unit,
+  the number of taps is fixed, and every optional tap comes from a single
+  class of game-indistinguishable, unreferenced permanents. With Sol Ring and
+  two Mountains for Gray Ogre, **Pay the cost** leaves one Mountain untapped.
+  Tapping both Mountains before Sol Ring leaves one colorless mana floating.
+  Any distinguishing state — a land targeted on the stack,
   enchanted, animated, carrying counters, or referenced by a trigger or
   continuous effect — places that permanent in its own class and keeps the
   prompt.

@@ -20,3 +20,7 @@
 - For resolution payments, preserve a simple activation when accepting the
   cost can leave a different source or floating pool. Ward {2} with Kyoshi
   Village and Sol Ring distinguishes the two payments.
+
+- For pass 2, use tap counts only when every participating source produces
+  one unit per useful tap. A broader skip for mandatory multi-unit sources
+  would need to account for mana left floating after each legal tap order.

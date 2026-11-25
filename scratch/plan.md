@@ -101,12 +101,18 @@ under Great Divide Guide gave 29 payment actions for Firebrand Archer.
   (`model.after_tap(rep)`) makes the remaining obligations unpayable with the
   current pool (`!after.payable(pool, obligations, SourcePolicy::All)`).
 - The payment is determined when:
-  1. Common preconditions 1–5 hold.
+  1. Automatic payment can fund the cost, and there is no other legal
+     activation, help payment, extra float or spend-effect/color choice.
   2. At most **one** class `U` is not fully needed.
-  3. If `U` exists, every member of `U` adds 1 spendable unit (`source_max_units == 1`),
-     so the exact count tapped from `U` is uniquely fixed with zero surplus.
-  4. Every choice source (in any class, fully needed or `U`) has `mode.total() == 1`
-     and no multi-ability unit ambiguity (so no choice mode can float surplus).
+  3. For the new count-based shortcut, every useful output of **every**
+     participating source produces exactly one spendable unit and leaves no
+     surplus. This includes mandatory fixed sources. Keep the existing
+     exact-payment proof for multi-unit production. If the existing pool
+     could change what is spent or left floating, retain the choice.
+  4. With a fixed number of units to produce, subtract the number of
+     mandatory taps. The remainder is the number of members tapped from
+     the single optional class. Use the same proof for a residual color
+     choice before comparing its class counts.
 - Handles: `Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`,
   `Plains + Plains + Kyoshi Village` for `{1}{G}` (via surplus-pruned
   `automatic_choice_taps`), `3 identical Guildgates` for `{1}{R}`.
@@ -196,6 +202,12 @@ Drafted in place before implementation (recheck wording against final implementa
 
 1. Done — `72a12fa277` (see Built).
 2. **Next — interchangeable sources and determined-completion modal skip.**
+   - The original optional-class unit check fails for Gray Ogre with Sol Ring
+     and two Mountains. Sol Ring must tap, and the Mountains are the only
+     optional class. PayCost taps the Ring and one Mountain. Tapping both
+     Mountains first uses one of the Ring's two units and floats the other.
+     `required_sol_ring_can_leave_a_mountain_or_floating_mana` exercises
+     both orders from the same cast. Use the revised unit check above.
    - Count taps by equivalence class in each residual completion. Anthem of
      Champions ({G}{W}) with Village, Forest and Plains provides the
      counterexample to a total tap count. After the Village taps for green

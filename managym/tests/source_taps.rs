@@ -590,6 +590,29 @@ fn mana_made_while_paying_commits_to_the_cost() {
     }
 }
 
+#[test]
+fn required_sol_ring_can_leave_a_mountain_or_floating_mana() {
+    let mut game = payment_position("Gray Ogre", &["Sol Ring", "Mountain", "Mountain"]);
+    cast(&mut game);
+    assert_eq!(taps(&game).len(), 3);
+    game.skip_trivial = false; // Inspect priority before the floating mana empties.
+
+    let mut exact = game.clone();
+    pay_cost(&mut exact);
+    assert_eq!(spell_receipt(&exact, "Gray Ogre").total(), 3);
+    assert_eq!(untapped(&exact), ["Mountain"]);
+    assert_eq!(exact.state.players[0].mana_pool.total(), 0);
+
+    tap(&mut game, "Mountain");
+    tap(&mut game, "Mountain");
+    if game.pending_choice.is_some() {
+        pay_cost(&mut game);
+    }
+    assert_eq!(spell_receipt(&game, "Gray Ogre").total(), 3);
+    assert!(untapped(&game).is_empty());
+    assert_eq!(game.state.players[0].mana_pool, Mana::parse("C"));
+}
+
 /// A source that makes more than is owed pays what is owed; the rest floats.
 #[test]
 fn surplus_of_mana_made_while_paying_floats() {
