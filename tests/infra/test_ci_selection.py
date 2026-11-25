@@ -54,6 +54,17 @@ def selected(
         ("tests/infra/test_external_consumer.py", {"python_unit", "integration"}),
         ("tests/config/test_load.py", {"integration"}),
         ("tests/academy/test_qwen_policy.py", {"integration"}),
+        (
+            "tests/academy/test_play_launcher.py",
+            {"python_unit", "protocol_v1", "clean_machine_play"},
+        ),
+        (
+            "tests/academy/test_clean_machine_verifier.py",
+            {"python_unit", "clean_machine_play"},
+        ),
+        ("tests/model/test_world.py", {"academy_integration"}),
+        ("tests/semantic/test_elemental_world.py", {"academy_integration"}),
+        ("tests/semantic/test_decklist_import.py", {"academy_integration"}),
         ("tests/test_public_api_contract.py", {"integration"}),
         ("tests/public_api.json", {"integration"}),
         ("scripts/public_api.py", {"integration"}),
@@ -187,19 +198,59 @@ def test_workflow_test_files_exist() -> None:
     assert not missing, "\n".join(missing)
 
 
+def selected_by_path(paths: list[str]) -> dict[str, set[str]]:
+    """Run select-tests.sh once per path in a single bash invocation."""
+    script = (
+        'while IFS= read -r -d "" path; do '
+        'printf "PATH\\t%s\\n" "$path"; '
+        'printf "%s\\0" "$path" | bash "$1"; '
+        "done"
+    )
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", script, "_", str(SELECTOR)],
+        input="".join(path + "\0" for path in paths),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    by_path: dict[str, set[str]] = {}
+    current: str | None = None
+    outputs: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if line.startswith("PATH\t"):
+            if current is not None:
+                assert set(outputs) == JOBS
+                assert set(outputs.values()) <= {"true", "false"}
+                by_path[current] = {k for k, v in outputs.items() if v == "true"}
+            current = line.split("\t", 1)[1]
+            outputs = {}
+        else:
+            job, value = line.split("=", 1)
+            outputs[job] = value
+    if current is not None:
+        assert set(outputs) == JOBS
+        assert set(outputs.values()) <= {"true", "false"}
+        by_path[current] = {k for k, v in outputs.items() if v == "true"}
+    assert set(by_path) == set(paths)
+    return by_path
+
+
 def pytest_covered_files(workflow_text: str, all_tests: set[str]) -> set[str]:
-    """Return every `tests/**/test_*.py` file selected by a workflow's pytest runs."""
+    """Return every `tests/**/test_*.py` file run in full by a workflow's pytest commands."""
     # Collapse YAML shell continuations so multi-line pytest commands parse together.
     normalized = re.sub(r"\\\n[ \t]*", " ", workflow_text)
     covered: set[str] = set()
     for line in normalized.splitlines():
         if "pytest" not in line or line.lstrip().startswith("#"):
             continue
+        # `-k` filters run only a subset of a file's tests and do not own the file.
+        if re.search(r"(?:^|\s)-k\b", line):
+            continue
         files: set[str] = set()
         dirs: set[str] = set()
         ignored: set[str] = set()
         for match in re.finditer(
-            r"(?<![/\w.-])(--ignore=)?(tests/(?:[\w.-]+/)*[\w.-]+\.py|tests/(?:[\w.-]+/)*(?=\s|$))",
+            r"(?<![/\w.-])(--ignore=)?(tests/(?:[\w.-]+/)*[\w.-]+\.py(?!::)|tests/(?:[\w.-]+/)*(?=\s|$))",
             line,
         ):
             prefix, path = match.group(1), match.group(2)
@@ -223,30 +274,87 @@ def pytest_covered_files(workflow_text: str, all_tests: set[str]) -> set[str]:
     return covered
 
 
+def _workflow_job_blocks(workflow_text: str) -> dict[str, str]:
+    """Split a GitHub Actions workflow's `jobs:` section into raw per-job blocks."""
+    blocks: dict[str, list[str]] = {}
+    in_jobs = False
+    current: str | None = None
+    for line in workflow_text.splitlines():
+        if not in_jobs:
+            if line == "jobs:":
+                in_jobs = True
+            continue
+        if line and not line[0].isspace() and not line.startswith("#"):
+            break
+        match = re.match(r"^  ([a-z0-9-]+):\s*$", line)
+        if match:
+            current = match.group(1)
+            blocks[current] = [line]
+        elif current is not None:
+            blocks[current].append(line)
+    return {job: "\n".join(lines) for job, lines in blocks.items()}
+
+
+def _pr_job_coverage(all_tests: set[str]) -> dict[str, set[str]]:
+    ci_jobs = _workflow_job_blocks((ROOT / ".github/workflows/ci.yml").read_text())
+    coverage: dict[str, set[str]] = {}
+    for job_id, block in ci_jobs.items():
+        key = job_id.replace("-", "_")
+        if key not in JOBS:
+            continue
+        called = re.search(
+            r"^\s+uses:\s+\./\.github/workflows/([\w.-]+\.yml)\s*$",
+            block,
+            re.MULTILINE,
+        )
+        text = (
+            (ROOT / ".github/workflows" / called.group(1)).read_text()
+            if called
+            else block
+        )
+        coverage[key] = pytest_covered_files(text, all_tests)
+    return coverage
+
+
 def test_all_test_files_are_covered_by_ci_workflows() -> None:
-    """Every Python test file under tests/ must be executed by CI."""
+    """Every non-nightly Python test file must be owned by a PR job that selects it."""
     all_tests = {
         p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/**/test_*.py")
     }
-    pr_workflows = (
-        "ci.yml",
-        "manabot-integration.yml",
-        "academy-integration.yml",
-    )
     nightly_only = {
         # Runs in baseline.yml on a release extension (3+ min on debug).
         "tests/verify/test_learning_regression.py",
     }
-    pr_covered: set[str] = set()
-    for name in pr_workflows:
-        pr_covered |= pytest_covered_files(
-            (ROOT / ".github/workflows" / name).read_text(), all_tests
-        )
     nightly_covered = pytest_covered_files(
         (ROOT / ".github/workflows/baseline.yml").read_text(), all_tests
     )
     assert nightly_only <= nightly_covered, sorted(nightly_only - nightly_covered)
-    uncovered = sorted(all_tests - pr_covered - nightly_only)
-    assert not uncovered, "Test files not covered by any PR CI workflow:\n" + "\n".join(
+
+    job_coverage = _pr_job_coverage(all_tests)
+    assert {"python_unit", "protocol_v1", "integration", "academy_integration"} <= set(
+        job_coverage
+    )
+    # Filtered `-k` runs (like protocol_v1's test_server.py subset) do not own the file.
+    assert "tests/academy/test_server.py" not in job_coverage["protocol_v1"]
+
+    pr_tests = sorted(all_tests - nightly_only)
+    selected_jobs = selected_by_path(pr_tests)
+    uncovered: list[str] = []
+    unselected: list[str] = []
+    for path in pr_tests:
+        owners = {job for job, files in job_coverage.items() if path in files}
+        if not owners:
+            uncovered.append(path)
+            continue
+        chosen = selected_jobs[path]
+        if not (chosen & owners):
+            unselected.append(
+                f"{path}: selected={sorted(chosen)}, owners={sorted(owners)}"
+            )
+    assert not uncovered, "Test files not covered by any PR CI job:\n" + "\n".join(
         uncovered
+    )
+    assert not unselected, (
+        "Test files whose selected CI jobs do not include an owning job:\n"
+        + "\n".join(unselected)
     )

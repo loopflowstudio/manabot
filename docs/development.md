@@ -342,8 +342,9 @@ When a job passes 8 minutes, in order of preference:
 2. Cut the shared installation and build time.
 3. Move test files to a faster group, or add a group to the matrix, balanced by
    the measured times; `tests/infra/test_ci_selection.py` checks that every
-   path a group names exists and that every `tests/**/test_*.py` file is
-   covered by CI.
+   path a group names exists, that every non-nightly `tests/**/test_*.py` file
+   is run in full by a PR job, and that `.github/ci/select-tests.sh` selects an
+   owning job when that file changes.
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
 single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
@@ -372,17 +373,21 @@ neither skipped nor succeeded.
 | Other Academy UI | UI |
 | Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
-| Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `tests/model/test_world.py`, `tests/semantic/test_elemental_world.py`, `tests/semantic/test_decklist_import.py`, `tests/semantic/fixtures/elemental/` | Academy integration |
+| `scripts/play`, `scripts/play.py`, `tests/academy/test_play_launcher.py`, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `tests/academy/test_clean_machine_verifier.py` | Python unit, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
-| `manabot/README.md` (published API table), other `manabot/`, training/eval/sim/belief/semantic/verify/config tests, `tests/academy/test_qwen_policy.py`, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
+| `manabot/README.md` (published API table), other `manabot/`, other training/eval/sim/belief/semantic/model/verify/config tests, `tests/academy/test_qwen_policy.py`, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/`, `tests/infra/test_external_consumer.py` | Python unit, integration |
 | `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
 Runtime inputs such as experiment Markdown and benchmark data are not prose-only.
-`tests/infra/test_ci_selection.py` covers these boundaries and the aggregate;
-update both when adding a package or consumer.
+`tests/infra/test_ci_selection.py` covers these boundaries, the aggregate, and the
+invariant that every non-nightly `tests/**/test_*.py` file is run in full by a PR
+job that `.github/ci/select-tests.sh` selects when that file changes; update both
+when adding a package or consumer.
 
 **Other workflows.** `macos-nightly.yml` reruns both integration suites on
 `macos-latest` nightly. `baseline.yml` trains the CPU test variant nightly on
