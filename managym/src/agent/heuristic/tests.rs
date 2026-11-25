@@ -40,6 +40,7 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         ability_index: None,
         continuation_index: None,
         pays_directly: false,
+        is_mana_ability: false,
         announces_x: false,
         spell_profile: 0,
         route_mana_value: None,
