@@ -36,7 +36,7 @@ launch, track and evaluate it, or bring your own.
 A recipe is a file with a `train(config)` function, and
 [Etude](https://github.com/loopflowstudio/etude) runs it. Everything a run
 records is ordinary files in a directory you own. Use the checkout environment
-from [development](development.md#environment-and-commands), with Etude SDK 0.4.6 or newer.
+from [development](development.md#environment-and-commands), with Etude SDK 0.4.7 or newer.
 
 ```bash
 uv run etude train manabot/recipes/local.py  # a two-update smoke on CPU
