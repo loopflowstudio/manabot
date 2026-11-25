@@ -63,165 +63,24 @@ Vocabulary edits that are table data, not primitives:
   `token.cat_beast_2_2_w` (Felidar Retreat) and `token.phyrexian_goblin_1_1_r`
   (Ovika), each with its first token-printing Scryfall id.
 
-## Build order (riskiest primitive first)
+## Finished slices (detail in git and the ledger)
 
-### Slice 1 — Choices made as a permanent enters (complete)
+1. Entry choices on one battlefield incarnation (Banner, Haven, Mare, Automaton, Courtyard, Spyglass) — `47e0e34eda`, `9e1bd7c4a8`, `1635633a40`.
+2. Curator's opponent-chosen piles — `49417f76ad`, `cb84b1c0fe`.
+3. Biogenic Upgrade's cast-time counter shares — `49417f76ad`, `cb84b1c0fe`.
+4. `TargetRelation` and whole-assignment `Decision::Retarget` (Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience, Charming Prince, Affectionate Indrik) — `4e481dc0a1`.
+5. Stack copies and retargeting (Thousand-Year Storm, Bolt Bend, Teach by Example) — `d73b18db4a`; stress `bench_states storm-copies --sizes 8`.
+6. `LibraryTop`/`Unselected` selectors, `SelectCards.max_mana_value`, `Effect::GrantPlay` (Gutless Plunderer, Strongbox Raider, Genesis Wave) — `460fe18685`.
+7. Last-known values and shared sacrifice (Tribute to Hunger, Deadly Brew) — `30fd60f499`.
+8. Kicked entries, composite ward, `ManaExpiry`, Changeling, `CardPredicate.keyword`, `CounterKind::Wish` (Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush) — `460fe18685`.
 
-Heraldic Banner, Uncharted Haven, Diamond Mare, Adaptive Automaton, Secluded
-Courtyard and Sorcerous Spyglass have directed play tests and ledger evidence.
-The choice belongs to one battlefield incarnation. A batch retains each answer
-until all entrants are ready. The active player answers first and each player
-chooses their entrants in either order. Brought Back now returns all its chosen
-cards together. Its previous selector moved only its first target.
-
-The 12 entry-choice tests cover both orders of Spyglass and Banner, the timing
-of the private look, Command replay and stale rejection, independent copies,
-both players' chosen-value facts, the 367-type prompt, Zhao and spending
-restricted mana for abilities in hand and on the battlefield. Academy keeps
-permanents with different choices in separate piles. On the rebuilt CPython
-3.13 extension both bundled pilots replayed. The optional u1952 checkpoint
-was unconfigured. Four Academy demos replayed 192 Commands and five navigation
-positions refreshed. Both viewer seats passed policy fact admission for chosen
-Blue, Atog and Lightning Bolt. Scryfall conformance and the Rust replay,
-experience and study schema checks passed.
-
-At the integrated gate exercise 8–16 Courtyards with distinct mana restrictions
-and eight differently chosen Banners or Automatons. Compare the payment and
-layer results against Engine Budget.
-
-### Slice 2 — Two piles, chosen by an opponent (complete)
-
-Curator of Destinies offers two choices for each inspected card. At handoff
-the opponent sees the face-up identities and the face-down count. Directed
-play covers all six split sizes, both destinations, restore and hidden-world
-sampling, Flying and an attempted Counterspell. The Academy reconnect frame
-and an exact fork both kept the face-down names private. On the CPython 3.13
-release wheel, five alternating partition steps through the opponent handoff
-took a median 0.065 ms across 101 forks, excluding cloning.
-
-### Slice 3 — Counters divided among targets at cast (complete)
-
-Biogenic Upgrade announces a positive share for each target before payment.
-Copies retain the original shares by target slot. Distribution and doubling
-each use a simultaneous batch, so doubling reads each creature's counters
-after distribution. Directed play covers all three target counts, a target
-leaving, and a copy changing targets. Both viewers see the announced amounts
-on the stack. Text play and policy input admitted both new decision shapes.
-Scryfall conformance, card-program observability and the two bundled pilot
-replays passed. The optional u1952 checkpoint was unconfigured. Four Academy
-demos replayed 192 Commands and five navigation positions refreshed.
-
-### Slice 4 — Target relations and targeting cardinality (complete)
-
-Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience,
-Charming Prince and Affectionate Indrik have directed play tests and
-ledger evidence. Primal Might (Slice 9) uses the same `Fight`.
-
-- `TargetRequirement.relation: Option<TargetRelation>` names one earlier
-  clause: `DistinctFromEarlier`, `AttachedToEarlier(clause)`,
-  `DifferentControllerFrom(clause)`. Spells, triggers and activations check
-  it while choosing (`Game::relations_admit`), with one-clause lookahead so
-  a first target is offered only if a later required clause keeps a
-  partner; castability uses the same check. Resolution
-  (`require_target_relations`) reads last known controllers, makes both
-  sides illegal on a shared controller, and drops attached Equipment once
-  its creature target is illegal.
-- `Decision::Retarget { chosen, .. }` judges new targets as one assignment
-  (CR 115.7e). A slot offers a change, or keeping, only if some completion
-  of the later slots is legal; unchanged targets that were already illegal
-  may stay. The stack object changes once, when every slot is decided, and
-  `publish_targets` emits the targeting events. "Change the target"
-  (`may_keep` false) keeps the other slots and validates against them.
-- `Effect::Simultaneously` merges its instructions' event batches into one
-  (Drakuseth's damage, Run Away Together's returns). `ClauseTarget(n)`
-  names every legal target of clause n, players included.
-- Fiery Annihilation's Oracle text exiles the Equipment; the earlier
-  “destroyed” wording here was wrong.
-
-Evidence: `copy_targets_change_as_one_assignment` (swap, forced change,
-single-target change), the three card tests, and the existing fight,
-Biogenic Upgrade, Bolt Bend, Teach by Example and Storm copy tests. The
-16-creature-a-side Drakuseth trigger offered 36 then 35 targets; its choices
-took 4.8 ms in a debug build.
-
+Known defect for the gate:
 `resolution_tests::retained_creation_precedes_allocation_and_preserves_copy_entry_terms`
 fails (`resolution_tests.rs:3866`, a token not on the battlefield) at
-`e0baeed8e8`, before this slice, and the same way after it. The gate's full
-debug run must fix or explain it.
+`e0baeed8e8`, before Slice 4, and the same way after it. The full debug run
+must fix or explain it.
 
-### Slice 5 — Stack copies and retargeting (complete)
-
-Thousand-Year Storm, Bolt Bend and Teach by Example have directed native play
-tests and ledger evidence. Replicate and Storm repeat the existing copy instruction.
-A copy can use the last stack appearance of a countered spell and triggers ward
-for its final targets. The stress position is `bench_states storm-copies --sizes 8`.
-
-The 17 focused card tests and Scryfall conformance passed. The stress run
-offered eight successive retarget decisions. The rebuilt CPython 3.13
-extension replayed the four Academy demos (192 Commands) and five navigation
-positions. Both bundled pinned pilots passed; the optional u1952 checkpoint
-was unconfigured. Current-world admission and the Engine Budget comparison
-remain for the integrated gate.
-
-### Slice 6 — Library-top selection (complete)
-
-Gutless Plunderer, Strongbox Raider and Genesis Wave have directed play tests
-and ledger evidence.
-
-- `ObjectSelector::LibraryTop(Box<EffectValue>)` reads the top N cards of the
-  resolving player's library, pins them in `Decision::SelectCards { looked, pool }`,
-  records private library knowledge, uses `SelectionOrigin::Library`, and
-  exposes them only to the deciding viewer until revealed or moved.
-- `ObjectSelector::Unselected` reads the enclosing `SelectCards`' `from` domain
-  minus `Selected` (live objects only), available in both `effects` and
-  `if_declined`.
-- `SelectCards.max_mana_value: Option<Box<EffectValue>>` bounds candidates at
-  resolution (Genesis Wave).
-- `Effect::GrantPlay` replaced and deleted `Effect::ExileTopCardsToPlay` and
-  `Effect::GrantGraveyardCastThisTurn` across all 7 existing callers (Flameshape,
-  Redcap Gutter-Dweller, Kellan, The Legend of Roku, Zuko, Zul Ashur, Sphinx of
-  Forgotten Lore) plus Strongbox Raider. `Effect::Move.face_down` carries
-  face-down exile for Flameshape.
-- Note on Auras under Genesis Wave: if a future change implements CR 303.4g
-  (an Aura with no legal object stays in its previous zone instead of entering
-  unattached), Genesis Wave will need its post-entry graveyard move to include
-  chosen cards that stayed in the library (tracked in `scratch/questions.md`).
-- Stress position (`Genesis Wave X = 16`) remains for the integrated gate.
-
-### Slice 7 — Last-known values and shared sacrifice (complete)
-
-Tribute to Hunger gained six from a pumped Gray Ogre. Deadly Brew used both
-players’ choices before sacrificing together, accepted a planeswalker, and
-offered only another graveyard card after its controller sacrificed.
-Blasphemous Edict uses the same predicate-and-count instruction. The result
-keeps the departed battlefield object for properties and the graveyard
-successor for selection.
-
-### Slice 8 — Kicked entries, payment obligations and new vocabulary (complete)
-
-Gnarlid Colony, Gatekeeper of Malakir, Ovika, Savage Ventmaw, Three Tree
-Mascot, Mystical Teachings, Wishclaw Talisman and Ballyrush Banneret have
-directed play tests and ledger evidence (plus `token.phyrexian_goblin_1_1_r`).
-
-- **Kicked on entry.** `EntersWithPlusOneCounters` evaluates its condition
-  against the entering spell's `kicked` and `x` (`proposed_event.rs`);
-  Gatekeeper reuses the existing kicked intervening-if trigger propagation.
-- **Composite ward.** `PaymentProgress.owed` is a `Vec<CostComponent>` built
-  from `PaymentCost::All`; `can_pay_resolution_tail` prevents starting an
-  unpayable composite cost (2 life vs `{3}, Pay 3 life`), and
-  `advance_resolution_payment` pays trailing no-choice life immediately after
-  mana commits.
-- **Mana expiry.** `ManaClass.expiry: ManaExpiry { Step, EndOfCombat, EndOfTurn }`
-  replaced `ManaClass.combat: bool`, and `clear_mana_pools(step)` partitions
-  surviving vs expiring units via `ManaPool::split_expiring`.
-- **Changeling.** `Keyword::Changeling` gives all creature types in every zone
-  via `PrintedCharacteristics::has_subtype`, `layers.rs` (`CreatureTypes::All`),
-  `SpellSnapshot`, and `GreatestSharedCreatureType`.
-- **Keyword predicate.** `CardPredicate.keyword: Option<Keyword>` replaced
-  `flying` and `deathtouch` (retired tokens recorded in `token_renames.rs`).
-- **Data.** Added `CounterKind::Wish` and `token.phyrexian_goblin_1_1_r`.
-- Stress positions (8 Ventmaw-style pools + Changelings under 8 chosen-type
-  anthems) remain for the integrated gate.
+## Remaining
 
 ### Slice 9 — Cards that compose today (23 cards)
 
@@ -253,10 +112,6 @@ from the surveys:
 | Arcane Epiphany | `CostsLess 1` if you control a Wizard |
 | Gate Colossus | `CostsLessPerPermanent(Gate)`, `CantBeBlockedBy { max_power: 2 }`, graveyard Gate-entry trigger with optional move to library top (first graveyard entry trigger, so test it) |
 | Koma, World-Eater | Koma, Cosmos Serpent shapes (`khm.rs:29`) with `token.komas_coil` |
-| Strongbox Raider, Genesis Wave, Gutless Plunderer | Slice 6 |
-| Tribute to Hunger, Deadly Brew | Slice 7 |
-| Charming Prince, Affectionate Indrik, Drakuseth, Fiery Annihilation, Run Away Together | Slice 4 |
-| Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush | Slice 8 |
 
 The remaining 23 compose-only cards land as one pass with one directed test
 each in their set files. Add `observability.rs` rows where a card is the first
@@ -285,8 +140,11 @@ real user of a static or cost row.
 - Current-world admission:
   `uv run --extra dev --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`,
   plus `tests/model/test_pinned_pilot.py`.
-- Stress states listed per slice through `bench_states`. Engine Budget stays
-  within 10%.
+- Stress states through `bench_states`; Engine Budget stays within 10%:
+  8–16 Courtyards with distinct mana restrictions and eight differently
+  chosen Banners or Automatons (payment and layers); `storm-copies --sizes 8`;
+  Genesis Wave X = 16; eight Ventmaw-style pools; Changelings under eight
+  chosen-type anthems.
 - Synergies to exercise together:
   - Thousand-Year Storm with Teach by Example (a Teach copy is not cast, so
     it never raises Storm's count).
