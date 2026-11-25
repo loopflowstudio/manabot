@@ -408,9 +408,12 @@ impl Game {
                     object_id: spell.object,
                     by: None,
                 });
+            } else {
+                self.presentation_ability_fizzled(&stacked);
             }
             return;
         };
+        self.presentation_resolving(&stacked);
         match stacked {
             StackObject::Spell(spell) => self.resolve_spell_object(spell, source, targets),
             StackObject::ActivatedAbility(ability) => {

@@ -44,6 +44,7 @@ STRUCT_MODELS = (
     "LegacyTurnView",
     "ObjectRenderId",
     "PresentationEvent",
+    "PresentationLabels",
     "PromptView",
     "RecoveryEnvelope",
     "StopsConfig",
@@ -90,8 +91,24 @@ UNION_VARIANTS = {
         "BlockedPresentation",
         "TurnStartedPresentation",
         "LandPlayedPresentation",
+        "DrewPresentation",
         "DiscardedPresentation",
         "RevealedPresentation",
+        "ActivatedPresentation",
+        "TriggeredPresentation",
+        "AbilityResolvedPresentation",
+        "CounteredPresentation",
+        "PassedPresentation",
+        "CountersPresentation",
+        "SearchedPresentation",
+        "LookedPresentation",
+        "SacrificedPresentation",
+        "LostPresentation",
+        "LifePresentation",
+        "ExiledPresentation",
+        "TokenCreatedPresentation",
+        "PtChangedPresentation",
+        "ControlChangedPresentation",
     ),
 }
 
@@ -169,10 +186,18 @@ def test_python_fields_and_requiredness_match_rust_generated_schema():
 
 
 def test_python_enums_match_rust_generated_schema():
+    from typing import get_args
+
+    from managym.experience import PresentationRule
+
     for name in ENUM_MODELS:
         assert (
             RUST_SCHEMA["$defs"][name]["enum"] == PYTHON_SCHEMA["$defs"][name]["enum"]
         ), name
+    assert (
+        list(get_args(PresentationRule))
+        == RUST_SCHEMA["$defs"]["PresentationRule"]["enum"]
+    )
 
 
 @pytest.mark.parametrize(

@@ -15,9 +15,10 @@
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
-  import type { MoveTurn } from './moves';
-  import { committed, offerText, type PrimaryLabel } from './prompt';
-  import { targetNames, type RecentView } from './recent';
+  import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
+  import type { Segment } from './tell';
+  import { committed, offerChoiceLabel, offerText, type PrimaryLabel } from './prompt';
+  import { targetNames, type ResolvedSpell } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import { formatScore, markText, type DecisionMark } from '$lib/analysis';
   import ManaText from './ManaText.svelte';
@@ -26,6 +27,8 @@
 
   interface Props {
     view: BoardView;
+    /** Stack entries for the drawn board (may be an earlier cursor board while `view` stays live). */
+    stack?: StackItem[];
     frame: ExperienceFrame;
     live: boolean;
     /** What to do now, in plain words. */
@@ -44,8 +47,11 @@
     workStarted: number | null;
     interrupted: boolean;
     canPassTurn: boolean;
-    recent: RecentView;
-    moves: MoveTurn[];
+    /** Unread history tail derived from `history` (empty whenever a cursor is active). */
+    recentFacts: readonly RecentHistoryItem[];
+    /** Spells cast since your last move that left the stack, for lingering target arrows. */
+    resolvedSpells: readonly ResolvedSpell[];
+    history: HistoryTurn[];
     opponentName: string;
     onact: (placed: PlacedOffer) => void;
     onpassturn: () => void;
@@ -60,12 +66,6 @@
     notices?: Snippet;
     /** The game has ended; its result card sits over the board. */
     over?: boolean;
-    /**
-     * The opponent's move being read out. It heads the decision block, and
-     * while it is set the decision's controls wait: listed, focusable and
-     * announced unavailable, a press on one ends the read-out (the board owns that).
-     */
-    reading?: Snippet;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
     /** An analysis's mark on each of your moves, by move id. */
@@ -74,11 +74,17 @@
     shownMoves?: ReadonlySet<string>;
     /** The recap's heading. */
     recapTitle?: string;
-    /** Moves jump to their position when set. */
-    onjump?: (id: string) => void;
+    /** Moves jump to their position when set (Review). */
+    onjump?: (id: string, boardSeq: number | null) => void;
     /** Read-only (a recording, or a policy's line): no empty stack and no answer buttons beside the list. */
     recording?: boolean;
     currentMove?: string | null;
+    /** Select a history line to move the board cursor to it (live play). */
+    onselectline?: (line: HistoryLine) => void;
+    /** `HistoryLine.id`s matching the active cursor / walk stop. */
+    cursorLineIds?: ReadonlySet<string>;
+    /** Cast/activation seq marked when a standalone resolution line is selected. */
+    cursorSourceSeq?: number | null;
     /** A combat draft's controls, in place of the per-creature buttons. */
     draft?: Snippet;
     /** Why a confirmed combat declaration stopped before all of it was sent. */
@@ -86,12 +92,13 @@
   }
 
   let {
-    view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, reading,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, draft, stopped = null,
+    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recentFacts, resolvedSpells, history, opponentName,
+    stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, stopped = null,
   }: Props = $props();
 
-  const readingOut = $derived(reading !== undefined);
+  const stack = $derived(stackGiven ?? view.stack);
+
   /** No choices because the opponent is deciding: the list waits for them by name instead of counting 0. */
   const waitingFor = $derived(frame.offers.length === 0 && opponentChoosing);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
@@ -106,13 +113,13 @@
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
-  const resolved = $derived(new Map(recent.resolved.map(spell => [spell.id, spell])));
+  const resolved = $derived(new Map(resolvedSpells.map(spell => [spell.id, spell])));
 
   // The recap shows its first lines; the rest open on demand and fold again when the recap changes.
   const RECAP_LINES = 3;
   let recapOpen = $state(false);
-  $effect(() => { void recent.facts; recapOpen = false; });
-  const facts = $derived(recapOpen ? recent.facts : recent.facts.slice(0, RECAP_LINES));
+  $effect(() => { void recentFacts; recapOpen = false; });
+  const facts = $derived(recapOpen ? recentFacts : recentFacts.slice(0, RECAP_LINES));
 
   // Seconds the opponent or the server has been working, beside "… is choosing".
   let elapsed = $state(0);
@@ -126,13 +133,28 @@
   });
 
   let logList = $state<HTMLElement | null>(null);
-  // The list follows the newest move live, and the shown position's move in a recording.
+  let expanded = $state<Set<string>>(new Set());
+  const hasCursor = $derived((cursorLineIds?.size ?? 0) > 0);
+  function isLineCurrent(entry: HistoryLine, fallbackId = false): boolean {
+    if (hasCursor) return cursorLineIds!.has(entry.id);
+    const key = entry.jumpKey ?? (fallbackId ? entry.id : null);
+    return currentMove !== null && key === currentMove;
+  }
+  function toggleExpanded(id: string): void {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expanded = next;
+  }
+  // The list follows the active cursor / walk stop, the shown Review position, or the newest line live.
   $effect(() => {
-    void moves.length;
-    void moves.at(-1)?.moves.length;
+    void history.length;
+    void history.at(-1)?.lines.length;
+    void history.at(-1)?.lines.at(-1)?.children.length;
+    void cursorLineIds;
     const current = currentMove;
     // Only the list scrolls: scrolling an element into view would also move a rail that is taller than a short window.
-    if (current === null && !onjump) { if (logList) logList.scrollTop = logList.scrollHeight; return; }
+    if (!hasCursor && current === null && !onjump) { if (logList) logList.scrollTop = logList.scrollHeight; return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!row || !logList) return;
     const top = row.offsetTop - logList.offsetTop;
@@ -156,19 +178,38 @@
   }
 </script>
 
+{#snippet lineSegments(parts: readonly Segment[], focusable: boolean)}
+  {#each parts as segment, segIdx (segIdx)}
+    {#if segment.card}
+      {#if focusable}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) -->
+        <span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>
+      {:else}
+        <span class="card-name" {...hover(segment.card)}>{segment.text}</span>
+      {/if}
+    {:else}
+      {segment.text}
+    {/if}
+  {/each}
+{/snippet}
+
+{#snippet moveWhat(entry: HistoryLine, prevWho: string, focusable: boolean)}
+  <span class="what">{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, focusable)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+{/snippet}
+
 <aside class="rail" class:recording aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
 
   <!-- A recording draws the stack only while something is on it. -->
-  {#if !recording || view.stack.length || recent.facts.length}
+  {#if !recording || stack.length || recentFacts.length}
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
-    {#if view.stack.length === 0 && !recording}
+    {#if stack.length === 0 && !recording}
       <h2><span class="type-heading text-ink-2">Stack</span></h2>
       <p class="type-caption text-ink-3">Empty</p>
-    {:else if view.stack.length}
-      <h2><span class="type-heading text-ink-2">Stack · {view.stack.length}</span></h2>
+    {:else if stack.length}
+      <h2><span class="type-heading text-ink-2">Stack · {stack.length}</span></h2>
       <ol>
-        {#each view.stack as item, index (item.entry.id)}
+        {#each stack as item, index (item.entry.id)}
           {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
           {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
           {@const provenance = stackProvenance(item.entry)}
@@ -176,9 +217,12 @@
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
-              data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
+              data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : item.entry.id)}
               data-announcing={item.announcing}
-              data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
+              data-travel-id={item.card ? `card:${item.card.id}` : `stack:${item.entry.id}`}
+              data-travel-source={item.entry.source_permanent !== undefined ? `perm:${item.entry.source_permanent}` : undefined}
+              data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'}
+              data-travel-name={item.card?.name ?? item.entry.label.split(' — ')[0]}
               aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${targets.length ? `, targeting ${targets.join(' and ')}` : ''}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
@@ -197,23 +241,32 @@
         {/each}
       </ol>
     {/if}
-    {#if recent.facts.length}
+    {#if recentFacts.length}
       <div class="recent" data-testid="recent">
         <h3><span class="type-heading text-ink-2">{recapTitle}</span></h3>
         <ol>
           {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
+            {@const isFactJump = Boolean(onjump && fact.line.jumpKey)}
+            {@const isFactSelectable = Boolean(onselectline && fact.line.boardSeq !== null)}
             <li class="type-caption fact" class:theirs={fact.by === 'opponent'} data-testid="recent-fact">
               {#if spell}
                 <span class="resolved" data-stack-card={spell.id} tabindex="-1" {...hover(spell.name)}><Thumb name={spell.name} /></span>
               {/if}
-              <span class="fact-text" title={fact.text}>{fact.text}</span>
+              {#if isFactJump || isFactSelectable}
+                <button type="button" class="fact-btn" title={fact.text}
+                  onclick={() => (isFactJump ? onjump!(fact.line.jumpKey!, fact.line.boardSeq) : onselectline!(fact.line))}>
+                  <span class="fact-text">{@render lineSegments(fact.segments, false)}</span>
+                </button>
+              {:else}
+                <span class="fact-text" title={fact.text}>{@render lineSegments(fact.segments, true)}</span>
+              {/if}
             </li>
           {/each}
         </ol>
-        {#if recent.facts.length > RECAP_LINES}
+        {#if recentFacts.length > RECAP_LINES}
           <button type="button" class="more type-caption" data-testid="recent-more" aria-expanded={recapOpen} onclick={() => (recapOpen = !recapOpen)}>
-            {recapOpen ? 'Fewer' : `${recent.facts.length - RECAP_LINES} more`}
+            {recapOpen ? 'Fewer' : `${recentFacts.length - RECAP_LINES} more`}
           </button>
         {/if}
       </div>
@@ -221,8 +274,7 @@
   </section>
   {/if}
 
-  <section use:region={{ across: !onjump }} class="block prompt" class:reading-out={readingOut} aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
-    {#if reading}{@render reading()}{/if}
+  <section use:region={{ across: !onjump }} class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     <p class="type-heading whose" class:yours={live}>
       {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
     </p>
@@ -272,20 +324,20 @@
       <!-- A recording's answers are the list below; buttons here would repeat them, disabled. -->
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
-          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
+          disabled={!live} onclick={() => onact(view.primary!)}>
           <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? offerText(view.primary.offer)} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
+          disabled={!live} onclick={() => onact(placed)}>
           <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
       {#if canPassTurn}
-        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
+        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
           title="Pass every priority window until the turn ends (Shift+Enter or F6)">Pass turn <kbd>⇧↵</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
@@ -321,49 +373,95 @@
   </section>
   {/if}
 
-  <section use:region={{ across: !onjump }} class="block log" aria-label="Moves">
-    <h2><span class="type-heading text-ink-2">Moves</span></h2>
+  <section use:region={{ across: false }} class="block log" aria-label="History">
+    <h2><span class="type-heading text-ink-2">History</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
-      {#each moves as turn, index (`${turn.turn}:${index}`)}
+      {#each history as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
           <!-- A recording numbers the turn in its first row's gutter; the heading stays for screen readers. -->
           <p class="turn-head type-label" class:sr-only={onjump !== undefined}><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
-            {#each turn.moves as move, at (move.id)}
-              {#if onjump}
-                <!-- A recording's move jumps to its position. -->
-                <li class="move type-caption jump" class:quiet={move.passes !== null} class:auto={move.actor === 'auto'} class:you={move.actor === 'you'}
-                  data-testid={move.passes ? 'pass-run' : 'log-entry'} data-actor={move.actor}>
-                  <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}
-                    title={move.passes ? undefined : move.segments.map(segment => segment.text).join('')}>
-                    <span class="gutter" aria-hidden="true" title={at === 0 && turn.owner ? `Turn ${turn.turn ?? ''}, ${turn.owner}` : undefined}>{at === 0 ? turn.turn ?? '·' : ''}</span>
-                    <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
-                    <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
-                    {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}{@const same = mark.agreed === mark.of}
-                      <span class="reading">
-                        <span class="mark type-caption" data-testid="move-mark" data-same={same} data-agreed={mark.agreed} data-of={mark.of}>{markText(mark)}</span>
-                        <svg class="track" viewBox="0 0 32 8" aria-hidden="true" data-testid="move-track">
-                          <line x1="0" x2="32" y1="4" y2="4" />
-                          {#if mark.its !== null}<circle class="its" cx={3 + mark.its * 26} cy="4" r="2.5" />{/if}
-                          {#if mark.yours !== null}<circle class="yours" cx={3 + mark.yours * 26} cy="4" r="1.75" />{/if}
-                        </svg>
-                      </span>
-                      <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
+            {#each turn.lines as entry, at (entry.id)}
+              {@const jumpId = entry.jumpKey ?? entry.id}
+              {@const prevWho = at > 0 ? turn.lines[at - 1]?.who : ''}
+              {@const isCurrent = isLineCurrent(entry, true)}
+              {@const isSource = cursorSourceSeq !== null && entry.seq === cursorSourceSeq}
+              {@const childCurrent = entry.children.some(child => isLineCurrent(child))}
+              {@const isJump = Boolean(onjump && entry.jumpKey)}
+              {@const isSelectable = !entry.passes && Boolean(onselectline && entry.boardSeq !== null)}
+              {@const mark = moveMarks.get(entry.id)}
+              {#if isJump || isSelectable}
+                <!-- A recording's line jumps to its position; a live line selects its cursor board. -->
+                <li class="move type-caption jump" class:quiet={entry.passes !== null} class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'}
+                  data-testid={entry.passes ? 'pass-run' : 'log-entry'} data-actor={entry.actor}>
+                  <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
+                    data-move={isJump ? jumpId : undefined} data-history-seq={entry.boardSeq ?? undefined}
+                    title={isJump && !entry.passes ? entry.segments.map(segment => segment.text).join('') : undefined}
+                    onclick={() => (isJump ? onjump!(jumpId, entry.boardSeq) : onselectline!(entry))}>
+                    {#if isJump}
+                      <span class="gutter" aria-hidden="true" title={at === 0 && turn.owner ? `Turn ${turn.turn ?? ''}, ${turn.owner}` : undefined}>{at === 0 ? turn.turn ?? '·' : ''}</span>
+                      <span class="who" class:repeat={!entry.passes && prevWho === entry.who}>{entry.passes ? '' : entry.who}</span>
+                      <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{@render lineSegments(entry.segments, false)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
+                      {#if mark}{@const same = mark.agreed === mark.of}
+                        <span class="reading">
+                          <span class="mark type-caption" data-testid="move-mark" data-same={same} data-agreed={mark.agreed} data-of={mark.of}>{markText(mark)}</span>
+                          <svg class="track" viewBox="0 0 32 8" aria-hidden="true" data-testid="move-track">
+                            <line x1="0" x2="32" y1="4" y2="4" />
+                            {#if mark.its !== null}<circle class="its" cx={3 + mark.its * 26} cy="4" r="2.5" />{/if}
+                            {#if mark.yours !== null}<circle class="yours" cx={3 + mark.yours * 26} cy="4" r="1.75" />{/if}
+                          </svg>
+                        </span>
+                        <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
+                      {/if}
+                      {#if shownMoves.has(entry.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
+                    {:else}
+                      {@render moveWhat(entry, prevWho, false)}
                     {/if}
-                    {#if shownMoves.has(move.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
                   </button>
                 </li>
-              {:else if move.passes}
+              {:else if entry.passes}
                 <li class="move type-caption quiet" data-testid="pass-run">
-                  <span class="who" aria-hidden="true"></span>
-                  <span class="what">passed{#each move.passes as part, at (part.actor)}{at ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
+                  <span class="what">passed{#each entry.passes as part, idx (part.actor)}{idx ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
                 </li>
               {:else}
-              <li class="move type-caption" class:auto={move.actor === 'auto'} class:you={move.actor === 'you'} data-testid="log-entry" data-actor={move.actor}>
-                <!-- A score names the player once per run of their moves. -->
-                <span class="who" class:repeat={turn.moves[at - 1]?.who === move.who}>{move.who}</span>
-                <span class="what">{#each move.segments as segment, at (at)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}</span>
-              </li>
+                <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
+                  {@render moveWhat(entry, prevWho, true)}
+                </li>
+              {/if}
+              {#if entry.children.length > 0}
+                {#if turn.busy && !expanded.has(entry.id) && !childCurrent}
+                  <li class="consequence-summary type-caption">
+                    <button type="button" class="consequence-toggle" data-testid="consequence-toggle" aria-expanded="false" onclick={() => toggleExpanded(entry.id)}>
+                      {entry.children.length} {entry.children.length === 1 ? 'consequence' : 'consequences'}
+                    </button>
+                  </li>
+                {:else}
+                  <li class="consequences-wrap">
+                    {#if turn.busy}
+                      <button type="button" class="consequence-toggle type-caption" data-testid="consequence-toggle" aria-expanded="true" onclick={() => toggleExpanded(entry.id)}>
+                        Hide {entry.children.length} {entry.children.length === 1 ? 'consequence' : 'consequences'}
+                      </button>
+                    {/if}
+                    <ol class="consequences">
+                      {#each entry.children as child (child.id)}
+                        {@const isChildJump = Boolean(onjump && child.jumpKey)}
+                        {@const isChildInteractive = isChildJump || Boolean(onselectline && child.boardSeq !== null)}
+                        <li class="consequence type-caption" class:jump={isChildInteractive} data-testid="history-consequence" data-depth="1">
+                          {#if isChildInteractive}
+                            <button type="button" aria-current={isLineCurrent(child) ? 'true' : undefined}
+                              data-move={isChildJump ? child.jumpKey! : undefined}
+                              data-history-seq={child.boardSeq ?? undefined}
+                              onclick={() => (isChildJump ? onjump!(child.jumpKey!, child.boardSeq) : onselectline!(child))}>
+                              <span class="what">{@render lineSegments(child.segments, false)}</span>
+                            </button>
+                          {:else}
+                            <span class="what">{@render lineSegments(child.segments, true)}</span>
+                          {/if}
+                        </li>
+                      {/each}
+                    </ol>
+                  </li>
+                {/if}
               {/if}
             {/each}
           </ol>
@@ -374,15 +472,16 @@
   {#snippet choiceList()}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
+        {@const choiceText = offerChoiceLabel(placed, view.list, frame.projection)}
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${offerText(placed.offer)}${recordedP(placed) !== undefined ? `, ${evidence?.heading ? 'policy' : 'recorded policy'} ${formatProbability(recordedP(placed)!)}` : ''}${estimateOf(placed) !== undefined ? `, estimate after ${formatScore(estimateOf(placed)!)}` : ''}${evidence?.heading ? (choosers(placed) ? `, ${choosers(placed)}` : '') : isChosen(placed) ? ', chosen' : ''}`}
-            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
+            aria-label={`${choiceText}${recordedP(placed) !== undefined ? `, ${evidence?.heading ? 'policy' : 'recorded policy'} ${formatProbability(recordedP(placed)!)}` : ''}${estimateOf(placed) !== undefined ? `, estimate after ${formatScore(estimateOf(placed)!)}` : ''}${evidence?.heading ? (choosers(placed) ? `, ${choosers(placed)}` : '') : isChosen(placed) ? ', chosen' : ''}`}
+            disabled={!live} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label" title={recording ? offerText(placed.offer) : undefined}>{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={offerText(placed.offer)} />{#if !recording && evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
+            <span class="label" title={recording ? choiceText : undefined}>{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={choiceText} />{#if !recording && evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
             {#if recording && evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}
             {#if estimateOf(placed) !== undefined}<span class="estimate" aria-hidden="true" data-testid="offer-estimate" title="Estimate after this choice, 0–100 from your seat: the next decision's reading, in a world re-dealt from what you knew">{formatScore(estimateOf(placed)!)}</span>{/if}
             {#if recordedP(placed) !== undefined}
@@ -423,8 +522,13 @@
   .recent ol { display: grid; gap: 3px; }
   /* Folded, the recap is three lines; opened, it scrolls within a quarter of the window. */
   .recent ol { max-height: 25vh; overflow-y: auto; }
-  .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+  .fact { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
   .fact.theirs { color: var(--text); }
+  .fact-btn {
+    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 1px 4px; margin: 0 -4px; border-radius: var(--radius-sm);
+    text-align: left; color: inherit; background: none; cursor: pointer;
+  }
+  .fact-btn:hover { background: var(--bg-field); }
   .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
   .prompt { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -447,7 +551,7 @@
   .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
   .pass-turn:hover { color: var(--text); background: var(--bg-field); }
   .status { min-height: 16px; }
-  .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
+  .choices { flex: 0 1 auto; min-height: 0; max-height: 40%; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
   .raw { min-height: 0; display: flex; flex-direction: column; gap: 4px; }
   .raw[open] { flex: 1; }
@@ -458,33 +562,32 @@
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
-  .row:hover:not(:disabled, [aria-disabled]) { border-color: var(--border-strong); background: var(--bg-field); }
-  .row:disabled, .row[aria-disabled] { color: var(--text-secondary); cursor: default; }
-  /* During the read-out: the decision stays in place beneath the beat, quieter. */
-  .reading-out [data-testid='decision-prompt'], .reading-out .whose { color: var(--text-tertiary); }
-  .prompt [aria-disabled] { opacity: 0.55; cursor: default; }
+  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
+  .row:disabled { color: var(--text-secondary); cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   /* Reviewing, a choice keeps one line like its move, so the bounded list shows several; the whole choice is its title. */
   .recording .row .label { font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recording .row .who-chose { flex: none; margin-left: 0; }
   .hidden-key { visibility: hidden; }
-  .log { flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
+  .log { flex: 1 1 220px; min-height: 120px; display: flex; flex-direction: column; border-bottom: 0; }
   /* Reviewing, the moves are what you read: they take the remaining height, and the choices list keeps a bounded share. */
   .recording .log { flex: 1 1 0; min-height: 200px; }
   .recording .choices { flex: 0 1 auto; min-height: 0; max-height: 26%; }
-  .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, var(--text) 14px); display: grid; align-content: start; gap: 4px; }
-  .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+  .turns { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 6px; }
+  .turn ol { display: grid; gap: 1px; }
+  .turn-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .move { display: flex; align-items: baseline; gap: 6px; padding-left: 26px; color: var(--text); line-height: 16px; }
+  .move { padding: 1px 4px; color: var(--text); line-height: 20px; }
   /* What happened is the game's face; who did it and the count stay the interface's. */
-  .move .what { flex: 1; min-width: 0; font: 14px/20px var(--font-serif); }
-  .move .who { flex: none; width: 60px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .move .who.repeat { visibility: hidden; }
+  .move .what { display: block; min-width: 0; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
+  .move .who {
+    display: inline; margin-right: 5px; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary);
+  }
   .move.you .who { color: var(--info-text); }
   .move.auto { color: var(--text-tertiary); }
   .move.quiet { color: var(--text-tertiary); }
-  .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
+  .more { min-height: 0; color: var(--text-secondary); padding: 1px 4px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .card-name { font-family: var(--font-serif); font-weight: 600; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
@@ -504,15 +607,21 @@
   .row:disabled.chosen { color: var(--text); }
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
-  .move.jump { padding-left: 0; }
+  .move.jump { padding: 0; }
+  .jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .jump button:hover { background: var(--bg-field); }
+  .jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .jump button[data-cursor-source='true'] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 2px 0 0 var(--border-strong); }
   /* A recording's row also carries its mark, so its words keep one line, as a score's move list does; the whole
      move is the button's title and its accessible name. */
-  .move.jump .who { width: 44px; }
   .recording .turn + .turn { border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); padding-top: 2px; }
   .recording .turns { gap: 0; }
   .recording .turn { min-width: 0; }
   .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .move.jump .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; }
+  .recording .move.jump .who { flex: none; width: 44px; margin-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recording .move.jump .who.repeat { visibility: hidden; }
+  .recording .move.jump .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
@@ -525,8 +634,10 @@
   /* Who chose it follows the choice on its line, wrapping under it only when the line is full. */
   .who-chose { margin-left: 6px; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
-  /* Dense rows: a 24 px target (WCAG 2.5.8) rather than the 32 px control height. */
-  .move.jump button { width: 100%; min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 2px 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
-  .move.jump button:hover { background: var(--bg-field); }
-  .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .consequences-wrap, .consequence-summary { padding-left: 6px; }
+  .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 7px; margin: 1px 0 3px; }
+  .consequence { color: var(--text-secondary); line-height: 20px; }
+  .consequence .what { display: block; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
+  .consequence-toggle { min-height: 0; color: var(--text-tertiary); padding: 1px 3px; text-decoration: underline dotted; }
+  .consequence-toggle:hover { color: var(--text); }
 </style>

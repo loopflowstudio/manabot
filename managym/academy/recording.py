@@ -428,6 +428,36 @@ class Recording:
         self._boards: dict[int, dict[str, Any]] = {}
         self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
+    # The 12 original pre-history presentation kinds; any other kind guarantees
+    # a recording carries modern track history (immune to drift as kinds grow).
+    _LEGACY_PRESENTATION_KINDS = frozenset(
+        {
+            "cast",
+            "targeted",
+            "resolved",
+            "damage",
+            "destroyed",
+            "died",
+            "attack_group",
+            "blocked",
+            "turn_started",
+            "land_played",
+            "discarded",
+            "revealed",
+        }
+    )
+
+    def has_track_history(self) -> bool:
+        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
+        return any(
+            event.labels is not None
+            or event.cause is not None
+            or event.rule is not None
+            or event.kind.kind not in self._LEGACY_PRESENTATION_KINDS
+            for events in self.tracks.values()
+            for event in events
+        )
+
     def can_reveal(self, position: Position) -> bool:
         """Both hands at `position`: a Watch spectator view where one was
         captured, or any position of an authoritatively complete played game."""
@@ -578,6 +608,12 @@ class Recording:
         # Names come from the event's own retained transition. A later board,
         # including spectator analysis, must never fill historical private facts.
         labels: dict[str, dict[str, str]] = {"objects": {}, "players": {}, "stacks": {}}
+        if event.labels is not None:
+            return {
+                "objects": dict(event.labels.objects),
+                "players": {"0": "Seat 1", "1": "Seat 2"},
+                "stacks": dict(event.labels.stacks),
+            }
         index = self.event_by_revision.get(event.from_revision)
         if index is None:
             return labels
@@ -690,8 +726,12 @@ class Recording:
             if row
             else deepcopy(replayed or self._board(position))
         )
-        event = self.payload["events"][position.event_index] if row else {}
-        analysis = event.get("analysis_observation") if self.watch else None
+        event = (
+            self.payload["events"][position.event_index]
+            if position.event_index < len(self.payload["events"])
+            else {}
+        )
+        analysis = event.get("analysis_observation") if (row and self.watch) else None
         other = (
             self.views.board(index, opponent=True)
             if self.views and self.views.complete
@@ -720,13 +760,18 @@ class Recording:
             if position.kind == "consequences"
             else position.key
         )
+        boards = (
+            deepcopy(event.get("boards", []))
+            if position.kind == "consequences" and not self.watch
+            else []
+        )
         return {
             **self.metadata(position),
             "description": self._description(position),
             "note_key": note_key,
             "observation": deepcopy(analysis) if reveal else observation,
             "decision": decision,
-            "outputs": deepcopy(event.get("bot_decision")),
+            "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,
             "revealed": reveal,
             "can_reveal": other is not None
@@ -743,6 +788,7 @@ class Recording:
             "cursor": cursor,
             "transition_start": transition_start,
             "consequences_recorded": bool(self.replay) or bool(track),
+            "boards": boards,
         }
 
 

@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { CardState, ExperienceFrame, PermanentState, PresentationEvent, PresentationLabels } from '$lib/types';
-import { nameBook, recentView, boardLines, targetNames, turnOwners } from './recent';
+import { recentMarks, boardLines, targetNames, turnOwners } from './recent';
+
+const names = { you: 'You', opponent: 'Heuristic' };
 
 const bolt = JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/bolt-target.json', import.meta.url), 'utf8')) as {
   recovery: { frame: ExperienceFrame; presentation_tail: PresentationEvent[] };
 };
-const names = { you: 'You', opponent: 'Search 64' };
 const labels: PresentationLabels = { objects: { '31:0': 'Lightning Bolt', '77:0': 'Grizzly Bears' }, players: {}, stacks: { 4001: 'Lightning Bolt' } };
+const emptyLabels: PresentationLabels = { objects: {}, players: {}, stacks: {} };
 
 function withBoard(frame: ExperienceFrame, change: (projection: ExperienceFrame['projection']) => void): ExperienceFrame {
   const copy = structuredClone(frame);
@@ -21,106 +23,86 @@ const card = (id: number, name: string): CardState => ({ ...structuredClone(bolt
 const permanent = (id: number, name: string, extra: Partial<PermanentState> = {}): PermanentState =>
   ({ id, name, controller_id: 1, tapped: false, power: 2, toughness: 2, damage: 0, summoning_sick: false, plus1_counters: 0, ...extra } as PermanentState);
 
-describe('recentView', () => {
-  it('says what happened since the last decision, from presentation events only', () => {
-    const view = recentView(bolt.recovery.frame, 1, bolt.recovery.presentation_tail, () => labels, names);
-    expect(view.facts.map(fact => fact.text)).toEqual([
-      'You cast Lightning Bolt, targeting Search 64',
-      'An effect dealt 3 to Search 64',
-      'Grizzly Bears died',
-    ]);
-    // The spell left the stack, so it is shown as resolved with its target.
-    expect(view.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt', by: 'you', targets: ['Search 64'] }]);
+describe('recentMarks', () => {
+  it('collects resolved spells, touched objects, and damage totals since the last decision', () => {
+    const marks = recentMarks(bolt.recovery.frame, 1, bolt.recovery.presentation_tail, () => labels);
+    expect(marks.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt' }]);
+    expect([...marks.damage.players]).toEqual([[1, 3]]);
   });
 
-  it('calls the person "you" mid-sentence, and "yourself" in their own move', () => {
-    const atYou = bolt.recovery.presentation_tail.map(event =>
-      event.kind.kind === 'targeted' || event.kind.kind === 'damage'
-        ? { ...event, kind: { ...event.kind, target: { kind: 'player' as const, id: 0 } } } : event);
-    const view = recentView(bolt.recovery.frame, 1, atYou, () => labels, names);
-    expect(view.facts.slice(0, 2).map(fact => fact.text)).toEqual(['You cast Lightning Bolt, targeting yourself', 'An effect dealt 3 to you']);
+  it('ignores events before sinceRevision or when sinceRevision is null', () => {
+    const after = recentMarks(bolt.recovery.frame, 2, bolt.recovery.presentation_tail, () => labels);
+    expect(after.resolved).toEqual([]);
+    expect(after.touched.size).toBe(0);
+    expect(after.damage.players.size).toBe(0);
+    expect(recentMarks(bolt.recovery.frame, null, bolt.recovery.presentation_tail, () => labels).resolved).toEqual([]);
   });
 
-  it('adds up the damage each player and object was dealt', () => {
-    const view = recentView(bolt.recovery.frame, 1, bolt.recovery.presentation_tail, () => labels, names);
-    expect([...view.damage.players]).toEqual([[1, 3]]);
-  });
-
-  it('shows nothing that happened before the decision it follows', () => {
-    const view = recentView(bolt.recovery.frame, 2, bolt.recovery.presentation_tail, () => labels, names);
-    expect(view.facts).toEqual([]);
-    expect(recentView(bolt.recovery.frame, null, bolt.recovery.presentation_tail, () => labels, names).facts).toEqual([]);
-  });
-});
-
-describe('nameBook', () => {
-  it("names an opponent's spell from hidden hand by the move's narration, and others by what was on screen", () => {
-    const after = withBoard(bolt.recovery.frame, projection => { projection.opponent.battlefield = [permanent(93, 'Water Tribe Rallier')]; });
-    const book = nameBook([bolt.recovery.frame, after], [
-      { id: 'a', actor: 'villain', turn: 4, text: 'Play Plains' },
-      { id: 'b', actor: 'villain', turn: 4, text: 'Cast Water Tribe Rallier' },
-    ]);
-    const cast: PresentationEvent = { ...bolt.recovery.presentation_tail[0], seq: 7, from_revision: 3, to_revision: 4,
-      kind: { kind: 'cast', object: { entity: 79, incarnation: 1 }, controller: 1, stack: 79 } };
-    const damage: PresentationEvent = { ...bolt.recovery.presentation_tail[3], seq: 8, from_revision: 3, to_revision: 4,
-      kind: { kind: 'damage', source: null, target: { kind: 'object', id: { entity: 93, incarnation: 2 } }, amount: 2 } };
-    const view = recentView(after, 3, [cast, damage], () => ({ objects: {}, players: {}, stacks: {} }), names, book);
-    expect(view.facts.map(fact => fact.text)).toEqual(['Search 64 cast Water Tribe Rallier', 'An effect dealt 2 to Water Tribe Rallier']);
-    expect(view.resolved.map(spell => spell.name)).toEqual(['Water Tribe Rallier']);
-  });
-
-  it("names a narrated spell without the narration's targets, so each target is said once", () => {
-    // The qa4 game: Allies at Last from a hidden hand, one target. Its move reads
-    // "Cast Allies at Last, targeting Tiger-Seal"; the beat once read
-    // "…, targeting Tiger-Seal and Tiger-Seal".
-    const after = withBoard(bolt.recovery.frame, projection => { projection.agent.battlefield = [permanent(137, 'Tiger-Seal', { controller_id: 0 })]; });
-    const book = nameBook([bolt.recovery.frame, after], [
-      { id: 'a', actor: 'villain', turn: 16, text: 'Cast Allies at Last, targeting Tiger-Seal' },
-    ]);
+  it('tracks touched permanents and event.labels spell names without frame fallback', () => {
     const base = bolt.recovery.presentation_tail[0];
-    const cast: PresentationEvent = { ...base, seq: 84, from_revision: 3, to_revision: 4,
-      kind: { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 } };
-    const targeted: PresentationEvent = { ...base, seq: 85, from_revision: 3, to_revision: 4,
-      kind: { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 137, incarnation: 3 } } } };
-    const view = recentView(after, 3, [cast, targeted], () => ({ objects: {}, players: {}, stacks: {} }), names, book);
-    expect(view.facts.map(fact => fact.text)).toEqual(['Search 64 cast Allies at Last, targeting Tiger-Seal']);
-    expect(view.resolved).toEqual([{ id: 44, name: 'Allies at Last', by: 'opponent', targets: ['Tiger-Seal'] }]);
+    const events: PresentationEvent[] = [
+      { ...base, seq: 10, from_revision: 3, to_revision: 4, kind: { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 },
+        labels: { objects: { '44:1': 'Allies at Last' }, stacks: { '44': 'Allies at Last' } } },
+      { ...base, seq: 11, from_revision: 3, to_revision: 4, cause: 10,
+        kind: { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 137, incarnation: 3 } } } },
+      { ...base, seq: 12, from_revision: 3, to_revision: 4,
+        kind: { kind: 'land_played', object: { entity: 95, incarnation: 1 }, player: 1 } },
+      { ...base, seq: 13, from_revision: 3, to_revision: 4,
+        kind: { kind: 'activated', source: { entity: 93, incarnation: 2 }, controller: 1, stack: 91 } },
+      { ...base, seq: 14, from_revision: 3, to_revision: 4,
+        kind: { kind: 'counters', object: { entity: 98, incarnation: 1 }, counter: '+1/+1', count: 1, total: 2 } },
+    ];
+    const marks = recentMarks(bolt.recovery.frame, 3, events, () => emptyLabels);
+    expect(marks.resolved).toEqual([{ id: 44, name: 'Allies at Last' }]);
+    expect([...marks.touched].sort((a, b) => a - b)).toEqual([93, 95, 98, 137]);
   });
 
-  it('reads every spell a compound move cast, in order', () => {
-    const book = nameBook([bolt.recovery.frame], [
-      { id: 'a', actor: 'villain', turn: 4, text: 'Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Suki, Kyoshi Warrior and Ally' },
-      { id: 'b', actor: 'hero', turn: 4, text: 'Cast Pop Quiz' },
-    ]);
-    expect(book.casts).toEqual({ you: ['Pop Quiz'], opponent: ['Suki, Kyoshi Warrior', 'Yip Yip!'] });
-  });
-});
-
-describe('lands, discards and reveals', () => {
-  it("tells the opponent's land play and discard as facts about the cards they became", () => {
-    const after = withBoard(bolt.recovery.frame, projection => {
-      projection.opponent.battlefield = [permanent(95, 'Plains')];
-      projection.opponent.graveyard = [card(96, 'Earth Kingdom Jailer'), card(97, 'Yip Yip!')];
+  it('clears creature damage, life-plate deltas, touched rings, and resolved-spell target outlines across a turn boundary', () => {
+    const base = bolt.recovery.presentation_tail[0];
+    const damagedFrame = withBoard(bolt.recovery.frame, projection => {
+      projection.agent.battlefield = [permanent(60, 'White Lotus Reinforcements', { controller_id: 0, damage: 2 })];
+      projection.opponent.battlefield = [permanent(61, 'Earth Kingdom Jailer', { controller_id: 1, damage: 0 })];
     });
-    const base = bolt.recovery.presentation_tail[0];
-    const land: PresentationEvent = { ...base, seq: 7, from_revision: 3, to_revision: 4,
-      kind: { kind: 'land_played', object: { entity: 95, incarnation: 1 }, player: 1 } };
-    const discard: PresentationEvent = { ...base, seq: 8, from_revision: 4, to_revision: 5,
-      kind: { kind: 'discarded', objects: [{ entity: 96, incarnation: 2 }, { entity: 97, incarnation: 2 }], player: 1 } };
-    const view = recentView(after, 3, [land, discard], () => ({ objects: {}, players: {}, stacks: {} }), names, nameBook([after], []));
-    expect(view.facts.map(fact => [fact.by, fact.text, fact.subjects])).toEqual([
-      ['opponent', 'Search 64 played Plains', [95]],
-      ['opponent', 'Search 64 discarded Earth Kingdom Jailer and Yip Yip!', [96, 97]],
-    ]);
-  });
+    const healedFrame = withBoard(bolt.recovery.frame, projection => {
+      projection.agent.battlefield = [permanent(60, 'White Lotus Reinforcements', { controller_id: 0, damage: 0 })];
+      projection.opponent.battlefield = [permanent(61, 'Earth Kingdom Jailer', { controller_id: 1, damage: 0 })];
+    });
+    const eventsSameTurn: PresentationEvent[] = [
+      { ...base, seq: 18, from_revision: 3, to_revision: 4,
+        kind: { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 },
+        labels: { objects: { '44:1': 'Firebending Lesson' }, stacks: { '44': 'Firebending Lesson' } } },
+      { ...base, seq: 19, from_revision: 3, to_revision: 4, cause: 18,
+        kind: { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 60, incarnation: 1 } } } },
+      { ...base, seq: 20, from_revision: 3, to_revision: 4, cause: 18,
+        kind: { kind: 'damage', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 60, incarnation: 1 } }, amount: 2 } },
+      { ...base, seq: 21, from_revision: 3, to_revision: 4,
+        kind: { kind: 'damage', source: null, target: { kind: 'player', id: 1 }, amount: 3 } },
+      { ...base, seq: 22, from_revision: 3, to_revision: 4,
+        kind: { kind: 'blocked', attacker: { entity: 61, incarnation: 1 }, blockers: [{ entity: 60, incarnation: 1 }] } },
+    ];
+    // Same turn while damage is still on the creature: badges, touched rings, and lingering lines show.
+    const sameTurn = recentMarks(damagedFrame, 3, eventsSameTurn, () => emptyLabels);
+    expect(sameTurn.damage.objects.get(60)).toBe(2);
+    expect(sameTurn.damage.players.get(1)).toBe(3);
+    expect(sameTurn.touched.has(60)).toBe(true);
+    expect(sameTurn.resolved).toEqual([{ id: 44, name: 'Firebending Lesson' }]);
+    expect(boardLines(damagedFrame, eventsSameTurn, sameTurn.resolved, 3)).toHaveLength(2);
 
-  it("tells the opponent's reveal by the cards' names", () => {
-    const base = bolt.recovery.presentation_tail[0];
-    const reveal: PresentationEvent = { ...base, seq: 7, from_revision: 3, to_revision: 4,
-      kind: { kind: 'revealed', cards: ['Kyoshi Warriors'], player: 1 } };
-    const frame = bolt.recovery.frame;
-    const view = recentView(frame, 3, [reveal], () => ({ objects: {}, players: {}, stacks: {} }), names, nameBook([frame], []));
-    expect(view.facts.map(fact => [fact.by, fact.kind, fact.text])).toEqual([['opponent', 'revealed', 'Search 64 revealed Kyoshi Warriors']]);
+    // Same turn if damage is already gone on the board: creature damage badge is suppressed.
+    expect(recentMarks(healedFrame, 3, eventsSameTurn, () => emptyLabels).damage.objects.size).toBe(0);
+
+    // After a new turn starts: creature damage, life-plate delta, touched outline,
+    // resolved-spell target outline, and prior-turn block line all clear.
+    const eventsNextTurn: PresentationEvent[] = [
+      ...eventsSameTurn,
+      { ...base, seq: 23, from_revision: 4, to_revision: 5, kind: { kind: 'turn_started', player: 0, turn_number: 7 } },
+    ];
+    const nextTurn = recentMarks(healedFrame, 3, eventsNextTurn, () => emptyLabels);
+    expect(nextTurn.damage.objects.size).toBe(0);
+    expect(nextTurn.damage.players.size).toBe(0);
+    expect(nextTurn.touched.size).toBe(0);
+    expect(nextTurn.resolved).toEqual([]);
+    expect(boardLines(healedFrame, eventsNextTurn, nextTurn.resolved, 3)).toEqual([]);
   });
 });
 
@@ -133,8 +115,27 @@ describe('boardLines', () => {
     expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail)).toEqual([]);
   });
 
+  it('draws target lines for triggered and activated abilities in stack_objects targeting players or permanents', () => {
+    const withAbilities = withBoard(bolt.recovery.frame, projection => {
+      projection.opponent.battlefield = [permanent(50, 'Earth Kingdom Jailer')];
+      projection.stack_objects = [
+        { id: 901, kind: 'triggered_ability', controller: 1, label: 'Vengeful Bloodwitch — Drain', source_permanent: 30 },
+        { id: 902, kind: 'activated_ability', controller: 0, label: 'Water Tribe Rallier — Pump', source_permanent: 40 },
+      ];
+    });
+    const base = bolt.recovery.presentation_tail[0];
+    const events: PresentationEvent[] = [
+      { ...base, seq: 20, kind: { kind: 'targeted', source: { kind: 'stack', id: 901 }, target: { kind: 'player', id: 0 } } },
+      { ...base, seq: 21, kind: { kind: 'targeted', source: { kind: 'stack', id: 902 }, target: { kind: 'object', id: { entity: 50, incarnation: 0 } } } },
+    ];
+    expect(boardLines(withAbilities, events)).toEqual([
+      { from: { kind: 'stack', id: 901 }, to: { kind: 'player', index: 0 }, kind: 'target' },
+      { from: { kind: 'stack', id: 902 }, to: { kind: 'object', id: 50 }, kind: 'target' },
+    ]);
+  });
+
   it('keeps the line of a spell that just resolved while it is shown beside the stack', () => {
-    const resolved = [{ id: 4001, name: 'Lightning Bolt', by: 'you' as const, targets: [] }];
+    const resolved = [{ id: 4001, name: 'Lightning Bolt' }];
     expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail, resolved)).toHaveLength(1);
   });
 
@@ -165,24 +166,23 @@ describe('boardLines', () => {
       projection.opponent.battlefield = [permanent(50, 'Attacker')];
       projection.agent.battlefield = [permanent(60, 'Blocker', { controller_id: 0 })];
     });
-    const block: PresentationEvent = { ...bolt.recovery.presentation_tail[0], seq: 9, from_revision: 5, to_revision: 6,
-      kind: { kind: 'blocked', attacker: { entity: 50, incarnation: 1 }, blockers: [{ entity: 60, incarnation: 1 }] } };
-    const line = { from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' };
-    expect(boardLines(after, [block], [], 5)).toEqual([line]);
-    // Before your move, or with a creature gone, there is no line.
-    expect(boardLines(after, [block], [], 6)).toEqual([]);
-    const gone = withBoard(after, projection => { projection.opponent.battlefield = []; });
-    expect(boardLines(gone, [block], [], 5)).toEqual([]);
+    const block: PresentationEvent = {
+      ...bolt.recovery.presentation_tail[0], seq: 10, from_revision: 3, to_revision: 4,
+      kind: { kind: 'blocked', attacker: { entity: 50, incarnation: 0 }, blockers: [{ entity: 60, incarnation: 0 }] },
+    };
+    expect(boardLines(after, [block], [], 3)).toEqual([{ from: { kind: 'object', id: 60 }, to: { kind: 'object', id: 50 }, kind: 'block' }]);
+    expect(boardLines(after, [block], [], 4)).toEqual([]);
   });
 });
 
 describe('turnOwners', () => {
-  it('knows whose turn each retained turn start was, and the current one', () => {
-    const start = (seq: number, player: number, turn: number): PresentationEvent => ({
-      ...bolt.recovery.presentation_tail[0], seq, kind: { kind: 'turn_started', player, turn_number: turn },
-    });
-    const owners = turnOwners(bolt.recovery.frame, [start(1, 0, 1), start(2, 1, 2)]);
-    expect(owners.get(1)).toBe('you');
+  it('records each turn owner from turn_started events and the current frame', () => {
+    const start: PresentationEvent = {
+      ...bolt.recovery.presentation_tail[0], seq: 1,
+      kind: { kind: 'turn_started', player: 1, turn_number: 2 },
+    };
+    const owners = turnOwners(bolt.recovery.frame, [start]);
     expect(owners.get(2)).toBe('opponent');
+    expect(owners.get(bolt.recovery.frame.projection.turn.turn_number)).toBe('you');
   });
 });

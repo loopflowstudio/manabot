@@ -285,6 +285,7 @@ impl Game {
         snapshot.decision_memory_enabled = self.decision_memory_enabled;
         snapshot.card_capture = self.card_capture.clone();
         snapshot.statistics = self.statistics.clone();
+        snapshot.presentation = self.presentation.clone();
         snapshot.capture_originals = self.capture_originals.clone();
         snapshot.capture_drawing = self.capture_drawing;
         snapshot

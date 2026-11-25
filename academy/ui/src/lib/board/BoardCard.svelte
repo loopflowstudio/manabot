@@ -29,6 +29,7 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace, frameColors } from '$lib/card-faces.svelte';
   import { badgeReading, badgesOf, chipWidth, fitBadges } from './badges';
+  import type { StopDelta } from './beats';
   import type { CardState, PermanentState } from '$lib/types';
   import { getContext, onMount } from 'svelte';
   import { cardEvidence, EVIDENCE, formatProbability, type OfferEvidence } from './replay';
@@ -59,10 +60,12 @@
     side?: 'you' | 'opponent';
     /** It attacked, blocked, was dealt damage or was targeted since your last move. */
     touched?: boolean;
-    /** The opponent's move being read out is about this card. */
+    /** The active stop or history line is about this card. */
     beat?: boolean;
     /** Damage it was dealt since your last move, shown as it lands. */
     dealt?: number;
+    /** Damage, counter or P/T changes at the active cursor stop ("−3", "+1/+1 · 2", "+1/+0"). */
+    stopDeltas?: readonly StopDelta[];
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
     /** What it has committed to the pending cost: "tapped to crew". */
@@ -93,7 +96,7 @@
 
   let {
     connectSource = false, connectTarget = false, drop = false, name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, stopDeltas = [], planned = null, paid = null,
     count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, travel = true, onactivate, onpreview,
   }: Props = $props();
 
@@ -293,7 +296,15 @@
       {#if showPolicy && recorded}
         <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
       {/if}
-      {#if dealt}{#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
+      {#if dealt}
+        {#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}
+      {:else if stopDeltas.length}
+        <span class="stop-deltas" aria-hidden="true">
+          {#each stopDeltas as delta (`${delta.kind}:${delta.text}`)}
+            <span class={`stop-delta ${delta.kind}`} data-testid="stop-delta" data-delta-kind={delta.kind}>{delta.text}</span>
+          {/each}
+        </span>
+      {/if}
     </span>
   </button>
 </div>
@@ -375,9 +386,11 @@
     color: var(--text); background: var(--bg-surface); box-shadow: inset 0 0 0 1px var(--border);
   }
   .chip.sick { width: 16px; height: 16px; padding: 0; color: var(--text-secondary); }
-  .chip.damage { color: var(--damage); }
+  .chip.damage { color: var(--damage); animation: bump var(--motion-move) var(--motion-move-ease); }
+  .chip.counter { animation: bump var(--motion-move) var(--motion-move-ease); }
   .chip.overridden { color: var(--text-tertiary); text-decoration: line-through; }
   .chip.granted { box-shadow: inset 0 0 0 1px var(--gain); }
+  @keyframes bump { from { transform: scale(1.14); } }
 
   /* An attacker tilts a few degrees past its rest: a tapped one lies just past the quarter, a vigilant one stays upright. */
   .tcard.attacking { --tilt: -2deg; box-shadow: var(--lift-attacking); }
@@ -424,12 +437,23 @@
   }
   .plan b { font: 600 12px/16px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
   .dealt {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
-    font: 600 20px/28px var(--font-sans); color: var(--bg);
-    padding: 0 6px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
-    animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
+    position: absolute; top: 3px; right: 3px; pointer-events: none;
+    font: 600 16px/24px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--bg);
+    padding: 0 5px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
+    animation: land var(--motion-move) var(--motion-move-ease);
   }
-  @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
+  .stop-deltas {
+    position: absolute; top: 3px; right: 3px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none;
+  }
+  .stop-delta {
+    font: 600 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
+    padding: 0 5px; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised);
+    animation: land var(--motion-move) var(--motion-move-ease);
+  }
+  .stop-delta.damage { color: var(--bg); background: var(--damage); }
+  .stop-delta.counters, .stop-delta.pump { color: var(--bg); background: var(--gain); }
+  @keyframes land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);
     font-family: var(--font-sans); font-weight: 600; font-variant-numeric: tabular-nums;
@@ -441,6 +465,6 @@
   .pt.hurt { color: var(--damage); }
   @media (prefers-reduced-motion: reduce) {
     .slot, .tcard { transition: none; }
-    .dealt { animation: none; }
+    .dealt, .stop-delta, .chip.damage, .chip.counter { animation: none; }
   }
 </style>

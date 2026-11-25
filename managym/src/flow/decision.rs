@@ -1442,9 +1442,10 @@ impl Game {
                             Target::StackAbility(ability.id),
                             ability.controller,
                         );
-                        self.push_to_stack(
-                            crate::state::stack_object::StackObject::ActivatedAbility(ability),
-                        );
+                        let ability =
+                            crate::state::stack_object::StackObject::ActivatedAbility(ability);
+                        self.presentation_activated(&ability);
+                        self.push_to_stack(ability);
                     }
                     FrameCompletion::TurnFaceUp(object) => {
                         if self.state.permanent_of(object).is_some() {
@@ -2757,6 +2758,11 @@ impl Game {
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 let discarded = self.move_object(*object_id, ZoneType::Graveyard);
+                if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup
+                    && suspended.frame.source().is_none()
+                {
+                    self.presentation_cleanup_discard();
+                }
                 if self.state.live(discarded).is_some() {
                     suspended.frame.this_way.push(discarded);
                 }
