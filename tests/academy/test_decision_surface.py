@@ -10,8 +10,8 @@ from typing import Any
 from pydantic import ValidationError
 import pytest
 
-import managym
 from manabot.verify.text_observation import priority_root
+import managym
 from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,

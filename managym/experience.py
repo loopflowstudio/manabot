@@ -416,14 +416,18 @@ class CopyView(ProtocolModel):
 
 
 class AbilityGrantView(ProtocolModel):
-    effect_timestamp: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     source: str | None = Field(default=None, exclude_if=lambda value: value is None)
     counter: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class KeywordAbilityView(ProtocolModel):
     source: str | None = Field(default=None, exclude_if=lambda value: value is None)
-    effect_timestamp: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     label: str
     granted: bool = Field(default=False, exclude_if=lambda value: not value)
 
