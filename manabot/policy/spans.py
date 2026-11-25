@@ -93,6 +93,26 @@ class RowSpans:
     offsets: np.ndarray
     groups: tuple[int, ...]
 
+    @classmethod
+    def from_table(
+        cls,
+        table: tuple[bool, bytes, bytes],
+        layout: RecordLayout,
+        shape: tuple[int, ...],
+        batch_size: int,
+    ) -> "RowSpans":
+        seat_axis, offsets, values = table
+        axis = int(seat_axis)
+        records = np.frombuffer(values, layout.dtype)
+        if layout.dtype.names is None:
+            records = records.reshape(-1, *shape[axis + 1 :])
+        return cls(
+            records,
+            layout,
+            np.frombuffer(offsets, np.int32),
+            (batch_size, *shape[:axis]),
+        )
+
     @cached_property
     def integers(self) -> np.ndarray:
         """Integer joins, flags and whole words in logical column order."""
@@ -344,21 +364,11 @@ def observation_spans(
     schema = batch_layout(batch.layout)
     tables: dict[str, RowSpans] = {}
     capacities: dict[str, int] = {}
-    for key, (seat_axis, offsets, values) in batch.tables().items():
-        axis = int(seat_axis)
+    for key, table in batch.tables().items():
         shape = space.shapes[key]
-        capacities[key] = shape[axis]
-        groups = (batch.batch_size, *shape[:axis])
-        trailing = shape[axis + 1 :]
-        layout = schema.records[key]
-        records = np.frombuffer(values, layout.dtype)
-        if layout.dtype.names is None:
-            records = records.reshape(-1, *trailing)
-        tables[key] = RowSpans(
-            records,
-            layout,
-            np.frombuffer(offsets, np.int32),
-            groups,
+        capacities[key] = shape[int(table[0])]
+        tables[key] = RowSpans.from_table(
+            table, schema.records[key], shape, batch.batch_size
         )
     needs = buckets = None
     if bucketed:

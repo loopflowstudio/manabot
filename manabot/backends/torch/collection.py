@@ -16,7 +16,7 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import ObservationBuffers, PolicyObservation
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
@@ -145,11 +145,11 @@ class SelectionPredictor:
         self.generator = torch.Generator().manual_seed(seed)
 
     @torch.inference_mode()
-    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
+    def predict(self, encoded: PolicyObservation) -> SelectionDraw:
         agent, generator = self.agent, self.generator
         tensors = on_device(
             agent.prepare(
-                {key: value[None] for key, value in encoded.items()},
+                encoded,
                 inference=True,
             ),
             device_of(agent),

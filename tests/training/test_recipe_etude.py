@@ -138,8 +138,8 @@ def test_selection_statistics_follow_the_draw_and_legal_offer_types(
 ) -> None:
     # The first two offers share a type. The final slot is padding.
     encoded = {
-        "actions": np.eye(2)[[0, 0, 1, 1]],
-        "actions_valid": np.array([1, 1, 1, 0]),
+        "actions": np.eye(2)[[0, 0, 1, 1]][None],
+        "actions_valid": np.array([[1, 1, 1, 0]]),
     }
     prediction = selection_prediction(
         SelectionDraw(2, -0.75, np.array([0.5, 0.25, 0.25, 0], dtype=np.float32)),

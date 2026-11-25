@@ -89,7 +89,14 @@ from manabot.policy.readings import (
     read_numeric,
     reading_plan,
 )
-from manabot.policy.spans import ObservationSpans, full_word
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    RowSpans,
+    batch_layout,
+    full_word,
+)
+import managym
 
 Array = np.ndarray
 
@@ -1424,29 +1431,69 @@ def _events(
     )
 
 
-def reference_distribution(obs: ObservationBuffers, kind: str) -> Array:
-    """The full-support magnet [B,A] float32 a reverse KL pulls toward.
-
-    `"uniform"` spreads mass evenly over the legal offers; `"action_type_uniform"`
-    spreads it evenly over the legal action types, then over offers within a
-    type. Reads `actions_valid` [B,A] and `actions` [B,A,F]; every row needs a
-    legal offer.
-    """
+def reference_distribution(
+    obs: ObservationBuffers | managym.ObservationBatch | ObservationSpans, kind: str
+) -> Array:
+    """Full-support KL reference [B,A], with zero mass off the legal offers."""
     if kind not in {"uniform", "action_type_uniform"}:
         raise ValueError(f"unknown reference: {kind}")
-    valid = np.asarray(obs["actions_valid"]) > 0
-    if not valid.any(-1).all():
-        raise ValueError("reference requires at least one legal offer per row")
-    if kind == "uniform":
-        return (valid / valid.sum(-1, keepdims=True)).astype(np.float32)
-    action_types = np.asarray(obs["actions"])[..., :ACTION_TYPE_DIM]
-    types = action_types.argmax(-1)
-    # Legal offers of each type per row, [B,types]: exact small integers.
-    width = action_types.shape[-1]
-    slots = types + width * np.arange(valid.shape[0])[:, None]
-    counts = np.bincount(
-        slots.ravel(), weights=valid.ravel(), minlength=valid.shape[0] * width
+    if kind == "uniform" and isinstance(
+        obs, (ObservationSelection, managym.ObservationBatch)
+    ):
+        if isinstance(obs, ObservationSelection):
+            counts = obs.action_counts
+            capacity = obs.space.config.max_actions
+        else:
+            counts = np.asarray(obs.action_counts, dtype=np.intp)
+            capacity = obs.layout.shapes["actions"][0]
+        if (counts == 0).any():
+            raise ValueError("reference requires at least one legal offer per row")
+        return ((np.arange(capacity) < counts[:, None]) / counts[:, None]).astype(
+            np.float32
+        )
+    if isinstance(obs, ObservationSelection):
+        obs = obs.spans
+    if isinstance(obs, managym.ObservationBatch):
+        shape = obs.layout.shapes["actions"]
+        actions = RowSpans.from_table(
+            obs.tables()["actions"],
+            batch_layout(obs.layout).records["actions"],
+            shape,
+            obs.batch_size,
+        )
+        capacity = shape[0]
+    elif isinstance(obs, ObservationSpans):
+        actions = obs.tables["actions"]
+        capacity = obs.capacities["actions"]
+    else:
+        # v9/v10 dense inputs may have non-prefix masks until retirement in 0.3.0.
+        valid = np.asarray(obs["actions_valid"]) > 0
+        rows, slots = np.nonzero(valid)
+        features = (
+            np.asarray(obs["actions"])[rows, slots, :ACTION_TYPE_DIM]
+            if kind == "action_type_uniform"
+            else None
+        )
+        return offer_probabilities(valid.shape, rows, slots, features)
+
+    rows, slots = actions.coordinates
+    features = (
+        actions.integers[:, :ACTION_TYPE_DIM] if kind == "action_type_uniform" else None
     )
-    counts = counts.reshape(valid.shape[0], width).astype(np.float32)
-    weights = valid / np.take_along_axis(counts, types, -1).clip(min=1)
-    return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
+    return offer_probabilities((actions.groups[0], capacity), rows, slots, features)
+
+
+def offer_probabilities(
+    shape: tuple[int, int], rows: Array, slots: Array, types: Array | None
+) -> Array:
+    weights = np.zeros(shape, np.float32)
+    if types is None:
+        weights[rows, slots] = 1
+    else:
+        # Each type gets one unit of mass, shared by the offers of that type.
+        groups = rows * types.shape[1] + types.argmax(-1)
+        weights[rows, slots] = 1 / np.bincount(groups)[groups]
+    total = weights.sum(axis=1, keepdims=True)
+    if (total == 0).any():
+        raise ValueError("reference requires at least one legal offer per row")
+    return weights / total

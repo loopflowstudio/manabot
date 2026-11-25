@@ -19,9 +19,9 @@ from pydantic import ConfigDict, Field, model_validator
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import (
-    ACTION_TYPE_DIM,
     ObservationSpace,
-    encode_observation,
+    PolicyObservation,
+    encode_policy_batch,
 )
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
@@ -68,19 +68,17 @@ class SelectionPrediction:
 class SelectionPredictor(Protocol):
     """Frozen-policy numerics with an independently seeded game-local stream."""
 
-    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw: ...
+    def predict(self, encoded: PolicyObservation) -> SelectionDraw: ...
 
 
 def selection_prediction(
     draw: SelectionDraw,
-    encoded: dict[str, np.ndarray],
+    encoded: PolicyObservation,
     reference: Literal["uniform", "action_type_uniform"],
 ) -> SelectionPrediction:
     """Report entropy and KL(policy || reference) in nats for the sampled decision."""
     probabilities = draw.probabilities
-    ref = reference_distribution(
-        {key: encoded[key][None] for key in ("actions_valid", "actions")}, reference
-    )[0]
+    ref = reference_distribution(encoded, reference)[0]
     logs = np.log(np.maximum(probabilities, 1e-12))
     return SelectionPrediction(
         action=draw.action,
@@ -220,8 +218,10 @@ def collect_selection_game(
                 raise RuntimeError("live selection game has no actor")
             frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
             observation = Observation.from_json(env.semantic_observation_json(actor))
-            encoded = encode_observation(space, raw)
-            if len(frame.offers) != int(encoded["actions_valid"].sum()):
+            encoded = encode_policy_batch(space, [raw])
+            if len(frame.offers) > space.config.max_actions or len(frame.offers) != len(
+                raw.action_space.actions
+            ):
                 raise ValueError("selection policy cannot encode every legal offer")
             prediction = selection_prediction(
                 predictor.predict(encoded), encoded, reference
@@ -232,7 +232,7 @@ def collect_selection_game(
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
-                action_type=int(encoded["actions"][action, :ACTION_TYPE_DIM].argmax()),
+                action_type=int(raw.action_space.actions[action].action_type),
                 value=prediction.value,
                 action_probability=prediction.probability,
                 entropy=prediction.entropy,

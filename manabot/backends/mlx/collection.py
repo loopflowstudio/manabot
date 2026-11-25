@@ -21,7 +21,7 @@ from manabot.backends.mlx.rl import (
     require,
 )
 from manabot.backends.mlx.rollout import check_packed, observation_arrays, packing_mask
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import ObservationBuffers, PolicyObservation
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
@@ -155,9 +155,8 @@ class SelectionPredictor:
         self.agent = agent
         self._key = mx.random.key(seed)
 
-    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
-        batch = {key: value[None] for key, value in encoded.items()}
-        prepared = self.agent.prepare(batch, inference=True)
+    def predict(self, encoded: PolicyObservation) -> SelectionDraw:
+        prepared = self.agent.prepare(encoded, inference=True)
         with mx.stream(self.agent.inference_device):
             logits, value = self.agent(prepared)
         # Sample and normalize the same float32 logits reported by evaluate().
