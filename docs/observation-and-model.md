@@ -941,7 +941,8 @@ is an engineering result; it establishes no learning-quality advantage.
 
 Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
 Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`
-on a release extension built with the `benchmark` feature.
+to compare packed output with the same scalar decision. A release extension built
+with the `benchmark` feature also reports Rust allocation counts.
 
 ### Catalog naming input
 

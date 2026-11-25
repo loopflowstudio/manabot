@@ -1,7 +1,7 @@
 """Matched native decision fixtures and provenance for observation benchmarks.
 
 Fixture restoration and hashing happen outside timing. Each sample executes one
-ordinary vector step, including Python failure capture, tensor sync and rewards.
+buffered vector step, including Python failure capture and native packed output.
 Allocation profiling is a separate pass: Rust requested bytes, Torch CPU tensor
 allocation events, and Python traced peak/live bytes have distinct scopes.
 """
@@ -20,9 +20,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.env.observation import encode_observation
-from manabot.env.vector_env import VectorEnv
+from manabot.env.failures import RecordedVectorEnv
+from manabot.env.observation import ObservationSpace
 import manabot.managym._managym as native
+from manabot.policy.spans import ObservationSelection
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 
@@ -38,15 +39,6 @@ def digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-
-
-def array_digest(arrays: dict[str, np.ndarray]) -> str:
-    hasher = hashlib.sha256()
-    for key, value in sorted(arrays.items()):
-        hasher.update(key.encode())
-        hasher.update(str((value.shape, value.dtype.str)).encode())
-        hasher.update(value.tobytes())
-    return hasher.hexdigest()
 
 
 def identity() -> dict[str, object]:
@@ -135,10 +127,11 @@ def decision_cases() -> list[DecisionCase]:
     ]
 
 
-def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
+def matched_breakdown(
+    vector: RecordedVectorEnv, space: ObservationSpace, streams: int, steps: int
+) -> list[dict[str, Any]]:
     """Return per-family exact-match proofs, timings and separate allocation data."""
     rows: list[dict[str, Any]] = []
-    vector = env._rust_env
     for case in decision_cases():
         root = case.root
         actor = root.current_agent_index()
@@ -152,20 +145,17 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
         positional = root.clone_env()
         post_observation = positional.step(case.action)[0]
         assert semantic.state_digest() == positional.state_digest()
-        expected = encode_observation(env.observation_space, post_observation)
-        encoded = encode_observation(env.observation_space, observation)
-        actions = torch.full((env.num_envs,), case.action, dtype=torch.int64)
-
+        expected = managym.encode_observation_batch([post_observation], space.layout)
+        encoded = managym.encode_observation_batch([observation], space.layout)
+        actions = [case.action] * streams
         snapshot = root.snapshot()
-        loads = [
-            managym.SlotLoad.snapshot(slot, snapshot) for slot in range(env.num_envs)
-        ]
-
+        loads = [managym.SlotLoad.snapshot(slot, snapshot) for slot in range(streams)]
         vector.load_slots_into_buffers(loads)
-        env.step(actions)
-        for key, value in expected.items():
-            for row in env._buffers[key]:
-                np.testing.assert_array_equal(row, value, err_msg=case.name + ":" + key)
+        vector.step_into_buffers(actions)
+        actual = ObservationSelection(space, tuple(vector.observation_rows())).batch
+        assert actual.tables() == expected.gather([(expected, 0)] * streams).tables(), (
+            case.name
+        )
         frames = vector.semantic_decision_frames_json()
         assert all(
             json.loads(frame) == json.loads(positional.semantic_decision_frame_json())
@@ -173,42 +163,45 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
         )
         for _ in range(20):
             vector.load_slots_into_buffers(loads)
-            env.step(actions)
+            vector.step_into_buffers(actions)
         samples = []
         for _ in range(steps):
             vector.load_slots_into_buffers(loads)
             start = time.perf_counter_ns()
-            env.step(actions)
+            vector.step_into_buffers(actions)
             samples.append(time.perf_counter_ns() - start)
 
-        vector.load_slots_into_buffers(loads)
-        vector.native._benchmark_allocations_start()
-        try:
-            env.step(actions)
-        finally:
-            allocations, allocated_bytes = vector.native._benchmark_allocations_stop()
+        native_allocations = {}
+        if managym.ALLOCATION_COUNTING:
+            vector.load_slots_into_buffers(loads)
+            vector.native._benchmark_allocations_start()
+            try:
+                vector.step_into_buffers(actions)
+            finally:
+                allocations, allocated_bytes = (
+                    vector.native._benchmark_allocations_stop()
+                )
+            native_allocations = {
+                "rust_requests_per_batch": allocations,
+                "rust_requested_bytes_per_batch": allocated_bytes,
+            }
         vector.load_slots_into_buffers(loads)
         tracemalloc.start()
-        env.step(actions)
+        vector.step_into_buffers(actions)
         python_live, python_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
         vector.load_slots_into_buffers(loads)
         with torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU], profile_memory=True
         ) as profile:
-            env.step(actions)
+            vector.step_into_buffers(actions)
         events = profile.events()
         torch_allocations = [
             e.self_cpu_memory_usage for e in events if e.self_cpu_memory_usage > 0
         ]
-        output_bytes = sum(a.nbytes for a in env._buffers.values())
-        sync_bytes = sum(
-            dst.numel() * dst.element_size()
-            for key, dst in env._obs_tensors.items()
-            if dst.data_ptr() != env._obs_cpu_views[key].data_ptr()
-        ) + sum(
-            t.numel() * t.element_size()
-            for t in (env._reward_tensor, env._terminated_tensor, env._truncated_tensor)
+        tables = actual.tables()
+        output_bytes = sum(
+            len(offsets) + len(data) for _, offsets, data in tables.values()
         )
         rows.append(
             {
@@ -223,28 +216,17 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
                 )
                 if hasattr(observation, "continuation_json")
                 else None,
-                "encoded_digest": array_digest(encoded),
-                "legacy_encoded_digest": array_digest(
-                    {k: v for k, v in encoded.items() if k != "relations"}
-                ),
+                "packed_input_sha256": hashlib.sha256(encoded.to_bytes()).hexdigest(),
                 "command": json.loads(command.to_json()),
                 "command_digest": digest(json.loads(command.to_json())),
-                "output_digest": array_digest(expected),
-                "legacy_output_digest": array_digest(
-                    {
-                        key: value
-                        for key, value in expected.items()
-                        if key != "relations"
-                    }
-                ),
+                "packed_output_sha256": hashlib.sha256(expected.to_bytes()).hexdigest(),
                 "post_state_digest": positional.state_digest(),
                 "warmup_steps": 20,
                 "samples_ns_per_batch": samples,
-                "median_ns_per_env": float(np.median(samples)) / env.num_envs,
-                "steps_per_second": env.num_envs * steps * 1e9 / sum(samples),
+                "median_ns_per_env": float(np.median(samples)) / streams,
+                "steps_per_second": streams * steps * 1e9 / sum(samples),
                 "allocations": {
-                    "rust_requests_per_batch": allocations,
-                    "rust_requested_bytes_per_batch": allocated_bytes,
+                    **native_allocations,
                     "torch_cpu_positive_allocation_events_per_batch": len(
                         torch_allocations
                     ),
@@ -255,11 +237,9 @@ def matched_breakdown(env: VectorEnv, steps: int) -> list[dict[str, Any]]:
                     "python_traced_peak_bytes_per_batch": python_peak,
                 },
                 "bytes": {
-                    "native_dense_output_per_batch": output_bytes,
-                    "tensor_sync_destination_per_batch": sync_bytes,
-                    "relations_per_batch": env._buffers.get(
-                        "relations", np.empty(0)
-                    ).nbytes,
+                    "packed_tables_per_batch": output_bytes,
+                    "relations_per_batch": len(tables["relations"][1])
+                    + len(tables["relations"][2]),
                     "scope": "Logical output/copy bytes, not physical memory-bus traffic or repeated stores. Python peaks are not allocation traffic.",
                 },
             }
