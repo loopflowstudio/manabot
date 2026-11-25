@@ -36,7 +36,16 @@ Choices made with nobody in the conversation (each documented in
   spawn queue. This exercises the actual queue feeder and keeps pytest's
   main module out of the collection worker.
 
+- A separately restored memory archive can hold equivalent prefixes in different
+  Python objects. Compare the prefix identity and certified tail key when
+  validating the two memory holders. This accepts jace's archive round trip
+  without walking or materializing the history.
+
 Outside this work (future follow-ups):
+
+- The optional u1952 probability replay already differs at decision 8 on the
+  unpatched base. Keep the frozen recording for diagnosis. The comparison
+  and checkpoint are in the pass 2 checks in `scratch/plan.md`.
 
 - `collect_pair()[0]` retains both learners' recorded rows in `recorded.rows`
   because `_build_complete_batch` shares one `RecordedSpans` across learners.

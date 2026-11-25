@@ -71,106 +71,13 @@ cache-free `__reduce__` on `ObservationSpace` (from `config`),
 `RolloutBatch` shares every batch and prefix once. Tests 1–3 below pass in
 `tests/training/test_rollout_transport.py`.
 
-### 3. `concatenate` for packed `[rows, 1]` batches
+### 3. Packed worker batch merge — built in `6c9358791d`
 
-- **`PackedActions.concatenate(rows)`** (`manabot/training/rollout/actions.py`):
-  - Raise `ValueError("cannot concatenate empty packed action rows")` on empty
-    `rows` (currently raises `IndexError`).
-  - When `native is not None`, also require
-    `row.native.space.config == first.native.space.config` (previously only
-    checked `capacity`).
-- **`RecordedObservations.concatenate(parts)`** (`manabot/training/rollout/collection.py`):
-  - Reject empty `parts` with `ValueError`; return `parts[0]` for a single part
-    after validating its internal consistency.
-  - Reject mixed native (`ObservationSelection`) and dense parts with
-    `ValueError`.
-  - All-native parts:
-    - Require matching `part.rows.space.config` and `part.memory_capacities`.
-    - Validate `(part.memory_capacities is not None) == (part.rows.memory is not None)`
-      and when memory is enabled, `len(part.memory) == len(part.rows.coordinates)`
-      and `part.rows.memory.prefixes == part.memory` (or matching lengths &
-      capacities); raise `ValueError` on inconsistent state.
-    - Join `coordinates` and `memory` into one `ObservationSelection` (with
-      `PrefixObservation({}, memory, memory_capacities)` when enabled).
-  - All-dense parts:
-    - Require matching `memory_capacities`, matching key sets (non-empty),
-      consistent per-part row count across keys, matching trailing shapes and
-      dtypes, and matching `len(part.memory) == row_count` when memory is
-      enabled. `np.concatenate` each key along axis 0.
-  - `index`: validate each `part.index` is 1D integer within `[0, row_count)`
-    and shift by cumulative recorded `row_count` (NOT `len(part.index)`).
-  - `needs`: `None` if all parts have `needs is None`; otherwise validate each
-    present `needs` has shape `(row_count, len(AXES))`, fill
-    `np.full((row_count, len(AXES)), -1, np.int64)` where `None`, and
-    concatenate along axis 0.
-- **`RolloutBatch.concatenate(batches)`** (`manabot/training/rollout/collection.py`):
-  - Reject empty `batches` with `ValueError`.
-  - Validate EVERY part (including a 1-element list) is packed `[rows, 1]`
-    (`actions.ndim == 2 and actions.shape[1] == 1 and dones.shape == actions.shape`)
-    and that `trajectories is None` agrees across all parts. If `len(batches) == 1`,
-    validate the terminal/bootstrap invariants and return `batches[0]`.
-  - `trajectories` absent on all (complete games):
-    - Every part must end on a terminal row (`dones[-1, 0]` is True) and have
-      `next_done.shape == (1,) and next_done.all()`.
-    - Keep the last part's `next_obs` and `next_done` (matching single-collector
-      output and jace).
-  - `trajectories` present on all (explicit spans):
-    - Shift each span's `start`/`stop` by cumulative row count and its
-      non-None `bootstrap_index` by cumulative `len(part.next_done)`.
-    - Concatenate `next_done` (`np.concatenate(..., axis=0)`).
-    - Concatenate `next_obs` across parts with `len(part.next_done) > 0` only
-      (a worker whose snapshot trajectories all ended terminally has
-      `len(next_done) == 0` and `next_obs == {}` from `frozen_bootstraps`):
-      - If no part has bootstrap rows, keep `batches[0].next_obs`.
-      - If all non-empty `next_obs` parts are `ObservationSelection`, join
-        their coordinates (and `PrefixObservation` memory when present) after
-        checking `space.config` and memory capacities match.
-      - If all non-empty `next_obs` parts are dense dicts / `PrefixObservation`,
-        `np.concatenate` non-memory keys and join prefixes when present.
-      - Mixed native/dense non-empty `next_obs` raise `ValueError`.
-  - Concatenate `actions`, `logprobs`, `rewards`, `dones`, `values` along
-    axis 0; join `action_data` via `PackedActions.concatenate`; join `recorded`
-    via `RecordedObservations.concatenate`.
-  - Optional arrays (`outcome_probabilities`, `assignments`, `target_residuals`,
-    `episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`,
-    `sample_weight`) must be present on all parts or none (`ValueError` if
-    mixed).
-  - When `branch_group_id` is present, re-offset each part's non-negative IDs by
-    `next_group_id` (updating `next_group_id = int(shifted.max()) + 1` whenever
-    any `>= 0` ID exists, keeping `-1` as absent) so worker-local group IDs
-    never collide in `grouped_roots`.
-  - Resulting `RolloutBatch` passes `validate_rollout_metadata` through
-    `__post_init__`.
+`RolloutBatch.concatenate` joins packed complete games or explicit trajectory spans, rebasing recorded rows, frozen bootstraps and worker-local branch groups independently. Both piece-level merges and the dense 0.2.x consumer path are covered in `tests/training/test_rollout_transport.py`.
 
-`ObservationSelection` keeps its `Mapping` face untouched; a test holds jace's
-dense merge shape in place.
+### 4. Deprecated encoder shortcuts — built in `7e582bc943`
 
-### 4. The deprecated `ObservationEncoder` shim answers the old attributes
-
-`manabot/env/observation.py`: `ObservationSpace.__getattr__` serves one table
-of the pre-#566 `ObservationEncoder` attributes, each warning
-`DeprecationWarning` with `REMOVAL_RELEASE = "0.3.0"` and `stacklevel=2`:
-
-- capacities from `config`: `max_actions`, `cards_per_player`,
-  `perms_per_player`, `max_events`, `max_focus_objects`, `max_stack_objects`
-  (`config.max_stack_objects if self.one_token else 0`, matching pre-#566);
-- widths from `shapes`: `player_dim`, `card_dim`, `permanent_dim`,
-  `action_dim`, `event_dim`, `relation_dim`, `name_dim`;
-- `library_shape`: `tuple(V11_LAYOUT["known_library"]["shape"])` (not
-  `self.shapes["known_library"]`, which is absent on legacy v9/v10);
-- the six enum counts: `num_phases`, `num_steps`, `num_zones`, `num_actions`,
-  `num_event_types`, `num_event_entity_kinds`.
-
-`__getattr__` only fires for a missing name, so `config`, `shapes`,
-`one_token`, `turn_state` are unaffected and no new non-deprecated surface is
-added. Reject dunder names, unknown names, and any lookup before `__init__` has
-set `config` / `shapes` with `AttributeError`, so `copy`, `pickle`, and gym
-introspection keep their behavior.
-
-Choice made for review (`concept-review.html` #3a): put the shim on
-`ObservationSpace.__getattr__` rather than a separate proxy returned by
-`encoder`, so `space.encoder is space` stays true AND both
-`space.encoder.max_actions` and `ObservationEncoder(config).max_actions` work.
+Both `space.encoder` and `ObservationEncoder(config)` expose all twenty historical shortcuts with the 0.3.0 warning across v9, v10 and v11. The legacy known-library and stack behavior is documented in `5834b2e087`.
 
 ## Acceptance check at gate
 
@@ -282,17 +189,26 @@ in `manabot/env/observation.py` so rollover deletes them with `encoder`.
    collection. One local run (seed 7, Torch seed 71, 960 rows): batch pickle
    8,346,219 B (6 ms dump / 40 ms load), memory prefixes 3,037,646 B,
    selection after reading caches 8,171,210 B, space 633 B.
-2. **Merge and shim — next.** Design §3 and §4: `PackedActions.concatenate`
-   guards, `RecordedObservations.concatenate`, `RolloutBatch.concatenate`
-   (empty-bootstrap snapshot workers, `branch_group_id` re-offset), the
-   `ObservationSpace.__getattr__` shim table; tests 4–5 and the shim tests in
-   `tests/env/test_named_observation_layout.py`; existing boundary/pilot
-   tests. Docs already describe these APIs (`00f1bd645c`:
-   `docs/training-loop.md:87-133`, `docs/engine.md:761`) — the code must
-   match them, or the docs are corrected in the same pass.
-3. **Consumer proof.** The jace run described under the acceptance check
+2. **Merge and shim — done.** Seeds 7 and 11, four complete-game streams each, Torch seed 71: 960 and 972 independently pickled and restored learner rows joined in 1.05 ms in one local CPU run, with 1,932 retained prefixes. The timing excludes collection and IPC.
+3. **Consumer proof — next.** The jace run described under the acceptance check
    (throwaway env outside the checkout, jace `9d212cb`); report anything
    failing outside this change.
+
+## Pass 2 checks
+
+All eleven transport tests, all three shim cases, the package-boundary checks
+(including MLX), and the two committed pilots passed on macOS CPython 3.13.
+The optional frontier Small u1952 pilot replays its game, but its maximum
+probability difference at decision 8 is 0.00208 (chosen-action rank 1 in both).
+The same digest-verified checkpoint and recording produced that exact failure
+with the unpatched Python sources and a clean release build of the native
+engine from `183f6daf59` (same engine and training sources as `f75ba48c72`).
+The release reviewer can reproduce the comparison with the cached checkpoint:
+
+```sh
+MANABOT_U1952_CHECKPOINT="$PWD/.runs/artifact-cache/c95c61aa298528e5c2782430d5e3f90929d3e9b7ac8b1fc45f560ed6ab4bbaf8" \
+  uv run --no-sync pytest -q 'tests/model/test_pinned_pilot.py::test_recorded_game[u1952]'
+```
 
 ## Done when
 
