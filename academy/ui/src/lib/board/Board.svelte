@@ -37,7 +37,7 @@
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
-    setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
+    setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type Draft } from './combat';
   import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
@@ -701,7 +701,7 @@
     if (offers.length === 1) { act(offers[0]); return; }
     opener = element;
     const rect = at ?? element.getBoundingClientRect();
-    menuAt = { title, offers, x: Math.min(rect.left, window.innerWidth - 300), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
+    menuAt = { title, offers, x: Math.max(8, Math.min(rect.left, window.innerWidth - 300)), y: rect.bottom + 6 > window.innerHeight - 160 ? Math.max(8, rect.top - 8 - 36 * offers.length - 30) : rect.bottom + 6 };
   }
 
   // Inspect opens only when asked: after the pointer rests on a card for a
@@ -895,9 +895,11 @@
     });
     if (next === current) return;
     if (current.phase === 'pressed') {
-      // Now a drag: inspect closes and stays closed, and no text selection follows the pointer.
+      // Now a drag: inspect and open popovers close, and no text selection follows the pointer.
       hush();
       pointed = null;
+      menuAt = null;
+      zoneAt = null;
       window.getSelection()?.removeAllRanges();
     }
     gesture = next;
@@ -1004,7 +1006,7 @@
           { key: 'Shift Ctrl', does: 'Hold Full Control across turns' },
         ]),
     { key: 'Esc', does: recording ? 'Close a menu or preview' : "Cancel a drag; close a menu or preview; skip the opponent's moves" },
-    ...(canDrag ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
+    ...(canDrag || combatPreview !== undefined ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
     { key: '?', does: 'Show or hide these keys' },
   ]);
@@ -1175,7 +1177,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onkeyup={onKeyup} onblur={() => { ctrlPending = false; ctrlShift = false; }} onpointermove={event => { onPointerMove(event); onDragMove(event); }} onpointerup={onDragEnd} onpointercancel={onDragEnd}
+<svelte:window onkeydown={onKeydown} onkeyup={onKeyup} onblur={() => { ctrlPending = false; ctrlShift = false; endDrag(); }} onpointermove={event => { onPointerMove(event); onDragMove(event); }} onpointerup={onDragEnd} onpointercancel={onDragEnd}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
 <div class="game" class:dragging class:with-sidebar={sidebarOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
