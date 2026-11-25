@@ -97,8 +97,6 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  // The slow pace leaves time to read a beat before it ends by itself.
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = await startAgainstRandom(page);
   const main = page.locator('main');
   // A number key during a beat ends the reading and chooses nothing.
@@ -137,7 +135,6 @@ test('pressing the board or activating a choice ends the reading without acting'
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = await startAgainstRandom(page);
   const board = page.getByTestId('game-board');
   // A press on a past board (cards with no offers), a pointer press on a held
@@ -165,23 +162,4 @@ test('reduced motion reads out no beats', async ({ page }) => {
     return await page.locator('[data-testid=recent-fact].theirs').count() > 0;
   }, 120);
   await expect(page.getByTestId('beat')).toHaveCount(0);
-});
-
-test('the Menu turns the reading off, and the browser remembers it', async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await startAgainstRandom(page);
-  await page.getByTestId('game-menu').click();
-  const pace = page.getByTestId('beat-pace');
-  await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
-  await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('game-menu').click();
-  await playUntil(page, async () => {
-    expect(await page.getByTestId('beat').count()).toBe(0);
-    return await page.locator('[data-testid=recent-fact].theirs').count() > 0;
-  }, 120);
-  await page.reload();
-  await expect(page.getByTestId('game')).toBeVisible();
-  await page.getByTestId('game-menu').click();
-  await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
 });

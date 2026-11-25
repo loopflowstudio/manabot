@@ -57,8 +57,6 @@ else
       tests/academy/*) select_jobs academy_integration protocol_v1 ;;
       scripts/play|scripts/play.py|scripts/verify-clean-machine|deploy/play/*)
         select_jobs python_unit protocol_v1 clean_machine_play ;;
-      scripts/play-elemental|scripts/play_elemental.py)
-        select_jobs academy_integration clean_machine_play ;;
       manabot/sim/table_bots.py|manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
       tests/infra/test_external_consumer.py) select_jobs python_unit integration ;;
