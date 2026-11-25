@@ -1,4 +1,4 @@
-at: 87c42e1734c2dce816aadfdf2318add3d9e60076
+at: 046392c61634dd13f2dc2e97afdb9c251257005f
 first:
   - path: scratch/plan.md
     why: Outcome, determinism rule, and verified passes.
@@ -12,19 +12,23 @@ first:
     why: Creature-type grant check for self-animating lands.
   - path: managym/state/src/ability.rs
     why: Recursive effect check for self-animating lands.
+  - path: managym/state/src/payment.rs
+    why: Source-reference lookup for payment receipts.
   - path: managym/src/flow/mana.rs
-    why: Source offers, unified payability, modal equivalence, automatic taps.
+    why: Source offers, action-space modal collapse, payability, and staging.
   - path: managym/src/flow/mana/interchangeable.rs
     why: Indistinguishable source classes and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
-    why: Unified skip check and produced-mana commitment.
+    why: Unified skip check, staged actions, and produced-mana commitment.
   - path: managym/src/flow/decision.rs
-    why: Unified resolution mana offers and frame source references.
+    why: Resolution mana offers and action-space mana choice delegation.
+  - path: managym/src/flow/action.rs
+    why: Staged announced action consumption and invalidation.
+  - path: managym/src/flow/scenario.rs
   - path: managym/src/agent/ability_description.rs
     why: Unified tap-for-mana wording across choice sources.
-  - path: managym/src/flow/action.rs
   - path: manabot/semantic/text_observation.py
-    why: Simple choice mana taps adopt native Tap-for wording in LLM text.
+    why: Simple choice mana taps match fixed-tap wording in LLM text.
   - path: managym/academy/recording.py
     why: Moves log resolves choice-of-color mana taps to the color added.
   - path: academy/ui/src/lib/board/Rail.svelte
@@ -37,21 +41,25 @@ first:
   - path: academy/ui/e2e/choice-navigation.spec.ts
     why: Multi-offer board-card locator for Llanowar Elves convoke + mana tap.
   - path: managym/tests/source_taps.rs
-    why: Engine tests for skips, resolution payments, PlayLand turns, labels, and guards.
+    why: Engine tests for skips, partial resolution modals, PlayLand, and guards.
+  - path: managym/tests/semantic_conformance_tests.rs
+    why: Pins forced-mana conformance receipt across skip_trivial lockstep.
   - path: tests/academy/test_dual_land_payment.py
-    why: Academy session checks for dual-land skip, labels, and Moves log resolved color.
+    why: Academy session checks for dual-land skip, labels, and Moves log.
   - path: tests/academy/test_recording_narration.py
-    why: Narration tests for choice-of-color mana taps across priority, payment, and Ward.
+    why: Narration tests for choice-of-color mana taps across payment contexts.
+  - path: tests/semantic/test_text_observation.py
+    why: Checks unified LLM wording for choice-of-color mana taps.
   - path: tests/academy/test_payment_preview.py
     why: Payment preview checks with a distinct blue dual.
-  - path: tests/academy/test_choice_navigation.py
-    why: Updated Accumulate Wisdom prefix after basic payment skip.
+  - path: tests/academy/test_table_projection.py
+    why: Updated Bolt payment stop setup for identical-basic skip.
   - path: tests/academy/test_authored_match_parity.py
     why: Updated parity assertions for 170-command receipt (same terminal state).
 hide:
   - path: managym/academy/fixtures/
     why: Regenerated fixture prefixes after redundant-basic skips.
   - path: conformance/
-    why: Regenerated authored-match authority and parity receipts (174 -> 170 commands).
+    why: Regenerated authored-match receipts and forced-mana conformance evidence.
   - path: tests/fixtures/
     why: Updated heuristic parity and controlled-capacity drill tapes.
