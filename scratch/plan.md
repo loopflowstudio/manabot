@@ -146,6 +146,11 @@ Biogenic Upgrade, Bolt Bend, Teach by Example and Storm copy tests. The
 16-creature-a-side Drakuseth trigger offered 36 then 35 targets; its choices
 took 4.8 ms in a debug build.
 
+`resolution_tests::retained_creation_precedes_allocation_and_preserves_copy_entry_terms`
+fails (`resolution_tests.rs:3866`, a token not on the battlefield) at
+`e0baeed8e8`, before this slice, and the same way after it. The gate's full
+debug run must fix or explain it.
+
 ### Slice 5 — Stack copies and retargeting (complete)
 
 Thousand-Year Storm, Bolt Bend and Teach by Example have directed native play
