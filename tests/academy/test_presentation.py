@@ -43,7 +43,9 @@ def _bolt_scenario(trace_dir) -> GameSession:
             "seed": 7,
         }
     )
-    assert session.env is not None
+    assert session.env is not None and session.obs is not None
+    while session.obs.turn.turn_number == 0:
+        session.obs, *_ = session.env.step(0)
     session.env.scenario_clear_hand(0)
     session.env.scenario_clear_hand(1)
     session.env.scenario_force_card_in_hand(0, "Lightning Bolt")

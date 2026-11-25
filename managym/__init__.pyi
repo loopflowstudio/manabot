@@ -1361,6 +1361,7 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
+__version__: str
 # Deprecated: the label of the last numbered world; removed in 0.3.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int

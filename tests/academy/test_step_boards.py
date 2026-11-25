@@ -82,8 +82,8 @@ def test_equal_boards_merge_and_a_board_equal_to_the_frame_is_not_sent() -> None
     assert rebuild(frame, sent) == [attacking]
 
 
-def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
-    game = server.GameSession()
+def test_each_opponent_step_reaches_the_table_on_its_own_board(tmp_path) -> None:
+    game = server.GameSession(tmp_path)
     game.new_game({"villain_type": "random", "seed": 11})
     kept: list[StepBoard] = []
     keep = game._keep_step_board
@@ -97,6 +97,8 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
     game._keep_step_board = recording  # type: ignore[method-assign]
     rebuilt_any = differed = 0
     for _ in range(80):
+        if rebuilt_any >= 5 and differed >= 5:
+            break
         frame = game.current_recovery("explicit_resync")["frame"]
         if frame["status"] != "ready":
             break

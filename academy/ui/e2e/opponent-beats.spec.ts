@@ -10,7 +10,13 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
-async function startAgainstRandom(page: Page, sent: { count: number }, seed = 0): Promise<void> {
+/**
+ * Start a seeded game against the random opponent, counting the commands sent.
+ * Seed 1 reaches a past board (an opponent window of several moves) at the
+ * fourth decision under `playUntil`'s choices.
+ */
+async function startAgainstRandom(page: Page, seed = 1): Promise<{ count: number }> {
+  const sent = { count: 0 };
   await page.routeWebSocket('**/ws/play', socket => {
     const server = socket.connectToServer();
     socket.onMessage(message => {
@@ -26,14 +32,20 @@ async function startAgainstRandom(page: Page, sent: { count: number }, seed = 0)
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('game')).toBeVisible();
+  return sent;
 }
 
-/** Decide until `until` holds, preferring lands, spells and attacks so the game moves. */
-async function playUntil(page: Page, until: () => Promise<boolean>, limit: number): Promise<number> {
+/**
+ * Decide until `until` returns a truthy result, preferring lands, spells and
+ * attacks so the game moves. Throws, naming why, when the game ends or the
+ * budget runs out first.
+ */
+async function playUntil<T>(page: Page, until: () => Promise<T | null | false>, limit: number): Promise<T> {
   for (let decisions = 0; decisions < limit; decisions += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
-    if (await until()) return decisions;
-    if (await page.getByTestId('result-card').isVisible()) return decisions;
+    const result = await until();
+    if (result) return result;
+    if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
@@ -43,7 +55,7 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
     await rows.nth(Math.max(0, pick)).click();
     await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision')), { timeout: 30_000 }).toBeGreaterThan(revision);
   }
-  return limit;
+  throw new Error(`no awaited state within the ${limit}-decision budget`);
 }
 
 interface WalkSnapshot {
@@ -86,8 +98,7 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  const sent = await startAgainstRandom(page);
 
   const main = page.locator('main');
   const board = page.getByTestId('game-board');
@@ -173,8 +184,7 @@ test('clicking the earlier board returns to now; selecting a history line and ar
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  const sent = await startAgainstRandom(page);
 
   const board = page.getByTestId('game-board');
   await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
@@ -216,15 +226,11 @@ test('clicking the earlier board returns to now; selecting a history line and ar
 test('reduced motion does not auto-walk, while scrubber and Show their turn again still work by hand', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  let opponentFacts = 0;
+  await startAgainstRandom(page);
   await playUntil(page, async () => {
     expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
+    return await page.locator('[data-testid=recent-fact].theirs').count() > 0;
   }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
   // Manual replay steps to stop 0 and holds without auto-advancing.
@@ -234,11 +240,11 @@ test('reduced motion does not auto-walk, while scrubber and Show their turn agai
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
 });
+
 test('a reload never walks turns already shown, and the next opponent turn still walks', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  await startAgainstRandom(page);
   await playUntil(page, async () => (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) > 0, 120);
   await page.keyboard.press('Space');
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false', { timeout: 30_000 });
