@@ -98,9 +98,7 @@ fn beastmaster_ascension() -> CardDefinition {
                 }),
                 power: 5,
                 toughness: 5,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
+                per: None,
             })],
             text_box: text_box.into(),
             ..Default::default()

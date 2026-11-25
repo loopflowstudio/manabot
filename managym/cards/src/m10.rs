@@ -39,9 +39,7 @@ fn elvish_archdruid() -> CardDefinition {
                 condition: None,
                 power: 1,
                 toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
+                per: None,
             })],
             // A mana ability whose amount is read as it is activated (CR
             // 605.1a, 605.3a): characteristics finalize it to concrete mana.

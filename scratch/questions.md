@@ -22,3 +22,7 @@
   branch's control and blocked columns. Source quality reads main's battlefield
   LKI and exact graveyard arrivals. Academy opening fixtures use main's recorded
   Commands replayed through the combined engine.
+- The three existing counted bonuses retain their serialized field names so
+  checkpoints read the same card-program tokens after the Rust type changes.
+- Changeling uses the creature types in CR 205.3m (2026-11-06), including
+  types without a card in the catalog, such as Time Lord.

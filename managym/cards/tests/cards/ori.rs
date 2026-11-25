@@ -502,3 +502,25 @@ fn joraga_invocation_counts_overlapping_lure_and_flying_requirements() {
         }
     }
 }
+
+#[test]
+fn dwynen_counts_attacking_elves_including_a_changeling() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with_group, pass_until, settle},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&["Dwynen, Gilt-Leaf Daen", "Taurean Mauler", "Llanowar Elves"]);
+    let dwynen = s.force_permanent_on_battlefield(0, "Dwynen, Gilt-Leaf Daen");
+    let mauler = s.force_permanent_on_battlefield(0, "Taurean Mauler");
+    s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    assert_eq!(s.game().characteristics(mauler).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(dwynen).pt(), (3, 4));
+    for id in [dwynen, mauler] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with_group(&mut s, &[dwynen, mauler]);
+    settle(&mut s);
+    s.assert_life(0, 22);
+}

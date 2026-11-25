@@ -4,8 +4,8 @@ use managym_state::ability::{
     TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-    StaticAbility,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -14,6 +14,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        garruks_uprising(),
         heartfire_immolator(),
         mazemind_tome(),
         sanguine_indulgence(),
@@ -171,6 +172,46 @@ fn heartfire_immolator() -> CardDefinition {
                 )],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn garruks_uprising() -> CardDefinition {
+    let powerful = CardPredicate {
+        min_power: Some(4),
+        ..CardPredicate::creature()
+    };
+    let draw = Effect::DrawCards { count: 1.into() };
+    let text_box = "When this enchantment enters, if you control a creature with power 4 or greater, draw a card.\nCreatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever a creature you control with power 4 or greater enters, draw a card.";
+    CardDefinition {
+        key: "m21.garruks_uprising",
+        scryfall_id: "71a4860a-8bb6-45c0-b00a-b4a42da33ab9",
+        printed: PrintedCharacteristics {
+            name: "Garruk's Uprising".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: Some(Condition::ControlsAtLeast {
+                        count: 1,
+                        predicate: powerful.clone(),
+                        distinct_names: false,
+                    }),
+                    effects: vec![draw.clone()],
+                },
+                Ability::when_enters(TriggerSubject::you_control(powerful), vec![draw]),
+            ],
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate::creature()),
+                condition: None,
+                keywords: Keywords::of(&[Keyword::Trample]),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

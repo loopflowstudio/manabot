@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Effect, TargetRequirement, TargetSpec},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        ReplacementEffect, StaticAbility, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics, PtCount,
+        ReplacementEffect, StaticAbility, StaticPtBuff, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -11,7 +11,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![confiscate(), duress(), fog_bank()]
+    vec![blanchwood_armor(), confiscate(), duress(), fog_bank()]
 }
 
 fn confiscate() -> CardDefinition {
@@ -76,6 +76,32 @@ fn duress() -> CardDefinition {
             name: "Duress".into(),
             types: CardTypes::new([CardType::Sorcery]),
             mana_cost: Some(ManaCost::parse("{B}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn blanchwood_armor() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature gets +1/+1 for each Forest you control.";
+    CardDefinition {
+        key: "usg.blanchwood_armor",
+        scryfall_id: "9b5f3776-74f4-4626-833b-e1b0921d3cbc",
+        printed: PrintedCharacteristics {
+            name: "Blanchwood Armor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per: Some(PtCount::YouControl(CardPredicate::subtype("Forest"))),
+            })],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             text_box: text_box.into(),
             ..Default::default()
         },

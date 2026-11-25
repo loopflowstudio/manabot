@@ -1640,6 +1640,8 @@ pub struct PyKeywords {
     pub hexproof: bool,
     #[pyo3(get, set)]
     pub indestructible: bool,
+    #[pyo3(get, set)]
+    pub changeling: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1660,6 +1662,7 @@ impl From<KeywordData> for PyKeywords {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -2178,6 +2181,7 @@ impl From<PyKeywords> for KeywordData {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }

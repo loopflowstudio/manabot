@@ -51,9 +51,7 @@ fn lumen_class_frigate() -> CardDefinition {
                     condition: charged(2),
                     power: 1,
                     toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
+                    per: None,
                 }),
                 StaticAbility::TypeGrant(StaticTypeGrant {
                     scope: StaticScope::This,
@@ -139,9 +137,7 @@ Equip {1}"#;
                     condition: None,
                     power: 1,
                     toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
+                    per: None,
                 }),
                 StaticAbility::AttachedHas(ActivatedAbilityDefinition {
                     sorcery_timing: true,

@@ -225,3 +225,21 @@ fn knights_check_the_announced_omen_face_and_live_spell_on_resolution() {
     settle(&mut s);
     assert_eq!(permanent(&s, grace).damage, 0);
 }
+
+#[test]
+fn tempest_djinn_counts_only_its_controllers_basic_islands() {
+    use crate::support::game::until_end_of_turn;
+    use managym::state::effect::Modification;
+    let mut s = five_color_setup(&["Tempest Djinn", "Soulstone Sanctuary"]);
+    let djinn = s.force_permanent_on_battlefield(0, "Tempest Djinn");
+    let nonbasic = s.force_permanent_on_battlefield(0, "Soulstone Sanctuary");
+    until_end_of_turn(
+        &mut s,
+        nonbasic,
+        Modification::AddSubtypes(vec!["Island".into()]),
+    );
+    s.force_permanent_on_battlefield(1, "Island");
+    assert_eq!(s.game().characteristics(djinn).pt(), (0, 4));
+    s.force_permanent_on_battlefield(0, "Island");
+    assert_eq!(s.game().characteristics(djinn).pt(), (1, 4));
+}

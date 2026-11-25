@@ -268,3 +268,29 @@ fn heartfire_immolator_deals_its_sacrificed_appearances_pumped_power() {
     );
     assert!(s.game().state.permanents[returned].is_some());
 }
+
+#[test]
+fn garruks_uprising_checks_power_on_entry_and_on_resolution() {
+    use crate::support::play::enter_and_settle;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Garruk's Uprising", "Goblin Boarders", "Hill Giant"]);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 0);
+    assert!(s
+        .game()
+        .characteristics(giant)
+        .keywords
+        .has(Keyword::Trample));
+    s.game_mut().state.turn.history[0].attacked = true;
+    let boarders = enter_and_settle(&mut s, "Goblin Boarders");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+    let third = crate::support::inspect::library_card(&s, 0, "Garruk's Uprising");
+    move_card(&mut s, third, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    move_card(&mut s, boarders, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+}

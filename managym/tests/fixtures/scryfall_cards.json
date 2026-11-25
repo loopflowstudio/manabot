@@ -12929,5 +12929,115 @@
     "colors": [
       "G"
     ]
+  },
+  "Blanchwood Armor": {
+    "name": "Blanchwood Armor",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +1/+1 for each Forest you control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Crossway Troublemakers": {
+    "name": "Crossway Troublemakers",
+    "mana_cost": "{5}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "Attacking Vampires you control have deathtouch and lifelink. (Any amount of damage they deal to a creature is enough to destroy it. Damage dealt by those creatures also causes their controller to gain that much life.)\nWhenever a Vampire you control dies, you may pay 2 life. If you do, draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Dreadwing Scavenger": {
+    "name": "Dreadwing Scavenger",
+    "mana_cost": "{1}{U}{B}",
+    "type_line": "Creature — Nightmare Bird",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Threshold"
+    ],
+    "oracle_text": "Flying\nWhenever this creature enters or attacks, draw a card, then discard a card.\nThreshold — This creature gets +1/+1 and has deathtouch as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Dwynen, Gilt-Leaf Daen": {
+    "name": "Dwynen, Gilt-Leaf Daen",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Garruk's Uprising": {
+    "name": "Garruk's Uprising",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, if you control a creature with power 4 or greater, draw a card.\nCreatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever a creature you control with power 4 or greater enters, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "New Horizons": {
+    "name": "New Horizons",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant land\nWhen this Aura enters, put a +1/+1 counter on target creature you control.\nEnchanted land has \"{T}: Add two mana of any one color.\"",
+    "colors": [
+      "G"
+    ]
+  },
+  "Taurean Mauler": {
+    "name": "Taurean Mauler",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Shapeshifter",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Changeling"
+    ],
+    "oracle_text": "Changeling (This card is every creature type.)\nWhenever an opponent casts a spell, you may put a +1/+1 counter on this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Tempest Djinn": {
+    "name": "Tempest Djinn",
+    "mana_cost": "{U}{U}{U}",
+    "type_line": "Creature — Djinn",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nThis creature gets +1/+0 for each basic Island you control.",
+    "colors": [
+      "U"
+    ]
   }
 }

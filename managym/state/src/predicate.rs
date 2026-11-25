@@ -233,11 +233,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if !self.subtypes_any.is_empty()
-            && !self
-                .subtypes_any
-                .iter()
-                .any(|s| object.subtypes.iter().any(|value| value == s))
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
         {
             return false;
         }
@@ -254,11 +250,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if self
-            .not_subtypes
-            .iter()
-            .any(|s| object.subtypes.iter().any(|value| value == s))
-        {
+        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
             return false;
         }
         if self
@@ -299,7 +291,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !object.subtypes.contains(subtype) {
+            if !object.has_subtype(subtype) {
                 return false;
             }
         }

@@ -56,6 +56,11 @@ impl CardTypes {
         }
     }
 
+    /// Creatures and kindreds share the creature subtype list (CR 205.3m).
+    pub fn has_creature_subtypes(&self) -> bool {
+        self.is_creature() || self.types.contains(&CardType::Kindred)
+    }
+
     #[inline]
     pub fn is_castable(&self) -> bool {
         !self.is_land() && !self.types.is_empty()
@@ -225,6 +230,7 @@ keywords! {
     /// control.
     Hexproof => "hexproof",
     Indestructible => "indestructible",
+    Changeling => "changeling",
 }
 
 impl Keyword {
@@ -376,25 +382,51 @@ pub enum StaticScope {
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
 /// +P/+T [as long as condition]". Applies only while the source is on the
 /// battlefield.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StaticPtBuff {
     pub scope: StaticScope,
     pub condition: Option<Condition>,
     pub power: i32,
     pub toughness: i32,
-    /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
-    /// Zookeeper): the bonus is multiplied by the affected creature's
-    /// creature-type count, capped at this value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_creature_type_max: Option<i32>,
-    /// "+P/+T for each color among [predicate] permanents you control"
-    /// (Earthen Ally): the bonus is multiplied by that color count.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_color_among: Option<CardPredicate>,
-    /// "+P/+T for each [predicate] card in your graveyard" (Avatar
-    /// Destiny): the bonus is multiplied by that count.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_graveyard_matching: Option<CardPredicate>,
+    pub per: Option<PtCount>,
+}
+
+/// The quantity multiplying a static power/toughness bonus in layer 7c.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PtCount {
+    CreatureTypes { max: i32 },
+    ColorsAmong(CardPredicate),
+    GraveyardMatching(CardPredicate),
+    YouControl(CardPredicate),
+    SourceCounters(CounterKind),
+}
+
+// Keep published card programs and their checkpoint learning tokens stable.
+impl serde::Serialize for StaticPtBuff {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut state =
+            serializer.serialize_struct("StaticPtBuff", 4 + usize::from(self.per.is_some()))?;
+        state.serialize_field("scope", &self.scope)?;
+        state.serialize_field("condition", &self.condition)?;
+        state.serialize_field("power", &self.power)?;
+        state.serialize_field("toughness", &self.toughness)?;
+        match &self.per {
+            Some(PtCount::CreatureTypes { max }) => {
+                state.serialize_field("per_creature_type_max", &Some(max))?
+            }
+            Some(PtCount::ColorsAmong(p)) => state.serialize_field("per_color_among", &Some(p))?,
+            Some(PtCount::GraveyardMatching(p)) => {
+                state.serialize_field("per_graveyard_matching", &Some(p))?
+            }
+            Some(PtCount::YouControl(p)) => state.serialize_field("per_you_control", p)?,
+            Some(PtCount::SourceCounters(kind)) => {
+                state.serialize_field("per_source_counter", kind)?
+            }
+            None => {}
+        }
+        state.end()
+    }
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
@@ -1547,6 +1579,26 @@ struct DefinitionWire<'a> {
 }
 
 impl PrintedCharacteristics {
+    /// CR 702.73a: changeling defines the creature types of this face in every zone.
+    pub fn has_all_creature_types(&self) -> bool {
+        self.keywords.has(Keyword::Changeling)
+    }
+
+    pub fn creature_types(&self) -> super::subtype::CreatureTypes {
+        if self.has_all_creature_types() {
+            super::subtype::CreatureTypes::All
+        } else if self.types.has_creature_subtypes() {
+            super::subtype::CreatureTypes::among(&self.subtypes)
+        } else {
+            super::subtype::CreatureTypes::default()
+        }
+    }
+
+    pub fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|name| name == subtype)
+            || (self.has_all_creature_types() && super::subtype::is_creature_type(subtype))
+    }
+
     pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
         std::iter::once(SpellProfile::Front)
             .chain(self.inset.as_ref().and_then(InsetSpell::casting_profile))

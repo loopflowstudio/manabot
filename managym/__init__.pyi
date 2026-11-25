@@ -961,6 +961,7 @@ class Keywords:
     menace: bool
     hexproof: bool
     indestructible: bool
+    changeling: bool
 
 class Player:
     player_index: int

@@ -973,6 +973,7 @@ _KEYWORDS = (
     "menace",
     "hexproof",
     "indestructible",
+    "changeling",
 )
 
 # Every observed field and the LLM text that states it, or why none is needed.
@@ -1430,6 +1431,16 @@ def test_protection_and_hexproof_reach_both_viewer_presentations() -> None:
     assert any("Knight of Grace" in choice for choice in choices)
     assert sum("Crystal Barricade" in choice for choice in choices) == 2
     assert all("Progenitus" not in choice for choice in choices)
+
+
+def test_changeling_reaches_the_elf_anthem_and_viewer_text() -> None:
+    env = priority_root((), ("Taurean Mauler", "Dwynen, Gilt-Leaf Daen"))
+    decision = capture_text_decision(env)
+    assert "effective keywords changeling" in decision.text
+    board = serialize_observation(_viewer_observation(decision))["agent"]["battlefield"]
+    mauler = next(permanent for permanent in board if permanent["name"] == "Taurean Mauler")
+    assert mauler["keywords"] == ["changeling"]
+    assert (mauler["power"], mauler["toughness"]) == (3, 3)
 
 
 def test_permanent_control_and_blocked_status_are_visible() -> None:

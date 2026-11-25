@@ -39,6 +39,7 @@ const STATES: &[(&str, &str)] = &[
     ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven. Avoids counted-tap scans on ordinary activations; residual nested-filter branches need an exact bound accounting for upfront spending purposes and saved outputs"),
     ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
+    ("counted-buffs", "N Tempest Djinn and Blanchwood Armor buffs across both seats, over sixteen basic lands"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("control-auras", "Each Confiscate controls one opposing Gray Ogre"),
     ("joraga-blocks", "Joraga Invocation on a mixed flying and ground attack against reach and ground blockers"),
@@ -450,6 +451,15 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 "Waterbending Lesson".into(),
             ]);
         }
+        "counted-buffs" => {
+            for (i, seat) in seats.iter_mut().enumerate() {
+                seat.add("Island", 4);
+                seat.add("Forest", 4);
+                let count = (size + 1 - i) / 2;
+                seat.add("Tempest Djinn", count.div_ceil(2));
+                seat.add("Blanchwood Armor", count / 2);
+            }
+        }
         "duplicate-creatures"
         | "herald-statics"
         | "herald-healthy"
@@ -637,7 +647,15 @@ fn build(recipe: &Recipe) -> Env {
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
-    if matches!(recipe.state.as_str(), "attachments" | "control-auras") {
+    if matches!(
+        recipe.state.as_str(),
+        "attachments" | "control-auras" | "counted-buffs"
+    ) {
+        let creature = if recipe.state == "counted-buffs" {
+            "Tempest Djinn"
+        } else {
+            "Gray Ogre"
+        };
         let swap = recipe.state == "control-auras";
         let game = env.fixture_game_mut();
         for i in 0..2 {
@@ -648,7 +666,7 @@ fn build(recipe: &Recipe) -> Env {
                 .flatten()
                 .filter(|p| {
                     let card = &game.state[p.object];
-                    card.owner == PlayerId(if swap { 1 - i } else { i }) && card.name == "Gray Ogre"
+                    card.owner == PlayerId(if swap { 1 - i } else { i }) && card.name == creature
                 })
                 .map(|p| p.object)
                 .collect();
@@ -666,7 +684,7 @@ fn build(recipe: &Recipe) -> Env {
                         let object = &state[p.object];
                         (
                             object.owner,
-                            object.name == "Gray Ogre",
+                            object.name == creature,
                             object.types.is_land(),
                         )
                     })
@@ -677,7 +695,7 @@ fn build(recipe: &Recipe) -> Env {
                     continue;
                 };
                 if owner == PlayerId(i) {
-                    if ogre && !swap {
+                    if ogre && recipe.state == "attachments" {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
                     } else if !ogre && !land {
                         p.attached_to = Some(targets[index % targets.len()]);

@@ -72,6 +72,8 @@ pub enum FactKind {
     ContinuationProgram = 14,
     AbilityResolution = 15,
     TriggeringAmount = 16,
+    /// A keyword outside the fixed evergreen columns, joined to its object.
+    Keyword = 17,
 }
 
 impl FactKind {
@@ -83,7 +85,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 15] = [
+    pub const ALL: [FactKind; 16] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -99,6 +101,7 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::TriggeringAmount,
+        FactKind::Keyword,
     ];
 }
 
@@ -1745,9 +1748,29 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             );
         }
     }
-    // Counters on a visible card off the battlefield ("with a stash counter").
     if layout == InputLayout::OneToken {
+        for item in &obs.stack_objects {
+            if item
+                .spell
+                .as_ref()
+                .is_some_and(|spell| spell.keywords.changeling)
+                || item
+                    .granted_keywords
+                    .as_ref()
+                    .is_some_and(|keywords| keywords.changeling)
+            {
+                push(
+                    item.stack_object_id,
+                    FactKind::Keyword,
+                    name_value("changeling"),
+                    1,
+                );
+            }
+        }
         for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+            if card.keywords.changeling {
+                push(card.id, FactKind::Keyword, name_value("changeling"), 1);
+            }
             for (kind, count) in &card.counters {
                 push(
                     card.id,
@@ -1761,6 +1784,9 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
+        if layout == InputLayout::OneToken && permanent.keywords.changeling {
+            push(object, FactKind::Keyword, name_value("changeling"), 1);
+        }
         if permanent.plus1_counters > 0 {
             push(
                 object,

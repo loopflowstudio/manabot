@@ -781,9 +781,7 @@ fn fire_nation_s_conquest() -> CardDefinition {
                 condition: None,
                 power: 1,
                 toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
+                per: None,
             })],
             text_box: text_box.into(),
             ..Default::default()
@@ -813,9 +811,7 @@ fn allied_teamwork() -> CardDefinition {
                 condition: None,
                 power: 1,
                 toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
+                per: None,
             })],
             text_box: text_box.into(),
             ..Default::default()

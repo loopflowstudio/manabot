@@ -75,7 +75,7 @@ fn confiscate_competes_with_later_control_and_releases_its_permanent() {
     clear_summoning_sickness(&mut s, ogre);
     s.force_permanent_on_battlefield(1, "Island");
     cast(&mut s, "Confiscate");
-    let mut fork = command(
+    let (mut fork, _) = command(
         &mut s,
         |a| matches!(a, Action::ChooseTarget { target: Target::Permanent(id), .. } if *id == ogre),
     );
@@ -193,4 +193,31 @@ fn confiscates_departure_removes_the_blocker_but_the_attacker_stays_blocked() {
     assert_eq!(s.life(0), 20);
     assert_eq!(permanent(&s, attacker).damage, 0);
     assert_eq!(permanent(&s, blocker).damage, 0);
+}
+
+#[test]
+fn blanchwood_armor_counts_the_auras_controllers_forests() {
+    use crate::support::play::{cast, settle};
+    use managym::state::{
+        effect::{EffectDuration, Modification},
+        game_object::Target,
+    };
+    let mut s = five_color_setup(&["Blanchwood Armor", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Forest");
+    cast(&mut s, "Blanchwood Armor");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
+    let affected = s.game().affected_permanent(ogre);
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(1),
+        affected,
+        Modification::Control,
+        EffectDuration::Indefinite,
+    );
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
+    s.force_permanent_on_battlefield(0, "Forest");
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
 }

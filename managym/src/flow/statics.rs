@@ -134,9 +134,9 @@ impl Characteristics {
     }
 
     /// Whether it has every creature type. Mid-pass, `CreatureTypes::All`
-    /// only marks the grant, which counts for a creature alone (CR 205.3d).
+    /// marks the grant, which requires a corresponding card type (CR 205.3d).
     pub fn has_all_creature_types(&self) -> bool {
-        self.is_creature() && self.creature_types.is_all()
+        self.types.has_creature_subtypes() && self.creature_types.is_all()
     }
 
     /// Whether a summoning-sick permanent with these characteristics can't

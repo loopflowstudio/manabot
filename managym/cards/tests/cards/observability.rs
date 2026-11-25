@@ -114,12 +114,10 @@ enum Seen {
     Identity,
 }
 
-/// Keyword → (card column, permanent column). Every keyword is evergreen
-/// today, so each has columns; the first non-evergreen keyword names its fact
-/// row here instead of columns. The token is the `Keyword::<name>` variant in
-/// the definition's keyword list, present only when the keyword is.
-fn keyword_columns(keyword: Keyword) -> (usize, usize) {
-    match keyword {
+/// Evergreen keywords have fixed columns. Changeling uses a keyword fact.
+fn keyword_columns(keyword: Keyword) -> Option<(usize, usize)> {
+    Some(match keyword {
+        Keyword::Changeling => return None,
         Keyword::Flying => (card::FLYING, permanent::FLYING),
         Keyword::Reach => (card::REACH, permanent::REACH),
         Keyword::Haste => (card::HASTE, permanent::HASTE),
@@ -134,7 +132,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
         Keyword::Menace => (card::MENACE, permanent::MENACE),
         Keyword::Hexproof => (card::HEXPROOF, permanent::HEXPROOF),
         Keyword::Indestructible => (card::INDESTRUCTIBLE, permanent::INDESTRUCTIBLE),
-    }
+    })
 }
 
 fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
@@ -2093,9 +2091,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             condition: None,
             power: 2,
             toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
+            per: None,
         }),
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
         StaticAbility::CharacteristicPt(PowerCda::GraveyardMatchingBy {
@@ -2273,7 +2269,7 @@ fn card_row(
         (card::HAS_WARD, permanent::HAS_WARD),
         (card::WARD_COST, permanent::WARD_COST),
     ];
-    shared.extend(Keyword::ALL.into_iter().map(keyword_columns));
+    shared.extend(Keyword::ALL.into_iter().filter_map(keyword_columns));
     for (card_column, permanent_column) in shared {
         assert_eq!(
             card_row[card_column], permanent_row[permanent_column],
@@ -2797,7 +2793,9 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
     }));
     for keyword in Keyword::ALL {
         let name = keyword.name();
-        let (card_column, permanent_column) = keyword_columns(keyword);
+        let Some((card_column, permanent_column)) = keyword_columns(keyword) else {
+            continue;
+        };
         let keywords = Keywords::of(&[keyword]);
 
         let mut granted = base_game.clone();
@@ -3458,6 +3456,7 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
         FactKind::SetCreatureType => "PermanentData.creature_types",
+        FactKind::Keyword => "CharacteristicsData.keywords",
         FactKind::TriggeringAmount => "ContinuationFrame.triggering_amount",
         FactKind::AbilityResolution => "PermanentData.ability_resolutions",
         FactKind::UsedAbility => "PermanentData.used_abilities",
@@ -3603,7 +3602,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         ward_program => [FactOccurrence(FactKind::EffectProgram)],
         kicker_cost => [Columns(Card, card::HAS_KICKER, 2)],
         card_types => [Rows("card types below")],
-        keywords => [Rows("keywords below")],
+        keywords => [Rows("evergreen keyword columns"), Fact(FactKind::Keyword)],
         mana_cost => [
             column(Card, card::MANA_VALUE),
             column(Permanent, permanent::MANA_VALUE),
@@ -3975,7 +3974,9 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
         }
     }
     for keyword in Keyword::ALL {
-        let (object, permanent) = keyword_columns(keyword);
+        let Some((object, permanent)) = keyword_columns(keyword) else {
+            continue;
+        };
         for (buffer, index) in [(Buffer::Card, object), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),
@@ -6726,6 +6727,47 @@ fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
         assert_eq!(
             Observation::for_player(&branch, PlayerId(0)).action_space,
             expected
+        );
+    }
+}
+
+#[test]
+fn changeling_is_a_keyword_fact_for_both_viewers() {
+    let mut s = five_color_setup(&["Taurean Mauler"]);
+    let mauler = s.force_permanent_on_battlefield(0, "Taurean Mauler");
+    for viewer in [0, 1] {
+        let rows = facts_about(&s, viewer, object_index(&s, viewer, mauler));
+        fact_row(&rows, FactKind::Keyword, name_value("changeling"));
+    }
+}
+
+#[test]
+fn counted_bonuses_read_counters_on_the_source() {
+    use managym::state::card::PtCount;
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let recipient = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, source);
+    s.game_mut().state[card]
+        .statics
+        .push(StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::OtherYouControl(CardPredicate::creature()),
+            condition: None,
+            power: 1,
+            toughness: 1,
+            per: Some(PtCount::SourceCounters(CounterKind::Charge)),
+        }));
+    crate::support::game::set_counters(&mut s, recipient, CounterKind::Charge, 5);
+    assert_eq!(s.game().characteristics(recipient).pt(), (2, 2));
+    crate::support::game::set_counters(&mut s, source, CounterKind::Charge, 2);
+    for viewer in [0, 1] {
+        assert_eq!(
+            permanent_value(&s, viewer, recipient, permanent::POWER),
+            0.4
+        );
+        assert_eq!(
+            permanent_value(&s, viewer, recipient, permanent::TOUGHNESS),
+            0.4
         );
     }
 }

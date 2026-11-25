@@ -271,6 +271,8 @@ mod ulg;
 mod usg;
 #[path = "cards/vis.rs"]
 mod vis;
+#[path = "cards/voc.rs"]
+mod voc;
 #[path = "cards/war.rs"]
 mod war;
 #[path = "cards/woe.rs"]

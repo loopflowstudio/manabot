@@ -402,13 +402,15 @@ pub struct KeywordData {
     pub menace: bool,
     pub hexproof: bool,
     pub indestructible: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub changeling: bool,
 }
 
-/// Number of `KeywordData` flags; tensor keyword blocks follow field order.
+/// Number of evergreen keyword columns in each policy keyword block.
 pub const KEYWORD_COUNT: usize = 14;
 
 impl KeywordData {
-    /// Every flag in field order, for fixed-width policy columns.
+    /// Evergreen flags in policy column order.
     pub fn flags(&self) -> [bool; KEYWORD_COUNT] {
         let Self {
             flying,
@@ -425,6 +427,7 @@ impl KeywordData {
             menace,
             hexproof,
             indestructible,
+            changeling: _, // Open keyword fact.
         } = *self;
         [
             flying,
@@ -444,8 +447,7 @@ impl KeywordData {
         ]
     }
 
-    /// The evergreen keywords' columns. Every `Keyword` is evergreen today;
-    /// a non-evergreen keyword gets a fact row instead of a column.
+    /// Evergreen keywords have fixed columns. Other keywords use fact rows.
     pub fn from_keywords(keywords: &Keywords) -> Self {
         Self {
             flying: keywords.has(Keyword::Flying),
@@ -462,6 +464,7 @@ impl KeywordData {
             menace: keywords.has(Keyword::Menace),
             hexproof: keywords.has(Keyword::Hexproof),
             indestructible: keywords.has(Keyword::Indestructible),
+            changeling: keywords.has(Keyword::Changeling),
         }
     }
 }

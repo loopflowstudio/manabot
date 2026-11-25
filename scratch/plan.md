@@ -112,62 +112,42 @@ ambiguous menace attackers. Release `bench_states joraga-blocks`: 9.79–67.04 �
 decision at 8-on-8 and 16-on-16. The slice-1 attachments spike (296.4 µs at 100
 permanents) did not recur in fourteen runs (medians 94–102 µs); no cause isolated.
 
-### 4 · Changeling and counted static P/T, with the composing cards (Taurean Mauler, Tempest Djinn, Blanchwood Armor, Dreadwing Scavenger, Dwynen, Garruk's Uprising, Crossway Troublemakers, New Horizons)
+**4 · Built.** All eight cards in the table above are playable. Changeling uses the printed
+face in every zone and the layer-4 creature types on the battlefield.
+`StaticPtBuff.per` counts from one `PtCount`. The three existing card
+programs retain their serialized field names. New Horizons’ enchanted Forest
+paid both white pips of Leonin Skyhunter. Both viewers see changeling as a
+named v11 keyword fact. The FDN ledger links each card to its play fixture.
 
-- Changeling (CR 702.73) is a characteristic-defining ability working in every
-  zone. Add a `Keyword::Changeling`, appended. In layers it applies first in layer
-  4 as `CreatureTypes::All` (from #593). Off the battlefield,
-  `CardPredicate::matches_printing` treats a creature-type subtype test as
-  satisfied when the printing has changeling, and `is_creature_type` picks which
-  subtypes it covers. `PrintedCharacteristics::creature_types()` is the one
-  reader for both paths. A Changeling in hand counts for "reveal an Elf" or
-  library searches.
-- Counted P/T: replace `StaticPtBuff`'s three `per_*` options with one
-  `per: Option<PtCount>`. Its cases: `CreatureTypes { max }`,
-  `ColorsAmong(predicate)`, `GraveyardMatching(predicate)`,
-  `YouControl(predicate)` (Tempest Djinn's basic Islands, Blanchwood's Forests;
-  "you" is the source's controller) and `SourceCounters(kind)` (slice 7's
-  Banner). It reads inside the layer context.
-- Composing cards:
-  - Dreadwing: two triggers (ETB, attacks) that loot; Threshold
-    `GraveyardAtLeast{7}` static continuous +1/+1 and deathtouch.
-  - Dwynen: reach; `PtBuff OtherYouControl(Elf creature)`; attack trigger
-    `gain_life(AttackingMatching{Elf})`.
-  - Garruk's Uprising: an intervening-if ETB `ControlsAtLeast{1, min_power 4}`
-    that draws; `KeywordGrant YouControl(creature) trample`; ETB `Matching{You,
-    creature min_power 4}` that draws (power is read as it enters).
-  - Crossway: `KeywordGrant YouControl(attacking Vampire)` for deathtouch and
-    lifelink; `Dies{Matching You Vampire}` → `OptionalPayment{Life(2)} →
-    draw`.
-  - New Horizons: enchant land; ETB `put_counters` on target creature you
-    control; `AttachedHas` with `AddOneColorManaValue{Fixed(2)}`. It is the first
-    `AttachedHas` on a land, so test the mana ability on the land.
-- Obsolete: `StaticPtBuff.per_creature_type_max`, `per_color_among` and
-  `per_graveyard_matching` (convert Diligent Zookeeper, Earthen Ally and Avatar
-  Destiny).
-- Checks: `mor:: dom:: usg:: fdn:: ori:: m21:: voc:: xln::` and the converted cards'
-  existing tests. Interactions:
-  - A Changeling in hand found by an Elf/Vampire library search, and buffed by
-    Dwynen on the battlefield.
-  - Taurean Mauler counts as an attacking Vampire under Crossway, gaining
-    deathtouch and lifelink.
-  - Tempest Djinn counts only basic Islands: Soulstone/other Islands do not count.
-  - Blanchwood on a creature that changes control (slice 1): Forests count for the
-    Aura's controller.
-  - Dreadwing at 6 and 7 graveyard cards.
-  - Garruk's Uprising: an ETB 3/3 with a +1/+1 counter as it enters (4 power)
-    draws.
-  - New Horizons' land taps for two of one color into a real payment (two-pip
-    cost), and the remaining mana is checked.
-- Stress: `diverse-statics` plus 8/16 counted buffs over a board of 16 lands
-  (Djinn, Blanchwood); `characteristics` rows.
+The directed Rust checks passed, including the three migrated TLA cards.
+The pinned v9 and v11 pilots replayed on the rebuilt CPython 3.13 extension.
+The optional frontier checkpoint was unavailable. Academy replayed 192 demo
+Commands and refreshed all five retained navigation positions.
+
+Scryfall conformance passed. The release `bench_states` characteristics
+measurement took 12.25 µs at priority with 8 counted buffs over 16 lands
+and 21.46 µs with 16 buffs. Across priority, attack and block the respective
+ranges were 11.17–14.62 and 21.38–51.13 µs (median of three per position).
+`diverse-statics` took 9.42–10.21 and 23.25–28.08 µs at the same sizes.
 
 ### 5 · Graveyard moves from anywhere consult replacements (Progenitus, Darksteel Colossus, Dryad Militant)
 
-Every move reaches `commit_zone_move` through one proposal path, but
-`collect_replacements` reads a card's own replacements only for moves to the
-battlefield. The only graveyard redirects are the stack-only
-`ExileInsteadOfGraveyard` flag and the battlefield-only `ExileIfWouldDie`.
+**Pass 3 counterexample from code inspection.** Discarding an instant to pay a
+cost goes through `pay_discard_cost → move_object → complete_immediate_batch`.
+Under the proposed design, two Dryad Militants would produce two candidates.
+The batch would return `OrderReplacement`, which panics in
+`advance_immediate_batch`. A resolving spell whose targets all became illegal takes the same
+immediate route. Cleanup and several discard decisions also move directly.
+A mill redirected back to the same library is rejected by
+`proposal_is_current` before its reveal and shuffle can happen.
+
+First exercise a discard payment and a fizzled spell with two
+Militants. Retain the payment/decision/resolution continuation across the
+affected player's ordering choice and commit its receipt or consequences once.
+Audit direct graveyard callers, the upfront death/flashback rewrites, and
+the affected permanent or spell's controller when it differs from its owner.
+Represent revealing and shuffling a card already in its library without a
+spurious zone change. Build the three cards together on that proven route.
 
 - `ReplacementEffect::GraveyardInstead { what: GraveyardMover, to: Redirect }`.
   `GraveyardMover` is `This` (the moving card's own text, read from any origin
@@ -178,7 +158,7 @@ battlefield. The only graveyard redirects are the stack-only
   SBA and costs. It reads the moving object's abilities (layered on the
   battlefield, so a creature that lost all abilities dies normally; printed
   elsewhere) and battlefield sources. When more than one applies, the affected
-  owner chooses through the existing ordering (CR 616.1).
+  object's controller (owner if uncontrolled) chooses through CR 616.1 ordering.
 - Reveal is a public reveal event. The shuffle clears positional knowledge
   (constructed-position rule) and draws from the game rng, so replay and forks
   hold.
@@ -321,9 +301,9 @@ except `EntersAsCopy`.
 
 ## Passes
 
-Passes 1 and 2 built slices 1–3. Three passes remain; Pass 3 is next and unblocked.
+Passes 1 and 2 built slices 1–3. Pass 3 added slice 4 and exposed two changes needed in the graveyard design.
 
-- **Pass 3 · characteristics and graveyard routes:** slices 4 and 5.
+- **Next · graveyard routes:** review slice 5’s revised payment continuation and library shuffle before implementing the three replacement cards.
 - **Pass 4 · proposed-event replacements:** slices 6, 7 and 8.
 - **Pass 5 · integration:** the cross-slice synergies below, ledger rows, Engine
   Budget reference.

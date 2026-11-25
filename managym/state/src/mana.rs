@@ -57,7 +57,7 @@ impl SpendPredicate {
     pub fn matches(&self, context: &SpendingContext) -> bool {
         match (self, context) {
             (Self::CastSubtype(name), SpendingContext::Cast { spell, .. }) => {
-                spell.0.subtypes.iter().any(|subtype| subtype == name)
+                spell.0.has_subtype(name)
             }
             (Self::ActivateSubtype(name), SpendingContext::Activate { source, .. }) => {
                 source.has_subtype(name)
@@ -204,8 +204,7 @@ impl SpendEffect {
         let spell = &*spell.0;
         match self {
             Self::CreatureEntersWithPlusOneCounter { without_subtype } => {
-                spell.types.is_creature()
-                    && !spell.subtypes.iter().any(|name| name == without_subtype)
+                spell.types.is_creature() && !spell.has_subtype(without_subtype)
             }
             Self::SpellGainsKeyword {
                 spell: predicate, ..
@@ -391,9 +390,13 @@ impl std::hash::Hash for SpellSnapshot {
 impl serde::Serialize for SpellSnapshot {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut out = serializer.serialize_struct("SpellSnapshot", 2)?;
+        let all = self.0.has_all_creature_types();
+        let mut out = serializer.serialize_struct("SpellSnapshot", 2 + usize::from(all))?;
         out.serialize_field("subtypes", &self.0.subtypes)?;
         out.serialize_field("types", &self.0.types)?;
+        if all {
+            out.serialize_field("all_creature_types", &true)?;
+        }
         out.end()
     }
 }

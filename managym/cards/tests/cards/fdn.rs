@@ -8838,3 +8838,33 @@ fn crystal_barricade_gives_its_controller_hexproof() {
     cast(&mut s, "Lightning Bolt");
     assert!(offered_targets(&s).contains(&Target::Player(PlayerId(1))));
 }
+
+#[test]
+fn dreadwing_scavenger_loots_across_the_threshold_on_attack() {
+    use crate::support::{game::clear_summoning_sickness, play::pass_until};
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&["Dreadwing Scavenger"]);
+    graveyard_of(&mut s, 0, 5);
+    let card = enter_and_settle(&mut s, "Dreadwing Scavenger");
+    let bird = permanent_of(&s, card).unwrap();
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 6);
+    assert_eq!(s.game().characteristics(bird).pt(), (2, 2));
+    assert!(!s
+        .game()
+        .characteristics(bird)
+        .keywords
+        .has(Keyword::Deathtouch));
+    clear_summoning_sickness(&mut s, bird);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, bird);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    s.step_action(0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 7);
+    assert_eq!(s.game().characteristics(bird).pt(), (3, 3));
+    assert!(s
+        .game()
+        .characteristics(bird)
+        .keywords
+        .has(Keyword::Deathtouch));
+}

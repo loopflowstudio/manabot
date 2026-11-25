@@ -289,6 +289,7 @@ fn every_registered_real_card_matches_scryfall() {
             .iter()
             .any(|a| matches!(a, StaticAbility::HexproofFrom(_)));
         let checks = [
+            ("Changeling", def.keywords.has(Keyword::Changeling)),
             ("Flying", def.keywords.has(Keyword::Flying)),
             ("Reach", def.keywords.has(Keyword::Reach)),
             ("Haste", def.keywords.has(Keyword::Haste)),

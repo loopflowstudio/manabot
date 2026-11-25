@@ -220,9 +220,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
             condition: Some(fire.clone()),
             power: 1,
             toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
+            per: None,
         })],
         ..Default::default()
     };

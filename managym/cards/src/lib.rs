@@ -134,6 +134,7 @@ mod tsp;
 mod ulg;
 mod usg;
 mod vis;
+mod voc;
 mod vow;
 mod war;
 mod woe;
@@ -304,6 +305,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ulg::cards,
     usg::cards,
     vis::cards,
+    voc::cards,
     vow::cards,
     war::cards,
     woe::cards,

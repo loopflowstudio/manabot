@@ -20,6 +20,7 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        dreadwing_scavenger(),
         crystal_barricade(),
         elenda_saint_of_dusk(),
         vampire_soulcaller(),
@@ -972,9 +973,7 @@ fn leyline_axe() -> CardDefinition {
                     condition: None,
                     power: 1,
                     toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
+                    per: None,
                 }),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
@@ -3641,9 +3640,7 @@ fn celestial_armor() -> CardDefinition {
                     condition: None,
                     power: 2,
                     toughness: 0,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
+                    per: None,
                 }),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
@@ -3678,9 +3675,7 @@ fn dropkick_bomber() -> CardDefinition {
                 condition: None,
                 power: 1,
                 toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
+                per: None,
             })],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{R}"),
@@ -4120,6 +4115,43 @@ fn crystal_barricade() -> CardDefinition {
             statics: vec![StaticAbility::ControllerHas(Box::new(
                 Modification::Hexproof,
             ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dreadwing_scavenger() -> CardDefinition {
+    let loot = vec![Effect::DrawCards { count: 1.into() }, Effect::discard()];
+    let text_box = "Flying\nWhenever this creature enters or attacks, draw a card, then discard a card.\nThreshold — This creature gets +1/+1 and has deathtouch as long as there are seven or more cards in your graveyard.";
+    CardDefinition {
+        key: "fdn.dreadwing_scavenger",
+        scryfall_id: "e24d838b-ab48-410a-9a50-dbfea5da089b",
+        printed: PrintedCharacteristics {
+            name: "Dreadwing Scavenger".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Nightmare".into(), "Bird".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::when_enters(TriggerSubject::This, loot.clone()),
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: loot,
+                },
+            ],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(threshold()),
+                vec![
+                    Modification::pump(1, 1),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
+                ],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -4,8 +4,8 @@ use managym_state::{
         Ability, Condition, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject,
     },
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        SourceQuality, StaticAbility, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics, PtCount,
+        SourceQuality, StaticAbility, StaticPtBuff, StaticScope,
     },
     effect::Modification,
     mana::{Color, ManaCost},
@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        tempest_djinn(),
         knight_of_malice(),
         knight_of_grace(),
         adamant_will(),
@@ -245,6 +246,36 @@ fn knight_of_malice() -> CardDefinition {
                     vec![Modification::pump(1, 0)],
                 ),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tempest_djinn() -> CardDefinition {
+    let text_box = "Flying\nThis creature gets +1/+0 for each basic Island you control.";
+    CardDefinition {
+        key: "dom.tempest_djinn",
+        scryfall_id: "3acc883b-3aea-4d0b-ae0f-00d4a08c47c1",
+        printed: PrintedCharacteristics {
+            name: "Tempest Djinn".into(),
+            mana_cost: Some(ManaCost::parse("{U}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Djinn".into()],
+            power: Some(0),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per: Some(PtCount::YouControl(CardPredicate {
+                    subtype: Some("Island".into()),
+                    ..CardPredicate::basic_land()
+                })),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

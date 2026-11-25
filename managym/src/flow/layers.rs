@@ -11,7 +11,7 @@ use crate::{
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            LayerValue, PowerCda, PtCount, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
         game_object::{
@@ -283,18 +283,17 @@ impl SourcePlan {
         for (_, operation) in &self.parts {
             match operation {
                 Operation::Modify(Modification::Control) => reads.fields |= CONTROL,
-                Operation::Buff(buff) => {
-                    if buff.per_creature_type_max.is_some() {
-                        reads.fields |= SUBTYPES;
-                    }
-                    if let Some(predicate) = &buff.per_color_among {
+                Operation::Buff(buff) => match &buff.per {
+                    Some(PtCount::CreatureTypes { .. }) => reads.fields |= SUBTYPES,
+                    Some(PtCount::ColorsAmong(p)) => {
                         reads.fields |= COLORS;
-                        reads.predicate(predicate);
+                        reads.predicate(p);
                     }
-                    if let Some(predicate) = &buff.per_graveyard_matching {
-                        reads.predicate(predicate);
+                    Some(PtCount::GraveyardMatching(p) | PtCount::YouControl(p)) => {
+                        reads.predicate(p)
                     }
-                }
+                    Some(PtCount::SourceCounters(_)) | None => {}
+                },
                 Operation::Cda { cda, .. } => match cda.as_ref() {
                     PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
                         reads.fields |= CARD_TYPES;
@@ -598,6 +597,7 @@ impl<'a> Context<'a> {
             view: Arc::new(Characteristics {
                 name: source.name.clone(),
                 subtypes: source.subtypes.clone(),
+                creature_types: source.creature_types(),
                 types: source.types.clone(),
                 colors: source.colors(),
                 mana_abilities: source.mana_abilities.clone(),
@@ -631,7 +631,7 @@ impl<'a> Context<'a> {
                 })
                 .collect(),
         };
-        Self::finish_object(&mut object, source);
+        Self::finish_abilities(&mut object);
         let nodes = object
             .statics
             .iter()
@@ -651,13 +651,18 @@ impl<'a> Context<'a> {
         view.is_animated = view.is_creature() && !record.types.is_creature();
         // During the pass `CreatureTypes::All` marks a record granting all
         // creature types; a listed set is derived from the final subtypes.
-        view.creature_types = if !view.is_creature() {
+        view.creature_types = if !view.types.has_creature_subtypes() {
             CreatureTypes::default()
         } else if view.creature_types.is_all() {
             CreatureTypes::All
         } else {
             CreatureTypes::among(&view.subtypes)
         };
+        Self::finish_abilities(object);
+    }
+
+    fn finish_abilities(object: &mut LayerObject) {
+        let view = Arc::make_mut(&mut object.view);
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
@@ -900,30 +905,42 @@ impl<'a> Context<'a> {
             .collect()
     }
     fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
-        let per_type = buff.per_creature_type_max.map_or(1, |max| {
-            let view = &self.objects[&id].view;
-            if view.has_all_creature_types() {
-                max
-            } else {
-                (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
-            }
-        });
         let controller = self.controller(source);
-        let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
-            self.objects
+        let times = match &buff.per {
+            None => 1,
+            Some(PtCount::CreatureTypes { max }) => {
+                let view = &self.objects[&id].view;
+                if view.has_all_creature_types() {
+                    *max
+                } else {
+                    (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(*max)
+                }
+            }
+            Some(PtCount::ColorsAmong(p)) => self
+                .objects
                 .iter()
                 .filter(|(id, _)| {
-                    self.controller(**id) == controller && self.matches(**id, p, None)
+                    self.controller(**id) == controller
+                        && !self.game.is_phased_out(**id)
+                        && self.matches(**id, p, Some(source))
                 })
                 .flat_map(|(_, o)| o.view.colors.iter().copied())
                 .collect::<BTreeSet<_>>()
-                .len() as i32
-        });
-        let per_card = buff
-            .per_graveyard_matching
-            .as_ref()
-            .map_or(1, |p| self.graveyard_count(controller, p));
-        let times = per_type * per_color * per_card;
+                .len() as i32,
+            Some(PtCount::GraveyardMatching(p)) => self.graveyard_count(controller, p),
+            Some(PtCount::YouControl(p)) => self
+                .objects
+                .keys()
+                .filter(|id| {
+                    self.controller(**id) == controller
+                        && !self.game.is_phased_out(**id)
+                        && self.matches(**id, p, Some(source))
+                })
+                .count() as i32,
+            Some(PtCount::SourceCounters(kind)) => {
+                self.game.live_permanent(source).counter_count(*kind)
+            }
+        };
         Operation::Modify(Modification::ModifyPt {
             power: LayerValue::Fixed(buff.power * times),
             toughness: LayerValue::Fixed(buff.toughness * times),
@@ -1430,7 +1447,10 @@ impl<'a> Context<'a> {
                                     .any(|set| subtype_category(set) == subtype_category(subtype))
                         };
                         let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
-                        if !types.contains(&CardType::Creature) || sets_creature_types {
+                        if !(types.contains(&CardType::Creature)
+                            || types.contains(&CardType::Kindred))
+                            || sets_creature_types
+                        {
                             view.creature_types_set |= sets_creature_types
                                 || view.creature_types.is_all()
                                 || view.subtypes.iter().any(|s| is_creature_type(s));

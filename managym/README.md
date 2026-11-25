@@ -1119,6 +1119,19 @@ step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAM
 followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
 permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
+
+### Reading creature types and counted bonuses
+
+Taurean Mauler has every creature type in every zone. Master Piandao can
+reveal it as an Ally from the library. On the battlefield Dwynen counts it
+as an Elf, and Crossway Troublemakers grants it deathtouch and lifelink
+while it attacks. A type-setting effect can replace its creature types in
+layer 4. Removing its abilities in layer 6 leaves those types in place.
+
+Counted bonuses read the source's controller. Blanchwood Armor counts that
+player's Forests even when another player controls the enchanted creature.
+Tempest Djinn counts each basic Island its current controller controls.
+
 ### Reading power during combat
 
 Courageous Goblin and Ruby, Daring Tracker check for a creature with power

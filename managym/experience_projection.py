@@ -45,6 +45,7 @@ KEYWORD_NAMES = (
     "menace",
     "hexproof",
     "indestructible",
+    "changeling",
 )
 
 ACTION_LABELS = {
