@@ -49,7 +49,7 @@ reversible before merge.
     first. Assumed the existing signature (`observations_for_players(players)`
     using the registered layout) for now; adding optional
     `*, layout: ObservationLayout | None = None, action_overflow: str | None = None`
-    is a small reversible addition in Pass 3 if desired.
+    is a small reversible addition in Pass 4 if desired.
 12. **Belief demo root.** Use the first decision after keeping opening hands.
     At the opening modes the actor has no object focus. On the same seeded
     position both input paths gave the same action logits with and without

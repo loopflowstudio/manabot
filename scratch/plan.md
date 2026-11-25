@@ -196,13 +196,7 @@ dense dictionary:
 - **Old search receipts holding dense buffers** (`managym/replay.py:488-493, 651-663`)
   are refused with a typed error naming `v0.2.5`.
 - **After retirement**, document `v0.2.5` as the release for v9/v10.
-- **Open question from `write-docs`:** `VectorEnv.observations_for_players(players)`
-  currently requires `set_observation_layout` first and uses the registered layout.
-  Should it also accept optional `*, layout: ObservationLayout | None = None,
-  action_overflow: str | None = None` overrides so readable-mode callers or
-  consumers with different capacities (e.g., belief models) can call it without
-  re-registering step buffers? Currently documented against the existing signature
-  (`set_observation_layout` required); reversible before Pass 3.
+- `observations_for_players` layout override: questions 11.
 
 ## Source of truth
 
@@ -304,132 +298,58 @@ JSON readers; `write_dense_row`; `reference_distribution` (rewritten on CSR);
 
 ## Passes
 
-Done: **0. Belief on native batches** (`993ac80296`). Belief player and
-likelihood scorer encode v11 native batches; Torch/MLX take explicit
-`BeliefRows`; compact attention keeps belief rows and the global token
-(dense and native routes gave identical logits on the demo root, questions 12).
-`encode_policy_batch` still serves v9/v10 for the two belief callers until Pass 3.
+Done:
 
-Docs were drafted ahead of the build (`0bb2c15c12`) and already describe
-`ObservationBatch.to_bytes()`/`from_bytes()`, `admit`, v11-only; each claim must
-be backed by code before gate.
+- **0. Belief on native batches** (`993ac80296`): explicit `BeliefRows`;
+  compact attention keeps belief rows and the global token (questions 12).
+- **Docs drafted ahead of build** (`0bb2c15c12`); every claim must be backed by
+  code before gate.
+- **1. Native batch bytes and capture/parity** (`565258570e`, `0cb9a72532`):
+  64 decisions archive to 130,397 bytes vs 15,808,000 dense; MLX float32 parity
+  max weight diff 3.0e-08. Pass 4 must keep the object-join descriptions the
+  archive uses when deleting the dense extent scanner.
+- **2a. Scalar games, evaluation, collection, retained memory**
+  (`0369f18b7a`..`fab0d064aa`). Broad six-suite run: 2,107 passed, 16 skipped,
+  27 failed; 24 reproduce on the starting revision (conditional-search fixtures
+  14, automatic game capture 3, belief fixtures 4, PUCT compatibility, recording
+  export, MLX 256-wide eval timeout); the other 3 passed together in 261.52 s
+  after Pass 2b. Paired-deal fixture allowance raised to 240 s (new sources play
+  2,644 vs 1,683 decisions on the same deals).
+- **2b. Native v11 consumers and rollout inspection**
+  (`6d07c41230`..`60b8347589`): counterfactuals on `Prepared`, permutations
+  re-encoded natively, decision-memory verification on packed rows, packed
+  benchmarks (questions 15, 16).
+- **3. Policy input v11 only** (`008ddbf3a1`): strength comparison waived
+  (questions 1). Config, checkpoint, replay, Academy catalog, native layout and
+  archive admission refuse v9/v10 naming v0.2.5; legacy input modules, layout
+  selectors, v9/u1952 pilots and the Torch vector wrapper removed. The v11
+  pilot replayed 71 decisions; its 235 probabilities matched the
+  pre-retirement sources (`a9b519e647`) exactly and the committed recording to
+  9.24e-7 (check is 1e-5 plus chosen-action rank). The archived v9 frontier
+  evaluation is reproducible at `14a168309f`. Historical v4 eligibility
+  captures: questions 17.
 
-Done: **1. Native batch bytes and capture/parity** (`565258570e`,
-`0cb9a72532`). 64 decisions: archive 130,397 bytes vs 15,808,000 dense; MLX
-float32 parity max weight diff 3.0e-08. Pass 4 must keep the object-join
-descriptions the archive uses when deleting the dense extent scanner, and Pass 3
-must keep reading the Pass 1 v11 archive header.
+Remaining (dense names still found by grep after Pass 3: 15 `manabot` files,
+led by `training/rollout/collection.py`, `env/memory_store.py`,
+`policy/buckets.py`; plus `managym/__init__.pyi`, `recording.py`, `replay.py`
+and ~30 test files):
 
-Done: **2a. Scalar games, evaluation, collection and retained memory**
-(`0369f18b7a`..`fab0d064aa`). Scalar `Env` returns the viewer projection;
-Etude, simulation, guidance, PUCT, verify and selection data encode at the
-policy boundary; target practice supplies native rows; PPO/damped/selection
-references come from packed offers (exactly equal to padded on 64 decisions);
-selections, parity capture and the hand probe carry `RetainedMemory`. Fresh TLA
-frontier and batched baseline train on v11; frontier evaluation still admits
-the executed v9 layout. Broad run of the six suites: 2,107 passed, 16 skipped,
-27 failed, 24 of which reproduce on the starting revision (conditional-search
-fixtures 14, automatic game capture 3, belief fixtures 4, PUCT compatibility,
-recording export, MLX 256-wide eval timeout). Paired-deal fixture allowance
-raised to 240 s (new sources play 2,644 vs 1,683 decisions on the same deals;
-passed in 235.22 s).
-
-Done: **2b. Native v11 consumers and rollout inspection**
-(`6d07c41230` through `60b8347589`). Combat and identity counterfactuals
-use the loaded checkpoint’s readings. Choice inspection re-encodes permutations
-of the live viewer. Decision-memory verification replays packed rows, including
-both disclosures, both memory encoders and a 245-transition training update.
-Rollout indexes now select native coordinates, aligned memory and behavior logs
-on both backends. Inspectors project individual fields. The selection mapping
-and dense scripted collector fixture are gone. The packed vector benchmark
-matched scalar encodings on five decision families. Across 21 search frontiers
-per evidence mode, singleton and batched encodings matched, with zero measured
-base, value or target error on the seed-42 one-world run.
-
-All production and benchmark callers have moved off the Torch vector wrapper.
-It emits a 0.3.0 deprecation warning and keeps its published behavior and
-contract tests until removal (questions 15). The v10 vector-model check now
-uses the recorded vector’s dense registration directly. Pinned v9 and v11
-replays passed. The optional u1952 replay skipped without its checkpoint.
-The three extra failures from Pass 2a were identified by comparing the saved
-pytest logs. Card evaluation resume/delivery/audit, MLX private-seed selection,
-and the paired-deal learning report all passed together in 261.52 s.
-The six full suites remain for gate.
-
-The acceptance grep over `manabot scripts experiments` now finds 41 lines in
-14 files, all under `manabot`. The hits are dense compatibility, the deprecated
-Torch wrapper, and the shared `admit_native` name retained until Pass 3.
-The current default local-search comparison and a saved-reference round trip
-both ran on one world at seed 42. The historical comparison needs the original
-benchmark checkout (questions 16).
-
-Done: **3. Policy input v11 only.** Jack Heart waived the strength comparison
-in Task comment `9cbbc4d9-f4cb-4065-8398-54442d78d980`. Configuration,
-checkpoint, replay, Academy catalog, native layout and archived batch
-admission reject v9/v10 with the v0.2.5 recovery release. Removed the Rust
-and Python legacy input modules, layout selectors, outdated pilots, and Torch
-vector wrapper. Torch and MLX always include the stack and both turn tables.
-The archived v9 frontier evaluation is reproducible at `14a168309f`.
-
-On macOS CPython 3.13 the v11 fixture replayed all 71 decisions. The 235
-probabilities matched exactly against the pre-retirement Python sources at
-`a9b519e647` using the installed pre-retirement engine from the MTG-435
-checkout. Against the committed recording the maximum absolute difference was
-9.24e-7. The documented recording check is 1e-5 and unchanged chosen-action
-rank. A byte-identical cross-platform recording is not its contract.
-Historical v4 eligibility captures lack v11 object identities. The text
-reader preserves them, the batch encoder refuses them, and the native
-constructed position checks the live eligibility rows.
-
-Remaining:
-
-**3b. Dense Python preparation and rollout retirement.** The version gate is
-resolved. Delete dense admission and preparation together, rename `admit_native`
-to `admit`, and move the dense preparer tests that exercise surviving behavior
-to packed batches. Delete the dense collector fallback and its retention,
-minibatch, and memory facades. Public dense scalar/vector entry points still
-exist at the end of pass 3. Keep v11 archive format-1 admission and saved
-checkpoint readings.
+**3b. Dense Python admission, preparation and rollout retirement.** Delete
+dense admission and preparation together (`policy/admission.py`,
+`policy/prepare.py`, `policy/buckets.py` `BucketedObservation`), rename
+`admit_native` to `admit` across backends and callers, and move dense preparer
+tests that exercise surviving behavior to packed batches. Delete the dense
+collector fallback (`training/rollout/collection.py`, `admission.py`,
+`producers.py`, `numerics.py`) with its `ObservationRows`, `PrefixObservation`,
+`CompactObservation`, `select_rows` and dense `MemoryStore` slicing. Keep v11
+archive format-1 admission and saved checkpoint readings. Teaches whether any
+Python caller still needs the native dense entry points before Pass 4 removes
+them.
 
 **4. Native dense transport deleted + docs/guards.** The Rust list in "What
 goes"; slot admission via scratch `PackedRows`; Rust tests read rows through
 one `inspect.rs` reader over `encode_rows`; `recording.py`, `replay.py`, stubs;
-debug `cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
+remaining dense tests; decide questions 11. Debug
+`cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
 and clippy. Then `AGENTS.md`, `.lf/qa/*.md`, 0.3.0 release-notes entry, and a
 boundary test asserting removed names are absent.
-
-## Acceptance check at gate
-
-```
-uv run python - <<'PY'
-import managym
-from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
-for v in (9, 10):
-    try: ObservationConfig(policy_input_version=v)
-    except UnsupportedPolicyInput as e: assert "v0.2.5" in str(e)
-    else: raise SystemExit("accepted")
-gone = ["encode_observation_into", "encode_observations_into", "input_v10_state"]
-assert not [n for n in gone if hasattr(managym, n)]
-assert not hasattr(managym.VectorEnv, "set_buffers")
-assert not hasattr(managym.ObservationLayout, "allocate")
-PY
-uv run --extra dev pytest tests/model/test_pinned_pilot.py tests/model/test_policy_input_rejection.py tests/model/test_backend_capture.py tests/belief/test_belief_agent.py tests/test_package_boundaries.py -q
-git grep -nE "InputLayout|legacy_input|EncodedObservation|set_buffers|axis_extents|object_references|PrefixObservation|CompactObservation|admit_native" -- managym manabot scripts   # empty
-```
-
-plus the current-world set from AGENTS.md (`tests/semantic/test_elemental_world.py
-tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py
-tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py`)
-and one real collection update on TLA decks through `experiments/tla_frontier.py`'s
-recipe on CPU.
-
-## Done when
-
-- A v9 or v10 config, checkpoint, batch archive, or replay is refused by name
-  with `v0.2.5`, and nothing in `managym` or `manabot` can encode one.
-- A person training, evaluating, searching, running belief models, capturing
-  backend parity, or playing in Academy on v11 sees no regression; the v11
-  pinned pilot replays its recorded action ranks and probabilities within 1e-5,
-  with identical probabilities before and after retirement on the same machine.
-- The names in "What goes" are absent from the tree outside frozen evidence and
-  release notes, and no test or doc teaches them.
