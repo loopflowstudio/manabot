@@ -355,7 +355,10 @@ def test_target_practice_constructs_only_requested_games(
             assert batch.actions.size == 2 and batch.dones.all()
             assert seeds == list(range(10, 12 + 2 * batch_index))
             assert collector._env.current_agent_indices() == [-1, -1]
-            assert not collector._buffers["actions_valid"].any()
+            assert all(
+                batch.action_counts[i] == 0
+                for batch, i in collector._env.observation_rows()
+            )
         with pytest.raises(RuntimeError, match="parked"):
             collector._env.step_into_buffers([0, 0], [False, True])
         with pytest.raises(ValueError, match="configured match"):
@@ -369,7 +372,10 @@ def test_target_practice_constructs_only_requested_games(
                 [managym.SlotLoad.fresh(i) for i in (0, 1)]
             )
         assert collector._env.current_agent_indices() == [-1, -1]
-        assert not collector._buffers["actions_valid"].any()
+        assert all(
+            batch.action_counts[i] == 0
+            for batch, i in collector._env.observation_rows()
+        )
         collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert seeds[-3:] == [14, 15, 14]
         assert collector._env.current_agent_indices() == [0, -1]

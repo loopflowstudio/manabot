@@ -1120,8 +1120,8 @@ def open_collector(
                 raise ValueError(
                     "snapshot self-play requires native trivial-decision skipping"
                 )
-        packed = observation_space.one_token and isinstance(
-            env, (RecordedVectorEnv, BufferedStreams)
+        packed = observation_space.one_token and callable(
+            getattr(env, "observation_rows", None)
         )
         buffers = (
             step_buffers(num_envs)

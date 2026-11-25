@@ -13,7 +13,7 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import RewardConfig
 from manabot.verify.scenarios import find_cast_action, pass_index
 import managym
@@ -99,9 +99,10 @@ class TargetPracticeVector:
         self.seeds = [seed + row for row in range(count)]
         self.envs: list[Env | None] = [None] * count
         self.buffers: dict[str, np.ndarray] = {}
+        self.rows: list[tuple[managym.ObservationBatch, int] | None] = [None] * count
         self.infos: list[dict[str, Any]] = [{} for _ in range(count)]
 
-    def set_buffers(
+    def set_observation_layout(
         self,
         buffers: dict[str, np.ndarray],
         action_overflow: str = "error",
@@ -110,8 +111,30 @@ class TargetPracticeVector:
     ) -> None:
         if action_overflow != self.space.config.action_overflow:
             raise ValueError("target practice action policy differs from its encoder")
+        if layout.shapes != self.space.shapes:
+            raise ValueError("target practice layout differs from its encoder")
         self.buffers = buffers
-        self.layout = layout
+
+    # v9/v10 register dense outputs until their retirement in 0.3.0.
+    set_buffers = set_observation_layout
+
+    def observation_rows(self) -> list[tuple[managym.ObservationBatch, int]]:
+        rows = [entry for entry in self.rows if entry is not None]
+        if len(rows) != self.count:
+            raise RuntimeError(
+                "target practice slots have no observations before reset"
+            )
+        return rows
+
+    def _encode(self, slots: list[int], games: list[Env]) -> None:
+        """Publish these projections together, retaining every unselected slot."""
+        batch = encode_policy_batch(self.space, [game.last_raw_obs for game in games])
+        if isinstance(batch, managym.ObservationBatch):
+            for index, slot in enumerate(slots):
+                self.rows[slot] = (batch, index)
+        else:
+            for key, values in batch.items():
+                self.buffers[key][slots] = values
 
     def reset_all_into_buffers(self, configs: object) -> None:
         self.load_slots_into_buffers(
@@ -132,16 +155,7 @@ class TargetPracticeVector:
             target_root(self.match, self.space, self.seeds[row], row % 2)
             for row in rows
         ]
-        opening = self.space.allocate(len(rows))
-        for index, env in enumerate(roots):
-            managym.encode_observation_into(
-                env.last_raw_obs,
-                self.layout,
-                {key: value[index] for key, value in opening.items()},
-                self.space.config.action_overflow,
-            )
-        for key, values in opening.items():
-            self.buffers[key][rows] = values
+        self._encode(rows, roots)
         for row, env in zip(rows, roots, strict=True):
             self.envs[row] = env
             self.seeds[row] += self.count
@@ -170,12 +184,7 @@ class TargetPracticeVector:
             self.buffers[key].fill(0)
         for row, env in playing:
             winner = resolve_target(env, actions[row])
-            managym.encode_observation_into(
-                env.last_raw_obs,
-                self.layout,
-                {key: self.buffers[key][row] for key in self.space.keys()},
-                self.space.config.action_overflow,
-            )
+            self._encode([row], [env])
             self.buffers["rewards"][row] = 1.0 if winner == row % 2 else -1.0
             self.infos[row] = {"winner_index": winner}
             self.envs[row] = None
