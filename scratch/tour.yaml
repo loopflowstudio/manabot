@@ -1,25 +1,30 @@
-at: 428eb5c17d51901359d7ac28c76458dc091db2ab
+at: 7f38f08705d02b839bcd105e9c32246f1d854aca
 first:
   - path: scratch/plan.md
-    why: Why required sources also matter when counting optional taps.
+    why: Outcome, determinism rule, and verified passes.
   - path: docs/academy.md
-    why: The intended experience when choosing mana in Academy.
+    why: Intended manual mana experience and preview notes.
   - path: managym/README.md
-    why: Which payments skip and which choices stay visible.
+    why: Which payments skip and which choices stay open.
   - path: managym/state/src/card.rs
-    why: What makes a mana tap simple.
+    why: Shared predicate for simple mana tap abilities.
   - path: managym/src/flow/mana.rs
-    why: Source offers, color equivalence, and automatic tap selection.
+    why: Source offers, color equivalence, and surplus-pruned automatic taps.
   - path: managym/src/flow/mana/interchangeable.rs
-    why: Game-indistinguishable source classes and single-unit tap count proofs.
+    why: Indistinguishable source classes and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
-    why: How new mana commits to an announced cost.
+    why: Unified skip check and produced-mana commitment.
   - path: managym/src/flow/decision.rs
-    why: Which source choices remain during resolution.
+    why: Resolution mana offers and frame source references.
+  - path: managym/src/agent/ability_description.rs
+    why: Unified tap-for-mana wording across choice sources.
+  - path: managym/src/flow/action.rs
   - path: managym/tests/source_taps.rs
-    why: Forked payments verify untapped lands and floating mana.
+    why: Engine tests for forced skips, labels, and guards.
   - path: tests/academy/test_dual_land_payment.py
-    why: Academy session coverage for exact dual-land skip, unified tap labels, and redundant modal skip.
+    why: Academy session checks for dual-land skip and labels.
   - path: tests/academy/test_payment_preview.py
-    why: Payment preview endpoint updated for opening-hand keeps and a distinct blue dual source.
-hide: []
+    why: Payment preview checks with a distinct blue dual.
+hide:
+  - path: managym/python/managym/academy/fixtures/
+    why: Regenerated fixture prefixes after redundant-basic skips.
