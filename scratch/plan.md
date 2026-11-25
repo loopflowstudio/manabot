@@ -76,7 +76,7 @@ color-modal skip in `equivalent_mana_choices`. All 30
 identical basics/Guildgates, `Plains × 2 + Kyoshi Village` for `{1}{G}`,
 `Village + 3 Plains` for `{1}{W}`, and targeted/enchanted/animated Plains.
 
-Pass 3 (this commit): added `tests/academy/test_dual_land_payment.py` (exact
+Pass 3 (`1fc1cda661`): added `tests/academy/test_dual_land_payment.py` (exact
 two-drop with `Kyoshi Village` + `Plains` previews exact and skips payment;
 `Kyoshi Village` + 3 `Plains` shows `"Tap Kyoshi Village for {G}/{W}"`, three
 `"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`, and tapping
@@ -130,9 +130,9 @@ and the sources that may fund a nested activation.
 
 `advance_payment` runs on every cast in training. Fixed-only affordability
 can use the arithmetic fast path. Choice modes check payable continuations.
-Pass 2 should classify interchangeable sources only when a stop would
-otherwise be published. Check the engine budget after decision counts settle,
-and record a changed baseline with its reason. Validate in debug so that
+Interchangeable classification runs only when a stop would otherwise be
+published. The moved `bench_steps` digest is recorded from CI's run (see
+Remaining). Validate in debug so that
 cache parity assertions run.
 
 ## Exclusions
@@ -150,16 +150,19 @@ cache parity assertions run.
 
 ## Docs
 
-Drafted in place before implementation (recheck wording against final implementation in Pass 3):
+`managym/README.md` (`### Automatic source preference`, `### Manual mana
+sources`, `### Inspecting automatic payment`) and `docs/academy.md`
+(`### Previewing payments`) describe the built behavior (rechecked in pass 3).
 
-- `managym/README.md` — `### Automatic source preference`, `### Manual mana sources`, and `### Inspecting automatic payment`.
-- `docs/academy.md` — `### Previewing payments` (auto-skip rules for dual lands and identical sources, simple choice-of-color labels and color-modal skipping, preview table).
+## Remaining
 
-## Passes
+No implementation passes remain (1–3 built, see Built). Gate/CI only:
 
-1. Done — `72a12fa277` (see Built).
-2. Done — `93bc6923e5` (see Built).
-3. Done — Academy tests, docs recheck, refreshed fixtures, pinned-pilot check, and `bench_steps` check (see Built). Remaining CI follow-up after PR run: download `engine-budget` artifact and run `uv run scripts/engine_budget.py record --reason` to adopt the moved digest.
+- Run the two acceptance commands below (after rebuilding the extension).
+- After the PR's CI run, download its `engine-budget` artifact
+  (`measurement.json`) and run `uv run scripts/engine_budget.py record --reason
+  "<skipped identical-source payments move bench_steps>"` to adopt the moved
+  digest in `managym/perf/baseline.json`.
 
 ## Tests
 
