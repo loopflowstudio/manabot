@@ -68,6 +68,32 @@ describe('nameBook', () => {
     expect(view.facts.map(fact => fact.text)).toEqual(['Search 64 cast Water Tribe Rallier', 'An effect dealt 2 to Water Tribe Rallier']);
     expect(view.resolved.map(spell => spell.name)).toEqual(['Water Tribe Rallier']);
   });
+
+  it("names a narrated spell without the narration's targets, so each target is said once", () => {
+    // The qa4 game: Allies at Last from a hidden hand, one target. Its move reads
+    // "Cast Allies at Last, targeting Tiger-Seal"; the beat once read
+    // "…, targeting Tiger-Seal and Tiger-Seal".
+    const after = withBoard(bolt.recovery.frame, projection => { projection.agent.battlefield = [permanent(137, 'Tiger-Seal', { controller_id: 0 })]; });
+    const book = nameBook([bolt.recovery.frame, after], [
+      { id: 'a', actor: 'villain', turn: 16, text: 'Cast Allies at Last, targeting Tiger-Seal' },
+    ]);
+    const base = bolt.recovery.presentation_tail[0];
+    const cast: PresentationEvent = { ...base, seq: 84, from_revision: 3, to_revision: 4,
+      kind: { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 } };
+    const targeted: PresentationEvent = { ...base, seq: 85, from_revision: 3, to_revision: 4,
+      kind: { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 137, incarnation: 3 } } } };
+    const view = recentView(after, 3, [cast, targeted], () => ({ objects: {}, players: {}, stacks: {} }), names, book);
+    expect(view.facts.map(fact => fact.text)).toEqual(['Search 64 cast Allies at Last, targeting Tiger-Seal']);
+    expect(view.resolved).toEqual([{ id: 44, name: 'Allies at Last', by: 'opponent', targets: ['Tiger-Seal'] }]);
+  });
+
+  it('reads every spell a compound move cast, in order', () => {
+    const book = nameBook([bolt.recovery.frame], [
+      { id: 'a', actor: 'villain', turn: 4, text: 'Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Suki, Kyoshi Warrior and Ally' },
+      { id: 'b', actor: 'hero', turn: 4, text: 'Cast Pop Quiz' },
+    ]);
+    expect(book.casts).toEqual({ you: ['Pop Quiz'], opponent: ['Suki, Kyoshi Warrior', 'Yip Yip!'] });
+  });
 });
 
 describe('lands, discards and reveals', () => {
