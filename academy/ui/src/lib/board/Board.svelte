@@ -466,7 +466,8 @@
     }
   }
   function onClick(event: MouseEvent): void {
-    if (swallowClick) {
+    // A keyboard click (detail 0) is never the end of a drag.
+    if (swallowClick && event.detail > 0) {
       swallowClick = false;
       event.preventDefault();
       event.stopPropagation();
@@ -800,11 +801,16 @@
   });
   // A dropped card's choices closed without one chosen (Cancel, Escape, or another card's menu): it goes back to hand.
   $effect(() => {
-    if (current.phase === 'holding' && current.reason === 'menu' && menuAt?.offers !== current.drag.offers) {
+    if (current.phase === 'holding' && current.reason === 'menu' && !openFor(current.drag.offers)) {
       const held = current;
       untrack(() => settleHome(held.drag, held.at));
     }
   });
+
+  /** The open menu is the one for these offers (the menu's state is a copy, so compared by offer). */
+  function openFor(offers: PlacedOffer[]): boolean {
+    return menuAt !== null && menuAt.offers.length === offers.length && menuAt.offers.every((placed, index) => placed.offer.id === offers[index].offer.id);
+  }
 
   // ———————————————— Keyboard
 
