@@ -275,6 +275,8 @@ def test_trace_record_preserves_nested_policy_evidence() -> None:
     expected.pop("recording_import")
     expected["config"].pop("mana_payment")
     expected["config"].pop("mana_floats")
+    expected["config"].pop("hero_deck_pool")
+    expected["config"].pop("villain_deck_pool")
     expected["mana_payment"] = ["manual", "manual"]
     expected["mana_floats"] = ["off", "off"]
     assert trace.to_record() == expected
