@@ -1,4 +1,4 @@
-at: 008ddbf3a1942be931e7f329f99bc8f4cf8f19aa
+at: 4b9fecb4d9f18df10825fcbc6b16f792fee15176
 first:
   - path: scratch/plan.md
     why: Completed retirement and remaining dense transport work
@@ -12,8 +12,14 @@ first:
     why: Publish the single v11 schema
   - path: managym/src/agent/observation_encoder.rs
     why: Encode one row per game object
+  - path: managym/src/agent/observation_rows.rs
+    why: Pack rows for policies and read them in engine tests
+  - path: managym/src/python/vector_env_bindings.rs
+    why: Publish vector rows only as frozen batches
   - path: managym/src/python/observation_batch/archive.rs
     why: Preserve packed layout and validate restored joins
+  - path: managym/recording.py
+    why: Read fixed seats as one native batch
   - path: manabot/env/env.py
     why: Return the acting viewer's native observation
   - path: manabot/policy/spans.py
