@@ -14,6 +14,7 @@ from manabot.env.memory_store import (
     MEMORY_FIELDS,
     CompactObservation,
     PrefixObservation,
+    RetainedMemory,
 )
 from manabot.env.observation import (
     FACT_KIND_INDEX,
@@ -184,7 +185,13 @@ class ObservationSelection(Mapping[str, np.ndarray]):
 
     space: ObservationSpace
     coordinates: tuple[BatchRow, ...]
-    memory: PrefixObservation | None = None
+    memory: RetainedMemory | None = None
+
+    def __post_init__(self) -> None:
+        if self.memory is not None and len(self.coordinates) != len(
+            self.memory.prefixes
+        ):
+            raise ValueError("decision-memory prefix batch mismatch")
 
     @cached_property
     def batch(self) -> managym.ObservationBatch:
@@ -254,23 +261,14 @@ class ObservationSelection(Mapping[str, np.ndarray]):
             if isinstance(indexes, slice)
             else tuple(self.coordinates[i] for i in indexes)
         )
-        memory = self.memory
-        if memory is not None:
-            prefixes = (
-                memory.prefixes[indexes]
-                if isinstance(indexes, slice)
-                else tuple(memory.prefixes[i] for i in indexes)
-            )
-            memory = PrefixObservation({}, prefixes, memory.memory_capacities)
+        memory = self.memory.select(indexes) if self.memory is not None else None
         return ObservationSelection(self.space, coords, memory)
 
     def export(self) -> PrefixObservation | dict[str, np.ndarray]:
         rows = {key: self.project(key) for key in self}
         if self.memory is None:
             return rows
-        return PrefixObservation(
-            rows, self.memory.prefixes, self.memory.memory_capacities
-        )
+        return PrefixObservation(rows, self.memory.prefixes, self.memory.capacities)
 
     def materialize(self) -> CompactObservation | dict[str, np.ndarray]:
         rows = self.export()
@@ -319,7 +317,7 @@ class ObservationSpans:
     buckets: BucketSizes | None
     needs: np.ndarray | None
 
-    memory: PrefixObservation | None = None
+    memory: RetainedMemory | None = None
 
     def fact_payloads(self, rows: np.ndarray) -> np.ndarray:
         values = rows[..., FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2].astype(np.float32)

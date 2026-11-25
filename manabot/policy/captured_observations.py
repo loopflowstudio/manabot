@@ -10,7 +10,7 @@ from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import (
     MemoryArchive,
     PrefixIdentity,
-    PrefixObservation,
+    RetainedMemory,
     archive_memory,
     restore_memory,
 )
@@ -30,7 +30,7 @@ def pack_observation(
         batch = observation
     arrays = {"batch": np.frombuffer(batch.to_bytes(), dtype=np.uint8)}
     if memory is not None:
-        archive = archive_memory(memory.prefixes, memory.memory_capacities)
+        archive = archive_memory(memory.prefixes, memory.capacities)
         arrays["memory"] = np.array(
             json.dumps(
                 {
@@ -86,7 +86,7 @@ def unpack_observation(
             arrays["memory/offsets"],
             arrays["memory/indexes"],
         )
-        memory = PrefixObservation({}, restore_memory(archive), capacities)
+        memory = RetainedMemory(restore_memory(archive), capacities)
     return ObservationSelection(
         space, tuple((batch, i) for i in range(batch.batch_size)), memory
     )

@@ -76,7 +76,7 @@ class AdmittedRows:
         if isinstance(rows.observation, PrefixObservation):
             raw = rows.observation
             rows.observation = PrefixObservation(
-                raw, raw.prefixes, raw.memory_capacities
+                raw, raw.memory.prefixes, raw.memory.capacities
             )
         return prepared, rows
 

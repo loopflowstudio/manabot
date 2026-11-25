@@ -107,7 +107,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
         RecordedObservations(
             {k: v for k, v in rows.items() if k not in ACTION_FIELDS},
             np.arange(5),
-            memory=rows.prefixes,
+            memory=rows.memory.prefixes,
             memory_capacities=(4, 1024, 1024, 16384),
         ),
         actual.actions[None],

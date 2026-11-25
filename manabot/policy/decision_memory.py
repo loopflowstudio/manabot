@@ -23,7 +23,7 @@ from managym.decision_memory import (
 )
 
 if TYPE_CHECKING:
-    from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
+    from manabot.env.memory_store import RecordNode, RetainedMemory, Tail
     from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Packed, Tables
     from manabot.policy.spans import ObservationSpans
@@ -603,14 +603,14 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     return arrays
 
 
-def retained_memory(obs: object) -> "PrefixObservation | None":
+def retained_memory(obs: object) -> "RetainedMemory | None":
     from manabot.env.memory_store import PrefixObservation
     from manabot.policy.spans import ObservationSelection
 
     if type(obs) is ObservationSelection:
         return obs.memory
     return (
-        obs
+        obs.memory
         if isinstance(obs, PrefixObservation)
         and not any(key in obs for key in MEMORY_FIELDS)
         else None
@@ -618,7 +618,7 @@ def retained_memory(obs: object) -> "PrefixObservation | None":
 
 
 def validate_retained_memory(
-    obs: "PrefixObservation", tables: "Tables", definition_count: int, include_own: bool
+    obs: "RetainedMemory", tables: "Tables", definition_count: int, include_own: bool
 ) -> None:
     from manabot.policy.admission import definition_ids
     from manabot.policy.prepare import record_word
@@ -808,7 +808,7 @@ def _empty_memory(tables: Tables) -> MemoryRows[np.ndarray]:
 
 
 def _prepare_retained(
-    obs: "PrefixObservation", tables: "Tables"
+    obs: "RetainedMemory", tables: "Tables"
 ) -> MemoryRows[np.ndarray]:
     from manabot.env.memory_store import record_tail
     from manabot.policy.prepare import pack
@@ -855,7 +855,7 @@ def _prepare_retained(
 
 
 def _prepare_fold(
-    obs: PrefixObservation, tables: Tables, roots: Mapping[str, int] | None = None
+    obs: RetainedMemory, tables: Tables, roots: Mapping[str, int] | None = None
 ) -> MemoryRows[np.ndarray]:
     """Embed each selected node once, with exact joins to predecessor references.
 
@@ -1025,7 +1025,7 @@ def prepare_memory(
     roots: Mapping[str, int] | None = None,
     native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
-    retained = retained_memory(obs)
+    retained = native.memory if native is not None else retained_memory(obs)
     return (
         (
             _prepare_fold(retained, tables, roots)

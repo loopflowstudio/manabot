@@ -45,6 +45,7 @@ from manabot.env.memory_store import (
     Prefix,
     PrefixIdentity,
     PrefixObservation,
+    RetainedMemory,
     select_rows,
 )
 from manabot.env.observation import (
@@ -236,7 +237,7 @@ class RecordedSpans:
 
     def arrays(self) -> ObservationSelection:
         memory = (
-            PrefixObservation({}, self.memory, self.memory_capacities)
+            RetainedMemory(tuple(self.memory), self.memory_capacities)
             if self.memory_capacities is not None
             else None
         )
@@ -1392,7 +1393,7 @@ def retain_spans(
     memory = None
     if collector._memory_store is not None:
         prefixes = _capture_memory(collector, rows, selected, players)
-        memory = PrefixObservation({}, prefixes, collector._memory_store.capacities)
+        memory = RetainedMemory(prefixes, collector._memory_store.capacities)
         batch = batch.blank_decision_memory()
     return ObservationSelection(
         selected.space, tuple((batch, i) for i in range(batch.batch_size)), memory
@@ -2510,7 +2511,7 @@ def _sample_learning_rows(
             first = collector._observations.append(
                 rows,
                 needs,
-                prefixes=observation.prefixes
+                prefixes=observation.memory.prefixes
                 if isinstance(observation, PrefixObservation)
                 else (),
             )

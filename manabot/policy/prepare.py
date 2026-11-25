@@ -810,7 +810,7 @@ def prepare(
         obs = obs.rows
     memory = (
         prepare_memory(
-            native.memory if native is not None and native.memory is not None else obs,
+            obs,
             tables,
             fold=memory_fold,
             roots=memory_roots,

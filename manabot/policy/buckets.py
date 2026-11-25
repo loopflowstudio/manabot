@@ -186,7 +186,7 @@ def bucket_observation(
     buckets = sizes_of(needs, space, objects=objects)
     memory = retained_memory(obs)
     trimmed = (
-        PrefixObservation(obs, memory.prefixes, memory.memory_capacities)
+        PrefixObservation(obs, memory.prefixes, memory.capacities)
         if memory is not None
         else dict(obs)
     )

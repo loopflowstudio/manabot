@@ -90,7 +90,7 @@ def test_chunk_cache_preserves_dense_features_outputs_and_gradients() -> None:
     tables = model._admission_spec().tables
     changed = replace(tables, name_definitions=np.empty(0, np.int64))
     with pytest.raises(ValueError, match="name row"):
-        validate_retained_memory(selected, changed, 0, False)
+        validate_retained_memory(selected.memory, changed, 0, False)
     assert store.measure([prefix])["feature_cache_bytes"] > 0
     nodes = [weakref.ref(node) for node in prefix.tail.chunks()]
     del prefix, selected

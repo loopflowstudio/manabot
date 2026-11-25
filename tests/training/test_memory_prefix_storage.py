@@ -84,7 +84,7 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     )
     assert recorded.ordered((4, 1)) == {}
     assert "decision_records" not in recorded.rows
-    archive = archive_memory(selected.prefixes, (4, 1024, 1024, 16384))
+    archive = archive_memory(selected.memory.prefixes, (4, 1024, 1024, 16384))
     restored = gather_memory(restore_memory(archive))
     for key in MEMORY_FIELDS:
         np.testing.assert_array_equal(restored[key], selected[key])
@@ -108,8 +108,8 @@ def test_slicing_a_compact_export_preserves_edits_and_prefix_order() -> None:
     obs["decision_records"][2, 0, 3] = 21
     selected = select_rows(obs, slice(1, 3))
     assert isinstance(selected, CompactObservation)
-    assert selected.prefixes == (empty, full)
-    assert selected.memory_capacities == obs.memory_capacities
+    assert selected.memory.prefixes == (empty, full)
+    assert selected.memory.capacities == obs.memory.capacities
     assert selected["decision_records"][1, 0, 3] == 21
     assert np.shares_memory(selected["decision_records"], obs["decision_records"])
 
@@ -225,7 +225,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                     for key, value in first.next_obs.items()
                 },
                 [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
-                memory.memory_capacities,
+                memory.capacities,
             )
             selected_batch = replace(
                 first, next_obs=selected, next_done=np.zeros(3, bool)

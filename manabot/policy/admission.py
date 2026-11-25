@@ -13,7 +13,7 @@ import numpy as np
 
 from manabot.belief.encoding import BeliefRows
 from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import CompactObservation
+from manabot.env.memory_store import CompactObservation, RetainedMemory
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     FACT_COMBAT_RESTRICTION,
@@ -340,7 +340,7 @@ def admit_native(
         batch, spec.space, bucketed=bucketed, objects=object_trimming(spec.model)
     )
     if rows.memory is not None:
-        check_memory_contract(rows.memory, spec)
+        check_prefixes(rows.memory, spec)
     data = rows.tables
     beliefs(belief, spec.model, data["actions"].groups[0])
     lookup = spec.tables.definition_rows
@@ -418,21 +418,30 @@ def admit_native(
     return rows
 
 
+def check_prefixes(memory: RetainedMemory, spec: Spec) -> None:
+    if not all(
+        key in spec.space.shapes and spec.space.shapes[key][0] == capacity
+        for key, capacity in zip(MEMORY_FIELDS, memory.capacities, strict=True)
+    ):
+        raise ValueError("decision-memory capacity mismatch")
+    validate_retained_memory(
+        memory,
+        spec.tables,
+        spec.definition_count,
+        spec.space.config.decision_memory_include_own,
+    )
+
+
 def check_memory_contract(obs: ObservationBuffers, spec: Spec) -> None:
     """Check capture, chooser roles and capacities on the original memory export."""
     retained = bool(spec.space.config.max_decision_records)
     prefixes = retained_memory(obs)
     if retained != (prefixes is not None or "decision_records" in obs):
         raise ValueError("decision-memory model and input contract disagree")
-    if prefixes is None:
-        admit_memory(obs)
-    else:
-        validate_retained_memory(
-            prefixes,
-            spec.tables,
-            spec.definition_count,
-            spec.space.config.decision_memory_include_own,
-        )
+    if prefixes is not None:
+        check_prefixes(prefixes, spec)
+        return
+    admit_memory(obs)
     if not retained:
         return
     if (
@@ -448,11 +457,9 @@ def check_memory_contract(obs: ObservationBuffers, spec: Spec) -> None:
         expected = spec.space.shapes[key]
         if isinstance(obs, CompactObservation):
             fits = (
-                obs.memory_capacities[axis] == expected[0]
+                obs.memory.capacities[axis] == expected[0]
                 and obs[key].shape[1] <= expected[0]
             )
-        elif prefixes is not None:
-            fits = prefixes.memory_capacities[axis] == expected[0]
         else:
             fits = obs[key].shape[1:] == expected
         if not fits:

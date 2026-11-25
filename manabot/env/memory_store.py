@@ -303,6 +303,36 @@ def _record_chunk(
     return parent
 
 
+@dataclass(frozen=True, slots=True)
+class RetainedMemory:
+    """One bounded, immutable decision prefix for each selected viewer row."""
+
+    prefixes: tuple[Prefix, ...]
+    capacities: MemoryCapacities
+
+    def __post_init__(self) -> None:
+        if (
+            len(self.capacities) != len(MEMORY_FIELDS)
+            or min(self.capacities) < 1
+            or any(
+                any(
+                    count > cap
+                    for count, cap in zip(p.counts, self.capacities, strict=True)
+                )
+                for p in self.prefixes
+            )
+        ):
+            raise ValueError("decision-memory prefix exceeds configured capacity")
+
+    def select(self, indexes: np.ndarray | slice) -> "RetainedMemory":
+        prefixes = (
+            self.prefixes[indexes]
+            if isinstance(indexes, slice)
+            else tuple(self.prefixes[i] for i in indexes)
+        )
+        return RetainedMemory(prefixes, self.capacities)
+
+
 class PrefixObservation(dict[str, np.ndarray]):
     """Ordinary rows and immutable prefixes, without a dense memory owner."""
 
@@ -312,27 +342,15 @@ class PrefixObservation(dict[str, np.ndarray]):
         prefixes: Sequence[Prefix],
         capacities: MemoryCapacities,
     ) -> None:
-        if (
-            len(capacities) != len(MEMORY_FIELDS)
-            or min(capacities) < 1
-            or any(
-                any(
-                    count > cap for count, cap in zip(p.counts, capacities, strict=True)
-                )
-                for p in prefixes
-            )
-        ):
-            raise ValueError("decision-memory prefix exceeds configured capacity")
         if any(
             len(v) != len(prefixes) for k, v in rows.items() if k not in MEMORY_FIELDS
         ):
             raise ValueError("decision-memory prefix batch mismatch")
         super().__init__((k, v) for k, v in rows.items() if k not in MEMORY_FIELDS)
-        self.prefixes = tuple(prefixes)
-        self.memory_capacities = capacities
+        self.memory = RetainedMemory(tuple(prefixes), capacities)
 
     def materialize(self) -> "CompactObservation":
-        return CompactObservation(self, self.prefixes, self.memory_capacities)
+        return CompactObservation(self, self.memory.prefixes, self.memory.capacities)
 
 
 class CompactObservation(PrefixObservation):
@@ -347,7 +365,7 @@ class CompactObservation(PrefixObservation):
         memory: Mapping[str, np.ndarray] | None = None,
     ) -> None:
         super().__init__(rows, prefixes, capacities)
-        self.update(gather_memory(self.prefixes) if memory is None else memory)
+        self.update(gather_memory(self.memory.prefixes) if memory is None else memory)
 
 
 def select_rows(
@@ -360,21 +378,17 @@ def select_rows(
     # Deprecated dense row slicing; removed in 0.3.0.
     selected = {key: value[indexes] for key, value in rows.items()}
     if isinstance(rows, PrefixObservation):
-        prefixes = (
-            rows.prefixes[indexes]
-            if isinstance(indexes, slice)
-            else tuple(rows.prefixes[int(i)] for i in indexes)
-        )
+        memory = rows.memory.select(indexes)
         if isinstance(rows, CompactObservation):
             # Dense exports may contain edits made after prefix capture.
             return CompactObservation(
                 selected,
-                prefixes,
-                rows.memory_capacities,
+                memory.prefixes,
+                memory.capacities,
                 memory={key: selected[key] for key in MEMORY_FIELDS},
             )
         if not any(key in rows for key in MEMORY_FIELDS):
-            return PrefixObservation(selected, prefixes, rows.memory_capacities)
+            return PrefixObservation(selected, memory.prefixes, memory.capacities)
     return selected
 
 
