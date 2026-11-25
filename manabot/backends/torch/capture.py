@@ -1,8 +1,7 @@
 """Capture real Torch policy calls and learner inputs for backend comparisons.
 
 `capture` runs one update of supplied self-play settings in an Etude run, retaining
-the initial checkpoint,
-full-capacity observation arrays, selected targets and per-minibatch settings.
+the initial checkpoint, packed observation batches, selected targets and per-minibatch settings.
 The instrumentation observes the production damped update at its checked-loss
 boundary. Hook frame access is confined here; readers use `backends.parity`.
 Disk serialization is subtracted from the shared engine time, never counted as
@@ -21,20 +20,25 @@ from etude.train.tracking import TrainingRun
 import numpy as np
 import torch
 
+from manabot.backends.captured_observations import pack_observation
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import PolicyObservation
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops import self_play as execution
 from manabot.training.loops.self_play import SelfPlay
 from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.updates.health import OptimizerHealth
+import managym
 
 
 def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
     """Record one real damped update; restore hooks even when execution fails."""
     if not isinstance(settings.learning, DampedPolicyLearning):
         raise ValueError("backend capture requires damped-policy learning")
+    if settings.observation.policy_input_version != 11:
+        raise ValueError("backend capture requires policy input v11")
     out.mkdir(parents=True, exist_ok=False)
     (out / "collection").mkdir()
     (out / "learner").mkdir()
@@ -47,22 +51,24 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
     recording_seconds = 0.0
     in_collection = False
     original_prepare = PolicyInference.prepare
-    original_forward = ActorCritic.forward
+    original_forward = ActorCritic.forward_distribution
     original_collect = execution.collect
     original_check = OptimizerHealth.check
 
     def prepare(
-        self: PolicyInference, obs: ObservationBuffers
+        self: PolicyInference, obs: PolicyObservation
     ) -> Prepared[torch.Tensor]:
         nonlocal recording_seconds
         if not in_collection:
             return original_prepare(self, obs)
         tick = time.perf_counter()
         prepared = original_prepare(self, obs)
+        if not isinstance(obs, (ObservationSelection, managym.ObservationBatch)):
+            raise ValueError("backend capture requires a native observation batch")
         calls.append(
             {
                 "index": len(calls),
-                "B": int(obs["actions_valid"].shape[0]),
+                "B": prepared.batch,
                 "prepare": time.perf_counter() - tick,
                 "forward": 0.0,
             }
@@ -70,7 +76,7 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
         recording_start = time.perf_counter()
         np.savez(
             out / "collection" / f"{len(calls) - 1:05d}.npz",
-            **obs,
+            **pack_observation(obs),
         )
         recording_seconds += time.perf_counter() - recording_start
         return prepared
@@ -104,13 +110,14 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
         assert frame.f_back.f_code.co_name == "update_damped_iteration"
         indexes = local["indexes"]
         learning = local["learning"]
-        arrays = {f"obs/{k}": v for k, v in local["rows"].observation.items()}
+        arrays = pack_observation(local["rows"].observation)
         arrays.update(
             actions=local["minibatch_actions"].detach().cpu().numpy(),
             advantages=local["advantages"][indexes].detach().cpu().numpy(),
             value_targets=local["value_targets"][indexes].detach().cpu().numpy(),
-            actor_mask=local["actor_mask"].numpy(),
-            behavior_logs=local["behavior_logs"].numpy(),
+            reference=local["reference"].detach().cpu().numpy(),
+            actor_mask=local["actor_mask"].detach().cpu().numpy(),
+            behavior_logs=local["behavior_logs"].detach().cpu().numpy(),
         )
         np.savez(out / "learner" / f"{len(minibatches):03d}.npz", **arrays)
         minibatches.append(
@@ -132,7 +139,7 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
         del local, frame
 
     PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    ActorCritic.forward = forward  # type: ignore[method-assign]
+    ActorCritic.forward_distribution = forward  # type: ignore[method-assign]
     execution.collect = collect  # type: ignore[method-assign]
     OptimizerHealth.check = check  # type: ignore[method-assign]
     started = time.perf_counter()
@@ -144,7 +151,7 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
         execution.self_play(settings, run, updates=1)
     finally:
         PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
-        ActorCritic.forward = original_forward  # type: ignore[method-assign]
+        ActorCritic.forward_distribution = original_forward  # type: ignore[method-assign]
         execution.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
     initial = run.out / "policies" / "00000000-raw.safetensors"

@@ -28,19 +28,33 @@ import managym
 from tests.fixtures.training_records import recording
 
 
-@pytest.fixture(scope="module")
-def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def make_capture(tmp_path_factory: pytest.TempPathFactory, *, memory: bool) -> Path:
     tmp_path = tmp_path_factory.mktemp("backend-capture")
     settings = SelfPlay(
         match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        observation=ObservationConfig(policy_input_version=9),
+        observation=ObservationConfig(
+            max_decision_records=64,
+            max_decision_reference_details=2048,
+            max_decision_references=128,
+            max_decision_members=512,
+            decision_memory_include_own=True,
+        )
+        if memory
+        else ObservationConfig(),
+        batch_closure="exact-quota" if memory else "complete-games",
+        learning_seats="one" if memory else "both",
+        collection_rows=2,
+        learner_rows=2,
+        bootstrap_rows=2,
         model=ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
-            value_kind="scalar",
+            value_kind="categorical_wdl" if memory else "scalar",
+            policy_film=memory,
+            decision_memory="gru" if memory else "none",
             value_aggregation="masked_mean",
             world=managym.WORLD_SETUP,
         ),
@@ -67,11 +81,40 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return out
 
 
+@pytest.fixture(scope="module")
+def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return make_capture(tmp_path_factory, memory=False)
+
+
+def test_capture_replays_interned_decision_memory(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    source = make_capture(tmp_path_factory, memory=True)
+    retained = [obs.memory for obs, *_ in minibatches(source, None)]
+    assert all(memory is not None for memory in retained)
+    assert any(
+        prefix.counts[0]
+        for memory in retained
+        if memory is not None
+        for prefix in memory.prefixes
+    )
+    assert_recorded_losses(source)
+    report = check(source / "initial.pt", source, 2, 2, backend_name="torch", threads=1)
+    assert not report.failures()
+
+
 def test_capture_replays_both_seat_update(captured: Path) -> None:
     out = captured
     meta = json.loads((out / "capture.json").read_text())
     assert meta["calls"] > 0 and meta["minibatches"] > 1
     assert meta["engine"] >= 0
+    assert all(
+        call["forward"] > 0 for call in json.loads((out / "calls.json").read_text())
+    )
+    assert_recorded_losses(out)
+
+
+def assert_recorded_losses(out: Path) -> None:
     agent, space = load_checkpoint(str(out / "initial.pt"), bucketed_shapes=True)
     weights = from_torch_state(
         agent.config,
@@ -84,7 +127,12 @@ def test_capture_replays_both_seat_update(captured: Path) -> None:
     rows = 0
     for obs, targets, settings, recorded in minibatches(out, None):
         assert targets.actions.shape == targets.advantages.shape
-        assert targets.value_targets.shape == targets.actions.shape
+        expected = (
+            (len(targets.actions), 3)
+            if agent.config.value_kind == "categorical_wdl"
+            else targets.actions.shape
+        )
+        assert targets.value_targets.shape == expected
         assert len(targets.actions) <= 2
         loss = minibatch_loss(
             resolve("torch"),
@@ -101,7 +149,7 @@ def test_capture_replays_both_seat_update(captured: Path) -> None:
         norm = learner.step(loss, settings.max_grad_norm)
         assert torch.isfinite(norm)
         rows += len(targets.actions)
-    assert rows == meta["learner_decisions"]
+    assert rows == json.loads((out / "capture.json").read_text())["learner_decisions"]
 
 
 @pytest.mark.parametrize(

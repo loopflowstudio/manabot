@@ -28,7 +28,7 @@ from manabot.backends import resolve
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import ObjectAttention
 from manabot.backends.parity import TOLERANCES, minibatch_loss, minibatches
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import PolicyObservation
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.training.updates.backend import UpdateBackend
 
@@ -57,7 +57,7 @@ class BatchProfile:
 def profile_step(
     backend: UpdateBackend,
     learner: Learner,
-    obs: ObservationBuffers,
+    obs: PolicyObservation,
     targets: Targets,
     settings: Settings,
     index: int,
@@ -167,7 +167,9 @@ def profile(
             bootstrap_rows=None,
         )
         samples = []
-        for i, (obs, targets, settings, _) in enumerate(minibatches(source, count)):
+        for i, (obs, targets, settings, _) in enumerate(
+            minibatches(source, count, space=policy.observation_space)
+        ):
             sample = profile_step(backend, learner, obs, targets, settings, i)
             samples.append(sample)
             print(json.dumps(asdict(sample)), flush=True)

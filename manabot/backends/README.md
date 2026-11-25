@@ -373,8 +373,8 @@ still differs between the two backends:
 
 `capture(out, settings, run)` records one damped-policy update from `SelfPlay`
 settings in an open Etude run. It writes `settings.json`, the initial policy,
-collection calls and learner minibatches. Frozen experiment capture commands
-require their original revision; retained captures remain readable.
+collection calls and learner minibatches. Run frozen experiment capture commands
+and replay historical dense captures at the revision that recorded them.
 
 | Module | Names |
 | --- | --- |

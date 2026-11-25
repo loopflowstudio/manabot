@@ -34,17 +34,20 @@ import numpy as np
 import torch
 
 from manabot.backends import resolve
+from manabot.backends.captured_observations import unpack_observation
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import runtime as torch_runtime
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import read_policy, restore_policy
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.checkpoint import (
     ParameterArrays,
     PolicyCheckpoint,
     canonical_parameters,
 )
-from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import (
     BackendLearner,
     BackendPolicy,
@@ -52,7 +55,8 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
-from manabot.training.updates.backend import Arrays, Learner, Policy, UpdateBackend
+from manabot.policy.spans import ObservationSelection
+from manabot.training.updates.backend import Learner, Policy, UpdateBackend
 from manabot.training.updates.objective import minibatch_objective
 
 if TYPE_CHECKING:
@@ -328,27 +332,27 @@ class Report:
         return [name for name, _, passed in self.checks() if not passed]
 
 
-def read_npz(path: Path) -> dict[str, np.ndarray]:
-    with np.load(path, allow_pickle=False) as arrays:
-        return {key: arrays[key] for key in arrays.files}
-
-
 def minibatches(
-    capture: Path, count: int | None
-) -> Iterator[tuple[dict[str, np.ndarray], Targets, Settings, dict[str, Any]]]:
+    capture: Path, count: int | None, *, space: ObservationSpace | None = None
+) -> Iterator[tuple[ObservationSelection, Targets, Settings, dict[str, Any]]]:
     """Captured learner minibatches as (observation, targets, settings, meta)."""
+    if space is None:
+        config = json.loads((capture / "settings.json").read_text())["observation"]
+        space = ObservationSpace(ObservationConfig.from_checkpoint(config))
     rows = json.loads((capture / "minibatches.json").read_text())
     for row in rows[:count]:
-        arrays = read_npz(capture / "learner" / f"{row['index']:03d}.npz")
-        obs = {k[4:]: v for k, v in arrays.items() if k.startswith("obs/")}
-        targets = Targets(
-            actions=arrays["actions"],
-            advantages=arrays["advantages"],
-            value_targets=arrays["value_targets"],
-            actor_mask=arrays["actor_mask"],
-            behavior_logs=arrays["behavior_logs"],
-            reference=reference_distribution(obs, row["reference"]),
-        )
+        with np.load(
+            capture / "learner" / f"{row['index']:03d}.npz", allow_pickle=False
+        ) as arrays:
+            obs = unpack_observation(arrays, space)
+            targets = Targets(
+                actions=arrays["actions"],
+                advantages=arrays["advantages"],
+                value_targets=arrays["value_targets"],
+                actor_mask=arrays["actor_mask"],
+                behavior_logs=arrays["behavior_logs"],
+                reference=arrays["reference"],
+            )
         settings = Settings(
             learning_rate=row["learning_rate"],
             clip=row["clip"],
@@ -437,7 +441,7 @@ class ParityMismatch(ValueError):
 
 
 def evaluate(
-    arrays: Arrays,
+    backend: ParityBackend,
     policy: ParityPolicy,
     learner: ParityLearner,
     batch: Prepared,
@@ -450,13 +454,16 @@ def evaluate(
                 on_device(batch, learner.device)
             )
         else:
-            mlx_policy = cast("MLXActorCritic", policy)
-            logits, values = mlx_policy.forward_heads(batch)
+            logits, values = cast("MLXActorCritic", policy).forward_heads(batch)
     dtype = str(values.dtype).rsplit(".", 1)[-1]
     report.observed_forward_dtype = dtype
     if dtype != report.precision:
         raise ParityMismatch(f"forward dtype {dtype} differs from {report.precision}")
-    return arrays.to_numpy(logits), arrays.to_numpy(values).reshape(-1)
+    if policy.config.value_kind == "categorical_wdl":
+        if not isinstance(policy, torch_backend.policy.ActorCritic):
+            values = backend.arrays.float32(values)
+        values = backend.rl.expected_outcome(backend.rl.outcome_probabilities(values))
+    return backend.arrays.to_numpy(logits), backend.arrays.to_numpy(values).reshape(-1)
 
 
 def check(
@@ -553,7 +560,9 @@ def compare(
 
     reference_learner, policy, learner = load_pair()
     for index, (obs, targets, settings, meta) in enumerate(
-        minibatches(capture, minibatch_count)
+        minibatches(
+            capture, minibatch_count, space=reference_learner.agent.observation_space
+        )
     ):
         reference_policy = reference_learner.agent
         reference_batch = reference_policy.prepare(obs)
@@ -574,7 +583,7 @@ def compare(
         )
 
         batch = policy.prepare(obs)
-        port_logits, port_values = evaluate(port.arrays, policy, learner, batch, report)
+        port_logits, port_values = evaluate(port, policy, learner, batch, report)
         port_loss = minibatch_loss(port, policy, learner, batch, targets, settings)
         loss_value = float(port.arrays.to_numpy(port_loss))
         grads = learner.gradients(port_loss)
@@ -649,7 +658,7 @@ def compare(
             flush=True,
         )
     _collection(
-        port.arrays,
+        port,
         reference_learner.agent,
         policy,
         learner,
@@ -707,7 +716,7 @@ def _compare_step(
 
 
 def _collection(
-    arrays: Arrays,
+    backend: ParityBackend,
     agent: torch_backend.policy.ActorCritic,
     policy: ParityPolicy,
     learner: ParityLearner,
@@ -728,14 +737,18 @@ def _collection(
                 0, len(calls) - 1, min(count, len(calls)), dtype=int
             ):
                 path = calls[index]
-                obs = read_npz(path)
-                logits, values = agent.evaluate(agent.prepare(obs, inference=True))
+                with np.load(path, allow_pickle=False) as arrays:
+                    obs = unpack_observation(arrays, agent.observation_space)
+                prepared = agent.prepare(obs, inference=True)
+                logits, values = agent.evaluate(prepared)
                 port_logits, port_values = evaluate(
-                    arrays, policy, learner, policy.prepare(obs, inference=True), report
+                    backend,
+                    policy,
+                    learner,
+                    policy.prepare(obs, inference=True),
+                    report,
                 )
-                absolute, _ = _legal_difference(
-                    port_logits, logits, obs["actions_valid"] > 0
-                )
+                absolute, _ = _legal_difference(port_logits, logits, prepared.legal)
                 delta = float(np.abs(port_values - values.reshape(-1)).max())
                 if not np.isfinite(delta):
                     raise ParityMismatch(

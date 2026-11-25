@@ -848,7 +848,8 @@ class MLXActorCritic(nn.Module):
     ) -> tuple[mx.array, mx.array]:
         """Differentiable policy logits and raw scalar [B,1] or WDL [B,3] critic."""
         with self.forward_precision():
-            return self._forward(batch)
+            logits, values = self.forward_heads(batch)
+            return logits, values.astype(mx.float32)
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: the definition vectors objects
@@ -896,7 +897,8 @@ class MLXActorCritic(nn.Module):
             return logits, expected_outcome(outcome_probabilities(raw))
         return logits, raw.squeeze(-1)
 
-    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+    def forward_heads(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+        """Inside forward_precision, expose the critic before its host-facing float32 cast."""
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         if batch.guard is not None:
@@ -1243,7 +1245,7 @@ class MLXActorCritic(nn.Module):
             projected = (projected * validity[..., None]).sum(1) / validity.sum(
                 1, keepdims=True
             )
-        return head[5](head[4](head[3](projected))).astype(mx.float32)
+        return head[5](head[4](head[3](projected)))
 
     def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
