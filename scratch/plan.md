@@ -74,7 +74,9 @@ Choices made for review are listed in `scratch/questions.md`.
 
 1. Done (`4a7adb5b29`) — server swap, record and readers; `tests/academy/test_swap_sides.py` 6 passed.
 2. Done (`c97527f9c3`, `381937fb24`, `61f8621a45`) — protocol, Settings This game / Next game, Swap play/draw rename, Review dividers, estimate breaks, QA fixes (`liveAnalysis` reset on seat change, narrow rail move name, Play again matchup decks), `e2e/swap-sides.spec.ts` green.
-3. Done — post-build concept review fixes (3a–3d): Review seat-vs-pilot separation (`pilotSeatAt`, `seatIdentity`, `perspectiveLabel`, `playOrDraw`, `seatColumnLabel`, `estimateArc` omitted when swapped, `docs/academy.md` updated), Play `GET /api/traces/{id}/decisions` (`play_decisions_with_addresses`, zero `POLICY` rows) + closed-decklist redaction alignment (`prepare_trace_payload`), immediate committed board flip before `_advance()` preserving live analysis, `fork_study` snapshot fix, `scratch/probe/` removed. Full CI/remaining suite checks deferred to gate.
+3. Done (`fe642ed643`) — post-build concept review fixes (3a–3d): Review seat-vs-pilot separation (`pilotSeatAt`, `seatIdentity`, `perspectiveLabel`, `playOrDraw`, `seatColumnLabel`, `estimateArc` omitted when swapped, `docs/academy.md` updated), Play `GET /api/traces/{id}/decisions` (`play_decisions_with_addresses`, zero `POLICY` rows) + closed-decklist redaction alignment (`prepare_trace_payload`), immediate committed board flip before `_advance()` preserving live analysis, `fork_study` snapshot fix, `scratch/probe/` removed. Realign 2026-11-25: the four acceptance pytest files 35 passed; UI vitest 704 passed; svelte-check 0 errors. Playwright `swap-sides.spec.ts` and full CI deferred to gate.
+
+No slices remain; next is gate.
 
 ## Acceptance check at gate
 
