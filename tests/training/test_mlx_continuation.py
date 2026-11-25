@@ -129,7 +129,7 @@ def exercise_continuation(root: Path) -> None:
     ) as run:
         learner, ema = loop.create(settings, seed=37, backend=backend)
         _, restored = loop.resume_training(settings, run, backend, learner, ema)
-        assert restored.host is not None and restored.sampling is not None
+        assert restored is not None and restored.sampling is not None
         host_file = saved.path / "continuation.json"
         payload = host_file.read_bytes()
         assert restored.host.model_dump_json().encode() == payload

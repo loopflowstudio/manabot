@@ -207,14 +207,6 @@ class Continuation(TrainingState, Protocol):
     def restore_sampling(
         self, session: CollectionSession, arrays: Mapping[str, np.ndarray]
     ) -> None: ...
-    def restore_legacy(
-        self,
-        folder: Path,
-        learner: SelfPlayLearner,
-        ema: BackendPolicy | None,
-        *,
-        step: int,
-    ) -> None: ...
     def framework(self) -> dict[str, str | None]: ...
 
 

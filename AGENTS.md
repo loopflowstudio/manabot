@@ -371,7 +371,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
-  restoring weights. Older runs supply their model settings from the initial raw policy.
+  restoring weights.
 - Model and name rules state and observation fields directly after the
   Comprehensive Rules, not derived consequence flags; new state reaches policy
   input, LLM text and learning tokens together. To extend an integer-serialized

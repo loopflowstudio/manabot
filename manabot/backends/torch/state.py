@@ -6,10 +6,7 @@ directory and its metadata (`training/state/incidents.py`).
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from pathlib import Path
-import pickle
+from collections.abc import Mapping
 import random
 from typing import TYPE_CHECKING, Any, BinaryIO
 
@@ -379,85 +376,6 @@ def restore_sampling(
         )
     elif "rng.torch.mps" in arrays:
         torch.mps.set_rng_state(torch.from_numpy(arrays["rng.torch.mps"]))
-
-
-@contextmanager
-def legacy_file(path: Path) -> Iterator[dict[str, Any]]:
-    """Name the failing file when Torch decoding or tensor admission fails."""
-    try:
-        saved = torch.load(path, map_location="cpu", weights_only=True)
-        if not isinstance(saved, dict):
-            raise ValueError("expected a state dictionary")
-        yield saved
-    except (
-        OSError,
-        EOFError,
-        pickle.UnpicklingError,
-        KeyError,
-        AttributeError,
-        RuntimeError,
-        ValueError,
-        TypeError,
-    ) as error:
-        raise ValueError(f"{path.name}: {error}") from error
-
-
-def legacy_parameters(path: Path, policy: ActorCritic) -> dict[str, np.ndarray]:
-    """Extract weights only after checking every persistent lookup buffer."""
-    with legacy_file(path) as saved:
-        if differing := policy.state_dict().keys() ^ saved.keys():
-            raise ValueError(f"incompatible keys {sorted(differing)}")
-        for name, expected in policy_buffers(policy).items():
-            value = saved[name].numpy()
-            if value.dtype != expected.dtype or not np.array_equal(value, expected):
-                raise ValueError(f"incompatible buffer {name}")
-        arrays = {
-            canonical_name(name): saved[name].numpy()
-            for name, _ in policy.named_parameters()
-        }
-        admit_policy_arrays(arrays, parameter_shapes(policy))
-    return arrays
-
-
-def legacy_adam(saved: dict[str, Any], learner: Learner, step: int) -> AdamState:
-    """Resolve Torch's serialized parameter indices against the optimizer groups."""
-    names = {p: canonical_name(n) for n, p in learner.agent.named_parameters()}
-    steps = dict.fromkeys(names.values(), 0) if step else {}
-    first: dict[str, np.ndarray] = {}
-    second: dict[str, np.ndarray] = {}
-    entries = saved["state"].copy()
-    for old, live in zip(
-        saved["param_groups"], learner.optimizer.param_groups, strict=True
-    ):
-        for index, param in zip(old["params"], live["params"], strict=True):
-            if index in entries:
-                entry = entries.pop(index)
-                name = names[param]
-                count = entry["step"].item()
-                if not float(count).is_integer():
-                    raise ValueError(f"invalid step for {name}")
-                steps[name] = int(count)
-                first[name] = entry["exp_avg"].numpy()
-                second[name] = entry["exp_avg_sq"].numpy()
-    if entries:
-        raise ValueError("unknown parameter indices")
-    adam = AdamState(step, steps, first, second)
-    admit_adam(adam, parameter_shapes(learner.agent), step=step)
-    return adam
-
-
-def restore_legacy(
-    folder: Path, learner: Learner, ema: ActorCritic | None, *, step: int
-) -> None:
-    """Admit the old state dictionaries on CPU before installing any tensors."""
-    raw = legacy_parameters(folder / "learner.pt", learner.agent)
-    averaged = legacy_parameters(folder / "ema.pt", ema) if ema is not None else {}
-    with legacy_file(folder / "optimizer.pt") as saved:
-        adam = legacy_adam(saved, learner, step)
-    load_policy_arrays(learner.agent, raw)
-    if ema is not None:
-        load_policy_arrays(ema, averaged)
-    load_adam(learner, adam)
 
 
 def framework() -> dict[str, str | None]:

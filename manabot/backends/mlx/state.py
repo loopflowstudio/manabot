@@ -9,7 +9,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 import json
 import math
-from pathlib import Path
 import random
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -143,15 +142,6 @@ def restore_sampling(
     session.restore_rng(arrays["rng.collector"])
     high, low = arrays["rng.mlx"].tolist()
     mx.random.seed((high << 32) | low)
-
-
-def restore_legacy(
-    folder: Path, learner: Learner, ema: MLXActorCritic | None, *, step: int
-) -> None:
-    raise ValueError(
-        "learner.pt: this save was written by Torch object registration; "
-        "resume once on Torch to write a portable save"
-    )
 
 
 @dataclass

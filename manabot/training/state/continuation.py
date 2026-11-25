@@ -109,7 +109,7 @@ def restore_host_rng(host: HostContinuation, rng: np.random.Generator) -> None:
 
 @dataclass(frozen=True)
 class RestoredContinuation:
-    host: HostContinuation | None = None
+    host: HostContinuation
     sampling: dict[str, np.ndarray] | None = None
     sampling_reseeded: bool = False
     adam_steps_aligned: int = 0
@@ -209,6 +209,20 @@ def read_tensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]:
         raise ValueError(f"{path.name}: {error}") from error
 
 
+def admit_save_format(folder: Path) -> dict[str, Any]:
+    """Read Etude's record and refuse pre-portable saves before model admission."""
+    if (folder / "training.safetensors").exists():
+        raise ValueError("training.safetensors: unsupported pre-portable MLX save")
+    record = json.loads((folder / "state.json").read_bytes())
+    if "learner" in record["files"] or (folder / "learner.pt").exists():
+        raise ValueError(
+            "state.json: this save holds learner.pt, written before portable saves; "
+            "resume it with manabot 0.2.5, or start a new run warm-started from "
+            "the run's published policy"
+        )
+    return record
+
+
 def restore_continuation(
     folder: Path,
     *,
@@ -217,24 +231,14 @@ def restore_continuation(
     ema: BackendPolicy | None,
     counts: Counts,
     settings: SelfPlay,
+    record: dict[str, Any] | None = None,
 ) -> RestoredContinuation:
     """Validate the entire snapshot before copying into the live policies and Adam."""
-    record = json.loads((folder / "state.json").read_bytes())
+    if record is None:
+        record = admit_save_format(folder)
     if record["at"].get("updates") != counts.updates:
         raise ValueError("state.json: updates differs from the saved counts")
     files = record["files"]
-    if (folder / "training.safetensors").exists():
-        raise ValueError("training.safetensors: unsupported pre-portable MLX save")
-    if "learner" in files:
-        expected = {"learner": "learner.pt", "optimizer": "optimizer.pt"}
-        if ema is not None:
-            expected["ema"] = "ema.pt"
-        if files != expected:
-            raise ValueError(
-                f"state.json: expected legacy files {expected}, got {files}"
-            )
-        state.restore_legacy(folder, learner, ema, step=counts.optimizer_updates)
-        return RestoredContinuation()
     # Etude decodes extra into Counts before the callback. Check the recorded
     # payload as well, so defaults or ignored fields cannot mask a damaged file.
     counts_digest = canonical_sha256(record["extra"])
