@@ -5,6 +5,13 @@
    * move, the prompt in one plain line with its buttons, every legal choice by
    * number, and the log as a move list. The list is the guarantee that the
    * board hides nothing: it holds every offer of the frame, in order.
+   *
+   * One rule divides the rail's height. What you must read to act (notices,
+   * the stack with its recap, the decision) keeps its whole height; its long
+   * lists scroll inside their own bounds. The two reference lists (every
+   * legal choice, then the moves) share what is left, each above a floor, and
+   * scroll inside. No block is cut by its neighbour; on a window too short
+   * for the floors the rail itself scrolls.
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
@@ -50,8 +57,6 @@
     notices?: Snippet;
     /** The game has ended; its result card sits over the board. */
     over?: boolean;
-    /** The docked inspect pane, when inspecting docks to the rail. */
-    dock?: Snippet;
     /**
      * The opponent's move being read out. It heads the decision block, and
      * while it is set the decision's controls wait: listed, focusable and
@@ -73,7 +78,7 @@
 
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
+    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
@@ -107,14 +112,14 @@
     return () => clearInterval(timer);
   });
 
-  let logEnd = $state<HTMLElement | null>(null);
   let logList = $state<HTMLElement | null>(null);
   // The list follows the newest move live, and the shown position's move in a recording.
   $effect(() => {
     void moves.length;
     void moves.at(-1)?.moves.length;
     const current = currentMove;
-    if (current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
+    // Only the list scrolls: scrolling an element into view would also move a rail that is taller than a short window.
+    if (current === null && !onjump) { if (logList) logList.scrollTop = logList.scrollHeight; return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!row || !logList) return;
     const top = row.offsetTop - logList.offsetTop;
@@ -140,8 +145,6 @@
 
 <aside class="rail" aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
-
-  {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
     <h2><span class="type-heading text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
@@ -339,22 +342,19 @@
           </ol>
         </li>
       {/each}
-      <li bind:this={logEnd} aria-hidden="true"></li>
     </ol>
   </section>
 </aside>
 
 <style>
-  .rail { display: flex; flex-direction: column; min-height: 0; height: 100%; border-left: 1px solid var(--border); background: var(--bg-surface); }
+  .rail { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; border-left: 1px solid var(--border); background: var(--bg-surface); }
   .block { padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .notices { padding: 8px 14px 0; display: grid; gap: 6px; }
   h2 { margin-bottom: 4px; line-height: 16px; }
-  .stack { max-height: 34vh; overflow-y: auto; }
-  /* A crowded rail never cuts the top two stack entries (a spell and what it answers): the block keeps room for its
-     heading and one entry (88 px) or two (135 px); deeper entries and the recap below scroll. */
-  .stack:has(.stack-entry) { min-height: 88px; }
-  .stack:has(li + li .stack-entry) { min-height: 135px; }
+  .stack { flex: none; }
   .stack ol { display: grid; gap: 3px; }
+  /* Three entries show (a spell, its answer and the answer to that); a deeper stack scrolls. The padding keeps a legal entry's ring inside the scroll box. */
+  .stack > ol { max-height: 150px; overflow-y: auto; margin: -2px; padding: 2px; }
   .stack-entry {
     width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
     border: 1px solid var(--border); background: var(--bg-field); font-size: 14px; line-height: 20px; color: var(--text);
@@ -370,11 +370,13 @@
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
+  /* Folded, the recap is three lines; opened, it scrolls within a quarter of the window. */
+  .recent ol { max-height: 25vh; overflow-y: auto; }
   .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
   .fact.theirs { color: var(--text); }
   .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
-  .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .prompt { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
   .detail summary { cursor: pointer; width: max-content; }
@@ -424,7 +426,6 @@
   .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-  .docked { flex: none; max-height: 36%; overflow-y: auto; }
   .card-name { font-family: var(--font-serif); font-weight: 600; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }

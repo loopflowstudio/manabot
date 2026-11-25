@@ -170,11 +170,11 @@ test('the Menu turns the reading off, and the browser remembers it', async ({ pa
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
-  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game-settings').click();
   const pace = page.getByTestId('beat-pace');
   await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
   await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game-settings').click();
   let opponentFacts = 0;
   await playUntil(page, async () => {
     expect(await page.getByTestId('beat').count()).toBe(0);
@@ -184,6 +184,6 @@ test('the Menu turns the reading off, and the browser remembers it', async ({ pa
   expect(opponentFacts).toBeGreaterThan(0);
   await page.reload();
   await expect(page.getByTestId('game')).toBeVisible();
-  await page.getByTestId('game-menu').click();
+  await page.getByTestId('game-settings').click();
   await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
 });

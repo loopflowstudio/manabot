@@ -179,7 +179,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/interrupted-${theme}.png`, import.meta.url)) });
       // The site header is inert behind the full-window board; New game is in the board's menu.
       await page.getByTestId('game-menu').click();
-      const setup = page.getByRole('region', {name: 'Session, stops and tools'}).getByRole('link', {name: 'New game', exact: true});
+      const setup = page.getByRole('region', {name: 'Session and tools'}).getByRole('link', {name: 'New game', exact: true});
       await expect(setup).toBeVisible();
       await setup.focus();
       await page.keyboard.press('Enter');

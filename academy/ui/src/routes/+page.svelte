@@ -434,10 +434,10 @@
 
 {#snippet menu()}
   <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
-  <details class="game-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
-    <div class="menu-panel" role="region" aria-label="Session, stops and tools">
-      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+  <!-- Two short popovers, one open at a time: how play behaves, and this game's session and tools. -->
+  <details class="game-menu" name="game-popover">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-settings">Settings</summary>
+    <div class="menu-panel" role="region" aria-label="Play settings">
       <fieldset class="beat-pace" data-testid="beat-pace">
         <legend class="type-caption text-ink-2">Opponent's moves</legend>
         {#each BEAT_PACES as pace (pace)}
@@ -445,17 +445,19 @@
             onchange={() => { beatPace = pace; saveBeatPace(pace); }} />{BEAT_PACE_LABELS[pace]}</label>
         {/each}
       </fieldset>
-      <label class="type-caption flex items-center gap-2">
-        <input type="checkbox" checked={autoTap && fullControl === 'off'} onchange={toggleAutoTap} />
-        <span>Auto-tap lands <span class="text-ink-3">(Ctrl pauses once · Shift+Ctrl holds)</span></span>
-      </label>
-      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
       <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
       <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
         <legend class="sr-only">Pilot stop controls</legend>
         <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
           onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
       </fieldset>
+    </div>
+  </details>
+  <details class="game-menu" name="game-popover">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Game</summary>
+    <div class="menu-panel" role="region" aria-label="Session and tools">
+      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
       {#if gameStore.table}
         <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
           <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}

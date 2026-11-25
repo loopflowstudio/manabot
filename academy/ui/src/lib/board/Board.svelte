@@ -17,6 +17,7 @@
    * row) and a bottom edge (`bottom`: the transport and the decision strip).
    */
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
+  import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
@@ -523,7 +524,7 @@
   let menuElement = $state<HTMLElement | null>(null);
 
   // Inspecting: a preview floats beside the card under the pointer or focus,
-  // or the rail's docked pane keeps the last card inspected.
+  // or the sidebar's docked pane keeps the last card inspected.
   const INSPECT_KEY = 'academy.table.inspect';
   let inspectMode = $state<'float' | 'dock'>(typeof localStorage !== 'undefined' && localStorage.getItem(INSPECT_KEY) === 'dock' ? 'dock' : 'float');
   function toggleInspect(): void {
@@ -766,6 +767,8 @@
   const selfTracker = $derived(buildSelfTracker(boardProjection.agent, trackerFaces, trackerDefNames));
   const oppTracker = $derived(buildOpponentTracker(boardProjection.opponent, trackerFaces, trackerDefNames));
   const anyTrackerOpen = $derived(myDeckOpen || oppDeckOpen);
+  /** The reference column left of the board: the docked inspect pane, then the open deck trackers. */
+  const sidebarOpen = $derived(anyTrackerOpen || inspectMode === 'dock');
 
   function toggleBothTrackers(): void {
     const next = !anyTrackerOpen;
@@ -891,7 +894,7 @@
 <svelte:window onkeydown={onKeydown} onkeyup={onKeyup} onblur={() => { ctrlPending = false; ctrlShift = false; }} onpointermove={onPointerMove}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
-<div class="game" class:with-decks={anyTrackerOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
+<div class="game" class:with-sidebar={sidebarOpen} data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
   data-turn={turnNumber} data-step={turnStep} data-turn-owner={yourTurn ? 'you' : 'opponent'} style:--plate={`${PLATE_WIDTH}px`} style:--hand-label={`${HAND_LABEL_WIDTH}px`} bind:this={root}>
   <header class="topbar">
     <a href="/games" class="brand" aria-label="Academy · Games">Academy</a>
@@ -921,14 +924,16 @@
         aria-label="Toggle decklist trackers" title="Show or hide Untapped-style deck trackers for both seats"
         onclick={toggleBothTrackers}>Decks</button>
       <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
-        aria-label="Dock inspected cards on the rail" title={inspectMode === 'dock' ? 'Inspected cards show in a pane on the rail; press to show them beside the card' : 'Inspected cards show beside the card; press to dock them on the rail'}
+        aria-label="Dock inspected cards in the sidebar" title={inspectMode === 'dock' ? 'Inspected cards show in the sidebar; press to show them beside the card' : 'Inspected cards show beside the card; press to dock them in the sidebar'}
         onclick={toggleInspect}>Dock</button>
+      <span class="theme-slot"><ThemeSwitch /></span>
       {#if menu}{@render menu()}{/if}
     </div>
   </header>
 
-  {#if anyTrackerOpen}
-    <aside class="deck-sidebar" class:split={oppDeckOpen && myDeckOpen && selfTracker !== null} aria-label="Deck trackers" data-testid="deck-sidebar">
+  {#if sidebarOpen}
+    <aside class="sidebar" aria-label="Inspected card and deck trackers" data-testid="reference-sidebar">
+      {#if inspectMode === 'dock'}{@render dock()}{/if}
       {#if oppDeckOpen}
         <DeckTracker title={oppTracker.mode === 'opponent-open' ? (opponent.deck ?? `${said}'s deck`) : `${said} · seen`} view={oppTracker} faces={trackerFaces} side="opponent" onclose={() => { oppDeckOpen = false; }} />
       {/if}
@@ -1010,7 +1015,7 @@
   <div class="rail-slot" id="rail-choices">
     <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
-      onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
+      onstack={onStack} onpreviewname={previewName} {notices} over={finished} 
       {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
@@ -1142,25 +1147,24 @@
     grid-template-rows: 40px minmax(0, 1fr) auto auto;
     background: var(--bg); color: var(--text);
   }
-  .game.with-decks {
+  /* Reference on the left (the inspected card, the decks), the board in the middle, the game's present on the right. */
+  .game.with-sidebar {
     grid-template-columns: 256px minmax(0, 1fr) clamp(250px, 21vw, 300px);
   }
-  .deck-sidebar {
+  .sidebar {
     grid-row: 2 / span 2;
     grid-column: 1;
     min-height: 0;
     min-width: 0;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
     border-right: 1px solid var(--border);
     background: var(--bg-surface);
   }
-  .deck-sidebar.split {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .deck-sidebar.split > :global(:first-child) {
-    border-bottom: 1px solid var(--border-strong);
-  }
+  /* The inspect pane takes the height of its card, to two fifths of the column; the trackers share the rest and scroll inside. */
+  .sidebar > :global(*) { flex: 1 1 0; min-height: 0; }
+  .sidebar > :global(* + *) { border-top: 1px solid var(--border-strong); }
+  .sidebar > .dock { flex: none; max-height: 40%; padding: 10px 14px; }
   .topbar {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
@@ -1178,7 +1182,7 @@
     position: relative; min-height: 0; min-width: 0; display: grid;
     transition: grid-template-rows var(--motion-move) var(--motion-move-ease);
   }
-  .game.with-decks .board { grid-column: 2; }
+  .game.with-sidebar .board { grid-column: 2; }
   /* One row the half's own height: a tall plate scrolls inside it rather than growing the rows past the half. */
   .half { display: grid; grid-template-columns: var(--plate) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; border-bottom: 1px solid var(--border); background: var(--bg-muted); }
   .half :global(.plate) { border-right: 1px solid var(--border); }
@@ -1236,11 +1240,11 @@
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
-  .game.with-decks .rail-slot { grid-column: 3; }
+  .game.with-sidebar .rail-slot { grid-column: 3; }
   .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
   .strip-toggle:hover { color: var(--text); }
   .bottom { grid-row: 3; grid-column: 1; min-width: 0; border-top: 1px solid var(--border); background: var(--bg-surface); }
-  .game.with-decks .bottom { grid-column: 2; }
+  .game.with-sidebar .bottom { grid-column: 2; }
 
   .menu {
     position: fixed; z-index: 300; min-width: 220px; max-width: 320px; padding: 8px; display: grid; gap: 2px;
@@ -1258,7 +1262,7 @@
     position: fixed; z-index: 250; width: 270px; max-height: calc(100vh - 60px); overflow: hidden; pointer-events: none;
     padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--bg-surface); box-shadow: var(--shadow-raised);
   }
-  .dock { max-height: 100%; overflow-y: auto; }
+  .dock { overflow-y: auto; }
   .keys-hint { display: inline-flex; align-items: center; color: var(--text-tertiary); padding: 2px 3px; border-radius: var(--radius-sm); }
   .keys-hint:hover, .keys-hint[aria-expanded='true'] { color: var(--text); background: var(--bg-field); }
   .keys {
@@ -1271,6 +1275,8 @@
   .keys dd { color: var(--text-secondary); }
   .keys .cancel { justify-self: end; display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); padding: 3px 6px; border-radius: var(--radius-sm); }
   .keys .cancel:hover, .keys .cancel:focus-visible { background: var(--bg-field); }
+  .theme-slot { display: inline-flex; color: var(--text-tertiary); }
+  .theme-slot:hover { color: var(--text); }
   .inspect-toggle { color: var(--text-tertiary); padding: 2px 6px; border-radius: var(--radius-sm); white-space: nowrap; }
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
   .inspect-toggle[aria-pressed='true'] { color: var(--text); background: var(--bg-field); }
