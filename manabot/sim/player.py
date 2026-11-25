@@ -17,7 +17,7 @@ class Player(Protocol):
     name: str
 
     def get_action(self, obs: managym.Observation) -> int:
-        """One action index for an viewer observation."""
+        """Choose an index from the viewer's legal actions."""
         ...
 
 
