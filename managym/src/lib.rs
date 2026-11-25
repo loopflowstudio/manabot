@@ -1,6 +1,7 @@
 pub mod agent;
+pub mod allocator;
 #[cfg(feature = "benchmark")]
-pub mod benchmark_allocations;
+pub mod benchmark_footprint;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_layers;
 #[cfg(feature = "benchmark")]
@@ -29,4 +30,3 @@ pub use agent::env::Env;
 pub use flow::game::Game;
 pub use state::hash::MATCH_STATE_HASH_VERSION;
 pub use state::player::PlayerConfig;
-pub use world::WORLD_VERSION;

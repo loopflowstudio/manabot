@@ -13,6 +13,7 @@ use managym::{
 #[test]
 fn meteorite_deals_two_on_entry_and_taps_for_any_color() {
     let mut s = five_color_setup(&["Meteorite"]);
+    s.allow_priority_floats();
     let object = cast_owned(&mut s, "Meteorite");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);

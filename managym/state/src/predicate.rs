@@ -4,21 +4,41 @@
 
 use super::card::{CardType, Keyword, PrintedCharacteristics};
 
-use super::game_object::{Object, ObjectKind};
+use super::game_object::ObjectKind;
 use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
 /// observation vocabularies can enumerate what the encoders describe.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(default)]
 pub struct CardPredicate {
-    /// Shares the asking source permanent's layered name. Requires a source
-    /// (currently ControlsAtLeast); card-only matching cannot answer it.
+    /// Shares the asking source permanent's layered name. Requires a source;
+    /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
+    /// "named [name]": the object's name as it is (or last was) equals this
+    /// one (CR 201.2). An empty name names nothing (CR 201.2a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub named: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
+    /// "without flying", as the object's characteristics are now.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub not_flying: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub deathtouch: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -33,7 +53,7 @@ pub struct CardPredicate {
     /// "with a +1/+1 counter on it": only permanents carry counters.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub with_counter: bool,
-    /// "attacking": only permanents declared as attackers this combat.
+    /// "attacking": all currently attacking permanents, including those put in attacking.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
     /// "tapped": only permanents are tapped.
@@ -57,11 +77,17 @@ pub struct CardPredicate {
     /// "nonbasic": the card must not have the basic supertype.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nonbasic: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub nonlegendary: bool,
     /// At least one alternative must match ("artifact or Lesson").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_power: Option<i32>,
+    /// "with toughness N or greater", checked against effective toughness
+    /// on the battlefield.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_toughness: Option<u8>,
     /// Card must have this card type.
     pub card_type: Option<CardType>,
     /// Card must have at least one of these card types ("artifact,
@@ -86,6 +112,41 @@ impl CardPredicate {
     pub fn creature() -> Self {
         Self {
             card_type: Some(CardType::Creature),
+            ..Self::default()
+        }
+    }
+
+    pub fn permanent() -> Self {
+        Self {
+            card_types_any: vec![
+                CardType::Artifact,
+                CardType::Battle,
+                CardType::Creature,
+                CardType::Enchantment,
+                CardType::Land,
+                CardType::Planeswalker,
+            ],
+            ..Self::default()
+        }
+    }
+
+    pub fn creature_or_planeswalker() -> Self {
+        Self {
+            card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+            ..Default::default()
+        }
+    }
+
+    pub fn instant_or_sorcery() -> Self {
+        Self {
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Self::default()
+        }
+    }
+
+    pub fn noncreature() -> Self {
+        Self {
+            not_card_types: vec![CardType::Creature],
             ..Self::default()
         }
     }
@@ -117,32 +178,29 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
-    /// Match against an object's printed characteristics.
-    pub fn matches_object(&self, object: &Object) -> bool {
-        self.matches_object_with_power(object, object.power.unwrap_or(0))
+    /// Whether an object named `name` satisfies `named` (CR 201.2).
+    pub fn accepts_name(&self, name: &str) -> bool {
+        self.named
+            .as_deref()
+            .is_none_or(|named| !named.is_empty() && named == name)
     }
 
-    /// Match against an object, substituting `power` (e.g. a permanent's
-    /// effective power including counters and until-EOT modifiers).
-    pub fn matches_object_with_power(&self, object: &Object, power: i32) -> bool {
-        self.matches(object, power, &[])
-    }
-
-    /// Full matching: `power` substitutes the card's printed power and
-    /// `added_types` are card types the object has in addition to its printed
-    /// types (an animated land's creature type, a granted land type).
-    pub fn matches(&self, object: &Object, power: i32, added_types: &[CardType]) -> bool {
+    /// Match the selected spell's printed characteristics before it goes on the stack.
+    pub fn matches_printed_spell(&self, spell: &PrintedCharacteristics, kind: ObjectKind) -> bool {
         self.matches_printing(
-            object,
-            object.kind(),
-            object.mana_value_cost().map_or(0, |cost| cost.mana_value),
-            power,
-            added_types,
+            spell,
+            kind,
+            spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
+            spell.power.unwrap_or(0),
+            &[],
         )
     }
 
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
+    /// `power` substitutes the printed power and `added_types` are card types
+    /// the object has beyond its printed ones (an animated land's creature
+    /// type, a granted land type).
     pub fn matches_printing(
         &self,
         object: &PrintedCharacteristics,
@@ -151,13 +209,22 @@ impl CardPredicate {
         power: i32,
         added_types: &[CardType],
     ) -> bool {
+        let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
         if self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
+            || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
             || (self.flying && !object.keywords.has(Keyword::Flying))
+            || (self.not_flying && object.keywords.has(Keyword::Flying))
+            || self
+                .min_toughness
+                .is_some_and(|min| object.toughness.unwrap_or(0) < i32::from(min))
         {
+            return false;
+        }
+        if !self.accepts_name(&object.name) {
             return false;
         }
         if self
@@ -201,6 +268,14 @@ impl CardPredicate {
         {
             return false;
         }
+        if self.nonlegendary
+            && object
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary"))
+        {
+            return false;
+        }
         if self.nonbasic
             && object
                 .supertypes
@@ -212,9 +287,6 @@ impl CardPredicate {
         if self.min_power.is_some_and(|min| power < min) {
             return false;
         }
-        let has_type = |card_type: CardType| {
-            object.types.types.contains(&card_type) || added_types.contains(&card_type)
-        };
         if let Some(card_type) = self.card_type {
             if !has_type(card_type) {
                 return false;

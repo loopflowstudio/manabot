@@ -11,6 +11,7 @@ Training-time monitoring that calls this machinery is in
 
 - [One deal](#one-deal)
 - [What counts](#what-counts)
+- [Comparing measurements across revisions](#comparing-measurements-across-revisions)
 - [Anchors and ratings](#anchors-and-ratings)
 - [Beyond win rate](#beyond-win-rate)
 - [What we know](#what-we-know)
@@ -115,7 +116,7 @@ and diagnostics, not as working anchors; `fit_population` still places
 against each other on shared deals.
 
 Ratings are a seat-aware Bradley-Terry fit expressed on the Elo scale
-(`eval.rating`). A rating belongs to one tuple of world, content suite,
+(`eval.rating`). A rating belongs to one tuple of content suite,
 information boundary, compute class and arena version, and never crosses those
 boundaries; one anchor fixes the origin, so differences carry meaning and the
 absolute number doesn't. The full contract, including why the payoff matrix
@@ -173,15 +174,24 @@ and replace `local` in the checkpoint path with that name.
 - `--opponent` also accepts another local policy file, `scripted_greedy` or
   `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
-  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
-  checkpoint must already admit that setup; nothing is converted.
+  `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster, or a
+  `DeckMatchup` JSON of two deck lists. A checkpoint that recorded exact decks
+  must already admit that setup; nothing is converted. A checkpoint that
+  recorded none, such as a TLA frontier run, plays only a `DeckMatchup`.
 - `--game-seconds` and `--max-commands` bound each game. `--seconds` bounds
   checkpoint preparation, scalar play and replay, including child startup.
+- `--backend {torch,mlx}` (default `torch`) chooses which backend admits the
+  checkpoint and runs the scalar CPU game children. Selecting `mlx` resolves
+  explicit `precision="float32"` on CPU without importing PyTorch and does not
+  change `EvaluationRequest`, `EvaluationKey` or registration digests. Each
+  backend samples actions from its own random stream, so one request plays
+  different games on Torch and MLX; compare their scores, not their traces. MLX
+  reads portable policy containers. Use Torch to read a legacy PyTorch file.
 - `--request request.json --out NEW` repeats a saved request in full. Repeated
   seeds are not new samples.
 
 It needs no training records, credentials or the `evaluation` extra, uses CPU
-with one Torch thread per process, and never rents hardware, enters an Etude
+(with one Torch thread per process when `--backend torch`), and never rents hardware, enters an Etude
 queue or starts a callback endpoint. Exit 0 means a complete replayed cohort;
 1 means an incomplete attempt. An admission timeout retains
 `admission-failure.json`. Results are labelled `local-check-not-admission`:
@@ -189,8 +199,9 @@ a quick check, not promotion or held-out evidence.
 
 Typed callers pass a `Backend` to
 `manabot.eval.local.checkpoint_request(..., backend=backend)` and use
-`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=...)`.
-An unknown training seed stays `None`, never inferred from deals.
+`manabot.eval.evaluation.evaluate_local(request, deadline=..., out_dir=..., backend_name="torch")`
+(pass `backend_name="mlx"` to execute scalar CPU children on MLX without altering
+the frozen request or key). An unknown training seed stays `None`, never inferred from deals.
 
 `evaluate(request, out_dir=..., agents=...)` is the single execution entry
 point shared by the local CLI, training monitoring and Etude benchmark/Duel
@@ -204,6 +215,195 @@ explicit leg subsets.
 Etude entry points are `manabot.eval.benchmark` (one Etude match is one deal
 with all eight legs; Etude owns match records, resume and uncertainty) and
 `manabot.eval.duel`.
+
+## Comparing measurements across revisions
+
+Seat an older checkpoint alongside its comparator in the same evaluation on
+one revision to compare them directly. Etude reports can also line up existing
+measurements across revisions when the opponent identity, decks, deals,
+decision settings and choice of raw or averaged policy match. Throughput
+comparisons also require the same machine. For a comparison within the
+training corpus, verify that both runs trained on the evaluation matchups by
+the selected updates. A matchup outside a checkpoint’s corpus measures transfer.
+See [training corpus](observation-and-model.md#what-a-checkpoint-is-bound-to).
+
+Check the revisions between the measurements for a declared change that
+affects the metric. Pinned-pilot recordings give the reason for a change in
+what a stored policy computes. Engine Budget records the reason its reference
+moved, and the heuristic registration records its source hash. When a relevant
+change intervenes, measure both participants on the same revision.
+
+Local evaluation requests and Etude match records carry the checkpoint
+registration. `writer_revision` gives the writing revision when known.
+`stored_programs` counts trained card definitions whose saved program the
+policy reads, including programs identical to the current catalog. Earlier
+registrations can omit both fields.
+
+Score early learning on the raw learner. An averaged export can still be
+close to initialization while the raw policy is improving.
+
+### Querying the training corpus
+
+Use the `evaluation` extra for DuckDB. Start from the policy checkpoint file
+and the storage root holding its run: the file records the experiment, run and
+update that wrote it, and the corpus is that run through that update.
+
+```python
+from pathlib import Path
+
+from manabot.eval.training_corpus import training_corpus
+
+# Etude keeps its records under ~/.etude/track (moved by ETUDE_HOME). A run of
+# `etude train manabot/recipes/local.py` keeps its policies in local/out there.
+track = Path.home() / ".etude/track"
+policy = track / "local/out/policies/00000002-raw.safetensors"
+# A DuckDB connection holding the corpus, runs, game_settings and deck_cards relations.
+corpus = training_corpus(policy, source=track)
+```
+
+A file that records no run or update raises `UnknownCoverage`, naming what is
+missing, as does a storage root that does not hold the file's run. Files written before checkpoints recorded their experiment take it as
+`experiment="local"`. The file is a policy container (`.safetensors`); convert
+a PyTorch `.pt` checkpoint with `manabot.backends.convert` first.
+
+The query also accepts a published Etude checkpoint record as
+`training_corpus(checkpoint, source=storage)`, using its recorded update, or
+an opened run and an update. For frontier Small, which predates the file
+records, open the run from a local copy of `r2://manabot/jobs` containing the
+run declaration, writer record and sealed metrics block covering update 1:
+
+```python
+from etude.train.read import read
+
+storage = Path("runs")
+run = read(storage, "tla_frontier", "59718fe34945")
+corpus = training_corpus(run, through=1)
+print("Deck entries and distinct card keys:", corpus.sql(
+    "select count(distinct entry), count(distinct card) from deck_cards").fetchall())
+
+print("Completed games:", corpus.sql("select coalesce(sum(games), 0) from corpus").fetchall())
+print("Observed decks:", corpus.sql("""
+    select count(distinct deck) from (select unnest([play, draw]) as deck from corpus)
+""").fetchall())
+
+# Matchup membership and counts. Filter either seat by Deck.identity to
+# inspect a particular matchup. Swapping play and draw gives the reverse leg.
+print(corpus.sql("""
+    select play, draw, sum(games) as played from corpus
+    group by play, draw order by played desc, play, draw
+""").fetchall())
+
+# Which definition keys in a proposed deck are new to this corpus?
+print(corpus.sql("""
+    select unnest(['lea.island', 'lea.lightning_bolt'])
+    except select unnest(play_cards || draw_cards) from corpus
+""").fetchall())
+
+# Games with Island in either list, counting a mirror once.
+print(corpus.sql("""
+    select coalesce(sum(games), 0) from corpus
+    where list_contains(play_cards || draw_cards, 'lea.island')
+""").fetchall())
+
+# Deck mix at each update. A mirror contributes two seats.
+print(corpus.sql("""
+    select experiment, run, update_number, deck, sum(games) as seats from
+        (select experiment, run, update_number, unnest([play, draw]) as deck, games from corpus)
+    group by all order by experiment, run, update_number, seats desc, deck
+""").fetchall())
+```
+
+One spelling says which seat a row is about: `seat`, the native seat, where 0
+is on the play. `game_settings`, `card_statistics` and the stored outcome rows
+all carry it. A `corpus` row is about a game, so it names both seats: `play`
+and `play_cards` are the deck in seat 0, `draw` and `draw_cards` the deck in
+seat 1. Runs that stored their outcomes under the labels `play` and `draw`
+read into the same columns.
+
+Each run keeps its own update numbers. If a learner started from a published
+checkpoint, the corpus includes the parent through that checkpoint’s update.
+The reader matches its recorded run, update and SHA-256 in the same storage.
+An unresolved parent raises `UnknownCoverage`.
+
+How a learner was trained is split by one rule: could the value differ between
+two games of the same run? What cannot is a column of `runs`, one row per
+contributing run. What can is counted in `game_settings`: for each update, the
+values a setting took and the number of that update's games played under each.
+
+```python
+print(corpus.sql("""
+    select experiment, run, max_actions, action_overflow, policy_input_version,
+           behavior, opponent_mode, learning_seats, matchup_curriculum,
+           parent_run, parent_update
+    from runs order by experiment, run
+""").fetchall())
+print(corpus.sql("select run, entry, deck, board, card, copies from deck_cards order by all").fetchall())
+
+# Which settings held one value in every game?
+print(corpus.sql("""
+    select setting, seat, min(value) from game_settings
+    group by setting, seat having count(distinct value) = 1 order by all
+""").fetchall())
+
+# In what share of games did each value hold?
+print(corpus.sql("""
+    select setting, seat, value, sum(games) as games,
+           sum(games) / sum(sum(games)) over (partition by setting, seat) as share
+    from game_settings group by setting, seat, value order by all
+""").fetchall())
+
+# Over which updates of each run did each value hold? A value that stops at
+# one update, or at the checkpoint a child run started from, changed there.
+print(corpus.sql("""
+    select experiment, run, setting, seat, value,
+           min(update_number) as first_update, max(update_number) as last_update,
+           sum(games) as games
+    from game_settings group by all order by setting, seat, experiment, run, first_update
+""").fetchall())
+```
+
+`game_settings` records `decklists` (`open` or `closed`) and `skip_trivial`
+(`true` or `false`). `seat` is NULL for a setting of the whole game; a
+per-seat setting carries the native seat, where 0 is on the play. Values are
+text. A setting's counts always sum to the update's completed games; a run
+whose counts do not raises `UnknownCoverage`. A setting with no rows was not
+recorded, which is different from false. Runs that predate the table have
+`decklists` rows only when they declared one disclosure for every game, and
+no `skip_trivial` rows.
+
+Self-play and the minimal loop write `runs` and `deck_cards` at update zero
+and the setting counts with each update's outcomes. A run's
+`deck_cards` can hold several entries with the same deck identity. Older runs use their declared observation
+settings and values shared by every declared stage. They have NULL for
+unrecorded or varying columns of `runs`.
+Card membership includes main decks and sideboards.
+For historical scalar outcomes, the `deck_cards` entries come from the declared deck source
+and card keys come from the writer's catalog. An explicitly logged empty
+outcome table records zero completed games. An update missing its outcomes
+raises `UnknownCoverage`, as do missing deck entries. With Etude SDK 0.4.1 the
+table reader loads all selected table artifacts in the supplied history, even
+when the requested update is early.
+
+For a run recorded with `statistics: true`, pass its local statistics directory
+to query card draws and choices alongside list membership. Statistics count
+terminal games by update, native seat and definition key. Games and wins count
+main-deck inclusion. Choice counts also include generated cards. A missing
+directory, empty capture or update with fewer terminal games than the corpus
+raises `UnknownCoverage`. A resumed run keeps rows from superseded attempts,
+so its statistics can exceed the selected corpus. A single capture directory
+cannot establish card statistics for a corpus that follows a parent checkpoint.
+That request raises `UnknownCoverage`. Aggregate each table before
+joining because several matchups and seats can contribute to the same update.
+
+```python
+corpus = training_corpus(policy, source=track, statistics=policy.parents[1] / "statistics")
+print(corpus.sql("""
+    select (select sum(games) from corpus
+            where list_contains(play_cards || draw_cards, 'lea.island')) as list_games,
+           sum(drawn_copies) as draws, sum(selections) as choices
+    from card_statistics where card = 'lea.island'
+""").fetchall())
+```
 
 ## Etude agents
 
@@ -227,7 +427,9 @@ sampler, and the loader forwards each such row as its own batch. A seat whose
 player config holds `blank_decision_memory: True` plays the same bytes with
 the log zeroed at every decision, registered as a distinct player
 ([reliance comparison](observation-and-model.md#whole-game-decision-memory));
-`manabot.eval.pairing.play_pairing` plays an authored paired deal with either.
+`manabot.eval.pairing.play_pairing` plays a paired deal with either and
+returns an Etude `Result` carrying outcome rows, heuristic behaviour counts
+and [card data](#card-data).
 
 Managed checkpoint registrations name `etude-policy-f32-auto-v1` and
 `numpy-pcg64-v1`. New tournaments have fresh `agents-v1` names and one native
@@ -259,11 +461,12 @@ uv run python -m manabot.eval.local --status .runs/local-check/panel
 uv run python -m manabot.eval.local --continue .runs/local-check/panel --seconds 300
 ```
 
-Continuation plays only the missing deals, rerunning any partial deal whole;
-only the deadline may change locally. Typed callers use
+Continuation plays missing deals, rerunning any partial deal whole. Each
+local attempt selects its deadline and execution backend. Pass `--backend mlx`
+on the continuation command to run its games on MLX. Typed callers use
 `evaluation_status(directory)` and `continue_evaluation(directory,
-deadline=...)`. A changed request needs a fresh evaluation. Retained served
-attempts name the original revision to run them from. Relocated
+deadline=..., backend_name="mlx")`. A changed request needs a fresh evaluation.
+Retained served attempts name the original revision to run them from. Relocated
 checkpoints may be passed explicitly and are rechecked by digest and size.
 
 The first `evaluation.json` freezes identity and request; later attempts write
@@ -295,28 +498,42 @@ The report viewer never sums overlapping clocks.
 
 ## Card data
 
-17Lands-style card statistics from evaluation games. A card evaluation is an
-Etude eval run naming an **experiment**; all runs of an experiment pool in one
-kept Etude database (`ETUDE_HOME/statsdb`). Each match plays one deal's eight
-legs. The native recorder runs during Command replay, outside observations,
-rule hashes, RNG and search clones.
+17Lands-style card statistics from evaluation games. All eval runs of an
+**experiment** pool in one kept Etude database (`ETUDE_HOME/statsdb`). The
+native recorder runs during Command replay, outside observations, rule hashes,
+RNG and search clones.
+
+A benchmark that returns `play_pairing(...)` keeps card data automatically.
+Each declared leg must have an outcome and an evidence blob before Etude can
+store the match. An invalid leg keeps its null score, and a failed match keeps
+its arena diagnostics. For a working benchmark callback, see
+[the opponent-memory pilot](../experiments/opponent_memory.py).
+
+Read the card table, render a self-contained HTML page, or audit the blobs by
+replaying the games.
 
 ```sh
-uv run --extra evaluation python -m manabot.eval.cards evaluate --spec evaluation.json --out .runs/cards
-uv run --extra evaluation python -m manabot.eval.cards data --experiment EXP --source .runs/cards [--html page.html | --json]
-uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXP --source .runs/cards --replay
+uv run --extra evaluation python -m manabot.eval.cards data --experiment EXP --source .runs/eval
+uv run --extra evaluation python -m manabot.eval.cards data --experiment EXP --source .runs/eval --html page.html
+uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXP --source .runs/eval --replay
 ```
 
-`CardEvaluationSpec` (`manabot/eval/card_evaluation.py`) names experiment and
-run, registrations, checkpoint paths, unique deal seeds, limits and an optional
-`AuthoredMatchup` (default Lessons/Allies). Resuming requires identical players
-and conditions. `data` filters with `--subject`/`--opponent` (name, Etude
-identity or 8+ characters of checkpoint digest), `--position`, `--deck`,
-`--opponent-deck`, `--run`, `--commit`; `--rebuild` rereads all blocks.
+`data` prints tab-separated rows by default and writes JSON with `--json`.
+Filter with `--subject` or `--opponent` (name, Etude identity or 8+ characters
+of checkpoint digest), `--position`, `--deck`, `--opponent-deck`, `--run` or
+`--commit`. Use `--rebuild` to reread all blocks.
 
-Any evaluation calling `play_cell` can deliver card data: pass
-`card_evidence_dir`, merge `trace_card_tables(...)` tables and blobs into its
-Etude `Result`, and declare `rollups=CARD_ROLLUPS` (`manabot.eval.card_metrics`).
+For a standalone eight-leg evaluation, supply a `CardEvaluationSpec` with the
+experiment, run, registrations, checkpoint paths, unique deal seeds, limits
+and optional authored matchup (default Lessons/Allies). Resuming requires the
+same players and conditions.
+
+```sh
+uv run --extra evaluation python -m manabot.eval.cards evaluate --spec evaluation.json --out .runs/eval
+```
+
+Evaluations that call `play_cell` directly can pass `card_evidence_dir` and
+merge the tables and blobs from `trace_card_tables` into their Etude `Result`.
 
 **Columns.** GP (games with the card in deck), OH (opening-hand copies), GD
 (copies drawn later), GIH = OH + GD with GIH WR = winning qualifying copies /
@@ -328,17 +545,23 @@ GIH interval is a deterministic 95% percentile bootstrap over whole deal seeds,
 one draw of deal weights per filter selection.
 
 **Tables.** Each match delivers `card_plays` (per game and player),
-`card_counts`, `cards` and the shared `plays`; `seat` indexes `Match.players`,
-`game_seat` is the native seat (0 on the play). Queries read only `CARD_ROLLUPS`
-(`card_deals`, `game_deals`) through `manabot.eval.card_query.card_db`, never
-card rows; a changed rollup takes a new name. Games pool across source commits,
-which are provenance and a filter. A crashed or unreplayed game is an
-ineligible row; its deal's other games still count. Evidence is a private
-blob per game read with Etude's `read_blobs`; `etude convert-eval` makes older
-per-file runs readable.
+`card_counts`, `cards` and the shared `plays`. The `seat` column indexes
+`Match.players`, and `game_seat` is the native seat (0 on the play). Games
+pool across source commits, which are also available as a filter. A crashed
+or unreplayed game with evidence is ineligible. Its deal's other games still
+count. Read the private evidence blobs with Etude's `read_blobs`. Use
+`etude convert-eval` to read older per-file runs.
 
-**Arena logs.** `cards export-log --experiment EXP --source .runs/cards --run RUN
---game GAME --viewer 0|1 --out game.log` writes the game's
+`card_db` computes `card_deals` and `game_deals` once in the local database
+for blocks stored without those rollups. A new benchmark can precompute them
+at store time with `rollups=CARD_ROLLUPS` from `manabot.eval.card_metrics`.
+An existing run keeps its declared rollups, and a changed rollup needs a new
+name. Only games stored with card tables appear on the page. An experiment
+with no such games reports “this experiment has no card evaluations”.
+
+**Arena logs.** `uv run --extra evaluation python -m manabot.eval.cards export-log
+--experiment EXP --source .runs/eval --run RUN --game GAME --viewer 0
+--mapping printings.json --out game.log` writes seat 0's
 [Arena-style log](engine-python.md#export-an-arena-style-log) through managym's
 exporter, which any recorded game can use without manabot. Arena ids come from
 the table shipped with managym, joined by Scryfall id and never by name; cards
@@ -496,6 +719,71 @@ there is no additional replay or policy inference for statistics. When
 same traversal. Each reducer's `finish` runs once across all deal blocks, not
 once per worker. The card table uses native seats; participant mapping,
 eligibility and bootstrap intervals remain evaluation responsibilities.
+
+For per-game play counts, pass `reducers={"play": Play()}` with `Play`
+from `manabot.eval.behaviour`. The `play` table in `statistics.json` has one
+row per native seat per completed game. Pool each pair of columns by summing
+both columns before dividing. A zero denominator leaves the rate undefined.
+
+| Numerator / denominator | What one opportunity means |
+| --- | --- |
+| `lands_played / land_turns` | An own turn with a land play offered. Playing any offered land counts once. |
+| `casts_made / cast_turns` | An own turn with a spell cast offered. Choosing a cast counts once even if several spells are cast. |
+| `attackers_declared / attackers_offered` | One attacker declaration decision. The selected offer's declaration flag records the choice. |
+| `blockers_declared / blockers_offered` | One blocker declaration decision, including when several attackers are legal targets. |
+| `attackers_lost_for_nothing / attackers_committed` | A declared attacker died during combat and none of its blockers died during that combat. |
+| `blockers_lost_for_nothing / blockers_committed` | A declared blocker died during combat and the attacker it blocked survived that combat. |
+| `mana_use_early / mana_turns_early`, `mana_use_mid / mana_turns_mid`, `mana_use_late / mana_turns_late` | Mean fraction of available mana paid on own turn cycles 1–3, 4–6 and 7 onward. Each turn with positive availability contributes equally. |
+| `casts_off_turn / casts` | One chosen cast action. The numerator counts choices made on the opponent's turn. |
+| `turns / games` | One completed game. Each seat's row carries the final game turn number. |
+
+Combat loss rates count every committed attacker or blocker. A forced block
+counts even when the engine skips its decision. A lone assignment cleared by
+menace contributes only to the recorded choice counts.
+
+Checkpoint evaluations against the heuristic publish a `behaviour` table in
+Etude. Each row describes the checkpoint (`seat=0`) and records its native
+`game_seat`, deck and opposing deck (plus `matchup` and `on_play` in benchmark
+and paired deals). Benchmark and paired matches use the
+accepted whole deal from its original or continued attempt. Elemental full and
+subset grids label rows with `unit` and `deal` and include each valid game.
+For example, `compare(db, table="behaviour", value="lands_played", per="land_turns")`
+pools the checkpoint's land plays over its opportunities in both seats.
+The Etude columns `chump_attacks` and `chump_blocks` carry the loss counts
+paired with `attackers_committed` and `blockers_committed`. Historical rows
+lack these pairs and contribute only to the other curves. The published
+400-update TLA trophy report used recorded declarations for both denominators.
+Older results, checkpoint duels and matches with unavailable play statistics
+have gaps. Game scores remain available independently.
+
+On one local CPU checkpoint–heuristic deal (four Lessons/Allies legs, 793
+decisions), verification took 0.623 s of CPU time alone and 0.646 s with
+`Play` and exposure capture, about 4% more. These are medians of three
+fresh-process replays per condition on identical records, excluding startup,
+gameplay and file reads.
+
+Choice counts cover nontrivial decisions in the recording. A pass followed by
+a land play later in the same turn counts as one opportunity taken. A cast is
+counted when selected, regardless of how the spell resolves.
+
+Combat losses include tokens and deaths to spells or abilities, including in the
+final combat. If player loss ends the game before a creature moves to the
+graveyard, lethal damage alone contributes no death. A blocker that saves its controller by dying can count.
+
+At each own priority window, mana availability includes mana already paid that
+turn, floating mana (including firebending), and an upper bound on net production
+from current sources. Modal sources contribute their best output. Mana paid
+after passing the turn counts toward that same cycle until the next own turn.
+An unused Treasure contributes on every turn it survives. Resources gained
+on the opponent’s turn can put a cycle above 100%. Convoke and waterbend
+taps do not spend mana, so tapping a mana creature this way can lower the
+fraction. Read alongside cast opportunities to distinguish holding mana from
+having nothing to cast.
+
+An earlier priority pass cannot establish that an attack is safe. Razor Rings
+can first gain a legal target after attackers are declared. Blocker count and
+attacker power alone also cannot establish lethal damage. At 2 life, a 2/2
+lifelink blocker can keep its controller alive against two attacking 2/2s.
 
 Only complete, successfully audited games contribute reducer rows. Rejected
 games remain in the evaluation's original records and outcome diagnostics.

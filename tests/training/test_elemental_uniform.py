@@ -49,7 +49,7 @@ def _match(decklists: DecklistDisclosure = "open") -> Match:
 def _collector(
     streams: int = 4,
     learning_seats: Literal["one", "both"] = "one",
-    complete_games: bool = False,
+    games_per_stream: int | None = None,
 ) -> Collector:
     return open_collector(
         ObservationSpace(),
@@ -61,9 +61,10 @@ def _collector(
         learning_seats=learning_seats,
         batch_closure=(
             "exact-quota"
-            if learning_seats == "one" and not complete_games
+            if learning_seats == "one" and games_per_stream is None
             else "complete-games"
         ),
+        games_per_stream=games_per_stream,
         matchup_curriculum="elemental-uniform",
         numerics=TorchCollectionSession(device="cpu", seed=17402, precision="float32"),
     )
@@ -78,12 +79,11 @@ def test_uniform_collector_changes_terminal_roots(
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
-    # The test needs changed terminal roots, so use game closure rather than
-    # assuming a transition quota happens to finish a game.
-    first = _collector(learning_seats=learning_seats, complete_games=True)
+    # Each stream plays both the opening and its first replacement.
+    first = _collector(learning_seats=learning_seats, games_per_stream=2)
     initial_pairs = first._env.current_matchup_indices()
-    batch = collect(first, agent, 128)
-    assert first.stats.games > 0
+    batch = collect(first, agent, 1)
+    assert first.stats.games == 8
     assert first._env.current_matchup_indices() != initial_pairs
     for match, players in zip(
         first.stream_matches, first._env.current_player_configs(), strict=True
@@ -98,13 +98,11 @@ def test_uniform_collector_changes_terminal_roots(
     assert (
         sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
     )
-    if learning_seats == "one":
-        assert batch.actions.size >= 4 * 128
-    else:
+    if learning_seats == "both":
         assert batch.actions.size == first.stats.micro_steps
         assert int(batch.dones.sum()) == first.stats.games * 2
     assert sum(c["terminal_games"] for c in exposure.values()) == first.stats.games
-    assert sum(c["game_roots"] for c in exposure.values()) == first.stats.games + 4
+    assert sum(c["game_roots"] for c in exposure.values()) == first.stats.games
     assert (
         sum(c["environment_decisions"] for c in exposure.values())
         == first.stats.micro_steps
@@ -270,7 +268,7 @@ def test_uniform_crash_refill_retains_sampled_setups(
             row for row in attempts if row.stream == 0 and row.outcome == "completed"
         )
         assert replacement.seed == failed.seed + 2
-        assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 5
+        assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 3
         assert (
             sum(c["learner_transitions"] for c in collector.stats.exposure.values())
             == batch.actions.size

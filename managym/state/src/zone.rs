@@ -141,6 +141,12 @@ pub struct ZoneManager {
     /// state hash records the generations beside them.
     #[serde(rename = "card_zones")]
     slots: SlotTable,
+    /// The second physical card of each melded battlefield appearance.
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "super::game_object::exact"
+    )]
+    melded_cards: Vec<(ObjectId, CardId)>,
 }
 
 /// Every allocated slot's state. `placed` is one past the highest slot ever
@@ -172,6 +178,15 @@ impl serde::Serialize for SlotTable {
 struct SlotState {
     generation: u32,
     zone: Option<ZoneType>,
+}
+
+impl SlotState {
+    fn advance_generation(&mut self) {
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .expect("object generation overflow");
+    }
 }
 
 impl ZoneManager {
@@ -211,15 +226,18 @@ impl ZoneManager {
     }
 
     /// Whether `object` is the appearance its slot holds now. An object in
-    /// no zone (a sideboard card, a token not yet created, or one that ceased
-    /// to exist) is still the slot's latest; see [`ZoneManager::zone_of`] for
-    /// existence.
+    /// no zone can still be the slot's latest. Use [`ZoneManager::zone_of`]
+    /// to check existence.
     #[inline]
     pub fn is_latest(&self, object: ObjectId) -> bool {
-        self.slots
-            .states
-            .get(object.slot())
-            .is_some_and(|slot| slot.generation == object.generation())
+        self.slots.states.get(object.slot()).is_some_and(|slot| {
+            slot.generation == object.generation()
+                && (slot.zone.is_some()
+                    || !self
+                        .melded_cards
+                        .iter()
+                        .any(|(_, card)| card.index() == object.slot()))
+        })
     }
 
     /// The zone holding this exact appearance; `None` once it has moved.
@@ -243,8 +261,41 @@ impl ZoneManager {
     /// The appearance of a physical card its slot holds now, in a zone or not.
     #[inline]
     pub fn object_of(&self, card: CardId) -> ObjectId {
+        if let Some(&(permanent, _)) = self.melded_cards.iter().find(|(_, second)| *second == card)
+        {
+            return permanent;
+        }
         let slot = card.index();
         ObjectId::in_slot(slot, self.slots.states[slot].generation)
+    }
+
+    /// Join the second exiled card to the first card's battlefield appearance.
+    pub fn join_melded_card(&mut self, permanent: ObjectId, second: CardId) -> ObjectId {
+        let exile = self.object_of(second);
+        assert_eq!(self.zone_of(permanent), Some(ZoneType::Battlefield));
+        assert_eq!(self.zone_of(exile), Some(ZoneType::Exile));
+        assert!(self.melded_card(permanent).is_none());
+        let slot = self.depart(exile).expect("exiled meld component");
+        self.melded_cards.push((permanent, second));
+        slot
+    }
+
+    pub fn melded_card(&self, permanent: ObjectId) -> Option<CardId> {
+        self.melded_cards
+            .iter()
+            .find(|(object, _)| *object == permanent)
+            .map(|(_, card)| *card)
+    }
+
+    /// Release the second slot during the departure commit. Its next move
+    /// mints a fresh appearance, so the original exile link stays stale.
+    pub fn separate_melded_card(&mut self, permanent: ObjectId) -> Option<ObjectId> {
+        let index = self
+            .melded_cards
+            .iter()
+            .position(|(object, _)| *object == permanent)?;
+        let (_, second) = self.melded_cards.remove(index);
+        Some(self.object_of(second))
     }
 
     fn remove_from_zone(&mut self, object: ObjectId, zone: ZoneType) {
@@ -266,6 +317,17 @@ impl ZoneManager {
         }
     }
 
+    /// Retire the appearance leaving a zone (CR 400.7). Its slot can back
+    /// another object before its physical card next occupies a zone alone.
+    fn depart(&mut self, object: ObjectId) -> Option<ObjectId> {
+        let zone = self.zone_of(object)?;
+        self.remove_from_zone(object, zone);
+        let state = &mut self.slots.states[object.slot()];
+        state.zone = None;
+        state.advance_generation();
+        Some(ObjectId::in_slot(object.slot(), state.generation))
+    }
+
     /// Move `object` from wherever it is to the end of `holder`'s `to_zone`
     /// and return the appearance this makes (CR 400.7): a new generation of
     /// its slot when it leaves a zone, the same id when it enters its first.
@@ -281,15 +343,13 @@ impl ZoneManager {
     ) -> ObjectId {
         debug_assert!(self.is_latest(object), "a stale object cannot move");
         let slot = object.slot();
-        let mut moved = object;
-        if let Some(old_zone) = self.zone_of(object) {
-            self.remove_from_zone(object, old_zone);
-            let generation = &mut self.slots.states[slot].generation;
-            *generation = generation
-                .checked_add(1)
-                .expect("object generation overflow");
-            moved = ObjectId::in_slot(slot, *generation);
-        }
+        let moved = self.depart(object).unwrap_or_else(|| {
+            let state = &mut self.slots.states[slot];
+            if state.generation != 0 {
+                state.advance_generation();
+            }
+            ObjectId::in_slot(slot, state.generation)
+        });
         match self.store_mut(to_zone, holder) {
             ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, moved)),
             ZoneStore::Objects(zone) => zone.push(moved),
@@ -427,18 +487,31 @@ impl ZoneManager {
         self.shuffle(zone, player, rng);
     }
 
-    /// Put hidden card `new` where `player`'s face-down exiled card `old`
-    /// lies. `old` is left zoneless until the caller reassigns it to the
-    /// hand or library with [`ZoneManager::reassign_hidden`].
-    pub fn replace_face_down_exile(&mut self, player: PlayerId, old: ObjectId, new: ObjectId) {
-        if let Some(slot) = self.exile[player.0]
-            .iter_mut()
-            .find(|object| **object == old)
-        {
-            *slot = new;
+    /// Put each hidden card `new` where `player`'s face-down exiled card
+    /// `old` lies, all at once: a card may leave one slot and fill another.
+    /// An `old` that fills no slot is left zoneless until the caller
+    /// reassigns it to the hand or library with [`ZoneManager::reassign_hidden`].
+    pub fn exchange_face_down_exile(
+        &mut self,
+        player: PlayerId,
+        exchange: &[(ObjectId, ObjectId)],
+    ) {
+        let positions: Vec<usize> = exchange
+            .iter()
+            .map(|(old, _)| {
+                self.exile[player.0]
+                    .iter()
+                    .position(|object| object == old)
+                    .expect("a face-down slot is in its owner's exile")
+            })
+            .collect();
+        for (old, _) in exchange {
+            self.slots.states[old.slot()].zone = None;
         }
-        self.slots.states[new.slot()].zone = Some(ZoneType::Exile);
-        self.slots.states[old.slot()].zone = None;
+        for ((_, new), position) in exchange.iter().zip(positions) {
+            self.exile[player.0][position] = *new;
+            self.slots.states[new.slot()].zone = Some(ZoneType::Exile);
+        }
     }
 
     /// Reassign `player`'s hand and library to exactly `new_hand` and

@@ -7,29 +7,25 @@ one with these methods over its own policy input.
 """
 
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.backends.torch.arrays import array_fields, on_device
-from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
     legal_mask,
     require,
 )
-from manabot.env.memory_store import PrefixObservation, select_rows
-from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, PackedActions
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.rollout.admission import AdmittedRows
 
 
-class AdmittedRollout:
+class AdmittedRollout(AdmittedRows):
     """A rollout batch whose observations are admitted once for one policy.
 
     Bootstrap reads admit one execution chunk at a time. `admit_rows` admits the learner
@@ -41,54 +37,17 @@ class AdmittedRollout:
     must not change afterwards.
     """
 
-    def __init__(self, agent: ActorCritic, batch: RolloutBatch) -> None:
-        self.agent = agent
-        self.batch = batch
-        self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        # Bucket needs of admitted rows, recorded at collection or measured
-        # once, so every epoch's minibatches take their maximum instead of
-        # measuring again.
-        self._needs: np.ndarray | None = None
-        self._measured = np.zeros(batch.actions.size, dtype=bool)
-
-    def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
-        """Admit flat rollout `indexes` not yet admitted."""
-        pending = np.unique(indexes[~self._admitted[indexes]])
-        for start in range(0, len(pending), chunk_rows):
-            chunk = pending[start : start + chunk_rows]
-            rows = self.batch.observations(chunk)
-            obs = rows.observation
-            self.agent.check_observation(obs)
-            self._admitted[chunk] = True
-            if not self.agent.bucketed_shapes:
-                continue
-            needs = self.batch.recorded.gather_needs(chunk)
-            if needs is None:
-                needs = row_needs(obs, self.agent.observation_space.encoder)
-            if needs is None:
-                continue
-            if self._needs is None:
-                self._needs = np.zeros((len(self._admitted), needs.shape[1]), np.int64)
-            self._needs[chunk] = needs
-            self._measured[chunk] = True
-
-    def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
+    def next_observation(self, device: torch.device) -> Prepared[torch.Tensor] | None:
         """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
-        return next(self.next_observations(device, len(self.batch.next_done)))
+        return next(
+            self.next_observations(device, max(1, len(self.batch.next_done))), None
+        )
 
     def next_observations(
         self, device: torch.device, size: int
     ) -> Iterator[Prepared[torch.Tensor]]:
         """Admit, prepare and transfer one bootstrap chunk at a time."""
-        if size < 1:
-            raise ValueError("bootstrap rows must be positive")
-        for start in range(0, len(self.batch.next_done), size):
-            raw = select_rows(
-                self.batch.next_obs,
-                np.arange(start, min(start + size, len(self.batch.next_done))),
-            )
-            prepared = self.agent.prepare(raw, inference=True)
-            del raw
+        for prepared in self.bootstrap_inputs(size):
             yield on_device(prepared, device)
             del prepared
 
@@ -97,31 +56,8 @@ class AdmittedRollout:
     ) -> tuple[Prepared[torch.Tensor], ActionRows]:
         """Learner-prepared observations of flat rollout `indexes` on `device`,
         with their behavior distributions, independent of autograd mode."""
-        prepared, rows = self._prepare_rows(indexes)
+        prepared, rows = self.prepare_rows(indexes)
         return on_device(prepared, device), rows
-
-    def _prepare_rows(
-        self, indexes: NDArray[np.int64]
-    ) -> tuple[Prepared[np.ndarray], ActionRows]:
-        if not self._admitted[indexes].all():
-            raise ValueError("rollout rows were not admitted")
-        rows = self.batch.observations(indexes)
-        needs = (
-            self._needs[indexes]
-            if self._needs is not None and self._measured[indexes].all()
-            else None
-        )
-        prepared = self.agent.prepare_admitted(
-            rows.observation, needs=needs, inference=False
-        )
-        # Behavior/reference calculations need ordinary action fields, not a
-        # second raw memory owner beside Prepared (including in the prefetch).
-        if isinstance(rows.observation, PrefixObservation):
-            raw = rows.observation
-            rows.observation = PrefixObservation(
-                raw, raw.prefixes, raw.memory_capacities
-            )
-        return prepared, rows
 
     @contextmanager
     def minibatches(
@@ -129,36 +65,18 @@ class AdmittedRollout:
     ) -> Iterator[
         Iterator[tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]]
     ]:
-        """Prepare learner rows one batch ahead, independent of autograd mode.
+        # Transfers stay on the caller's device stream.
+        with self.prefetch_minibatches(order, size) as batches:
 
-        Only immutable host input is read on the worker. Transfers and all
-        model/optimizer work stay on the caller's device stream. At most two
-        host minibatches are live; exiting joins the worker even on failure.
-        """
-        if size < 1:
-            raise ValueError("minibatch size must be positive")
-        chunks = [order[start : start + size] for start in range(0, len(order), size)]
-        with ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="ppo-prepare"
-        ) as worker:
-
-            def batches() -> Iterator[
+            def transferred() -> Iterator[
                 tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]
             ]:
-                # Lazy submission: the worker holds the batch being awaited
-                # and at most the one after it.
-                submitted = (
-                    worker.submit(self._prepare_rows, chunk) for chunk in chunks
-                )
-                pending = next(submitted, None)
-                for chunk in chunks:
-                    ready, pending = pending, next(submitted, None)
-                    assert ready is not None
-                    prepared, rows = ready.result()
+                for chunk, prepared, rows in batches:
                     yield chunk, on_device(prepared, device), rows
-                    del prepared, rows, ready
+                    del prepared, rows
 
-            yield batches()
+            with closing(transferred()) as inputs:
+                yield inputs
 
     def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         """The 0/1 legal-action input [B,A] of rows this rollout returned."""
@@ -173,7 +91,9 @@ def packing_mask(
     mask: NDArray[np.generic], logs: NDArray[np.generic]
 ) -> NDArray[np.bool_]:
     """Validate legal support and padding before the host drops padding rows."""
-    valid = legal_mask(torch.as_tensor(mask)).numpy()
+    valid = (
+        mask if mask.dtype == np.bool_ else legal_mask(torch.as_tensor(mask)).numpy()
+    )
     if valid.ndim != 2 or logs.shape != valid.shape:
         raise ValueError("packed actions require matching [B,A] distributions")
     if np.any(~np.isneginf(logs[~valid])):
@@ -210,7 +130,7 @@ def check_packed(
         )
     for start in range(0, len(packed.offsets) - 1, 32):
         indexes = np.arange(start, min(start + 32, len(packed.offsets) - 1))
-        rows = packed.unpack(indexes)
+        rows = packed.behavior(indexes)
         try:
             check_behavior(
                 torch.as_tensor(rows.log_probabilities),

@@ -26,15 +26,19 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.run_settings import RunSettings
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_decks,
     validate_agent_setup,
 )
-from manabot.sim.rollout import allocate_buffers
 from manabot.training.decks import UniformDecks
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
@@ -85,9 +89,16 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(decks: UniformDecks) -> Collector:
+def _collector(
+    decks: UniformDecks,
+    *,
+    mana_floats: managym.ManaFloats = "off",
+    mana_payment: managym.ManaPayment = "manual",
+) -> Collector:
     return open_collector(
-        ObservationSpace(),
+        ObservationSpace(
+            ObservationConfig(mana_floats=mana_floats, mana_payment=mana_payment)
+        ),
         Match(decks.match_config()),
         Reward(RewardConfig()),
         num_envs=2,
@@ -168,7 +179,7 @@ def test_collector_resets_seats_seeds_and_exposure(
         assert first._env.current_game_seeds() != initial
         exposure = first.stats.exposure
         assert len(exposure) >= 3
-        assert sum(row["game_roots"] for row in exposure.values()) == 6
+        assert sum(row["game_roots"] for row in exposure.values()) == 4
         assert (
             sum(row["learner_transitions"] for row in exposure.values())
             == batch.actions.size
@@ -237,7 +248,7 @@ def test_sampled_decks_agree_across_producer_counts(
         close_collector(many)
 
 
-def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
+def test_checkpoint_plays_unseen_admitted_decks(
     decks: UniformDecks, tmp_path: Path
 ) -> None:
     target = tmp_path / "policy.pt"
@@ -247,7 +258,6 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
-        "world",
         "world_digest",
         "policy_input_version",
         "rules",
@@ -257,17 +267,19 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_branching",
         "naming_vocabulary",
     }
-    assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()
     validate_agent_setup(policy, [unseen, decks.players()[0]])
     unsupported = Deck({"Swamp": 9, "Ally": 1}).player()
-    with pytest.raises(ValueError, match="not admitted by"):
+    with pytest.raises(ValueError, match="is not admitted:"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
-    with pytest.raises(ValueError, match="not submitted to the world"):
+    with pytest.raises(
+        ValueError,
+        match="Supply a DeckMatchup with submitted decks",
+    ):
         validate_agent_setup(policy, [unseen, other_pack])
 
     for key, change in (
@@ -280,15 +292,15 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = change
         else:
             changed["world_binding"][key] = {**binding[key], **change}
-        assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
         write_checkpoint(changed, path)
+        assert not inspect_checkpoint(path, backend=TORCH_BACKEND).compatible
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
     validate_agent_decks(policy, decks.players())
-    # A setup-bound checkpoint plays only its roster, under the shared rule.
+    # Recording exact decks restricts play to that roster.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
         [
@@ -335,7 +347,8 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
         assert env.current_player_configs()[0][0].decklist == before[0][0].decklist
         env.reset_seeds_into_buffers(env.current_game_seeds())
         # Retained replay inputs name the decks each later root actually used.
-        for game in env.games:
+        for slot in range(collector.num_envs):
+            game = env.game_inputs(slot)
             assert {player.name for player in game.players} == {
                 player.name for player in replacement
             }
@@ -408,8 +421,12 @@ def test_failure_records_actual_sampled_decks(
                 *root, decklists=root.decklists
             )
             assert attempt.decks_digest == (decks.digest if sampled else None)
+        # Reject the supplied actions from live decision frames.
+        collector._env.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(slot) for slot in range(collector.num_envs)]
+        )
         scope = CaptureScope(tmp_path / "failures")
-        with capture_scope(scope), pytest.raises(Exception):
+        with capture_scope(scope), pytest.raises(managym.AgentError):
             collector._env.step_into_buffers([-1, -1])
         evidence = GameRecord.model_validate_json(scope.paths[-1].read_bytes())
         if sampled:
@@ -425,7 +442,7 @@ def test_failure_records_actual_sampled_decks(
         close_collector(collector)
 
 
-def test_independent_population_retains_event_ids_and_mirrors() -> None:
+def test_independent_population_retains_event_ids_and_mirrors(tmp_path: Path) -> None:
     deck = Deck({"Plains": 10})
     source = UniformDecks(
         decks=(deck, deck),
@@ -434,18 +451,24 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
     )
     assert [player.name for player in source.players()] == ["event-a", "event-b"]
     source.check()
-    collector = _collector(source)
-    try:
-        batch = collect(collector, _agent(), 1)
-        assert batch is not None and collector.stats.games == 4
-        for pair in collector._env.current_player_configs():
-            assert all(player.name in source.entry_ids for player in pair)
-            assert pair[0].deck == pair[1].deck == deck
-        identity = collector._env.identities["deck_source"]
+    with capture_scope(
+        CaptureScope(tmp_path / "failures", settings=RunSettings(record_games=1))
+    ):
+        collector = _collector(source)
+        try:
+            collect(collector, _agent(), 1)
+            assert collector.stats.games == 4
+            for pair in collector._env.current_player_configs():
+                assert all(player.name in source.entry_ids for player in pair)
+                assert pair[0].deck == pair[1].deck == deck
+        finally:
+            close_collector(collector)
+    records = list(read_records(tmp_path / "games"))
+    assert len(records) == 4
+    for record in records:
+        identity = record.identities["deck_source"]
         assert identity["sampling_policy"] == "uniform-independent-v1"
         assert identity["deck_ids"] == ["event-a", "event-b"]
-    finally:
-        close_collector(collector)
     with pytest.raises(ValueError, match="entry IDs"):
         UniformDecks(
             decks=(deck,), sampling="uniform-independent-v1", entry_ids=("same", "same")
@@ -474,7 +497,7 @@ def test_source_disclosure_preserves_open_identity(
     assert UniformDecks.model_validate(record) == configured
 
 
-def test_closed_fixed_roots_survive_auto_reset(decks: UniformDecks) -> None:
+def test_closed_fixed_roots_survive_refill(decks: UniformDecks) -> None:
     match = Match(decks.model_copy(update={"decklists": "closed"}).match_config())
     collector = open_collector(
         ObservationSpace(),
@@ -539,9 +562,9 @@ def test_mixed_source_closed_streams_match_all_closed_inputs(
     actual = mixed.current_player_configs()
     mask = np.array([setup.decklists == "closed" for setup in actual])
     assert mask.any() and not mask.all()
-    buffers = [allocate_buffers(space, 8) for _ in range(2)]
+    buffers = [space.allocate(8) for _ in range(2)]
     for vector, output in zip((mixed, closed), buffers, strict=True):
-        vector.write_observations_for_players([viewer] * 8, output)
+        vector.write_observations_for_players([viewer] * 8, output, layout=space.layout)
     for key, value in buffers[0].items():
         np.testing.assert_array_equal(value[mask], buffers[1][key][mask], err_msg=key)
     prepared = [
@@ -573,3 +596,28 @@ def test_mixed_training_games_export_the_resolved_disclosure(
         assert replay.game.setup().decklists == disclosure
         settings.add(disclosure)
     assert settings == {"open", "closed"}
+
+
+@pytest.mark.parametrize("mode", ["all", "usable"])
+def test_priority_taps_follow_sampled_self_play_roots(
+    decks: UniformDecks, mode: managym.ManaFloats
+) -> None:
+    collector = _collector(decks, mana_floats=mode, mana_payment="auto")
+    try:
+        collect(collector, _agent(), 1)
+        assert collector.stats.games > 0
+        assert collector.stats.skipped_decisions > 0
+        if mode == "usable":
+            # No spell, paid activation or tap trigger in these all-basic decks.
+            assert collector.stats.priority_taps == 0
+        else:
+            assert 0 < collector.stats.priority_taps < collector.stats.micro_steps
+        for match, setup in zip(
+            collector.stream_matches,
+            collector._env.current_player_configs(),
+            strict=True,
+        ):
+            assert setup.mana_payment == match.config.mana_payment == ("auto", "auto")
+            assert setup.mana_floats == match.config.mana_floats == (mode, mode)
+    finally:
+        close_collector(collector)

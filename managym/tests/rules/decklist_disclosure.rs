@@ -2,6 +2,7 @@
 // Open and closed decklists: what each viewer's observation carries, and
 // that hidden-information sampling refuses a closed opponent.
 
+use managym::state::player::ManaFloats;
 use std::collections::BTreeMap;
 
 use managym::{
@@ -27,6 +28,8 @@ fn configs(disclosure: DecklistDisclosure) -> GameSetup {
             .map(|key| pack.player_config(key, key).unwrap())
             .collect(),
         decklists: disclosure.into(),
+        mana_floats: [ManaFloats::Off; 2],
+        mana_payment: Default::default(),
     }
 }
 

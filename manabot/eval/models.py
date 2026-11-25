@@ -11,11 +11,12 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.identity import SHA256_PATTERN, StrictModel
-from manabot.sim.registration import WorldVersion
+from manabot.sim.registration import HISTORICAL_MIRROR_SUITE
 
 
 class EvaluationKey(StrictModel):
-    world: WorldVersion
+    # Arenas recorded before the world label was removed carry it; new keys omit it.
+    world: str | None = Field(default=None, exclude_if=lambda v: v is None)
     content_suite: str
     viewer_boundary: str
     arena_version: str
@@ -88,7 +89,8 @@ class MatchRow(StrictModel):
             raise ValueError("match cell identity mismatch")
         if self.player_a_seat != self.leg % 2:
             raise ValueError("match leg and player-A seat mismatch")
-        if self.arena_key.world == "w2" and self.leg > 1:
+        historical_mirror = self.arena_key.content_suite == HISTORICAL_MIRROR_SUITE
+        if historical_mirror and self.leg > 1:
             raise ValueError("historical mirror has only two legs")
         failed = self.termination_reason in {
             "truncated",
@@ -120,7 +122,7 @@ class MatchRow(StrictModel):
             ("ur_lessons", "gw_allies") if self.leg < 2 else ("gw_allies", "ur_lessons")
         ):
             raise ValueError("deck assignment and leg mismatch")
-        if self.arena_key.world != "w2" and self.seat_decks is None:
+        if not historical_mirror and self.seat_decks is None:
             raise ValueError("selected match must retain its deck assignment")
         if not failed and self.failure is not None:
             raise ValueError("completed match cannot carry a failure")

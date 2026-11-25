@@ -16,8 +16,15 @@ use managym::{
 
 #[test]
 fn fetch_lands_have_distinct_entry_and_life_rules() {
-    for (name, tapped, life) in [("Fabled Passage", true, 20), ("Prismatic Vista", false, 19)] {
+    for (name, forests, tapped, life) in [
+        ("Fabled Passage", 2, true, 20),
+        ("Fabled Passage", 3, false, 20),
+        ("Prismatic Vista", 0, false, 19),
+    ] {
         let mut s = five_color_setup(&[name]);
+        for _ in 0..forests {
+            s.force_permanent_on_battlefield(0, "Forest");
+        }
         play_and_settle(&mut s, name);
         let source = permanent_named(&s, name);
         activate_first(&mut s, source);
@@ -136,6 +143,7 @@ fn the_great_henge_costs_less_by_greatest_power_and_rewards_nontoken_creatures()
 #[test]
 fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     let mut s = five_color_unfunded_setup(&["The Great Henge", "Heroic Intervention"]);
+    s.allow_priority_floats();
     let henge = s.force_permanent_on_battlefield(0, "The Great Henge");
     activate(&mut s, henge, 0);
     take_single_output(&mut s);
@@ -164,4 +172,145 @@ fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     assert_eq!(s.life(0), 24, "one more activation, one more gain");
     settle(&mut s);
     assert_eq!(s.life(0), 24);
+}
+
+/// Wildborn Preserver's trigger chooses X only as it resolves (CR 107.3),
+/// so its stacked text keeps X symbolic rather than reading an unbound 0.
+#[test]
+fn wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack() {
+    use managym::agent::observation::Observation;
+    let mut s = five_color_setup(&["Wildborn Preserver", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Wildborn Preserver");
+    crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.advance_until(
+        |sc| !sc.game().state.stack_objects.is_empty(),
+        "the Preserver's trigger is stacked".into(),
+    );
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let [entry] = obs.stack_objects.as_slice() else {
+            panic!("one trigger: {:?}", obs.stack_objects);
+        };
+        let text = entry.description.clone().unwrap();
+        assert!(
+            text.contains("Choose X. You may pay {X}")
+                && text.contains("the announced value of X")
+                && !text.contains("(0)")
+                && !text.contains("that many"),
+            "{text}"
+        );
+    }
+}
+
+/// Wildborn Preserver's trigger asks for X as it resolves; paying puts X
+/// counters on it through the reflexive trigger. A Human does not trigger it.
+#[test]
+fn wildborn_preserver_pays_x_for_x_counters_when_a_non_human_creature_enters() {
+    use crate::support::{inspect::tapped, play::fork_choosing};
+    use managym::state::player::ManaPayment;
+    for auto in [false, true] {
+        let mut s = five_color_unfunded_setup(&[
+            "Wildborn Preserver",
+            "Gray Ogre",
+            "Aang, at the Crossroads",
+        ]);
+        let preserver = s.force_permanent_on_battlefield(0, "Wildborn Preserver");
+        let forests = [0; 3].map(|_| s.force_permanent_on_battlefield(0, "Forest"));
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        crate::support::game::enters_battlefield_with_triggers(
+            &mut s,
+            0,
+            "Aang, at the Crossroads",
+        );
+        settle(&mut s);
+        assert_eq!(counters_of(&s, preserver, CounterKind::PlusOnePlusOne), 0);
+
+        crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        s.advance_until(
+            |sc| sc.action_space().kind == ActionSpaceKind::Modal,
+            "the Preserver asks for X".into(),
+        );
+        // "You may pay" is one confirmation under either setting; the lands
+        // then pay without a further choice.
+        let pay = |s: &mut Scenario| {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+            choose(s, |a| matches!(a, Action::PayCost { .. }));
+            settle(s);
+        };
+        // A fork at the choice of X: the lands tapped and the counters follow it.
+        for x in [1, 2] {
+            let mut fork = fork_choosing(
+                &s,
+                |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == x),
+            );
+            pay(&mut fork);
+            assert_eq!(
+                counters_of(&fork, preserver, CounterKind::PlusOnePlusOne),
+                x as i32,
+                "auto={auto}"
+            );
+            let spent = forests.iter().filter(|land| tapped(&fork, **land)).count();
+            assert_eq!(spent, x, "auto={auto}");
+        }
+        choose_mode(&mut s, 3);
+        pay(&mut s);
+        assert_eq!(
+            counters_of(&s, preserver, CounterKind::PlusOnePlusOne),
+            3,
+            "auto={auto}"
+        );
+        assert!(forests.iter().all(|land| tapped(&s, *land)), "auto={auto}");
+    }
+}
+
+/// Thrill of Possibility's discard is paid as it is cast, from the other cards
+/// in hand; the receipt names the discarded card, and it then draws two.
+#[test]
+fn thrill_of_possibility_discards_a_chosen_card_as_it_is_cast() {
+    for auto in [false, true] {
+        let s =
+            crate::support::play::cast_discarding_a_chosen_card("Thrill of Possibility", 2, auto);
+        // The Ogre and two drawn cards.
+        assert_eq!(s.zone_size(0, ZoneType::Hand), 3);
+    }
+}
+
+#[test]
+fn printed_creature_raging_redcap() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat("Raging Redcap", 1, 2, &[Keyword::DoubleStrike]);
+}
+
+#[test]
+fn foundations_5e_bake_into_a_pie() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Bake into a Pie", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Bake into a Pie");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+    assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
+    assert!(s.battlefield_permanents_named(1, "Food").is_empty());
+}
+
+#[test]
+fn foundations_5f_syr_alin_the_lions_claw() {
+    crate::attack_pumps_the_team("Syr Alin, the Lion's Claw", (4, 4), false);
+}
+
+/// "Scorching Dragonfire deals 3 damage to target creature or planeswalker.
+/// If that creature or planeswalker would die this turn, exile it instead."
+#[test]
+fn foundations_5g_scorching_dragonfire() {
+    crate::assert_damage_exiles_creature_or_planeswalker("Scorching Dragonfire", 3);
 }

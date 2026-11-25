@@ -17,6 +17,7 @@ composes with the other and neither changes the model.
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
+from functools import partial
 from types import TracebackType
 from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
@@ -24,38 +25,53 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from manabot.backends.torch._continuation import ContinuationEncoder
-from manabot.backends.torch._decision_memory import CollectionMemory, DecisionMemory
-from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
-from manabot.backends.torch._name_candidates import NameCandidateEncoder
-from manabot.backends.torch._numerics import buffer_on
-from manabot.backends.torch._recent_events import RecentEventEncoder
-from manabot.backends.torch._semantic_cards import (
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
+from manabot.backends.torch.continuation import ContinuationEncoder
+from manabot.backends.torch.decision_memory import DecisionMemory
+from manabot.backends.torch.facts import FactEncoder, RecordVocabulary
+from manabot.backends.torch.live_tokens import LiveTokens
+from manabot.backends.torch.name_candidates import NameCandidateEncoder
+from manabot.backends.torch.numerics import buffer_on
+from manabot.backends.torch.recent_events import RecentEventEncoder
+from manabot.backends.torch.rl import NumericalError
+from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
-
-# Local imports
-from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
-from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.rl import NumericalError
-from manabot.belief.range import BeliefError
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
-    STACK_DEFINITION_INDEX,
-    STACK_DIM,
-    STACK_SOURCE_INDEX,
-    TURN_STATE_DIM,
+    FACT_KINDS,
     ObservationBuffers,
     ObservationSpace,
+    PolicyObservation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import row_needs, sizes_of, trim_observation
-from manabot.policy.checkpoint import layout
-from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_observation,
+    object_trimming,
+)
+from manabot.policy.catalog import fresh_policy_tables
+from manabot.policy.checkpoint import Dimensions
+from manabot.policy.collection_memory import CollectionMemory
+from manabot.policy.prepare import (
+    AttentionLayout,
+    BeliefRows,
+    FactLayout,
+    Layout,
+    Prepared,
+    Tables,
+    prepare,
+)
 from manabot.policy.protocol import InferenceResult
+from manabot.policy.readings import Readings, fresh_readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
 import managym
 
 if TYPE_CHECKING:
@@ -126,6 +142,8 @@ class ActorCritic(nn.Module):
         observation_space: ObservationSpace,
         config: ModelConfig,
         *,
+        readings: Readings | None = None,
+        fact_kinds: int = FACT_KINDS,
         bucketed_shapes: bool = False,
         live_tokens: bool = False,
     ) -> None:
@@ -140,53 +158,36 @@ class ActorCritic(nn.Module):
         )
         self.logger = getLogger(__name__)
 
-        # Extract dimensions from the observation encoder.
-        enc = observation_space.encoder
-        if config.decision_memory != "none" and not enc.config.max_decision_records:
-            raise ValueError(
-                "decision-memory model requires explicit observation capacities"
-            )
-        if config.decision_memory != "none" and not config.catalog_records():
-            raise ValueError("decision memory requires a catalog world")
-        if config.decision_memory != "none" and not enc.one_token:
-            raise ValueError("decision memory requires policy input v11")
-        if config.recent_events and (
-            config.world is None or enc.config.policy_history_version != 1
-        ):
-            raise ValueError("recent events require world and policy_history_version=1")
-        if not config.recent_events and enc.config.policy_history_version != 0:
-            raise ValueError(
-                "history observation contract requires recent_events ActorCritic"
-            )
-        player_dim = enc.player_dim
-        card_dim = enc.card_dim
-        # Inputs v10/v11 append each seat's turn-state row to its player row and
-        # each card row's turn-state value to that card row.
-        self.turn_state = enc.turn_state
-        self.stack_tokens = enc.one_token
-        if self.turn_state:
-            player_dim += TURN_STATE_DIM
-            card_dim += 1
-        # Definition IDs and permanent links are categorical joins, never
-        # numeric permanent features.
-        columns = layout(observation_space)
-        perm_dim = len(columns.numeric_permanent_columns)
-        action_dim = enc.action_dim
-        self.max_focus_objects = enc.max_focus_objects
-        embed_dim = config.hidden_dim
+        admission.history_config(config, observation_space)
+        # A model built without a checkpoint reads its inputs by kind.
+        self.readings: Readings = (
+            fresh_readings(observation_space) if readings is None else readings
+        )
+        tables = fresh_policy_tables(observation_space, config)
+        dims = Dimensions.from_layout(
+            config,
+            observation_space,
+            Layout(self.readings),
+            token_rows=tables.token_rows,
+            name_rows=len(tables.definitions),
+            fact_kinds=fact_kinds,
+        )
+        self.turn_state = observation_space.turn_state
+        self.stack_tokens = observation_space.one_token
+        self.max_focus_objects = dims.focus
+        embed_dim = dims.hidden
 
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
-        if config.world is not None:
+        if tables.catalog is not None:
             # Log-enabled controls reserve the branches' exact catalog rows,
             # so trunk copying never remaps a shared embedding or lookup.
             self.semantic_cards = SemanticCardEncoder(
-                config.world,
+                tables.catalog,
                 embed_dim,
                 decklists=True,
-                records=config.catalog_records(),
-                decision_memory=bool(enc.config.max_decision_records),
-                library=enc.one_token,
+                library=observation_space.one_token,
+                stream_norm=config.stream_norm,
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -196,25 +197,26 @@ class ActorCritic(nn.Module):
             )
 
         # Set up typed object embeddings.
-        self.player_embedding = ProjectionLayer(player_dim, embed_dim)
-        self.card_embedding = ProjectionLayer(card_dim, embed_dim)
-        self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
+        self.player_embedding = ProjectionLayer(dims.player, embed_dim)
+        self.card_embedding = ProjectionLayer(dims.card, embed_dim)
+        self.perm_embedding = ProjectionLayer(dims.permanent, embed_dim)
         # Embed policy features; validity only masks legal rows.
-        self.action_embedding = ProjectionLayer(action_dim - 2, embed_dim)
+        self.action_embedding = ProjectionLayer(dims.action, embed_dim)
 
-        self.logger.info(f"Player embedding: ({player_dim} -> {embed_dim})")
-        self.logger.info(f"Card embedding: ({card_dim} -> {embed_dim})")
-        self.logger.info(f"Permanent embedding: ({perm_dim} -> {embed_dim})")
-        self.logger.info(f"Action embedding: ({action_dim - 2} -> {embed_dim})")
+        self.logger.info(f"Player embedding: ({dims.player} -> {embed_dim})")
+        self.logger.info(f"Card embedding: ({dims.card} -> {embed_dim})")
+        self.logger.info(f"Permanent embedding: ({dims.permanent} -> {embed_dim})")
+        self.logger.info(f"Action embedding: ({dims.action} -> {embed_dim})")
 
         # Global game state processor via attention.
         if self.config.attention_on:
-            num_heads = self.config.num_attention_heads
+            num_heads = dims.heads
             self.attention = GameObjectAttention(
                 embed_dim,
                 num_heads=num_heads,
-                feedforward_dim=config.attention_feedforward_dim,
+                feedforward_dim=dims.feedforward,
                 memory_gate_scale=config.decision_memory_gate_scale,
+                pre_norm=config.stream_norm,
             )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
@@ -277,28 +279,20 @@ class ActorCritic(nn.Module):
             self.belief_global_embedding = None
 
         # Static ownership mask over the concatenated visible object sequence.
-        is_agent_parts = [
-            torch.ones(1, dtype=torch.bool),
-            torch.zeros(1, dtype=torch.bool),
-            torch.ones(enc.cards_per_player, dtype=torch.bool),
-            torch.zeros(enc.cards_per_player, dtype=torch.bool),
-            torch.ones(enc.perms_per_player, dtype=torch.bool),
-            torch.zeros(enc.perms_per_player, dtype=torch.bool),
-        ]
-        is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
-        self.register_buffer("_is_agent_template", is_agent_template)
+        self.register_buffer("_is_agent_template", torch.from_numpy(tables.ownership))
 
         # Construct optional parameters after the historical model to preserve
         # its initialization order and state-dict names.
         self.extra_attention = nn.ModuleList(
             GameObjectAttention(
                 embed_dim,
-                config.num_attention_heads,
+                dims.heads,
                 ownership=False,
-                feedforward_dim=config.attention_feedforward_dim,
+                feedforward_dim=dims.feedforward,
                 memory_gate_scale=config.decision_memory_gate_scale,
+                pre_norm=config.stream_norm,
             )
-            for _ in range(config.attention_layers - 1)
+            for _ in range(dims.layers - 1)
         )
         self.value_token = (
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
@@ -337,7 +331,7 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
-        self.continuation = ContinuationEncoder(embed_dim, enc.relation_dim)
+        self.continuation = ContinuationEncoder(embed_dim, dims.relation)
 
         # The policy input links permanents to other objects: an Aura or
         # Equipment to its host, a blocker to the attacker it blocks. Each
@@ -348,7 +342,7 @@ class ActorCritic(nn.Module):
         # weights start additive; skip_init draws no RNG.
         self.link_from_target = nn.ModuleList()
         self.link_to_target = nn.ModuleList()
-        for _ in columns.link_columns:
+        for _ in range(dims.links):
             for layers in (self.link_from_target, self.link_to_target):
                 layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
                 nn.init.zeros_(layer.weight)
@@ -361,16 +355,22 @@ class ActorCritic(nn.Module):
         record_vocabulary: RecordVocabulary = (
             "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts = FactEncoder(embed_dim, vocabulary=record_vocabulary)
+        self.facts = FactEncoder(
+            embed_dim,
+            fact_kinds=dims.fact_kinds,
+            numeric=dims.fact,
+            vocabulary=record_vocabulary,
+        )
         self.shared_effects = SharedEffectEncoder(
-            embed_dim, vocabulary=record_vocabulary
+            embed_dim,
+            numeric=dims.effect,
+            vocabulary=record_vocabulary,
         )
         self.name_candidates = NameCandidateEncoder(
-            managym.naming_catalog(),
+            tables.definitions,
             embed_dim,
-            self.semantic_cards.definition_rows
-            if self.semantic_cards is not None
-            else None,
+            tables.program_rows,
+            onto_definitions=config.definition_names,
         )
 
         # An execution choice of the training stage, never model state: no
@@ -387,25 +387,16 @@ class ActorCritic(nn.Module):
         # link (one-based object index) adds the source's pre-attention
         # embedding through a zero-initialized layer, so the initial function
         # ignores it.
-        self._numeric_stack_columns = [
-            column
-            for column in range(STACK_DIM)
-            if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
-        ]
         self.stack_embedding: ProjectionLayer | None = None
         self.stack_source: nn.Linear | None = None
         if self.stack_tokens:
-            self.stack_embedding = ProjectionLayer(
-                len(self._numeric_stack_columns), embed_dim
-            )
+            self.stack_embedding = ProjectionLayer(dims.stack, embed_dim)
             self.stack_source = torch.nn.utils.skip_init(
                 nn.Linear, embed_dim, embed_dim
             )
             nn.init.zeros_(self.stack_source.weight)
             nn.init.zeros_(self.stack_source.bias)
-            self.logger.info(
-                f"Stack embedding: ({len(self._numeric_stack_columns)} -> {embed_dim})"
-            )
+            self.logger.info(f"Stack embedding: ({dims.stack} -> {embed_dim})")
 
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
@@ -415,46 +406,59 @@ class ActorCritic(nn.Module):
             else None
         )
 
+        # One normalized token stream (`ModelConfig.stream_norm`): every
+        # stream summed into an object token is normalized here or starts at
+        # zero (links, stack sources, facts, shared effects). Pre-normalized
+        # attention leaves the residual stream unnormalized, so the heads read
+        # it through `final_norm`. LayerNorms draw no RNG, so every parameter
+        # above keeps its draws.
+        self.stream_norms: nn.ModuleDict | None = None
+        self.final_norm: nn.LayerNorm | None = None
+        if config.stream_norm:
+            self.final_norm = nn.LayerNorm(embed_dim)
+            streams = ["player", "card", "permanent", "definition", "context"]
+            if self.stack_tokens:
+                streams.append("stack")
+            self.stream_norms = nn.ModuleDict(
+                {name: nn.LayerNorm(embed_dim) for name in streams}
+            )
+
+        # Focus-conditioned scoring (FiLM over the offer's focused objects):
+        # the offer's features are scaled by 1 + W @ focused before
+        # action_layer, so two offers naming one object differ by a function
+        # of it at initialization. Ordinary initialization, unlike
+        # policy_film: a zero start would leave that gap blind to the object
+        # until W moved. Built last so every other parameter keeps the draws
+        # of the model without it.
+        self.focus_film: nn.Linear | None = None
+        if config.focus_film:
+            self.focus_film = layer_init(
+                nn.Linear(self.max_focus_objects * embed_dim, embed_dim, bias=False)
+            )
+
         # When True, forward() stashes legal logits at original coordinates on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
+        self._binding_cache = admission.BindingCache()
         self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
 
     def admit_belief(self, belief_schema: "BeliefEncodingSchema") -> None:
         """Admit a host belief vocabulary against this policy's input embeddings."""
-        if self.belief_count_buckets != belief_schema.count_buckets:
-            raise BeliefError("ActorCritic and belief encoding count buckets differ")
-        if self.belief_card_embedding is None:
-            raise BeliefError(
-                "Manabot requires an ActorCritic with belief input enabled"
-            )
-        maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
-        if maximum_card_id >= self.belief_card_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
-        if self.belief_owner_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
-        maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
-        if maximum_owner_id >= self.belief_owner_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic owner-role vocabulary"
-            )
-        if self.belief_zone_embedding is None:
-            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
-        maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
-        if maximum_zone_id >= self.belief_zone_embedding.num_embeddings:
-            raise BeliefError(
-                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
-            )
+        belief_schema.admit_model(self.config)
 
     def _binding(self) -> str:
-        return admission.binding(self.config, self.observation_space)
+        return self._binding_cache.get(
+            self.config, self.observation_space, self.readings
+        )
 
     def _admission_spec(self) -> admission.Spec:
         key = (
+            id(self.config),
+            id(self.observation_space),
             self._binding(),
             tuple(
                 (name, id(value), value._version)
@@ -472,7 +476,11 @@ class ActorCritic(nn.Module):
             self.config,
             self.observation_space,
             replace(
-                Tables.from_buffers(buffers, layout(self.observation_space)),
+                Tables.from_buffers(
+                    buffers,
+                    Layout(self.readings),
+                    fact_kinds=self.facts.kind.num_embeddings - 1,
+                ),
                 order_lengths=_catalog_order,
             ),
             self.card_definitions.num_embeddings
@@ -484,18 +492,28 @@ class ActorCritic(nn.Module):
 
     def prepare(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        self.check_observation(obs)
-        return self.prepare_admitted(
-            obs, inference=inference, memory_roots=memory_roots
-        )
+        bucketed, tables = self._admit_observation(obs)
+        return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
-    def check_observation(self, obs: ObservationBuffers) -> None:
+    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
+        """Validate the current rows and return their measured extents when bucketed."""
+        bucketed, _ = self._admit_observation(obs)
+        return None if bucketed is None else bucketed.needs
+
+    def _admit_observation(
+        self, obs: PolicyObservation
+    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
+        spec = self._admission_spec()
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            return admission.admit_native(
+                obs, spec, bucketed=self.bucketed_shapes
+            ), spec.tables
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -504,13 +522,18 @@ class ActorCritic(nn.Module):
             failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
             raise NumericalError(
                 "invalid_action_mask",
-                {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
+                {
+                    "mask": torch.from_numpy(mask.copy()),
+                    "failed": torch.from_numpy(failed),
+                },
             ) from error
-        admission.check(obs, self._admission_spec(), legal)
+        return admission.admit(
+            obs, spec, legal, bucketed=self.bucketed_shapes
+        ), spec.tables
 
     def prepare_admitted(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
@@ -519,42 +542,67 @@ class ActorCritic(nn.Module):
         """Prepare unchanged admitted rows for learning or inference.
 
         `inference` selects compaction and catalog coverage independently of
-        autograd mode; bucketed batches always use the full catalog schedule.
+        autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
+        MPS uses bucketed object columns for inference and bucketed live fact
+        routes for both inference and learning.
         """
-        spec = self._admission_spec()
-        capacity = obs["actions_valid"].shape[1]
-        if self.bucketed_shapes:
-            if needs is None:
-                needs = row_needs(obs, self.observation_space.encoder)
-            if needs is not None:
-                obs = trim_observation(
-                    obs,
-                    sizes_of(
-                        needs,
-                        self.observation_space.encoder,
-                        objects=self.object_trimming(),
-                    ),
-                )
-        batch = prepare(
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
+            rows = observation_spans(
+                obs,
+                self.observation_space,
+                bucketed=self.bucketed_shapes,
+                objects=self.object_trimming(),
+                minimum_needs=needs,
+            )
+            return self._prepare_rows(
+                rows, self._admission_spec().tables, inference, memory_roots
+            )
+        bucketed = (
+            bucket_observation(
+                obs, self.observation_space, needs, objects=self.object_trimming()
+            )
+            if self.bucketed_shapes
+            else None
+        )
+        return self._prepare_rows(
+            bucketed or obs, self._admission_spec().tables, inference, memory_roots
+        )
+
+    def _prepare_rows(
+        self,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        tables: Tables,
+        inference: bool,
+        memory_roots: Mapping[str, int] | None,
+    ) -> Prepared[np.ndarray]:
+        device = self.device_type
+        # Learners and CUDA inference keep padded attention; power-of-two
+        # column counts on MPS bound the distinct Metal attention graphs.
+        attention: AttentionLayout = "padded"
+        if self.config.attention_on:
+            if self.live_tokens:
+                attention = "live_tokens"
+            elif inference and device == "cpu":
+                attention = "used_columns"
+            elif inference and device == "mps":
+                attention = "bucketed_columns"
+        facts: FactLayout = "padded"
+        if device == "mps":
+            facts = "bucketed_live_rows"
+        elif inference and device == "cpu" and not self.bucketed_shapes:
+            facts = "used_columns"
+        full_catalog = inference or (self.bucketed_shapes and device == "cuda")
+        return prepare(
             obs,
-            spec.tables,
-            inference=inference and device_of(self).type == "cpu",
-            bucketed=self.bucketed_shapes,
-            live_tokens=self.live_tokens and self.config.attention_on,
+            tables,
+            attention=attention,
+            facts=facts,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
-            binding=spec.binding,
-            action_capacity=capacity,
-            select_programs=not inference and not self.bucketed_shapes,
-        )
-
-        return replace(
-            batch,
-            bucket_needs=None
-            if needs is None
-            else tuple(tuple(map(int, row)) for row in needs),
+            binding=self._binding(),
+            select_programs=not full_catalog,
         )
 
     def _evaluate_outputs(
@@ -617,10 +665,6 @@ class ActorCritic(nn.Module):
         if double:
             tensor = tensor.double()
         return to_numpy(torch.softmax(tensor, dim=-1))
-
-    @staticmethod
-    def probability_from_logit(value: float) -> float:
-        return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
 
     @torch.no_grad()
     def sample(
@@ -832,10 +876,7 @@ class ActorCritic(nn.Module):
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
-        return (
-            self.config.value_aggregation != "historical_mean"
-            and self.belief_count_buckets == 0
-        )
+        return object_trimming(self.config)
 
     def _attend_objects(
         self,
@@ -876,6 +917,10 @@ class ActorCritic(nn.Module):
                 objects = layer(
                     objects, is_agent, key_padding_mask, summaries=summaries
                 )
+        if self.final_norm is not None:
+            # Padding stays zero, not the norm's bias.
+            live_slots = (~key_padding_mask).unsqueeze(-1).to(objects.dtype)
+            objects = self.final_norm(objects) * live_slots
         if columns is not None:
             # Restore the optional neutral value token in the same scatter,
             # at the slot immediately after the original object coordinates.
@@ -918,6 +963,8 @@ class ActorCritic(nn.Module):
         packed = self.attention.forward_live(packed, owners, tokens, summaries)
         for layer in self.extra_attention:
             packed = layer.forward_live(packed, owners, tokens, summaries)
+        if self.final_norm is not None:
+            packed = self.final_norm(packed)
         return tokens.scatter(packed)
 
     def _value_from_objects(
@@ -970,53 +1017,83 @@ class ActorCritic(nn.Module):
             actions = actions + state.programs[obs.candidate_rows]
         actions = actions + state.shared_context[obs.legal_batches]
         focused = post_attention_objects.flatten(0, 1)[obs.focus]
-        focused = focused * obs.focus_mask.unsqueeze(-1)
-        return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
+        focused = (focused * obs.focus_mask.unsqueeze(-1)).flatten(1)
+        if self.focus_film is not None:
+            # An absent focus is zero, so an unfocused offer is scaled by 1.
+            actions = actions * (1 + self.focus_film(focused))
+        return self.action_layer(torch.cat((actions, focused), dim=-1))
+
+    def _stream(self, name: str, x: torch.Tensor) -> torch.Tensor:
+        """Normalize one stream summed into object tokens (`stream_norm`)."""
+        if self.stream_norms is None:
+            return x
+        return self.stream_norms[name](x)
+
+    def _definition_table(self, table: torch.Tensor) -> torch.Tensor:
+        """Normalize a definition table [definitions + 1, D] with row 0 kept
+        zero, so a named card and an unnamed token enter at one scale."""
+        if self.stream_norms is None:
+            return table
+        normed = self.stream_norms["definition"](table[1:])
+        return torch.cat((table.new_zeros((1, table.shape[1])), normed))
+
+    def _generic_definitions(
+        self, rows: torch.Tensor, *, table: torch.Tensor | None
+    ) -> torch.Tensor:
+        """Identity rows of a world without card programs."""
+        assert self.card_definitions is not None
+        if table is not None:
+            return table[rows]
+        return self.card_definitions(rows)
 
     def _gather_object_embeddings(
         self, obs: Prepared[torch.Tensor], programs: torch.Tensor | None = None
     ) -> EmbeddedObservation:
-        enc_agent_player = self.player_embedding(obs.agent_player)
-        enc_opp_player = self.player_embedding(obs.opponent_player)
-        enc_agent_cards = self.card_embedding(obs.agent_cards)
-        enc_opp_cards = self.card_embedding(obs.opponent_cards)
+        enc_agent_player = self._stream(
+            "player", self.player_embedding(obs.agent_player)
+        )
+        enc_opp_player = self._stream(
+            "player", self.player_embedding(obs.opponent_player)
+        )
+        enc_agent_cards = self._stream("card", self.card_embedding(obs.agent_cards))
+        enc_opp_cards = self._stream("card", self.card_embedding(obs.opponent_cards))
         definitions = None
         if self.semantic_cards is not None:
             if programs is None:
                 assert obs.programs is not None
                 programs = self.semantic_cards.definitions(obs.programs)
-            definitions = self.name_candidates.public_definitions(programs)
+            # Every object reader sees the normalized table; the raw
+            # `programs` keep scoring naming candidates and decision memory.
+            definitions = self._definition_table(
+                self.name_candidates.public_definitions(programs)
+            )
             cards, known = self.semantic_cards(obs, definitions)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = self.semantic_cards.lookup(
-                definitions, obs.permanent_rows
-            )
-            stack_definitions = (
-                None
-                if obs.stack_rows is None
-                else self.semantic_cards.lookup(definitions, obs.stack_rows)
-            )
+            lookup = partial(self.semantic_cards.lookup, definitions)
         else:
             assert self.card_definitions is not None
-            cards = self.card_definitions(obs.card_rows)
-            enc_agent_cards = enc_agent_cards + cards[:, 0]
-            enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self.card_definitions(obs.permanent_rows)
-            stack_definitions = (
-                None
-                if obs.stack_rows is None
-                else self.card_definitions(obs.stack_rows)
+            table = (
+                self._definition_table(self.card_definitions.weight)
+                if self.stream_norms is not None
+                else None
             )
+            lookup = partial(self._generic_definitions, table=table)
+            cards = lookup(obs.card_rows)
+        enc_agent_cards = enc_agent_cards + cards[:, 0]
+        enc_opp_cards = enc_opp_cards + cards[:, 1]
+        permanent_definitions = lookup(obs.permanent_rows)
         # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
-            self.perm_embedding(obs.permanents[:, 0].contiguous())
+            self._stream(
+                "permanent", self.perm_embedding(obs.permanents[:, 0].contiguous())
+            )
             + permanent_definitions[:, 0]
         )
         enc_opp_perms = (
-            self.perm_embedding(obs.permanents[:, 1].contiguous())
+            self._stream(
+                "permanent", self.perm_embedding(obs.permanents[:, 1].contiguous())
+            )
             + permanent_definitions[:, 1]
         )
         parts = [
@@ -1029,8 +1106,11 @@ class ActorCritic(nn.Module):
         ]
         if self.stack_tokens:
             assert self.stack_embedding is not None and obs.stack is not None
-            assert stack_definitions is not None
-            parts.append(self.stack_embedding(obs.stack) + stack_definitions)
+            assert obs.stack_rows is not None
+            parts.append(
+                self._stream("stack", self.stack_embedding(obs.stack))
+                + lookup(obs.stack_rows)
+            )
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
@@ -1046,24 +1126,27 @@ class ActorCritic(nn.Module):
         objects = self.shared_effects(
             obs.effects, objects, token_embedding, definitions
         )
-        relation_definitions = (
-            SemanticCardEncoder.lookup(definitions, obs.relation_rows)
-            if definitions is not None
-            else self.card_definitions(obs.relation_rows)
-        )
         encoded_relations = self.continuation.encode_rows(
-            obs, objects, relation_definitions
+            obs, objects, lookup(obs.relation_rows)
         )
-        shared_context = encoded_relations.sum(1) / obs.relation_valid.sum(
-            1, keepdim=True
-        ).clamp_min(1)
+        relation_count = obs.relation_valid.sum(1, keepdim=True)
+        shared_context = encoded_relations.sum(1) / relation_count.clamp_min(1)
         frame_context = self.continuation.frame_context(obs, encoded_relations)
         if self.recent_events is not None:
             assert definitions is not None and obs.events is not None
             shared_context = (
                 self.recent_events(obs.events, objects, definitions) + shared_context
             )
-        objects = objects + shared_context.unsqueeze(1)
+        if self.stream_norms is not None:
+            # Zero, not a unit-scale bias, for a decision with no context.
+            present = relation_count.squeeze(-1) > 0
+            if self.recent_events is not None:
+                assert obs.events is not None
+                present = present | obs.events.validity.any(-1)
+            shared_context = self._stream(
+                "context", shared_context
+            ) * present.unsqueeze(-1).to(shared_context.dtype)
+        objects = objects + shared_context.unsqueeze(1) * obs.validity.unsqueeze(-1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
         )
@@ -1181,7 +1264,9 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
-        self.memory = CollectionMemory()
+        self.memory = CollectionMemory[torch.Tensor](
+            torch.cat, torch.stack, lambda states, i: states[i].detach().clone()
+        )
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()
@@ -1205,11 +1290,14 @@ class PolicyInference:
         self.check(agent)
         if torch.is_grad_enabled():
             raise RuntimeError("prepared inference observations cannot enter autograd")
-        self.cache_programs()
+        self._cache_programs()
 
     def cache_programs(self) -> None:
         """Prepare the fixed policy catalog, checking the serving lifetime first."""
         self.check(self.agent)
+        self._cache_programs()
+
+    def _cache_programs(self) -> None:
         if self.cache_catalog and not self.agent._cache_versions:
             self.agent.cache_programs()
 
@@ -1230,7 +1318,7 @@ class PolicyInference:
     @torch.no_grad()
     def infer(
         self,
-        obs: ObservationBuffers,
+        obs: PolicyObservation,
         *,
         span: Callable[[str], AbstractContextManager[object]] | None = None,
     ) -> InferenceResult:
@@ -1245,30 +1333,24 @@ class PolicyInference:
             )
 
     @torch.no_grad()
-    def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
+    def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if any(not isinstance(value, np.ndarray) for value in obs.values()):
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
+            not isinstance(value, np.ndarray) for value in obs.values()
+        ):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(
-            obs,
-            inference=True,
-            memory_roots=self.memory.roots(obs)
+        roots = (
+            self.memory.roots(obs)
             if self.agent.config.decision_memory == "gru"
-            else None,
+            else None
         )
+        batch = self.agent.prepare(obs, inference=True, memory_roots=roots)
         if self.cache_catalog:
             batch = replace(batch, programs=None)
-        arrays = (
-            []
-            if self.device.type == "cpu"
-            else array_fields(batch, np.ndarray).values()
-        )
-        self.transfer_bytes = sum(array.nbytes for array in arrays)
-        self.transfers = len({array.dtype for array in arrays})
-        return replace(
-            self.memory.bind(on_device(batch, self.device), obs),
-            guard=self._forward_check,
-        )
+        moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
+        if roots is not None:
+            moved = self.memory.bind(moved, obs, roots)
+        return replace(moved, guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------
@@ -1334,6 +1416,12 @@ class GameObjectAttention(nn.Module):
       - Adding a learned perspective vector (with sign flip based on controller),
       - Applying multi-head attention,
       - And returning the context-rich output.
+
+    Post-normalization (`norm(x + f(x))`) is the historical layout. With
+    `pre_norm` each block reads a normalized copy of the residual stream,
+    `x + mha(norm1(x))` then `x + mlp(norm2(x))` (Xiong et al., 2020), so
+    query/key size does not grow with the number of streams summed into a
+    token; the caller then owns one final norm. Parameter names are shared.
     """
 
     def __init__(
@@ -1344,8 +1432,10 @@ class GameObjectAttention(nn.Module):
         ownership: bool = True,
         feedforward_dim: int | None = None,
         memory_gate_scale: float = 1.0,
+        pre_norm: bool = False,
     ) -> None:
         super().__init__()
+        self.pre_norm = pre_norm
         self.memory_gate: nn.Parameter | None = None
         self.memory_projection: nn.Linear | None = None
         self.memory_gate_scale = memory_gate_scale
@@ -1404,20 +1494,22 @@ class GameObjectAttention(nn.Module):
                 )
             owned_objects = objects + perspective_scale * self.perspective
 
-        attn_out, _ = self.mha(
-            owned_objects,
-            owned_objects,
-            owned_objects,
+        mask = (~key_padding_mask).unsqueeze(-1).float()
+        attention_input = self.norm1(owned_objects) if self.pre_norm else owned_objects
+        attended, _ = self.mha(
+            attention_input,
+            attention_input,
+            attention_input,
             key_padding_mask=key_padding_mask,
             need_weights=False,
         )
+        return self._after_attention(owned_objects + attended) * mask
 
-        x = self.norm1(owned_objects + attn_out)
-        mlp_out = self.mlp(x)
-        post_norm = self.norm2(x + mlp_out)
-
-        mask = (~key_padding_mask).unsqueeze(-1).float()
-        return post_norm * mask
+    def _after_attention(self, residual: torch.Tensor) -> torch.Tensor:
+        if self.pre_norm:
+            return residual + self.mlp(self.norm2(residual))
+        x = self.norm1(residual)
+        return self.norm2(x + self.mlp(x))
 
     def forward_live(
         self,
@@ -1438,15 +1530,16 @@ class GameObjectAttention(nn.Module):
             ).unsqueeze(-1)
         if self.perspective is not None:
             packed = packed + owners.unsqueeze(-1) * self.perspective
-        attended = tokens.self_attention(self.mha, packed)
-        x = self.norm1(packed + attended)
-        output = self.norm2(x + self.mlp(x))
-        return output
+        attention_input = self.norm1(packed) if self.pre_norm else packed
+        return self._after_attention(
+            packed + tokens.self_attention(self.mha, attention_input)
+        )
 
 
 def layer_init(
     layer: nn.Module, gain: float = 1.0, bias_const: float = 0.0
 ) -> nn.Module:
     torch.nn.init.orthogonal_(layer.weight, gain)
-    torch.nn.init.constant_(layer.bias, bias_const)
+    if layer.bias is not None:
+        torch.nn.init.constant_(layer.bias, bias_const)
     return layer

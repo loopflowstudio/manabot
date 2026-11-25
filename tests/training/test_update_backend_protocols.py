@@ -18,43 +18,26 @@ import pytest
 import torch
 
 from manabot.backends import resolve
-from manabot.backends.parity import BACKENDS, installed_backends
+from manabot.backends.parity import BACKENDS, ParityBackend
 from manabot.backends.torch.arrays import array_fields, on_device
-from manabot.backends.torch.collection import (
-    CollectionSession as TorchCollectionSession,
-)
-from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
-from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import (
-    MatchConfig,
-    ModelConfig,
-    ObservationConfig,
-    RewardConfig,
-)
-from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
+from manabot.policy.checkpoint import PolicyCheckpoint
 from manabot.policy.protocol import Backend
-from manabot.training.rollout.collection import (
-    RolloutBatch,
-    collect,
-    open_collector,
+from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.state.backend import (
+    Continuation,
+    SelectionBackend,
+    SelfPlayBackend,
+    VerificationBackend,
 )
-from manabot.training.state.backend import TrainingRuntime, TrainingState
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
-    CategoricalRL,
     Learner,
     LearnerFile,
-    PPOAdmittedRollout,
-    PPOBackend,
-    PPOLearner,
     UpdateBackend,
-    categorical_rl,
-    ppo_rl,
 )
-import managym
+from tests.training.backend_fixtures import installed_backend, legacy_capture
 
 # -- conformance ---------------------------------------------------------------
 
@@ -124,7 +107,8 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
                 found.append(f"{where}: not an exception type")
         elif isinstance(declared, property):
             returned = get_type_hints(
-                declared.fget, localns={"RolloutBatch": RolloutBatch}
+                declared.fget,
+                localns={"RolloutBatch": RolloutBatch},
             ).get("return")
             if isinstance(returned, type) and getattr(returned, "_is_protocol", False):
                 found += _violations(actual, returned, where)
@@ -141,52 +125,16 @@ def _violations(value: object, protocol: type, path: str) -> list[str]:
 
 @pytest.fixture(scope="module")
 def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
-    torch.manual_seed(3)
-    # The framework backends implement input v9 only.
-    with pytest.warns(DeprecationWarning):
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    agent = ActorCritic(
-        space,
-        ModelConfig(
-            hidden_dim=16,
-            num_attention_heads=2,
-            value_aggregation="masked_mean",
-            world=managym.WORLD_SETUP,
-        ),
-    )
-    state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    collector = open_collector(
-        space,
-        Match(MatchConfig()),
-        Reward(RewardConfig()),
-        num_envs=1,
-        opponent_mode="self",
-        learning_seats="one",
-        batch_closure="exact-quota",
-        numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
-    )
-    batch = collect(collector, agent, 2)
-    return from_torch_state(
-        agent.config,
-        space.encoder.config,
-        state,
-        parameter_names=dict(agent.named_parameters()),
-    ), batch
-
-
-def _installed(name: str) -> Backend:
-    if name not in installed_backends():
-        pytest.skip(f"the {BACKENDS[name]} framework is not installed")
-    return resolve(name)
+    return legacy_capture(seed=3, num_envs=1, decisions=2)
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))
-def test_backend_provides_what_the_damped_update_calls(
+def test_backend_provides_what_the_updates_call(
     name: str, captured: tuple[PolicyCheckpoint, RolloutBatch]
 ) -> None:
-    module = _installed(name)
+    module = installed_backend(name)
     weights, batch = captured
-    learner = module.learner.Learner(module.load(weights)[0], "cpu", minibatch_rows=4)
+    _, learner = module.load(weights, minibatch_rows=4)
     admitted = module.rollout.AdmittedRollout(learner.agent, batch)
     assert _violations(module, Backend, name) == []
     assert _violations(module, UpdateBackend, name) == []
@@ -198,27 +146,6 @@ def test_backend_provides_what_the_damped_update_calls(
     )
     assert _violations(learner, Learner, f"{name}.Learner") == []
     assert _violations(admitted, AdmittedRollout, f"{name}.AdmittedRollout") == []
-
-
-def test_torch_provides_what_ppo_calls(
-    captured: tuple[PolicyCheckpoint, RolloutBatch],
-) -> None:
-    module = resolve("torch")
-    learner = module.learner.Learner(
-        module.load(captured[0])[0], "cpu", minibatch_rows=4
-    )
-    assert _violations(module, PPOBackend, "torch") == []
-    assert _violations(learner, PPOLearner, "torch.Learner") == []
-    assert (
-        _violations(
-            module.rollout.AdmittedRollout(learner.agent, captured[1]),
-            PPOAdmittedRollout,
-            "torch.AdmittedRollout",
-        )
-        == []
-    )
-    assert categorical_rl(module.rl) is module.rl
-    assert ppo_rl(module.rl) is module.rl
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
@@ -303,15 +230,6 @@ def test_prefetch_propagates_admission_failure_and_can_stop_early(
             pass
 
 
-def test_a_backend_without_a_categorical_critic_is_refused() -> None:
-    module = _installed("mlx")
-    assert not isinstance(module.rl, CategoricalRL)
-    with pytest.raises(TypeError, match="no categorical critic"):
-        categorical_rl(module.rl)
-    with pytest.raises(TypeError, match="no PPO update"):
-        ppo_rl(module.rl)
-
-
 def test_the_conformance_check_sees_a_wrong_signature() -> None:
     class _Wrong:
         @staticmethod
@@ -333,14 +251,15 @@ def test_the_conformance_check_sees_a_wrong_signature() -> None:
     ]
     assert _violations(_Wrong(), LearnerFile, "wrong") == [
         "wrong.check_objective: missing",
-        "wrong.critic_gradient_norms: missing",
-        "wrong.gradient_health: missing",
         "wrong.no_grad: requires 'enabled', which the protocol does not pass",
-        "wrong.parameter_health: missing",
     ]
 
 
-def test_torch_execution_state_capabilities_match_their_contracts() -> None:
-    backend = resolve("torch")
-    assert _violations(backend.state, TrainingState, "state") == []
-    assert _violations(backend.runtime, TrainingRuntime, "runtime") == []
+@pytest.mark.parametrize("name", sorted(BACKENDS))
+def test_backends_provide_runtime_and_collection_contracts(name: str) -> None:
+    backend = installed_backend(name)
+    assert _violations(backend, SelfPlayBackend, name) == []
+    assert _violations(backend.state, Continuation, name) == []
+    assert _violations(backend, VerificationBackend, name) == []
+    assert _violations(backend, ParityBackend, name) == []
+    assert _violations(backend, SelectionBackend, name) == []

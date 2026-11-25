@@ -30,6 +30,7 @@ import type {
   PresentationLabels,
   SubjectRef,
 } from '$lib/types';
+import { inspectableCards } from './view';
 
 /** Something on screen a line can start or end at. */
 export type Endpoint =
@@ -336,8 +337,7 @@ export function turnOwners(frame: ExperienceFrame, events: readonly Presentation
 /** Every card name this viewer can see now, for inspecting names in the log. */
 export function visibleNames(frame: ExperienceFrame, labels: PresentationLabels): string[] {
   const players: PlayerState[] = [frame.projection.agent, frame.projection.opponent];
-  const names = players.flatMap(player => [
-    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...(player.inspected ?? []),
-  ].map(card => card.name).concat(player.battlefield.map(p => p.name ?? '')));
+  const names = inspectableCards(players).map(card => card.name)
+    .concat(players.flatMap(player => player.battlefield.map(p => p.name ?? '')));
   return [...new Set([...names, ...Object.values(labels.objects), ...Object.values(labels.stacks)].filter(Boolean))];
 }

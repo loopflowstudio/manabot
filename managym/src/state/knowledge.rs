@@ -70,6 +70,30 @@ impl LibraryKnowledge {
         }
     }
 
+    /// The top card moves to `position`, counted from the top after the move
+    /// (the bottom of a library of `position + 1` cards). Facts about the
+    /// cards it passes shift up one; each viewer keeps what it saw of it.
+    pub fn move_top_to(&mut self, position: usize) {
+        self.move_position(0, position);
+    }
+
+    pub fn move_position(&mut self, from: usize, to: usize) {
+        for view in [&mut self.public, &mut self.own] {
+            let moved = view.remove(&from);
+            *view = std::mem::take(view)
+                .into_iter()
+                .map(|(at, definition)| {
+                    let after_removal = at - usize::from(at > from);
+                    (after_removal + usize::from(after_removal >= to), definition)
+                })
+                .collect();
+            if let Some(definition) = moved {
+                view.insert(to, definition);
+            }
+            Self::bound(view);
+        }
+    }
+
     /// Keep eight nearest-top and two nearest-bottom facts. Dropping a fact
     /// is the only overflow behavior and cannot disclose private information.
     pub fn bound(view: &mut BTreeMap<usize, CardDefId>) {
@@ -101,6 +125,19 @@ mod tests {
         assert_eq!(knowledge.public, BTreeMap::from([(0, CardDefId(1))]));
         assert_eq!(knowledge.remove_top(), Some(CardDefId(1)));
         assert!(knowledge.is_empty());
+    }
+
+    #[test]
+    fn moving_the_top_card_to_the_bottom_keeps_the_facts_above_it() {
+        let mut knowledge = LibraryKnowledge::default();
+        knowledge.own.extend([(1, CardDefId(1)), (2, CardDefId(2))]);
+        knowledge.public.insert(0, CardDefId(9));
+        knowledge.move_top_to(4);
+        assert_eq!(
+            knowledge.own,
+            BTreeMap::from([(0, CardDefId(1)), (1, CardDefId(2))])
+        );
+        assert_eq!(knowledge.public, BTreeMap::from([(4, CardDefId(9))]));
     }
 
     #[test]

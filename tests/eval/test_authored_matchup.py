@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval.match import play_cell
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.replay import read_trace
-from managym import WORLD_VERSION, Env, authored_deck_setup
+from managym import Env, authored_deck_setup
 from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -54,9 +54,7 @@ def test_open_authored_matrix_preserves_serialized_identities() -> None:
         "role_b": matrix.role_b,
     }
     assert matrix.model_dump() == original
-    assert matrix.content_suite == (
-        f"{WORLD_VERSION}-authored-matrix-{canonical_sha256(original)}"
-    )
+    assert matrix.content_suite == (f"w17-authored-matrix-{canonical_sha256(original)}")
     explicit = AuthoredMatchup(**original, decklists="open")
     assert explicit.model_dump_json() == matrix.model_dump_json()
     for leg in range(8):
@@ -88,12 +86,9 @@ def test_closed_authored_matrix_hides_opponent_decklists_in_every_leg() -> None:
         for viewer in (0, 1):
             observation = env.observation_for_player(viewer)
             assert observation.decklists_closed
-            for rows in (
-                space.encode(observation)["decklists"],
-                env.encode_observation(observation)["decklists"],
-            ):
-                assert rows[0].any()
-                assert not rows[1].any()
+            rows = encode_observation(space, observation)["decklists"]
+            assert rows[0].any()
+            assert not rows[1].any()
     with pytest.raises(ValueError):
         AuthoredMatchup.model_validate({**opened.model_dump(), "decklists": "mixed"})
 
@@ -103,13 +98,10 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
 ) -> None:
     matrix = roster()
     contract = arena_fixture()
-    key = contract.key.model_copy(
-        update={"world": WORLD_VERSION, "content_suite": matrix.content_suite}
-    )
+    key = contract.key.model_copy(update={"content_suite": matrix.content_suite})
     players = [
         p.model_copy(
             update={
-                "world": WORLD_VERSION,
                 "content_suite": matrix.content_suite,
                 "matchup_sha256": canonical_sha256(matrix.match().model_dump()),
             }

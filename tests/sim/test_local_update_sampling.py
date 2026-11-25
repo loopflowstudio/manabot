@@ -12,10 +12,11 @@ from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import observation_spans
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.local_update import LocalUpdatePlayer, LocalUpdateTeacher
 from manabot.sim.search.local_update_receipt import (
@@ -457,7 +458,7 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
             narrow,
             "space",
             ObservationSpace(
-                narrow.space.encoder.config.model_copy(
+                narrow.space.config.model_copy(
                     update={"max_actions": 1, "action_overflow": "first-legal"}
                 )
             ),
@@ -500,8 +501,8 @@ def test_batch_inputs_match_python_at_selected_capacities(
     engines = [env._engine, branch, env._engine]
     witnesses = [engine.search_witness_json() for engine in engines]
     expected = [
-        teacher.space.encode(
-            engine.observation_for_player(engine.current_agent_index())
+        encode_observation(
+            teacher.space, engine.observation_for_player(engine.current_agent_index())
         )
         for engine in engines
     ]
@@ -513,11 +514,16 @@ def test_batch_inputs_match_python_at_selected_capacities(
     prepare = teacher.agent.prepare
 
     def check_inputs(
-        actual: dict[str, np.ndarray], *, inference: bool = False
+        actual: managym.ObservationBatch, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
-        assert actual.keys() == tensors.keys()
+        assert type(actual) is managym.ObservationBatch
+        decoded = observation_spans(
+            actual, teacher.space, bucketed=False, objects=False
+        )
         for key, tensor in tensors.items():
-            np.testing.assert_array_equal(actual[key], tensor.numpy(), err_msg=key)
+            np.testing.assert_array_equal(
+                decoded.dense(key), tensor.numpy(), err_msg=key
+            )
         return prepare(actual, inference=inference)
 
     with monkeypatch.context() as patch:

@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from manabot.policy.protocol import BackendName
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.supervision import supervise_game
 
@@ -22,6 +23,8 @@ def play_game(
     game_seconds: float,
     evidence_path: Path | None = None,
     keep_completed: bool = False,
+    *,
+    backend_name: BackendName = "torch",
 ) -> dict[str, Any]:
     return supervise_game(
         game,
@@ -31,5 +34,6 @@ def play_game(
         game_seconds,
         evidence_path,
         worker=GAME_WORKER,
+        worker_args=(backend_name,),
         keep_completed=keep_completed,
     )

@@ -18,11 +18,14 @@ import time
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+)
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend, BackendPolicy
-from manabot.sim.rollout import allocate_buffers
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
+import managym
 
 # -----------------------------------------------------------------------------
 # Batched value evaluation
@@ -44,14 +47,32 @@ class ValueScorer:
         self.forward_calls = 0
         self.obs_scored = 0
 
-    def score(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
-        obs = self.agent.prepare(
-            {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
-            inference=True,
-        )
+    def score(
+        self,
+        buffers: ObservationBuffers | managym.ObservationBatch,
+        rows: np.ndarray | None = None,
+    ) -> np.ndarray:
+        if isinstance(buffers, managym.ObservationBatch):
+            count = buffers.batch_size if rows is None else len(rows)
+            selected = (
+                buffers
+                if rows is None
+                else buffers.gather([(buffers, int(i)) for i in rows])
+            )
+            obs = self.agent.prepare(selected, inference=True)
+        else:
+            assert rows is not None
+            count = len(rows)
+            obs = self.agent.prepare(
+                {
+                    key: buffers[key][rows]
+                    for key in self.agent.observation_space.shapes
+                },
+                inference=True,
+            )
         probs = self.agent.win_probabilities(obs)
         self.forward_calls += 1
-        self.obs_scored += len(rows)
+        self.obs_scored += count
         return probs
 
 
@@ -72,16 +93,10 @@ class ValueSearchStats(SearchStats):
 
 
 def _random_valid_actions(
-    buffers: ObservationBuffers, rows: np.ndarray, rng: np.random.Generator
+    batch: managym.ObservationBatch, rng: np.random.Generator
 ) -> np.ndarray:
-    valid = buffers["actions_valid"][rows] > 0
-    weights = valid.astype(np.float64)
-    totals = weights.sum(axis=1, keepdims=True)
-    totals[totals == 0] = 1.0
-    weights /= totals
-    cdf = np.cumsum(weights, axis=1)
-    u = rng.random((len(cdf), 1))
-    return (u < cdf).argmax(axis=1).astype(np.int64)
+    counts = np.maximum(np.asarray(batch.action_counts, dtype=np.int64), 1)
+    return (rng.random(len(counts)) * counts).astype(np.int64)
 
 
 class _ValueLeafScorer:
@@ -118,14 +133,6 @@ class _ValueLeafScorer:
         self._calls = 0
         self.stats = ValueSearchStats()
         self._obs_space = ObservationSpace()
-        self._buffers: dict[str, np.ndarray] | None = None
-        self._capacity = 0
-
-    def _ensure_buffers(self, capacity: int) -> dict[str, np.ndarray]:
-        if self._buffers is None or self._capacity < capacity:
-            self._buffers = allocate_buffers(self._obs_space, capacity)
-            self._capacity = capacity
-        return self._buffers
 
     def score_actions(self, env: Env) -> np.ndarray:
         """Hero-perspective score per legal root action (engine order)."""
@@ -137,17 +144,16 @@ class _ValueLeafScorer:
 
         pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
         num_slots = pool.num_slots
-        buffers = self._ensure_buffers(num_slots)
-        pool.set_buffers(buffers, self._capacity)
-        active = pool.encode_active()
+        pool.set_observation_layout(self._obs_space.layout)
+        active, batch = pool.encode_active_batch()
 
         for _ in range(self.depth):
             if not active:
                 break
             rows = np.asarray(active, dtype=np.int64)
             actions_full = np.zeros(num_slots, dtype=np.int64)
-            actions_full[rows] = _random_valid_actions(buffers, rows, self._rng)
-            active = pool.step_active(actions_full.tolist())
+            actions_full[rows] = _random_valid_actions(batch, self._rng)
+            active, batch = pool.step_active_batch(actions_full.tolist())
 
         denominator = float(self.worlds * self.rollouts)
         base_scores, simulations, cap_hits = pool.scores()
@@ -155,7 +161,7 @@ class _ValueLeafScorer:
 
         if active:
             rows = np.asarray(active, dtype=np.int64)
-            values = self.scorer.score(buffers, rows).astype(np.float64)
+            values = self.scorer.score(batch).astype(np.float64)
             acting = np.asarray(pool.acting_players(), dtype=np.int64)[rows]
             hero = int(pool.hero_index)
             # V is the acting player's win prob; flip for the non-hero actor.
@@ -255,7 +261,7 @@ class ValueSearchPlayer:
 
 
 def load_value_scorer(
-    checkpoint: str, *, backend: Backend, device: str = "cpu"
+    checkpoint: str, *, backend: PolicyLoader, device: str = "cpu"
 ) -> ValueScorer:
     agent, _ = backend.load_policy(checkpoint)
     return ValueScorer(agent, device=device)

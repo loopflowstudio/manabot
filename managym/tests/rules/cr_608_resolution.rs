@@ -4,14 +4,14 @@
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     flow::{
-        trigger::{PendingTrigger, TriggerId, TriggerOrderingClass},
+        trigger::{PendingTrigger, TriggerId},
         turn::StepKind,
     },
     state::{
         ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{ObjectId, PlayerId},
+        game_object::{AbilitySource, ObjectId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -24,24 +24,13 @@ use crate::support::{game::*, play::select_card};
 fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
     let source_ref = s.game().state.live(now(s, source));
     s.game_mut().state.pending_triggers.push(PendingTrigger {
-        program: false,
-        remembered: Vec::new(),
-        source_identity: managym::state::game_object::AbilitySource::new(source, source_ref),
-        source_lki: None,
-        ability_index: 0,
-        controller: PlayerId(0),
-        targets: Vec::new(),
-        target_req_indices: Vec::new(),
-        requirement_index: 0,
-        id: TriggerId(0),
-        ordering_class: TriggerOrderingClass::Ordinary,
-        context: None,
-        player: None,
-        chosen_modes: Vec::new(),
-        attacker: None,
         inline_effects: Some(effects),
-        x: 0,
-        spent: Default::default(),
+        ..PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(0),
+            AbilitySource::new(source, source_ref),
+            0,
+        )
     });
 }
 
@@ -75,7 +64,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
     s.pass_priority();
     s.pass_priority(); // resolve to the choice
     assert_eq!(s.game().state.players[0].life, 0);
-    assert!(s.game().state.players[0].alive);
+    assert!(s.game().state.loss(0).is_none());
     assert_ne!(s.action_space().kind, ActionSpaceKind::Priority);
     let choice = s
         .action_space()
@@ -85,7 +74,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
         .expect("resolution choice");
     s.step_action(choice);
     assert_eq!(s.game().state.players[0].life, 2);
-    assert!(s.game().state.players[0].alive);
+    assert!(s.game().state.loss(0).is_none());
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert!(s.game().state.stack_objects.is_empty());
 }

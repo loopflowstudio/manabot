@@ -24,19 +24,19 @@ pub const HISTORY_DIM: usize = history::WIDTH;
 pub const HISTORY_LIMIT: usize = 32;
 pub type HistoryWindow = Arc<VecDeque<HistoryEvent>>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum HistoryReference {
     Unavailable,
     Player(PlayerId),
     Card {
-        definition: u32,
+        definition: Option<u32>,
         owner: PlayerId,
         zone: Option<ZoneType>,
         context_id: Option<i32>,
     },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[repr(u8)]
 pub enum HistoryKind {
     Arrival,
@@ -47,7 +47,7 @@ pub enum HistoryKind {
     Countered,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HistoryEvent {
     pub kind: HistoryKind,
     pub amount: i32,
@@ -75,15 +75,15 @@ fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     else {
         return HistoryReference::Unavailable;
     };
-    if game.is_foretold(object) {
+    if game.is_face_down_in_exile(object) {
         return HistoryReference::Unavailable;
     }
     let data = &game.state[object];
     HistoryReference::Card {
-        definition: data.definition_id.0,
+        definition: data.definition_id.catalog_id().map(|id| id.0),
         owner: data.owner,
         zone: Some(zone),
-        context_id: Some(data.id.0 as i32),
+        context_id: Some(game.observed_object_id(object).0 as i32),
     }
 }
 
@@ -128,15 +128,20 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
     if let GameEvent::CardMoved {
-        object_id: object, ..
+        object_id: object,
+        departed,
+        ..
     } = event
     {
         let id = game.state[*object].id.0 as i32;
+        let battlefield_alias = departed
+            .and_then(|id| game.object_lki(id))
+            .map(|lki| lki.presentation_id.0 as i32);
         // Every real zone move creates a new incarnation. The old reference
         // keeps its public definition/zone but cannot follow the physical card.
         let matches = |reference: &HistoryReference| {
             matches!(reference,
-            HistoryReference::Card { context_id: Some(context), .. } if *context == id)
+            HistoryReference::Card { context_id: Some(context), .. } if *context == id || Some(*context) == battlefield_alias)
         };
         if game
             .policy_history
@@ -174,6 +179,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             source,
             target,
             amount,
+            ..
         } => {
             let target = match target {
                 DamageTarget::Player(id) => Target::Player(*id),
@@ -186,7 +192,9 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
                 vec![target_reference(game, target)],
             )
         }
-        GameEvent::LifeChanged { player, old, new } => (
+        GameEvent::LifeChanged {
+            player, old, new, ..
+        } => (
             Life,
             new - old,
             unknown,
@@ -195,6 +203,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         GameEvent::SpellCast {
             object_id: object,
             targets,
+            ..
         } => (
             Cast,
             0,
@@ -254,7 +263,7 @@ pub fn encode(
     obs: &Observation,
     capacity: usize,
     object_to_index: &HashMap<i32, i32>,
-) -> Vec<[f32; HISTORY_DIM]> {
+) -> Vec<[i64; HISTORY_DIM]> {
     encode_rows(obs, capacity, |id| {
         object_to_index.get(&id).map(|index| *index as usize)
     })
@@ -265,18 +274,18 @@ pub(crate) fn encode_rows(
     obs: &Observation,
     capacity: usize,
     context: impl Fn(i32) -> Option<usize>,
-) -> Vec<[f32; HISTORY_DIM]> {
-    let reference = |value: &HistoryReference| -> [f32; 5] {
+) -> Vec<[i64; HISTORY_DIM]> {
+    let reference = |value: &HistoryReference| -> [i64; 5] {
         let role = |owner: PlayerId| {
             if owner.0 as i32 == obs.turn.agent_player_id {
-                1.0
+                1
             } else {
-                2.0
+                2
             }
         };
         match value {
-            HistoryReference::Unavailable => [0.0, 0.0, 0.0, -1.0, 0.0],
-            HistoryReference::Player(player) => [0.0, role(*player), 0.0, role(*player) - 1.0, 1.0],
+            HistoryReference::Unavailable => [0, 0, 0, -1, 0],
+            HistoryReference::Player(player) => [0, role(*player), 0, role(*player) - 1, 1],
             HistoryReference::Card {
                 definition,
                 owner,
@@ -285,11 +294,11 @@ pub(crate) fn encode_rows(
             } => {
                 let context = context_id.and_then(&context);
                 [
-                    (*definition + 1) as f32,
+                    definition.map_or(0, |id| (u64::from(id) + 1) as i64),
                     role(*owner),
-                    zone.map(|zone| (zone as usize + 1) as f32).unwrap_or(0.0),
-                    context.map(|v| v as f32).unwrap_or(-1.0),
-                    if context.is_some() { 1.0 } else { 2.0 },
+                    zone.map(|zone| (zone as usize + 1) as i64).unwrap_or(0),
+                    context.map(|v| v as i64).unwrap_or(-1),
+                    if context.is_some() { 1 } else { 2 },
                 ]
             }
         }
@@ -298,9 +307,9 @@ pub(crate) fn encode_rows(
         .iter()
         .skip(obs.policy_history.len().saturating_sub(capacity))
         .map(|event| {
-            let mut row = [0.0; HISTORY_DIM];
-            row[history::KIND] = event.kind as u8 as f32;
-            row[history::AMOUNT] = event.amount as f32;
+            let mut row = [0; HISTORY_DIM];
+            row[history::KIND] = event.kind as u8 as i64;
+            row[history::AMOUNT] = event.amount as i64;
             row[history::SOURCE_DEFINITION..history::TARGET_DEFINITION]
                 .copy_from_slice(&reference(&event.source));
             row[history::TARGET_DEFINITION..history::WIDTH]
@@ -360,6 +369,9 @@ mod tests {
         game.emit(GameEvent::SpellCast {
             object_id: object,
             targets: vec![Target::Permanent(target)],
+            caster: PlayerId(0),
+            spend_before: 0,
+            spend_after: 0,
         });
         let initial = Observation::for_player(&game, PlayerId(0));
         let cast = initial.policy_history.back().unwrap();
@@ -445,6 +457,7 @@ mod tests {
                 player: PlayerId(1),
                 old: 20,
                 new: 20 - index,
+                gain_ordinal: 0,
             });
             let object = game.state.zones.latest().nth(index as usize).unwrap();
             game.move_object(object, ZoneType::Hand);
@@ -476,6 +489,7 @@ mod tests {
             source: Some(token),
             target: DamageTarget::Permanent(permanent),
             amount: 1,
+            combat: false,
         });
         let root = game.policy_history.clone();
         for _ in 0..2048 {
@@ -529,6 +543,9 @@ mod tests {
             game.emit(GameEvent::SpellCast {
                 object_id: source,
                 targets: vec![Target::Permanent(target)],
+                caster: PlayerId(0),
+                spend_before: 0,
+                spend_after: 0,
             });
             Observation::for_player(&game, PlayerId(0))
         };

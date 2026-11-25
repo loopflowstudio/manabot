@@ -1,12 +1,15 @@
 //! Ravnica cards expressed in the shared proposed-event rules.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, ReplacementEffect},
+    card::{
+        AdditionalCost, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, ReplacementEffect,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![doubling_season()]
+    vec![doubling_season(), guardian_of_vitu_ghazi()]
 }
 
 fn doubling_season() -> CardDefinition {
@@ -28,6 +31,27 @@ fn doubling_season() -> CardDefinition {
                     additional: 0,
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn guardian_of_vitu_ghazi() -> CardDefinition {
+    let text_box = "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nVigilance";
+    CardDefinition {
+        key: "rav.guardian_of_vitu_ghazi",
+        scryfall_id: "1c293144-df82-481d-8d24-2bdc164a355f",
+        printed: PrintedCharacteristics {
+            name: "Guardian of Vitu-Ghazi".into(),
+            mana_cost: Some(ManaCost::parse("{6}{G}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into()],
+            power: Some(4),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            additional_costs: vec![AdditionalCost::Convoke],
             text_box: text_box.into(),
             ..Default::default()
         },

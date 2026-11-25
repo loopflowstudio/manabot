@@ -25,7 +25,8 @@ use managym::{
     state::{
         card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
-        mana::{Mana, ManaClass, ManaSpent, SpendEffect},
+        mana::{Mana, ManaClass, SpendEffect},
+        payment::PaymentReceipt,
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -357,6 +358,7 @@ fn create_foods(s: &mut Scenario, count: usize) -> Vec<PermanentId> {
 #[test]
 fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
     let (mut s, source, foods) = merchant(4);
+    s.allow_priority_floats();
     // This ability has no source {T} cost; sickness and a tapped Merchant do not prevent it.
     s.game_mut().state.permanents[source]
         .as_mut()
@@ -394,6 +396,7 @@ fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
 #[test]
 fn merchant_three_foods_fund_only_one_activation() {
     let (mut s, source, foods) = merchant(3);
+    s.allow_priority_floats();
     let prism = move_to_hand(&mut s, "Prophetic Prism");
     assert!(!can_cast(&s, prism));
     activate(&mut s, source, 0);
@@ -430,7 +433,6 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
         }
         choose_mode(&mut s, 4);
     }
-    choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 23);
     assert!(s.game().state.permanents[payer].is_none());
@@ -441,6 +443,7 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
 #[test]
 fn merchant_tap_count_reaches_the_acting_viewer_and_policy() {
     let (mut s, source, foods) = merchant(2);
+    s.allow_priority_floats();
     activate(&mut s, source, 0);
     for (index, food) in foods.iter().enumerate() {
         for viewer in [PlayerId(0), PlayerId(1)] {
@@ -545,13 +548,15 @@ fn only_pool(s: &mut Scenario, mana: &str) {
     s.set_player_mana_pool(0, mana);
 }
 
-fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> ManaSpent {
+fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> PaymentReceipt {
     s.game()
         .state
         .stack_objects
         .iter()
         .find_map(|stack| match stack {
-            StackObject::Spell(spell) if spell.object == now(s, object) => Some(spell.spent),
+            StackObject::Spell(spell) if spell.object == now(s, object) => {
+                Some(spell.spent.clone())
+            }
             _ => None,
         })
         .expect("spell on the stack")
@@ -583,7 +588,7 @@ fn toph_earthbends_the_amount_of_mana_spent_to_cast_her() {
     let land = s.force_permanent_on_battlefield(0, "Forest");
     only_pool(&mut s, "RGGG");
     let toph = cast_owned(&mut s, "Toph, Greatest Earthbender");
-    assert_eq!(spell_spent(&s, toph).amounts, [0, 0, 0, 1, 3, 0]);
+    assert_eq!(spell_spent(&s, toph).amounts(), [0, 0, 0, 1, 3, 0]);
     assert_eq!(spell_spent(&s, toph).total(), 4);
     settle_targeting(&mut s, land);
     assert_eq!(counters(&s, land), 4);
@@ -609,8 +614,8 @@ fn toph_put_onto_the_battlefield_earthbends_zero() {
     assert!(s.game().state.permanents[permanent]
         .as_ref()
         .unwrap()
-        .cast_spent
-        .is_empty());
+        .spell_entry
+        .is_none());
     assert!(s
         .game()
         .state
@@ -687,6 +692,7 @@ fn attendant_mana(s: &mut Scenario, mana: &str, attendants: usize) -> Vec<Perman
 fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
     for attendants in [1, 2] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+        s.allow_priority_floats();
         attendant_mana(&mut s, if attendants == 1 { "1W" } else { "W" }, attendants);
         let pool = &s.game().state.players[0].mana_pool;
         assert_eq!(
@@ -695,7 +701,7 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
         );
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         let spent = spell_spent(&s, sheep);
-        assert_eq!(spent.entry_counters, attendants as u8);
+        assert_eq!(spent.entry_counters(), attendants as u8);
         assert_eq!(spent.total(), 3);
         settle(&mut s);
         let permanent = permanent_of(&s, sheep).unwrap();
@@ -709,36 +715,61 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
 #[test]
 fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    s.allow_priority_floats();
     let attendant = attendant_mana(&mut s, "1W", 1)[0];
+    let produced_by = s.game().state.permanents[attendant]
+        .as_ref()
+        .unwrap()
+        .object;
     let card = card_of(&s, attendant);
     move_card(&mut s, card, ZoneType::Graveyard);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
+    // The receipt names the Attendant as it was on the battlefield, never
+    // the card now in the graveyard, and only its unit carries the rider.
+    let spent = spell_spent(&s, sheep);
+    let riders: Vec<_> = spent
+        .mana()
+        .iter()
+        .filter(|unit| unit.effect.is_some())
+        .collect();
+    assert_eq!(riders.len(), 1);
+    let origin = riders[0].source.expect("the Attendant");
+    assert_eq!(origin.object, produced_by);
+    assert_ne!(origin.object, now(&s, produced_by));
+    assert_eq!(
+        Some(origin.definition),
+        managym::cards::content_pack::default_content_pack().definition_id("Animal Attendant")
+    );
+    assert_eq!(spent.mana_sources(), [origin]);
     settle(&mut s);
     let permanent = permanent_of(&s, sheep).unwrap();
     assert_eq!(counters(&s, permanent), 1);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "R", 1);
     let guard = cast_owned(&mut s, "Capital Guard");
-    assert_eq!(spell_spent(&s, guard).entry_counters, 0);
+    assert_eq!(spell_spent(&s, guard).entry_counters(), 0);
     settle(&mut s);
     let permanent = permanent_of(&s, guard).unwrap();
     assert_eq!(counters(&s, permanent), 0);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Explosive Shot", "Craw Wurm"]);
+    s.allow_priority_floats();
     s.force_permanent_on_battlefield(1, "Craw Wurm");
     attendant_mana(&mut s, "R", 1);
     let shot = cast_owned(&mut s, "Explosive Shot");
     if s.action_space().kind == ActionSpaceKind::ChooseTarget {
         s.step_action(0);
     }
-    assert_eq!(spell_spent(&s, shot).entry_counters, 0);
+    assert_eq!(spell_spent(&s, shot).entry_counters(), 0);
 }
 
 /// The chooser may keep mana whose rider would be wasted on a Human.
 #[test]
 fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "RG", 1);
     cast_owned(&mut s, "Capital Guard");
     spend_named(&mut s, |label| label == "Spend {G} (expires at step end)");
@@ -752,6 +783,7 @@ fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
 #[test]
 fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    s.allow_priority_floats();
     attendant_mana(&mut s, "1W", 1);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
@@ -765,8 +797,8 @@ fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     assert!(s.game().state.permanents[returned]
         .as_ref()
         .unwrap()
-        .cast_spent
-        .is_empty());
+        .spell_entry
+        .is_none());
 }
 
 /// Until-end-of-combat mana keeps its class: Attendant mana in the combat
@@ -777,10 +809,10 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
         only_pool(&mut s, "1W");
         s.game_mut().state.players[0].combat_mana_pool =
-            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]);
+            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]).into();
         s.game_mut().state.players[0]
             .mana_pool
-            .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]));
+            .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]), None);
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         let obs = Observation::for_player(s.game(), PlayerId(0));
         let pools = &obs.agent.pooled_mana_classes;
@@ -792,7 +824,7 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
             label.contains("{G}") && label.contains("end of combat") == spend_combat
         });
         spend_named(&mut s, |label| label.contains("{C}"));
-        assert_eq!(spell_spent(&s, sheep).entry_counters, 1);
+        assert_eq!(spell_spent(&s, sheep).entry_counters(), 1);
         let player = &s.game().state.players[0];
         assert_eq!(player.combat_mana_pool.total(), u16::from(!spend_combat));
         assert_eq!(
@@ -815,6 +847,7 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
 fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
     for use_rider in [false, true] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+        s.allow_priority_floats();
         attendant_mana(&mut s, "1WG", 1);
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         assert_choice_contract(&s);
@@ -824,7 +857,7 @@ fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
         });
         assert_choice_contract(&s);
         spend_named(&mut s, |label| label.contains("{C}"));
-        assert_eq!(spell_spent(&s, sheep).entry_counters, u8::from(use_rider));
+        assert_eq!(spell_spent(&s, sheep).entry_counters(), u8::from(use_rider));
         assert_eq!(
             s.game().state.players[0]
                 .mana_pool
@@ -855,6 +888,96 @@ fn uncles_musings_same_pool_offers_different_converge_receipts() {
     }
 }
 
+/// The committed list includes mana spent while the payer chooses what pays:
+/// with {W}{U}{G}{G}{G}{G} pooled, green pays {G}{G}, and spending {W} for a
+/// generic pip lists it before the next choice. Only the payer sees it.
+#[test]
+fn uncles_musings_lists_mana_spent_during_the_spend_choice() {
+    use crate::support::play::fork_stepping;
+
+    let mut s = five_color_unfunded_setup(&["Uncle's Musings"]);
+    only_pool(&mut s, "WUGGGG");
+    cast_owned(&mut s, "Uncle's Musings");
+    let paid = |s: &Scenario, seat: usize| -> Vec<String> {
+        s.game()
+            .decision_context(PlayerId(seat))
+            .map(|context| context.paid.into_iter().map(|paid| paid.phrase).collect())
+            .unwrap_or_default()
+    };
+    let green = paid(&s, 0);
+    assert_eq!(green.len(), 2, "{green:?}");
+    assert!(
+        green.iter().all(|phrase| phrase.contains("{G}")),
+        "{green:?}"
+    );
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let white = frame
+        .offers
+        .iter()
+        .position(|offer| offer.label.contains("{W}"))
+        .unwrap();
+    let fork = fork_stepping(&s, white);
+    assert_choice_contract(&fork);
+    let listed = paid(&fork, 0);
+    assert_eq!(listed[..2], green[..], "{listed:?}");
+    assert!(
+        matches!(&listed[..], [_, _, white] if white.contains("{W}")),
+        "{listed:?}"
+    );
+    assert!(paid(&fork, 1).is_empty());
+    // The sibling choice is unchanged.
+    assert_eq!(paid(&s, 0), green);
+}
+
+/// Mana made during payment stays the payer's to spend when pooled mana of
+/// another color could pay the same pip: tapping a Plains for Musings with
+/// four green floating still lets the caster spend the green and keep the
+/// white (CR 601.2h).
+#[test]
+fn uncles_musings_mana_made_during_payment_keeps_the_color_choice() {
+    use crate::support::play::fork_stepping;
+    use managym::state::mana::Color;
+
+    let mut s = five_color_unfunded_setup(&["Uncle's Musings"]);
+    s.allow_priority_floats();
+    only_pool(&mut s, "GGGG");
+    let plains = s.force_permanent_on_battlefield(0, "Plains");
+    let card = cast_owned(&mut s, "Uncle's Musings");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::TapForMana { permanent, .. } if *permanent == plains),
+    );
+    // The {W} could pay a generic pip that green could pay instead, so it
+    // was not committed; with no source left, green pays {G}{G} and the
+    // payer chooses what pays the generic {2}.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(
+        s.game().state.players[0].mana_pool.mana().mana,
+        [1, 0, 0, 0, 2, 0]
+    );
+    assert_choice_contract(&s);
+    for (first, colors, left) in [("{W}", 2, Color::Green), ("{G}", 1, Color::White)] {
+        // Spend offers are action-aligned: fork the first spend choice.
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let index = frame
+            .offers
+            .iter()
+            .position(|offer| offer.label.contains(first))
+            .unwrap();
+        let mut fork = fork_stepping(&s, index);
+        while fork.game().state.stack_objects.is_empty() {
+            spend_named(&mut fork, |label| label.contains("{G}"));
+        }
+        let spent = spell_spent(&fork, card);
+        assert_eq!((spent.total(), spent.colors()), (4, colors), "{first}");
+        let pool = fork.game().state.players[0].mana_pool.mana();
+        assert_eq!(pool.total(), 1, "{first}");
+        assert_eq!(pool.mana[left as usize], 1, "{first}");
+    }
+    // The forks left the spend choice untouched.
+    assert_eq!(s.game().state.players[0].mana_pool.mana().total(), 3);
+}
+
 #[test]
 fn toph_nested_filter_fee_is_not_part_of_the_cast_receipt() {
     let mut s = five_color_unfunded_setup(&["Toph, Greatest Earthbender", "Prophetic Prism"]);
@@ -865,7 +988,6 @@ fn toph_nested_filter_fee_is_not_part_of_the_cast_receipt() {
     assert_choice_contract(&s);
     spend_named(&mut s, |label| label.contains("{G}"));
     choose_mode(&mut s, 4);
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(spell_spent(&s, card).total(), 4);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
 }
@@ -897,6 +1019,7 @@ fn toph_cast_receipt_includes_additional_mana_costs() {
 fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
     for name in ["Koala-Sheep", "Toph, Greatest Earthbender"] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", name, "Counterspell"]);
+        s.allow_priority_floats();
         if name == "Koala-Sheep" {
             attendant_mana(&mut s, "1W", 1);
         } else {
@@ -917,8 +1040,8 @@ fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
         assert!(s.game().state.permanents[permanent]
             .as_ref()
             .unwrap()
-            .cast_spent
-            .is_empty());
+            .spell_entry
+            .is_none());
         assert!(s
             .game()
             .state

@@ -18,18 +18,22 @@ from etude.train.read import read_all
 import numpy as np
 from pydantic import Field
 
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ActionEnum, ObservationBuffers
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
 from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
+from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
-from manabot.training.state.backend import TrainingBackend
-from manabot.verify.choice_corpus import Case, collect_choices, input_collisions
+from manabot.training.state.backend import VerificationBackend
+from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
+from manabot.verify.choice_inputs import reorder_objects, reorder_offers
+import managym
 
 Verdict = Literal["learning", "regression", "inconclusive", "error"]
 
@@ -122,11 +126,107 @@ class PolicySnapshot(Strict):
     maximum_invariance_error: float
 
 
+def _softmax(logits: np.ndarray) -> np.ndarray:
+    shifted = logits - logits.max(axis=-1, keepdims=True)
+    weights = np.exp(shifted)
+    return weights / weights.sum(axis=-1, keepdims=True)
+
+
+def _logsumexp(values: np.ndarray) -> float:
+    peak = float(values.max())
+    return peak + float(np.log(np.exp(values - peak).sum()))
+
+
 def inspect_policy(
-    path: Path, cases: list[Case], updates: int, *, backend: TrainingBackend
+    path: Path, cases: list[Case], updates: int, *, backend: PolicyLoader
 ) -> PolicySnapshot:
-    """Use the ordinary world-bound loader and exact setup; never refit weights."""
-    return backend.verification.inspect_policy(path, cases, updates)
+    """Use the checkpoint loader and exact setup; never refit weights."""
+    if not cases:
+        raise ValueError("empty frozen choice corpus")
+    agent, _ = backend.load_policy(path)
+    configs = [
+        managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
+    ]
+    validate_agent_setup(agent, configs)
+    restored, _ = backend.load_policy(path)
+    choices: list[ChoiceScore] = []
+    maximum = 0.0
+    for start in range(0, len(cases), 32):
+        scores, error = score_choices(agent, restored, cases[start : start + 32])
+        choices.extend(scores)
+        maximum = max(maximum, error)
+    return PolicySnapshot(
+        updates=updates,
+        checkpoint_sha256=file_sha256(path),
+        choices=choices,
+        maximum_invariance_error=maximum,
+    )
+
+
+def score_choices(
+    agent: BackendPolicy, restored: BackendPolicy, cases: list[Case]
+) -> tuple[list[ChoiceScore], float]:
+    """Score a bounded batch and check reload, batching and permutation invariance."""
+
+    def evaluate(
+        policy: BackendPolicy, observation: ObservationBuffers
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logits, values = policy.evaluate(policy.prepare(observation, inference=True))
+        probabilities = _softmax(logits)
+        if not np.isfinite(probabilities).all() or not np.isfinite(values).all():
+            raise ValueError("nonfinite frozen checkpoint output")
+        return logits, probabilities, values
+
+    stacked = {
+        key: np.concatenate([case.obs[key] for case in cases], axis=0)
+        for key in cases[0].obs
+    }
+    _, probabilities, values = evaluate(agent, stacked)
+    _, loaded_probabilities, loaded_values = evaluate(restored, stacked)
+    errors = [
+        float(np.abs(loaded_probabilities - probabilities).max()),
+        float(np.abs(loaded_values - values).max()),
+    ]
+    scores: list[ChoiceScore] = []
+    for row, case in enumerate(cases):
+        obs = case.obs
+        single, p, value = evaluate(agent, obs)
+        valid = obs["actions_valid"]
+        count = int(valid.sum())
+        order = np.arange(count - 1, -1, -1)
+        _, offers, offer_value = evaluate(
+            agent, reorder_offers(obs, order, agent.observation_space.layout)
+        )
+        _, objects, object_value = evaluate(
+            agent, reorder_objects(obs, agent.observation_space.layout)
+        )
+        errors.extend(
+            [
+                float(np.abs(p[0] - probabilities[row]).max()),
+                float(np.abs(value[0] - values[row]).max()),
+                float(np.abs(offers[0, :count] - p[0, order]).max()),
+                float(np.abs(objects - p).max()),
+                float(np.abs(offer_value - value).max()),
+                float(np.abs(object_value - value).max()),
+                float(p[valid == 0].sum()),
+            ]
+        )
+        # Log-sum-exp avoids underflow and gives identical public copies shared
+        # probability mass. Its sign has no prescribed strategic interpretation.
+        left, right = case.groups
+        log_odds = _logsumexp(single[0, left]) - _logsumexp(single[0, right])
+        scores.append(
+            ChoiceScore(
+                case=case.name,
+                family=case.family,
+                log_odds=log_odds,
+                value=float(value[0]),
+            )
+        )
+    maximum = max(errors)
+    if maximum > 1e-4:
+        raise ValueError(f"frozen-policy invariance error {maximum} exceeds 1e-4")
+    return scores, maximum
 
 
 class FamilyChange(Strict):
@@ -172,7 +272,8 @@ class BaselineReport(Strict):
     regime_digest: str
     source: str = "unavailable"
     corpus_sha256: str = "unavailable"
-    world: str
+    # Reports written before the world label was removed carry it; ignored.
+    world: str | None = Field(default=None, exclude_if=lambda value: value is None)
     steps: int
     software: Literal["passed", "error"] = "error"
     learning: LearningEvidence
@@ -232,7 +333,7 @@ def inspect_baseline(
     exported: Sequence[PolicyPoint],
     metric_rows: Sequence[Mapping[str, object]],
     *,
-    backend: TrainingBackend,
+    backend: PolicyLoader,
 ) -> None:
     """Fill policy and exposure diagnostics in place, using the frozen native corpus."""
     report.learning = learning_evidence([report.paired])
@@ -247,25 +348,24 @@ def inspect_baseline(
         if findings or not rows or time.perf_counter() >= deadline:
             raise ValueError(f"native corpus audit incomplete or failed: {findings}")
         collisions = {
-            case.name: input_collisions(case) for case in rows if input_collisions(case)
+            case.name: groups for case in rows if (groups := input_collisions(case))
         }
         if collisions:
             raise ValueError(f"public choices lost in encoded inputs: {collisions}")
         cases.extend(rows)
         corpus_hashes.append(file_sha256(target / "cases.json"))
     report.corpus_sha256 = canonical_sha256(corpus_hashes)
-    with backend.state.preserve_rng():
-        for checkpoint in exported:
-            if file_sha256(checkpoint.path) != checkpoint.sha256:
-                raise ValueError("checkpoint bytes changed")
-            report.policies.append(
-                inspect_policy(
-                    Path(checkpoint.path),
-                    cases,
-                    checkpoint.updates,
-                    backend=backend,
-                )
+    for checkpoint in exported:
+        if file_sha256(checkpoint.path) != checkpoint.sha256:
+            raise ValueError("checkpoint bytes changed")
+        report.policies.append(
+            inspect_policy(
+                Path(checkpoint.path),
+                cases,
+                checkpoint.updates,
+                backend=backend,
             )
+        )
     report.families = family_changes(report.policies[0], report.policies[-1])
     exposure: dict[int, ActionExposure] = {}
     for row in metric_rows:
@@ -344,7 +444,7 @@ def report_recipe(
     updates: int,
     deals: tuple[int, ...],
     seconds: float,
-    backend: TrainingBackend,
+    backend: VerificationBackend,
 ) -> BaselineReport:
     """Evaluate the loop's initial/final raw policies and retain the nightly evidence.
 
@@ -355,76 +455,80 @@ def report_recipe(
     report = BaselineReport(
         seed=seed,
         regime_digest=learner_digest(settings),
-        world=settings.world,
         steps=updates,
         learning=learning_evidence([]),
     )
-    previous_threads = backend.runtime.threads()
-    backend.runtime.configure(1, "float32", "cpu")
     try:
-        exported = [
-            PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
-            for path in sorted((directory / "policies").glob("*-raw.safetensors"))
-        ]
-        if not exported or exported[0].updates != 0 or exported[-1].updates != updates:
-            raise ValueError("missing initial or endpoint checkpoint")
-        payload = backend.metadata(str(exported[-1].path))
-        counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
-        if counts.updates != updates or counts.optimizer_updates == 0:
-            raise ValueError(
-                "training did not complete the requested optimizer updates"
-            )
-        source = payload.get("source", {}).get("commit")
-        if not isinstance(source, str):
-            raise ValueError("checkpoint has no source revision")
-        report.source = source
-        results: list[EvaluationResult] = []
-        deadline = time.time() + seconds
-        for point in (exported[0], exported[-1]):
-            if time.time() >= deadline:
-                raise TimeoutError("verification evaluation budget exhausted")
-            request = checkpoint_request(
-                point.path, opponent="random", deal_seeds=deals, backend=backend
-            )
-            target = directory / "evaluation" / f"{point.updates:08d}"
-            if (target / "evaluation.json").exists():
-                result = EvaluationResult.model_validate_json(
-                    (target / "evaluation.json").read_bytes()
-                )
-                if result.execution is not None or result.request != request:
-                    raise ValueError("evaluation belongs to another checkpoint")
-            else:
-                result = evaluate_local(
-                    request,
-                    deadline=deadline,
-                    out_dir=target,
-                )
-            result.validate_cohort()
-            if result.status != "completed" or result.request.deal_seeds != deals:
+        with backend.runtime.scoped(1, "float32", "cpu"):
+            exported = [
+                PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
+                for path in sorted((directory / "policies").glob("*-raw.safetensors"))
+            ]
+            if (
+                not exported
+                or exported[0].updates != 0
+                or exported[-1].updates != updates
+            ):
+                raise ValueError("missing initial or endpoint checkpoint")
+            payload = backend.metadata(str(exported[-1].path))
+            counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
+            if counts.updates != updates or counts.optimizer_updates == 0:
                 raise ValueError(
-                    "paired arena evaluation incomplete or from other deals"
+                    "training did not complete the requested optimizer updates"
                 )
-            results.append(result)
-        report.paired = paired_rows(results[0].rows, results[1].rows, deals)
-        run_directory = directory.parent
-        (tracked,) = [
-            run
-            for run in read_all(run_directory.parent)
-            if run.name == run_directory.name
-        ]
-        exposure = {
-            name: int(np.nansum(tracked.points(name, "updates").y))
-            for name in tracked.metrics()
-            if name.startswith("selection_groups/")
-        }
-        inspect_baseline(report, directory, exported, [exposure], backend=backend)
+            source = payload.get("source", {}).get("commit")
+            if not isinstance(source, str):
+                raise ValueError("checkpoint has no source revision")
+            report.source = source
+            results: list[EvaluationResult] = []
+            deadline = time.time() + seconds
+            for point in (exported[0], exported[-1]):
+                if time.time() >= deadline:
+                    raise TimeoutError("verification evaluation budget exhausted")
+                request = checkpoint_request(
+                    point.path, opponent="random", deal_seeds=deals, backend=backend
+                )
+                target = directory / "evaluation" / f"{point.updates:08d}"
+                if (target / "evaluation.json").exists():
+                    result = EvaluationResult.model_validate_json(
+                        (target / "evaluation.json").read_bytes()
+                    )
+                    if result.execution is not None or result.request != request:
+                        raise ValueError("evaluation belongs to another checkpoint")
+                else:
+                    result = evaluate_local(
+                        request,
+                        deadline=deadline,
+                        out_dir=target,
+                        backend_name=backend.name,
+                    )
+                result.validate_cohort()
+                if result.status != "completed" or result.request.deal_seeds != deals:
+                    raise ValueError(
+                        "paired arena evaluation incomplete or from other deals"
+                    )
+                results.append(result)
+            report.paired = paired_rows(results[0].rows, results[1].rows, deals)
+            run_directory = directory.parent
+            (tracked,) = [
+                run
+                for run in read_all(run_directory.parent)
+                if run.name == run_directory.name
+            ]
+            exposure = {
+                name: int(np.nansum(tracked.points(name, "updates").y))
+                for name in tracked.metrics()
+                if name.startswith("selection_groups/")
+            }
+            with backend.runtime.preserve_rng("cpu"):
+                inspect_baseline(
+                    report, directory, exported, [exposure], backend=backend
+                )
     except Exception as error:
         report.error = f"{type(error).__name__}: {error}"
         report.learning = LearningEvidence(
             verdict="error", seeds=1, deals=0, reason=report.error
         )
-    finally:
-        backend.runtime.configure(previous_threads, "float32", "cpu")
     return write_baseline_report(report, directory)
 
 
@@ -452,15 +556,10 @@ def aggregate_reports(
     ):
         errors.append("missing source or frozen-corpus identity")
     if (
-        len(
-            {
-                (r.regime_digest, r.world, r.steps, r.source, r.corpus_sha256)
-                for r in reports
-            }
-        )
+        len({(r.regime_digest, r.steps, r.source, r.corpus_sha256) for r in reports})
         != 1
     ):
-        errors.append("cohort recipe/world/horizon/source/corpus differs")
+        errors.append("cohort recipe/horizon/source/corpus differs")
     evidence = (
         LearningEvidence(
             verdict="error", seeds=len(reports), deals=0, reason="; ".join(errors)

@@ -17,16 +17,16 @@ import random
 from typing import Literal
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.match import environment
 from etude.eval.records import (
     Benchmark,
     Code,
+    Environment,
     Match,
     Player,
     Seating,
     checkpoint_player,
 )
-from etude.eval.result import Tables
+from etude.eval.result import Result
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from etude.train.tracking import track
@@ -420,11 +420,12 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         EvalJob(
             tournament=Benchmark(
                 name=DESIGN.name,
-                environment=environment(
-                    DESIGN.name,
-                    files=[Path(__file__), ROOT / "manabot/eval/pairing.py"],
+                environment=Environment(
+                    name=DESIGN.name,
+                    # This file and pairing.py when the pilot's games were played.
+                    files="b47322cf2add632ad53b5f8fa035d18c154d9759cbaa51bf69ba7026a6f8b255",
                     config={
-                        "world": managym.WORLD_VERSION,
+                        "world": "w17",
                         "pack": DESIGN.pack,
                         "game_seconds": DESIGN.game_seconds,
                         "disclosures": list(DISCLOSURES),
@@ -442,7 +443,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
     ]
 
 
-def play(match: Match, agents: Sequence[object]) -> Tables:
+def play(match: Match, agents: Sequence[object]) -> Result:
     """Validate pilot conditions and delegate the paired deal to the shared arena."""
     conditions = Conditions.model_validate(match.config)
     pairing = Pairing(

@@ -58,7 +58,6 @@ from manabot.verify.llm_match import (
     schedule,
     seated,
 )
-import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 TOURNAMENT = "llm-claude-haiku-v-mtg183"
@@ -112,12 +111,15 @@ def output() -> Path:
 def play(match: Match[Game], agents: Sequence[object]) -> Result:
     """One game: Claude through OpenRouter against the checkpoint on the CPU."""
     _, llm, checkpoint = seated(match)
-    opponent = checkpoint_opponent(checkpoint, output() / "checkpoints")
+    backend = resolve("torch")
+    opponent = checkpoint_opponent(
+        checkpoint, output() / "checkpoints", backend=backend
+    )
     ledger = BudgetLedger(output() / "budget.sqlite", BUDGET)
     ledger.check_admission()
     inference = OpenRouterConfig.model_validate(llm.config)
     with OpenRouterSession(inference, budget=ledger, budget_owner=match.key) as session:
-        return play_game(match, session, opponent, backend=resolve("torch"))
+        return play_game(match, session, opponent, backend=backend)
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
@@ -135,7 +137,7 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         environment=environment(
             "elemental-llm",
             files=[ROOT / "experiments/elemental_grid.py"],
-            config={"world": managym.WORLD_VERSION, "pack": PACK},
+            config={"world": "w17", "pack": PACK},
         ),
         seatings=(
             Seating(name="claude-v-mtg183", players=players(), configs=games, games=1),

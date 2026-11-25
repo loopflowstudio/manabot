@@ -13,6 +13,7 @@ from manabot.env.observation import (
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.action_cases import (
@@ -48,7 +49,8 @@ def one_thread() -> Iterator[None]:
     ],
 )
 @pytest.mark.parametrize("preference", [0, 1])
-def test_policy_choice_can_learn_either_preference(
+@torch.no_grad()
+def test_policy_can_score_either_choice_first(
     kind: Family, semantic: bool, preference: int
 ) -> None:
     case = decision_case(kind)
@@ -60,30 +62,44 @@ def test_policy_choice_can_learn_either_preference(
             num_attention_heads=2,
             world="ur-lessons-vs-gw-allies" if semantic else None,
         ),
-    )
+    ).eval()
     # Erasing precisely the repaired information reproduces the forced tie.
+    # Packed inference can round identical scores differently by row.
     logits, _ = agent(device_input(agent, identity_removed(case)))
     torch.testing.assert_close(
-        logits[0, candidates[0]], logits[0, candidates[1]], rtol=0, atol=0
+        logits[0, candidates[0]], logits[0, candidates[1]], rtol=1e-6, atol=1e-9
     )
-    optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
     admitted = device_input(agent, obs)
+    count = int(obs["actions_valid"].sum())
     preferred = candidates[preference]
-    for _ in range(60):
-        logits, _ = agent(admitted)
-        optimizer.zero_grad()
-        (-logits.log_softmax(-1)[0, preferred]).backward()
-        optimizer.step()
-    with torch.no_grad():
-        logits, _ = agent(admitted)
-        assert float(logits.softmax(-1)[0, preferred]) > 0.95
-        count = int(obs["actions_valid"].sum())
-        order = torch.arange(count - 1, -1, -1)
-        actual, _ = agent(device_input(agent, reorder_offers(obs, order)))
-        # Reordering changes floating-point reduction order after training.
-        torch.testing.assert_close(
-            actual[:, :count], logits[:, order], atol=2e-5, rtol=1e-5
-        )
+    head = agent.policy_head[-1]
+    features: list[torch.Tensor] = []
+
+    def retain_features(
+        module: torch.nn.Module, args: tuple[torch.Tensor, ...]
+    ) -> None:
+        features.append(args[0])
+
+    with head.register_forward_pre_hook(retain_features):
+        agent(admitted)
+    # Fit the final head directly so this test measures available distinctions
+    # without depending on optimizer convergence.
+    rows = features[0].double()
+    others = torch.arange(count) != preferred
+    differences = rows[preferred] - rows[others]
+    margins = torch.full((count - 1,), 8.0, dtype=rows.dtype)
+    fitted = torch.linalg.lstsq(differences, margins, driver="gelsd").solution
+    head.weight.copy_(fitted[None].to(head.weight))
+
+    logits, _ = agent(admitted)
+    assert float(logits.softmax(-1)[0, preferred]) > 0.95
+    order = torch.arange(count - 1, -1, -1)
+    actual, _ = agent(
+        device_input(agent, reorder_offers(obs, order, agent.observation_space.layout))
+    )
+    torch.testing.assert_close(
+        actual[:, :count], logits[:, order], atol=2e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), float("inf"), 1000000.0])
@@ -119,7 +135,9 @@ def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     "field,column",
     [("mode_index", ACTION_MODE_INDEX), ("ability_index", ACTION_ABILITY_INDEX)],
 )
-def test_selector_boundary_parity(field: str, column: int) -> None:
+def test_selector_boundary_encodes_the_maximum_and_rejects_beyond(
+    field: str, column: int
+) -> None:
     env = initial(authored=False)
     raw = env.scenario_refresh()
     space = raw.action_space
@@ -127,12 +145,10 @@ def test_selector_boundary_parity(field: str, column: int) -> None:
     setattr(actions[0], field, MAX_ACTION_SELECTOR)
     space.actions = actions
     raw.action_space = space
-    obs = encode(env, raw)
+    obs = encode(raw)
     assert obs["actions"][0, 0, column] == 16777216
     setattr(actions[0], field, MAX_ACTION_SELECTOR + 1)
     space.actions = actions
     raw.action_space = space
     with pytest.raises(ValueError, match="action selector"):
-        env.encode_observation(raw)
-    with pytest.raises(ValueError, match="action selector"):
-        ObservationSpace().encode(raw)
+        encode_observation(ObservationSpace(), raw)

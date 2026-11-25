@@ -1,24 +1,102 @@
 """Censored rollout diagnostics of the player's advantage selection.
 
-The selection itself is the backend's (`backend.rl.selection_mask`); these
-group it by the player's action types and terminal distances, on the host in
-NumPy, so every backend reports them the same way.
+Each source applies the backend's magnitude filter to its eligible rows.
+Host diagnostics group the result by source, action type and terminal distance.
 
 Distances count same-viewer transitions to a terminal observed in this batch.
 Unfinished tails are unknown, never labeled distant or terminal. Residuals are
 lambda-target minus collection prediction, not independent ground-truth error.
 """
 
-from typing import Literal, TypedDict
+from dataclasses import dataclass
+from typing import Literal, NotRequired, TypedDict
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from manabot.policy.returns import magnitude_quantile, quantile, terminal_distances
 from manabot.training.rollout.adaptive import AdaptiveDiagnostics
+from manabot.training.updates.backend import Array, Device, UpdateBackend
 from manabot.training.updates.health import NumericalHealth
 
 _QUARTILES = (0.0, 0.25, 0.5, 0.75, 1.0)
+
+
+class SourceDiagnostics(TypedDict):
+    eligible: int
+    retained: int
+    retention_rate: NotRequired[float]
+    threshold: NotRequired[float]
+
+
+@dataclass(frozen=True)
+class SourceSelection:
+    source: str
+    eligible: int
+    retained: int
+    threshold: float | None
+    floor_binds: bool | None
+
+    def diagnostics(self) -> SourceDiagnostics:
+        result = SourceDiagnostics(eligible=self.eligible, retained=self.retained)
+        if self.threshold is not None:
+            result.update(
+                retention_rate=self.retained / self.eligible, threshold=self.threshold
+            )
+        return result
+
+
+def select_sources(
+    backend: UpdateBackend,
+    device: Device,
+    advantages: Array,
+    eligible: np.ndarray,
+    sources: np.ndarray | None,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[np.ndarray, tuple[SourceSelection, ...]]:
+    """Filter eligible flat rows per source; return one stable pre-shuffle order."""
+    strata = (0,) if sources is None else np.unique(sources)
+    parts: list[np.ndarray] = []
+    summaries: list[SourceSelection] = []
+    flat = advantages.flatten()
+    for source in strata:
+        rows = np.flatnonzero(
+            eligible if sources is None else eligible & (sources == source)
+        )
+        cutoff = None
+        kept = rows
+        if len(rows):
+            values = (
+                flat
+                if len(rows) == eligible.size
+                else flat[backend.arrays.from_numpy(rows, device)]
+            )
+            indexes, cutoff = backend.rl.selected_magnitudes(
+                values, kind, fraction, minimum
+            )
+            kept = rows[backend.arrays.to_numpy(indexes)]
+            parts.append(kept)
+        summaries.append(
+            SourceSelection(
+                ("fresh", "snapshot")[source],
+                len(rows),
+                len(kept),
+                None if cutoff is None else max(cutoff, minimum),
+                None if cutoff is None else minimum > cutoff,
+            )
+        )
+    if not parts:
+        return np.empty(0, dtype=np.intp), tuple(summaries)
+    order = parts[0]
+    if len(parts) > 1:
+        order = np.sort(np.concatenate(parts))
+        if kind == "top_count":
+            order = order[
+                np.argsort(-np.abs(backend.arrays.to_numpy(flat)[order]), kind="stable")
+            ]
+    return order, tuple(summaries)
 
 
 class SelectionGroup(TypedDict):
@@ -38,6 +116,7 @@ def selection_diagnostics(
     selected: ArrayLike,
     ends: ArrayLike,
     action_types: ArrayLike,
+    segment_ends: np.ndarray | None = None,
 ) -> list[SelectionGroup]:
     """Raw/retained signed quartiles and residual magnitudes per type/distance.
 
@@ -50,7 +129,7 @@ def selection_diagnostics(
     residuals = np.asarray(residuals, np.float32)
     selected = np.asarray(selected, bool)
     action_types = np.asarray(action_types)
-    distances = terminal_distances(np.asarray(ends, bool))
+    distances = terminal_distances(np.asarray(ends, bool), segment_ends)
     result: list[SelectionGroup] = []
     bins = {
         "terminal": distances == 0,
@@ -119,6 +198,7 @@ def value_scale(
     kind: Literal["top_count", "quantile"],
     quantile: float,
     minimum: float,
+    sources: tuple[SourceSelection, ...] | None = None,
 ) -> ValueScale:
     """Summarize critic/advantage scale in float64 over host rows; see
     ValueScale for target semantics."""
@@ -127,7 +207,12 @@ def value_scale(
     target_variance = float(targets.var())
     threshold: float | None = None
     floor_binds: bool | None = None
-    if kind == "quantile":
+    if kind == "quantile" and sources is not None:
+        eligible_sources = [s for s in sources if s.eligible]
+        if len(eligible_sources) == 1:
+            threshold = eligible_sources[0].threshold
+            floor_binds = eligible_sources[0].floor_binds
+    elif kind == "quantile":
         empirical = magnitude_quantile(np.asarray(advantages, np.float32), quantile)
         threshold = max(empirical, minimum)
         floor_binds = minimum > empirical
@@ -170,6 +255,8 @@ class UpdateDiagnostics(TypedDict, total=False):
     policy_lambda: float
     value_lambda: float
     reference: str
+    reference_forward_kl: float
+    reference_forward_kl_coefficient: float
     collection_kl_coefficient: float
     retained_fraction: float
     return_mean: float
@@ -178,6 +265,7 @@ class UpdateDiagnostics(TypedDict, total=False):
     bootstrapped_tail_fraction: float
     action_types: list[int]
     selected_action_types: list[int]
+    source_selection: dict[str, SourceDiagnostics]
     selection_groups: list[SelectionGroup]
     value_scale: ValueScale
     skipped: str

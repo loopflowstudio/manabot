@@ -5,7 +5,7 @@ use managym_state::{
         CardDefinition, CardType, CardTypes, PrintedCharacteristics, ReplacementEffect,
         StaticAbility,
     },
-    effect::Modification,
+    effect::CopyException,
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -32,7 +32,7 @@ fn sakashima_of_a_thousand_faces() -> CardDefinition {
             replacement_effects: vec![ReplacementEffect::EntersAsCopy {
                 scope: Scope::YouControl,
                 predicate: CardPredicate::creature(),
-                exceptions: vec![Modification::GrantStatic(Box::new(
+                exceptions: vec![CopyException::GrantStatic(Box::new(
                     StaticAbility::LegendRuleDoesntApply,
                 ))],
             }],

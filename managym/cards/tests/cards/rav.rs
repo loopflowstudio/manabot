@@ -1,12 +1,23 @@
-//! Doubling Season replaces creation and effect-caused counter placement.
+//! Doubling Season replaces creation and effect-caused counter placement;
+//! Guardian of Vitu-Ghazi convokes with a creature of two owed colors.
 use crate::support::game::move_card;
 use crate::support::{
-    game::{enters_battlefield_with_triggers, five_color_setup},
-    play::{pass_until, resolve_everything},
+    game::{
+        enters_battlefield_with_triggers, five_color_setup, five_color_unfunded_setup,
+        force_new_card_in_hand,
+    },
+    inspect::{card_of, offer_labels, tapped, top_spell},
+    play::{cast_card, choose, pass_until, pay_rest, resolve_everything},
 };
 use managym::{
-    agent::action::ActionSpaceKind,
-    state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    agent::action::{Action, ActionSpaceKind},
+    state::{
+        game_object::PlayerId,
+        mana::Color,
+        payment::{How, Toward},
+        permanent::CounterKind,
+        zone::ZoneType,
+    },
 };
 
 #[test]
@@ -50,4 +61,87 @@ fn doubling_season_doubles_entry_lore_and_tokens_but_not_precombat_lore() {
         2
     );
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+}
+
+/// A green-white creature convoking for {6}{G}{W} pays either colored pip
+/// or {1}:
+/// the player chooses which when mana can pay the other, and is not asked
+/// when only one choice leaves the cost payable. The automatic payer pays
+/// mana with mana: with lands for the whole cost it asks nothing, and short
+/// of mana the convoker and its color are the player's picks.
+#[test]
+fn guardian_of_vitu_ghazi_convoker_chooses_which_owed_color_it_pays() {
+    for (mountains, plains, auto) in [
+        (6, true, false),
+        (6, false, false),
+        (6, true, true),
+        (6, false, true),
+        (5, true, true),
+    ] {
+        let mut s = five_color_unfunded_setup(&["Guardian of Vitu-Ghazi"]);
+        let convoker = s.force_permanent_on_battlefield(0, "Guardian of Vitu-Ghazi");
+        for _ in 0..mountains {
+            s.force_permanent_on_battlefield(0, "Mountain");
+        }
+        s.force_permanent_on_battlefield(0, "Forest");
+        if plains {
+            s.force_permanent_on_battlefield(0, "Plains");
+        }
+        let guardian = force_new_card_in_hand(&mut s, 0, "Guardian of Vitu-Ghazi");
+        if auto {
+            s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+        }
+        if auto && mountains == 6 && plains {
+            // Eight lands pay it all.
+            cast_card(&mut s, guardian);
+            let spell = top_spell(&s);
+            assert_eq!(spell.spent.total(), 8);
+            assert!(spell.spent.contributions().is_empty());
+            assert!(!tapped(&s, convoker));
+            continue;
+        }
+        cast_card(&mut s, guardian);
+        pass_until(&mut s, ActionSpaceKind::PayOrNot);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == convoker),
+        );
+        assert!(tapped(&s, convoker));
+        let paid = if plains {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+            let labels = offer_labels(&s);
+            assert_eq!(
+                labels,
+                [
+                    "Guardian of Vitu-Ghazi pays {W} (convoke)",
+                    "Guardian of Vitu-Ghazi pays {G} (convoke)",
+                    "Guardian of Vitu-Ghazi pays {1} (convoke)"
+                ]
+            );
+            // {G} by convoke is mode 4.
+            choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+            if !auto {
+                pay_rest(&mut s);
+            }
+            Color::Green
+        } else {
+            // The Forest is the only green source for the other pip, so
+            // the Guardian pays {W} and the seven lands pay the rest.
+            assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+            Color::White
+        };
+        let spell = top_spell(&s);
+        assert_eq!(spell.spent.total(), 7);
+        if mountains == 6 {
+            // A spare land: none of the convoked color is spent.
+            assert_eq!(spell.spent.amounts()[paid as usize], 0, "plains {plains}");
+        }
+        assert_eq!(
+            spell
+                .spent
+                .contributed(How::Tapped, Toward::Convoke)
+                .collect::<Vec<_>>(),
+            [card_of(&s, convoker)]
+        );
+    }
 }

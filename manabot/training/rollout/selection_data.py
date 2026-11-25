@@ -18,18 +18,23 @@ from pydantic import ConfigDict, Field, model_validator
 
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
-from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
+from manabot.env.observation import (
+    ACTION_TYPE_DIM,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
+from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import BackendPolicy
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 
 if TYPE_CHECKING:
-    from manabot.training.state.backend import TrainingBackend
+    from manabot.training.state.backend import SelectionBackend
 
 
 class SelectionGameSpec(Strict):
@@ -40,6 +45,15 @@ class SelectionGameSpec(Strict):
     action_seed: int = Field(ge=0, le=2**32 - 1)
     assignment: Literal[0, 1]
     split: Literal["development", "held_out"]
+
+
+@dataclass(frozen=True)
+class SelectionDraw:
+    """One sampled offer, its critic value and the policy mass in offer order."""
+
+    action: int
+    value: float
+    probabilities: np.ndarray  # [action capacity], zero on padding
 
 
 @dataclass(frozen=True)
@@ -54,11 +68,29 @@ class SelectionPrediction:
 class SelectionPredictor(Protocol):
     """Frozen-policy numerics with an independently seeded game-local stream."""
 
-    def predict(
-        self,
-        encoded: dict[str, np.ndarray],
-        reference: Literal["uniform", "action_type_uniform"],
-    ) -> SelectionPrediction: ...
+    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw: ...
+
+
+def selection_prediction(
+    draw: SelectionDraw,
+    encoded: dict[str, np.ndarray],
+    reference: Literal["uniform", "action_type_uniform"],
+) -> SelectionPrediction:
+    """Report entropy and KL(policy || reference) in nats for the sampled decision."""
+    probabilities = draw.probabilities
+    ref = reference_distribution(
+        {key: encoded[key][None] for key in ("actions_valid", "actions")}, reference
+    )[0]
+    logs = np.log(np.maximum(probabilities, 1e-12))
+    return SelectionPrediction(
+        action=draw.action,
+        value=draw.value,
+        probability=float(probabilities[draw.action]),
+        entropy=float(-(probabilities * logs).sum()),
+        reference_kl=float(
+            (probabilities * (logs - np.log(np.maximum(ref, 1e-12)))).sum()
+        ),
+    )
 
 
 class FrozenRecord(Strict):
@@ -139,14 +171,14 @@ def collect_selection_game(
     env = managym.Env(
         seed=spec.seed,
         skip_trivial=True,
-        decision_memory=space.encoder.config.max_decision_records > 0,
-        decision_memory_include_own=space.encoder.config.decision_memory_include_own,
+        decision_memory=space.config.max_decision_records > 0,
+        decision_memory_include_own=space.config.decision_memory_include_own,
     )
     capture = ScalarCapture(
         spec.seed,
         True,
-        decision_memory=space.encoder.config.max_decision_records > 0,
-        decision_memory_include_own=space.encoder.config.decision_memory_include_own,
+        decision_memory=space.config.max_decision_records > 0,
+        decision_memory_include_own=space.config.decision_memory_include_own,
     )
     raw, _ = capture.reset(env, match.to_rust())
     rows: list[SelectionDecision] = []
@@ -165,13 +197,13 @@ def collect_selection_game(
                     "skip_trivial": True,
                     **(
                         {"decision_memory": False}
-                        if space.encoder.config.max_decision_records == 0
-                        and not space.encoder.config.decision_memory_include_own
+                        if space.config.max_decision_records == 0
+                        and not space.config.decision_memory_include_own
                         else {}
                     ),
                     **(
                         {"decision_memory_include_own": True}
-                        if space.encoder.config.decision_memory_include_own
+                        if space.config.decision_memory_include_own
                         else {}
                     ),
                 }
@@ -188,10 +220,12 @@ def collect_selection_game(
                 raise RuntimeError("live selection game has no actor")
             frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
             observation = Observation.from_json(env.semantic_observation_json(actor))
-            encoded = space.encode(raw)
+            encoded = encode_observation(space, raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            prediction = predictor.predict(encoded, reference)
+            prediction = selection_prediction(
+                predictor.predict(encoded), encoded, reference
+            )
             action = prediction.action
             row = SelectionDecision(
                 step=len(rows),
@@ -289,7 +323,7 @@ def collect_selection(
     match: MatchConfig,
     reference: Literal["uniform", "action_type_uniform"] = "action_type_uniform",
     max_steps: int = 2000,
-    backend: "TrainingBackend",
+    backend: "SelectionBackend",
 ) -> Path:
     """Freeze a policy's complete-game diagnostics, retaining partial replay journals.
 

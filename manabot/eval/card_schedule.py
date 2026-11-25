@@ -19,7 +19,6 @@ from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.registration import PlayerRegistration
 
 RUNTIME_FIELDS = (
-    "world",
     "engine_source_sha256",
     "content_manifest_sha256",
     "content_digest",
@@ -88,7 +87,10 @@ def admit_card_game(game: GameEvidence, match: Match) -> tuple[str, str]:
 
 def admit_card_runtime(game: GameEvidence, environment: Environment) -> None:
     """Bind a game to the runtime and content its eval run declared."""
-    identity = {field: environment.config.get(field) for field in RUNTIME_FIELDS}
+    # An environment declared before the world label was removed hashed it
+    # into `files`; it is read back as one more field of that identity.
+    fields = (*RUNTIME_FIELDS, *(["world"] if "world" in environment.config else []))
+    identity = {field: environment.config.get(field) for field in fields}
     if (
         any(not isinstance(value, str) or not value for value in identity.values())
         or environment.files != canonical_sha256(identity)

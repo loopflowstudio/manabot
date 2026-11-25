@@ -123,6 +123,7 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
                 "tau": float(local["tau"]),
                 "clip": learning.clip,
                 "collection_kl": learning.collection_kl,
+                "reference_forward_kl": learning.reference_forward_kl,
                 "reference": learning.reference,
                 "max_grad_norm": learning.max_grad_norm,
                 "time": time.perf_counter(),

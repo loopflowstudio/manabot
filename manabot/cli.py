@@ -174,7 +174,7 @@ def export_game_command(
 ) -> None:
     """Export one complete training game without loading its policy."""
     warnings.warn(
-        "export-game is deprecated; open records directly with managym academy replay; removal in 0.4.0",
+        "export-game is deprecated; open records directly with managym academy replay; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )

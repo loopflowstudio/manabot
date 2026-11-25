@@ -21,24 +21,33 @@ This module reads and writes the file format with NumPy; it imports no array
 framework.
 """
 
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 import json
+import logging
 from pathlib import Path
 import struct
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from manabot.env.observation import (
-    FACT_KINDS,
-    PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    ObservationSpace,
-)
+from manabot.belief.encoding import BeliefEncodingSchema, belief_checkpoint_fields
+from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.world import validate_checkpoint_world
+from manabot.model.architecture import (
+    ArchitectureReceipt,
+    architecture_receipt,
+    validate_architecture_receipt,
+)
+from manabot.model.interface import model_interface, saved_readings, world_fields
+from manabot.model.world import checkpoint_source, validate_policy_input, written_at
+from manabot.policy.binding import BindingReport, bind_catalog
 from manabot.policy.prepare import Layout, Tables
+from manabot.policy.readings import Readings
+
+if TYPE_CHECKING:
+    from manabot.policy.protocol import BackendPolicy
+    import managym
 
 type ParameterArrays = Mapping[str, np.ndarray]
 
@@ -66,6 +75,9 @@ _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _OPTIONAL_METADATA_KEYS = (
     "bc",
     "global_step",
+    "writer_catalog",
+    "input_columns",
+    "input_readings",
     "belief_schema_identity",
     "belief_content_manifest_identity",
 )
@@ -79,6 +91,13 @@ class NotAContainer(ValueError):
 
 class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
+
+
+def memory_parameter(name: str) -> bool:
+    """The new weights in a memory branch, in either backend's parameter layout."""
+    return name.startswith("decision_memory.") or name.endswith(
+        (".memory_gate", ".memory_projection.weight")
+    )
 
 
 def pretrained_memory_branch(
@@ -97,12 +116,23 @@ def pretrained_memory_branch(
         "decision_memory_summaries",
         "decision_memory_gate_scale",
     }
-    if (
-        source.decision_memory != "none"
-        or target.decision_memory == "none"
-        or source.model_dump(exclude=excluded) != target.model_dump(exclude=excluded)
-    ):
-        raise ValueError("pretrained model settings differ from requested arm")
+    branch = source.decision_memory == "none" and target.decision_memory != "none"
+    differ = [
+        f"{key}: {getattr(source, key)!r} -> {getattr(target, key)!r}"
+        for key in type(source).model_fields
+        if not (branch and key in excluded)
+        and getattr(source, key) != getattr(target, key)
+    ]
+    if differ or not branch:
+        raise ValueError(
+            "pretrained model settings differ from requested arm"
+            + (
+                f" ({', '.join(differ)}); set the requested model to the "
+                "pretrained policy's values"
+                if differ
+                else ""
+            )
+        )
     if not all(
         (
             observation.max_decision_records,
@@ -122,7 +152,7 @@ def pretrained_memory_branch(
 
 @dataclass(frozen=True)
 class Dimensions:
-    """Input widths and architecture of one checkpoint."""
+    """Architecture and projection widths for a policy with the given input readings."""
 
     hidden: int
     heads: int
@@ -134,21 +164,51 @@ class Dimensions:
     action: int
     focus: int
     relation: int
+    effect: int
+    fact: int
     fact_kinds: int
     token_rows: int
     name_rows: int
     links: int
+    stack: int = 0
 
-
-def layout(space: ObservationSpace) -> Layout:
-    encoder = space.encoder
-    joins = (PERMANENT_DEFINITION_INDEX, *PERMANENT_LINK_INDEXES)
-    return Layout(
-        numeric_permanent_columns=tuple(
-            c for c in range(encoder.permanent_dim) if c not in joins
-        ),
-        link_columns=PERMANENT_LINK_INDEXES,
-    )
+    @classmethod
+    def from_layout(
+        cls,
+        model: ModelConfig,
+        space: ObservationSpace,
+        columns: Layout,
+        *,
+        token_rows: int,
+        name_rows: int,
+        fact_kinds: int = FACT_KINDS,
+    ) -> "Dimensions":
+        """Use the policy's input readings and its actual embedding sizes."""
+        player = columns.numeric_width("agent_player")
+        card = columns.numeric_width("agent_cards")
+        if space.turn_state:
+            player += columns.numeric_width("player_turn_state")
+            card += 1
+        return cls(
+            hidden=model.hidden_dim,
+            heads=model.num_attention_heads,
+            layers=model.attention_layers,
+            feedforward=model.attention_feedforward_dim
+            or model.num_attention_heads * model.hidden_dim,
+            player=player,
+            card=card,
+            permanent=columns.numeric_width("agent_permanents"),
+            action=columns.numeric_width("actions"),
+            focus=space.config.max_focus_objects,
+            relation=columns.numeric_width("relations"),
+            effect=columns.numeric_width("effects"),
+            fact=columns.fact_width(catalog_ids=model.catalog_records()),
+            fact_kinds=fact_kinds,
+            token_rows=token_rows,
+            name_rows=name_rows,
+            links=len(columns.link_columns),
+            stack=columns.numeric_width("stack") if space.one_token else 0,
+        )
 
 
 # -- canonical names -----------------------------------------------------------------
@@ -203,31 +263,63 @@ class PolicyCheckpoint:
     parameters: ParameterArrays
     buffers: Mapping[str, np.ndarray]
     metadata: Mapping[str, str]
+    # The readings the checkpoint was written with (`saved_readings`), one per
+    # column of each buffer's saved prefix.
+    readings: Readings
+    report: BindingReport | None = None
+
+    def receipt(self) -> ArchitectureReceipt:
+        return architecture_receipt(
+            self.model,
+            self.space,
+            {k: (int(v.size), True) for k, v in self.parameters.items()},
+        )
+
+    def record(self) -> dict[str, Any]:
+        return {
+            key: json.loads(value)
+            for key, value in self.metadata.items()
+            if key != "converted_from"
+        }
+
+    @property
+    def writer_revision(self) -> str | None:
+        source = json.loads(self.metadata.get("source", "null"))
+        return source.get("commit") if isinstance(source, dict) else None
+
+    @property
+    def stored_programs(self) -> int:
+        """Count writer programs in use, excluding new runtime definitions."""
+        if self.report is not None:
+            return self.report.stored_programs
+        # With no catalog rebind the backend uses the saved buffers directly.
+        programs = self.buffers.get("semantic_cards.tokens")
+        return len(programs) if programs is not None else 0
+
+    @property
+    def fact_kinds(self) -> int:
+        """The last fact kind with a learned embedding in this policy."""
+        return self.parameters["facts.kind.weight"].shape[0] - 1
 
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, layout(self.space))
+        return Tables.from_buffers(
+            self.buffers, Layout(self.readings), fact_kinds=self.fact_kinds
+        )
 
     def dimensions(self) -> Dimensions:
-        encoder = self.space.encoder
-        model = self.model
-        return Dimensions(
-            hidden=model.hidden_dim,
-            heads=model.num_attention_heads,
-            layers=model.attention_layers,
-            feedforward=model.attention_feedforward_dim
-            or model.num_attention_heads * model.hidden_dim,
-            player=encoder.player_dim,
-            card=encoder.card_dim,
-            permanent=len(layout(self.space).numeric_permanent_columns),
-            action=encoder.action_dim,
-            focus=encoder.max_focus_objects,
-            relation=encoder.relation_dim,
-            fact_kinds=FACT_KINDS,
-            token_rows=int(
-                self.parameters["semantic_cards.token_embedding.weight"].shape[0]
-            ),
-            name_rows=int(self.parameters["name_candidates.embedding.weight"].shape[0]),
-            links=len(PERMANENT_LINK_INDEXES),
+        token_rows = (
+            self.parameters["semantic_cards.token_embedding.weight"].shape[0]
+            if self.model.world is not None
+            else 0
+        )
+        names = self.parameters["name_candidates.embedding.weight"]
+        return Dimensions.from_layout(
+            self.model,
+            self.space,
+            Layout(self.readings),
+            token_rows=token_rows,
+            name_rows=names.shape[0],
+            fact_kinds=self.fact_kinds,
         )
 
 
@@ -238,9 +330,11 @@ def from_torch_state(
     metadata: Mapping[str, str] | None = None,
     *,
     parameter_names: Iterable[str],
+    readings: Readings,
 ) -> PolicyCheckpoint:
     """The container contents of a PyTorch state dict (as NumPy arrays).
-    Every tensor becomes one canonical parameter or one lookup buffer."""
+    Every tensor becomes one canonical parameter or one lookup buffer;
+    `readings` are the policy's input readings."""
     names = tuple(parameter_names)
     missing = sorted(set(names) - set(state))
     if missing:
@@ -271,6 +365,7 @@ def from_torch_state(
             if name not in parameter_set
         },
         metadata=meta,
+        readings=readings,
     )
 
 
@@ -294,10 +389,95 @@ def checkpoint_metadata(
     return metadata
 
 
+def restore_value_semantic(policy: "BackendPolicy", semantic: object) -> None:
+    """Apply the saved critic units in place. Older files can omit the declaration."""
+    if semantic is None:
+        return
+    if semantic not in ("signed_outcome", "win_logit"):
+        raise ValueError("unsupported checkpoint value semantic")
+    if policy.value_semantic is not None and policy.value_semantic != semantic:
+        raise ValueError("checkpoint value semantic conflicts with its critic")
+    policy.value_semantic = semantic
+
+
+def save_policy_checkpoint(
+    agent: "BackendPolicy",
+    obs_space: ObservationSpace,
+    path: str | Path,
+    *,
+    parameters: Mapping[str, np.ndarray],
+    buffers: Mapping[str, np.ndarray],
+    readings: Readings,
+    architecture: ArchitectureReceipt,
+    player_configs: "Sequence[managym.PlayerConfig] | None",
+    extra: dict[str, Any] | None = None,
+    belief_schema: BeliefEncodingSchema | None = None,
+) -> None:
+    """Save a portable policy container from canonical float32 parameters and buffers.
+
+    Shared across every framework backend: metadata, world binding, belief
+    binding and container serialization live here once.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    record: dict[str, Any] = {
+        **world_fields(obs_space, readings, player_configs),
+        "source": checkpoint_source(),
+        "architecture": architecture.model_dump(mode="json"),
+        "global_step": 0,
+        "hypers": {
+            "agent_hypers": agent.config.checkpoint_payload(),
+            "observation_hypers": obs_space.config.model_dump(),
+            "train_hypers": {},
+            # The collector applies the policy's decision settings to both seats.
+            # Training provenance is independent of strict world/ABI admission.
+            "training_setup": {
+                "mana_payment": [obs_space.config.mana_payment] * 2,
+                "mana_floats": [obs_space.config.mana_floats] * 2,
+                "skip_trivial": True,
+            },
+        },
+        "bc": extra or {},
+    }
+    validate_policy_input(agent, record["world_binding"])
+    record.update(
+        belief_checkpoint_fields(
+            belief_schema,
+            count_buckets=agent.belief_count_buckets,
+            card_vocab_size=agent.config.belief_card_vocab_size,
+        )
+    )
+    for name, value in parameters.items():
+        if value.dtype != np.float32:
+            raise TypeError(f"parameter {name}: expected float32, got {value.dtype}")
+    meta = checkpoint_metadata(record)
+    # Keep the writer's parameter order for positional Adam snapshots.
+    meta["parameter_names"] = json.dumps([torch_name(name) for name in parameters])
+    container = PolicyCheckpoint(
+        model=agent.config,
+        space=obs_space,
+        parameters=parameters,
+        buffers=buffers,
+        metadata=meta,
+        readings=readings,
+    )
+    write_container(target, container)
+
+
 def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
     arrays = dict(checkpoint.parameters)
     arrays.update({_BUFFER + k: v for k, v in checkpoint.buffers.items()})
-    write_safetensors(path, arrays, checkpoint.metadata)
+    metadata = dict(checkpoint.metadata)
+    if checkpoint.report is not None:
+        # read_container returns runtime-bound arrays. Serializing those arrays
+        # makes this runtime their writer, while conversion uses the originals.
+        record = {
+            **world_fields(checkpoint.space, checkpoint.readings),
+            "architecture": checkpoint.receipt().model_dump(mode="json"),
+            "source": checkpoint_source(),
+        }
+        metadata.update({key: json.dumps(value) for key, value in record.items()})
+    write_safetensors(path, arrays, metadata)
 
 
 def read_metadata(path: str | Path) -> dict[str, Any]:
@@ -333,6 +513,11 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     Raises `NotAContainer` for a file that is not safetensors or lacks the
     container metadata; convert its PyTorch checkpoint again.
     """
+    return admit_checkpoint(read_saved_container(path))
+
+
+def read_saved_container(path: str | Path) -> PolicyCheckpoint:
+    """A container's tensors and metadata as written, before admission."""
     path = Path(path)
     remedy = "convert the PyTorch .pt with `uv run python -m manabot.backends.convert`"
     try:
@@ -345,12 +530,15 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
             f"{path} has no {', '.join(missing)} metadata, so it is not a policy "
             f"checkpoint container; {remedy}"
         )
-    meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
+    meta = {
+        key: json.loads(value)
+        for key, value in metadata.items()
+        if key != "converted_from"
+    }
     hypers = meta["hypers"]
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
     )
-    validate_checkpoint_world(meta, space)
     model = ModelConfig.from_checkpoint(hypers["agent_hypers"])
     parameters = {k: v for k, v in arrays.items() if not k.startswith(_BUFFER)}
     for name, value in parameters.items():
@@ -364,7 +552,41 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
             k[len(_BUFFER) :]: v for k, v in arrays.items() if k.startswith(_BUFFER)
         },
         metadata=metadata,
+        readings=saved_readings(meta, space),
     )
+
+
+def admit_checkpoint(checkpoint: PolicyCheckpoint) -> PolicyCheckpoint:
+    """Verify the receipt against the tensors that were written, before adding rows."""
+    record = checkpoint.record()
+    interface = model_interface(record, checkpoint.space)
+    if record.get("architecture") is not None:
+        validate_architecture_receipt(checkpoint.receipt(), record["architecture"])
+    width = len(checkpoint.readings["agent_player"])
+    projection = checkpoint.parameters.get("player_embedding.projection.0.weight")
+    if projection is None:
+        raise ValueError(
+            f"checkpoint has no player projection weights; {written_at(record)}"
+        )
+    if projection.shape[1] != checkpoint.dimensions().player:
+        raise ValueError("checkpoint player columns differ from its projection")
+    if interface is None:
+        return checkpoint
+    if not checkpoint.model.catalog_records() and interface.writer == interface.current:
+        return checkpoint
+    try:
+        bound, report = bind_catalog(checkpoint, interface.writer, interface.current)
+    except ValueError as error:
+        raise ValueError(f"{error}; {written_at(record)}") from error
+    logging.getLogger(__name__).info(
+        "Policy input v%s (%s). Player columns %d/%d. %s.",
+        checkpoint.space.config.policy_input_version,
+        written_at(record),
+        width,
+        checkpoint.space.shapes["agent_player"][-1],
+        report.summary(),
+    )
+    return replace(bound, report=report)
 
 
 # safetensors: an 8-byte little-endian header length, a JSON header naming each
@@ -377,6 +599,9 @@ _DTYPES = {
     "I32": np.int32,
     "I16": np.int16,
     "I8": np.int8,
+    "U64": np.uint64,
+    "U32": np.uint32,
+    "U16": np.uint16,
     "U8": np.uint8,
     "BOOL": np.bool_,
 }
@@ -386,6 +611,20 @@ _CODES = {np.dtype(dtype): code for code, dtype in _DTYPES.items()}
 def write_safetensors(
     path: Path, arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
 ) -> None:
+    parts = safetensor_parts(arrays, metadata)
+    with path.open("wb") as file:
+        file.writelines(parts)
+
+
+def encode_safetensors(
+    arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
+) -> bytes:
+    return b"".join(safetensor_parts(arrays, metadata))
+
+
+def safetensor_parts(
+    arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
+) -> Iterable[bytes]:
     header: dict[str, Any] = {"__metadata__": dict(metadata)}
     blobs: list[bytes] = []
     offset = 0
@@ -406,15 +645,14 @@ def write_safetensors(
         offset += len(blob)
     encoded = json.dumps(header, separators=(",", ":")).encode()
     encoded += b" " * (-len(encoded) % 8)
-    with path.open("wb") as file:
-        file.write(struct.pack("<Q", len(encoded)))
-        file.write(encoded)
-        for blob in blobs:
-            file.write(blob)
+    return (struct.pack("<Q", len(encoded)), encoded, *blobs)
 
 
 def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]:
-    data = path.read_bytes()
+    return decode_safetensors(path.read_bytes())
+
+
+def decode_safetensors(data: bytes) -> tuple[dict[str, np.ndarray], dict[str, str]]:
     (length,) = struct.unpack("<Q", data[:8])
     header = json.loads(data[8 : 8 + length])
     metadata = header.pop("__metadata__", None) or {}

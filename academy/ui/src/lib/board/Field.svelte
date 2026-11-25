@@ -108,6 +108,7 @@
               beat={beat.has(item.permanent.id)}
               dealt={damage.get(item.permanent.id) ?? 0}
               planned={planned?.get(item.permanent.id) ?? null}
+              paid={item.paid}
               side={toward === 'up' ? 'you' : 'opponent'}
               {toward}
               count={index === 0 && pile.items.length > 1 ? pile.items.length : null}

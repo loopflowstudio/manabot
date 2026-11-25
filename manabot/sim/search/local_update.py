@@ -7,8 +7,7 @@ branch's execution state and independent RNG; immutable `RolloutReceipt` values
 carry its evidence into the local-update receipt. Full rollout evidence (v3
 receipts) keeps per-Command native witnesses and actor viewer hashes; opt-in
 compact evidence (v4) keeps Command counts reconciled with native counters.
-Opt-in native frontier encoding writes every live branch's view into
-teacher-owned buffers with one `managym.encode_observations_into` call.
+Native frontier encoding returns one immutable v11 batch per ply.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -29,7 +28,7 @@ from numpy.typing import NDArray
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
-from manabot.belief.protocol import SamplerBackend
+from manabot.belief.protocol import belief_sampling
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling_types import sampling_digest
 from manabot.belief.state import (
@@ -39,9 +38,11 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
+from manabot.env.observation import PolicyObservation
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.local_update_receipt import (
     FloatArray,
@@ -78,7 +79,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
-        "manabot/backends/torch/_facts.py",
+        "manabot/backends/torch/facts.py",
         "manabot/backends/torch/belief.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
@@ -95,7 +96,7 @@ class LocalUpdateTeacher:
         sha256: str,
         config: LocalSearchConfig,
         *,
-        backend: SamplerBackend,
+        backend: PolicyLoader,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
         native_encoder: bool = True,
@@ -133,20 +134,21 @@ class LocalUpdateTeacher:
                 raise ValueError(
                     "sampler generating policy or world differs from rollout policy"
                 )
+            sampling = belief_sampling(backend)
             model = load_belief_sampler(
                 sampler.path,
-                codec=backend.belief,
+                codec=sampling,
                 expected_checkpoint_identity=sampler.sha256,
                 expected_dataset_identity=sampler.dataset_identity,
                 expected_schema_identity=sampler.schema_identity,
                 expected_policy_identity=sha256,
                 expected_world_identity=sampler.world_identity,
             )
-            backend.belief.freeze_sampler(model)
+            sampling.freeze_sampler(model)
             self._sampler_authority = LearnedHandSampler(model, sampler.sha256)
         elif config.sampling == "compatible_prior":
             self._sampler_authority = PhysicalHandSampler(
-                backend.belief.PhysicalDistribution()
+                belief_sampling(backend).PhysicalDistribution()
             )
         self.hand_sampler = self._sampler_authority
         if hand_sampler is not None:
@@ -194,18 +196,20 @@ class LocalUpdateTeacher:
 
     def _encode_native(
         self, engines: Sequence[managym.Env]
-    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
-        """One native call writes every actor view into the reused frontier buffers.
-
-        The returned arrays are views of the first `len(engines)` rows and are
-        valid until the next frontier encoding.
-        """
+    ) -> tuple[PolicyObservation, list[int]]:
+        """Encode the full frontier; search requires every legal offer to fit."""
+        if self.space.one_token:
+            batch = managym.encode_observation_batch(engines, self.space.layout)
+            counts = batch.action_counts
+            if 0 in counts:
+                raise ValueError("policy cannot represent complete legal offers")
+            return batch, counts
         capacity = len(self._frontier_buffers.get("actions_valid", ()))
         if len(engines) > capacity:
             capacity = len(engines)
-            self._frontier_buffers = self.space.encoder.allocate(capacity)
+            self._frontier_buffers = self.space.allocate(capacity)
         counts = managym.encode_observations_into(
-            engines, self._frontier_buffers, capacity
+            engines, self.space.layout, self._frontier_buffers, capacity
         )
         encodings = {
             key: value[: len(engines)] for key, value in self._frontier_buffers.items()
@@ -221,18 +225,18 @@ class LocalUpdateTeacher:
         # The selected space owns every axis, including historical inputs and
         # nondefault capacities. Each row is a contiguous view of this call's
         # fresh batch; no observation buffers survive into the next frontier.
-        encodings = self.space.encoder.allocate(len(engines))
+        encodings = self.space.allocate(len(engines))
         counts: list[int] = []
         for index, engine in enumerate(engines):
             actor = int(engine.current_agent_index())
             raw = engine.observation_for_player(actor)
             encoded = {key: value[index] for key, value in encodings.items()}
             count = len(raw.action_space.actions)
-            if count == 0 or count > self.space.encoder.max_actions:
+            if count == 0 or count > self.space.config.max_actions:
                 raise ValueError("policy cannot represent complete legal offers")
             # Search requires every legal offer, even if a checkpoint permits
             # first-legal truncation during training.
-            engine.encode_observation_into(raw, encoded)
+            managym.encode_observation_into(raw, self.space.layout, encoded)
             if int(encoded["actions_valid"].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)

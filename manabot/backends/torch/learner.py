@@ -15,7 +15,8 @@ keeps the averaged model that evaluation and exports read. `forward_precision` a
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
+import warnings
 
 import numpy as np
 import torch
@@ -23,6 +24,12 @@ from torch import Tensor, nn
 
 from manabot.backends.torch.rl import NumericalError, float64_operand, require
 from manabot.infra.profiler import Profiler
+from manabot.training.updates.health import (
+    CRITIC_READOUT_PREFIXES,
+    UNRECORDED_STEP,
+    StepRecorder as _StepRecorder,
+    parameter_movement,
+)
 
 if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
@@ -30,35 +37,9 @@ if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.learning import Precision
+    from manabot.training.updates.health import StepSample
 
 # -- Update step ---------------------------------------------------------------
-
-
-class StepRecorder(Protocol):
-    """What `gradient_step` reports; recording never changes the loss, step or RNG.
-
-    `track(section)` times "Backward and gradient clipping" and "Optimizer
-    step"; each ends at a finite check that already waits for the device.
-    `rejecting()` wraps the whole step, so it sees every `NumericalError`.
-    When `sampling()` is true for a step, `before_clip` reads the gradients
-    before clipping rescales them in place and `record_gradients` reads them
-    after; `record_step` follows every completed step, with the pre-step
-    parameters only on a sampled step (empty otherwise).
-    """
-
-    def track(self, section: str) -> AbstractContextManager[object]: ...
-
-    def rejecting(self) -> AbstractContextManager[object]: ...
-
-    def sampling(self) -> bool: ...
-
-    def before_clip(self, model: nn.Module) -> None: ...
-
-    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None: ...
-
-    def record_step(
-        self, parameters: list[nn.Parameter], before: list[Tensor]
-    ) -> None: ...
 
 
 def check_objective(loss: Tensor) -> None:
@@ -68,35 +49,13 @@ def check_objective(loss: Tensor) -> None:
     require(torch.isfinite(loss), "nonfinite_objective", loss=loss)
 
 
-class _Unrecorded:
-    """The `StepRecorder` of an unobserved step: no timing, no samples."""
-
-    def track(self, section: str) -> AbstractContextManager[object]:
-        return nullcontext()
-
-    def rejecting(self) -> AbstractContextManager[object]:
-        return nullcontext()
-
-    def sampling(self) -> bool:
-        return False
-
-    def before_clip(self, model: nn.Module) -> None:
-        pass
-
-    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None:
-        pass
-
-    def record_step(self, parameters: list[nn.Parameter], before: list[Tensor]) -> None:
-        pass
-
-
 def gradient_step(
     loss: Tensor,
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     max_grad_norm: float,
     *,
-    recorder: StepRecorder | None = None,
+    recorder: _StepRecorder | None = None,
     accumulated: bool = False,
 ) -> Tensor:
     """Zero, backward, clip the global norm to `max_grad_norm`, step; return the pre-clip norm.
@@ -107,7 +66,7 @@ def gradient_step(
     `accumulated` preserves gradients already backpropagated by execution chunks;
     clipping and Adam still occur exactly once at the logical boundary.
     """
-    recorder = recorder or _Unrecorded()
+    recorder = recorder if recorder is not None else UNRECORDED_STEP
     with recorder.rejecting():
         check_objective(loss)
         parameters = list(model.parameters())
@@ -116,11 +75,9 @@ def gradient_step(
         with recorder.track("Backward and gradient clipping"):
             if not accumulated:
                 loss.backward()
-            sampled = recorder.sampling()
             if not any(p.grad is not None for p in parameters):
                 raise NumericalError("missing_all_gradients", {"loss": loss})
-            if sampled:
-                recorder.before_clip(model)
+            critic_norms = critic_gradient_norms(model) if recorder.sampling() else None
             try:
                 # error_if_nonfinite reads the norm on the host: the device wait
                 # that ends the backward timer.
@@ -136,10 +93,14 @@ def gradient_step(
                         if p.grad is not None
                     },
                 ) from error
-            if sampled:
-                recorder.record_gradients(model, norm)
+            if critic_norms is not None:
+                recorder.record_sample(gradient_health(model, norm, critic_norms))
         with recorder.track("Optimizer step"):
-            before = [p.detach().clone() for p in parameters] if sampled else []
+            before = (
+                [p.detach().clone() for p in parameters]
+                if critic_norms is not None
+                else []
+            )
             optimizer.step()
             # One flat read: per-tensor checks cost two launches per parameter tensor.
             if not torch.isfinite(
@@ -149,7 +110,9 @@ def gradient_step(
                     "nonfinite_parameters_after_step",
                     {f"parameter/{name}": p for name, p in model.named_parameters()},
                 )
-            recorder.record_step(parameters, before)
+            if before:
+                recorder.record_sample(parameter_health(parameters, before))
+            recorder.record_step()
     return norm
 
 
@@ -200,11 +163,19 @@ def apply_matmul_precision(precision: "Precision") -> None:
     torch.backends.cudnn.allow_tf32 = cudnn
 
 
+def validate_precision(precision: str, device: torch.device) -> None:
+    if precision not in ("float32", "tf32", "bf16"):
+        raise ValueError(f"unsupported Torch precision: {precision!r}")
+    if precision == "bf16" and device.type not in {"cuda", "mps"}:
+        raise ValueError("precision bf16 requires CUDA or MPS")
+
+
 def forward_precision(
     precision: "Precision", device: torch.device
 ) -> AbstractContextManager[object]:
     """The context one policy forward runs in: bf16 autocast on `device`
     (CUDA or MPS), else nothing."""
+    validate_precision(precision, device)
     if precision != "bf16":
         return nullcontext()
     return torch.autocast(device.type, dtype=torch.bfloat16)
@@ -241,6 +212,7 @@ class Learner:
             raise ValueError("execution row limits must be positive")
         self.execution_rows, self.bootstrap_rows = execution_rows, bootstrap_rows
         self.device = torch.device(device)
+        validate_precision(precision, self.device)
         # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
         # a training-mode forward before backward, including on warm starts.
         self.agent = agent.to(self.device).train()
@@ -275,7 +247,7 @@ class Learner:
         loss: Tensor,
         max_grad_norm: float,
         *,
-        recorder: StepRecorder | None = None,
+        recorder: _StepRecorder | None = None,
         accumulated: bool = False,
     ) -> Tensor:
         """`gradient_step` on this learner's policy and optimizer: the
@@ -320,14 +292,6 @@ class Learner:
         }
 
 
-# ActorCritic parameter prefixes that only the critic output reads, in every
-# value aggregation.
-_CRITIC_READOUT = ("value_head.", "value_readout.")
-# The value token is an unmasked key in object attention, so actor logits read
-# it too: its gradient mixes policy and value loss and is reported on its own.
-_VALUE_TOKEN = "value_token"
-
-
 def _norm(tensors: list[Tensor]) -> float:
     if not tensors:
         return 0.0
@@ -347,10 +311,10 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
         [
             p.grad
             for name, p in named.items()
-            if p.grad is not None and name.startswith(_CRITIC_READOUT)
+            if p.grad is not None and name.startswith(CRITIC_READOUT_PREFIXES)
         ]
     )
-    token = named.get(_VALUE_TOKEN)
+    token = named.get("value_token")
     if token is None:
         return critic, None
     return critic, _norm([] if token.grad is None else [token.grad])
@@ -358,16 +322,12 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
 
 def gradient_health(
     model: nn.Module, norm_before: Tensor, critic_norms: tuple[float, float | None]
-) -> dict[str, float | int]:
+) -> "StepSample":
     """A sampled clipped step's gradients, without changing them."""
-    health: dict[str, float | int] = {}
-    if critic_norms is None:
-        raise RuntimeError("record_gradients requires before_clip first")
     critic_norm, token_norm = critic_norms
     parameters = list(model.parameters())
     grads = [p.grad for p in parameters if p.grad is not None]
-    health.update(
-        sampled_steps=1,
+    health: StepSample = dict(
         gradient_norm_before=float(norm_before),
         gradient_norm_after=_norm(grads),
         gradient_norm_critic_readout=critic_norm,
@@ -386,9 +346,8 @@ def gradient_health(
 
 def parameter_health(
     parameters: list[nn.Parameter], before: list[Tensor]
-) -> dict[str, float]:
+) -> "StepSample":
     """Parameter displacement of a sampled step, with established float64 arithmetic."""
-    health: dict[str, float] = {}
     delta = (
         torch.stack(
             [
@@ -406,8 +365,15 @@ def parameter_health(
         .sum()
         .sqrt()
     )
-    health["parameter_delta_l2"] = float(delta)
-    health["parameter_relative_delta"] = (
-        float(delta / scale) if scale > 0 else float(delta)
-    )
-    return health
+    return parameter_movement(float(delta), float(scale))
+
+
+def __getattr__(name: str) -> type[_StepRecorder]:
+    if name == "StepRecorder":
+        warnings.warn(
+            "StepRecorder moved to manabot.training.updates.health; removal in 0.3.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _StepRecorder
+    raise AttributeError(name)

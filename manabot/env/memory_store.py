@@ -17,6 +17,7 @@ from weakref import WeakValueDictionary
 import numpy as np
 
 from manabot.env.decision_memory import MEMORY_FIELDS, MEMORY_WIDTHS
+from manabot.env.observation import column, columns
 from manabot.policy.decision_memory import (
     MemoryCursor,
     admit_chunk,
@@ -29,6 +30,15 @@ if TYPE_CHECKING:
 
 MemoryCapacities = tuple[int, int, int, int]
 _CHUNK_ROWS = 32
+_RECORD_LAST_HIGH, _RECORD_LAST_LOW = columns(
+    "decision_records", "last_high", "last_low"
+)
+_RECORD_COUNTS = slice(
+    column("decision_records", "mana_count"),
+    column("decision_records", "choice_count") + 1,
+)
+_REFERENCE_DETAIL_COUNT = column("decision_references", "detail_count")
+_MEMBER_REFERENCE = column("decision_members", "reference")
 
 
 @dataclass(frozen=True, eq=False, slots=True, weakref_slot=True)
@@ -240,13 +250,15 @@ def _record_chunk(
     base = node.previous.cursor if node.previous else MemoryCursor()
     for index in range(start, len(records)):
         header = records[index : index + 1]
-        member_end = member_start + int(header[0, 15:18].sum(dtype=np.float64))
+        member_end = member_start + int(header[0, _RECORD_COUNTS].sum(dtype=np.float64))
         joins = members[member_start - base.members : member_end - base.members]
-        reference_end = int(joins[:, 0].max(initial=reference_start))
+        reference_end = int(joins[:, _MEMBER_REFERENCE].max(initial=reference_start))
         snapshots = references[
             reference_start - base.references : reference_end - base.references
         ]
-        detail_end = detail_start + int(snapshots[:, 11].sum(dtype=np.float64))
+        detail_end = detail_start + int(
+            snapshots[:, _REFERENCE_DETAIL_COUNT].sum(dtype=np.float64)
+        )
         blocks = (
             header,
             details[detail_start - base.details : detail_end - base.details],
@@ -264,7 +276,11 @@ def _record_chunk(
                 for a, b in zip(candidate.rows, blocks, strict=True)
             )
         ):
-            end = int(header[0, 8]) * 65536 + int(header[0, 9]) + 1
+            end = (
+                int(header[0, _RECORD_LAST_HIGH]) * 65536
+                + int(header[0, _RECORD_LAST_LOW])
+                + 1
+            )
             candidate = RecordNode(
                 parent,
                 blocks,
@@ -327,33 +343,39 @@ class CompactObservation(PrefixObservation):
         rows: Mapping[str, np.ndarray],
         prefixes: Sequence[Prefix],
         capacities: MemoryCapacities,
+        *,
+        memory: Mapping[str, np.ndarray] | None = None,
     ) -> None:
         super().__init__(rows, prefixes, capacities)
-        self.update(gather_memory(self.prefixes))
+        self.update(gather_memory(self.prefixes) if memory is None else memory)
 
 
 def select_rows(
-    rows: Mapping[str, np.ndarray], indexes: np.ndarray
-) -> dict[str, np.ndarray]:
-    if isinstance(rows, CompactObservation):
-        selected = CompactObservation(
-            {key: value[indexes] for key, value in rows.items()},
-            [rows.prefixes[int(i)] for i in indexes],
-            rows.memory_capacities,
+    rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
+) -> Mapping[str, np.ndarray]:
+    from manabot.policy.spans import ObservationSelection
+
+    if type(rows) is ObservationSelection:
+        return rows.select(indexes)
+    # Deprecated dense row slicing; removed in 0.3.0.
+    selected = {key: value[indexes] for key, value in rows.items()}
+    if isinstance(rows, PrefixObservation):
+        prefixes = (
+            rows.prefixes[indexes]
+            if isinstance(indexes, slice)
+            else tuple(rows.prefixes[int(i)] for i in indexes)
         )
-        # An explicit export is arbitrary dense input, including edits made
-        # after export. Never replace those bytes with its original prefix.
-        selected.update({key: rows[key][indexes] for key in MEMORY_FIELDS})
-        return selected
-    if isinstance(rows, PrefixObservation) and not any(
-        key in rows for key in MEMORY_FIELDS
-    ):
-        return PrefixObservation(
-            {k: v[indexes] for k, v in rows.items() if k not in MEMORY_FIELDS},
-            [rows.prefixes[int(i)] for i in indexes],
-            rows.memory_capacities,
-        )
-    return {k: v[indexes] for k, v in rows.items()}
+        if isinstance(rows, CompactObservation):
+            # Dense exports may contain edits made after prefix capture.
+            return CompactObservation(
+                selected,
+                prefixes,
+                rows.memory_capacities,
+                memory={key: selected[key] for key in MEMORY_FIELDS},
+            )
+        if not any(key in rows for key in MEMORY_FIELDS):
+            return PrefixObservation(selected, prefixes, rows.memory_capacities)
+    return selected
 
 
 def gather_bytes(prefixes: Sequence[Prefix]) -> int:
@@ -483,16 +505,23 @@ class MemoryStore:
         """Capture selected native streams; unchanged cursors do no row work.
 
         Generation, chooser, counts and coalesced-tail revision are compared in
-        bulk. Only changed rows enter scalar capture and its full admission.
+        bulk. Dense buffers use global slot indexes. A native selection is
+        already in requested order, while stream identities still use global
+        slots. Only the changed suffix enters chunk admission.
         The seed is checked independently so an identity change within a native
         generation still fails rather than reusing an unrelated issued prefix.
         """
+        from manabot.policy.spans import ObservationSelection
+
+        native = type(buffers) is ObservationSelection
         count = len(seeds)
         if self._live_prefixes.shape != (count, 2):
             self._live_prefixes = np.full((count, 2), None, object)
             self._live_metadata = np.zeros((count, 2, 7), np.uint64)
             self._live_valid = np.zeros((count, 2), np.bool_)
         selected_seats = np.asarray(seats, dtype=np.int64)[rows]
+        if ((selected_seats < 0) | (selected_seats > 1)).any():
+            raise ValueError("decision-memory capture requires a live seat (0 or 1)")
         selected_epochs = np.asarray(epochs, dtype=np.uint64)[rows]
         selected_seeds = np.asarray(seeds, dtype=np.uint64)[rows]
         selected_cursors = np.asarray(cursors, dtype=np.uint64)[rows, selected_seats]
@@ -506,33 +535,36 @@ class MemoryStore:
             counts = selected_cursors[changed, :4]
             if (counts > np.asarray(self.capacities)).any():
                 raise ValueError("decision-memory native counts exceed capacity")
-            for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-                if buffers[key].dtype != np.float32 or buffers[key].shape != (
-                    count,
-                    capacity,
-                    MEMORY_WIDTHS[key],
-                ):
-                    raise ValueError(
-                        "decision-memory capacity mismatch or non-float32 transport"
-                    )
+            if not native:
+                for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
+                    if buffers[key].dtype != np.float32 or buffers[key].shape != (
+                        count,
+                        capacity,
+                        MEMORY_WIDTHS[key],
+                    ):
+                        raise ValueError(
+                            "decision-memory capacity mismatch or non-float32 transport"
+                        )
         for index in changed:
             row, seat = int(rows[index]), int(selected_seats[index])
+            epoch = int(selected_epochs[index])
             old = previous[index]
             # A game's viewer identity is created once, even across changed tails.
             identity = (
                 old.identity
                 if isinstance(old, Prefix)
-                and old.native_epoch == int(selected_epochs[index])
+                and old.native_epoch == epoch
                 and selected_seeds[index] == self._live_metadata[row, seat, 1]
-                else PrefixIdentity(str(seeds[row]), seat, str(seeds[row]))
+                else PrefixIdentity(str(seeds[row]), seat, str(epoch))
             )
             previous[index] = self._capture_live_admitted(
                 buffers,
                 row,
                 identity,
-                epoch=int(selected_epochs[index]),
+                epoch=epoch,
                 counts=selected_cursors[index, :4],
                 tail_version=int(selected_cursors[index, 4]),
+                native_index=int(index) if native else None,
             )
         self._live_prefixes[rows, selected_seats] = previous
         self._live_metadata[rows, selected_seats] = metadata
@@ -587,6 +619,7 @@ class MemoryStore:
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
+        native_index: int | None = None,
     ) -> Prefix:
         """Native transport shape/count admission precedes this chunk admission."""
         previous = self._streams.get((row, identity.viewer))
@@ -610,11 +643,20 @@ class MemoryStore:
             else None
         )
         cursor = tail.cursor if tail else MemoryCursor()
-        rows = tuple(
-            buffers[key][row, :count]
-            for key, count in zip(MEMORY_FIELDS, counts, strict=True)
-        )
-        for blocks in record_chunks(rows, _CHUNK_ROWS, cursor):
+        starts = (cursor.records, cursor.details, cursor.references, cursor.members)
+        if native_index is not None:
+            from manabot.policy.spans import ObservationSelection
+
+            assert isinstance(buffers, ObservationSelection)
+            rows = buffers.live_memory(native_index, starts)
+        else:
+            rows = tuple(
+                buffers[key][row, start:count]
+                for key, start, count in zip(MEMORY_FIELDS, starts, counts, strict=True)
+            )
+        for blocks in record_chunks(
+            rows, _CHUNK_ROWS, reference_offset=cursor.references
+        ):
             tail = self._append(tail, self._intern(blocks))
         serving = RecordVersion()
         if tail is not None and old_tail is not None:

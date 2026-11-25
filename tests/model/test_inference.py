@@ -27,6 +27,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from tests.fixtures.dense_collector import dense_collector
 from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, program_input
 
@@ -62,7 +63,11 @@ class PolicyFixture:
 
 
 def _policy(
-    *, semantic: bool = True, history: bool = False, input_version: int | None = None
+    *,
+    semantic: bool = True,
+    history: bool = False,
+    input_version: int | None = None,
+    bucketed_shapes: bool = False,
 ) -> PolicyFixture:
     torch.set_num_threads(1)
     torch.manual_seed(819)
@@ -78,7 +83,7 @@ def _policy(
     if not semantic:
         config.agent.world = None
     space = ObservationSpace(config.observation)
-    agent = ActorCritic(space, config.agent).eval()
+    agent = ActorCritic(space, config.agent, bucketed_shapes=bucketed_shapes).eval()
     collector = open_collector(
         space,
         Match(config.match),
@@ -88,6 +93,7 @@ def _policy(
         opponent_mode="self",
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
+    dense_collector(collector)
     return PolicyFixture(
         agent, collector, collection._retain_obs_rows(collector, np.arange(2))
     )

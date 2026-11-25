@@ -13,13 +13,13 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     belief_schema_from_engine,
 )
+from manabot.belief.protocol import BeliefPolicy
 from manabot.belief.state import (
     BeliefError,
     BeliefModel,
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
-from manabot.policy.protocol import BackendPolicy
 from managym.decision import Command, Observation, SemanticTransition
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -96,7 +96,7 @@ class ManabotPlayer:
 
     def __init__(
         self,
-        policy_value: BackendPolicy,
+        policy_value: BeliefPolicy,
         *,
         belief_model: BeliefModel | None = None,
         belief_schema: BeliefEncodingSchema | None = None,

@@ -1,4 +1,4 @@
-"""Deck/seat matrices for authored and imported world-bound evaluation pairs."""
+"""Deck/seat matrices for authored and imported evaluation pairs."""
 
 from __future__ import annotations
 
@@ -8,8 +8,13 @@ from pydantic import Field, model_validator
 
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
-from managym import WORLD_SETUP, WORLD_VERSION, Deck
+from managym import WORLD_SETUP, Deck
 from managym.disclosure import DecklistDisclosure
+
+# Matchup ids were prefixed with the world label while the engine carried one.
+# The prefix stays as a plain string so a resumed tournament finds the matchups
+# it already recorded; it says nothing about the installed engine.
+SUITE_PREFIX = "w17"
 
 
 def _deck_pair[T](pair: tuple[T, T], leg: int) -> tuple[T, T]:
@@ -46,7 +51,7 @@ class AuthoredMatchup(StrictModel):
 
     @property
     def content_suite(self) -> str:
-        return f"{WORLD_VERSION}-authored-matrix-{canonical_sha256(self.model_dump())}"
+        return f"{SUITE_PREFIX}-authored-matrix-{canonical_sha256(self.model_dump())}"
 
     def decks(self, leg: int) -> tuple[str, str]:
         return _deck_pair((self.role_a, self.role_b), leg)
@@ -73,10 +78,13 @@ class DeckMatchup(StrictModel):
     population_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     entries: tuple[str, str]
     lists: tuple[Deck, Deck]
+    decklists: DecklistDisclosure = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @property
     def content_suite(self) -> str:
-        return f"{WORLD_VERSION}-deck-matrix-{canonical_sha256(self.model_dump(mode='json'))}"
+        return f"{SUITE_PREFIX}-deck-matrix-{canonical_sha256(self.model_dump(mode='json'))}"
 
     def decks(self, leg: int) -> tuple[str, str]:
         return _deck_pair(self.entries, leg)
@@ -86,6 +94,7 @@ class DeckMatchup(StrictModel):
         first, second = _deck_pair(self.lists, leg)
         return MatchConfig(
             world=WORLD_SETUP,
+            decklists=self.decklists,
             hero=hero,
             villain=villain,
             hero_deck=first.main,
@@ -95,7 +104,7 @@ class DeckMatchup(StrictModel):
         )
 
 
-SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"
+SELECTED_SUITE = f"{SUITE_PREFIX}-allies-lessons-v1"
 
 
 def selected_decks(leg: int) -> tuple[str, str]:

@@ -51,16 +51,47 @@ pub fn deck_of(land: &str, card: &str) -> BTreeMap<String, usize> {
 
 /// A two-player game driven by tests. Construction and setup live here;
 /// directed play is in `play.rs` and reads are in `inspect.rs`.
+#[derive(Clone)]
 pub struct Scenario {
     pub(super) game: Game,
 }
 
 impl Scenario {
+    /// Exercise a printed mana activation directly at priority in a rules fixture.
+    pub fn allow_priority_floats(&mut self) {
+        self.game.mana_floats = [managym::state::player::ManaFloats::All; 2];
+        self.game.scenario_refresh_priority().unwrap();
+    }
+
     pub fn new(
         player0_deck: BTreeMap<String, usize>,
         player1_deck: BTreeMap<String, usize>,
         seed: u64,
     ) -> Scenario {
+        let mut scenario = Self::opening(player0_deck, player1_deck, seed);
+        scenario.keep_opening_hands();
+        scenario
+    }
+
+    fn keep_opening_hands(&mut self) {
+        while self.game.state.opening().is_some() {
+            let index = self
+                .game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|a| matches!(a, managym::agent::action::Action::Decline { .. }))
+                .unwrap_or(0);
+            self.game.step(index).unwrap();
+        }
+    }
+
+    pub fn opening(
+        player0_deck: BTreeMap<String, usize>,
+        player1_deck: BTreeMap<String, usize>,
+        seed: u64,
+    ) -> Self {
         let p0 = PlayerConfig::new("p0", player0_deck);
         let p1 = PlayerConfig::new("p1", player1_deck);
         Scenario {
@@ -75,7 +106,7 @@ impl Scenario {
         player1_sideboard: BTreeMap<String, usize>,
         seed: u64,
     ) -> Self {
-        Self {
+        let mut scenario = Self {
             game: Game::new(
                 vec![
                     PlayerConfig::new("p0", player0_deck).with_sideboard(player0_sideboard),
@@ -84,7 +115,9 @@ impl Scenario {
                 seed,
                 false,
             ),
-        }
+        };
+        scenario.keep_opening_hands();
+        scenario
     }
 
     pub fn game(&self) -> &Game {
@@ -174,7 +207,7 @@ impl Scenario {
     }
 
     pub fn set_player_mana_pool(&mut self, player: usize, mana: &str) {
-        self.game.state.players[player].mana_pool = Mana::parse(mana);
+        self.game.state.players[player].mana_pool = Mana::parse(mana).into();
     }
 }
 

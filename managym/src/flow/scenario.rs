@@ -15,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    agent::action::{ActionSpace, ActionSpaceKind, AgentError},
+    agent::action::{ActionSpaceKind, AgentError},
     cards::names::{NameCandidate, NameVocabulary},
     flow::{decision::Decision, game::Game},
     state::{
@@ -198,7 +198,6 @@ impl Game {
                 .resize(object_id.slot() + 1, None);
         }
         self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
-        self.invalidate_mana_cache(player);
         Ok(permanent_id)
     }
 
@@ -209,8 +208,6 @@ impl Game {
     /// call this once, after all injections, while the game is at a priority
     /// decision (e.g. immediately after reset, at the first main phase).
     pub fn scenario_refresh_priority(&mut self) -> Result<(), AgentError> {
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
         let Some(space) = self.current_action_space.as_ref() else {
             return Err(AgentError(
                 "scenario_refresh_priority: no active action space".to_string(),
@@ -229,13 +226,7 @@ impl Game {
             .ok_or_else(|| {
                 AgentError("scenario_refresh_priority: priority space has no player".to_string())
             })?;
-        let actions = self.compute_player_actions(player);
-        self.publish_action_space(ActionSpace {
-            player: Some(player),
-            kind: ActionSpaceKind::Priority,
-            actions,
-            focus: Vec::new(),
-        });
+        self.publish_action_space(self.priority_action_space(player));
         Ok(())
     }
 }

@@ -1,27 +1,40 @@
 ---
-requires: accepted card or mechanic cohort and intended interactions
-produces: working-phase plan and acceptance in the existing scratch design
+requires: a card or mechanic cohort and the interactions it must support
+produces: a slice-ordered implementation plan in `scratch/plan.md`
+action_style: procedural
 ---
-Prepare the working-behavior phase for the selected coherent card batch.
+Plan a card batch in `scratch/plan.md`: what each card needs, which shared mechanism it rides on, and the order to build them in.
 
-1. Read the accepted cohort and its interaction examples. Use the native rules
-   types and catalog as the authority. Identify defining modules, affected
-   consumers, and concrete obsolete symbols to delete; retain required behavior.
-2. Update the existing design with this phase's implementation and focused debug
-   checks. Require complete legal choices, native/Python/LLM observations and
-   learning tokens, replay/fork identity and viewer privacy. Frozen input versions
-   do not change. A new capability needs no invented deletion target. When the
-   batch adds or changes payment, choice, targeting, enumeration or
-   continuous-effect behavior, name the board shape that would make it expensive
-   (which cards, many copies or many different ones), so the later measurement
+1. Read the cohort, its interaction examples and the set ledger. Check each
+   card against the native rules types (`managym/state/`) and catalog
+   (`managym/cards/`), not the ledger's tags. Sort the batch into cards that
+   compose from today's types, cards waiting on a small shared primitive, and
+   cards waiting on an authority another Task owns. Mark the last group
+   pending in the ledger with the missing authority; write no one-off
+   shortcuts for them. When a group needs a new primitive, design it as small
+   orthogonal pieces (selectors, conditions, triggers, effects, replacements)
+   that compose—and reshape cramped existing types when needed—instead of
+   adding specialized variants that fuse multiple axes for one card.
+2. Cut the buildable cards into slices by mechanism, not by card. A slice is
+   one shared primitive with every card in the batch it unlocks, or 10–30
+   cards that already compose. One card is a slice only when it alone
+   exercises a new primitive. List the slices in build order, riskiest
+   primitive first, so each pass builds a whole slice without re-deriving the
+   next one.
+3. Give each slice its checks: the focused `cargo test` filter, the
+   constructed interactions that show its cards working together, and the
+   native, Python, LLM-text and learning-token observations it changes.
+   Offers stay complete; replay, forks and viewer privacy hold; frozen input
+   versions don't change. When a slice changes payment, choice, targeting,
+   enumeration or continuous effects, name the board shape that would make it
+   expensive (which cards, many copies or many different ones) so measurement
    runs it as a [stress state](../../docs/development.md#stress-states).
-3. Record the author-supplied synergies and behavior evidence that integrated
-   validation will consume. Card authors do not choose experimental decks or
-   launch a per-card training campaign. Known bugs remain scoped defects, not
-   native support gates.
-4. Preserve the full batch outcome and later decomposition/performance phases.
-   If work already satisfies this phase, retain its evidence without new edits.
+4. List the obsolete symbols each slice deletes. A new capability needs no
+   invented deletion.
+5. Record the author's synergies and interaction checks in `scratch/plan.md`
+   for integrated validation. Card authors don't choose experiment decks or
+   launch training; known bugs stay scoped defects, not support gates.
 
-The next implementation consumes this plan in the same checkout. A cross-Task
-handoff names a committed revision and paths whose contents the recipient reads;
-a path in another checkout alone is not a transfer.
+Run again on an existing plan, keep finished slices and change only what the
+code now contradicts. A cross-Task handoff names a committed revision and
+paths, never just a path in another checkout.

@@ -50,11 +50,9 @@ def first_valid_actions(obs: dict[str, torch.Tensor]) -> torch.Tensor:
 class TestVectorEnvPotential:
     def _blank_tensors(self, env: VectorEnv) -> tuple[torch.Tensor, torch.Tensor]:
         """Blank board rows (input v11 permanents) and player rows."""
-        encoder = env.observation_space.encoder
-        board = torch.zeros(
-            (env.num_envs, encoder.perms_per_player, encoder.permanent_dim)
-        )
-        players = torch.zeros((env.num_envs, 1, encoder.player_dim))
+        shapes = env.observation_space.shapes
+        board = torch.zeros((env.num_envs, *shapes["agent_permanents"]))
+        players = torch.zeros((env.num_envs, *shapes["agent_player"]))
         return board, players
 
     def _add_card(
@@ -76,7 +74,7 @@ class TestVectorEnvPotential:
             cards[env_index, slot, env_ref._land_index] = 1.0
         if is_creature:
             cards[env_index, slot, env_ref._creature_index] = 1.0
-        cards[env_index, slot, -1] = 1.0  # validity
+        cards[env_index, slot, env_ref._valid_index] = 1.0
 
     def test_potential_sign_conventions(self):
         config = RewardConfig(

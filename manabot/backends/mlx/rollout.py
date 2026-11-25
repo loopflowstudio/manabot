@@ -10,6 +10,7 @@ Admission is recorded per row, so later epochs do not repeat the checks.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import AbstractContextManager
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
@@ -17,69 +18,63 @@ import mlx.core as mx
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.backends.mlx.rl import NumericalError, check_behavior, legal_mask, require
 from manabot.policy.prepare import Prepared
+from manabot.training.rollout.admission import AdmittedRows
 
 if TYPE_CHECKING:
     from manabot.training.rollout.actions import ActionRows, PackedActions
-    from manabot.training.rollout.collection import RolloutBatch
 
 
-class AdmittedRollout:
+def observation_arrays(obs: Prepared[np.ndarray]) -> dict[str, np.ndarray]:
+    """Top-level host arrays retained as numerical incident evidence."""
+    return {
+        item.name: value
+        for item in fields(obs)
+        if isinstance(value := getattr(obs, item.name), np.ndarray)
+    }
+
+
+class AdmittedRollout(AdmittedRows):
     """A rollout batch whose observations one MLX policy reads. The batch must
     not change afterwards."""
 
-    def __init__(self, agent: MLXActorCritic, batch: "RolloutBatch") -> None:
-        self.agent = agent
-        self.batch = batch
-        self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        self._next = agent.prepare(batch.next_obs)
-
-    def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
-        """Validate learner rows in bounded chunks, once across all epochs."""
-        pending = np.unique(indexes[~self._admitted[indexes]])
-        for start in range(0, len(pending), chunk_rows):
-            chunk = pending[start : start + chunk_rows]
-            self.agent.check_observation(self.batch.observations(chunk).observation)
-            self._admitted[chunk] = True
-
-    def next_observation(self, device: object) -> Prepared:
-        """Bootstrap observations [trajectory, ...]."""
-        return self._next
+    def next_observation(self, device: object) -> Prepared | None:
+        """Inference-prepared bootstrap observations [trajectory, ...]."""
+        return next(
+            self.next_observations(device, max(1, len(self.batch.next_done))), None
+        )
 
     def next_observations(self, device: object, size: int) -> Iterator[Prepared]:
-        # Explicit limits are refused by the MLX learner before this path.
-        yield self._next
+        """Admit and prepare one bootstrap chunk at a time."""
+        return self.bootstrap_inputs(size)
 
     def rows(
         self, indexes: NDArray[np.int64], device: object
     ) -> "tuple[Prepared, ActionRows]":
         """Prepared observations of flat rollout `indexes`, with their behavior
         distributions."""
-        if not self._admitted[indexes].all():
-            raise ValueError("rollout rows were not admitted")
-        rows = self.batch.observations(indexes)
-        return self.agent.prepare_admitted(rows.observation), rows
+        return self.prepare_rows(indexes)
+
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: object
+    ) -> AbstractContextManager[
+        Iterator[tuple[NDArray[np.int64], Prepared[np.ndarray], ActionRows]]
+    ]:
+        return self.prefetch_minibatches(order, size)
 
     def legal(self, obs: Prepared) -> mx.array:
         """The legal-action mask [B,A] of rows this rollout returned."""
         return mx.array(obs.legal)
 
-    def evidence(self, obs: Prepared) -> dict[str, np.ndarray]:
-        """The arrays a rejected step retains for rows this rollout returned."""
-        return {
-            item.name: value
-            for item in fields(obs)
-            if isinstance(value := getattr(obs, item.name), np.ndarray)
-        }
+    evidence = staticmethod(observation_arrays)
 
 
 def packing_mask(
     mask: NDArray[np.generic], logs: NDArray[np.generic]
 ) -> NDArray[np.bool_]:
     """Validate legal support and padding before the host drops padding rows."""
-    valid = np.array(legal_mask(mx.array(mask)))
+    valid = mask if mask.dtype == np.bool_ else np.array(legal_mask(mx.array(mask)))
     if valid.ndim != 2 or logs.shape != valid.shape:
         raise ValueError("packed actions require matching [B,A] distributions")
     if np.any(~np.isneginf(logs[~valid])):
@@ -116,7 +111,7 @@ def check_packed(
         )
     for start in range(0, len(packed.offsets) - 1, 32):
         indexes = np.arange(start, min(start + 32, len(packed.offsets) - 1))
-        rows = packed.unpack(indexes)
+        rows = packed.behavior(indexes)
         try:
             check_behavior(
                 mx.array(rows.log_probabilities),

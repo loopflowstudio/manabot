@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import STACK_DEFINITION_INDEX
+from manabot.env.observation import STACK_DEFINITION_INDEX, encode_observation
 from manabot.training.rollout.collection import collect
 from manabot.verify.text_observation import priority_root
 from tests.model.prepared_routes import device_input
@@ -51,7 +51,9 @@ def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
         observation = env.observation_for_player(env.current_agent_index())
         obs = {
             key: torch.from_numpy(value[None]).float()
-            for key, value in case.agent.observation_space.encode(observation).items()
+            for key, value in encode_observation(
+                case.agent.observation_space, observation
+            ).items()
         }
     else:
         obs = _decisions(case, 48)

@@ -18,7 +18,14 @@ import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM, ObservationSpace
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    ACTION_MODE_INDEX,
+    NAME_DIM,
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import ModelConfig
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
@@ -126,19 +133,13 @@ def _command(frame: dict, offer: int, tag: str) -> str:
     )
 
 
-def _assert_scalar_parity(env: managym.Env, space: ObservationSpace) -> dict:
-    raw = env.observation_for_player(env.current_agent_index())
-    reference = space.encode(raw)
-    native = env.encode_observation(raw)
-    into = space.encoder.allocate()
-    env.encode_observation_into(raw, into)
-    for key in reference:
-        np.testing.assert_allclose(native[key], reference[key], atol=1e-6, err_msg=key)
-        np.testing.assert_array_equal(into[key], native[key], err_msg=key)
-    return reference
+def _acting_input(env: managym.Env, space: ObservationSpace) -> dict:
+    return encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
 
 
-def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
+def test_catalog_naming_groups_then_names_with_private_text(
     naming_root: managym.Env,
 ) -> None:
     space = ObservationSpace()
@@ -146,7 +147,7 @@ def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
     # Ordinary capacity, independent of the vocabulary.
     assert space.shapes["name_candidates"] == (512, NAME_DIM)
     raw = naming_root.observation_for_player(naming_root.current_agent_index())
-    reference = _assert_scalar_parity(naming_root, space)
+    reference = _acting_input(naming_root, space)
     groups = [action.name_group for action in raw.action_space.actions]
     assert all(group is not None for group in groups)
     assert 2 <= len(groups) <= managym.NAME_BRANCHING
@@ -170,7 +171,7 @@ def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
     path = _name_path(leaf, "Fire Lord Sozin")
     assert len(path) == 1
     raw = leaf.observation_for_player(0)
-    reference = _assert_scalar_parity(leaf, space)
+    reference = _acting_input(leaf, space)
     first, last = groups[path[0]]
     assert [a.name_index for a in raw.action_space.actions] == list(
         range(first, last + 1)
@@ -222,7 +223,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
     space = ObservationSpace()
     assert space.shapes["actions"][0] == 512
-    values = _assert_scalar_parity(root, space)
+    values = _acting_input(root, space)
     raw = root.observation_for_player(0)
     groups = [action.name_group for action in raw.action_space.actions]
     assert len(groups) == -(-len(catalog) // managym.NAME_BRANCHING)
@@ -254,13 +255,8 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     vector.reset_all(_players())
     for action in naming_trace.actions:
         vector.step([action])
-    buffers = space.encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
-    vector.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, 1)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.scenario_naming_vocabulary_into_buffers()
     for key, expected in values.items():
         np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
@@ -272,7 +268,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     vector.step_into_buffers([target])
     leaf_frame = json.loads(leaf.semantic_decision_frame_json())
     assert json.loads(vector.semantic_decision_frames_json()[0]) == leaf_frame
-    leaf_values = _assert_scalar_parity(leaf, space)
+    leaf_values = _acting_input(leaf, space)
     for key, expected in leaf_values.items():
         np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
     with pytest.raises(Exception, match="revision|stale"):
@@ -333,7 +329,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 branch.semantic_decision_frame_json()
             )
-            for key, expected in space.encode(pending).items():
+            for key, expected in encode_observation(space, pending).items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
         if searching:
             stop = next(
@@ -379,7 +375,7 @@ def test_catalog_naming_programs_affect_scores(
     leaf = naming_root.clone_env()
     _name_path(leaf, "Fire Lord Sozin")
     raw = leaf.observation_for_player(0)
-    tensors = _tensor(space.encode(raw))
+    tensors = _tensor(encode_observation(space, raw))
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
     logits, _ = model(device_input(model, tensors))
@@ -398,7 +394,7 @@ def test_catalog_naming_programs_affect_scores(
 
 
 @pytest.mark.parametrize("change", ["name", "order", "definition", "representation"])
-def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
+def test_naming_checkpoint_binds_names_before_loading_weights(
     naming_root: managym.Env,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -408,7 +404,7 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
-    tensors = _tensor(space.encode(naming_root.observation_for_player(0)))
+    tensors = _tensor(encode_observation(space, naming_root.observation_for_player(0)))
     path = tmp_path / "naming.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
@@ -437,8 +433,18 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
         del checkpoint["world_binding"]["naming_representation"]
         write_checkpoint(checkpoint, path)
     monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
+    # Learned name rows bind by name: reordering or rejoining a name loads,
+    # while a vanished name or another naming representation refuses.
+    refusal = {
+        "name": "missing learned naming rows",
+        "representation": "binding for naming_representation",
+    }.get(change)
     with patch.object(ActorCritic, "load_state_dict") as load_weights:
-        with pytest.raises(ValueError, match="world/setup/input binding differs"):
+        if refusal is None:
+            load_checkpoint(str(path))
+            load_weights.assert_called_once()
+            return
+        with pytest.raises(ValueError, match=refusal):
             load_checkpoint(str(path))
         load_weights.assert_not_called()
 
@@ -454,7 +460,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         # The following private search has no naming candidates.
         env.step(_offer_toward(env, "Gray Ogre")[0])
     space = ObservationSpace()
-    tensors = _tensor(space.encode(env.observation_for_player(0)))
+    tensors = _tensor(encode_observation(space, env.observation_for_player(0)))
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
@@ -498,13 +504,8 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     space = ObservationSpace()
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
-    buffers = space.encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
-    vector.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, 1)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(_players())
     raw = scalar.reset(_players())[0]
     # Replay one Command trace through both step APIs so their per-step events
@@ -517,7 +518,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     assert not buffers["name_candidates"][0, :, :2].any()
     # Group prompt, then leaf prompt, then the private search without names.
     for stage in ("group", "leaf"):
-        for key, expected in space.encode(raw).items():
+        for key, expected in encode_observation(space, raw).items():
             np.testing.assert_allclose(
                 buffers[key][0], expected, atol=1e-6, err_msg=f"{stage}:{key}"
             )
@@ -535,7 +536,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
         raw = scalar.step(index)[0]
         vector.step_into_buffers([index])
     assert not buffers["name_candidates"].any()
-    for key, expected in space.encode(raw).items():
+    for key, expected in encode_observation(space, raw).items():
         np.testing.assert_allclose(buffers[key][0], expected, atol=1e-6, err_msg=key)
 
 
@@ -556,7 +557,7 @@ def _mixed_naming_batch(
         ]
     )
     arrays = [
-        space.encode(env.observation_for_player(env.current_agent_index()))
+        encode_observation(space, env.observation_for_player(env.current_agent_index()))
         for env in (naming_root, leaf, search, ordinary)
     ]
     return space, {
@@ -637,7 +638,7 @@ def test_legal_row_scoring_rejects_malformed_joins(naming_root: managym.Env) -> 
     model = ActorCritic(space, ModelConfig(hidden_dim=8))
     # Batch row 0 is a group prompt, row 1 a name prompt.
     for key, row, column, value, message in (
-        ("actions", 1, -2, 0.5, "continuation reference"),
+        ("actions", 1, ACTION_CONTINUATION_INDEX, 0.5, "continuation reference"),
         ("action_focus", 1, 0, -2, "focus reference"),
         ("name_candidates", 1, 1, 0, "disagrees with vocabulary"),
         ("name_candidates", 0, 3, 0, "group span"),
@@ -656,7 +657,9 @@ def test_equal_rule_names_learn_opposite_public_preferences(
 
     Supervised targets name the publicly disclosed card. Equalize two installed
     programs at the encoder boundary: the names, native admission and real game
-    definitions are untouched. A program-only state cannot solve this pair.
+    definitions are untouched. A program-only state cannot solve this pair, so
+    this holds for models that add names onto definitions (checkpoints written
+    before `definition_names`); fresh models keep names on candidates only.
     """
     torch.set_num_threads(1)
     torch.manual_seed(243)
@@ -664,7 +667,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
     offers = leaf.observation_for_player(0).action_space.actions
-    batch = _tensor(space.encode(leaf.observation_for_player(0)))
+    batch = _tensor(encode_observation(space, leaf.observation_for_player(0)))
     model = ActorCritic(
         space,
         ModelConfig(
@@ -672,6 +675,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
             world=managym.WORLD_SETUP,
             attention_on=False,
             policy_film=True,
+            definition_names=True,
         ),
     ).eval()
     # Both names share one leaf prompt; choices are its offer rows.

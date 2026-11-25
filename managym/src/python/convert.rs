@@ -2,7 +2,7 @@
 use crate::infra::profiler::{InfoDict, InfoValue};
 #[cfg(feature = "python")]
 use pyo3::{
-    exceptions::{PyKeyError, PyTypeError, PyValueError},
+    exceptions::{PyTypeError, PyValueError},
     prelude::*,
     types::{PyAny, PyDict, PyDictMethods},
     Bound, Python,
@@ -36,6 +36,20 @@ pub fn shape_to_vec(shape_obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
     shape_obj.extract::<Vec<usize>>()
 }
 
+/// Refuse a buffer value that is not a NumPy array, naming the buffer.
+#[cfg(feature = "python")]
+pub fn require_ndarray(key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let ndarray = value.py().import_bound("numpy")?.getattr("ndarray")?;
+    if !value.is_instance(&ndarray)? {
+        let type_name = value.get_type().qualname()?;
+        return Err(PyTypeError::new_err(format!(
+            "buffer '{key}' must be a NumPy array, got {type_name}; \
+             allocate NumPy buffers and convert them with torch.from_numpy"
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(feature = "python")]
 pub fn require_numpy_array<'py>(
     dict: &Bound<'py, PyDict>,
@@ -44,27 +58,19 @@ pub fn require_numpy_array<'py>(
     expected_dtype_name: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
     let Some(value) = dict.get_item(key)? else {
-        return Err(PyKeyError::new_err(format!(
+        return Err(PyValueError::new_err(format!(
             "buffers missing required key '{key}'"
         )));
     };
 
-    let ndarray = dict.py().import_bound("numpy")?.getattr("ndarray")?;
-    if !value.is_instance(&ndarray)? {
-        let type_name = value.get_type().qualname()?;
-        return Err(PyTypeError::new_err(format!(
-            "buffer '{key}' must be a NumPy array, got {type_name}; \
-             allocate NumPy buffers and convert them with torch.from_numpy"
-        )));
-    }
+    require_ndarray(key, &value)?;
 
-    let dtype_name = value
-        .getattr("dtype")?
-        .getattr("name")?
-        .extract::<String>()?;
-    if dtype_name != expected_dtype_name {
+    let dtype = value.getattr("dtype")?;
+    if dtype.getattr("name")?.extract::<String>()? != expected_dtype_name
+        || !dtype.getattr("isnative")?.is_truthy()?
+    {
         return Err(PyTypeError::new_err(format!(
-            "buffer '{key}' must have dtype {expected_dtype_name}, got {dtype_name}"
+            "buffer '{key}' must have dtype {expected_dtype_name}, got {dtype}"
         )));
     }
 

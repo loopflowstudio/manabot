@@ -1,7 +1,9 @@
 """Local evidence uses the shared arena without training or cloud execution."""
 
 from collections.abc import Iterator
+from dataclasses import asdict
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import Any
@@ -10,19 +12,25 @@ import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
+from manabot.eval.behaviour import PlayCounts, checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
     continue_evaluation,
     evaluate,
+    evaluation_play_counts,
     evaluation_status,
 )
 from manabot.eval.local import checkpoint_request, main as local_main
 from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.checkpoint import read_safetensors, write_safetensors
+from manabot.policy.protocol import BackendName
 from manabot.sim.match import play_game
+from manabot.sim.matchup import DeckMatchup
 from manabot.sim.replay import read_trace, write_trace
+import managym
 from tests.eval.arena_fixture import arena_fixture
 from tests.eval.test_evaluation_policy_inputs import fixture_policy
 
@@ -51,6 +59,24 @@ def _request(
         game_seconds=240,
         backend=TORCH_BACKEND,
     )
+
+
+@pytest.mark.parametrize("revision", ["a" * 40, None])
+def test_checkpoint_request_records_writer_and_stored_programs(
+    tmp_path: Path, revision: str | None
+) -> None:
+    _, _, _, path = fixture_policy(tmp_path)
+    arrays, metadata = read_safetensors(path)
+    metadata["source"] = json.dumps({"commit": revision})
+    write_safetensors(path, arrays, metadata)
+    request = checkpoint_request(path, backend=TORCH_BACKEND)
+    saved = EvaluationRequest.model_validate_json(request.model_dump_json())
+    assert saved.candidate.writer_revision == revision
+    assert ("writer_revision" in saved.candidate.model_dump()) == (revision is not None)
+    assert saved.candidate.stored_programs == len(
+        arrays["buffer/semantic_cards.tokens"]
+    )
+    assert "stored_programs" not in saved.opponent.model_dump()
 
 
 def _anchor_request(seeds: tuple[int, ...] = (101,)) -> EvaluationRequest:
@@ -141,14 +167,31 @@ def test_cli_describes_deal_uncertainty_without_changing_statistics(
     )
 
     def evaluate_local(
-        request: EvaluationRequest, *, deadline: float, out_dir: Path
+        request: EvaluationRequest,
+        *,
+        deadline: float,
+        out_dir: Path,
+        backend_name: BackendName,
     ) -> EvaluationResult:
+        assert backend_name == "mlx"
         return result
 
     monkeypatch.setattr("manabot.eval.local.evaluate_local", evaluate_local)
     source = tmp_path / "request.json"
     source.write_text(request.model_dump_json())
-    assert local_main(["--request", str(source), "--out", str(tmp_path / "cli")]) == 0
+    assert (
+        local_main(
+            [
+                "--request",
+                str(source),
+                "--backend",
+                "mlx",
+                "--out",
+                str(tmp_path / "cli"),
+            ]
+        )
+        == 0
+    )
     output = capsys.readouterr().out
     if len(seeds) == 1:
         assert "score: 1.000 (1 deal block; uncertainty unavailable" in output
@@ -158,12 +201,14 @@ def test_cli_describes_deal_uncertainty_without_changing_statistics(
     assert request.purpose in output
 
 
-def test_cli_completes_without_training_cloud_or_callback(tmp_path: Path) -> None:
+def test_cli_completes_without_training_cloud_or_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _, _, _, path = fixture_policy(tmp_path)
-    # Spawn imports this module-level guard too, so admission/serving/game/replay
-    # children cannot silently take a managed route hidden from parent patches.
-    guard = tmp_path / "offline.py"
-    guard.write_text("""import importlib.abc
+    # Every interpreter, including standalone admission and replay children,
+    # imports the network guard without importing a policy backend.
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join((str(tmp_path), str(Path.cwd()))))
+    (tmp_path / "sitecustomize.py").write_text("""import importlib.abc
 import socket
 import sys
 
@@ -179,6 +224,9 @@ def forbidden(*args, **kwargs):
     raise AssertionError("forbidden cloud/credential/callback entry point")
 
 socket.create_connection = forbidden
+""")
+    guard = tmp_path / "offline.py"
+    guard.write_text("""from sitecustomize import forbidden
 from manabot.backends.torch import checkpoint
 from manabot.infra import artifacts
 artifacts.storage_from_uri = forbidden
@@ -274,6 +322,31 @@ def test_cli_admission_deadline_is_retained(tmp_path: Path) -> None:
     assert not (out / "panel").exists()
 
 
+def test_cli_matchup_file_accepts_deck_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A checkpoint can be seated from the CLI on two deck lists."""
+    deck = managym.Deck({"Mountain": 20, "Lightning Bolt": 40})
+    matchup = DeckMatchup(
+        population_sha256="0" * 64, entries=("a", "b"), lists=(deck, deck)
+    )
+    path = tmp_path / "matchup.json"
+    path.write_text(matchup.model_dump_json())
+    seen: list[object] = []
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        seen.append(args[3])
+        raise ValueError("stop after parsing")
+
+    monkeypatch.setattr("manabot.eval.local.prepare_local_request", refuse)
+    status = local_main(
+        ["--checkpoint", str(tmp_path / "c.safetensors"), "--matchup", str(path)]
+        + ["--out", str(tmp_path / "out")]
+    )
+    assert status == 1
+    assert seen == [matchup]
+
+
 def test_cli_saved_request_retains_deadline_result(tmp_path: Path) -> None:
     request = _request(tmp_path)
     source = tmp_path / "request.json"
@@ -349,6 +422,9 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
         seeds, directory = kwargs["deal_seeds"], kwargs["out_dir"]
         assert isinstance(seeds, tuple) and isinstance(directory, Path)
+        assert kwargs["backend_name"] == (
+            "mlx" if directory.parent.name == "attempts" else "torch"
+        )
         cohorts.append(seeds)
         selected = bound.model_copy(update={"deal_seeds": seeds})
         rows = _replayed_rows(selected)
@@ -368,7 +444,8 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     assert status.complete_deals() == tuple(range(40))
     assert status.score is None
     before = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
-    second = continue_evaluation(out)
+    assert local_main(["--continue", str(out), "--backend", "mlx"]) == 0
+    second = evaluation_status(out)
     assert second.status == "completed"
     assert second.evaluation_id == first.evaluation_id
     assert len(second.rows) == 200
@@ -382,6 +459,75 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
     fresh = evaluate(request, out_dir=tmp_path / "repeat")
     assert fresh.evaluation_id != first.evaluation_id
     assert cohorts[-1] == tuple(range(100))
+
+
+def test_continuation_uses_play_counts_from_the_accepted_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = _anchor_request((11, 9))
+    out = tmp_path / "evaluation"
+
+    def runner(
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        directory = kwargs["out_dir"]
+        rows = _replayed_rows(
+            request.model_copy(update={"deal_seeds": kwargs["deal_seeds"]})
+        )
+        if directory == out:
+            # The first leg has a verified replay but its sibling failed.
+            rows[1].failure = "fixture"
+        verified = [r for r in rows if r.failure is None]
+        play = [
+            asdict(
+                PlayCounts(
+                    seat=seat,
+                    games=1,
+                    turns=(1000 if directory == out else 0) + 10 * r.deal_seed + r.leg,
+                )
+            )
+            for r in verified
+            for seat in (0, 1)
+        ]
+        atomic_json(directory / "statistics.json", {"tables": {"play": play}})
+        _publish_blocks(directory, rows)
+        return [r.model_dump(mode="json") for r in rows], {}, {"passed": True}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", runner)
+    assert evaluate(request, out_dir=out).complete_deals() == (9,)
+    assert continue_evaluation(out).status == "completed"
+    counts = evaluation_play_counts(out)
+    assert counts is not None
+    assert {key: pair[0].turns for key, pair in counts.items()} == {
+        (9, 0): 1090,
+        (9, 1): 1091,
+        (11, 0): 110,
+        (11, 1): 111,
+    }
+    path = out / "statistics.json"
+    historical = json.loads(path.read_bytes())
+    for row in historical["tables"]["play"]:
+        del row["attackers_committed"], row["blockers_committed"]
+    atomic_json(path, historical)
+    counts = evaluation_play_counts(out)
+    assert counts is not None
+    baseline = checkpoint_counts(counts[9, 0], game_seat=0)
+    assert baseline["turns"] == 1090 and "blockers_lost_for_nothing" in baseline
+    assert "chump_blocks" not in baseline and "blockers_committed" not in baseline
+    for unavailable in (
+        [],
+        {"analysis_error": "failed", "tables": None},
+        {"tables": ["play"]},
+        {"tables": {"play": []}},
+    ):
+        atomic_json(path, unavailable)
+        assert evaluation_play_counts(out) is None
+        assert evaluation_status(out).status == "completed"
+    path.write_text('{"tables":')
+    assert evaluation_play_counts(out) is None
+    assert evaluation_status(out).status == "completed"
+    path.unlink()
+    assert evaluation_play_counts(out) is None
 
 
 def test_continuation_rejects_contract_drift_corruption_and_competing_writers(

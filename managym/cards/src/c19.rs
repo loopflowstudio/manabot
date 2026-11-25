@@ -1,8 +1,6 @@
 //! Commander 2019.
 use managym_state::{
-    ability::{
-        Ability, Effect, EffectValue, ObjectSelector, Scope, TriggerCondition, TriggerSubject,
-    },
+    ability::{Ability, Effect, ObjectSelector, Scope, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -35,13 +33,8 @@ fn dockside_extortionist() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens(
                     "token.treasure",
-                    EffectValue::Objects {
-                        of: Box::new(ObjectSelector::each(
-                            Scope::OpponentsControl,
-                            artifacts_and_enchantments,
-                        )),
-                        predicate: None,
-                    },
+                    ObjectSelector::each(Scope::OpponentsControl, artifacts_and_enchantments)
+                        .count(),
                 )],
             }],
             text_box: text_box.into(),

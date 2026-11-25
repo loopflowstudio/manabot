@@ -86,16 +86,16 @@ def test_divergence_and_world_admission(tmp_path: Path) -> None:
     replay = walk(record)
     assert list(replay) == []
     assert replay.stop is not None and replay.stop.status == "diverged"
-    record.identities["world"] = "another-world"
+    record.identities["card_digest"] = "other-cards"
     with pytest.raises(ValueError, match="recorded managym.*running managym"):
         walk(record)
 
 
 def test_vector_record_replays_scalar(tmp_path: Path) -> None:
-    from managym.recording import CapturedVector
+    from managym.recording import RecordedVectorEnv
 
     path = tmp_path / "vector.jsonl"
-    vector = CapturedVector(num_envs=1, seed=7, games_path=path)
+    vector = RecordedVectorEnv(num_envs=1, seed=7, games_path=path)
     vector.reset_all(players())
     vector.step([0])
     vector.close()
@@ -108,26 +108,26 @@ def test_deprecated_names_warn_and_read_the_same_record(tmp_path: Path) -> None:
     from managym.recording import FailureEvidence, read_failure
 
     capture = ScalarCapture(seed=7)
-    with pytest.warns(DeprecationWarning, match="snapshot.*0.4.0"):
+    with pytest.warns(DeprecationWarning, match="snapshot.*0.3.0"):
         assert capture.evidence().model_dump(
             exclude={"seconds"}
         ) == capture.snapshot().model_dump(exclude={"seconds"})
     row = capture.snapshot().model_dump(mode="json", by_alias=True)
-    with pytest.warns(DeprecationWarning, match="GameRecord.*0.4.0"):
+    with pytest.warns(DeprecationWarning, match="GameRecord.*0.3.0"):
         FailureEvidence.model_validate(row)
     path = tmp_path / "record.jsonl"
     capture.games_path = path
     capture.reset(managym.Env(seed=7), players())
     capture.close()
-    with pytest.warns(DeprecationWarning, match="read_record.*0.4.0"):
+    with pytest.warns(DeprecationWarning, match="read_record.*0.3.0"):
         assert read_failure(path) == read_record(path)
 
 
 def test_snapshot_admission_keeps_each_stream_boundary(tmp_path: Path) -> None:
     from managym.academy.launch import read_games
-    from managym.recording import CapturedVector, NativeBoundary, records_from_source
+    from managym.recording import NativeBoundary, RecordedVectorEnv, records_from_source
 
-    vector = CapturedVector(num_envs=2, seed=7)
+    vector = RecordedVectorEnv(num_envs=2, seed=7)
     vector.reset_all(players())
     vector.step([0, 0])
     snapshot = vector.snapshot()
@@ -230,7 +230,7 @@ def test_cli_failure_requires_runtime_admission(
 def test_statistics_sink_repeated_drains_preserve_games(
     tmp_path: Path, vectorized: bool
 ) -> None:
-    from managym.recording import CapturedVector
+    from managym.recording import RecordedVectorEnv
     from managym.statistics import CardPerformance, read_statistics, reduce
 
     recordings = []
@@ -240,12 +240,13 @@ def test_statistics_sink_repeated_drains_preserve_games(
         games_path = root / "games.jsonl"
         options = {"statistics_path": stats_path} if enabled else {}
         if vectorized:
-            vector = CapturedVector(
+            vector = RecordedVectorEnv(
                 num_envs=1, seed=7, stream_offset=3, games_path=games_path, **options
             )
             vector.reset_all(players())
             for _ in range(500):
-                vector.step([0])
+                if vector.step([0])[0][2]:
+                    vector.reset_all(players())
                 if games_path.exists() and len(list(read_records(games_path))) >= 3:
                     break
             else:
@@ -372,7 +373,7 @@ def guarded(name: str, *args: object, **kwargs: object) -> object:
     return original(name, *args, **kwargs)
 builtins.__import__ = guarded
 import managym
-from managym.recording import ScalarCapture, CapturedVector
+from managym.recording import ScalarCapture, RecordedVectorEnv
 from managym.statistics import CardPerformance, read_statistics
 root = Path(sys.argv[1])
 players = [managym.PlayerConfig(str(i), {'Mountain': 12}) for i in (0, 1)]
@@ -389,7 +390,7 @@ for _ in range(500):
         break
 assert env.is_game_over()
 capture.close()
-vector = CapturedVector(num_envs=2, seed=7, stream_offset=4, statistics_path=root / 'vector.jsonl')
+vector = RecordedVectorEnv(num_envs=2, seed=7, stream_offset=4, statistics_path=root / 'vector.jsonl')
 vector.reset_all(players)
 vector.step([0, 0])
 vector.reset_all(players)

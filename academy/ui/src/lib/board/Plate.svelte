@@ -3,7 +3,7 @@
    * A player's plate: who they are, life, zones and floating mana. The plate
    * is the player as a target, so offers on the player outline it.
    */
-  import { floatingTotal, manaText, pooledManaTerms, spendingText } from '$lib/mana';
+  import { floatingTotal, manaText, pooledManaTerms, spendPhrase, spendingText } from '$lib/mana';
   import { poolSymbols } from './payment';
   import Pips from './Pips.svelte';
   import type { CardState, PlayerState } from '$lib/types';
@@ -26,7 +26,7 @@
 
   let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
-  const hand = $derived(player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length);
+  const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
     { key: 'Hand', count: hand, cards: null },
     { key: 'Library', count: player.library_count, cards: null },
@@ -38,13 +38,14 @@
   // Mana that is not plain (restricted, with an effect when spent, or lasting
   // only to end of combat) says so beside the pips; each is part of the total.
   const special = $derived([
-    ...(player.restricted_mana ?? []).map(part => ({ mana: part.mana, terms: `only for ${spendingText(part)}` })),
+    ...(player.restricted_mana ?? []).map(part => ({ mana: part.mana, terms: spendPhrase(spendingText(part)) })),
     ...(player.pooled_mana_classes ?? []).map(pool => ({ mana: pool.mana, terms: pooledManaTerms(pool) })),
   ]);
   /** Floating mana no class line describes: plain mana, by colour. */
   const plain = $derived(total.map((amount, color) => Math.max(0, amount - special.reduce((sum, part) => sum + (part.mana[color] ?? 0), 0))));
   const hasPlain = $derived(plain.some(Boolean));
-  const label = $derived(`${name}, ${player.life} life${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
+  const counters = $derived(Object.entries(player.counters ?? {}).map(([kind, count]) => `${count} ${kind}`).join(', '));
+  const label = $derived(`${name}, ${player.life} life${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
 <section class="plate" aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
@@ -63,6 +64,7 @@
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
       {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
+    {#if counters}<span class="type-caption">{counters}</span>{/if}
   </button>
   <ul class="zones">
     {#each zones as zone (zone.key)}

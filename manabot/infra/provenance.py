@@ -69,13 +69,8 @@ def runtime_fingerprints(
     *,
     match_config: MatchConfig | None = None,
     observation_space: ObservationSpace | None = None,
-    world: str = managym.WORLD_VERSION,
 ) -> dict[str, Any]:
     """Return identities that the pre-registration freezes before a run."""
-    if world != managym.WORLD_VERSION:
-        raise ValueError(
-            f"Runtime is {managym.WORLD_VERSION}; cannot register it as {world}"
-        )
 
     obs_space = observation_space or ObservationSpace()
     matchup = match_config or MatchConfig(
@@ -98,14 +93,13 @@ def runtime_fingerprints(
     }
     action_abi = {
         "enum": {member.name: int(member.value) for member in ActionEnum},
-        "max_actions": obs_space.encoder.max_actions,
+        "max_actions": obs_space.config.max_actions,
         "actions_shape": list(obs_space.shapes["actions"]),
         "action_focus_shape": list(obs_space.shapes["action_focus"]),
         "actions_valid_shape": list(obs_space.shapes["actions_valid"]),
     }
     extension_path = Path(managym._managym.__file__)
     return {
-        "world": world,
         "engine_source_sha256": source_bundle_sha256(engine_source_paths()),
         "engine_extension_sha256": file_sha256(extension_path),
         "engine_extension_name": extension_path.name,

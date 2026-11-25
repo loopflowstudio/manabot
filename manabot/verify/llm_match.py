@@ -37,7 +37,7 @@ from manabot.verify.llm_game import CheckpointOpponent, GameConfig, GameSummary,
 
 if TYPE_CHECKING:
     from manabot.llm.openrouter import OpenRouterSession
-    from manabot.policy.protocol import Backend
+    from manabot.policy.protocol import SeededPolicyLoader, SimulationBackend
 
 
 class Game(BaseModel):
@@ -117,7 +117,9 @@ def seated(match: Match) -> tuple[int, Code, CheckpointPlayer]:
     return index, llm, checkpoint
 
 
-def checkpoint_opponent(player: CheckpointPlayer, cache: Path) -> CheckpointOpponent:
+def checkpoint_opponent(
+    player: CheckpointPlayer, cache: Path, *, backend: "SimulationBackend"
+) -> CheckpointOpponent:
     """The seated checkpoint, verified and loaded on the CPU once.
 
     A local file is verified in place; a stored object is downloaded into
@@ -128,7 +130,9 @@ def checkpoint_opponent(player: CheckpointPlayer, cache: Path) -> CheckpointOppo
         raise ValueError(f"{player.name} is not a checkpoint with a digest and size")
     cache.mkdir(parents=True, exist_ok=True)
     path = fetch_etude_checkpoint(artifact, cache / artifact.sha256)
-    return CheckpointOpponent(path, artifact.sha256, artifact.size_bytes)
+    return CheckpointOpponent(
+        path, artifact.sha256, artifact.size_bytes, backend=backend
+    )
 
 
 def play_game(
@@ -136,7 +140,7 @@ def play_game(
     session: "InferenceSession | OpenRouterSession",
     opponent: CheckpointOpponent,
     *,
-    backend: "Backend",
+    backend: "SeededPolicyLoader",
 ) -> Result:
     """Play the match's one game and return its rows and record; see the module docstring.
 

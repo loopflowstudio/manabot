@@ -3,7 +3,10 @@
 // offered actions, and the observation/command contract checks.
 
 use managym::{
-    agent::action::{Action, ActionSpace, ActionType},
+    agent::{
+        action::{Action, ActionSpace, ActionSpaceKind, ActionType},
+        observation::{Observation, PermanentData},
+    },
     flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
@@ -11,7 +14,7 @@ use managym::{
         effect::Modification,
         game_object::{Object, ObjectId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
-        stack_object::StackObject,
+        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
         target::Target,
         zone::ZoneType,
     },
@@ -231,6 +234,40 @@ pub fn stack_spell_card(s: &Scenario, name: &str) -> ObjectId {
 // Permanents
 // ---------------------------------------------------------------------------
 
+/// The topmost spell on the stack, with the receipt of what paid for it.
+pub fn top_spell(s: &Scenario) -> &SpellOnStack {
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .rev()
+        .find_map(|object| match object {
+            StackObject::Spell(spell) => Some(spell),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("a spell is on the stack: {:?}", s.action_space()))
+}
+
+/// The topmost activated ability on the stack, with the receipt of what paid
+/// for it.
+pub fn top_activation(s: &Scenario) -> &ActivatedAbilityOnStack {
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .rev()
+        .find_map(|object| match object {
+            StackObject::ActivatedAbility(ability) => Some(ability),
+            _ => None,
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "an activated ability is on the stack: {:?}",
+                s.action_space()
+            )
+        })
+}
+
 /// Player 0's first battlefield permanent with this name.
 pub fn permanent_named(s: &Scenario, name: &str) -> PermanentId {
     s.battlefield_permanents_named(0, name)[0]
@@ -256,6 +293,19 @@ pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
 
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
     permanent(s, id).tapped
+}
+
+/// A battlefield permanent's row as player 0 observes it, on either side.
+pub fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
+    let permanent = s.game().state.permanents[id].as_ref().unwrap();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    observation
+        .agent_permanents
+        .iter()
+        .chain(&observation.opponent_permanents)
+        .find(|p| p.id == permanent.id.0 as i32)
+        .cloned()
+        .unwrap()
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
@@ -359,30 +409,109 @@ pub fn permanent_of(s: &Scenario, object: ObjectId) -> Option<PermanentId> {
     s.game().state.permanent_of(now(s, object))
 }
 
+/// The labels of the current decision's offers, in offer order.
+pub fn offer_labels(s: &Scenario) -> Vec<String> {
+    s.game()
+        .semantic_decision_frame()
+        .unwrap()
+        .offers
+        .into_iter()
+        .map(|offer| offer.label)
+        .collect()
+}
+
+/// The current modal decision's offer labels, checked to be distinct,
+/// non-empty descriptions rather than the bare action-type fallback.
+pub fn mode_labels(s: &Scenario) -> Vec<String> {
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let labels = offer_labels(s);
+    let distinct: std::collections::BTreeSet<_> = labels.iter().collect();
+    assert_eq!(distinct.len(), labels.len(), "{labels:?}");
+    assert!(
+        labels
+            .iter()
+            .all(|label| !label.is_empty() && label != "ChooseMode"),
+        "{labels:?}"
+    );
+    labels
+}
+
+/// The shared focus and mode codes of an observed tap payment choice.
+pub struct TapPaysChoice {
+    pub focus: Vec<i32>,
+    pub modes: Vec<usize>,
+}
+
+/// The public object id an observation uses for a permanent.
+pub fn object_public_id(s: &Scenario, permanent: PermanentId) -> i32 {
+    s.game().state[card_of(s, permanent)].id.0 as i32
+}
+
+/// Read the current tap-pays choice from its chooser's observation, checking
+/// that every offer shares the choice's focus.
+pub fn tap_pays_choice(s: &Scenario) -> TapPaysChoice {
+    let space = s.action_space();
+    assert_eq!(space.kind, ActionSpaceKind::Modal);
+    let player = space.player.expect("a tap-pays choice has a chooser");
+    let observation = Observation::for_player(s.game(), player);
+    let observed_space = observation.action_space;
+    let modes = observed_space
+        .actions
+        .iter()
+        .map(|action| {
+            assert_eq!(action.focus, observed_space.focus);
+            action.mode_index.expect("a tap-pays offer has a mode")
+        })
+        .collect();
+    TapPaysChoice {
+        focus: observed_space.focus,
+        modes,
+    }
+}
+
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay; every legal action and a follow-up
-/// step run on exact forks that leave the source untouched.
+/// authority, with an independent replay. An unoffered Command, and every
+/// Command of the decision once one commits, is rejected and changes nothing.
+/// Every legal action and a follow-up step run on exact forks that leave the
+/// source untouched.
 pub fn assert_choice_contract(s: &Scenario) {
     use managym::{decision::Command, search_state::witness};
     let root = witness(s.game());
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers.len(), s.action_space().actions.len());
-    for offer in &frame.offers {
-        assert!(offer.choices.is_empty());
-        let command = Command {
-            command_id: format!("elemental-choice-{}", offer.id.0),
-            expected_revision: frame.revision,
-            offer_id: offer.id.0,
-            answers: vec![],
-            object_preconditions: vec![],
-        };
+    let commands: Vec<Command> = frame
+        .offers
+        .iter()
+        .map(|offer| {
+            assert!(offer.choices.is_empty());
+            Command {
+                command_id: format!("elemental-choice-{}", offer.id.0),
+                expected_revision: frame.revision,
+                offer_id: offer.id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            }
+        })
+        .collect();
+    // An offer the frame does not publish is rejected and changes nothing.
+    let unoffered = Command {
+        command_id: "elemental-choice-unoffered".to_string(),
+        offer_id: commands.iter().map(|c| c.offer_id).max().unwrap() + 1,
+        ..commands[0].clone()
+    };
+    let mut branch = s.game().clone();
+    assert!(branch.execute_semantic_command(&unoffered).is_err());
+    assert_eq!(witness(&branch), root);
+    for command in &commands {
         let mut branch = s.game().clone();
         let mut replay = s.game().clone();
-        branch.execute_semantic_command(&command).unwrap();
-        replay.execute_semantic_command(&command).unwrap();
+        branch.execute_semantic_command(command).unwrap();
+        replay.execute_semantic_command(command).unwrap();
         assert_eq!(witness(&branch), witness(&replay));
         let after = witness(&branch);
-        assert!(branch.execute_semantic_command(&command).is_err());
+        for stale in &commands {
+            assert!(branch.execute_semantic_command(stale).is_err());
+        }
         assert_eq!(witness(&branch), after);
     }
     for index in 0..s.action_space().actions.len() {

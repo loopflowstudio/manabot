@@ -1,5 +1,6 @@
 """Retained hidden-hand samples and their public-constraint validation."""
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 import json
 import math
@@ -29,6 +30,26 @@ class HandBatch:
     prepared: PreparedHands
     seed: int
     hands: tuple[HandSample, ...]
+
+
+def draw_hand_batch(
+    prepared: PreparedHands,
+    count: int,
+    seed: int,
+    check: Callable[[], None],
+    draw: Callable[[], tuple[Sequence[int], float]],
+) -> HandBatch:
+    """Record nonzero counts in vocabulary order, checking the budget around each draw."""
+    hands = []
+    for _ in range(count):
+        check()
+        counts, log_probability = draw()
+        cards = tuple(
+            (card, n) for card, n in zip(prepared.card_names, counts, strict=True) if n
+        )
+        hands.append(HandSample(cards, log_probability))
+        check()
+    return HandBatch(prepared, seed, tuple(hands))
 
 
 def validate_hand(hand: HandSample, constraints_json: str) -> None:

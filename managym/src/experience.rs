@@ -313,15 +313,20 @@ pub struct LegacyCardView {
     /// Foretold and face down in exile; only its owner's views list it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
-    /// The permission to play this card from exile, when it has one.
+    /// The permission to play this card from its current zone, when it has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cast_permission: Option<LegacyCastPermissionView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cast_permissions: Vec<LegacyCastPermissionView>,
     /// The value of X announced for this spell on the stack.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
+    /// Counters on the card off the battlefield ("with a stash counter on it").
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
 }
 
-/// A public permission to play an exiled card. Only set terms are present.
+/// A public permission to play a card in its current zone. Only set terms are present.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCastPermissionView {
@@ -339,7 +344,7 @@ pub struct LegacyCastPermissionView {
     /// Usable only on a turn numbered after this one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after_turn: Option<u32>,
-    /// Lasts while the permitted player controls this permanent.
+    /// The public permanent sustaining this grant.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_permanent_id: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -350,6 +355,23 @@ pub struct LegacyCastPermissionView {
     pub waterbend: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub foretold: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub follows_source_controller: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_adventure: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
+    /// Face down in exile without Foretell.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
+    /// A land face may be played with it ("you may play"); otherwise it casts spells only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub play_lands: bool,
+    /// What must hold for the player to use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 /// Mana spendable only on spells with one of `spells`' subtypes or abilities
@@ -448,21 +470,37 @@ pub struct LegacyPermanentView {
     /// Attacking in the current combat.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first_strike_participant: bool,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    /// Face down (CR 708.2).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
     /// Keywords it has after continuous effects, in keyword declaration order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keywords: Vec<String>,
     /// Activated abilities (indices in its ability list) whose limit is spent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damaged_permanents: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ability_resolutions: Vec<(u32, u32)>,
     /// It was dealt damage this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// It entered the battlefield during this turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub entered_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked_this_turn: bool,
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
@@ -515,6 +553,8 @@ pub struct LegacyPlayerView {
     /// `lesson_mana` split by restriction class.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<LegacyRestrictedManaView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spent_graveyard_types: Vec<(u32, String)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<u32>,
@@ -529,6 +569,8 @@ pub struct LegacyPlayerView {
     pub is_active: bool,
     pub is_agent: bool,
     pub life: i32,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
     pub zone_counts: BTreeMap<String, u32>,
     pub library_count: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -578,6 +620,8 @@ pub struct LegacyPlayerView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyTurnView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub creature_died_this_turn: bool,
     pub turn_number: u32,
     pub phase: String,
     pub step: String,
@@ -602,6 +646,12 @@ pub struct DecisionTargetView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackEntryView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_spent: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub ability_resolutions: u32,
     pub id: u64,
     pub kind: String,
     pub controller: u8,
@@ -615,6 +665,12 @@ pub struct StackEntryView {
     /// The announced value of X, when one was announced above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,
+    /// A spell cast from a prepared copy; its stack copies are not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    /// A spell cast with flashback, exiled as it leaves the stack.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
 }
 
 /// Read-only explanation of the current native continuation. This adds no
@@ -644,6 +700,22 @@ pub struct DecisionContextView {
     /// the announced costs are paid. Omitted otherwise and on older frames.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub announcing: Option<String>,
+    /// What objects have already paid toward the cost being paid, in the
+    /// order paid. Omitted when nothing has and on older frames.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paid: Vec<PaidView>,
+}
+
+/// One object's payment toward the pending cost: "sacrificed Gray Ogre to
+/// bargain". `object` is that object as it is now (a permanent still on the
+/// battlefield, the card in a graveyard or exile), absent when nothing the
+/// viewer can see remains of it.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaidView {
+    pub phrase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object: Option<DecisionObjectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -721,6 +793,7 @@ impl LegacyHeroObservation {
                     || context.source.0.is_some()
                     || !context.targets.is_empty()
                     || context.reserved_sacrifice.0.is_some()
+                    || !context.paid.is_empty()
                     || context.mana_cost.0.is_some()
                     || context.chosen_mode.0.is_some())
         })

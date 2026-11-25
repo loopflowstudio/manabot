@@ -69,10 +69,7 @@ fn mystic_remora() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::casts(
                         Actor::Opponent,
-                        CardPredicate {
-                            not_card_types: vec![CardType::Creature],
-                            ..Default::default()
-                        },
+                        CardPredicate::noncreature(),
                     ),
                     effects: vec![Effect::ForPlayer {
                         player: PlayerSelector::TriggeringPlayer,

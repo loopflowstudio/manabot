@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "manabot"
-version = "0.2.3"
+version = "0.2.5"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "managym==0.2.3",
+    "managym==0.2.5",
     # Split markers keep uv group-specific CPU/CUDA indexes disjoint.
     "torch>=2.15.0 ; sys_platform == 'linux'",
     "torch>=2.15.0 ; sys_platform != 'linux'",
@@ -21,7 +21,7 @@ dependencies = [
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk>=0.4.1,<0.5",
+    "etude-sdk>=0.4.7,<0.5",
 ]
 
 [project.scripts]
@@ -34,14 +34,14 @@ llm = [
     "transformers[chat-template]==5.3.0",
 ]
 reports = [
-    "etude-sdk[s3]>=0.4.1,<0.5",
+    "etude-sdk[s3]>=0.4.7,<0.5",
 ]
 artifacts = [
     "boto3>=1.35.0",
 ]
-academy = ["managym[academy]==0.2.3"]
+academy = ["managym[academy]==0.2.5"]
 evaluation = [
-    "etude-sdk[eval]>=0.4.1,<0.5",
+    "etude-sdk[eval]>=0.4.7,<0.5",
 ]
 # Apple Silicon only: the MLX backend (manabot/backends/mlx.md).
 mlx = [
@@ -58,6 +58,7 @@ dev = [
     "httpx>=0.28.0",
     "jsonschema>=4.23.0",
     "ruff>=0.9.0",
+    "blake3>=1",
 ]
 
 [dependency-groups]
@@ -75,7 +76,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.15.0",
     "uvicorn[standard]>=0.34.0",
-    "etude-sdk==0.4.1",
+    "etude-sdk==0.4.7",
 ]
 
 [tool.uv]

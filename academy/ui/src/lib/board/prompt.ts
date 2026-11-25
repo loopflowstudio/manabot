@@ -1,8 +1,8 @@
 /**
  * The prompt's one line: what to do now, in plain words.
  *
- * `promptLine(frame, view)` names the decision and the input that answers it
- * ("Choose blockers", "Pay {2}{U}: Space pays automatically"). The engine's
+ * `promptLine(frame, view)` names the decision ("Choose blockers", "Pay {2}{U}").
+ * `promptHint(frame, view)` describes how to answer a mana payment. The engine's
  * own instruction stays available behind the prompt's details; this line adds
  * no rules and chooses nothing.
  */
@@ -29,6 +29,7 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
   return asked.length === 1 ? asked[0].name ?? null : null;
 }
 
+/** What the decision asks, in one stable line: hovering a choice never rewrites it. */
 export function promptLine(frame: ExperienceFrame, view: BoardView): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
@@ -41,7 +42,7 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
       return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
     case 'PAY_OR_NOT':
       return context?.mana_cost
-        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}. ${view.primary ? 'Space pays automatically, or click' : 'Click'} lands to tap them yourself`
+        ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}`
         : `Pay the cost${source ? ` of ${source}` : ''}, or decline`;
     case 'CHOOSE_TARGET':
       return `Choose a target${source ? ` for ${source}` : ''}`;
@@ -60,6 +61,10 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
     case 'LOOK_AND_SELECT':
       return `Choose from the revealed cards${source ? ` (${source})` : ''}`;
     case 'MODAL':
+      // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
+      if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
+      if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
+      if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';
       return `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
       return 'Choose which legendary permanent to keep';
@@ -68,12 +73,27 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
   }
 }
 
+/** The payment instructions hold steady as previews arrive and change. */
+export function promptHint(frame: ExperienceFrame, view: BoardView): string | null {
+  if (frame.action_space !== 'PAY_OR_NOT' || !frame.projection.decision_context?.mana_cost) return null;
+  if (!view.primary) return 'Click lands to tap them yourself';
+  return 'Space pays automatically, or click lands to tap them yourself';
+}
+
+/**
+ * What is committed to the cost being paid, in the engine's words and order:
+ * a chosen sacrifice has not left yet.
+ */
+export function committed(frame: ExperienceFrame): string[] {
+  return (frame.projection.decision_context?.paid ?? []).map(entry => entry.phrase);
+}
+
 /** Where passing priority on an empty stack leads: the next step, in words. */
 const NEXT_STEP: Record<string, string> = {
   BEGINNING_UNTAP: 'To draw', BEGINNING_UPKEEP: 'To draw', BEGINNING_DRAW: 'To main',
   PRECOMBAT_MAIN_STEP: 'To combat', COMBAT_BEGIN: 'To attackers', COMBAT_DECLARE_ATTACKERS: 'To blockers',
   DECLARE_ATTACKERS_STEP: 'To blockers', COMBAT_DECLARE_BLOCKERS: 'To damage', DECLARE_BLOCKERS_STEP: 'To damage',
-  COMBAT_FIRST_STRIKE_DAMAGE: 'To damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
+  COMBAT_FIRST_STRIKE_DAMAGE: 'To regular damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
   POSTCOMBAT_MAIN_STEP: 'To end step', ENDING_END: 'To cleanup', END_STEP: 'To cleanup', ENDING_CLEANUP: 'To next turn',
 };
 
@@ -108,9 +128,11 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
   // A card name is never cut: when it does not fit beside the verb, the
   // button says the verb and the prompt line above names what resolves.
   if (top) return { text: `Resolve ${top}`.length <= PRIMARY_CHARS ? `Resolve ${top}` : 'Resolve', description: `${offer}: let ${top} resolve` };
-  const { turn } = frame.projection;
-  const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
-  const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';
-  const next = declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
+  const { turn, agent, opponent } = frame.projection;
+  let next = NEXT_STEP[turn.step];
+  if (turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP') {
+    const attacking = [agent, opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
+    if (!attacking) next = 'To end of combat';
+  }
   return next ? { text: next, description: `${offer}: ${next.toLowerCase()}` } : { text: offer, description: offer };
 }

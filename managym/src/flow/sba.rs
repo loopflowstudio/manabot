@@ -1,18 +1,17 @@
 // sba.rs
 // State-based actions.
 
-use crate::state::card::Keyword;
-
-use crate::state::game_object::ObjectKind;
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
-        game::Game,
+        game::{Game, GameOutcome, GameProcedure, LossCauses},
         proposed_event::{EventBinding, ProposedEvent},
+        statics::Characteristics,
     },
     state::{
         ability::{Ability, TriggerCondition},
-        game_object::{ObjectId, PermanentId, PlayerId},
+        card::{Keyword, StaticAbility},
+        game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
         zone::ZoneType,
@@ -33,19 +32,17 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
-            let views: Vec<_> = self
-                .layer_views(self.iter_battlefield_permanents(player))
-                .collect();
-            if views.iter().any(|(_, characteristics)| {
-                characteristics
+            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
+            {
+                if characteristics
                     .static_abilities
-                    .contains(&crate::state::card::StaticAbility::LegendRuleDoesntApply)
-            }) {
-                continue;
-            }
-            for (id, characteristics) in views {
-                let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                    .contains(&StaticAbility::LegendRuleDoesntApply)
+                {
+                    names.clear();
+                    break;
+                }
                 if characteristics.is_legendary {
+                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                     names
                         .entry(characteristics.name.clone())
                         .or_default()
@@ -57,36 +54,85 @@ impl Game {
         groups
     }
 
+    pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
+        self.layer_views(self.iter_battlefield_permanents(player))
+            .any(|(_, view)| {
+                view.static_abilities
+                    .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
+            })
+    }
+
+    pub fn lose_game(&mut self, player: PlayerId) {
+        if !self.is_game_over() && !self.protected_from_loss(player) {
+            let mut losses = [LossCauses::default(); 2];
+            losses[player.0].instructed = true;
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
+        }
+    }
+
+    pub fn win_game(&mut self, winner: PlayerId) {
+        if !self.is_game_over() && !self.protected_from_loss(PlayerId(1 - winner.0)) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Victory { winner });
+        }
+    }
+
+    /// Evaluate both seats against the battlefield before applying this batch.
+    fn commit_state_based_losses(&mut self) -> bool {
+        let losses = std::array::from_fn(|seat| {
+            let player = &self.state.players[seat];
+            let causes = LossCauses {
+                life_total: player.life <= 0,
+                poison: player.counters.get(CounterKind::Poison) >= 10,
+                deck_empty: player.drew_when_empty,
+                ..Default::default()
+            };
+            if causes.any() && self.protected_from_loss(PlayerId(seat)) {
+                Default::default()
+            } else {
+                causes
+            }
+        });
+        // CR 704.5b considers draws only since the previous check.
+        for seat in 0..2 {
+            if self.state.players[seat].drew_when_empty {
+                self.state.players[seat].drew_when_empty = false;
+            }
+        }
+        if losses.iter().any(|causes| causes.any()) {
+            self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
+            return true;
+        }
+        false
+    }
+
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
     pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
-        if self
-            .state
-            .players
-            .iter()
-            .all(|p| p.life > 0 && !p.drew_when_empty)
-        {
-            let groups = self.legend_groups();
-            if let Some(first) = groups.first() {
-                let id = self.state.permanent_of(first[0]).expect("legend");
-                let player = self.state.permanents[id]
-                    .as_ref()
-                    .expect("legend")
-                    .controller;
-                self.suspend_rule_decision(crate::flow::decision::Decision::LegendRule {
-                    player,
-                    groups,
-                    keep: Vec::new(),
-                });
-                return SbaProgress::Pending;
-            }
-            // No legend choice was needed, so this same simultaneous batch
-            // has no legend losers. Do not discover the groups a second time.
-            return self.perform_state_based_batch(&[]);
+        if self.is_game_over() {
+            return SbaProgress::Stable;
         }
-        self.perform_state_based_actions_with_legends(&[])
+        if self.commit_state_based_losses() {
+            return SbaProgress::Changed;
+        }
+        let groups = self.legend_groups();
+        if let Some(first) = groups.first() {
+            let id = self.state.permanent_of(first[0]).expect("legend");
+            let player = self.state.permanents[id]
+                .as_ref()
+                .expect("legend")
+                .controller;
+            self.suspend_rule_decision(crate::flow::decision::Decision::LegendRule {
+                player,
+                groups,
+                keep: Vec::new(),
+            });
+            return SbaProgress::Pending;
+        }
+        // No legend choice was needed, so this same simultaneous batch
+        // has no legend losers. Do not discover the groups a second time.
+        self.perform_state_based_batch(&[])
     }
 
     pub(crate) fn perform_state_based_actions_with_legends(
@@ -104,23 +150,6 @@ impl Game {
 
     fn perform_state_based_batch(&mut self, legend_losers: &[ObjectId]) -> SbaProgress {
         let mut performed = false;
-        for player in [PlayerId(0), PlayerId(1)] {
-            // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
-            if self.state.players[player.0].life <= 0
-                || self.state.players[player.0].drew_when_empty
-            {
-                performed |= self.lose_game(player);
-            }
-        }
-
-        if self.is_game_over() {
-            return if performed {
-                SbaProgress::Changed
-            } else {
-                SbaProgress::Stable
-            };
-        }
-
         // CR 704.5q — +1/+1 and -1/-1 counters on one permanent annihilate
         // in pairs. Power and toughness are unchanged, so the simultaneous
         // checks below read the same characteristics either way.
@@ -147,7 +176,7 @@ impl Game {
             let legend_loser = legend_losers.contains(&permanent.object);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.
-            let illegal_aura = self.aura_attachment_illegal(permanent_id);
+            let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
             let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
             // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
             // above do not destroy, even when lethal damage also applies.
@@ -181,8 +210,7 @@ impl Game {
                 .map(|target| ProposedEvent::Sacrifice { target }),
         );
         if !events.is_empty() {
-            let mut batch = self.event_batch(events);
-            batch.binding = EventBinding::Deaths;
+            let batch = self.event_batch(EventBinding::Deaths, events);
             let mut frame = EffectFrame::new(self.active_player(), Vec::new());
             frame.batch = Some(batch);
             frame.completion = FrameCompletion::StateBased {
@@ -229,17 +257,34 @@ impl Game {
 
     pub(crate) fn finish_state_based_batch(&mut self) -> bool {
         let mut performed = false;
-        // CR 704.5n — An Equipment attached to an object that is gone or is
-        // no longer a creature becomes unattached and stays on the battlefield.
-        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+        // CR 704.5n, 704.5p, 301.5c — An attached permanent that is not an
+        // Aura becomes unattached and stays on the battlefield unless it is a
+        // noncreature Equipment attached to a creature: Equipment whose
+        // creature is gone or no longer a creature, an animated Equipment,
+        // and a former Aura alike (all read from layered characteristics).
+        let attached: Vec<PermanentId> = (0..self.state.permanents.len())
             .map(PermanentId)
             .filter(|&id| {
-                self.state.permanents[id].as_ref().is_some_and(|equipment| {
-                    equipment.attached_to.is_some()
-                        && self.state[equipment.object].enchant().is_none()
-                }) && self.attached_creature(id).is_none()
+                self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.attached_to.is_some())
             })
             .collect();
+        // Earlier actions of this batch may have moved permanents, so reading
+        // layered views rebuilds the board; skip it when nothing is attached.
+        let detached: Vec<PermanentId> = if attached.is_empty() {
+            Vec::new()
+        } else {
+            self.layer_views(attached.into_iter())
+                .filter(|(id, view)| {
+                    !view.has_subtype("Aura")
+                        && !(view.has_subtype("Equipment")
+                            && !view.is_creature()
+                            && self.attached_creature(*id).is_some())
+                })
+                .map(|(id, _)| id)
+                .collect()
+        };
         for permanent_id in detached {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
@@ -248,7 +293,8 @@ impl Game {
         }
 
         // CR 704.5d-e — A token in a zone other than the battlefield, or a
-        // copy of a spell in a zone other than the stack, ceases to exist.
+        // spell copy outside the stack, ceases to exist. A prepared copy stays
+        // in exile while its battlefield source keeps it prepared.
         // This runs after the move to the graveyard, so death triggers from
         // tokens have already been enqueued.
         let mut tokens_to_remove = Vec::new();
@@ -257,6 +303,9 @@ impl Game {
             let ceases = match object.kind() {
                 ObjectKind::Card => false,
                 ObjectKind::Token => !matches!(zone, Some(ZoneType::Battlefield) | None),
+                ObjectKind::SpellCopy if zone == Some(ZoneType::Exile) => {
+                    self.preparation_source(object_id).is_none()
+                }
                 ObjectKind::SpellCopy => !matches!(zone, Some(ZoneType::Stack) | None),
             };
             if ceases {
@@ -267,6 +316,7 @@ impl Game {
             let from = self.state.zones.zone_of(object_id);
             match from {
                 Some(ZoneType::Library) => {
+                    self.state.library_order_pins_mut(owner).remove(&object_id);
                     // A token's departure is public. Shift known positions at
                     // that position without forgetting unrelated identities.
                     let position = self
@@ -338,25 +388,28 @@ impl Game {
         })
     }
 
-    /// Whether an Aura is unattached, or attached to itself or an object its
-    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
-    fn aura_attachment_illegal(&self, aura: PermanentId) -> bool {
+    /// Whether something that is an Aura now (its layered `view`) is
+    /// unattached, attached to itself or to an object its enchant ability
+    /// doesn't allow, has lost that ability, or is also a creature
+    /// (CR 303.4d, 704.5m).
+    fn aura_attachment_illegal(&self, aura: PermanentId, view: &Characteristics) -> bool {
+        if !view.has_subtype("Aura") {
+            return false;
+        }
+        if view.is_creature() {
+            return true;
+        }
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
         };
-        let Some(enchant) = self.state[permanent.object].enchant() else {
-            return false;
+        let enchant = self.state[permanent.object]
+            .enchant()
+            .filter(|_| !view.abilities_lost);
+        let Some(enchant) = enchant else {
+            return true;
         };
         !self.attached_permanent(aura).is_some_and(|object| {
             object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
         })
-    }
-
-    pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {
-        if !self.state.players[player.0].alive {
-            return false;
-        }
-        self.state.players[player.0].alive = false;
-        true
     }
 }

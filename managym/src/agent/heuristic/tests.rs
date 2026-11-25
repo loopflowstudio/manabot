@@ -39,6 +39,12 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         name_group: None,
         ability_index: None,
         continuation_index: None,
+        pays_directly: false,
+        announces_x: false,
+        spell_profile: 0,
+        route_mana_value: None,
+        quota_type: None,
+        play_route: None,
     }
 }
 fn card(id: i32, name: &str, mv: u8) -> CardData {
@@ -190,6 +196,25 @@ fn heuristic_kicker_memory_and_optional_costs() {
     ];
     assert_eq!(choose(&o), 1);
 }
+/// A ward paid in life is paid while it leaves the payer alive and declined
+/// when it would not.
+#[test]
+fn heuristic_pays_a_life_ward_only_when_it_survives() {
+    let mut o = board(Space::PayOrNot);
+    let mut sire = creature(30, 20, 7, 7);
+    sire.characteristics.ward_life = 7;
+    sire.object_id = Some(30);
+    o.opponent_permanents = vec![sire];
+    o.action_space.focus = vec![30];
+    o.action_space.actions = vec![
+        offer(Action::PayCost, &[], None),
+        offer(Action::DeclineChoice, &[], None),
+    ];
+    o.agent.life = 8;
+    assert_eq!(choose(&o), 0);
+    o.agent.life = 7;
+    assert_eq!(choose(&o), 1);
+}
 #[test]
 fn heuristic_learn_discard_and_selection() {
     let mut o = board(Space::Learn);
@@ -296,7 +321,10 @@ fn heuristic_pumps_only_when_combat_improves() {
     let mut o = board(Space::Priority);
     o.turn.step = StepKind::DeclareBlockers;
     o.agent_cards.push(card(1, "Fancy Footwork", 3));
-    o.agent_permanents.push(creature(30, 10, 2, 2));
+    o.agent_permanents.push(PermanentData {
+        attacking: true,
+        ..creature(30, 10, 2, 2)
+    });
     o.opponent_permanents.push(creature(40, 20, 3, 3));
     o.action_space.actions = vec![
         offer(Action::PriorityCastSpell, &[1], None),
@@ -320,6 +348,32 @@ fn heuristic_pumps_only_when_combat_improves() {
     o.opponent_permanents[0].power = 8;
     o.opponent_permanents[0].toughness = 8;
     assert_eq!(choose(&o), 1);
+}
+/// Attackers are read from the live board: one put onto the battlefield
+/// attacking (no declaration) or a vigilant one (untapped) is still an
+/// unblocked attacker whose pump can be lethal.
+#[test]
+fn heuristic_pumps_live_unblocked_attackers_without_a_declaration() {
+    for (attacking, tapped, expected) in [(true, false, 0), (true, true, 0), (false, false, 1)] {
+        let mut o = board(Space::Priority);
+        o.turn.step = StepKind::DeclareBlockers;
+        o.opponent.life = 3;
+        o.agent_cards.push(card(1, "Fancy Footwork", 3));
+        o.agent_permanents.push(PermanentData {
+            attacking,
+            tapped,
+            ..creature(31, 10, 2, 2)
+        });
+        o.action_space.actions = vec![
+            offer(Action::PriorityCastSpell, &[1], None),
+            offer(Action::PriorityPassPriority, &[], None),
+        ];
+        assert_eq!(
+            choose(&o),
+            expected,
+            "attacking {attacking}, tapped {tapped}"
+        );
+    }
 }
 #[test]
 fn heuristic_abilities_and_lesson_damage() {

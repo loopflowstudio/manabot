@@ -72,15 +72,16 @@ imports manabot or Torch; and `manabot.sim` imports none of `eval`,
 `training`, `experiment` or `reports` (`tests/test_package_boundaries.py`
 enforces all of it). Academy's trained opponents come from manabot through an
 installed entry point, so they appear when manabot is installed and Academy
-runs without it. The observation and action encoding is versioned as a
-*world* ([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were
-trained in.
+runs without it. A checkpoint keeps loading as
+cards are added, bound by name to what it reads
+([compatibility](docs/observation-and-model.md#running-a-checkpoint-on-a-later-revision)).
 
 ## What it trains on now
 
-The current world is *Avatar: The Last Airbender* Limited. Every card in the
-set is defined as a typed rules program (336 supported in
-[world w17](WORLDS.md)), and training draws both seats of each game at random
+Training uses *Avatar: The Last Airbender* Limited. The engine defines every
+card in the set as a typed rules program. Across all sets,
+[443 cards are eligible for deck entry](managym/src/cards/pool.rs).
+Training draws both seats of each game at random
 from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
 the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
 4.0), built by [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
@@ -163,8 +164,8 @@ observation, and a mechanic reaches all three in the change that adds it
 **Identity is typed.** An `ObjectId` names one appearance of an object in one
 zone and fails after a zone change; a `CardId` names the physical card and
 follows it. An action index is valid only in one decision epoch. Checkpoints
-bind world, deck setup and input schema and load only where the digest
-matches. Every durable value has a canonical serialization and digest
+bind the named policy inputs they read. If the binding records exact decks, it also checks the
+deck setup. Every durable value has a canonical serialization and digest
 (`manabot.infra.identity`), and locators are not identity.
 
 **Replay is exact.** A game regenerates from its deal seed, configuration and
@@ -189,13 +190,13 @@ support is an explicit result.
 **A recipe is a function.** An update learns from one batch, a loop keeps
 playing and updating until it is done, and a recipe calls our loops with our
 settings. A loop saves its learner atomically and resumes from that file when
-it is run again, and writes world-bound raw and EMA checkpoints. Etude
+it is run again, and writes raw and EMA checkpoints. Etude
 launches, tracks, retries and evaluates a recipe; nothing else runs it.
 Self-play refuses belief inputs; the trained model sees the current
 observation only ([training](docs/training.md)).
 
 **Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
-a rating belongs to one `EvaluationKey` (world, content suite, viewer
+a rating belongs to one `EvaluationKey` (content suite, viewer
 boundary, arena version, compute class) and never crosses it. Candidates play
 the same deals with seats and decks swapped, uncertainty resamples whole
 deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
@@ -267,7 +268,7 @@ distinct learning token, card names among them, which is the 8,000 between the
 two-deck and ten-deck runs. The fact encoder and the shared-effect encoder
 each hold about 0.8M parameters in hash-bucket embedding tables, so
 the current TLA recipe has 1,883,650 with the same 64×2 attention core.
-The first two rows predate the current world and
+The first two rows predate the current card pool and
 encoding, so they record scale only. The one-seat ladder's $10 checkpoint
 (151.6M decisions) scored 0.69 against the `heuristic` anchor and 0.70 as
 Lessons against Allies; it was closed before its $50 tier once self-play
@@ -280,8 +281,9 @@ of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe
 
 ## What we know
 
-All numbers belong to the world they were measured in, and most come from one
-training seed, so they guide the next experiment rather than settle a method.
+All numbers belong to the revision and decks they were measured on
+([comparing measurements](docs/evaluation.md#comparing-measurements-across-revisions)),
+and most come from one training seed, so they guide the next experiment rather than settle a method.
 Earlier findings are tabulated in the
 [research program](manabot/RESEARCH.md#what-we-know).
 
@@ -304,7 +306,7 @@ Earlier findings are tabulated in the
   and from 10.8% to 34.3% as each of the ten decks against its GW and UB seats,
   without slower decisions
   ([heuristic strength](experiments/reports/heuristic-strength.md)). Ratings are
-  pinned to an anchor version and a world, never compared across them.
+  pinned to an anchor version, never compared across versions.
 - **Learning from both seats replaced one-seat training.** The one-seat ladder
   reached 0.69 against the heuristic at $10
   ([scale ladder](experiments/reports/scale-ladder.md)); matched per learner decision
@@ -330,7 +332,7 @@ Earlier findings are tabulated in the
   capacity and recovers from oversized games, but hasn't run
   ([pilot evidence](experiments/reports/tla-trophy-pilot.md)).
 - **The full trophy population.** The pilot corpus was frozen when 134 of
-  1,000 sampled lists admitted; the current world admits all 1,000, and no
+  1,000 sampled lists admitted; the current pool admits all 1,000, and no
   protocol or run uses the larger population yet.
 - **Limited.** The long-term target is sealed and draft play: building decks
   from a pool, then piloting them. Piloting random trophy decks is the first

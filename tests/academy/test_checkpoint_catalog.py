@@ -9,7 +9,6 @@ import pytest
 import torch
 
 from manabot.backends import resolve
-from manabot.model.world import WORLD
 from manabot.sim.policy_provider import BaselineFactory
 from managym.academy import server, trace as trace_store
 from managym.academy.opponent import Opponent, opponent_catalog, policy_registry
@@ -32,7 +31,7 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     current = tmp_path / ".runs" / "self-play" / "step_0.pt"
     _write_tiny_checkpoint(current)
     checkpoint = read_checkpoint(current, map_location="cpu", weights_only=False)
-    checkpoint["world_binding"]["world"] = "w5"
+    checkpoint["world_binding"]["policy_input_version"] = 1
     (tmp_path / ".runs" / "older").mkdir()
     write_checkpoint(checkpoint, tmp_path / ".runs" / "older" / "step_0.pt")
     return tmp_path / ".runs"
@@ -66,14 +65,14 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     assert "W/D/L value head" in current["search_reason"]
     assert current["sha256"] == _id(runs / "self-play" / "step_0.pt")
     details = {line["label"]: line["value"] for line in current["details"]}
-    assert details["World"] == WORLD
+    assert "World" not in details
     assert details["Source"] == "runs"
     assert details["Model"].startswith("width 64")
     assert set(details["Bound decks"].split(" vs ")) == {"ur_lessons", "gw_allies"}
     assert details["Updates"] == "not recorded"
     older = entries["older/step_0"]
     assert not older["available"]
-    assert older["reason"] == f"trained in w5, engine is {WORLD}"
+    assert "differs from this runtime in policy_input_version" in older["reason"]
 
 
 def test_catalog_lists_policies_etude_trained_here(
@@ -125,7 +124,7 @@ def test_incompatible_checkpoint_is_refused_with_the_mismatch(runs: Path) -> Non
                 "opponent_sha256": _id(runs / "older" / "step_0.pt"),
             },
         )
-        assert f"trained in w5, engine is {WORLD}" in message
+        assert "differs from this runtime in policy_input_version" in message
 
         message = _new_game_error(
             client,
@@ -397,7 +396,7 @@ def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
 def test_retained_checkpoint_loader_accepts_omitted_setup(runs: Path) -> None:
     from manabot.sim.table_bots import CheckpointVillain
 
-    with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+    with pytest.warns(DeprecationWarning, match="removed in 0.3.0"):
         policy = CheckpointVillain(str(runs / "self-play" / "step_0.pt"))
     try:
         assert policy.agent is not None

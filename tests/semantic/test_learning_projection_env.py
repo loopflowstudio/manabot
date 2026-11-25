@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.semantic.learning import BoundSemanticPack
 import managym
 
@@ -85,7 +85,7 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     assert _projection_bytes(hidden_variants[0]) == _projection_bytes(projection)
     assert _projection_bytes(hidden_variants[1]) == _projection_bytes(projection)
 
-    encoded = ObservationSpace().encode(visible)
+    encoded = encode_observation(ObservationSpace(), visible)
     assert set(encoded) == set(ObservationSpace().shapes)
     assert all(
         encoded[key].shape == shape for key, shape in ObservationSpace().shapes.items()

@@ -110,6 +110,7 @@ fn force_of_negation_offers_its_alternative_only_outside_your_turn() {
 #[test]
 fn sunbaked_canyon_pays_life_for_red_or_white_and_cycles_itself() {
     let mut s = five_color_setup(&["Sunbaked Canyon"]);
+    s.allow_priority_floats();
     let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
     s.set_player_mana_pool(0, "");
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -119,6 +120,7 @@ fn sunbaked_canyon_pays_life_for_red_or_white_and_cycles_itself() {
     s.assert_life(0, 19);
 
     let mut s = five_color_setup(&["Sunbaked Canyon"]);
+    s.allow_priority_floats();
     let canyon = s.force_permanent_on_battlefield(0, "Sunbaked Canyon");
     s.game_mut().scenario_refresh_priority().unwrap();
     let hand = s.zone_size(0, ZoneType::Hand);
@@ -127,4 +129,63 @@ fn sunbaked_canyon_pays_life_for_red_or_white_and_cycles_itself() {
     s.assert_zone_size(0, ZoneType::Hand, hand + 1);
     assert!(s.game().state.permanents[canyon].is_none());
     s.assert_life(0, 20);
+}
+
+#[test]
+fn foundations_permanent_good_fortune_unicorn() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{counters, permanent_named};
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Good-Fortune Unicorn", "Gray Ogre", "Serra Angel"]);
+    enter_and_settle(&mut s, "Good-Fortune Unicorn");
+    let source = permanent_named(&s, "Good-Fortune Unicorn");
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Gray Ogre");
+    assert_eq!(counters(&s, permanent_named(&s, "Gray Ogre")), 1);
+    assert_eq!(counters(&s, source), 0);
+    enter_and_settle(&mut s, "Serra Angel");
+    assert_eq!(counters(&s, permanent_named(&s, "Serra Angel")), 1);
+}
+
+/// "At the beginning of your upkeep, this creature deals 1 damage to you":
+/// only its controller's upkeep.
+#[test]
+fn foundations_5f_ravenous_giant() {
+    use crate::support::game::five_color_setup;
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Ravenous Giant"]);
+    s.force_permanent_on_battlefield(0, "Ravenous Giant");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!((s.life(0), s.life(1)), (20, 20));
+    s.advance_to_active_step(0, StepKind::Main);
+    assert_eq!((s.life(0), s.life(1)), (19, 20));
+}
+
+/// "Attacking creatures you control get +1/+0": only while attacking, and
+/// never for the opponent's attackers.
+#[test]
+fn foundations_5f_goblin_oriflamme() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        play::attack_with,
+    };
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Goblin Oriflamme", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Goblin Oriflamme");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let idle = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    assert_eq!(s.game().characteristics(attacker).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    assert_eq!(s.game().characteristics(attacker).pt(), (3, 2));
+    assert_eq!(s.game().characteristics(idle).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().characteristics(attacker).pt(), (2, 2));
+
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_summoning_sickness(&mut s, theirs);
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    attack_with(&mut s, theirs);
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }

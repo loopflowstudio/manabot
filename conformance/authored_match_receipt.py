@@ -19,7 +19,11 @@ ROOT = Path(__file__).parents[1]
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json"
 )
-FIXED_TIME = "2026-07-17T00:00:00+00:00"
+AUTHORITY_RECEIPT_PATH = (
+    ROOT
+    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-battlefield-history.json"
+)
+FIXED_TIME = "2026-11-24T00:00:00+00:00"
 MATCH_SEED = 0
 POLICY_SEED = 0
 MAX_HERO_COMMANDS = 10_000
@@ -62,6 +66,11 @@ class DeterministicServerOfferPolicy:
             InteractionOffer.model_validate(offer).model_dump(mode="json")
             for offer in offers
         ]
+        keep = next(
+            (offer for offer in validated if offer["label"] == "Keep hand"), None
+        )
+        if keep is not None:
+            return keep
         # The terminal authority proof exercises the automatic payer. Keep
         # source selection out of its strategic random stream; the separate
         # directed source-payment proofs exercise deliberate manual taps.
@@ -402,8 +411,8 @@ def generate_authored_match_receipt() -> dict[str, Any]:
             "seed": MATCH_SEED,
             "generated_at": FIXED_TIME,
             "policy": {
-                "hero": "uniform-server-offer-auto-source-payment-v1",
-                "villain": "uniform-server-offer-auto-source-payment-v1",
+                "hero": "keep-opening-hands-uniform-server-offer-auto-source-payment-v1",
+                "villain": "keep-opening-hands-uniform-server-offer-auto-source-payment-v1",
                 "hero_seed": POLICY_SEED,
                 "villain_seed": POLICY_SEED,
             },
@@ -433,7 +442,7 @@ def generate_authored_match_receipt() -> dict[str, Any]:
 
 
 def write_or_check_authored_match_receipt(
-    path: Path = DEFAULT_RECEIPT_PATH,
+    path: Path = AUTHORITY_RECEIPT_PATH,
     *,
     check: bool,
 ) -> None:

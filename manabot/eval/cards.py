@@ -17,6 +17,7 @@ import time
 from etude.storage import default_root
 
 from manabot.eval.card_evaluation import (
+    VERIFY_EXPERIMENT,
     CardEvaluationSpec,
     evaluate_cards,
     verification_spec,
@@ -25,6 +26,7 @@ from manabot.eval.card_page import write_page
 from manabot.eval.card_query import (
     CardData,
     CardSelection,
+    NoCardEvaluations,
     audit,
     card_data,
     card_db,
@@ -133,9 +135,17 @@ def main() -> None:
     export.add_argument("--mapping", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
     verification = commands.add_parser("verify")
+    verification.set_defaults(experiment=VERIFY_EXPERIMENT)
     verification.add_argument("--games", type=int, default=1024)
     verification.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    try:
+        run(args)
+    except NoCardEvaluations as error:
+        sys.exit(f"{args.experiment}: {error}")
+
+
+def run(args: argparse.Namespace) -> None:
     if args.command == "evaluate":
         result = evaluate_cards(
             CardEvaluationSpec.model_validate_json(args.spec.read_bytes()),

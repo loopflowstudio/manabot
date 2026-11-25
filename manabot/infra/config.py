@@ -16,14 +16,22 @@ from pydantic import (
 )
 
 from manabot.env.legacy_input import warn_deprecated_input
-from managym import WORLD_SETUP, Deck, DeckImport, Decklist, PlayerConfig
+from managym import (
+    WORLD_SETUP,
+    Deck,
+    DeckImport,
+    Decklist,
+    ManaFloats,
+    ManaPayment,
+    PlayerConfig,
+)
 from managym.disclosure import DecklistDisclosure
 
 # The policy input a fresh configuration selects. Input v11 gives each game
 # thing one object row (cards outside the battlefield and stack, permanents
 # with their characteristics, a stack segment) and carries v10's turn state.
 # Inputs v9 and v10 (v9 plus turn state) are deprecated and read only by
-# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.4.0);
+# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.3.0);
 # earlier inputs run from the revision that recorded them.
 PolicyInputVersion = Literal[9, 10, 11]
 POLICY_INPUT_VERSION: PolicyInputVersion = 11
@@ -61,30 +69,20 @@ class BaseConfig(BaseModel):
 
 
 class UnsupportedPolicyInput(ValueError):
-    """A checkpoint, replay or saved configuration bound to another policy
-    input, or an observation the configured input cannot hold.
+    """A checkpoint, replay or saved configuration bound to another policy input.
 
-    `version` is the saved or required version; a saved configuration that
-    omits it was written for policy input v1. `state` names what a v9
-    observation needed when turn state (v10 or v11) is required.
+    `version` is the saved version; a saved configuration that omits it was
+    written for policy input v1.
     """
 
-    def __init__(self, version: object, state: str | None = None) -> None:
+    def __init__(self, version: object) -> None:
         self.version = version
-        self.state = state
-        if state is not None:
-            message = (
-                f"policy input v{version} required: this observation needs "
-                f"{state}, which v9 cannot hold"
-            )
-        else:
-            message = (
-                f"the checkpoint was written for policy input v{version} and must "
-                "be run from the revision that recorded it; this revision supports "
-                f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
-                f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
-            )
-        super().__init__(message)
+        super().__init__(
+            f"the checkpoint was written for policy input v{version} and must "
+            "be run from the revision that recorded it; this revision supports "
+            f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
+            f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
+        )
 
 
 class ObservationConfig(BaseConfig):
@@ -106,7 +104,13 @@ class ObservationConfig(BaseConfig):
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
     )
-    max_focus_objects: int = 2
+    mana_payment: ManaPayment = Field(
+        default="manual", exclude_if=lambda value: value == "manual"
+    )
+    mana_floats: ManaFloats = Field(
+        default="off", exclude_if=lambda value: value == "off"
+    )
+    max_focus_objects: int = Field(default=2, gt=0)
     # Memory capacities are explicit until the replay census sizes the pilot.
     decision_memory_include_own: bool = Field(
         default=False, exclude_if=lambda value: not value
@@ -185,6 +189,14 @@ class MatchConfig(BaseConfig):
         default="open", exclude_if=lambda value: value == "open"
     )
 
+    mana_payment: tuple[ManaPayment, ManaPayment] = Field(
+        default=("manual", "manual"),
+        exclude_if=lambda value: value == ("manual", "manual"),
+    )
+    mana_floats: tuple[ManaFloats, ManaFloats] = Field(
+        default=("off", "off"), exclude_if=lambda value: value == ("off", "off")
+    )
+
     @field_validator("world")
     @classmethod
     def validate_world(cls, value: str | None) -> str | None:
@@ -215,6 +227,8 @@ class MatchConfig(BaseConfig):
         second: PlayerConfig,
         *,
         decklists: DecklistDisclosure,
+        mana_floats: tuple[ManaFloats, ManaFloats] = ("off", "off"),
+        mana_payment: tuple[ManaPayment, ManaPayment] = ("manual", "manual"),
     ) -> "MatchConfig":
         """Record a native root in seat order, rejecting asymmetric match settings."""
         if first.world != second.world:
@@ -231,6 +245,8 @@ class MatchConfig(BaseConfig):
             villain_sideboard=second.sideboard,
             world=first.world,
             decklists=decklists,
+            mana_floats=mana_floats,
+            mana_payment=mana_payment,
         )
 
     @classmethod
@@ -353,6 +369,15 @@ class ModelConfig(BaseConfig):
     # head (FiLM). Omitted is the historical additive policy, so frozen
     # recipes and checkpoints keep their meaning.
     policy_film: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Scale each offer's own features by its focused post-attention objects
+    # before the action layer, so offers naming one object differ by a
+    # function of it from initialization. Omitted is the historical head.
+    focus_film: bool = Field(default=False, exclude_if=lambda value: not value)
+    # One normalized token stream: a LayerNorm on every stream summed into an
+    # object token (numeric projections, definitions, the knowledge pool,
+    # shared context), pre-normalization attention and a final norm. Omitted
+    # is the historical post-normalization layout with `/ 60` knowledge pools.
+    stream_norm: bool = Field(default=False, exclude_if=lambda value: not value)
     attention_layers: int = Field(default=1, ge=1)
     # Omitted defaults preserve historical recipe and checkpoint identities.
     attention_feedforward_dim: int | None = Field(
@@ -361,11 +386,16 @@ class ModelConfig(BaseConfig):
     # How fact and shared-effect ids embed: `catalog` reads the card encoder's
     # exact token rows and definition rows; `hashed` learns 4096 hashed rows
     # per id column. Models without a world have only the hashed layout. Saved
-    # world checkpoints that omit the field are hashed (`from_checkpoint`);
+    # models with world="world" that omit the field use hashed rows (`from_checkpoint`);
     # regimes omit the fresh default.
     record_vocabulary: Literal["hashed", "catalog"] = Field(
         default="catalog", exclude_if=lambda value: value == "catalog"
     )
+    # Whether each public name vector is added onto its definition's program,
+    # so every card token carries a name stream beside its rules program.
+    # Fresh models keep names on NameCard candidates only; checkpoints that
+    # omit the field predate the choice and add them (`from_checkpoint`).
+    definition_names: bool = Field(default=False, exclude_if=lambda value: not value)
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -406,21 +436,33 @@ class ModelConfig(BaseConfig):
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ModelConfig":
         """Read a saved model configuration.
 
-        A checkpoint that omits the record vocabulary predates the choice, so
-        it means the frozen hashed ids where the choice exists (with a world).
-        Without a world both values build the same model, and omission reads
-        as the fresh default so it equals its regime's configuration.
+        A checkpoint that omits the record vocabulary or definition names
+        predates the choice, so it means the frozen hashed ids and names added
+        onto definitions where the choice exists (with a world). Without a
+        world both values build the same model, and omission reads as the
+        fresh default so it equals its regime's configuration.
         """
         config = cls(**payload)
-        predates_choice = "record_vocabulary" not in payload
-        if predates_choice and config.world is not None:
-            return cls(**{**payload, "record_vocabulary": "hashed"})
-        return config
+        if config.world is None:
+            return config
+        predated = {
+            key: value
+            for key, value in (
+                ("record_vocabulary", "hashed"),
+                ("definition_names", True),
+            )
+            if key not in payload
+        }
+        return cls(**{**payload, **predated}) if predated else config
 
     def checkpoint_payload(self) -> dict[str, Any]:
-        """The serialized configuration with the record vocabulary explicit, so
-        `from_checkpoint` reads a fresh catalog model back as catalog."""
-        return {**self.model_dump(), "record_vocabulary": self.record_vocabulary}
+        """The serialized configuration with the record vocabulary and definition
+        names explicit, so `from_checkpoint` reads a fresh model back as fresh."""
+        return {
+            **self.model_dump(),
+            "record_vocabulary": self.record_vocabulary,
+            "definition_names": self.definition_names,
+        }
 
     def catalog_records(self) -> bool:
         """Whether fact and shared-effect ids read the card vocabulary."""
@@ -438,6 +480,8 @@ class ModelConfig(BaseConfig):
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
             raise ValueError("embedding width must be divisible by attention heads")
+        if self.stream_norm and not self.attention_on:
+            raise ValueError("stream_norm requires attention_on")
         if not self.attention_on and (
             self.value_aggregation == "value_token"
             or self.attention_layers != 1

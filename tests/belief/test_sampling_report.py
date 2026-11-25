@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import asdict, replace
+from functools import partial
 import hashlib
 import json
 from pathlib import Path
@@ -10,7 +11,9 @@ import pytest
 import torch
 
 from manabot.backends import resolve
+from manabot.backends.torch import belief_fit
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
+from manabot.belief.checkpoint import SamplerIdentities, read_belief_sampler
 from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -22,6 +25,10 @@ from manabot.belief.sampling_data import (
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
+
+torch_report = partial(
+    report_saved_sampler, codec=resolve("torch").belief, trainer=belief_fit
+)
 
 
 def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
@@ -53,9 +60,9 @@ def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
     )
 
 
-def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
+def _checkpoint(path: Path, dataset: SamplerDataset, seed: int | None = 19) -> str:
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(seed)
+        torch.manual_seed(0 if seed is None else seed)
         model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
         # Fixed nonzero corrections exercise learned inference without training.
         with torch.no_grad():
@@ -73,7 +80,7 @@ def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
             "hidden_size": 4,
             "history_dropout": 0.0,
             "state_dict": model.state_dict(),
-            "metrics": {"seed": seed},
+            "metrics": {} if seed is None else {"seed": seed},
         },
         path,
     )
@@ -116,13 +123,12 @@ def test_saved_cli_reproduces_statistics_and_refuses_overwrite(tmp_path: Path) -
         main([*args, "--out", str(target)])
         outputs.append(json.loads(target.read_text()))
     assert _statistical(outputs[0]) == _statistical(outputs[1])
-    report = report_saved_sampler(
+    report = torch_report(
         data,
         checkpoint=checkpoint,
         checkpoint_identity=digest,
         training_dataset_path=data,
         sample_counts=(4, 12),
-        backend=resolve("torch"),
     )
     assert report.policy_relationship == "same_policy"
     assert len(report.measurements) == 6
@@ -140,12 +146,11 @@ def test_saved_cli_reproduces_statistics_and_refuses_overwrite(tmp_path: Path) -
     with pytest.raises(FileExistsError):
         main([*args, "--out", str(tmp_path / "report-0.json")])
     with pytest.raises(ValueError, match="byte identity"):
-        report_saved_sampler(
+        torch_report(
             data,
             checkpoint=checkpoint,
             checkpoint_identity="bad",
             training_dataset_path=data,
-            backend=resolve("torch"),
         )
 
 
@@ -190,13 +195,12 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
         path = tmp_path / f"foreign-{index}.json"
         save_dataset(foreign, path)
         reports.append(
-            report_saved_sampler(
+            torch_report(
                 path,
                 checkpoint=checkpoint,
                 checkpoint_identity=digest,
                 training_dataset_path=train_path,
                 sample_counts=(8,),
-                backend=resolve("torch"),
             )
         )
     assert all(report.policy_relationship == "foreign_policy" for report in reports)
@@ -213,22 +217,20 @@ def test_foreign_policy_label_changes_do_not_enter_inference(
     overlap = tmp_path / "overlap.json"
     save_dataset(replace(training, policy_identity="foreign"), overlap)
     with pytest.raises(ValueError, match="overlaps"):
-        report_saved_sampler(
+        torch_report(
             overlap,
             checkpoint=checkpoint,
             checkpoint_identity=digest,
             training_dataset_path=train_path,
-            backend=resolve("torch"),
         )
     wrong = tmp_path / "wrong.json"
     save_dataset(replace(training, world_identity="other-world"), wrong)
     with pytest.raises(ValueError, match="schema/world"):
-        report_saved_sampler(
+        torch_report(
             wrong,
             checkpoint=checkpoint,
             checkpoint_identity=digest,
             training_dataset_path=train_path,
-            backend=resolve("torch"),
         )
 
 
@@ -238,13 +240,12 @@ def test_wide_count_space_uses_bounded_sampling(tmp_path: Path) -> None:
     data, checkpoint = tmp_path / "wide.json", tmp_path / "wide.pt"
     save_dataset(dataset, data)
     digest = _checkpoint(checkpoint, dataset)
-    report = report_saved_sampler(
+    report = torch_report(
         data,
         checkpoint=checkpoint,
         checkpoint_identity=digest,
         training_dataset_path=data,
         sample_counts=(2, 5),
-        backend=resolve("torch"),
     )
     for row in report.measurements:
         assert row.learned is not None and row.learned.support_violations == 0
@@ -252,7 +253,7 @@ def test_wide_count_space_uses_bounded_sampling(tmp_path: Path) -> None:
         assert (
             row.learned.largest_sample_tensor_bytes == row.samples_per_example * 40 * 8
         )
-    prior = report_saved_sampler(data, sample_counts=(2,), backend=resolve("torch"))
+    prior = torch_report(data, sample_counts=(2,))
     assert prior.policy_relationship == "prior_only"
     assert all(row.learned is None for row in prior.measurements)
     assert {item.metric for item in prior.unavailable} >= {
@@ -266,12 +267,13 @@ def test_invalid_sensitivity_rejected_before_read(
     tmp_path: Path, counts: tuple[int, ...]
 ) -> None:
     with pytest.raises(ValueError, match="sample counts"):
-        report_saved_sampler(
-            tmp_path / "missing", sample_counts=counts, backend=resolve("torch")
+        torch_report(
+            tmp_path / "missing",
+            sample_counts=counts,
         )
 
 
-def test_report_counts_invalid_draws(
+def test_report_scores_joint_presence_and_counts_invalid_hands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dataset = _dataset()
@@ -285,21 +287,34 @@ def test_report_counts_invalid_draws(
         *,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
-        # One invalid hand violates minima/size; another violates capacity/size.
-        return torch.tensor([(0, 0), (3, 0)], dtype=torch.int64)
+        # The first two hands each violate multiple public constraints.
+        return torch.tensor([(0, 0), (3, 1), (2, 0), (1, 1)], dtype=torch.int64)
 
     monkeypatch.setattr(AutoregressiveBeliefSampler, "sample", invalid_sample)
-    report = report_saved_sampler(
+    report = torch_report(
         data,
         checkpoint=checkpoint,
         checkpoint_identity=digest,
         training_dataset_path=data,
-        sample_counts=(2,),
-        backend=resolve("torch"),
+        sample_counts=(4,),
     )
     for row in report.measurements:
-        assert row.learned is not None and row.learned.support_violations == 2
+        arm = row.learned
+        assert arm is not None
+        assert (arm.support_violations, arm.sampled_hands) == (2, 4)
+        assert arm.calibration_bins[5] == CalibrationBin(1, 0.5, 0.0)
+        assert arm.calibration_bins[7] == CalibrationBin(1, 0.75, 1.0)
+        assert arm.inclusion_brier == 0.15625
+        assert arm.inclusion_ece == 0.375
+        assert arm.conjunction_brier == 0.25
         assert row.physical_prior.support_violations == 0
+
+
+def test_single_card_prior_reports_certain_presence_without_pairs() -> None:
+    arm = belief_fit.evaluate_physical_sampler(_dataset(width=1).games[0].examples)
+    assert arm.calibration_bins[-1] == CalibrationBin(1, 1.0, 1.0)
+    assert arm.inclusion_brier == arm.inclusion_ece == 0.0
+    assert arm.conjunction_brier is None
 
 
 def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
@@ -322,14 +337,13 @@ def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
     for seed in (10, 11):
         checkpoint = tmp_path / f"model-{seed}.pt"
         digest = _checkpoint(checkpoint, dataset, seed)
-        report = report_saved_sampler(
+        report = torch_report(
             data,
             checkpoint=checkpoint,
             checkpoint_identity=digest,
             training_dataset_path=data,
             sample_counts=(4,),
             seed=7,
-            backend=resolve("torch"),
         )
         reports.append(report)
         assert report.training_seed == seed
@@ -382,7 +396,7 @@ def test_duplicate_saved_views_rejected(tmp_path: Path) -> None:
     path = tmp_path / "duplicates.json"
     save_dataset(dataset, path)
     with pytest.raises(ValueError, match="duplicate saved observation"):
-        report_saved_sampler(path, sample_counts=(2,), backend=resolve("torch"))
+        torch_report(path, sample_counts=(2,))
 
 
 def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
@@ -402,3 +416,22 @@ def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
     pooled = _pool_games([arm, replace(arm, calibration_bins=bins_b)], [1, 1])
     assert pooled.inclusion_ece == 0
     assert pooled.conjunction_brier is None
+
+
+def test_legacy_sampler_zip_requires_torch(tmp_path: Path) -> None:
+    pytest.importorskip("mlx.core")
+    dataset = _dataset()
+    path = tmp_path / "legacy.safetensors"
+    digest = _checkpoint(path, dataset, seed=None)
+    assert path.read_bytes().startswith(b"PK\x03\x04")
+    bindings = SamplerIdentities(
+        expected_dataset_identity=dataset.identity,
+        expected_policy_identity=dataset.policy_identity,
+        expected_schema_identity=dataset.schema.identity,
+        expected_world_identity=dataset.world_identity,
+        expected_checkpoint_identity=digest,
+    )
+    admitted = read_belief_sampler(path, codec=resolve("torch").belief, **bindings)
+    assert admitted.model.schema == dataset.schema and admitted.training_seed is None
+    with pytest.raises(ValueError, match="Torch"):
+        read_belief_sampler(path, codec=resolve("mlx").belief, **bindings)
