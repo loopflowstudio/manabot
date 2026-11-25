@@ -77,25 +77,14 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   keyword action. Five legacy `DelayedEvent` variants stay a closed set for
   0.3.0 (see questions). No findings.
 
-- Performance slices P1–P4 (`49393aef55`..`6a08a28b0e`):
-  - **P1** (`49393aef55`): `remove_invalid_defenders()` returns early before
-    `self.state.combat.as_mut()` when no permanent defender is invalid,
-    eliminating spurious `TrackedState` cache invalidations in combat SBA.
-  - **P2** (`a9986c3aab`): `Context::targets()` resolves source permanent,
-    controller, and name once per `Node`, fast-paths `This`/`Attached`/
-    `SpellsYouControl`, and iterates `self.objects.iter()` directly (deleting
-    per-target `Context::scope`).
-  - **P3** (`ef7f6b59ac`): boxed `permanent_defenders` as
-    `Option<Box<Vec<...>>>` on `GameEvent::AttackersDeclared` and
-    `GameEvent::CombatAttackersDeclared` with a compile-time `<= 56` byte
-    guard, restoring baseline `size_of::<GameEvent>()` with identical serde
-    omission/encoding.
-  - **P4** (`6a08a28b0e`): flattened `TurnState::attacks_this_turn` to
-    `Vec<(ObjectId, u32)>` plus sparse `attacked_permanents` (borrowed
-    directly in `CanonicalTurn`), eliminating per-attacker clone allocations.
-  - Focused debug nextest: 149/149 passed (`attack_targets`,
-    `presentation_events`, `combat_preview`, `cr_613`, `match_state_hash_tests`,
-    `sba::tests`, `layers`, `observability`, `emblem`).
+- Performance slices P1–P4 (`49393aef55`..`6a08a28b0e`): no-op combat
+  defender cleanup skips invalidation, `Context::targets` resolves its source
+  once per node, boxed `permanent_defenders` keeps `GameEvent` at 56 bytes,
+  flat `attacks_this_turn` + sparse `attacked_permanents`. Focused debug
+  nextest 149/149.
+- Synced main `6203fff202` (#601, Academy deck pools/trophies; Python and UI
+  only, no engine or protocol files) at `7941de98ae`. No checks run after the
+  merge; they fall to gate.
 
 ## Engine measurement (at `6a08a28b0e` vs `6dd3914c73` and base `7d3ac1eb1c`)
 
@@ -135,9 +124,11 @@ release binaries (`cargo build --release --locked --example bench_search --examp
 All implementation and performance slices (Slices 1–8, Concept Review Passes 1–4,
 Coverage Decomposition, and Performance Slices P1–P4) are complete.
 
-- **Gate / CI verification**: full workspace debug nextest, Python extension
-  rebuild + contract/Academy/model/pinned-pilot suites, and clean Ubuntu CI
-  runner Engine Budget via PR CI (or
+- **Gate / CI verification** on PR #607 (draft; only `preflight` reported):
+  full workspace debug nextest, Python extension rebuild +
+  contract/Academy/model/pinned-pilot suites (including #601's new
+  `tests/academy/test_deck_pools.py`), and clean Ubuntu runner Engine Budget
+  via PR CI (or
   `gh workflow run ci.yml --ref jack-heart/7ff13d-implement-planeswalkers-loyalty -f measure=HEAD`).
 
 ## Target model (updated by concept review)
