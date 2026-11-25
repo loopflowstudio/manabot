@@ -1,0 +1,14 @@
+at: 4dcf306764ff2ee4c9a7efe2f11346a0ea4af22c
+first:
+  - path: docs/academy.md
+    why: How to play, block, target and cancel by pointer
+  - path: academy/ui/src/lib/board/drag.ts
+    why: Gesture lifetime and what releasing can do
+  - path: academy/ui/src/lib/board/combat.ts
+    why: Placing or moving one drafted blocker
+  - path: academy/ui/src/lib/board/Board.svelte
+    why: Pointer hits resolve to draft assignments or bound offers
+  - path: academy/ui/src/lib/board/Lines.svelte
+    why: Standing and dragged lines share endpoint geometry
+  - path: academy/ui/e2e/drag-play.spec.ts
+    why: Pointer interactions and Commands received by the authority
