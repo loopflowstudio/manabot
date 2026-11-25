@@ -7,7 +7,7 @@ Workflow installation grants no campaign, resource, spending or shipping authori
 | Responsibility | Owns | Default Graph | Completion evidence |
 | --- | --- | --- | --- |
 | Experiments | Scientific questions spanning model architecture, training regime and card pools; training and evaluation together | `experiment` | One report: each run's commit, run ID and cost, what it showed, and for a finding the verdict on its prediction |
-| Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, reusable decomposition, measured optimization and integrated batch handoff |
+| Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, unified concept/composability review, new-card performance check and integrated batch handoff |
 | Engine performance | Native engine algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-machine comparison |
 | Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code`; `experiment-performance` for training/evaluation speed | Working maintained systems and their relevant workflow checks |
 | Academy | Browser inspection, replay, human interaction and accessibility | builtin `code` | Correct viewer-safe product behavior through its real configured path |
@@ -29,17 +29,20 @@ lf graph experiment-performance
 ```
 
 The workflow measures the update and plans each improvement as a slice. It
-implements slice after slice, syncing and realigning after each, then
-compresses and lets the performance review decide whether another bottleneck
-is worth a pass.
-It retains the publish, demo, delivery and verification boundaries of
-`engine-performance`. Its result is a software change with supported timing
-evidence, or a documented reason to stop when no useful improvement is supported.
+syncs and implements slice after slice (`implement` decides whether more slices
+remain), then lets the performance review decide whether another bottleneck is
+worth a pass. Once optimization finishes, a single `compress` pass simplifies
+the settled diff before `pr-publish`, interactive `ship-review`, `deliver` and
+`verify`. Its result is a software change with supported timing evidence, or a
+documented reason to stop when no useful improvement is supported.
 
 Use `experiment-performance` when the question spans collection, policy inference,
 learner work or evaluation matches, including how these costs change with model
 size. Use `engine-performance` for a bottleneck within the native engine, such as
-state copying or search. Coverage continues to compose `engine-optimization`.
+state copying or search. Coverage gates `engine-optimization` behind `card-perf`
+so clean card batches skip optimization while regressions and superlinear
+new-card stress shapes reuse the shared `engine-measure` → `implement` →
+`engine-performance-review` loop.
 The performance workflow does not change Wave defaults or replace a Task's
 captured graph.
 
@@ -122,30 +125,40 @@ observation versions and recipes remain unchanged.
 
 ## Coverage
 
-`coverage` is a narrow fork of the builtin code lifecycle. Each of three phases
-plans its work as slices, then runs like builtin `build`: an inner loop
-implements one slice, syncs and realigns (realign names the next slice or moves
-on), and once the slices are built, compress and the phase's domain review
-read the whole batch. The review sends the phase back to implementation or
-advances it.
+`coverage` is a narrow fork of the builtin code lifecycle with two passes before
+a single `compress` → `pr-publish` → `ship-review` → `deliver` → `verify`
+handoff:
 
-1. `coverage-working`: complete shared rules behavior and directed debug
-   checks. Concept review runs here, once per pass.
-2. `coverage-scalable`: remove special paths; real cards compose from shared
-   rules types with one owner for each fact.
-3. `engine-optimization`: measure bounded representative workloads, improve
-   worthwhile bottlenecks, keep debug invariants and behavior digests.
+1. **Build and review:** `card-batch` cuts the cohort into ~30–50 minute
+   mechanism slices and names the large-board stress shapes the new cards could
+   make expensive. An inner `sync` → `implement` loop builds slice after slice
+   (with `implement` collapsing finished slices in `scratch/plan.md` and
+   deciding directly whether more slices remain). Once the slices are built,
+   `card-review` checks outward concepts/wire contracts, inward Rust
+   composability, dead-code/duplication simplifications and workspace behavior
+   together, returning to `implement` for one batched fix pass when needed.
+2. **Targeted new-card performance gate (`card-perf`):** after `card-review`
+   advances, the `card-perf` `xor` router measures the new cards' `bench_states`
+   stress shapes for superlinear scaling and checks uninstrumented release
+   `bench_steps`/`bench_search` retired instructions against base. Clean runs
+   exit directly to `compress` with no extra steps; regressions or superlinear
+   new-card paths enter `engine-optimization` (`engine-measure` → `sync` →
+   `implement` → `engine-performance-review`) scoped to this branch's diff.
+   Pre-existing global engine hotspots belong in `engine-performance` Tasks
+   rather than parallel card branches.
+
+After `card-perf`, a single `compress` pass simplifies the settled diff before
+`pr-publish` and interactive `ship-review`, followed by `deliver` and
+interactive `verify`.
 
 A slice is a cohort, not a card: a shared primitive with every card in the
-batch it unlocks, or a group of cards that already compose. `card-batch` cuts
-the batch that way, so the review loop runs once per batch rather than once
-per card.
+batch it unlocks, or 10–30 cards that already compose. Defer branch-wide Academy
+fixture refreshes and `scratch/tour.yaml` updates until the end of the build
+pass or review fix pass rather than running them on every intermediate slice.
 
-The whole batch then has one publish/demo/gate/delivery/verify boundary. These are
-three code loops, not three required PRs. A semantic counterexample invalidates
-dependent evidence and requires repairing the working contract. Passing the 10%
-regression allowance alone does not establish that optimization is finished.
-Artificial load and narrowed choices/observations are forbidden.
+A semantic counterexample invalidates dependent evidence and requires repairing
+the working contract. Artificial load and narrowed choices/observations are
+forbidden.
 
 Card authors supply interactions, synergies, directed behavior evidence and a
 committed integrated snapshot. A separately owned validation outcome reads those
