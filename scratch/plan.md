@@ -1,25 +1,24 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
-Base `cf73d9778f`. MTG-420 (PR #593, head `c133c0308f`) still open and main
-unmoved on 2026-11-24. `lf sync main` once it merges, before slice 3 (emblem
-sources need its persistent ability-source representation). Slice 1 keeps its
-quota in its own `loyalty_activated_this_turn` field and does not extend
-`activated_this_turn`, so it need not wait; expect only a
-textual conflict at the reset site when syncing.
+Base `cf73d9778f`; main `e0dd3aed3b` (#600) merged in `57495c4bc1`.
+MTG-420 (PR #593, head `b94cc50b94`) still open on 2026-11-24. `lf sync main`
+once it merges, before slice 3 (emblem sources need its persistent
+ability-source representation). Slice 1's quota is its own
+`loyalty_activated_this_turn` field; expect only a textual conflict at the
+reset site when syncing.
 
-Done: slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
-pending-authority ledger notes (`cc77598c9e`).
-
-Done: fixed loyalty and The Theorist (`a5534ee7bb`). Three directed native
-cases covered entry, payment, resolution, timing and the turn limit. The
-CPython 3.13 wheel passed the shared offer, fork and observation checks,
-and replayed all five Academy opening fixtures. The Academy inspector shows
-starting loyalty and activation history. Its pile test and Svelte check passed.
+Done:
+- Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
+  pending-authority ledger notes (`cc77598c9e`).
+- Fixed loyalty, quota, `LoyaltyAtInstantSpeed`, printed loyalty and The
+  Theorist across play, v11, text and Academy (`a5534ee7bb`). Three directed
+  native cases; the cp313 wheel passed shared offer, fork and observation
+  checks and replayed all five Academy opening fixtures.
 
 ## Passes remaining
 
-1. Slice 1 fixed loyalty, The Theorist and the player timing permission are
-   implemented. The remaining pass needs two changes to the proposed data model.
+1. Next: variable loyalty (−X) and combat defenders (slice 2). Both change
+   the proposed data model:
 
    - Variable loyalty needs an announced X that can preserve every payable
      counter count through targeting, payment, stack and resolution. At 256
