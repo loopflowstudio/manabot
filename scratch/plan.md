@@ -40,6 +40,28 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   `match_state_hash_tests`, `managym-cards --test cards` (gtc/fdn/kld/fin/fra)
   green; Academy `npm run check`/`vitest` not run (no `node_modules`).
 
+- Pass 4 (gate & contract fixes): fixed legacy `CARD_DIM` slicing in
+  `observability.rs:2304`, emblem `registry_name()` in `env.rs:2174` and
+  `python/bindings.rs::catalog_tokens`, v11 ABI width assertions in
+  `observation_layout.rs` (permanents 60, actions 32, relations 52),
+  `test_input_scales.py` (`player_turn_state` reading width 24),
+  `tla::farm_animals_can_decline_target_and_still_pay_sacrifice` (added
+  real Food target to decline plus no-target activation case), and
+  `test_loyalty.py` (`len(bindings) == len(ask.declarable)`). Recorded
+  `tests/public_api.json` (`Action.division_amount`,
+  `ContinuationFrame.division_remaining`), refreshed Academy opening
+  fixtures, and wrote `-planeswalkers` semantic-conformance,
+  authored-match authority (174 commands), and parity (175 checkpoints,
+  1,050 viewer checks, 0 divergences) receipts while keeping main's
+  MTG-420 `-battlefield-history` receipts untouched. Verified:
+  `academy/ui` (`svelte-check` 0 errors/warnings, `vitest` 40/40 files,
+  653 tests), Rust debug workspace nextest (2,184 tests green), cp313
+  extension rebuild & atomic install, `tests/model/test_pinned_pilot.py`
+  green with zero drift (v9 & v11 unchanged), Academy/model/world/contract
+  Python suites green (105 + 5 + 286 + 177 passed), and release
+  `bench_steps` digest match (`10601622128491155944`, 118,559 steps,
+  512 games). Same-runner Engine Budget comparison deferred to gate/CI.
+
 ## Target model (updated by concept review)
 
 The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
@@ -48,27 +70,7 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; Passes 1–3 repaired all six. Pass 4 (the gate) is next and last.
-
-### Pass 4 — Gate & contract fixes
-
-- Fix the pre-existing CI failures carried from `d1ef91d814`:
-  - `observability::` legacy card-row parity (`observability.rs:2304` slices
-    `legacy.agent_cards` with `CARD_DIM` (57) instead of `config.card_dim()` (56)).
-  - `observation_layout::named_layout_matches_every_encoder_width` (update ABI
-    width assertions in `observation_layout.rs` to match final post-Pass-1/2
-    v11 widths).
-  - `content_pack_contract_covers_env_roots_siblings_and_rollout_slots`,
-    `definitions::every_authored_subtype_has_a_category`, and frozen
-    semantic-conformance cases.
-- Install Academy UI deps and run `npm run check` + `vitest` (Pass 3's
-  `Board.svelte`/`combat.ts` edits are unchecked).
-- Run debug nextest (`CARGO_BUILD_JOBS=2 cargo nextest run --profile ci
-  --test-threads 2`), rebuild the Python extension, run Academy / Python
-  tests, check Engine Budget (within 10%), and check
-  `tests/model/test_pinned_pilot.py` (record with `--reason` if the attack
-  row or Way/loyalty tokens moved). Keep main's MTG-420 receipts at their
-  original revision.
+code; Passes 1–4 are complete.
 
 ## Consumer invariants (every pass)
 

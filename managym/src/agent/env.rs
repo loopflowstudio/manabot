@@ -2171,7 +2171,7 @@ mod content_pack_contract_tests {
             let definition = admitted
                 .definition(entry.card_def_id)
                 .expect("manifest definition");
-            assert_eq!(definition.name, entry.registry_name);
+            assert_eq!(definition.registry_name(), entry.registry_name);
             assert_eq!(definition.key, entry.key.as_deref().unwrap_or(""));
         }
 

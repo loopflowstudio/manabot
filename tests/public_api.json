@@ -1266,6 +1266,9 @@
           "description": {
             "kind": "attribute"
           },
+          "division_amount": {
+            "kind": "attribute"
+          },
           "focus": {
             "kind": "attribute"
           },
@@ -1755,6 +1758,9 @@
             "kind": "attribute"
           },
           "delayed_frequency": {
+            "kind": "attribute"
+          },
+          "division_remaining": {
             "kind": "attribute"
           },
           "effect_execution": {

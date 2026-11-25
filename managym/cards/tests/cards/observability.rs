@@ -2292,16 +2292,14 @@ fn card_row(
     encoded: &EncodedObservation,
     permanent: PermanentId,
 ) -> Vec<f32> {
-    let legacy = encode(
-        observation,
-        &ObservationEncoderConfig {
-            layout: InputLayout::Legacy,
-            ..ObservationEncoderConfig::default()
-        },
-    )
-    .unwrap();
+    let legacy_config = ObservationEncoderConfig {
+        layout: InputLayout::Legacy,
+        ..ObservationEncoderConfig::default()
+    };
+    let legacy = encode(observation, &legacy_config).unwrap();
     let row = legacy_card_index(game, observation, permanent);
-    let card_row = legacy.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM].to_vec();
+    let legacy_card_dim = legacy_config.card_dim();
+    let card_row = legacy.agent_cards[row * legacy_card_dim..(row + 1) * legacy_card_dim].to_vec();
     let slot = permanent_slot(game, observation, permanent);
     let permanent_row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
     let mut shared = vec![
@@ -5802,9 +5800,7 @@ fn bargain_and_forage_sacrifices_reach_the_stack_frame() {
         s.force_permanent_on_battlefield(1, "Gray Ogre");
         s.force_permanent_on_battlefield(0, land);
         s.force_permanent_on_battlefield(0, "Mountain");
-        s.game_mut()
-            .create_token(token, PlayerId(0))
-            .unwrap();
+        s.game_mut().create_token(token, PlayerId(0)).unwrap();
         let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
         crate::support::play::cast_card(&mut s, card);
         // Bargain, the target, the sacrifice, then whatever mana is left.

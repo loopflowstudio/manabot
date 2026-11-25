@@ -3289,9 +3289,26 @@ fn cunning_maneuver_buffs_and_investigates_but_all_invalid_targets_stop_it() {
 fn farm_animals_can_decline_target_and_still_pay_sacrifice() {
     let mut s = five_color_setup(&["Curious Farm Animals"]);
     play_and_settle(&mut s, "Curious Farm Animals");
+    s.game_mut().create_token("token.food", PlayerId(0));
     let id = permanent_named(&s, "Curious Farm Animals");
     activate_first(&mut s, id);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, 23);
+    assert!(s
+        .battlefield_permanents_named(0, "Curious Farm Animals")
+        .is_empty());
+    assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
+}
+
+#[test]
+fn farm_animals_activates_without_any_artifact_or_enchantment_on_battlefield() {
+    let mut s = five_color_setup(&["Curious Farm Animals"]);
+    play_and_settle(&mut s, "Curious Farm Animals");
+    let id = permanent_named(&s, "Curious Farm Animals");
+    activate_first(&mut s, id);
+    spend_colorless(&mut s);
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 23);
     assert!(s
@@ -3398,8 +3415,7 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     let mut s = five_color_setup(&["Deadly Precision", "Callous Inspector"]);
     let victim = play_and_settle(&mut s, "Callous Inspector");
     let target = permanent_named(&s, "Callous Inspector");
-    s.game_mut()
-        .create_token("token.treasure", PlayerId(0));
+    s.game_mut().create_token("token.treasure", PlayerId(0));
     s.set_player_mana_pool(0, "0");
     cast(&mut s, "Deadly Precision");
     choose(
@@ -4276,8 +4292,7 @@ fn firebending_setup(seed: u64, mountains: usize) -> (Scenario, PermanentId) {
 fn treasure_is_available_when_announcing_a_kicker_cost() {
     let mut s = five_color_setup(&["Firebending Lesson", "Gnarled Professor"]);
     let victim = s.force_permanent_on_battlefield(1, "Gnarled Professor");
-    s.game_mut()
-        .create_token("token.treasure", PlayerId(0));
+    s.game_mut().create_token("token.treasure", PlayerId(0));
     s.set_player_mana_pool(0, "3R");
     cast(&mut s, "Firebending Lesson");
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
@@ -9366,10 +9381,8 @@ fn south_pole_voyager_second_resolution_draws() {
 fn spirit_tokens_cannot_block_or_be_blocked_by_nonspirits() {
     for spirit_attacking in [false, true] {
         let mut s = five_color_setup(&["Gnarled Professor"]);
-        s.game_mut()
-            .create_token("token.spirit", PlayerId(0));
-        s.game_mut()
-            .create_token("token.spirit", PlayerId(1));
+        s.game_mut().create_token("token.spirit", PlayerId(0));
+        s.game_mut().create_token("token.spirit", PlayerId(1));
         let spirit = s.battlefield_permanents_named(0, "Spirit")[0];
         let defender = s.battlefield_permanents_named(1, "Spirit")[0];
         let ordinary = s.force_permanent_on_battlefield(0, "Gnarled Professor");
@@ -10579,8 +10592,7 @@ fn waterbending_lesson_tap_stays_named_while_a_mana_ability_is_being_paid() {
         ],
         "0",
     );
-    s.game_mut()
-        .create_token("token.treasure", PlayerId(0));
+    s.game_mut().create_token("token.treasure", PlayerId(0));
     let creature = permanent_named(&s, "Callous Inspector");
     choose(
         &mut s,
@@ -10608,8 +10620,7 @@ fn committed_optional_payment_resumes_after_two_nested_mana_decisions() {
         ],
         "0",
     );
-    s.game_mut()
-        .create_token("token.treasure", PlayerId(0));
+    s.game_mut().create_token("token.treasure", PlayerId(0));
     // Inject the extra resource before payment begins. The initial waterbend
     // offer is already legal from the creatures and Prism; its normal tap
     // transition publishes the offers that include this Treasure.

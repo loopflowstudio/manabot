@@ -5301,7 +5301,7 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         "registry_names",
         content
             .definitions()
-            .map(|definition| definition.name.clone())
+            .map(|definition| definition.registry_name().to_owned())
             .collect::<Vec<_>>(),
     )?;
     out.set_item("token_kind", catalog.token_kind)?;

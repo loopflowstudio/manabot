@@ -54,7 +54,7 @@ fn manifest() -> Manifest {
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v6/evidence-battlefield-history-v1.json"
+        "../../conformance/semantic-kernel-w17-v6/evidence-planeswalkers-v1.json"
     ))
     .expect("pinned evidence")
 }

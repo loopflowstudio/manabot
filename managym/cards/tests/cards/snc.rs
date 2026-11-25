@@ -14,10 +14,7 @@ fn venom_connoisseur_commands_replay_old_and_new_resolutions() {
     let mut s = five_color_setup(&["Venom Connoisseur"]);
     let source = s.force_permanent_on_battlefield(0, "Venom Connoisseur");
     let player = PlayerId(0);
-    let ally = s
-        .game_mut()
-        .create_token("token.ally", player)
-        .unwrap();
+    let ally = s.game_mut().create_token("token.ally", player).unwrap();
     resolve_until_priority(&mut s);
     assert!(keywords(&s, source).has(Keyword::Deathtouch));
     assert!(!keywords(&s, ally).has(Keyword::Deathtouch));

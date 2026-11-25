@@ -31,10 +31,10 @@ from managym.decision import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
+    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-planeswalkers.json"
 )
-AUTHORITY_SHA256 = "228daa6571c4a9299368bc995ac7994761c505bdb31cabf5c4bf1657d7441385"
-TERMINAL_STATE = "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876"
+AUTHORITY_SHA256 = "5a765d4623472852a6ca0e9c978f2d8708d8c40b8124cb6ad0084169000198f7"
+TERMINAL_STATE = "c60b5503f64bede1147902d6ea8479946f863290816c1f3c2937c2bbf5efc1cf"
 
 COMMAND_COUNT = 174
 

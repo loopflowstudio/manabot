@@ -130,7 +130,7 @@ def test_declared_defender_is_bound_to_the_offer_and_survives_cold_replay() -> N
         ("target", defender.model_dump()),
     ]
     bindings = frame.object_candidates
-    assert len(bindings) == 1
+    assert len(bindings) == len(ask.declarable)
     command = Command(
         "attack-Jace", frame.revision, step.action_index, object_preconditions=bindings
     )

@@ -1285,12 +1285,12 @@ mod tests {
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 59 } else { 38 },
+                    if one_token { 60 } else { 38 },
                 ),
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 30 } else { 22 },
+                    if one_token { 32 } else { 22 },
                 ),
                 (
                     "events",
@@ -1300,7 +1300,7 @@ mod tests {
                 (
                     "relations",
                     config.relation_dim(),
-                    if one_token { 50 } else { 49 },
+                    if one_token { 52 } else { 49 },
                 ),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
