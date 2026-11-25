@@ -182,7 +182,7 @@ fn encoded_to_dict<'py>(
         &encoded.opponent_player,
         &[1, config.player_dim()],
     )?;
-    let cards = [config.max_cards_per_player, config.card_dim()];
+    let cards = [config.max_cards_per_player, enc::CARD_DIM];
     put("agent_cards", &encoded.agent_cards, &cards)?;
     put("opponent_cards", &encoded.opponent_cards, &cards)?;
     let permanents = [config.max_permanents_per_player, config.permanent_dim()];
@@ -1335,16 +1335,14 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class with a spend effect or non-step expiry: its
-/// qualifiers, amounts by W/U/B/R/G/C and learning-token program.
+/// Pooled mana of one class with a spend effect or combat expiry: its qualifiers,
+/// amounts by W/U/B/R/G/C and learning-token program.
 #[cfg(feature = "python")]
 #[pyclass(name = "PooledManaClass")]
 #[derive(Clone)]
 pub struct PyPooledManaClass {
     #[pyo3(get)]
     pub combat: bool,
-    #[pyo3(get)]
-    pub expiry: String,
     #[pyo3(get)]
     pub restriction: Option<String>,
     #[pyo3(get)]
@@ -1360,7 +1358,6 @@ impl From<PooledManaClassData> for PyPooledManaClass {
     fn from(value: PooledManaClassData) -> Self {
         Self {
             combat: value.combat,
-            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1374,7 +1371,6 @@ impl From<PyPooledManaClass> for PooledManaClassData {
     fn from(value: PyPooledManaClass) -> Self {
         Self {
             combat: value.combat,
-            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -2034,14 +2030,6 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
-    #[getter]
-    fn put_into_graveyard_this_turn(&self) -> bool {
-        self.data.put_into_graveyard_this_turn
-    }
-    #[setter]
-    fn set_put_into_graveyard_this_turn(&mut self, value: bool) {
-        self.data.put_into_graveyard_this_turn = value;
-    }
     /// Counters on the card off the battlefield, by kind name.
     #[getter]
     fn counters(&self) -> BTreeMap<String, i32> {
@@ -2372,15 +2360,6 @@ impl PyPermanent {
     #[setter]
     fn set_granted_firebending(&mut self, value: i32) {
         self.data.granted_firebending = value;
-    }
-    #[getter]
-    fn chosen(&self) -> Option<String> {
-        use crate::state::permanent::EntryChoice;
-        self.data.chosen.as_ref().map(|choice| match choice {
-            EntryChoice::Color(c) => format!("color {c:?}"),
-            EntryChoice::CreatureType(s) => format!("creature type {s}"),
-            EntryChoice::CardName(s) => format!("card name {s}"),
-        })
     }
     #[getter]
     fn temp_subtypes(&self) -> Vec<String> {
@@ -4547,6 +4526,15 @@ impl PyEnv {
         serde_json::to_string(&controls).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn permanent_details_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let details = env.permanent_details(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&details).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
             .inner
@@ -5569,6 +5557,7 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
     m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(

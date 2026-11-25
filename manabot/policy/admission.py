@@ -23,10 +23,10 @@ from manabot.env.observation import (
     FACT_KIND_INDEX,
     FACT_KINDS,
     FACT_OBJECT_INDEX,
+    FACT_SET_NAME,
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
-    NAME_ID_KINDS,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_ROWS,
@@ -582,7 +582,7 @@ def fact_vocabulary(
         raise ValueError("fact kind carries no detail")
     spaces = RecordNamespace
     catalog.require_names(
-        np.where(np.isin(kinds, NAME_ID_KINDS), spaces.NAME, spaces.TOKEN)[named],
+        np.where(kinds == FACT_SET_NAME, spaces.NAME, spaces.TOKEN)[named],
         ident[named],
     )
     catalog.require_names(

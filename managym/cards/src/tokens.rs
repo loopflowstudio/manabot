@@ -68,9 +68,6 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         inkling(),
         red_white_spirit(),
         rat(),
-        phyrexian_goblin_1_1_r(),
-        raccoon_3_3_g(),
-        cat_beast_2_2_w(),
     ]
 }
 
@@ -830,50 +827,6 @@ fn fractal() -> TokenDefinition {
             0,
             0,
             [Color::Green, Color::Blue],
-        ),
-    )
-}
-
-fn phyrexian_goblin_1_1_r() -> TokenDefinition {
-    token(
-        "token.phyrexian_goblin_1_1_r",
-        "3663e79b-2bf9-44af-a638-c0ad9067d8d4",
-        creature(
-            face(
-                "Phyrexian Goblin",
-                [CardType::Creature],
-                &["Phyrexian", "Goblin"],
-                "",
-            ),
-            1,
-            1,
-            [Color::Red],
-        ),
-    )
-}
-
-fn raccoon_3_3_g() -> TokenDefinition {
-    token(
-        "token.raccoon_3_3_g",
-        "af257e8b-9bed-4c6b-9510-11fe950fa80e",
-        creature(
-            face("Raccoon", [CardType::Creature], &["Raccoon"], ""),
-            3,
-            3,
-            [Color::Green],
-        ),
-    )
-}
-
-fn cat_beast_2_2_w() -> TokenDefinition {
-    token(
-        "token.cat_beast_2_2_w",
-        "e2c91781-acf9-4cff-be1a-85148ad2a683",
-        creature(
-            face("Cat Beast", [CardType::Creature], &["Cat", "Beast"], ""),
-            2,
-            2,
-            [Color::White],
         ),
     )
 }

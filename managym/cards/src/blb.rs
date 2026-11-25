@@ -15,7 +15,6 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
-        three_tree_mascot(),
         bakersbane_duo(),
         diresight(),
         feed_the_cycle(),
@@ -166,32 +165,4 @@ fn feed_the_cycle() -> CardDefinition {
         },
         ..Default::default()
     }
-}
-
-fn three_tree_mascot() -> CardDefinition {
-    use managym_state::{
-        card::{Keyword, Keywords},
-        mana::Mana,
-    };
-    CardDefinition {
-key: "blb.three_tree_mascot",
-scryfall_id: "aaced75b-6e07-457c-8ea2-f74d99710d15",
-printed: PrintedCharacteristics {
-name: "Three Tree Mascot".into(),
-mana_cost: Some(ManaCost::parse("{2}")),
-types: CardTypes::new([CardType::Artifact, CardType::Creature]),
-subtypes: vec!["Shapeshifter".into()],
-power: Some(2),
-toughness: Some(1),
-keywords: Keywords::of(&[Keyword::Changeling]),
-activated_abilities: vec![ActivatedAbilityDefinition {
-once_each_turn: true, mana_cost: ManaCost::parse("{1}"),
-effects: vec![Effect::mana_choice(["W", "U", "B", "R", "G"].map(Mana::parse))],
-..Default::default()
-}],
-text_box: "Changeling (This card is every creature type.)\n{1}: Add one mana of any color. Activate only once each turn.".into(),
-..Default::default()
-},
-..Default::default()
-}
 }

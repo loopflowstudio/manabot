@@ -212,7 +212,6 @@ fn harbinger_of_the_tides() -> CardDefinition {
                     effects: vec![Effect::SelectCards {
                         from: ObjectSelector::Target(target),
                         predicate: CardPredicate::default(),
-                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

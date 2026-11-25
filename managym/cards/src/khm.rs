@@ -179,7 +179,7 @@ fn fynn_the_fangbearer() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::DealsCombatDamage {
-                    subject: managym_state::ability::TriggerSubject::you_control(CardPredicate { keyword: Some(Keyword::Deathtouch), ..CardPredicate::creature() }),
+                    subject: managym_state::ability::TriggerSubject::you_control(CardPredicate { deathtouch: true, ..CardPredicate::creature() }),
                     to: Some(Actor::Opponent),
                     per: managym_state::ability::Per::Object,
                 },

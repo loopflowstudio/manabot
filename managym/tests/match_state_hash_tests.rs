@@ -237,7 +237,6 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         controller: PlayerId(0),
         source_definition_id: CardDefId(7),
         targets: Vec::new(),
-        target_shares: Vec::new(),
         target_req_indices: Vec::new(),
         kicked: false,
         x: 0,

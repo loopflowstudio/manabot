@@ -5,7 +5,7 @@ use managym_state::{
     mana::ManaCost,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![mystical_teachings(), cancel(), think_twice()]
+    vec![cancel(), think_twice()]
 }
 
 fn cancel() -> CardDefinition {
@@ -45,25 +45,4 @@ fn think_twice() -> CardDefinition {
         },
         ..Default::default()
     }
-}
-
-fn mystical_teachings() -> CardDefinition {
-    use managym_state::{card::Keyword, predicate::CardPredicate};
-    CardDefinition {
-key: "tsp.mystical_teachings",
-scryfall_id: "a057e5f3-b6bd-4995-b990-714201f36989",
-printed: PrintedCharacteristics {
-name: "Mystical Teachings".into(),
-mana_cost: Some(ManaCost::parse("{3}{U}")),
-types: CardTypes::new([CardType::Instant]),
-statics: vec![StaticAbility::Flashback(ManaCost::parse("{5}{B}"))],
-spell_effects: vec![Effect::search_library(CardPredicate { any_of: vec![
-CardPredicate {card_type: Some(CardType::Instant), ..Default::default()},
-CardPredicate {keyword: Some(Keyword::Flash), ..Default::default()}
-], ..Default::default()}, 1.into(), vec![Effect::return_to_hand(ObjectSelector::Selected)])],
-text_box: "Search your library for an instant card or a card with flash, reveal it, put it into your hand, then shuffle.\nFlashback {5}{B} (You may cast this card from your graveyard for its flashback cost. Then exile it.)".into(),
-..Default::default()
-},
-..Default::default()
-}
 }

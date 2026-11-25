@@ -251,7 +251,6 @@ impl Game {
                             Decision::SelectCards { .. }
                                 | Decision::Scry { .. }
                                 | Decision::ManifestDread { .. }
-                                | Decision::PartitionPiles { .. }
                                 | Decision::Surveil { .. }
                                 | Decision::LookAndSelect { .. }
                                 | Decision::OrderLibrary { .. }

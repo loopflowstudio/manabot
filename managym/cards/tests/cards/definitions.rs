@@ -83,16 +83,6 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                             walk(inner, format!("{child}/{part}"), place, found);
                         }
                     }
-                    ("EntersWithPlusOneCounters", Value::Object(entry)) => {
-                        if let Some(condition) = entry.get("condition") {
-                            walk(
-                                condition,
-                                format!("{child}/condition"),
-                                Place::SourceStatic,
-                                found,
-                            );
-                        }
-                    }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
                     // A state trigger (CR 603.8) asks its condition of its source.
                     ("State", _) => walk(field, child, Place::SourceStatic, found),

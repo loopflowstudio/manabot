@@ -591,10 +591,9 @@ mod tests {
             .unwrap();
         // This creature can convoke or waterbend but produces no mana.
         game.create_token("token.ally", payer, false).unwrap();
-        game.state.mana_pool_mut(payer).add(
-            &Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat),
-            None,
-        );
+        game.state
+            .combat_mana_pool_mut(payer)
+            .add(&Mana::parse("R"), None);
         game.capture_priority_mana(payer);
         let hand = game.state.zones.zone_objects(ZoneType::Hand, payer);
         let card = game.state.card_id(hand[0]).unwrap();

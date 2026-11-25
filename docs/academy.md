@@ -20,7 +20,6 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
 - [Choice navigation](#choice-navigation)
-- [Drafted decisions](#drafted-decisions)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
 - [Attempts and shared history](#attempts-and-shared-history)
@@ -604,11 +603,11 @@ symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
-outlined plate. Identical permanents with the same choices share a pile, its
-count after the top copy's name ("Forest ×4"; the copies beneath show no name of
-their own), and each copy remains its own control. Crowded rows shrink their cards
-and wrap onto a further line before anything scrolls, and each half gives the
-crowded row more of its height.
+outlined plate. Identical permanents with the same effective abilities, status
+and choices share a pile, its count after the top copy's name ("Forest ×4"; the
+copies beneath show no name of their own), and each copy remains its own
+control. Crowded rows shrink their cards and wrap onto a further line before
+anything scrolls, and each half gives the crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
 a bar above its art, wrapping to a second line rather than being cut; its mana
@@ -617,22 +616,46 @@ colours: a pale tint in light mode and a solid bar in dark mode, white a
 neutral ivory-grey and colourless a cool grey, a land the colour of its basic
 land types, and a card of several colours blended left to right as printed
 hybrid frames are. Power and toughness sit on a plate at the lower right, and
-on a row above it the permanent's state: attacking, blocking, damage marked on
-it, summoning sickness, counters and the keywords it has now (one it was
-granted is edged in green). Mana symbols carry their letter, and ◇ for
-colourless. A tapped permanent turns a quarter onto its side, in room its row
-keeps for it so it never covers a neighbour; its name bar stays across the
-top. An attacker steps toward the player it attacks and tilts a few degrees:
-one that tapped lies just past the quarter, a vigilant one stays upright.
-Something a spell on the stack targets has a dashed red edge. Cards in hand
-have the type line under the name and the cost on the art; a hand card's name
-stays on one line, shortened with an ellipsis when long, and its full name is
-in the inspection.
+above it sit the permanent's active state chips, in priority order: damage
+marked (`2 damage` in red), a small spiral mark when a creature is summoning
+sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
+`Can't attack or block`, `Doesn't untap`, `Must attack`, `Struck first`, or
+`No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
+the effective battlefield keywords and keyword abilities it has now (evergreen
+keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
+by an effect or another permanent is edged in green). Mana symbols carry their
+letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+in room its row keeps for it so it never covers a neighbour; its name bar stays
+across the top.
+
+Battlefield chips show what applies right now rather than static printed text.
+For example, **Platypus-Bear** displays plain `Defender` when you have no
+Lesson in your graveyard and strikes `Defender` through in muted ink once a
+Lesson is in your graveyard to show it can attack; **Fire Nation Cadets**
+displays `Firebending 2` only while a Lesson is in your graveyard; **Mai,
+Jaded Edge** shows `Prowess`, and an Ally beside **Sokka, Tenacious Tactician**
+shows green-edged `Prowess` alongside granted `Menace`; printed and granted
+Ward show their cost (`Ward {2}`, `Ward—Pay 7 life`, `Ward—Discard a card`);
+and **Ty Lee, Chi Blocker** shows `Prowess` on the board while leaving `Flash`
+to the inspection. Permanents with different effective abilities or status
+never share a pile, so a vanilla 1/1 Soldier token stays separate from a
+Firebending 1 Soldier token. Attacking and blocking do not take chip space: an
+attacker steps toward the player it attacks and tilts a few degrees (one that
+tapped lies just past the quarter, a vigilant one stays upright), and a blocker
+is joined to its attacker by a line. Chips are placed whole and never clipped
+mid-word. A narrow card can show `Firebend 2` or `Ward`. Hover the chip or
+inspect the card for the full ability and Ward cost. Chips use the space beside
+power/toughness when available. Hover a trailing `+N` for the hidden badges.
+The inspection and the card’s accessible name include every badge. On a short
+tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
+Cards in hand have the type line under the name and the cost on the art; a hand
+card's name stays on one line, shortened with an ellipsis when long, and its
+full name is in the inspection.
 
 While you may act, what you can act on is raised and what you cannot steps
 back: a card in hand you cannot play now is dimmed most, a permanent of yours
 nothing acts on is slightly muted, and lands and the opponent's side are never
-dimmed. Summoning sickness is told by its label, not by more dimming. The
+dimmed. Summoning sickness is told by its spiral mark, not by more dimming. The
 selected card, such as the spell whose targets you are choosing, rises higher
 with a thin ink edge. In light mode the grounds are white and grey and what you
 act with is charcoal; in dark mode they are near-black and it is near-white.
@@ -640,11 +663,19 @@ Academy follows the system setting. Card and player names, life, and the
 rail's moves and legal choices are set in Spectral; everything else is in Work
 Sans. The top bar shows the connection only when it has a problem.
 
-Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
-keywords with why it has each (printed, the effect that granted it, or
-"another ability" for a grant from another permanent's static ability), where its power and toughness come
-from (printed or set, counters, each effect by its source and duration, and
-whatever those do not explain as "other effects"), and its state. The
+Rest the pointer on a card for a moment, or focus it with the keyboard, to
+inspect it: its rules text, type line and cost, effective keywords and keyword
+abilities (including `Flash`, and `Defender · can attack anyway` when Defender
+is overridden) with why it has each (printed, the effect that granted it with
+source and duration, the counter for a keyword counter such as a double strike
+counter, or the permanent granting the ability, such as Sokka), where its power and toughness come from (printed or set,
+counters, each effect by its source and duration, and whatever those do not
+explain as "other effects"), and its full battlefield state (summoning sickness
+in words, attacking or blocking, active restrictions from static abilities or
+effects with their provenance, and ability loss). For example, a creature
+enchanted by Watery Grasp reads “Doesn’t untap · Watery Grasp”. Older recordings without
+extended permanent details still render plain `Defender`, effective keywords,
+recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
 until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
@@ -715,51 +746,29 @@ Choices with no card on the board, such as Lessons outside the game, appear in
 a tray over the board. Trays, the inspection, menus and the result card are
 opaque and sit above the lines between targets, so a line never crosses them.
 
-Combat and multi-card pile splits are drafted whole in live play before any
-step is sent:
-
-- **Combat.** At an attack, every creature that can attack is outlined; click
-  one (or focus it and press Enter) to add it to the attack or leave it out.
-  Drafted attackers are ringed with a dashed line and lean in, and a pile of
-  identical creatures takes a count ("2 of 3 Tiger-Seal") in the rail. At a
-  block, click a blocker, then the attacker it blocks; a blocker that can block
-  only one attacker takes it at once, and the block's line is drawn. The prompt
-  reads the whole plan ("Attack with 3 · not with Tiger-Seal", "Badgermole Cub
-  and Ally on Invasion Reinforcements") and nothing is declared while drafting.
-  The engine still asks about one creature at a time: Academy's read-only combat
-  preview replays the draft on a copy of the game and returns the exact answers
-  that declare it, or the first one it refuses and why (a lone blocker of a
-  creature with menace, a creature that cannot attack).
-- **Pile splits.** When an effect asks you to split looked-at cards into two
-  piles (such as Curator of Destinies), an opaque panel opens over the board
-  showing every undecided card in **Face-down** at the start. Click any card
-  (or focus it and press Enter) to move it between **Face-up** (your opponent
-  sees these) and **Face-down** (your opponent sees only the count), choose
-  **Swap piles** to flip all remaining cards at once, or choose **Look at the
-  board** to fold the panel and inspect the battlefield (**Show pile split**
-  reopens it). The prompt reads the split ("2 face-up (Gray Ogre, Forest) ·
-  3 face-down") and the primary button reads **Confirm split (2 up, 3 down)**;
-  nothing is placed until you confirm.
-
-Press **Confirm** (Space) to send the planned answers one by one, each bound to
-the frame that offered it. While sending, the rail shows progress and **Stop
-sending** (Escape) to halt between steps. If a pending Command, server work, or
-a priority-stop update arrives while a draft is open, the draft stays visible
-with edits and Confirm disabled until the board is answerable again. A reload
-in the same tab keeps an unsubmitted draft for that exact decision; if the game
-refuses a step, asks something unexpected, disconnects, or reloads mid-send,
-sending stops and the rail states how many steps were committed or sent. Each
-individual step's raw offers remain reachable in the rail under a collapsed
-disclosure (**Each creature's choice** or **Each card's choice**), disabled
-while a sequence is sending. See [Drafted decisions](#drafted-decisions) for the
-full lifecycle and which multi-step decisions use it. **Pass turn** (F6) passes
+Combat is drafted whole. At an attack, every creature that can attack is
+outlined; click one (or focus it and press Enter) to add it to the attack or
+leave it out. Drafted attackers are ringed with a dashed line and lean in, and
+a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, click a blocker, then the attacker it blocks; a blocker
+that can block only one attacker takes it at once, and the block's line is
+drawn. The prompt reads the whole plan ("Attack with 3 · not with
+Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
+nothing is declared while drafting. The engine still asks about one creature
+at a time: Academy's read-only combat preview replays the draft on a copy of
+the game and returns the exact answers that declare it, or the first one it
+refuses and why (a lone blocker of a creature with menace, a creature that
+cannot attack). Confirm (Space) sends those answers one by one; if the game
+asks anything the preview did not predict, sending stops and the board shows
+where the game stands. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. Each creature's own
+answers stay in the full list of legal choices. **Pass turn** (F6) passes
 priority until the turn ends.
 
-Keys: `1`–`9` choose a numbered choice (inactive while a draft is open), Space
-presses the primary button (or confirms the open draft, unless a control with
-its own action has focus), F6 passes the turn and Escape stops a confirmed
-draft between steps or closes an open list. **Menu** holds the session controls,
-priority stops, the sharing and Study tools and feedback.
+Keys: `1`–`9` choose a numbered choice, Space presses the primary button
+(unless a control with its own action has focus), F6 passes the turn and Escape
+closes an open list. **Menu** holds the session controls, priority stops, the
+sharing and Study tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload in the same tab to
@@ -1579,163 +1588,6 @@ ACADEMY_REVIEW_CHOICE=CHOOSE_TARGET ACADEMY_API_PORT=8147 ACADEMY_FRONTEND_PORT=
 The test pauses with the decision ready; resume the inspector to finish. Use
 `ACADEMY_REVIEW_CHOICE=DISCARD` for the cleanup discard. These attempts are
 scripted prefixes and do not count as human completions.
-
-## Drafted decisions
-
-Some engine decisions ask one atomic question per creature or card, even though
-a player thinks about the whole choice at once. Academy lets a live player draft
-that whole choice locally and confirm once, then submits the engine's own
-per-step offers in order through one shared chunked runner.
-
-### Example: splitting five cards with Curator of Destinies
-
-Curator of Destinies enters and looks at Gray Ogre, Hill Giant, Forest, Plains,
-and Swamp. The engine asks about one card at a time (`Put Gray Ogre in the
-face-up pile` or `Put Gray Ogre in the face-down pile`). On the live board:
-
-1. The **Split into two piles** panel opens over the board with all five cards
-   in **Face-down** (`0 face-up · 5 face-down`) and zero Commands sent. In the
-   rail, the per-card offers fold under **Each card's choice** and number keys
-   `1`–`9` do nothing while the panel is open.
-2. Click **Gray Ogre** and **Forest** (or focus each and press Enter). They
-   move into **Face-up**; the prompt updates to `2 face-up (Gray Ogre, Forest)
-   · 3 face-down` and the primary button reads **Confirm split (2 up, 3 down)**.
-3. Press **Space** (or click the button). The rail shows `Placing 1 of 5…` and
-   **Stop sending** (`Esc`), and sends the first card's offer bound to the
-   current revision. As each accepted frame arrives and the board becomes
-   answerable, the runner checks that the frame asks about the next planned
-   card and sends its offer—five Commands total (`up, down, up, down, down`).
-4. If step 3 is refused by the server, sending stops at once: the panel clears
-   the stale draft and reopens on the three undecided cards (listing the two
-   already committed), and the rail reads:
-   `Stopped after 2 of 5. The next card placement was not accepted. Split any remaining cards from here.`
-   If instead step 1 is refused at the same revision, the five-card draft stays
-   intact so you can adjust or confirm again.
-
-Combat declarations follow the same lifecycle, except the planned steps come
-from the read-only native preview (`/combat-preview`) instead of the frame's
-inspected cards, and the rail folds raw offers under **Each creature's choice**.
-
-### Lifecycle and invariants
-
-One drafted-decision contract governs every drafted decision:
-
-- **Live piloting only.** Drafts open only while piloting a live table. Study,
-  Replay, Watch, Interrupted, and read-only views never open a draft; they show
-  the authority's full legal choice list and any recorded probabilities.
-- **Kept visible through transient waits.** Table role (piloting) is separate
-  from momentary submission readiness. While a Command is pending, server work
-  is running, or priority stops are updating, an open draft stays on screen
-  with edits and Confirm disabled instead of collapsing to raw choices. Once
-  the board is answerable again, editing or chunked submission resumes.
-- **Authority-bound steps and immediate completion.** Nothing commits before
-  Confirm. Every sent step uses the current frame's own offer bound to that
-  frame's revision and prompt. After the final step advances the revision, the
-  run finishes immediately even if the opponent begins thinking before the
-  board becomes answerable again.
-- **Trivial steps are never waited on.** Because the engine applies
-  `skip_trivial`, the last step of a multi-step sequence is often answered
-  automatically (the final card of `OrderLibrary`, the last target's share, or
-  `Decline` once every card is chosen). Plans contain only the steps the engine
-  will ask, and the runner finishes when its planned steps run out without
-  waiting for a closing frame.
-- **Stops and honest counts.** The runner checks authority rejections,
-  connection state, and frame matching directly:
-
-  | Condition | Draft state | Rail message |
-  | --- | --- | --- |
-  | Step 1 refused at the same revision | Kept for editing and retry | Table's own rejection notice |
-  | Step 1 refused after the revision moved on (e.g. `stale_revision` recovery) | Cleared; rebuilt from current frame | `The board moved on before the first <item> was accepted. <retry hint>` |
-  | Step `N + 1` refused (`N >= 1`) | Cleared; board shows current frame | `Stopped after N of M. The next <item> was not accepted. <retry hint>` |
-  | Unexpected frame after `N` steps | Cleared; board shows current frame | `Stopped after N of M: the game asked something <unexpected>. The board shows where it stands; <retry hint>` |
-  | **Stop sending** (`Esc`) after `N` sent | Cleared; remaining steps not sent | `Stopped after N of M sent; the rest was not sent.` |
-  | Connection leaves `connected` after `N` sent | Cleared; never resumes automatically | `Stopped after N of M sent: the connection dropped. The board shows where the game stands.` |
-  | Page reloaded after `N` sent | Cleared; reported once on load | `Stopped after N of M sent: the page reloaded. The board shows where the game stands.` |
-
-  Disconnect, manual stop, and reload messages explicitly say *sent* rather
-  than committed because the last sent step's outcome is settled by authority
-  recovery.
-- **Tab-scoped persistence.** One `sessionStorage` key, `academy.table.draft`,
-  holds the unsubmitted draft (scoped to `match_id` and `frame_hash`) and the
-  in-flight run marker (scoped to `match_id`) as sibling fields, so marking an
-  active run never overwrites a saved draft. Storage failures lose only the
-  draft or marker and never raise an error.
-- **Raw choices and keyboard gating.** While a draft is open, the complete list
-  of legal choices stays accessible under the collapsed rail disclosure
-  (**Each creature's choice**, **Each card's choice**), with raw choice buttons
-  disabled while a sequence is sending so clicks cannot race the runner. Number
-  keys `1`–`9` and automatic payment triggers are suppressed while a draft is
-  open.
-
-### Multi-step decision classification
-
-Every multi-step native decision falls into one of four classes:
-
-- **A1 — Draftable from structured frame data today.** Every candidate and
-  constraint is already in typed `ExperienceFrame` fields (`inspected`,
-  `offers`); no engine or protocol change is needed.
-- **A2 — Frame-derivable once small structured fields are exposed.** No
-  clone-and-step preview is needed, but today limits or sides live only in
-  Rust `{:?}` text inside `decision_context.pending` or in English offer
-  labels. Exposing typed fields on `DecisionContextView` or `InteractionOffer`
-  lets the UI draft them without text or regex parsing.
-- **B — Needs a read-only native clone-and-step preview.** Engine rules govern
-  asking order, legality thresholds, or interleaved sub-decisions, so the
-  browser cannot derive the valid step sequence from one frame alone.
-- **C — Keep sequential.** Single-step decisions, legality- or planner-filtered
-  follow-ups, or choices interleaved with other questions.
-
-| Decision (`decision_context.stage`) | Class | Notes |
-| --- | --- | --- |
-| Combat declarations (`DECLARE_ATTACKER`, `DECLARE_BLOCKER`) | B (drafted) | Backed by read-only `/combat-preview`. |
-| PartitionPiles (`partition_piles`) | A1 (drafted; A2 cleanup) | Uses `agent.inspected`; still matches offer labels (`face-up` / `face-down`) until a structured pile side is carried on the offer. |
-| Scry (`scry`), N ≥ 2 | A1 | All looked-at cards are in `inspected`; every remaining card offers both sides at each step, pick order is final order, and nothing commits until the last step. |
-| Surveil (`surveil`) then `order_library_top` | A1 (two phases) | Graveyard picks commit as one batch, followed by library ordering. |
-| OrderLibrary (`order_library_top`, `order_library_bottom`) | A1 | N − 1 asked steps (`skip_trivial` places the last card); bottom ordering shows only the remaining slice. |
-| SelectCards (`select_cards`, `private_search`) with max > 1 | A2 | Fixed candidate pool; nothing moves until finish. Needs typed `min` / `max` fields instead of `pending` text. |
-| SearchDistinctNames (`private_search`) | A2 | Draft enforces distinct card names. Needs typed `remaining` field instead of `pending` text. |
-| OpponentSplitsRevealed (`split_revealed`) | A2 | Each pick moves immediately. Needs typed `remaining` field instead of `pending` text. |
-| Discard (`discard`), 2+ cards | A2 | Each discard commits and is public. Needs typed `remaining` field (cleanup discard asks one at a time with no total). |
-| DistributeCounters (`distribute_counters`) | A2 | One counter per step, repeats allowed, each commits. Needs typed `remaining` field instead of `pending` text. |
-| DivideAmongTargets (`target_shares`) | A2 | Arithmetic (`total = max_share + targets − 1`). Needs structured share values on offers instead of relying on offer order or labels. |
-| KeepPermanents `AllBut` (`keep_permanents`) | A2 | Public board with a fixed count limit. Needs typed `count` field instead of `pending` text. |
-| AssignCombatDamage (`assign_combat_damage`) | B | Asking order and lethal minimums follow engine rules; each frame shows one attacker–blocker pair. |
-| KeepPermanents by total creature power (`keep_permanents`) | B | Layered power sums determine legality; the decision may end without offering a decline. |
-| Trigger ordering (`order_triggers`) | B | Modes and targets are asked between trigger picks; pure batch ordering applies only when no trigger requires either. |
-| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | C | Later options are legality- or planner-filtered, or interleave with other questions; usually one or two steps. |
-| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | C | Single-step choices (all `LookAndSelect` users select at most one card). |
-
-Other multi-step flows that commit one step at a time—`SearchNamed`,
-opening-hand bottoming, `PendingChoice::Pay` (crew, convoke, waterbend), and
-one-per-step target prompts—remain sequential (Class C).
-
-### Requirements for future A2 fields and Class B previews
-
-- **A2 structured fields.** Expose typed counts (`min`, `max`, `remaining`,
-  `count`), pile side, or share values directly on `DecisionContextView` or
-  `InteractionOffer`. The client must never parse Rust `Debug` formatting from
-  `decision_context.pending` or match English offer labels with regular
-  expressions.
-- **Class B native preview.** Follow `/combat-preview`'s read-only contract:
-  bind the request to `(viewer, revision, fingerprint)`, clone the game without
-  mutating live state, step the clone with a per-decision plan matcher and stop
-  rule, and return either the ordered `(revision, fingerprint, action_index)`
-  steps that will be asked or the first refusal and its reason. A preview must
-  always stop before any step whose next frame depends on hidden randomness
-  (a shuffle or draw) or on an opponent's choice.
-
-### `ChoosePile` opponent view
-
-When the owner finishes a pile split (such as Curator of Destinies), the
-opponent faces a single-step `MODAL` decision (`stage: "choose_pile"`, prompt
-`Choose which pile goes to hand (<source>)`). Because it is one step, there is
-nothing to draft. The authority frame gives the choosing player:
-
-- `agent.inspected` containing only the face-up cards (face-down cards never
-  appear in the projection or recovery payload);
-- two offers: `Choose face-up pile (<card names>)` (or `Choose empty face-up
-  pile`) and `Choose face-down pile (<N> card(s))`;
-- `decision_context.pending` listing the face-up pile and face-down pile size.
 
 ## Presentation runtime
 

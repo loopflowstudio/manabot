@@ -933,7 +933,6 @@ fn uncle_s_musings() -> CardDefinition {
                 Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Graveyard),
                     predicate: CardPredicate::permanent(),
-                    max_mana_value: None,
                     min: 0,
                     max: EffectValue::ColorsSpentToCast,
                     effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

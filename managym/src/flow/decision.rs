@@ -108,8 +108,6 @@ impl FrameCompletion {
 /// chosen object as the final target. Presence is checked separately on use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ResolutionTarget {
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    pub share: u8,
     pub target: Target,
     pub requirement: usize,
     pub legal: bool,
@@ -173,11 +171,6 @@ pub struct EffectFrame {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub selected: Vec<ObjectId>,
-    /// Exact objects from the enclosing selection's `from` domain that were
-    /// not chosen (`ObjectSelector::Unselected`).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    #[serde(serialize_with = "crate::state::game_object::exact")]
-    pub unselected: Vec<ObjectId>,
     /// Private membership from which the selected exact objects were chosen.
     /// Inherited child scopes keep it until those objects leave that zone.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -187,12 +180,6 @@ pub struct EffectFrame {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub moved: Vec<ObjectId>,
-    /// One pre-move battlefield appearance per committed departure, including melds.
-    #[serde(
-        skip_serializing_if = "Vec::is_empty",
-        serialize_with = "crate::state::game_object::exact"
-    )]
-    pub moved_from: Vec<ObjectId>,
     /// Whether `Effect::Reveal` revealed the `selected` objects; a later
     /// placement of one on top of its library keeps it public ("reveal it,
     /// then shuffle and put that card on top"). Inline as a flag: the frame
@@ -293,11 +280,9 @@ impl EffectFrame {
             life_lost: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
-            unselected: Vec::new(),
             selected_revealed: false,
             selected_from: None,
             moved: Vec::new(),
-            moved_from: Vec::new(),
             chosen: None,
             created: Vec::new(),
             targets: Vec::new(),
@@ -317,7 +302,6 @@ impl EffectFrame {
         Self {
             program: self.program.clone(),
             selected: self.selected.clone(),
-            unselected: self.unselected.clone(),
             selected_revealed: self.selected_revealed,
             selected_from: self.selected_from.clone(),
             remembered: self.remembered.clone(),
@@ -344,13 +328,11 @@ impl EffectFrame {
     pub(crate) fn select_scope(
         &mut self,
         selected: Vec<ObjectId>,
-        unselected: Vec<ObjectId>,
         from: Option<ZoneSelection>,
         effects: Vec<Effect>,
     ) {
         let mut child = self.child_scope(effects);
         child.selected = selected;
-        child.unselected = unselected;
         child.selected_revealed = false;
         child.selected_from = from;
         let parent = std::mem::replace(self, child);
@@ -517,45 +499,7 @@ pub enum SelectionOrigin {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(untagged)]
-pub enum AfterNaming {
-    Exile {
-        count: usize,
-    },
-    Entry {
-        question: super::proposed_event::EntryQuestion,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum KeepLimit {
-    TotalCreaturePower(i32),
-    AllBut {
-        predicate: Box<CardPredicate>,
-        count: usize,
-    },
-}
-
-impl KeepLimit {
-    fn includes(&self, game: &Game, id: PermanentId) -> bool {
-        match self {
-            Self::TotalCreaturePower(_) => game.characteristics(id).is_creature(),
-            Self::AllBut { predicate, .. } => game.permanent_matches_predicate(id, predicate),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
-    OrderEntryChoices {
-        player: PlayerId,
-        questions: Vec<super::proposed_event::EntryDecision>,
-    },
-    ChooseEntryValue {
-        player: PlayerId,
-        question: super::proposed_event::EntryQuestion,
-        scope: crate::cards::names::NameScope,
-    },
     OrderMeldedCards {
         player: PlayerId,
         cards: [CardId; 2],
@@ -591,8 +535,7 @@ pub enum Decision {
     /// an effect. Clones retain constant-size bookkeeping.
     NameCard {
         player: PlayerId,
-        #[serde(flatten)]
-        after: AfterNaming,
+        count: usize,
         names: std::sync::Arc<crate::cards::names::NameVocabulary>,
         scope: crate::cards::names::NameScope,
     },
@@ -645,8 +588,8 @@ pub enum Decision {
         predicate: CardPredicate,
         /// The permanent an "another" or "all other" leaves out, never a
         /// candidate.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        excluded: Vec<PermanentId>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        excluded: Option<PermanentId>,
         /// "You may sacrifice": declining is allowed.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         optional: bool,
@@ -664,14 +607,6 @@ pub enum Decision {
         origin: SelectionOrigin,
         player: PlayerId,
         from: Option<ZoneSelection>,
-        /// Complete `from` domain captured when `SelectCards` started, so
-        /// `Unselected` names everything in `from` not chosen.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        pool: Vec<ObjectId>,
-        /// Whether `pool` is a privately inspected library prefix (`LibraryTop`).
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        inspected: bool,
         #[serde(serialize_with = "crate::state::game_object::exact")]
         candidates: Vec<ObjectId>,
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -749,20 +684,6 @@ pub enum Decision {
         owner: PlayerId,
         predicate: CardPredicate,
     },
-    /// During the private split, the next unanswered card is looked[next].
-    PartitionPiles {
-        player: PlayerId,
-        looked: Vec<ObjectId>,
-        next: usize,
-        face_up: Vec<ObjectId>,
-    },
-    /// The owner knows the inspected prefix. The chooser sees only face_up.
-    ChoosePile {
-        player: PlayerId,
-        owner: PlayerId,
-        looked: Vec<ObjectId>,
-        face_up: Vec<ObjectId>,
-    },
     /// An opponent chooses `remaining` more of `owner`'s `revealed` library
     /// cards for the graveyard; the rest enter tapped, then `owner` shuffles.
     OpponentSplitsRevealed {
@@ -815,21 +736,26 @@ pub enum Decision {
         player: PlayerId,
         remaining: usize,
     },
-    /// Both players choose in APNAP order, then sacrifice the unkept permanents together.
-    KeepPermanents {
+    /// `player` chooses another creature they control to keep, within
+    /// `max_total_power` with those already `kept` (by both players), or
+    /// stops; once the nonactive player stops, every other creature is
+    /// sacrificed.
+    KeepCreatures {
         player: PlayerId,
-        limit: KeepLimit,
+        max_total_power: i32,
+        /// "Sacrifices N creatures of their choice": the player keeps all
+        /// but this many and may not stop sooner.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
     },
-    /// `player` chooses a new target for the next slot of the stack object
-    /// (CR 115.7), after the targets `chosen` for the earlier slots, or
-    /// keeps the current one when `may_keep` ("you may choose new targets
-    /// for the copy"); later slots follow. The object's targets change only
-    /// once every slot is decided.
+    /// `player` chooses a new target for slot `slot` of the stack object
+    /// (CR 115.7), or keeps the current one when `may_keep` ("you may
+    /// choose new targets for the copy"); later slots follow.
     Retarget {
         player: PlayerId,
         object: Target,
-        chosen: Vec<Target>,
+        slot: usize,
         may_keep: bool,
     },
     /// "Starting with you, each player chooses up to one [predicate]
@@ -857,8 +783,6 @@ impl Decision {
             Decision::OrderMeldedCards { player, .. }
             | Decision::AssignCombatDamage { player, .. }
             | Decision::OrderReplacement { player, .. }
-            | Decision::OrderEntryChoices { player, .. }
-            | Decision::ChooseEntryValue { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -867,7 +791,7 @@ impl Decision {
             | Decision::ManaChoice { player, .. }
             | Decision::ManaSpend { player, .. }
             | Decision::ChooseObject { player, .. }
-            | Decision::KeepPermanents { player, .. }
+            | Decision::KeepCreatures { player, .. }
             | Decision::ChooseToExile { player, .. }
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
@@ -876,8 +800,6 @@ impl Decision {
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
-            | Decision::PartitionPiles { player, .. }
-            | Decision::ChoosePile { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::Scry { player, .. }
             | Decision::ManifestDread { player, .. }
@@ -906,22 +828,10 @@ impl Decision {
     /// offers over an entire zone have a different membership authority.
     pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[ObjectId])> {
         match self {
-            Self::PartitionPiles { player, looked, .. }
-            | Self::ChoosePile {
-                owner: player,
-                looked,
-                ..
-            }
-            | Self::Scry { player, looked, .. }
+            Self::Scry { player, looked, .. }
             | Self::ManifestDread { player, looked }
             | Self::Surveil { player, looked, .. }
             | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
-            Self::SelectCards {
-                player,
-                pool,
-                inspected: true,
-                ..
-            } => Some((*player, pool)),
             Self::OrderLibrary {
                 player,
                 object_ids: objects,
@@ -956,12 +866,10 @@ impl Decision {
             | Decision::ManaChoice { .. }
             | Decision::ManaSpend { .. }
             | Decision::ChooseObject { .. }
-            | Decision::KeepPermanents { .. }
+            | Decision::KeepCreatures { .. }
             | Decision::ChooseToExile { .. }
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
-            Decision::PartitionPiles { looked, .. } => looked,
-            Decision::ChoosePile { face_up, .. } => face_up,
             Decision::Scry { looked, .. } => looked,
             Decision::OrderLibrary {
                 object_ids: objects,
@@ -975,11 +883,6 @@ impl Decision {
             Decision::LookAndSelect { looked, .. }
             | Decision::ManifestDread { looked, .. }
             | Decision::Surveil { looked, .. } => looked,
-            Decision::SelectCards {
-                pool,
-                inspected: true,
-                ..
-            } => pool,
             Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
@@ -989,8 +892,6 @@ impl Decision {
             Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }
             | Decision::OrderReplacement { .. }
-            | Decision::OrderEntryChoices { .. }
-            | Decision::ChooseEntryValue { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -1104,51 +1005,78 @@ impl Game {
             .or_default() += 1;
     }
 
-    fn keep_candidates(
-        &self,
-        player: PlayerId,
-        limit: &KeepLimit,
-        kept: &[PermanentId],
-    ) -> Vec<PermanentId> {
-        let mut eligible: Vec<_> = self
-            .iter_battlefield_permanents(player)
-            .filter(|id| limit.includes(self, *id) && !kept.contains(id))
+    /// The creatures a pending `Decision::KeepCreatures` may add: its
+    /// player's, not yet kept, within the power bound with that player's
+    /// kept creatures.
+    pub(crate) fn keep_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::KeepCreatures {
+            player,
+            max_total_power,
+            sacrifice,
+            kept,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let creatures: Vec<_> = self
+            .battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| self.characteristics(*id).is_creature())
             .collect();
-        match limit {
-            KeepLimit::AllBut { count, .. } if eligible.len() <= *count => eligible.clear(),
-            KeepLimit::TotalCreaturePower(max) => {
-                let kept_power: i32 = kept
-                    .iter()
-                    .filter(|id| {
-                        self.state.permanents[**id]
-                            .as_ref()
-                            .is_some_and(|p| p.controller == player)
-                    })
-                    .map(|id| self.characteristics(*id).power)
-                    .sum();
-                eligible.retain(|id| self.characteristics(*id).power + kept_power <= *max);
-            }
-            KeepLimit::AllBut { .. } => {}
+        if let Some(count) = sacrifice {
+            let keeps = creatures.len().saturating_sub(*count);
+            let kept_own = creatures.iter().filter(|id| kept.contains(id)).count();
+            return if kept_own < keeps {
+                creatures
+                    .into_iter()
+                    .filter(|id| !kept.contains(id))
+                    .collect()
+            } else {
+                Vec::new()
+            };
         }
-        eligible
+        let total: i32 = kept
+            .iter()
+            .filter(|id| {
+                self.state.permanents[**id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == *player)
+            })
+            .map(|id| self.characteristics(*id).power)
+            .sum();
+        self.battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| {
+                self.characteristics(*id).is_creature()
+                    && !kept.contains(id)
+                    && total + self.characteristics(*id).power <= *max_total_power
+            })
+            .collect()
     }
 
-    pub(crate) fn keep_permanents(
+    /// Ask `player` to keep a creature, moving on to the nonactive player
+    /// (and finally sacrificing the rest) when `player` has no candidate.
+    pub(crate) fn keep_creatures(
         &mut self,
         player: PlayerId,
-        limit: KeepLimit,
+        max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
-        if self.keep_candidates(player, &limit, &kept).is_empty() {
-            self.finish_keeping(player, limit, kept, frame)
-        } else {
-            Some(Decision::KeepPermanents {
-                player,
-                limit,
-                kept,
-            })
+        let decision = Decision::KeepCreatures {
+            player,
+            max_total_power,
+            sacrifice,
+            kept,
+        };
+        if !self.keep_candidates(&decision).is_empty() {
+            return Some(decision);
         }
+        let Decision::KeepCreatures { kept, .. } = decision else {
+            unreachable!()
+        };
+        self.stop_keeping_creatures(player, max_total_power, sacrifice, kept, frame)
     }
 
     /// The permanents a `Decision::ChooseToExile` may add: matching, controlled
@@ -1220,27 +1148,32 @@ impl Game {
         None
     }
 
-    fn finish_keeping(
+    /// `player` has stopped keeping creatures: the nonactive player chooses
+    /// next, or every unkept creature is sacrificed.
+    fn stop_keeping_creatures(
         &mut self,
         player: PlayerId,
-        limit: KeepLimit,
+        max_total_power: i32,
+        sacrifice: Option<usize>,
         kept: Vec<PermanentId>,
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         if player == self.active_player() {
-            return self.keep_permanents(PlayerId(1 - player.0), limit, kept, frame);
+            return self.keep_creatures(
+                PlayerId(1 - player.0),
+                max_total_power,
+                sacrifice,
+                kept,
+                frame,
+            );
         }
         let events = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
-            .flat_map(|player| self.iter_battlefield_permanents(player))
-            .filter(|id| !kept.contains(id) && limit.includes(self, *id))
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .filter_map(|id| self.permanent_object(id))
             .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target });
-        let binding = match limit {
-            KeepLimit::AllBut { .. } => EventBinding::OwnSacrifices,
-            KeepLimit::TotalCreaturePower(_) => EventBinding::None,
-        };
-        frame.batch = Some(self.event_batch(binding, events));
+        frame.batch = Some(self.event_batch(EventBinding::None, events));
         None
     }
 
@@ -1259,8 +1192,6 @@ impl Game {
         };
         if let Effect::ExileMeldPair { partner } = effect.as_ref() {
             return excluded
-                .first()
-                .copied()
                 .and_then(|id| self.permanent_object(id))
                 .into_iter()
                 .flat_map(|source| self.meld_partners(*player, source, partner))
@@ -1270,7 +1201,7 @@ impl Game {
         self.battlefield_permanents(*player)
             .into_iter()
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
-            .filter(|id| !excluded.contains(id))
+            .filter(|id| Some(*id) != *excluded)
             .collect()
     }
 
@@ -1349,7 +1280,7 @@ impl Game {
 
     /// Finish the instruction's batch before exposing its next decision.
     /// Without a next decision, the frame runs the batch and its remaining effects.
-    pub(crate) fn continue_resolution(&mut self, mut frame: EffectFrame, next: Option<Decision>) {
+    fn continue_resolution(&mut self, mut frame: EffectFrame, next: Option<Decision>) {
         match next {
             Some(decision) => {
                 if let Some(batch) = frame.batch.take() {
@@ -1629,35 +1560,9 @@ impl Game {
         results: &[EventResult],
     ) {
         let moved = results.iter().flat_map(|result| result.arrivals());
-        if matches!(
-            batch.binding,
-            EventBinding::Moved { .. } | EventBinding::OwnSacrifices | EventBinding::Destroyed
-        ) {
-            frame.moved.clear();
-            frame.moved_from.clear();
-            for (pending, result) in batch.events.iter().zip(results) {
-                if !result.committed
-                    || (batch.binding == EventBinding::OwnSacrifices
-                        && !pending
-                            .sacrifice
-                            .is_some_and(|(_, player)| player == frame.controller))
-                {
-                    continue;
-                }
-                frame.moved.extend(result.arrivals());
-                if let crate::flow::proposed_event::ProposedEvent::ZoneMove {
-                    object_id,
-                    from: Some(ZoneType::Battlefield),
-                    ..
-                } = pending.event
-                {
-                    frame.moved_from.push(object_id);
-                }
-            }
-        }
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
-            EventBinding::Destroyed | EventBinding::OwnSacrifices => {}
+            EventBinding::Destroyed => frame.moved = moved.collect(),
             EventBinding::LifeLost => {
                 frame.life_lost = results.iter().fold(0_i32, |lost, result| {
                     lost.saturating_sub(result.life_delta.min(0))
@@ -1714,6 +1619,7 @@ impl Game {
                         .flat_map(|(result, _)| result.arrivals())
                         .collect();
                 }
+                frame.moved = moved.collect();
                 let mut owners = Vec::new();
                 for &object_id in &frame.moved {
                     let owner = self.state[object_id].owner;
@@ -1874,20 +1780,14 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
-                let tail_payable = self.can_pay_remaining_tail(payment);
-                let (cost, help) = match payment.owed.first() {
-                    Some(CostComponent::Discard) => {
-                        let mut actions: Vec<_> = if tail_payable {
-                            self.discard_candidates(player, None)
-                                .into_iter()
-                                .map(|object| Action::SelectCard { player, object })
-                                .collect()
-                        } else {
-                            Vec::new()
-                        };
-                        if payment.can_decline() {
-                            actions.push(Action::Decline { player });
-                        }
+                let (cost, help) = match &payment.owed {
+                    CostComponent::Discard => {
+                        let mut actions: Vec<_> = self
+                            .discard_candidates(player, None)
+                            .into_iter()
+                            .map(|object| Action::SelectCard { player, object })
+                            .collect();
+                        actions.push(Action::Decline { player });
                         return Some(ActionSpace {
                             player: Some(player),
                             kind: ActionSpaceKind::Discard,
@@ -1897,14 +1797,12 @@ impl Game {
                     }
                     // Paying life is one action under manual and automatic
                     // payment alike.
-                    Some(CostComponent::Life(life)) => {
+                    CostComponent::Life(life) => {
                         let mut actions = Vec::new();
-                        if tail_payable && self.can_pay_life(player, *life) {
+                        if self.can_pay_life(player, *life) {
                             actions.push(Action::PayCost { player });
                         }
-                        if payment.can_decline() {
-                            actions.push(Action::Decline { player });
-                        }
+                        actions.push(Action::Decline { player });
                         return Some(ActionSpace {
                             player: Some(player),
                             kind: ActionSpaceKind::PayOrNot,
@@ -1912,16 +1810,14 @@ impl Game {
                             focus: source_focus,
                         });
                     }
-                    Some(CostComponent::Mana { cost, help }) => (cost, *help),
+                    CostComponent::Mana { cost, help } => (cost, *help),
                     _ => unreachable!("unexpected resolution payment component"),
                 };
                 let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
                     let mut actions = Vec::new();
                     let pool = self.pooled_mana(player);
-                    if tail_payable
-                        && self.payable_with_help(player, &pool, cost, help, waterbend, None)
-                    {
+                    if self.payable_with_help(player, &pool, cost, help, waterbend, None) {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1933,22 +1829,20 @@ impl Game {
                     });
                 }
                 let mut actions = self.mana_ability_actions(player);
-                if tail_payable {
-                    actions.extend(
-                        self.help_taps(
-                            player,
-                            cost,
-                            help,
-                            waterbend,
-                            &self.waterbend_candidates(player),
-                            None,
-                        )
-                        .into_iter()
-                        .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
-                    );
-                    if self.can_pay_mana_cost(player, cost) {
-                        actions.push(Action::PayCost { player });
-                    }
+                actions.extend(
+                    self.help_taps(
+                        player,
+                        cost,
+                        help,
+                        waterbend,
+                        &self.waterbend_candidates(player),
+                        None,
+                    )
+                    .into_iter()
+                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
+                );
+                if self.can_pay_mana_cost(player, cost) {
+                    actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
                     actions.push(Action::Decline { player });
@@ -2010,24 +1904,22 @@ impl Game {
             Decision::Retarget {
                 player,
                 object,
-                chosen,
+                slot,
                 may_keep,
-            } => {
-                let (changes, keep) = self.retarget_offer(*object, chosen, *may_keep);
-                ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::ChooseTarget,
-                    actions: changes
-                        .into_iter()
-                        .map(|target| Action::ChooseTarget {
-                            player: *player,
-                            target,
-                        })
-                        .chain(keep.then_some(Action::Decline { player: *player }))
-                        .collect(),
-                    focus: source_focus,
-                }
-            }
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: self
+                    .retarget_candidates(*object, *slot)
+                    .into_iter()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target,
+                    })
+                    .chain(may_keep.then_some(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
             Decision::ChooseToExile {
                 player,
                 controller,
@@ -2045,19 +1937,17 @@ impl Game {
                 ),
                 focus: source_focus,
             },
-            Decision::KeepPermanents {
-                player,
-                limit,
-                kept,
+            Decision::KeepCreatures {
+                player, sacrifice, ..
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_objects(
                     *player,
-                    self.keep_candidates(*player, limit, kept)
+                    self.keep_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().object),
-                    matches!(limit, KeepLimit::TotalCreaturePower(_)),
+                    sacrifice.is_none(),
                 ),
                 focus: source_focus,
             },
@@ -2258,32 +2148,10 @@ impl Game {
                     focus: self.object_focus(looked),
                 }
             }
-            Decision::OrderEntryChoices { player, questions } => ActionSpace {
-                kind: ActionSpaceKind::Modal,
-                player: Some(*player),
-                focus: questions
-                    .iter()
-                    .map(|q| self.state.entry_object(q.object).id)
-                    .collect(),
-                actions: (0..questions.len())
-                    .map(|mode| Action::ChooseMode {
-                        player: *player,
-                        mode,
-                    })
-                    .collect(),
-            },
-            decision @ (Decision::ChooseEntryValue { player, scope, .. }
-            | Decision::NameCard { player, scope, .. }) => ActionSpace {
+            Decision::NameCard { player, scope, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
-                focus: match decision {
-                    Decision::ChooseEntryValue { question, .. }
-                    | Decision::NameCard {
-                        after: AfterNaming::Entry { question },
-                        ..
-                    } => vec![self.state.entry_object(question.object).id],
-                    _ => source_focus,
-                },
+                focus: source_focus,
                 actions: (0..scope.option_count())
                     .map(|mode| Action::ChooseMode {
                         player: *player,
@@ -2291,25 +2159,6 @@ impl Game {
                     })
                     .collect(),
             },
-            Decision::PartitionPiles { player, .. } | Decision::ChoosePile { player, .. } => {
-                let focus = match &suspended.decision {
-                    Decision::PartitionPiles { looked, next, .. } => {
-                        self.object_focus(&looked[*next..=*next])
-                    }
-                    _ => source_focus,
-                };
-                ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::Modal,
-                    actions: (0..2)
-                        .map(|mode| Action::ChooseMode {
-                            player: *player,
-                            mode,
-                        })
-                        .collect(),
-                    focus,
-                }
-            }
             Decision::Modal { player, modes } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -2464,58 +2313,6 @@ impl Game {
                 self.assign_combat_damage(suspended.frame, *pass, amounts);
                 Ok(())
             }
-            (Decision::OrderEntryChoices { questions, .. }, Action::ChooseMode { mode, .. }) => {
-                if *mode >= questions.len() {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("unknown entering object".into()));
-                }
-                suspended.decision = self.begin_entry_decision(
-                    suspended.frame.batch.as_mut().expect("entry batch"),
-                    questions.swap_remove(*mode),
-                );
-                *self.state.suspended_decision_mut() = Some(suspended);
-                Ok(())
-            }
-            (
-                Decision::ChooseEntryValue {
-                    question, scope, ..
-                },
-                Action::ChooseMode { mode, .. },
-            ) => {
-                use crate::state::{
-                    card::EntryChoiceKind, mana::Color, permanent::EntryChoice,
-                    subtype::creature_type_names,
-                };
-                match scope.option(*mode) {
-                    Some(NameOption::Group(child)) => {
-                        *scope = child;
-                        *self.state.suspended_decision_mut() = Some(suspended);
-                    }
-                    Some(NameOption::Name(row)) => {
-                        let value = match question.kind {
-                            EntryChoiceKind::Color => EntryChoice::Color(Color::COLORS[row]),
-                            EntryChoiceKind::CreatureType => {
-                                EntryChoice::CreatureType(creature_type_names()[row].into())
-                            }
-                            EntryChoiceKind::CardName => {
-                                unreachable!("card naming has its own vocabulary")
-                            }
-                        };
-                        suspended
-                            .frame
-                            .batch
-                            .as_mut()
-                            .expect("entry batch")
-                            .answer_entry(value);
-                        self.run_frame(suspended.frame);
-                    }
-                    None => {
-                        *self.state.suspended_decision_mut() = Some(suspended);
-                        return Err(AgentError("entry choice out of range".into()));
-                    }
-                }
-                Ok(())
-            }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
                 let Some(candidate) = candidates.get(*mode) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2543,7 +2340,7 @@ impl Game {
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
                     *player,
-                    vec![CostComponent::mana(ManaCost::default().with_generic(x))],
+                    CostComponent::mana(ManaCost::default().with_generic(x)),
                     std::mem::take(if_paid),
                     Vec::new(),
                 );
@@ -2592,12 +2389,8 @@ impl Game {
                 Ok(())
             }
             (Decision::Payment(payment), Action::SelectCard { object, .. })
-                if matches!(payment.owed.first(), Some(CostComponent::Discard)) =>
+                if matches!(payment.owed, CostComponent::Discard) =>
             {
-                if !self.can_pay_remaining_tail(payment) {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("cannot pay remaining resolution cost".into()));
-                }
                 if let Err(error) =
                     self.pay_discard_cost(payment.player, None, *object, &mut payment.receipt)
                 {
@@ -2607,16 +2400,12 @@ impl Game {
                 let Decision::Payment(payment) = suspended.decision else {
                     unreachable!()
                 };
-                self.advance_resolution_payment(payment, suspended.frame);
+                self.finish_resolution_payment(payment, suspended.frame);
                 Ok(())
             }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
-                if !self.can_pay_remaining_tail(payment) {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("cannot pay remaining resolution cost".into()));
-                }
-                let tapped = match payment.owed.first_mut() {
-                    Some(CostComponent::Mana { cost, help }) => self.resolution_help_tap(
+                let tapped = match &mut payment.owed {
+                    CostComponent::Mana { cost, help } => self.resolution_help_tap(
                         payment.player,
                         *permanent,
                         cost,
@@ -2629,12 +2418,8 @@ impl Game {
                 tapped
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
-                if !self.can_pay_remaining_tail(payment) {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("cannot pay remaining resolution cost".into()));
-                }
-                let cost = match payment.owed.first() {
-                    Some(CostComponent::Life(life)) => {
+                let cost = match &payment.owed {
+                    CostComponent::Life(life) => {
                         let (player, life) = (payment.player, *life);
                         if !self.can_pay_life(player, life) {
                             *self.state.suspended_decision_mut() = Some(suspended);
@@ -2644,10 +2429,10 @@ impl Game {
                         let Decision::Payment(payment) = suspended.decision else {
                             unreachable!()
                         };
-                        self.advance_resolution_payment(payment, suspended.frame);
+                        self.finish_resolution_payment(payment, suspended.frame);
                         return Ok(());
                     }
-                    Some(CostComponent::Mana { cost, .. }) => cost.clone(),
+                    CostComponent::Mana { cost, .. } => cost.clone(),
                     _ => unreachable!("unexpected resolution payment component"),
                 };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
@@ -2831,34 +2616,39 @@ impl Game {
                 Ok(())
             }
             (
-                Decision::KeepPermanents {
-                    player,
-                    limit,
-                    kept,
-                },
+                Decision::KeepCreatures { .. },
                 Action::SelectCard {
                     object: object_id, ..
                 },
             ) => {
-                let candidates = self.keep_candidates(*player, limit, kept);
+                let candidates = self.keep_candidates(&suspended.decision);
                 let selected = self
                     .state
                     .permanent_of(*object_id)
                     .filter(|id| candidates.contains(id));
                 let Some(selected) = selected else {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("illegal permanent to keep".into()));
+                    return Err(AgentError("illegal creature to keep".into()));
                 };
-                let Decision::KeepPermanents {
+                let Decision::KeepCreatures {
                     player,
-                    limit,
-                    mut kept,
-                } = suspended.decision
+                    max_total_power,
+                    sacrifice,
+                    kept,
+                } = &mut suspended.decision
                 else {
                     unreachable!()
                 };
                 kept.push(selected);
-                let next = self.keep_permanents(player, limit, kept, &mut suspended.frame);
+                let (player, max_total_power, sacrifice, kept) =
+                    (*player, *max_total_power, *sacrifice, std::mem::take(kept));
+                let next = self.keep_creatures(
+                    player,
+                    max_total_power,
+                    sacrifice,
+                    kept,
+                    &mut suspended.frame,
+                );
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2866,19 +2656,20 @@ impl Game {
                 Decision::Retarget {
                     player,
                     object,
-                    chosen,
+                    slot,
                     may_keep,
                 },
                 Action::ChooseTarget { target, .. },
             ) => {
-                let (player, object, may_keep) = (*player, *object, *may_keep);
-                if !self.retarget_accepts(object, chosen, *target, may_keep) {
+                let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
+                if !self.retarget_candidates(object, slot).contains(target) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }
-                let mut chosen = std::mem::take(chosen);
-                chosen.push(*target);
-                let next = self.retarget_after(player, object, chosen, may_keep);
+                self.change_stack_target(object, slot, *target);
+                let next = self
+                    .next_retarget(player, object, slot + 1, may_keep)
+                    .filter(|_| may_keep);
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2886,36 +2677,29 @@ impl Game {
                 Decision::Retarget {
                     player,
                     object,
-                    chosen,
+                    slot,
                     may_keep: true,
                 },
                 Action::Decline { .. },
             ) => {
-                let (player, object) = (*player, *object);
-                if !self.retarget_may_keep(object, chosen) {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("this target cannot stay".into()));
-                }
-                let mut chosen = std::mem::take(chosen);
-                let kept = self.state.stack_objects[self.stack_index_of(object).expect("retarget")]
-                    .targets()[chosen.len()];
-                chosen.push(kept);
-                let next = self.retarget_after(player, object, chosen, true);
+                let next = self.next_retarget(*player, *object, *slot + 1, true);
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
             (
-                Decision::KeepPermanents {
+                Decision::KeepCreatures {
                     player,
-                    limit: KeepLimit::TotalCreaturePower(max),
+                    max_total_power,
+                    sacrifice: None,
                     kept,
                 },
                 Action::Decline { .. },
             ) => {
                 let kept = std::mem::take(kept);
-                let next = self.finish_keeping(
+                let next = self.stop_keeping_creatures(
                     *player,
-                    KeepLimit::TotalCreaturePower(*max),
+                    *max_total_power,
+                    None,
                     kept,
                     &mut suspended.frame,
                 );
@@ -3315,73 +3099,6 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::PartitionPiles {
-                    player,
-                    looked,
-                    next,
-                    face_up,
-                },
-                Action::ChooseMode { mode, .. },
-            ) if *mode < 2 => {
-                if *mode == 0 {
-                    face_up.push(looked[*next]);
-                }
-                *next += 1;
-                if *next == looked.len() {
-                    let owner = *player;
-                    // The choice reveals membership, never the original library order.
-                    face_up.sort_unstable_by_key(|id| (self.state[*id].definition_id, *id));
-                    for object in face_up.iter() {
-                        self.emit(GameEvent::CardRevealed {
-                            owner,
-                            definition: self.state[*object].definition_id,
-                        });
-                    }
-                    suspended.decision = Decision::ChoosePile {
-                        player: self.next_player(owner),
-                        owner,
-                        looked: std::mem::take(looked),
-                        face_up: std::mem::take(face_up),
-                    };
-                }
-                *self.state.suspended_decision_mut() = Some(suspended);
-                Ok(())
-            }
-            (
-                Decision::ChoosePile {
-                    looked, face_up, ..
-                },
-                Action::ChooseMode { mode, .. },
-            ) if *mode < 2 => {
-                let take_face_up = *mode == 0;
-                let events = looked.iter().map(|object| {
-                    let to = if face_up.contains(object) == take_face_up {
-                        ZoneType::Hand
-                    } else {
-                        ZoneType::Graveyard
-                    };
-                    self.zone_move_proposal(
-                        *object,
-                        to,
-                        ZoneEntry {
-                            inspected_library_departure: true,
-                            ..Default::default()
-                        },
-                    )
-                });
-                suspended.frame.batch = Some(self.event_batch(
-                    EventBinding::Moved {
-                        linked: None,
-                        shuffle: false,
-                        library_end: None,
-                        reveal: take_face_up,
-                    },
-                    events,
-                ));
-                self.run_frame(suspended.frame);
-                Ok(())
-            }
             (Decision::SearchDistinctNames { .. }, Action::Decline { .. }) => {
                 self.finish_distinct_name_search(suspended);
                 Ok(())
@@ -3481,7 +3198,7 @@ impl Game {
             }
             (
                 Decision::NameCard {
-                    after,
+                    count,
                     names,
                     scope,
                     ..
@@ -3502,22 +3219,10 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("name option out of range".into()));
                 };
-                match after {
-                    AfterNaming::Exile { count } => {
-                        suspended.frame.queue.push_front(Effect::ExileNamed {
-                            name: candidate.name.clone(),
-                            count: *count,
-                        })
-                    }
-                    AfterNaming::Entry { .. } => suspended
-                        .frame
-                        .batch
-                        .as_mut()
-                        .expect("entry batch")
-                        .answer_entry(crate::state::permanent::EntryChoice::CardName(
-                            candidate.name.clone(),
-                        )),
-                }
+                suspended.frame.queue.push_front(Effect::ExileNamed {
+                    name: candidate.name.clone(),
+                    count: *count,
+                });
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3956,7 +3661,6 @@ impl Game {
 
     fn finish_card_selection(&mut self, suspended: SuspendedResolution) {
         let Decision::SelectCards {
-            pool,
             selected,
             from,
             effects,
@@ -3966,17 +3670,13 @@ impl Game {
         else {
             unreachable!("card selection");
         };
-        let unselected: Vec<ObjectId> = pool
-            .into_iter()
-            .filter(|object| !selected.contains(object) && self.state.live(*object).is_some())
-            .collect();
         let effects = if selected.is_empty() {
             if_declined
         } else {
             effects
         };
         let mut frame = suspended.frame;
-        frame.select_scope(selected, unselected, from, effects);
+        frame.select_scope(selected, from, effects);
         self.run_frame(frame);
     }
 
@@ -4623,7 +4323,7 @@ mod learn_tests {
                 ..
             }
         ));
-        let reveal = Observation::event_data(&game, events[0], PlayerId(1));
+        let reveal = Observation::event_data(&game, events[0]);
         assert_eq!(reveal[0].event_type, EventType::CardRevealed as i32);
         assert_eq!(reveal[0].source_kind, EventEntityKind::Definition as i32);
         assert_eq!(reveal[0].source_id, definition.0 as i32);
@@ -5211,13 +4911,13 @@ mod payment_tests {
         };
         assert_eq!(
             payment.owed,
-            vec![CostComponent::Mana {
+            CostComponent::Mana {
                 cost: ManaCost::parse("{1}"),
                 help: crate::flow::payment::Help {
                     waterbend: 2,
                     ..Default::default()
                 },
-            }]
+            }
         );
         assert_eq!(
             payment

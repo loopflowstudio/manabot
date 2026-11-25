@@ -1341,7 +1341,7 @@ fn cr_613_keyword_predicate_dependency_overrides_grant_timestamp() {
             vec![continuous(
                 StaticScope::All(CardPredicate {
                     any_of: vec![CardPredicate {
-                        keyword: Some(Keyword::Flying),
+                        flying: true,
                         ..Default::default()
                     }],
                     ..CardPredicate::creature()

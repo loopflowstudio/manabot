@@ -41,13 +41,13 @@ from manabot.env.observation import (
     FACT_KINDS,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
+    FACT_SET_NAME,
     FACT_SOURCE_INDEX,
     FACT_TRANSFORMS,
     FACT_TRIGGERING_AMOUNT,
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
-    NAME_ID_KINDS,
     PERMANENT_DEFINITION_INDEX,
     RELATION_VALID_INDEX,
     STACK_DEFINITION_INDEX,
@@ -1244,7 +1244,7 @@ def _facts(
     restriction = kinds == FACT_COMBAT_RESTRICTION
     named_detail = (np.isin(kinds, NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
     id_space = np.where(
-        np.isin(kinds, NAME_ID_KINDS), RecordNamespace.NAME, RecordNamespace.TOKEN
+        kinds == FACT_SET_NAME, RecordNamespace.NAME, RecordNamespace.TOKEN
     )
     detail_space = np.where(
         restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN

@@ -43,33 +43,3 @@ fn three_dreams_finds_up_to_three_differently_named_auras() {
         assert_eq!(zone_of(&s, *object), Some(ZoneType::Hand));
     }
 }
-
-#[test]
-fn frenzied_goblin_attack_trigger_pays_red_to_stop_a_blocker() {
-    use crate::support::{game::clear_summoning_sickness, play::attack_with};
-    use managym::{
-        flow::turn::StepKind,
-        state::{game_object::Target, player::ManaPayment},
-    };
-
-    for pay in [true, false] {
-        let mut s = five_color_setup(&["Frenzied Goblin", "Gray Ogre"]);
-        s.game_mut().mana_payment[0] = ManaPayment::Auto;
-        let goblin = s.force_permanent_on_battlefield(0, "Frenzied Goblin");
-        let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
-        clear_summoning_sickness(&mut s, goblin);
-        s.advance_to_active_step(0, StepKind::DeclareAttackers);
-        s.set_player_mana_pool(0, "R");
-        attack_with(&mut s, goblin);
-        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-        assert!(s.choose_target(Target::Permanent(blocker)));
-        pass_until(&mut s, ActionSpaceKind::PayOrNot);
-        if pay {
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-        } else {
-            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
-        }
-        settle(&mut s);
-        assert_eq!(s.game().cant_block(blocker), pay);
-    }
-}

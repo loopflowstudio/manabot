@@ -4,8 +4,8 @@ use managym_state::{
         Ability, Condition, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject,
     },
     card::{
-        AdditionalCost, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -16,44 +16,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         adamant_will(),
         ghitu_lavarunner(),
-        grow_from_the_ashes(),
         lyra_dawnbringer(),
         tatyova_benthic_druid(),
         run_amok(),
         muldrotha(),
     ]
-}
-
-fn grow_from_the_ashes() -> CardDefinition {
-    let text_box = "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card, put it onto the battlefield, then shuffle. If this spell was kicked, instead search your library for two basic land cards, put them onto the battlefield, then shuffle.";
-    let search = |count: i32| {
-        vec![Effect::search_library(
-            CardPredicate::basic_land(),
-            count.into(),
-            vec![Effect::return_to_battlefield(
-                ObjectSelector::Selected,
-                false,
-            )],
-        )]
-    };
-    CardDefinition {
-        key: "dom.grow_from_the_ashes",
-        scryfall_id: "51d4d1c2-671c-498c-a232-7d076e3dc3bb",
-        printed: PrintedCharacteristics {
-            name: "Grow from the Ashes".into(),
-            mana_cost: Some(ManaCost::parse("{2}{G}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
-            spell_effects: vec![Effect::If {
-                condition: Condition::Kicked,
-                then: search(2),
-                otherwise: search(1),
-            }],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
 }
 
 fn run_amok() -> CardDefinition {

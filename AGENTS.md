@@ -621,7 +621,8 @@ function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
 shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged).
+`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
+the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -645,10 +646,7 @@ checks names, sets and token printings online, never in CI, and skips tokens
 without an id.
 
 Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
-table of their categories. Its creature list follows CR 205.3m, including legal
-choices absent from the installed cards. Use the rules list for updates;
-Scryfall’s creature-type catalog also includes names outside that list.
-Add a new subtype there (the cards crate's
+table of their categories. Add a new subtype there (the cards crate's
 `every_authored_subtype_has_a_category` fails otherwise), and read creature
 types through `is_creature_type`, never by excluding other subtypes.
 
@@ -708,8 +706,6 @@ then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
 apart on `cards/search`, and append its row to
 `managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
-Append the text: the fixture repeats some names, so loading and re-dumping
-the JSON silently drops rows.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve

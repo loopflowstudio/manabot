@@ -159,6 +159,9 @@ def test_delegated_search_keeps_viewer_and_resource_ownership(
         assert projection.opponent.player_index == victim
         if context.stage == "private_search":
             break
+        if context.stage == "payment":
+            _choose(env, managym.ActionEnum.PAY_COST)
+            continue
         own_response |= "chooses for" not in context.instruction
         _choose(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
     else:

@@ -21,6 +21,7 @@ import type {
   PlayerState,
   StackEntryView,
 } from '$lib/types';
+import { badgesOf } from './badges';
 
 // ———————————————————————————————————————— Types
 
@@ -194,8 +195,8 @@ function isLand(permanent: PermanentState): boolean {
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
   if (item.paid || item.attached.length || p.attacking || p.first_strike_participant || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
-  return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
-    p.plus1_counters, p.chosen ?? null, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false,
+  return JSON.stringify([p.name, p.controller_id, p.power, p.toughness, p.face_down ?? false,
+    p.summoning_sick, badgesOf(p),
     item.offers.map(placed => placed.offer.label)]);
 }
 

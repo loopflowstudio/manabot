@@ -340,7 +340,7 @@ fn catalog_naming_cost_attribution() {
     let game = naming_game();
     measure("naming_decision", || Decision::NameCard {
         player: PlayerId(0),
-        after: crate::flow::decision::AfterNaming::Exile { count: 4 },
+        count: 4,
         scope: names.root(),
         names: Arc::clone(&names),
     });

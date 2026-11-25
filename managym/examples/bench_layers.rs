@@ -219,7 +219,7 @@ fn payment_surface(env: &mut Env) -> serde_json::Value {
         "digest": digest,
         "legal_actions": game.current_action_space,
         "players": game.state.players.iter().map(|p| serde_json::json!({
-            "life":p.life, "mana":p.mana_pool,
+            "life":p.life, "mana":p.mana_pool, "combat_mana":p.combat_mana_pool,
         })).collect::<Vec<_>>(),
         "permanents":game.state.permanents.iter().enumerate().filter_map(|(id,p)| {
             p.as_ref().map(|p| serde_json::json!({"id":id,"card":p.object,"tapped":p.tapped}))

@@ -21,7 +21,7 @@ use crate::{
         action::cost_label,
         decision::Decision,
         game::{Game, PendingChoice},
-        payment::{CostComponent, Help},
+        payment::{CostComponent, Help, PaymentProgress},
     },
     state::{
         card::CastOption,
@@ -470,7 +470,6 @@ impl Game {
             },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
-            Some(PendingChoice::DivideAmongTargets { .. }) => ("target_shares", "Assign the indicated target its share. Every target must receive at least one."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
@@ -486,8 +485,6 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
-                Decision::OrderEntryChoices { .. } => ("order_entry_choices", "Choose the entering permanent whose choice you want to make next."),
-                Decision::ChooseEntryValue { .. } => ("entry_choice", "Choose for the entering permanent."),
                 Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),
                 Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
@@ -507,8 +504,8 @@ impl Game {
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
-                Decision::Payment(progress) if matches!(progress.owed.first(), Some(CostComponent::Discard)) => ("resolution_payment", "Choose a card from your hand to discard, or decline."),
-                Decision::Payment(progress) if matches!(progress.owed.first(), Some(CostComponent::Life(_))) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Discard, .. }) => ("resolution_payment", "Choose a card from your hand to discard, or decline."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
                 Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
@@ -524,11 +521,9 @@ impl Game {
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
                 Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
-                Decision::KeepPermanents { limit: crate::flow::decision::KeepLimit::AllBut { .. }, .. } => ("keep_permanents", "Choose a permanent to keep. Each player sacrifices the required number of eligible permanents they did not keep."),
-                Decision::KeepPermanents { .. } => ("keep_permanents", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
+                Decision::KeepCreatures { sacrifice: Some(_), .. } => ("keep_creatures", "Choose another creature you control to keep; you keep all but the stated number, and every creature not kept is then sacrificed."),
+                Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
-                Decision::PartitionPiles { .. } => ("partition_piles", "Put the indicated card into the face-up or face-down pile. Your opponent sees the face-up cards once the piles are complete."),
-                Decision::ChoosePile { .. } => ("choose_pile", "Choose which pile its owner puts into their hand. The other pile goes to their graveyard."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };
             view.stage = stage.into();

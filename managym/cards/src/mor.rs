@@ -6,7 +6,7 @@ use managym_state::{
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![ballyrush_banneret(), kindled_fury(), negate()]
+    vec![kindled_fury(), negate()]
 }
 
 fn negate() -> CardDefinition {
@@ -46,37 +46,6 @@ fn kindled_fury() -> CardDefinition {
                 Keyword::FirstStrike,
             ),
             text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn ballyrush_banneret() -> CardDefinition {
-    use managym_state::{
-        ability::Condition,
-        card::{SpellCostReduction, StaticAbility},
-    };
-    CardDefinition {
-        key: "mor.ballyrush_banneret",
-        scryfall_id: "a029814e-d84d-43e5-b483-e918871b3333",
-        printed: PrintedCharacteristics {
-            name: "Ballyrush Banneret".into(),
-            mana_cost: Some(ManaCost::parse("{1}{W}")),
-            types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Kithkin".into(), "Soldier".into()],
-            power: Some(2),
-            toughness: Some(1),
-            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
-                predicate: CardPredicate {
-                    subtypes_any: vec!["Kithkin".into(), "Soldier".into()],
-                    ..Default::default()
-                },
-                condition: Condition::Always,
-                generic: 1.into(),
-                first_on_own_turn: false,
-            })],
-            text_box: "Kithkin spells and Soldier spells you cast cost {1} less to cast.".into(),
             ..Default::default()
         },
         ..Default::default()

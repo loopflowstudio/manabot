@@ -65,11 +65,6 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
       if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
       if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
       if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';
-      if (context?.stage === 'target_shares') return `Divide among targets${source ? ` for ${source}` : ''}`;
-      if (context?.stage === 'entry_choice') return `Choose as ${source ?? 'the permanent'} enters`;
-      if (context?.stage === 'order_entry_choices') return 'Choose which entering permanent to decide next';
-      if (context?.stage === 'partition_piles') return `Put each card into the face-up or face-down pile${source ? ` (${source})` : ''}`;
-      if (context?.stage === 'choose_pile') return `Choose which pile goes to hand${source ? ` (${source})` : ''}`;
       return `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
       return 'Choose which legendary permanent to keep';

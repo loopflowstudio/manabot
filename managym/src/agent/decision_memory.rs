@@ -1024,18 +1024,8 @@ pub(crate) fn capture(
                         false
                     }
                 }
-                Some(Decision::ChooseEntryValue { scope, .. }) => {
-                    // Tree navigation groups are UI splits, not game choices.
-                    let Some(crate::cards::names::NameOption::Name(row)) = scope.option(*mode)
-                    else {
-                        return None;
-                    };
-                    choice.mode = Some(row as u32);
-                    true
-                }
                 Some(
-                    Decision::OrderEntryChoices { .. }
-                    | Decision::Modal { .. }
+                    Decision::Modal { .. }
                     | Decision::ManaChoice { .. }
                     | Decision::ManaSpend { .. }
                     | Decision::ChoosePaymentX { .. },
@@ -1614,82 +1604,5 @@ mod tests {
         assert!(own.response[0].description.is_empty());
         game.move_object(hidden, ZoneType::Graveyard);
         assert!(own.response[0].definition.is_none());
-    }
-
-    #[test]
-    fn choose_entry_value_skips_group_navigation_and_records_canonical_leaf_row() {
-        use crate::{
-            cards::names::{NameOption, NameScope},
-            flow::{
-                decision::{Decision, EffectFrame, SuspendedResolution},
-                proposed_event::EntryQuestion,
-            },
-            state::{card::EntryChoiceKind, subtype::creature_type_names},
-        };
-        let mut game = game();
-        let object = game
-            .state
-            .latest_objects()
-            .find(|(_, row)| row.owner == PlayerId(0))
-            .unwrap()
-            .0;
-        let target_row = creature_type_names()
-            .iter()
-            .position(|&name| name == "Goblin")
-            .unwrap();
-        let set_scope = |game: &mut Game, scope: NameScope| {
-            *game.state.suspended_decision_mut() = Some(SuspendedResolution {
-                frame: EffectFrame::new(PlayerId(0), Vec::new()),
-                decision: Decision::ChooseEntryValue {
-                    player: PlayerId(0),
-                    question: EntryQuestion {
-                        object,
-                        kind: EntryChoiceKind::CreatureType,
-                    },
-                    scope,
-                },
-            });
-            ActionSpace {
-                player: Some(PlayerId(0)),
-                kind: ActionSpaceKind::Modal,
-                actions: (0..scope.option_count())
-                    .map(|mode| Action::ChooseMode {
-                        player: PlayerId(0),
-                        mode,
-                    })
-                    .collect(),
-                focus: Vec::new(),
-            }
-        };
-
-        let mut scope = NameScope {
-            start: 0,
-            end: creature_type_names().len(),
-        };
-        assert!(!scope.is_leaf());
-        while !scope.is_leaf() {
-            let space = set_scope(&mut game, scope);
-            let (group_mode, child) = (0..scope.option_count())
-                .find_map(|i| match scope.option(i) {
-                    Some(NameOption::Group(g)) if (g.start..g.end).contains(&target_row) => {
-                        Some((i, g))
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            assert!(
-                capture(&game, &space, &space.actions[group_mode]).is_none(),
-                "non-leaf group clicks must not emit a decision-memory record"
-            );
-            scope = child;
-        }
-        let leaf_mode = (0..scope.option_count())
-            .find(|&i| scope.option(i) == Some(NameOption::Name(target_row)))
-            .unwrap();
-        let leaf_space = set_scope(&mut game, scope);
-        let captured = capture(&game, &leaf_space, &leaf_space.actions[leaf_mode])
-            .expect("leaf entry choice is recorded");
-        assert_eq!(captured.record.choice.kind.as_deref(), Some("ChooseMode"));
-        assert_eq!(captured.record.choice.mode, Some(target_row as u32));
     }
 }

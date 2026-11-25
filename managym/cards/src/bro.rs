@@ -2,15 +2,15 @@
 use managym_state::{
     ability::{
         Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        ObjectSelector, PaymentCost, Per, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, ManaAbility, PrintedCharacteristics, StaticAbility,
+        Keywords, PrintedCharacteristics, StaticAbility,
     },
     effect::{EffectDuration, Modification},
-    mana::{Mana, ManaCost},
+    mana::ManaCost,
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -18,65 +18,12 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         deadly_riposte(),
-        demolition_field(),
         bushwhack(),
         cityscape_leveler(),
         giant_cindermaw(),
         goblin_firebomb(),
         obliterating_bolt(),
     ]
-}
-
-fn demolition_field() -> CardDefinition {
-    let text_box = "{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Destroy target nonbasic land an opponent controls. That land's controller may search their library for a basic land card, put it onto the battlefield, then shuffle. You may search your library for a basic land card, put it onto the battlefield, then shuffle.";
-    let may_search_basic = || Effect::OptionalPayment {
-        cost: PaymentCost::Mana(ManaCost::default()),
-        if_paid: vec![Effect::search_library(
-            CardPredicate::basic_land(),
-            1.into(),
-            vec![Effect::return_to_battlefield(
-                ObjectSelector::Selected,
-                false,
-            )],
-        )],
-        if_declined: vec![],
-    };
-    CardDefinition {
-        key: "bro.demolition_field",
-        scryfall_id: "d9c88546-13c9-4d7e-a618-cb2ccd1dbc0f",
-        printed: PrintedCharacteristics {
-            name: "Demolition Field".into(),
-            types: CardTypes::new([CardType::Land]),
-            mana_abilities: vec![ManaAbility {
-                mana: Mana::parse("C"),
-            }],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                mana_cost: ManaCost::parse("{2}"),
-                tap_source: true,
-                sacrifice_source: true,
-                effects: vec![
-                    Effect::destroy(ObjectSelector::Target(
-                        TargetSpec::PermanentOpponentControls {
-                            predicate: CardPredicate {
-                                card_type: Some(CardType::Land),
-                                nonbasic: true,
-                                ..Default::default()
-                            },
-                        },
-                    )),
-                    Effect::ForPlayer {
-                        player: PlayerSelector::TargetController,
-                        effects: vec![may_search_basic()],
-                    },
-                    may_search_basic(),
-                ],
-                ..Default::default()
-            }],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
 }
 
 /// Unearth `cost` (CR 702.84a): "Return this card from your graveyard to the
@@ -244,7 +191,7 @@ fn bushwhack() -> CardDefinition {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::fight_last_target()],
+                            effects: vec![Effect::FightLastTarget],
                         },
                     ],
                 ],

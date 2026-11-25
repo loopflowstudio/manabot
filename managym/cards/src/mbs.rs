@@ -13,35 +13,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![black_sun_s_zenith(), massacre_wurm(), slagstorm()]
-}
-
-fn slagstorm() -> CardDefinition {
-    let text_box = "Choose one —\n• Slagstorm deals 3 damage to each creature.\n• Slagstorm deals 3 damage to each player.";
-    CardDefinition {
-        key: "mbs.slagstorm",
-        scryfall_id: "9e318b03-2aad-462b-a2a9-8b6bdf0e93d6",
-        printed: PrintedCharacteristics {
-            name: "Slagstorm".into(),
-            mana_cost: Some(ManaCost::parse("{1}{R}{R}")),
-            types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::deal_damage(
-                        3,
-                        ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
-                    )],
-                    vec![Effect::DealDamageToPlayer {
-                        player: PlayerSelector::EachPlayer,
-                        amount: 3.into(),
-                    }],
-                ],
-            }],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
+    vec![black_sun_s_zenith(), massacre_wurm()]
 }
 
 fn massacre_wurm() -> CardDefinition {

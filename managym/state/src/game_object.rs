@@ -718,32 +718,19 @@ impl Object {
     pub fn token_with_copiable_values(
         id: PublicId,
         owner: PlayerId,
-        values: &CopiableValues,
+        (definition_id, definition): Face,
+        faces: Option<TransformingFaces>,
+        copy: Option<crate::effect::CopyEffect>,
         exceptions: &[crate::effect::CopyException],
     ) -> Self {
-        let mut token = Self::from_copiable_values(id, owner, values);
-        token.kind = ObjectKind::Token;
+        let mut token = Self::from_definition(id, owner, definition_id, definition, true);
+        token.form = Some(Box::new(ObjectForm {
+            faces,
+            copy,
+            ..Default::default()
+        }));
         token.apply_copy_exceptions(exceptions);
         token
-    }
-
-    /// Reconstruct the shown face and copy exceptions of a retained appearance.
-    pub fn from_copiable_values(id: PublicId, owner: PlayerId, values: &CopiableValues) -> Self {
-        let mut object = Self::from_definition(
-            id,
-            owner,
-            values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
-            Arc::clone(&values.definition.printed),
-            values.definition.is_token,
-        );
-        if values.faces.is_some() || values.copy.is_some() {
-            object.form = Some(Box::new(ObjectForm {
-                faces: values.faces.clone(),
-                copy: values.copy.clone(),
-                ..Default::default()
-            }));
-        }
-        object
     }
 
     /// Enter as a copy of `source` (CR 707.5): take its shown copiable values

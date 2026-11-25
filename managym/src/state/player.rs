@@ -119,6 +119,9 @@ pub struct Player {
     pub counters: super::permanent::Counters,
     pub drew_when_empty: bool,
     pub mana_pool: ManaPool,
+    /// Mana that lasts until end of combat (firebending) — persists across
+    /// combat steps instead of emptying, empties as combat ends.
+    pub combat_mana_pool: ManaPool,
 }
 
 impl Player {
@@ -138,6 +141,7 @@ impl Player {
             counters: Default::default(),
             drew_when_empty: false,
             mana_pool: ManaPool::default(),
+            combat_mana_pool: ManaPool::default(),
         }
     }
 }

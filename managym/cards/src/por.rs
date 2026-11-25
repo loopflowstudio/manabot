@@ -70,7 +70,6 @@ fn cruel_tutor() -> CardDefinition {
                 Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Library),
                     predicate: CardPredicate::default(),
-                    max_mana_value: None,
                     min: 0,
                     max: EffectValue::Fixed(1),
                     effects: vec![

@@ -202,8 +202,6 @@ fn append(out: &mut CatalogTokens, span: Span) {
 #[derive(serde::Serialize)]
 struct SpellProgram<'a> {
     effects: &'a [Effect],
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    division: u8,
     targeting: &'a [TargetRequirement],
 }
 
@@ -232,7 +230,6 @@ fn definition_programs_of(
     if !definition.spell_effects.is_empty() || !definition.targeting.is_empty() {
         let spell = SpellProgram {
             effects: &definition.spell_effects,
-            division: definition.division,
             targeting: &definition.targeting,
         };
         out.push((ProgramKind::Spell, tokens(&spell, pack)?));

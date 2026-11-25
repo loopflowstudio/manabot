@@ -1,7 +1,7 @@
 //! Innistrad.
 use managym_state::ability::{
-    Ability, Actor, Aggregate, Effect, EffectValue, ObjectProperty, ObjectSelector, PaymentCost,
-    Per, PlayerSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
+    Ability, Actor, Effect, EffectValue, ObjectSelector, PaymentCost, Per, Scope, TriggerCondition,
+    TriggerSubject,
 };
 use managym_state::card::{
     BlockRestriction, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -13,7 +13,6 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
-        tribute_to_hunger(),
         blasphemous_act(),
         mentor_of_the_meek(),
         typhoid_rats(),
@@ -174,32 +173,6 @@ fn vampire_interloper() -> CardDefinition {
             statics: vec![StaticAbility::BlockRestriction(
                 BlockRestriction::CantBlock(CardPredicate::default()),
             )],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn tribute_to_hunger() -> CardDefinition {
-    let text_box = "Target opponent sacrifices a creature of their choice. You gain life equal to that creature's toughness.";
-    CardDefinition {
-        key: "isd.tribute_to_hunger",
-        scryfall_id: "f77e0f88-2285-4b59-9165-9948c75d77a3",
-        printed: PrintedCharacteristics {
-            name: "Tribute to Hunger".into(),
-            mana_cost: Some(ManaCost::parse("{2}{B}")),
-            types: CardTypes::new([CardType::Instant]),
-
-            spell_effects: vec![
-                Effect::ForPlayer {
-                    player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
-                    effects: vec![Effect::sacrifice(CardPredicate::creature())],
-                },
-                Effect::gain_life(
-                    ObjectSelector::Moved.property(ObjectProperty::Toughness, Aggregate::Sum),
-                ),
-            ],
             text_box: text_box.into(),
             ..Default::default()
         },

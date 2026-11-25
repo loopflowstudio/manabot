@@ -449,11 +449,6 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
-    /// CR 601.2d follows target selection and precedes determining the cost.
-    DivideAmongTargets {
-        player: PlayerId,
-        spell: Box<crate::flow::payment::AnnouncedSpell>,
-    },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
@@ -752,6 +747,18 @@ impl TrackedState {
     pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].mana_pool
+    }
+
+    /// The ordinary and until-end-of-combat pools together.
+    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
+        self.revisions.mana_pools += 1;
+        let player = &mut self.state.players[player.0];
+        (&mut player.mana_pool, &mut player.combat_mana_pool)
+    }
+
+    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
+        self.revisions.mana_pools += 1;
+        &mut self.state.players[player.0].combat_mana_pool
     }
 
     /// Name the stack appearance of the cast `player` recorded last. The

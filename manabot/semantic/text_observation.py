@@ -96,7 +96,6 @@ _STAGES = frozenset(
         "opening_entry",
         "priority",
         "targets",
-        "target_shares",
         "announcement",
         "additional_cost",
         "payment",
@@ -118,8 +117,6 @@ _STAGES = frozenset(
         "discard",
         "select_milled",
         "select_cards",
-        "entry_choice",
-        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
@@ -130,13 +127,10 @@ _STAGES = frozenset(
         "trigger_mode",
         "revealed_hand",
         "split_revealed",
-        "partition_piles",
-        "choose_pile",
         "free_cast",
         "linked_exile",
         "distribute_counters",
         "keep_creatures",
-        "keep_permanents",
         "retarget",
         "resolution_cast",
         "surveil",
@@ -231,13 +225,9 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
-    "assign combat damage",
-    "manifest dread",
     "order melded cards",
-    "order entry choices",
-    "choose as a permanent enters",
-    "partition piles",
-    "choose a pile",
+    "manifest dread",
+    "assign combat damage",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -900,12 +890,6 @@ class _Renderer:
                     + "."
                 )
             for pooled in player.pooled_mana_classes:
-                if pooled.expiry == "end_of_turn":
-                    expiry_text = "; expires at end of turn."
-                elif pooled.expiry == "end_of_combat" or pooled.combat:
-                    expiry_text = "; expires at end of combat."
-                else:
-                    expiry_text = "; expires at step end."
                 lines.append(
                     "Of the mana above: "
                     + ", ".join(
@@ -919,7 +903,11 @@ class _Renderer:
                         else ""
                     )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
-                    + expiry_text
+                    + (
+                        "; expires at end of combat."
+                        if pooled.combat
+                        else "; expires at step end."
+                    )
                 )
             for source, kind in player.spent_graveyard_types:
                 grantor = self.names.get(source, f"departed permanent {source}")
@@ -999,8 +987,6 @@ class _Renderer:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
-            elif card.put_into_graveyard_this_turn:
-                optional += "; put into the graveyard this turn"
             for kind, count in sorted(card.counters.items()):
                 optional += f"; {kind.replace('_', ' ')} counters {count}"
             for permission in card.cast_permissions:
@@ -1068,8 +1054,6 @@ class _Renderer:
                 optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
             if permanent.keyword_counter_timestamps:
                 optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
-            if permanent.chosen:
-                optional += f"; chosen {permanent.chosen}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
@@ -1399,13 +1383,6 @@ class _Renderer:
                 f"Announcing this {context.announcing.replace('_', ' ')}: "
                 "it is on the stack until its costs are paid."
             )
-        if context.stage in {
-            "partition_piles",
-            "choose_pile",
-            "target_shares",
-            "retarget",
-        }:
-            lines.extend(context.pending)
         if context.chosen_mode is not None:
             lines.append(f"Chosen mode: {context.chosen_mode + 1}.")
         if context.targets:

@@ -21,15 +21,4 @@ describe('restricted mana wording', () => {
     expect(pooledManaTerms({ mana: [0, 0, 0, 0, 0, 1], restriction: 'anything but spells from hand', combat: false }))
       .toBe('for anything but spells from hand, normally expires at step end');
   });
-
-  it('distinguishes step, end-of-combat, and end-of-turn mana expiry', () => {
-    expect(pooledManaTerms({ mana: [0, 0, 0, 3, 3, 0], combat: false, expiry: 'end_of_turn' }))
-      .toBe('normally expires at end of turn');
-    expect(pooledManaTerms({ mana: [0, 0, 0, 2, 0, 0], combat: true, expiry: 'end_of_combat' }))
-      .toBe('normally expires at end of combat');
-    expect(pooledManaTerms({ mana: [0, 0, 0, 2, 0, 0], combat: true }))
-      .toBe('normally expires at end of combat');
-    expect(pooledManaTerms({ mana: [0, 0, 0, 0, 1, 0], restriction: 'creature spells', combat: false, expiry: 'step' }))
-      .toBe('only for creature spells, normally expires at step end');
-  });
 });

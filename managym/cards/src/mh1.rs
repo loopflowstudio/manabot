@@ -22,48 +22,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fists_of_flame(),
         force_of_negation(),
         prismatic_vista(),
-        springbloom_druid(),
         sunbaked_canyon(),
     ]
-}
-
-fn springbloom_druid() -> CardDefinition {
-    let text_box = "When this creature enters, you may sacrifice a land. If you do, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.";
-    CardDefinition {
-        key: "mh1.springbloom_druid",
-        scryfall_id: "6161d2ed-7cff-4c90-9e74-1d179a6c1498",
-        printed: PrintedCharacteristics {
-            name: "Springbloom Druid".into(),
-            mana_cost: Some(ManaCost::parse("{2}{G}")),
-            types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Elf".into(), "Druid".into()],
-            power: Some(1),
-            toughness: Some(1),
-            abilities: vec![Ability::when_enters(
-                TriggerSubject::This,
-                vec![
-                    Effect::may_sacrifice(
-                        CardPredicate {
-                            card_type: Some(CardType::Land),
-                            ..Default::default()
-                        },
-                        false,
-                    ),
-                    Effect::if_you_do(vec![Effect::search_library(
-                        CardPredicate::basic_land(),
-                        2.into(),
-                        vec![Effect::return_to_battlefield(
-                            ObjectSelector::Selected,
-                            true,
-                        )],
-                    )]),
-                ],
-            )],
-            text_box: text_box.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
 }
 
 fn force_of_negation() -> CardDefinition {

@@ -23,7 +23,7 @@ use crate::{
         proposed_event::ZoneEntry,
     },
     state::{
-        ability::LinkedGrant,
+        ability::{LinkedGrant, PlayWindow},
         game_object::{CardId, ObjectId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
@@ -236,6 +236,39 @@ impl Game {
         });
     }
 
+    /// "Exile the top `count` cards of your library [face down]. You may
+    /// play them [this turn | until the end of your next turn | for as long
+    /// as they remain exiled] [if `condition`]."
+    pub(crate) fn exile_top_cards_to_play(
+        &mut self,
+        player: PlayerId,
+        count: usize,
+        until: PlayWindow,
+        face_down: bool,
+        condition: Option<&crate::state::ability::Condition>,
+    ) {
+        let turn = self.state.turn.turn_number;
+        for _ in 0..count {
+            let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
+                return;
+            };
+            // The known order of the rest of the library shifts up by one.
+            let entry = ZoneEntry {
+                face_down,
+                library_top_departure: true,
+                ..ZoneEntry::default()
+            };
+            self.exile_with_play_grant(object_id, entry, |object| PlayGrant {
+                this_turn: until == PlayWindow::ThisTurn,
+                through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
+                face_down,
+                condition: condition.cloned(),
+                play_lands: true,
+                ..PlayGrant::new(object, player)
+            });
+        }
+    }
+
     /// Whether `player` may foretell `card` now: a card with foretell in
     /// their hand, during their turn, with {2} available (CR 702.143a).
     pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {
@@ -431,9 +464,10 @@ impl Game {
         });
     }
 
-    /// Exile `object` with `entry` (face down per CR 406.3) and add the play
-    /// grant `grant` builds for the exiled object. A token, or a card a
-    /// replacement kept out of exile, receives no grant.
+    /// Exile `object` with `entry` (face down per CR 406.3, or from the top
+    /// of a library) and add the play grant `grant` builds for the exiled
+    /// object. A token, or a card a replacement kept out of exile, receives
+    /// no grant.
     fn exile_with_play_grant(
         &mut self,
         object: ObjectId,

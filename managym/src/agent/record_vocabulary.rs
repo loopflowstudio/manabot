@@ -126,9 +126,6 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
     out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
-    for candidate in pack.name_candidates().iter() {
-        out.push(record(Name, &candidate.name, None));
-    }
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
         let json = serde_json::to_value(definition).expect("serializable definition");
@@ -223,7 +220,6 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "None",
                 "ThisWay",
                 "Destroyed",
-                "OwnSacrifices",
                 "LifeLost",
                 "Damage",
                 "Deaths",
@@ -258,12 +254,6 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Saddle",
                 "Station",
             ][..],
-        ),
-        ("EntryChoice", &["Color", "CreatureType", "CardName"][..]),
-        ("ManaExpiry", &["Step", "EndOfCombat", "EndOfTurn"][..]),
-        (
-            "SpendPredicate",
-            &["CastCreatureSubtype", "ActivateCreatureSubtype"][..],
         ),
         (
             "Effect",
@@ -309,7 +299,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "entry_counters",
         "gains",
         "copies",
-        "expiry",
+        "combat",
         "definition",
         "name",
         "cost",
@@ -333,7 +323,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
 fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("GrantPlay")?.get("condition"))
+        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
         .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
         .collect()
 }
@@ -396,15 +386,13 @@ mod tests {
         };
         let nested = Effect::If {
             condition: Condition::YourTurn,
-            then: vec![Effect::GrantPlay {
-                what: crate::state::ability::ObjectSelector::Moved,
+            then: vec![Effect::ExileTopCardsToPlay {
+                count: 2,
                 until: PlayWindow::WhileExiled,
-                play_lands: true,
-                flashback: false,
                 face_down: true,
                 condition: Some(wizard.clone()),
             }],
-            otherwise: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
+            otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
         };
         let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
         assert_eq!(play_grant_conditions(&json), [wizard]);
@@ -453,7 +441,6 @@ mod tests {
                     EventBinding::None,
                     EventBinding::ThisWay,
                     EventBinding::Destroyed,
-                    EventBinding::OwnSacrifices,
                     EventBinding::LifeLost,
                     EventBinding::Deaths,
                     EventBinding::Combat,

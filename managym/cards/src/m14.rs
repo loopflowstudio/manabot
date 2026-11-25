@@ -104,7 +104,6 @@ fn rise_of_the_dark_realms() -> CardDefinition {
             // each other enter (CR 603.6a).
             spell_effects: vec![Effect::return_to_battlefield(
                 ObjectSelector::ZoneMatching {
-                    except: None,
                     zone: ZoneType::Graveyard,
                     owner: Actor::AnyPlayer,
                     predicate: CardPredicate::creature(),

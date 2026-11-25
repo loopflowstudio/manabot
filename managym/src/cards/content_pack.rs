@@ -356,10 +356,10 @@ impl ContentPack {
                             "ward": card.ward().and_then(PaymentCost::mana),
                             "is_token": card.is_token,
                         });
-                        // A ward with a life component states it here; the key
-                        // is absent when the ward costs no life.
-                        if let Some(life) = card.ward().map(PaymentCost::life).filter(|&l| l > 0) {
-                            public["ward_life"] = life.into();
+                        // A ward paid in life has no mana cost to state; the
+                        // key is absent on every other definition.
+                        if let Some(PaymentCost::Life(life)) = card.ward() {
+                            public["ward_life"] = (*life).into();
                         }
                         // A cost choice other than kicker names itself, so
                         // a reader of `kicked` says "bargained"; the key is

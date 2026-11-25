@@ -415,9 +415,64 @@ pub struct ContinuousEffectView {
     pub timestamp: u32,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AbilityGrantView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub counter: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordAbilityView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub granted: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermanentRestriction {
+    CantBeBlocked,
+    CantBlock,
+    CantAttackOrBlock,
+    DoesntUntap,
+    MustAttack,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RestrictionView {
+    pub kind: PermanentRestriction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+pub struct PermanentDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyword_grants: Option<std::collections::BTreeMap<String, AbilityGrantView>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyword_abilities: Vec<KeywordAbilityView>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacks_despite_defender: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restrictions: Vec<RestrictionView>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(flatten)]
+    pub details: PermanentDetails,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -437,8 +492,6 @@ pub struct LegacyPermanentView {
     pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chosen: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -541,11 +594,6 @@ pub struct PooledManaView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction: Option<String>,
     pub combat: bool,
-    #[serde(
-        default = "crate::agent::observation::default_mana_expiry",
-        skip_serializing_if = "crate::agent::observation::is_step_mana_expiry"
-    )]
-    pub expiry: String,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

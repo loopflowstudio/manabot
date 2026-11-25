@@ -445,10 +445,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
         let mut s = five_color_setup(&["Prophetic Prism", "Serra Angel"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, &format!("W{}", "U".repeat(blue)));
-        s.game_mut().state.players[0].mana_pool.add(
-            &Mana::parse("U").with_expiry(managym::state::mana::ManaExpiry::EndOfCombat),
-            None,
-        );
+        s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U").into();
         let angel = library_card(&s, 0, "Serra Angel");
         let angel = move_card(&mut s, angel, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -462,12 +459,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
             activate_named(&mut s, "Prophetic Prism", 0);
             crate::support::inspect::assert_choice_contract(&s);
             spend_named(&mut s, |label| label.contains("end of combat"));
-            assert_eq!(
-                s.game().state.players[0]
-                    .mana_pool
-                    .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat),
-                0
-            );
+            assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);

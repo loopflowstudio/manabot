@@ -415,12 +415,53 @@ class CopyView(ProtocolModel):
     )
 
 
+class AbilityGrantView(ProtocolModel):
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    counter: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class KeywordAbilityView(ProtocolModel):
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    label: str
+    granted: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class PermanentRestriction(str, Enum):
+    CANT_BE_BLOCKED = "cant_be_blocked"
+    CANT_BLOCK = "cant_block"
+    CANT_ATTACK_OR_BLOCK = "cant_attack_or_block"
+    DOESNT_UNTAP = "doesnt_untap"
+    MUST_ATTACK = "must_attack"
+
+
+class RestrictionView(ProtocolModel):
+    kind: PermanentRestriction
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
 class LegacyPermanentView(ProtocolModel):
+    keyword_grants: dict[str, AbilityGrantView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    keyword_abilities: list[KeywordAbilityView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    attacks_despite_defender: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    restrictions: list[RestrictionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     is_token: bool | None = Field(default=None, exclude_if=lambda value: value is None)
-    chosen: str | None = Field(default=None, exclude_if=lambda value: value is None)
     temp_subtypes: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -505,9 +546,6 @@ class PooledManaView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     combat: bool
-    expiry: Literal["step", "end_of_combat", "end_of_turn"] = Field(
-        default="step", exclude_if=lambda value: value == "step"
-    )
 
 
 class LegacyPlayerView(ProtocolModel):

@@ -57,11 +57,6 @@ describe('promptLine', () => {
     expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
     expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
     expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');
-    expect(line(modal('target_shares'))).toBe('Divide among targets for Appeal to Eirdu');
-    expect(line(modal('entry_choice'))).toBe('Choose as Appeal to Eirdu enters');
-    expect(line(modal('order_entry_choices'))).toBe('Choose which entering permanent to decide next');
-    expect(line(modal('partition_piles'))).toBe('Put each card into the face-up or face-down pile (Appeal to Eirdu)');
-    expect(line(modal('choose_pile'))).toBe('Choose which pile goes to hand (Appeal to Eirdu)');
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {

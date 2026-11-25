@@ -92,7 +92,6 @@ fn claim_territory() -> PrintedCharacteristics {
                 Effect::SelectCards {
                     from: ObjectSelector::Selected,
                     predicate: CardPredicate::default(),
-                    max_mana_value: None,
                     min: 1,
                     max: EffectValue::Fixed(1),
                     effects: vec![Effect::return_to_battlefield(ObjectSelector::Selected, true)],

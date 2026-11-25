@@ -471,28 +471,3 @@ fn foundations_5d_adventuring_gear() {
         assert_eq!(branch.game().characteristics(giant).power, 3);
     }
 }
-
-#[test]
-fn gatekeeper_of_malakir_triggers_only_when_kicked() {
-    use crate::support::game::{five_color_setup, move_to_hand};
-    use crate::support::play::{cast_card, choose, pass_until, settle, target_opponent};
-    use managym::agent::action::{Action, ActionSpaceKind};
-
-    for kicked in [false, true] {
-        let mut s = five_color_setup(&["Gatekeeper of Malakir", "Gray Ogre"]);
-        let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
-        let card = move_to_hand(&mut s, "Gatekeeper of Malakir");
-        cast_card(&mut s, card);
-        if kicked {
-            choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
-            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
-            target_opponent(&mut s);
-            settle(&mut s);
-            assert!(s.game().state.permanents[foe].is_none());
-        } else {
-            choose(&mut s, |action| matches!(action, Action::Decline { .. }));
-            settle(&mut s);
-            assert!(s.game().state.permanents[foe].is_some());
-        }
-    }
-}

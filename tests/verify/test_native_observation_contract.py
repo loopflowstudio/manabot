@@ -447,7 +447,7 @@ def test_encodes_every_observed_permanent_and_card_field() -> None:
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
         [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1, 1, 0],
     )
-    assert actual["agent_cards"][0, column("agent_cards", "valid")] == 1
+    assert actual["agent_cards"][0, CARD_DIM - 1] == 1
 
 
 @pytest.mark.parametrize("capacity", [512, 256, 140])

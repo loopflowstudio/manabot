@@ -145,27 +145,14 @@ pub struct RestrictedManaData {
     pub mana: [i32; 6],
 }
 
-pub(crate) fn default_mana_expiry() -> String {
-    crate::state::mana::ManaExpiry::Step.as_str().into()
-}
-
-pub(crate) fn is_step_mana_expiry(expiry: &str) -> bool {
-    expiry.is_empty() || expiry == crate::state::mana::ManaExpiry::Step.as_str()
-}
-
-/// Pooled mana of one class with a spend effect or non-step expiry. `program`
-/// is the class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary,
-/// the same serialization the producing card's definition uses.
+/// Pooled mana of one class with a spend effect or combat expiry. `program` is the
+/// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
+/// same serialization the producing card's definition uses.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PooledManaClassData {
     #[serde(default)]
     pub combat: bool,
-    #[serde(
-        default = "default_mana_expiry",
-        skip_serializing_if = "is_step_mana_expiry"
-    )]
-    pub expiry: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction: Option<String>,
     /// "a +1/+1 counter on a non-Human creature spell it casts".
@@ -197,7 +184,7 @@ impl RestrictedManaData {
             .iter()
             .cloned()
             .map(SpendPredicate::ActivateSubtype);
-        ManaRestriction::only_predicates(spells.chain(sources).collect())
+        ManaRestriction::Only(spells.chain(sources).collect())
     }
 
     /// Whether this mana may pay for a spell or an ability source with `subtype`.
@@ -377,11 +364,8 @@ pub struct CardData {
     /// when its mana cost has X.
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
-    /// (`TurnState::graveyard_arrivals`); policy input v10.
+    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
     pub from_battlefield_this_turn: bool,
-    /// A graveyard card that was put there from any zone this turn
-    /// (`TurnState::graveyard_arrivals`); policy input v11.
-    pub put_into_graveyard_this_turn: bool,
     /// Counters on it off the battlefield ("with a stash counter on it"),
     /// by `CounterKind` name.
     pub counters: BTreeMap<String, i32>,
@@ -856,7 +840,6 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WirePermanentData")]
 pub struct PermanentData {
-    pub chosen: Option<crate::state::permanent::EntryChoice>,
     /// Mana value from the front of a transformed permanent (CR 202.3b).
     pub front_mana_value: Option<u8>,
     pub characteristics: CharacteristicsData,
@@ -1276,7 +1259,7 @@ impl Observation {
             decision_memory: game.decision_memory[agent_player.0].clone(),
             recent_events: recent_events
                 .into_iter()
-                .flat_map(|event| Self::event_data(game, event, agent_player))
+                .flat_map(|event| Self::event_data(game, event))
                 .collect(),
         };
 
@@ -1373,9 +1356,11 @@ impl Observation {
                 (None, None, None, None)
             };
 
-        let pool = p.mana_pool.mana();
+        // Regular and combat mana together, as the player may spend it.
+        let mut pool = p.mana_pool.mana().clone();
+        pool.add_combat(&p.combat_mana_pool);
         // Individual class counts are u8; public totals may exceed one class's
-        // capacity when classes share a color.
+        // capacity when regular and combat mana have the same color.
         let mut mana = pool.mana.map(i32::from);
         let mut lesson_mana = [0_i32; 6];
         for (class, amounts) in pool.classes() {
@@ -1408,7 +1393,7 @@ impl Observation {
                 player,
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
-            combat_mana: pool.expiry_total(crate::state::mana::ManaExpiry::EndOfCombat) as i32,
+            combat_mana: p.combat_mana_pool.total() as i32,
             mana,
             lesson_mana,
             restricted_mana: pool
@@ -1421,7 +1406,7 @@ impl Observation {
                 })
                 .collect(),
             // Restrictions without player columns are fact rows, as is mana
-            // with a spend effect or non-step expiry.
+            // with a spend effect or combat expiry.
             pooled_mana_classes: pool
                 .classes()
                 .iter()
@@ -1430,15 +1415,11 @@ impl Observation {
                         .restriction
                         .as_ref()
                         .is_some_and(|restriction| !representable(restriction));
-                    if class.effect.is_none()
-                        && class.expiry == crate::state::mana::ManaExpiry::Step
-                        && !unrepresentable
-                    {
+                    if class.effect.is_none() && !class.combat && !unrepresentable {
                         return None;
                     }
                     Some(PooledManaClassData {
-                        combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
-                        expiry: class.expiry.as_str().into(),
+                        combat: class.combat,
                         restriction: class.restriction.as_ref().map(|r| r.describe()),
                         effect: class
                             .effect
@@ -1574,15 +1555,6 @@ impl Observation {
             let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
-            for decision in suspended.decisions() {
-                if let Decision::ChoosePile { owner, looked, .. } = decision {
-                    if *owner == perspective {
-                        for object in looked {
-                            add_object(*object, ZoneType::Library);
-                        }
-                    }
-                }
-            }
             for decision in suspended.decisions().filter(|d| d.player() == perspective) {
                 let objects = match decision {
                     Decision::SearchNamed { owner, .. } => game
@@ -1596,11 +1568,6 @@ impl Observation {
                     Decision::SelectCards {
                         from: Some(source), ..
                     } => game.selection_zone_objects(source.owner, source.zone),
-                    Decision::SelectCards {
-                        pool,
-                        inspected: true,
-                        ..
-                    } => pool.clone(),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_objects(decision)
                     }
@@ -1711,7 +1678,6 @@ impl Observation {
         let face = object.definition_id;
         let printed_abilities = (permanent.object, face, 0)..=(permanent.object, face, usize::MAX);
         let pdat = PermanentData {
-            chosen: permanent.chosen.as_deref().cloned(),
             front_mana_value: (object
                 .form_faces()
                 .is_some_and(|faces| faces.back_up && !faces.front.1.modal_back)
@@ -1939,15 +1905,9 @@ impl Observation {
                 .collect(),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
-                && game
-                    .state
-                    .live(object_id)
-                    .is_some_and(|object| game.state.turn.in_graveyard_from_battlefield(object)),
-            put_into_graveyard_this_turn: zone == ZoneType::Graveyard
-                && game
-                    .state
-                    .live(object_id)
-                    .is_some_and(|object| game.state.turn.in_graveyard_this_turn(object)),
+                && game.state.live(object_id).is_some_and(|object| {
+                    game.state.turn.graveyard_from_battlefield.contains(&object)
+                }),
             counters: game
                 .state
                 .object_counters
@@ -2031,16 +1991,6 @@ impl Observation {
                 _ => 0,
             },
             description: match stack_object {
-                StackObject::Spell(spell) if !spell.target_shares.is_empty() => Some(format!(
-                    "{} — {}",
-                    game.state[spell.object].name,
-                    super::effect_execution::division_description(
-                        game,
-                        &spell.targets,
-                        &spell.target_shares,
-                        viewer
-                    )
-                )),
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
@@ -2171,7 +2121,7 @@ impl Observation {
     /// battlefield is named by its permanent, never by the storage slot of
     /// the physical card it hides (CR 708.2), and a face-down permanent that
     /// moves to a hidden zone names no object.
-    pub(crate) fn event_data(game: &Game, event: &GameEvent, viewer: PlayerId) -> Vec<EventData> {
+    pub(crate) fn event_data(game: &Game, event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         use EventEntity::{Card, Object, Player};
 
@@ -2195,9 +2145,6 @@ impl Observation {
                 ..
             } => {
                 let hidden = *face_down
-                    || (*from == Some(ZoneType::Library)
-                        && *to == ZoneType::Hand
-                        && !game.shares_information(viewer, *controller))
                     || (from.is_none() && *to == ZoneType::Hand)
                     || (matches!(to, ZoneType::Hand | ZoneType::Library)
                         && departed
@@ -2533,30 +2480,6 @@ impl Observation {
                             .into_iter()
                             .collect();
                     }
-                    (
-                        Action::ChooseMode { .. },
-                        Some(
-                            Decision::ChooseEntryValue { question, .. }
-                            | Decision::NameCard {
-                                after: crate::flow::decision::AfterNaming::Entry { question },
-                                ..
-                            },
-                        ),
-                    ) => return vec![game.state.entry_object(question.object).id],
-                    (
-                        Action::ChooseMode { mode, .. },
-                        Some(Decision::OrderEntryChoices { questions, .. }),
-                    ) => {
-                        return questions
-                            .get(*mode)
-                            .map(|q| game.state.entry_object(q.object).id)
-                            .into_iter()
-                            .collect()
-                    }
-                    (
-                        Action::ChooseMode { .. },
-                        Some(Decision::PartitionPiles { looked, next, .. }),
-                    ) => return vec![game.observed_object_id(looked[*next])],
                     // An amount of combat damage is about the attacker
                     // assigning it and the blocker receiving it.
                     (
@@ -2581,10 +2504,6 @@ impl Observation {
                     .as_ref()
                     .and_then(|suspended| suspended.frame.source())
                     .or(match &game.pending_choice {
-                        Some(crate::flow::game::PendingChoice::DivideAmongTargets {
-                            spell,
-                            ..
-                        }) => game.target_object(spell.targets[spell.target_shares.len()]),
                         Some(crate::flow::game::PendingChoice::SpellMode {
                             object: object_id,
                             ..
@@ -2769,14 +2688,17 @@ fn ward_value(cost: Option<&PaymentCost>) -> i32 {
 
 /// The life a ward costs; 0 without ward and for a ward paid in mana.
 fn ward_life(cost: Option<&PaymentCost>) -> i32 {
-    cost.map_or(0, |cost| cost.life() as i32)
+    match cost {
+        Some(PaymentCost::Life(life)) => *life as i32,
+        _ => 0,
+    }
 }
 
 /// A ward cost `ward_cost` cannot state, in learning tokens: empty without
 /// ward and for a ward whose price is its mana value.
 fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
     match cost {
-        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard | PaymentCost::All(_))) => {
+        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard)) => {
             crate::cards::tokens::rules_tokens(cost, default_content_pack())
                 .expect("registered rules payload")
         }

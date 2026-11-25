@@ -335,6 +335,7 @@ class Env:
     def semantic_decision_frame_json(self) -> str: ...
     def player_controls_json(self) -> str: ...
     def public_schedule_json(self) -> str: ...
+    def permanent_details_json(self, viewer: int) -> str: ...
     def decision_context_json(self, viewer: int) -> str: ...
     def decision_offer_subjects_json(self, viewer: int) -> str: ...
     def presentation_subjects_json(self) -> str: ...
@@ -1027,10 +1028,9 @@ class RestrictedMana:
     mana: tuple[int, int, int, int, int, int]
 
 class PooledManaClass:
-    """One pooled class with a spend effect or non-step expiry."""
+    """One pooled class with a spend effect or combat expiry."""
 
     combat: bool
-    expiry: str
     restriction: str | None
     effect: str | None
     mana: tuple[int, int, int, int, int, int]
@@ -1110,8 +1110,6 @@ class Card:
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
-    # A graveyard card put there from any zone this turn (input v11).
-    put_into_graveyard_this_turn: bool
     # Counters on the card off the battlefield ("with a stash counter on it").
     counters: dict[str, int]
 
@@ -1198,7 +1196,6 @@ class Permanent:
     exhausted_abilities: int
     once_each_turn_used: int
     granted_firebending: int
-    chosen: str | None
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
@@ -1362,6 +1359,7 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
+__version__: str
 # Deprecated: the label of the last numbered world; removed in 0.3.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int

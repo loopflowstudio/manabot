@@ -5,6 +5,12 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
+import numpy as np
+import pytest
+
+from manabot.belief.likelihood import LikelihoodResult, RulesProviderGap
+from manabot.belief.range import BeliefState
+from manabot.belief.tracker import BeliefTracker
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
@@ -17,11 +23,6 @@ from managym.possible_worlds import (
     PossibleWorld,
     PossibleWorldSpace,
 )
-import numpy as np
-import pytest
-
-from manabot.belief.likelihood import LikelihoodResult, RulesProviderGap
-from manabot.belief.tracker import BeliefTracker
 
 
 @dataclass
@@ -29,6 +30,7 @@ class FakeEngine:
     space: PossibleWorldSpace | None = None
     witness: str = "fixed-witness"
     event_cursor: int = 7
+    turn_number: int | None = None
 
     def state_digest(self) -> str:
         return self.witness
@@ -79,6 +81,9 @@ class FakeEngine:
 
     def semantic_observation_json(self, viewer: int) -> str:
         assert self.space is not None and viewer == self.space.viewer
+        viewer_state: dict[str, Any] = {"opponent_cards": []}
+        if self.turn_number is not None:
+            viewer_state["turn"] = {"turn_number": self.turn_number}
         return json.dumps(
             {
                 "identity": {
@@ -87,7 +92,7 @@ class FakeEngine:
                     "viewer": viewer,
                     "viewer_state_hash": self.space.source_viewer_state_hash,
                 },
-                "viewer_state": {"opponent_cards": []},
+                "viewer_state": viewer_state,
                 "events": [],
                 "decision": None,
             }
@@ -102,8 +107,9 @@ def _state(
     rows: list[tuple[dict[str, int], int]],
     known_hand: dict[str, int] | None = None,
     foretold: int = 0,
+    turn_number: int | None = None,
 ) -> tuple[FakeEngine, PossibleWorldSpace, Observation]:
-    engine = FakeEngine()
+    engine = FakeEngine(turn_number=turn_number)
     space = PossibleWorldSpace(
         identity=identity,
         viewer=0,
@@ -123,15 +129,7 @@ def _state(
         _engine=engine,
     )
     engine.space = space
-    observation = Observation(
-        schema_version=SEMANTIC_DECISION_VERSION,
-        revision=revision,
-        viewer=0,
-        viewer_state_hash=f"hash-{identity}",
-        viewer_state={"opponent_cards": []},
-        events=(),
-        decision=None,
-    )
+    observation = Observation.from_json(engine.semantic_observation_json(0))
     return engine, space, observation
 
 
@@ -647,3 +645,47 @@ def test_tracker_receipt_binds_observation_space_and_belief_identities() -> None
     assert receipt["transitions"][0]["after_space_id"] == "receipt-after"
     assert receipt["transitions"][0]["posterior_normalization_error"] < 1e-12
     assert len(receipt["history_digest"]) == 64
+
+
+def test_turn_zero_mulligan_resets_to_prior_while_preserving_model_id() -> None:
+    _, before, observation = _state(
+        "mulligan-before",
+        1,
+        {"A": 2, "B": 2},
+        2,
+        [({"A": 2}, 1), ({"A": 1, "B": 1}, 4), ({"B": 2}, 1)],
+        turn_number=0,
+    )
+    after_engine, after, after_observation = _state(
+        "mulligan-after",
+        2,
+        {"A": 2, "B": 2},
+        1,
+        [({"A": 1}, 2), ({"B": 1}, 2)],
+        turn_number=0,
+    )
+    tracker = BeliefTracker(
+        before,
+        observation,
+        likelihood=None,
+        epsilon=0.0,
+        model_id="frozen-policy-likelihood/test",
+    )
+
+    tracker.observe(
+        after_engine,
+        acting=1,
+        transition=_transition(1, 2, None, after_observation),
+    )
+
+    expected = BeliefState.compatible_prior(
+        after, model_id="frozen-policy-likelihood/test"
+    )
+    assert tracker.posterior.model_id == "frozen-policy-likelihood/test"
+    assert tracker.posterior.probabilities == pytest.approx(expected.probabilities)
+    assert tracker.posterior.digest == expected.digest
+    assert tracker.prior.model_id == "compatible-deal-prior/v1"
+    assert tracker.stats.hidden_draws == 0
+    assert tracker.records[-1].hidden_draws == 0
+    assert tracker.records[-1].known_exits == ()
+    assert tracker.records[-1].known_returns == ()

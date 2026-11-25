@@ -425,7 +425,7 @@ mod tests {
         let events: Vec<_> = game
             .take_observation_events()
             .iter()
-            .flat_map(|event| Observation::event_data(&game, event, PlayerId(1)))
+            .flat_map(|event| Observation::event_data(&game, event))
             .collect();
         assert!(events
             .iter()
@@ -508,7 +508,7 @@ mod tests {
         let rows: Vec<_> = game
             .take_observation_events()
             .iter()
-            .flat_map(|event| Observation::event_data(&game, event, PlayerId(1)))
+            .flat_map(|event| Observation::event_data(&game, event))
             .collect();
         let damage = rows
             .iter()

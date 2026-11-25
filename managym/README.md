@@ -274,10 +274,6 @@ targets still resolve.
 in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
 counter placement uses the former.
-A spell with a printed `division` assigns its total among the chosen targets
-before payment. The stack retains the shares in target order. Biogenic
-Upgrade places the announced counters in one batch, then reads the new
-counter counts for its doubling instruction.
 Graveyard targets
 carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
@@ -555,24 +551,6 @@ cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
-
-Thousand-Year Storm counts earlier instant and sorcery casts by its controller,
-including spells cast before it entered. Each copy offers its own target choices.
-If the original was countered, the copy takes the spell's last targets, mode and X.
-Keeping a target with ward triggers ward for the copy.
-
-With Divine Resilience, paying kicker changes how many creatures you can
-target. You can cast it kicked with an empty battlefield. Charming Prince can
-exile a creature you own that an opponent controls and return it under your
-control at the next end step. Affectionate Indrik's controller chooses its
-opposing target when the ability goes on the stack and decides whether to
-fight when it resolves.
-
-For Deadly Brew, the active player chooses which eligible permanents to keep
-first. Both players finish choosing before the sacrifices happen together.
-If you sacrificed one, you can return another permanent card in your graveyard.
-Tribute to Hunger uses the toughness the creature had just before its sacrifice,
-including temporary bonuses.
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/engine.md#resolution-contracts)

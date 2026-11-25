@@ -19,8 +19,6 @@ use super::{
     policy_history::{encode_rows, HISTORY_DIM},
 };
 
-/// A v9/v10 card row ends at `valid`.
-pub const CARD_DIM: usize = 56;
 /// A v9/v10 permanent row ends at `dealt_damage_this_turn`, then validity.
 pub const PERMANENT_VALID: usize = 37;
 pub const PERMANENT_DIM: usize = PERMANENT_VALID + 1;

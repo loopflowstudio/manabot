@@ -94,10 +94,39 @@ export interface ContinuousEffect {
   timestamp: number;
 }
 
+export interface AbilityGrantView {
+  effect_timestamp?: number;
+  source?: string;
+  counter?: boolean;
+}
+
+export interface KeywordAbilityView {
+  source?: string;
+  effect_timestamp?: number;
+  label: string;
+  granted?: boolean;
+}
+
+export type PermanentRestriction =
+  | 'cant_be_blocked'
+  | 'cant_block'
+  | 'cant_attack_or_block'
+  | 'doesnt_untap'
+  | 'must_attack';
+
+export interface RestrictionView {
+  kind: PermanentRestriction;
+  source?: string;
+}
+
 export interface PermanentState {
+  /** Effective evergreen grants, keyed by keyword: granting permanent, effect timestamp, or counter. */
+  keyword_grants?: Record<string, AbilityGrantView>;
+  keyword_abilities?: KeywordAbilityView[];
+  attacks_despite_defender?: boolean;
+  restrictions?: RestrictionView[];
   types?: CardTypes;
   is_token?: boolean;
-  chosen?: string;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
@@ -185,10 +214,8 @@ export interface PlayerTurnHistory {
   mana_spent_casting?: number;
 }
 
-export type ManaExpiry = 'step' | 'end_of_combat' | 'end_of_turn';
-
 export interface PlayerState {
-  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean; expiry?: ManaExpiry }[];
+  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean }[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */

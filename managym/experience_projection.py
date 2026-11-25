@@ -218,7 +218,6 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
     values: dict[str, Any] = {
         "counters": counters or None,
         "attached_to": permanent.attached_to,
-        "chosen": permanent.chosen,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
@@ -386,7 +385,6 @@ def _serialize_player(
                         else {}
                     ),
                     "combat": p.combat,
-                    **({"expiry": p.expiry} if p.expiry != "step" else {}),
                 }
                 for p in player.pooled_mana_classes
             ],
@@ -541,6 +539,10 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    details = json.loads(env.permanent_details_json(viewer))
+    for side in ("agent", "opponent"):
+        for permanent in data[side]["battlefield"]:
+            permanent.update(details[str(permanent["id"])])
     data["player_controls"] = json.loads(env.player_controls_json())
     data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
