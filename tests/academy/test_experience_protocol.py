@@ -100,6 +100,7 @@ UNION_VARIANTS = {
         "LookedPresentation",
         "SacrificedPresentation",
         "LostPresentation",
+        "LifePresentation",
     ),
 }
 

@@ -245,6 +245,7 @@ class Recording:
             "looked",
             "sacrificed",
             "lost",
+            "life",
         }
     )
 

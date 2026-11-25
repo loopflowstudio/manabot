@@ -310,6 +310,11 @@ export function tell(
       const permanents = joinSegments(kind.objects.map(id => obj(id, 'a permanent')));
       return [txt(`${who} sacrificed `), ...permanents, ...ruleClause(event.rule)];
     }
+    case 'life': {
+      const who = subjectName(kind.player, players);
+      const verb = kind.amount > 0 ? 'gained' : 'lost';
+      return [txt(`${who} ${verb} ${Math.abs(kind.amount)} life (now ${kind.total})`)];
+    }
     case 'lost': {
       const who = subjectName(kind.player, players);
       return [txt(`${who} lost the game`), ...ruleClause(event.rule)];

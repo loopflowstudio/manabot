@@ -125,6 +125,26 @@ impl PresentationSink {
         id
     }
 
+    /// A life loss that only commits the damage the previous fact told
+    /// (CR 120.3a); a gain from lifelink or any other change stays told.
+    fn follows_player_damage(&self, event: &GameEvent) -> bool {
+        let GameEvent::LifeChanged {
+            player, old, new, ..
+        } = event
+        else {
+            return false;
+        };
+        let dealt = match self.facts.last().map(|fact| &fact.note) {
+            Some(Note::Event(dealt) | Note::CombatDamage { dealt, .. }) => dealt,
+            _ => return false,
+        };
+        matches!(dealt, GameEvent::DamageDealt {
+            target: DamageTarget::Player(target),
+            amount,
+            ..
+        } if target == player && i64::from(*old) - i64::from(*new) == i64::from(*amount))
+    }
+
     /// The rule behind a state-based death, and for lethal damage the
     /// damage fact that dealt it.
     fn event_rule(&self, event: &GameEvent) -> (Option<PresentationRule>, Option<FactId>) {
@@ -219,8 +239,11 @@ impl Game {
             GameEvent::PermanentSacrificed { object_id, .. } => self.object_event_ref(*object_id),
             _ => None,
         };
-        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer));
+        let mut lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer));
         let sink = self.presentation.as_deref_mut().expect("checked above");
+        if sink.follows_player_damage(event) {
+            lines = [Vec::new(), Vec::new()];
+        }
         // Combat damage is one fact: the observation tells it by the
         // `CombatDamageDealt` emitted right after its `DamageDealt`.
         if let GameEvent::CombatDamageDealt { .. } = event {

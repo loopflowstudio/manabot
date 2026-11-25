@@ -981,6 +981,14 @@ pub enum PresentationKind {
     Lost {
         player: PlayerId,
     },
+    /// A player's life total changed other than by damage (CR 119.3,
+    /// 119.4): `amount` is signed (positive gained, negative lost) and
+    /// `total` the life total after.
+    Life {
+        player: PlayerId,
+        amount: i32,
+        total: i32,
+    },
 }
 
 /// Which library-looking keyword action `PresentationKind::Looked` tells.

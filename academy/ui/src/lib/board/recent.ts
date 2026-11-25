@@ -169,6 +169,7 @@ function factSide(frame: ExperienceFrame, kind: PresentationEvent['kind']): Side
     case 'looked':
     case 'sacrificed':
     case 'lost':
+    case 'life':
       return playerSide(frame, kind.player);
     default:
       return null;

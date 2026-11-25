@@ -960,20 +960,22 @@ history and recording. The opponent-move pace does not change these settings.
 
 ### Reading the history
 
-The opponent casts Lightning Strike at your Earth Kingdom Jailer, then
-activates Water Tribe Rallier. When the decision comes back to you, the rail's
-**History** reads:
+The opponent casts Lightning Strike at your Earth Kingdom Jailer, and its
+Vengeful Bloodwitch drains you when another of its creatures dies later in
+the turn. When the decision comes back to you, the rail's **History** reads:
 
 ```
 Turn 6 · Heuristic
 Cast Lightning Strike, targeting Earth Kingdom Jailer
   3 damage to Earth Kingdom Jailer
-  Earth Kingdom Jailer died · lethal damage (3 on toughness 3)
-  Trigger · Tiger-Seal: whenever a creature dies, draw a card
-Tiger-Seal's trigger resolved
-  Heuristic drew a card
-Activate Water Tribe Rallier · {1}, tap: put a +1/+1 counter on target Ally
-  +1/+1 counter on South Pole Voyager (now 2)
+  Earth Kingdom Jailer died · lethal damage
+Attack with Gray Ogre
+  South Pole Voyager blocked Gray Ogre
+  Gray Ogre died · lethal damage
+  Trigger · Vengeful Bloodwitch, targeting you
+Vengeful Bloodwitch's trigger resolved
+  You lost 1 life (now 17)
+  Heuristic gained 1 life (now 21)
 ```
 
 For anything that changed on the board, the history says what happened, in
@@ -986,8 +988,9 @@ the left edge, naming their rule or source instead of a player move. The lines
 indented under a line are what followed from it: damage, deaths, counters,
 triggers reaching the stack, abilities resolving or being countered, cards
 drawn, discarded, revealed or sacrificed, a library searched, a scry or
-surveil, a player losing. A fact about a card you may not see names it by role
-("a card", "a permanent"). Tapping for mana is never a line.
+surveil, life gained or lost other than by damage, a player losing. An
+ability names its targets as a spell does. A fact about a card you may not
+see names it by role ("a card", "a permanent"). Tapping for mana is never a line.
 
 **In what order.** The list is strictly the order things happened and is never
 rearranged. A spell that resolves with nothing in between (ignoring priority
@@ -1001,22 +1004,22 @@ You cast Accumulate Wisdom
   You drew a card
 Lightning Strike resolved
   3 damage to Earth Kingdom Jailer
-  Earth Kingdom Jailer died · lethal damage (3 on toughness 3)
+  Earth Kingdom Jailer died · lethal damage
 ```
 
 Selecting "Lightning Strike resolved" marks its cast above. A triggered
 ability whose event is long past, such as one at the beginning of upkeep, is
-a line at the left edge that names its source and condition and no player.
+a line at the left edge that names its source and no player.
 
 **Why.** A line is indented under the line that caused it. When no player
 chose it, it ends with the rule that did:
 
 | The line says | The rule |
 |---|---|
-| lethal damage (3 on toughness 3) | A creature with damage at least its toughness dies. |
+| lethal damage | A creature with damage at least its toughness dies. |
 | toughness 0 | A creature with toughness 0 or less dies. |
 | loyalty 0 | A planeswalker with no loyalty dies. |
-| legend rule: kept the newer Aang | Of two legendary permanents with one name under one player's control, one stays. |
+| legend rule | Of two legendary permanents with one name under one player's control, one stays. |
 | Aura had nothing to enchant | An Aura attached to nothing legal goes to the graveyard. |
 | 0 life | A player at 0 life or less loses. |
 | drew from an empty library | A player who drew from an empty library loses. |
@@ -1061,8 +1064,8 @@ shows the actual pending decision.
 **After the opponent acts,** the board starts at their first unread board stop
 and walks forward one kept board at a time: first Lightning Strike on the
 stack targeting Earth Kingdom Jailer, then Jailer on the battlefield with 3
-damage, then Jailer gone with **lethal damage** where it was, then
-Tiger-Seal's trigger on the stack. Passes are never a stop, and lines that
+damage, then Jailer gone with **lethal damage** where it was, then a
+death trigger on the stack. Passes are never a stop, and lines that
 happened at once share one stop. Under the board, in a steady-height bar that
 never shifts the board or your hand once the opponent has acted, sits one
 caption telling that stop's line or lines with any rule, and a scrubber with a
@@ -1693,7 +1696,7 @@ of game facts, and none can alter or delay the committed frame.
 | Field | Meaning |
 |---|---|
 | `seq` | Position on this viewer's track. |
-| `kind` | `cast`, `targeted`, `resolved`, `activated`, `triggered`, `ability_resolved`, `countered`, `passed`, `damage`, `died`, `counters`, `searched`, `looked` (scry, surveil), `sacrificed`, `drew`, `discarded`, `revealed`, `land_played`, `attack_group`, `blocked`, `turn_started`, `lost`. A permanent that dies is told once, as `died`. |
+| `kind` | `cast`, `targeted`, `resolved`, `activated`, `triggered`, `ability_resolved`, `countered`, `passed`, `damage`, `died`, `counters`, `searched`, `looked` (scry, surveil), `sacrificed`, `drew`, `discarded`, `revealed`, `land_played`, `attack_group`, `blocked`, `turn_started`, `lost`, `life` (gained or lost other than by damage; damage to a player is told only as `damage`). A permanent that dies is told once, as `died`. |
 | `cause` | Optional; omitted when root. The `seq` of the earlier event this one follows from. A move is one of the player-choice kinds (`cast`, `activated`, `land_played`, `attack_group`, `blocked`, `passed`) with no `cause` and no `rule`. |
 | `rule` | Optional; omitted when chosen by a player. The state-based or turn-based action that did it. |
 | `labels` | Optional; omitted on older recordings or when no object or stack entry is cited. Viewer-safe `PresentationLabels` (`objects`, `stacks`) naming only the objects and stack entries this event mentions, at exact incarnation. |

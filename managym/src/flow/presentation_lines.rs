@@ -42,8 +42,7 @@ impl PresentationLabels {
 impl Game {
     fn can_name_object(&self, object: ObjectId, viewer: PlayerId) -> bool {
         // A departed battlefield object keeps its exact public appearance in LKI.
-        self.object_lki(object).is_some()
-            || self.visible_reference(object, viewer).object.is_some()
+        self.object_lki(object).is_some() || self.visible_reference(object, viewer).object.is_some()
     }
 
     fn named_object(
@@ -138,6 +137,29 @@ impl Game {
         })
     }
 
+    /// One `targeted` line per target an ability on the stack chose, after
+    /// the line that put it there.
+    fn ability_target_lines(
+        &self,
+        targets: &[Target],
+        stack: StackRenderId,
+        name: &str,
+        viewer: PlayerId,
+    ) -> Vec<PresentationLine> {
+        targets
+            .iter()
+            .filter_map(|target| {
+                let mut labels = PresentationLabels::default();
+                let target = self.named_target(*target, viewer, &mut labels)?;
+                labels.stacks.insert(stack.0.to_string(), name.to_owned());
+                Some(labels.line(Kind::Targeted {
+                    source: SubjectRef::Stack { id: stack },
+                    target,
+                }))
+            })
+            .collect()
+    }
+
     pub(super) fn pass_line(player: PlayerId) -> Vec<PresentationLine> {
         vec![PresentationLabels::default().line(Kind::Passed {
             player: seat(player),
@@ -185,17 +207,18 @@ impl Game {
                 return vec![];
             };
             let stack = StackRenderId(stacked.id().0.into());
-            labels
-                .stacks
-                .insert(stack.0.to_string(), self.observed_object_name(object));
+            let name = self.observed_object_name(object);
+            labels.stacks.insert(stack.0.to_string(), name.clone());
             if resolving {
                 Kind::AbilityResolved { source, stack }
             } else {
-                Kind::Activated {
+                let mut lines = vec![labels.line(Kind::Activated {
                     source,
                     controller: seat(stacked.controller()),
                     stack,
-                }
+                })];
+                lines.extend(self.ability_target_lines(stacked.targets(), stack, &name, viewer));
+                return lines;
             }
         };
         vec![labels.line(kind)]
@@ -413,15 +436,19 @@ impl Game {
                     return vec![];
                 };
                 let stack = StackRenderId(ability.0.into());
-                labels.stacks.insert(
-                    stack.0.to_string(),
-                    self.observed_object_name(*source_object),
-                );
-                Kind::Triggered {
+                let name = self.observed_object_name(*source_object);
+                labels.stacks.insert(stack.0.to_string(), name.clone());
+                let targets = self
+                    .stack_index_of(Target::StackAbility(*ability))
+                    .map(|index| self.state.stack_objects[index].targets().to_vec())
+                    .unwrap_or_default();
+                let mut lines = vec![labels.line(Kind::Triggered {
                     source,
                     controller: seat(*controller),
                     stack,
-                }
+                })];
+                lines.extend(self.ability_target_lines(&targets, stack, &name, viewer));
+                return lines;
             }
             CountersPut {
                 permanent,
@@ -443,6 +470,15 @@ impl Game {
                     total: *total,
                 }
             }
+            // Damage to a player tells its own life loss; `presentation_event`
+            // drops the change that follows it.
+            LifeChanged {
+                player, old, new, ..
+            } => Kind::Life {
+                player: seat(*player),
+                amount: new - old,
+                total: *new,
+            },
             _ => return vec![],
         };
         vec![labels.line(kind)]

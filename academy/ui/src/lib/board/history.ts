@@ -125,6 +125,7 @@ const MODERN_KINDS = new Set([
   'looked',
   'sacrificed',
   'lost',
+  'life',
 ]);
 
 /** Exact definition of a player move: move kind with no cause and no rule. */

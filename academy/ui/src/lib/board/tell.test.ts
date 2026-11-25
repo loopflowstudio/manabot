@@ -173,4 +173,11 @@ describe('tell', () => {
     expect(segmentText(tell(event(7, { kind: 'lost', player: 0 }, { rule: 'empty_library' }), EMPTY, PLAYERS)))
       .toBe('You lost the game · drew from an empty library');
   });
+
+  it('words life gained and lost with the total after', () => {
+    expect(segmentText(tell(event(1, { kind: 'life', player: 0, amount: -1, total: 19 }), EMPTY, PLAYERS)))
+      .toBe('You lost 1 life (now 19)');
+    expect(segmentText(tell(event(2, { kind: 'life', player: 1, amount: 3, total: 23 }), EMPTY, PLAYERS)))
+      .toBe('Heuristic gained 3 life (now 23)');
+  });
 });

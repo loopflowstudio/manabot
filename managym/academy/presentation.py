@@ -47,6 +47,7 @@ CUES: dict[str, tuple[str, int, str | None]] = {
     "looked": ("normal", 450, None),
     "sacrificed": ("normal", 500, None),
     "lost": ("critical", 700, None),
+    "life": ("normal", 450, None),
     "passed": ("ambient", 0, None),
     "attack_group": ("emphasized", 500, "combat.attack"),
     "blocked": ("normal", 450, "combat.block"),
@@ -138,7 +139,7 @@ class PresentationProjector:
                 self.next_seq += 1
                 if index == 0:
                     self._ancestor[fact["id"]] = seq
-                    if name == "cast":
-                        # The cast is also the parent of each of its targets.
+                    if name in ("cast", "activated", "triggered"):
+                        # What put it on the stack is the parent of each of its targets.
                         cause = seq
         return events

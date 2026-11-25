@@ -892,6 +892,13 @@ class LostPresentation(ProtocolModel):
     player: UInt8
 
 
+class LifePresentation(ProtocolModel):
+    kind: Literal["life"]
+    player: UInt8
+    amount: Int32
+    total: Int32
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -915,7 +922,8 @@ PresentationKind: TypeAlias = Annotated[
     | SearchedPresentation
     | LookedPresentation
     | SacrificedPresentation
-    | LostPresentation,
+    | LostPresentation
+    | LifePresentation,
     Field(discriminator="kind"),
 ]
 

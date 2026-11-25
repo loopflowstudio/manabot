@@ -320,7 +320,15 @@ fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
         .action_space()
         .actions
         .iter()
-        .position(|a| matches!(a, Action::ChooseTarget { target: Target::Player(PlayerId(1)), .. }))
+        .position(|a| {
+            matches!(
+                a,
+                Action::ChooseTarget {
+                    target: Target::Player(PlayerId(1)),
+                    ..
+                }
+            )
+        })
         .expect("target player 1");
     burn.step_action(target_opp);
     for _ in 0..8 {
@@ -340,6 +348,11 @@ fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
         })
         .expect("expected lost fact");
     assert_eq!(lost_fact.rule, Some(PresentationRule::ZeroLife));
+    // Damage to a player tells its own life loss, never a second line.
+    assert!(!burn_facts
+        .iter()
+        .flat_map(|f| &f.lines)
+        .any(|l| matches!(l.kind, PresentationKind::Life { .. })));
     assert!(lost_fact.cause.is_some());
 
     // 3. Empty library draw -> Lost with Rule::EmptyLibrary.
@@ -380,4 +393,88 @@ fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
         })
         .expect("expected empty-library lost fact");
     assert_eq!(empty_lost.rule, Some(PresentationRule::EmptyLibrary));
+}
+
+/// A drain trigger names its target and tells both life changes.
+#[test]
+fn a_trigger_names_its_target_and_life_changes_are_told_once() {
+    use managym::{
+        agent::action::Action,
+        experience::{PresentationKind, SubjectRef},
+        state::{game_object::PlayerId, target::Target},
+    };
+
+    let mut scenario = five_color_setup(&["Vengeful Bloodwitch", "Lightning Bolt"]);
+    let witch = scenario.force_permanent_on_battlefield(0, "Vengeful Bloodwitch");
+    scenario.force_card_in_hand(0, "Lightning Bolt");
+    scenario.game_mut().scenario_refresh_priority().unwrap();
+    scenario.game_mut().enable_presentation();
+
+    let cast_bolt_at = |scenario: &mut Scenario, target: Target| {
+        let cast = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::CastSpell { object, .. } if scenario.game().state[*object].name == "Lightning Bolt"))
+            .expect("Lightning Bolt offered");
+        scenario.step_action(cast);
+        let choose = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseTarget { target: t, .. } if *t == target))
+            .expect("target offered");
+        scenario.step_action(choose);
+    };
+    let life_lines = |scenario: &Scenario| -> Vec<(u8, i32, i32)> {
+        scenario
+            .game()
+            .presentation_facts(PlayerId(0))
+            .iter()
+            .flat_map(|fact| &fact.lines)
+            .filter_map(|line| match line.kind {
+                PresentationKind::Life {
+                    player,
+                    amount,
+                    total,
+                } => Some((player.0, amount, total)),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // Bolt our own Bloodwitch: it dies, its trigger targets the opponent,
+    // who loses 1 while we gain 1.
+    cast_bolt_at(&mut scenario, Target::Permanent(witch));
+    for _ in 0..16 {
+        if life_lines(&scenario).len() == 2 {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+    assert_eq!(life_lines(&scenario), vec![(1, -1, 19), (0, 1, 21)]);
+
+    let lines: Vec<_> = scenario
+        .game()
+        .presentation_facts(PlayerId(0))
+        .into_iter()
+        .flat_map(|fact| fact.lines)
+        .collect();
+    let triggered = lines
+        .iter()
+        .position(|line| matches!(line.kind, PresentationKind::Triggered { .. }))
+        .expect("trigger told");
+    let PresentationKind::Triggered { stack, .. } = lines[triggered].kind else {
+        unreachable!()
+    };
+    assert!(
+        matches!(
+            &lines[triggered + 1].kind,
+            PresentationKind::Targeted {
+                source: SubjectRef::Stack { id },
+                target: SubjectRef::Player { id: player },
+            } if *id == stack && player.0 == 1
+        ),
+        "the trigger's target follows it: {lines:#?}"
+    );
 }

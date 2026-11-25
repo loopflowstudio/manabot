@@ -531,6 +531,7 @@ export const PRESENTATION_KIND_NAMES = [
   'looked',
   'sacrificed',
   'lost',
+  'life',
 ] as const;
 
 export const PRESENTATION_RULES = [
@@ -672,6 +673,13 @@ export type PresentationKind =
   | {
       kind: 'lost';
       player: number;
+    }
+  | {
+      /** Life gained (positive `amount`) or lost other than by damage; `total` after. */
+      kind: 'life';
+      player: number;
+      amount: number;
+      total: number;
     };
 
 export interface PresentationEvent {

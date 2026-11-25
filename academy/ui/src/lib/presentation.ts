@@ -209,6 +209,11 @@ function validatePresentationKind(value: unknown, seq: number): void {
     case 'lost':
       requireInteger(value.player, 'kind.player', seq);
       return;
+    case 'life':
+      requireInteger(value.player, 'kind.player', seq);
+      requireInteger(value.amount, 'kind.amount', seq);
+      requireInteger(value.total, 'kind.total', seq);
+      return;
     case 'counters':
       validateObjectRenderId(value.object, 'kind.object', seq);
       if (typeof value.counter !== 'string') {
@@ -358,6 +363,7 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'searched':
     case 'looked':
     case 'lost':
+    case 'life':
       return [{ kind: 'player', id: kind.player }];
   }
 }
