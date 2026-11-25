@@ -2,19 +2,20 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Aggregate, AttackedSubject, CompareOp, Condition, DelayedEvent,
-        DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except, KeywordAction, LibraryEnd,
-        ObjectProperty, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, Aggregate, AttackedSubject, CompareOp, Condition, DamageKind,
+        DamageRecipientFilter, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
+        Except, KeywordAction, LibraryEnd, ObjectProperty, ObjectSelector, PaymentCost, Per,
+        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
-        ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
-        InsetSpell, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
-        Restriction, StateBasedAction, StaticAbility, StaticContinuous, StaticRestriction,
-        StaticScope,
+        ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
+        CardTypes, InsetSpell, Keyword, Keywords, LayerValue, PrintedCharacteristics,
+        ReplacementEffect, Restriction, SacrificeCost, StateBasedAction, StaticAbility,
+        StaticContinuous, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
     },
-    effect::{EffectDuration, Modification},
-    mana::{Mana, ManaCost, ManaRestriction},
+    effect::{CopyException, EffectDuration, Modification},
+    mana::{Color, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -119,6 +120,34 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         garruk_curse_breaker(),
         garruk_veiled_butcher(),
         jace_reality_sculptor(),
+        teyo_lightshield_expert(),
+        teyo_diamondblade_mage(),
+        your_fate_ends_here(),
+        terminal_criticism(),
+        refute_destiny(),
+        extended_absence(),
+        fulminous_forte(),
+        essence_burn(),
+        wrath_of_the_bloodmane(),
+        silence_the_echo(),
+        break_under_pressure(),
+        awaken_the_inferno(),
+        craftwork_crusher(),
+        compel_brutality(),
+        edgar_ancient_bloodlord(),
+        liliana_the_faultless(),
+        liliana_the_repentant(),
+        massacre_girl_most_wanted(),
+        winter_tormented_loner(),
+        mabel_bitter_recluse(),
+        living_library(),
+        identity_echo(),
+        vindictive_triumph(),
+        entrust_the_spark(),
+        loyal_tutor(),
+        mind_meanderer(),
+        lichs_relic(),
+        face_yourself(),
     ]
 }
 
@@ -2279,6 +2308,1009 @@ fn jace_reality_sculptor() -> CardDefinition {
                     )
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn teyo_enters(keyword: Keyword) -> Ability {
+    let spec = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::default(),
+    };
+    Ability::enters(vec![Effect::TargetClause {
+        requirement: TargetRequirement::one(spec.clone()),
+        effects: vec![
+            Effect::until_end_of_turn(
+                ObjectSelector::Target(spec.clone()),
+                Modification::AddKeywords(Keywords::of(&[keyword])),
+            ),
+            Effect::If {
+                condition: Condition::TargetMatches(CardPredicate::creature()),
+                then: vec![Effect::put_counters(
+                    ObjectSelector::Target(spec.clone()),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+                otherwise: Vec::new(),
+            },
+            Effect::If {
+                condition: Condition::TargetMatches(CardPredicate::card_type(
+                    CardType::Planeswalker,
+                )),
+                then: vec![Effect::put_counters(
+                    ObjectSelector::Target(spec),
+                    CounterKind::Loyalty,
+                    1,
+                )],
+                otherwise: Vec::new(),
+            },
+        ],
+    }])
+}
+
+fn teyo_lightshield_expert() -> CardDefinition {
+    let text_box = "Flash\nWhen Teyo enters, target permanent you control gains hexproof until end of turn. Put a +1/+1 counter on it if it's a creature. Put a loyalty counter on it if it's a planeswalker. (It can't be the target of spells or abilities your opponents control.)";
+    CardDefinition {
+        key: "fra.teyo_lightshield_expert",
+        scryfall_id: "5f7521d7-9f1f-4f03-b2ea-dd2a1b1e4e5b",
+        printed: PrintedCharacteristics {
+            name: "Teyo, Lightshield Expert".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![teyo_enters(Keyword::Hexproof)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn teyo_diamondblade_mage() -> CardDefinition {
+    let text_box = "Flash\nWhen Teyo enters, target permanent you control gains deathtouch until end of turn. Put a +1/+1 counter on it if it's a creature. Put a loyalty counter on it if it's a planeswalker.";
+    CardDefinition {
+        key: "fra.teyo_diamondblade_mage",
+        scryfall_id: "100c3b67-0c92-4224-b5ed-67789c612df7",
+        printed: PrintedCharacteristics {
+            name: "Teyo, Diamondblade Mage".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warlock".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![teyo_enters(Keyword::Deathtouch)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn your_fate_ends_here() -> CardDefinition {
+    let text_box = "Destroy target creature or planeswalker with mana value 3 or greater. Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)";
+    CardDefinition {
+        key: "fra.your_fate_ends_here",
+        scryfall_id: "25000a17-b701-4d69-b2ef-2c74029199d3",
+        printed: PrintedCharacteristics {
+            name: "Your Fate Ends Here".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        min_mana_value: Some(3),
+                        ..CardPredicate::creature_or_planeswalker()
+                    },
+                })),
+                Effect::Surveil { count: 1 },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn terminal_criticism() -> CardDefinition {
+    let text_box = "Destroy target creature or planeswalker that's blue or red. You gain 1 life.";
+    CardDefinition {
+        key: "fra.terminal_criticism",
+        scryfall_id: "7ebd7e38-b27c-4c6e-aaea-e8ee5ba5e5df",
+        printed: PrintedCharacteristics {
+            name: "Terminal Criticism".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Blue, Color::Red],
+                        ..CardPredicate::creature_or_planeswalker()
+                    },
+                })),
+                Effect::gain_life(1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn refute_destiny() -> CardDefinition {
+    let text_box = "Exile target creature or planeswalker that's green or blue. Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)";
+    CardDefinition {
+        key: "fra.refute_destiny",
+        scryfall_id: "2c588954-c6eb-4aae-a2fa-0651ccf2d90a",
+        printed: PrintedCharacteristics {
+            name: "Refute Destiny".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Green, Color::Blue],
+                        ..CardPredicate::creature_or_planeswalker()
+                    },
+                })),
+                Effect::Surveil { count: 1 },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn extended_absence() -> CardDefinition {
+    let text_box = "Exile target creature or planeswalker. Extended Absence deals 1 damage to each opponent and you gain 1 life.";
+    CardDefinition {
+        key: "fra.extended_absence",
+        scryfall_id: "eb4b6ed8-782e-4473-abc9-d50bf2275c6a",
+        printed: PrintedCharacteristics {
+            name: "Extended Absence".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                })),
+                Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: 1.into(),
+                },
+                Effect::gain_life(1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fulminous_forte() -> CardDefinition {
+    let text_box = "Choose one —\n• Fulminous Forte deals 1 damage to each creature and planeswalker your opponents control.\n• Fulminous Forte deals 5 damage to target creature or planeswalker.";
+    CardDefinition {
+        key: "fra.fulminous_forte",
+        scryfall_id: "19acb2b5-3b3e-43f0-bd81-8426ed3d9c55",
+        printed: PrintedCharacteristics {
+            name: "Fulminous Forte".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::deal_damage(
+                        1,
+                        ObjectSelector::each(
+                            Scope::OpponentsControl,
+                            CardPredicate::creature_or_planeswalker(),
+                        ),
+                    )],
+                    vec![Effect::deal_damage(
+                        5,
+                        ObjectSelector::Target(TargetSpec::Permanent {
+                            predicate: CardPredicate::creature_or_planeswalker(),
+                        }),
+                    )],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn essence_burn() -> CardDefinition {
+    let text_box = "Essence Burn deals 5 damage to target black or green creature or planeswalker. If that permanent would die this turn, exile it instead.";
+    let spec = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            colors_any: vec![Color::Black, Color::Green],
+            ..CardPredicate::creature_or_planeswalker()
+        },
+    };
+    CardDefinition {
+        key: "fra.essence_burn",
+        scryfall_id: "d2e958de-70de-4156-8f9b-b2c0c1ba704a",
+        printed: PrintedCharacteristics {
+            name: "Essence Burn".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement::one(spec.clone()),
+                effects: vec![
+                    Effect::deal_damage(5, ObjectSelector::Target(spec.clone())),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(spec),
+                        Modification::ExileIfWouldDie,
+                    ),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wrath_of_the_bloodmane() -> CardDefinition {
+    let text_box = "This spell costs {1} less to cast if you control a legendary creature.\nWrath of the Bloodmane deals 4 damage to target creature or planeswalker.";
+    CardDefinition {
+        key: "fra.wrath_of_the_bloodmane",
+        scryfall_id: "b5b55617-684a-4036-be9b-a3b24fc9cd5a",
+        printed: PrintedCharacteristics {
+            name: "Wrath of the Bloodmane".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            statics: vec![StaticAbility::CostsLess {
+                amount: 1.into(),
+                condition: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
+                    count: 1,
+                    predicate: CardPredicate {
+                        supertype: Some("Legendary".into()),
+                        ..CardPredicate::creature()
+                    },
+                }),
+            }],
+            spell_effects: vec![Effect::deal_damage(
+                4,
+                ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                }),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn silence_the_echo() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, sacrifice a creature or planeswalker or pay {3}.\nDestroy target creature or planeswalker.";
+    CardDefinition {
+        key: "fra.silence_the_echo",
+        scryfall_id: "f1d274db-751b-4414-a38d-762198168e91",
+        printed: PrintedCharacteristics {
+            name: "Silence the Echo".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
+                predicate: CardPredicate::creature_or_planeswalker(),
+                another: false,
+                or_mana: Some(ManaCost::parse("{3}")),
+            }))],
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                },
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn break_under_pressure() -> CardDefinition {
+    let text_box = "Target opponent sacrifices a creature or planeswalker with the greatest mana value among creatures and planeswalkers they control. You gain 2 life.";
+    let max_mv = ObjectSelector::each_you_control(CardPredicate::creature_or_planeswalker())
+        .property(ObjectProperty::ManaValue, Aggregate::Max);
+    CardDefinition {
+        key: "fra.break_under_pressure",
+        scryfall_id: "46974d94-e900-43e4-92b5-4fb9b9f7cf46",
+        printed: PrintedCharacteristics {
+            name: "Break Under Pressure".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::ForPlayer {
+                    player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                    effects: vec![Effect::SelectCards {
+                        from: ObjectSelector::Each {
+                            of: Scope::YouControl,
+                            predicate: CardPredicate::creature_or_planeswalker(),
+                            except: None,
+                            max_mana_value: None,
+                            exact_mana_value: Some(Box::new(max_mv)),
+                        },
+                        predicate: CardPredicate::default(),
+                        min: 1,
+                        max: 1.into(),
+                        effects: vec![Effect::Sacrifice {
+                            what: ObjectSelector::Selected,
+                            optional: false,
+                        }],
+                        if_declined: Vec::new(),
+                    }],
+                },
+                Effect::gain_life(2),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn awaken_the_inferno() -> CardDefinition {
+    let text_box = "Awaken the Inferno deals 6 damage to target creature or planeswalker an opponent controls. Put a +1/+1 counter on up to one target creature you control.\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)";
+    let opp_target = TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    CardDefinition {
+        key: "fra.awaken_the_inferno",
+        scryfall_id: "c596c4ec-8480-4be9-a45d-700398a126f6",
+        printed: PrintedCharacteristics {
+            name: "Awaken the Inferno".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(opp_target.clone()),
+                    effects: vec![Effect::deal_damage(6, ObjectSelector::Target(opp_target))],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        card_type: Some(CardType::Land),
+                        supertype: Some("Basic".into()),
+                        ..Default::default()
+                    },
+                    1.into(),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn craftwork_crusher() -> CardDefinition {
+    let text_box = "Trample\nWhen this creature enters, choose two —\n• This creature deals 4 damage to target creature or planeswalker.\n• Create a 2/2 colorless Wizard Soldier creature token named Cadet.\n• Draw a card.";
+    CardDefinition {
+        key: "fra.craftwork_crusher",
+        scryfall_id: "03f9839c-aa07-4ee7-847b-091e47ab80c4",
+        printed: PrintedCharacteristics {
+            name: "Craftwork Crusher".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}{G}{G}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Boar".into(), "Construct".into()],
+            power: Some(7),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::enters(vec![Effect::TriggerModes {
+                modes: vec![
+                    vec![Effect::deal_damage(
+                        4,
+                        ObjectSelector::Target(TargetSpec::Permanent {
+                            predicate: CardPredicate::creature_or_planeswalker(),
+                        }),
+                    )],
+                    vec![Effect::create_tokens("token.cadet", 1)],
+                    vec![Effect::DrawCards { count: 1.into() }],
+                ],
+                min: 2,
+                up_to: Some(2.into()),
+                unchosen: false,
+            }])],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn compel_brutality() -> CardDefinition {
+    let text_box = "Choose one —\n• Target creature you control deals damage equal to its power to target creature or planeswalker an opponent controls.\n• Target planeswalker you control deals damage equal to its loyalty to target creature or planeswalker an opponent controls.";
+    let opp_target = TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    let own_pw = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::card_type(CardType::Planeswalker),
+    };
+    let bite_mode = |source_spec: TargetSpec, property: ObjectProperty| {
+        vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(source_spec.clone()),
+                effects: vec![Effect::Remember {
+                    what: ObjectSelector::Target(source_spec),
+                }],
+            },
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(opp_target.clone()),
+                effects: vec![Effect::If {
+                    condition: Condition::compare(
+                        ObjectSelector::Remembered.count(),
+                        CompareOp::Ge,
+                        1,
+                    ),
+                    then: vec![Effect::DealDamage {
+                        amount: ObjectSelector::Remembered.property(property, Aggregate::Sum),
+                        what: ObjectSelector::Target(opp_target.clone()),
+                        by: Some(ObjectSelector::Remembered),
+                    }],
+                    otherwise: Vec::new(),
+                }],
+            },
+        ]
+    };
+    CardDefinition {
+        key: "fra.compel_brutality",
+        scryfall_id: "bd32d736-7a58-46b9-90b4-2cac3c3e80a1",
+        printed: PrintedCharacteristics {
+            name: "Compel Brutality".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    bite_mode(TargetSpec::CreatureYouControl, ObjectProperty::Power),
+                    bite_mode(own_pw, ObjectProperty::Counters(CounterKind::Loyalty)),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn edgar_ancient_bloodlord() -> CardDefinition {
+    let text_box = "Whenever another creature or planeswalker you control dies, you gain 1 life.\n{2}, Sacrifice another creature or planeswalker: Put a +1/+1 counter on Edgar. He gains menace until end of turn. (He can't be blocked except by two or more creatures.)";
+    CardDefinition {
+        key: "fra.edgar_ancient_bloodlord",
+        scryfall_id: "7c619fed-2394-4efc-8cdc-6df5f51c1f57",
+        printed: PrintedCharacteristics {
+            name: "Edgar, Ancient Bloodlord".into(),
+            mana_cost: Some(ManaCost::parse("{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vampire".into(), "Noble".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::another_you_control(
+                        CardPredicate::creature_or_planeswalker(),
+                    ),
+                },
+                intervening_if: None,
+                effects: vec![Effect::gain_life(1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                sacrifice: Some(SacrificeCost {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                    another: true,
+                    or_mana: None,
+                }),
+                effects: vec![
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn liliana_the_faultless() -> CardDefinition {
+    let text_box = "Whenever another creature or planeswalker you control enters, you gain 1 life.\n{1}, {T}, Discard a card: Another target creature or planeswalker you control gains hexproof until end of turn.";
+    CardDefinition {
+        key: "fra.liliana_the_faultless",
+        scryfall_id: "70d8c400-87dc-4f15-808f-e54a95d779fc",
+        printed: PrintedCharacteristics {
+            name: "Liliana the Faultless".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature_or_planeswalker()),
+                vec![Effect::gain_life(1)],
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                discard_card: true,
+                effects: vec![Effect::another_target(
+                    TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate::creature_or_planeswalker(),
+                    },
+                    |spec| {
+                        vec![Effect::until_end_of_turn(
+                            ObjectSelector::Target(spec),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
+                        )]
+                    },
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn liliana_the_repentant() -> CardDefinition {
+    let text_box = "Whenever another creature or planeswalker you control enters, mill two cards.\nExhaust — {5}{B}: Return target creature or planeswalker card from your graveyard to the battlefield. Put a +1/+1 counter on Liliana. Activate only as a sorcery. (Activate each exhaust ability only once.)";
+    CardDefinition {
+        key: "fra.liliana_the_repentant",
+        scryfall_id: "1eb25a6c-d6b4-465d-990e-f1ab86b26b69",
+        printed: PrintedCharacteristics {
+            name: "Liliana the Repentant".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warlock".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature_or_planeswalker()),
+                vec![Effect::MillCards {
+                    count: 2.into(),
+                    target: None,
+                    player: None,
+                }],
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{5}{B}"),
+                effects: vec![
+                    Effect::return_to_battlefield(
+                        ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                            predicate: CardPredicate::creature_or_planeswalker(),
+                        }),
+                        false,
+                    ),
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn massacre_girl_most_wanted() -> CardDefinition {
+    let text_box = "Whenever another creature or planeswalker you control dies, Massacre Girl deals 1 damage to target opponent and you gain 1 life.\nWhenever an opponent is dealt noncombat damage, put a +1/+1 counter on Massacre Girl.";
+    CardDefinition {
+        key: "fra.massacre_girl_most_wanted",
+        scryfall_id: "9028d31f-9c41-47e3-885b-6a869bca8178",
+        printed: PrintedCharacteristics {
+            name: "Massacre Girl, Most Wanted".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Assassin".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::another_you_control(
+                            CardPredicate::creature_or_planeswalker(),
+                        ),
+                    },
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::DealDamageToPlayer {
+                            player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                            amount: 1.into(),
+                        },
+                        Effect::gain_life(1),
+                    ],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::DealsDamage {
+                        kind: DamageKind::Noncombat,
+                        source: TriggerSubject::any(CardPredicate::default()),
+                        to: DamageRecipientFilter::Player(Actor::Opponent),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn winter_tormented_loner() -> CardDefinition {
+    let text_box = "When Winter enters, you may sacrifice a creature or planeswalker. When you do, each opponent sacrifices a creature of their choice.\nWinter gets +1/+0 for each creature and planeswalker card in your graveyard.";
+    CardDefinition {
+        key: "fra.winter_tormented_loner",
+        scryfall_id: "9670f754-f41f-45ac-8e8b-025ad2c0f66b",
+        printed: PrintedCharacteristics {
+            name: "Winter, Tormented Loner".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warlock".into()],
+            power: Some(0),
+            toughness: Some(3),
+            abilities: vec![Ability::enters(vec![
+                Effect::may_sacrifice(CardPredicate::creature_or_planeswalker(), false),
+                Effect::if_you_do(vec![Effect::WhenYouDo {
+                    effects: vec![Effect::ForPlayer {
+                        player: PlayerSelector::EachOpponent,
+                        effects: vec![Effect::sacrifice(CardPredicate::creature())],
+                    }],
+                }]),
+            ])],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: Some(CardPredicate::creature_or_planeswalker()),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mabel_bitter_recluse() -> CardDefinition {
+    let text_box = "Deathtouch\nWhen Mabel enters, remove up to three counters from another target creature or planeswalker.";
+    CardDefinition {
+        key: "fra.mabel_bitter_recluse",
+        scryfall_id: "b2a412b0-2ae4-4552-bc5e-70654b6b9b4e",
+        printed: PrintedCharacteristics {
+            name: "Mabel, Bitter Recluse".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Mouse".into(), "Warlock".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::enters(vec![Effect::another_target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                },
+                |spec| {
+                    vec![Effect::RemoveCounters {
+                        from: ObjectSelector::Target(spec),
+                        up_to: 3,
+                        chosen: None,
+                    }]
+                },
+            )])],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn living_library() -> CardDefinition {
+    let text_box = "{6}, Sacrifice this creature: Choose target creature or planeswalker an opponent controls. Its owner shuffles it into their library.";
+    CardDefinition {
+        key: "fra.living_library",
+        scryfall_id: "5d4a8e5f-0024-4da3-a2f5-edb48b12e733",
+        printed: PrintedCharacteristics {
+            name: "Living Library".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Book".into(), "Illusion".into()],
+            power: Some(0),
+            toughness: Some(4),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{6}"),
+                sacrifice_source: true,
+                effects: vec![Effect::move_to(
+                    ObjectSelector::Target(TargetSpec::PermanentOpponentControls {
+                        predicate: CardPredicate::creature_or_planeswalker(),
+                    }),
+                    ZoneType::Library,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn identity_echo() -> CardDefinition {
+    let text_box = "{3}{R}: Exile target creature or planeswalker you control. Reveal cards from the top of your library until you reveal a creature or planeswalker card. Put that card onto the battlefield and the rest on the bottom of your library in a random order. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fra.identity_echo",
+        scryfall_id: "e600b33b-8916-43dd-95d3-d7cbf874933d",
+        printed: PrintedCharacteristics {
+            name: "Identity Echo".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{R}"),
+                sorcery_timing: true,
+                effects: vec![
+                    Effect::exile(ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate::creature_or_planeswalker(),
+                    })),
+                    Effect::RevealUntilToHand {
+                        predicate: CardPredicate::creature_or_planeswalker(),
+                        to_battlefield: true,
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vindictive_triumph() -> CardDefinition {
+    let text_box = "Exile target creature or planeswalker. If that permanent's mana value was 3 or less, return it to the battlefield tapped under your control. Exile it at the beginning of the next end step.";
+    let spec = TargetSpec::Permanent {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    CardDefinition {
+        key: "fra.vindictive_triumph",
+        scryfall_id: "a803dbe7-153a-4e92-ad4d-c2babebe003d",
+        printed: PrintedCharacteristics {
+            name: "Vindictive Triumph".into(),
+            mana_cost: Some(ManaCost::parse("{W}{B}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement::one(spec.clone()),
+                effects: vec![
+                    Effect::exile(ObjectSelector::Target(spec.clone())),
+                    Effect::If {
+                        condition: Condition::compare(
+                            ObjectSelector::Target(spec)
+                                .property(ObjectProperty::ManaValue, Aggregate::Sum),
+                            CompareOp::Le,
+                            3,
+                        ),
+                        then: vec![
+                            Effect::return_to_battlefield(ObjectSelector::Moved, true),
+                            Effect::at_next_end_step(
+                                ObjectSelector::Moved,
+                                vec![Effect::exile(ObjectSelector::Remembered)],
+                            ),
+                        ],
+                        otherwise: Vec::new(),
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn entrust_the_spark() -> CardDefinition {
+    let text_box = "You may sacrifice a planeswalker. If you do, search your library for a planeswalker card, put it onto the battlefield, then shuffle.";
+    let pw = CardPredicate::card_type(CardType::Planeswalker);
+    CardDefinition {
+        key: "fra.entrust_the_spark",
+        scryfall_id: "ca894d25-b9fc-4cd6-8746-70d8c2868721",
+        printed: PrintedCharacteristics {
+            name: "Entrust the Spark".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::may_sacrifice(pw.clone(), false),
+                Effect::if_you_do(vec![Effect::search_library(
+                    pw,
+                    1.into(),
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        false,
+                    )],
+                )]),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn loyal_tutor() -> CardDefinition {
+    let text_box = "Search your library for a planeswalker card, reveal it, then shuffle and put that card on top.";
+    CardDefinition {
+        key: "fra.loyal_tutor",
+        scryfall_id: "490dae91-94ce-42a9-a11f-6c5e77c4e486",
+        printed: PrintedCharacteristics {
+            name: "Loyal Tutor".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::SelectCards {
+                from: ObjectSelector::Zone(ZoneType::Library),
+                predicate: CardPredicate::card_type(CardType::Planeswalker),
+                min: 0,
+                max: 1.into(),
+                effects: vec![
+                    Effect::Reveal {
+                        what: ObjectSelector::Selected,
+                    },
+                    Effect::ShuffleLibrary,
+                    Effect::put_in_library(ObjectSelector::Selected, LibraryEnd::Top),
+                ],
+                if_declined: vec![Effect::ShuffleLibrary],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mind_meanderer() -> CardDefinition {
+    let text_box = "Flying\nThis creature has vigilance as long as you control a Jace planeswalker.\nWhen this creature enters, it fights up to one target creature an opponent controls. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "fra.mind_meanderer",
+        scryfall_id: "94c290ce-252c-42b3-bcb0-c1ef621df566",
+        printed: PrintedCharacteristics {
+            name: "Mind Meanderer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Fish".into(), "Illusion".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
+                    count: 1,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Planeswalker),
+                        subtype: Some("Jace".into()),
+                        ..Default::default()
+                    },
+                }),
+                keywords: Keywords::of(&[Keyword::Vigilance]),
+            })],
+            abilities: vec![Ability::enters(vec![Effect::TargetClause {
+                requirement: TargetRequirement::up_to(1, TargetSpec::CreatureOpponentControls),
+                effects: vec![Effect::Fight {
+                    first: ObjectSelector::ExactSource,
+                    second: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                }],
+            }])],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn lichs_relic() -> CardDefinition {
+    let text_box = "When this Equipment enters, you may pay {2}. When you do, for each opponent, destroy up to one target creature or planeswalker that player controls.\nEquipped creature gets +2/+1.\nEquip {2}";
+    let opp_target = TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    CardDefinition {
+        key: "fra.lichs_relic",
+        scryfall_id: "b105511d-5022-4a84-b6ce-4bb433e93a62",
+        printed: PrintedCharacteristics {
+            name: "Lich's Relic".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            abilities: vec![Ability::enters(vec![Effect::OptionalPayment {
+                cost: PaymentCost::Mana(ManaCost::parse("{2}")),
+                if_paid: vec![Effect::WhenYouDo {
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, opp_target.clone()),
+                        effects: vec![Effect::destroy(ObjectSelector::Target(opp_target))],
+                    }],
+                }],
+                if_declined: Vec::new(),
+            }])],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 2,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn face_yourself() -> CardDefinition {
+    let text_box = "For each creature target player controls, create a token that's a copy of that creature, except it has haste and \"At the beginning of the end step, if you don't control a planeswalker, sacrifice this token.\"";
+    CardDefinition {
+        key: "fra.face_yourself",
+        scryfall_id: "3ccf8f64-19bd-4fdf-b70a-30a042bacf2f",
+        printed: PrintedCharacteristics {
+            name: "Face Yourself".into(),
+            mana_cost: Some(ManaCost::parse("{5}{R}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::CreateTokenCopy {
+                count: 1.into(),
+                of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
+                exceptions: vec![
+                    CopyException::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                    CopyException::GrantTriggered(Box::new(Ability::Triggered {
+                        condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
+                        intervening_if: Some(Condition::not(Condition::ControlsAtLeast {
+                            distinct_names: false,
+                            count: 1,
+                            predicate: CardPredicate::card_type(CardType::Planeswalker),
+                        })),
+                        effects: vec![Effect::sacrifice_this()],
+                    })),
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -2046,3 +2046,1493 @@ fn jace_reality_sculptor_loyalty_abilities() {
         opp_lib_before - 1
     );
 }
+
+// ---------------------------------------------------------------------------
+// Slice 8: Adjacent planeswalker-aware composition (28 cards) + integrated
+// synergy checks.
+// ---------------------------------------------------------------------------
+
+fn auto_setup(names: &[&str]) -> crate::support::game::Scenario {
+    let mut s = crate::support::game::five_color_setup(names);
+    s.game_mut().mana_payment = [managym::state::player::ManaPayment::Auto; 2];
+    s.set_player_mana_pool(0, "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG");
+    s.set_player_mana_pool(1, "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG");
+    s
+}
+
+fn place_pw(
+    s: &mut crate::support::game::Scenario,
+    seat: usize,
+    name: &str,
+) -> managym::state::game_object::PermanentId {
+    crate::support::game::put_onto_battlefield(s, seat, name)
+}
+
+#[test]
+fn teyo_lightshield_expert_grants_hexproof_and_counters() {
+    use crate::support::{
+        game::{force_new_card_in_hand, until_end_of_turn},
+        inspect::counters_of,
+        play::{cast_card, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            card::Keyword, effect::Modification, permanent::CounterKind, target::Target,
+            zone::ZoneType,
+        },
+    };
+
+    let mut s = auto_setup(&[
+        "Teyo, Lightshield Expert",
+        "Hill Giant",
+        "Ajani Resolute",
+        "Plains",
+    ]);
+    // 1. Target creature -> hexproof + +1/+1 counter (no loyalty).
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let teyo1 = force_new_card_in_hand(&mut s, 0, "Teyo, Lightshield Expert");
+    cast_card(&mut s, teyo1);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(giant)));
+    settle(&mut s);
+    assert!(s
+        .game()
+        .characteristics(giant)
+        .keywords
+        .has(Keyword::Hexproof));
+    assert_eq!(counters_of(&s, giant, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, giant, CounterKind::Loyalty), 0);
+
+    // 2. Target planeswalker -> hexproof + loyalty counter (no +1/+1).
+    let ajani = place_pw(&mut s, 0, "Ajani Resolute");
+    let teyo_old = s.battlefield_permanents_named(0, "Teyo, Lightshield Expert")[0];
+    let teyo_old_obj = s.game().permanent_object(teyo_old).unwrap();
+    s.game_mut().move_object(teyo_old_obj, ZoneType::Graveyard);
+    let teyo2 = force_new_card_in_hand(&mut s, 0, "Teyo, Lightshield Expert");
+    cast_card(&mut s, teyo2);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ajani)));
+    settle(&mut s);
+    assert!(s
+        .game()
+        .characteristics(ajani)
+        .keywords
+        .has(Keyword::Hexproof));
+    assert_eq!(counters_of(&s, ajani, CounterKind::PlusOnePlusOne), 0);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 3);
+
+    // 3. Target dual-type planeswalker creature -> BOTH counters + hexproof!
+    until_end_of_turn(&mut s, ajani, Modification::BecomeCreature);
+    until_end_of_turn(
+        &mut s,
+        ajani,
+        Modification::SetBasePt {
+            power: Some(3),
+            toughness: Some(3),
+        },
+    );
+    let teyo_old = s.battlefield_permanents_named(0, "Teyo, Lightshield Expert")[0];
+    let teyo_old_obj = s.game().permanent_object(teyo_old).unwrap();
+    s.game_mut().move_object(teyo_old_obj, ZoneType::Graveyard);
+    let teyo3 = force_new_card_in_hand(&mut s, 0, "Teyo, Lightshield Expert");
+    cast_card(&mut s, teyo3);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ajani)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ajani, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 4);
+}
+
+#[test]
+fn teyo_diamondblade_mage_grants_deathtouch_and_counters() {
+    use crate::support::{
+        game::{force_new_card_in_hand, until_end_of_turn},
+        inspect::counters_of,
+        play::{cast_card, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::Keyword, effect::Modification, permanent::CounterKind, target::Target},
+    };
+
+    let mut s = auto_setup(&["Teyo, Diamondblade Mage", "Ajani Resolute"]);
+    let ajani = place_pw(&mut s, 0, "Ajani Resolute");
+    until_end_of_turn(&mut s, ajani, Modification::BecomeCreature);
+    until_end_of_turn(
+        &mut s,
+        ajani,
+        Modification::SetBasePt {
+            power: Some(3),
+            toughness: Some(3),
+        },
+    );
+    let teyo = force_new_card_in_hand(&mut s, 0, "Teyo, Diamondblade Mage");
+    cast_card(&mut s, teyo);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ajani)));
+    settle(&mut s);
+    assert!(s
+        .game()
+        .characteristics(ajani)
+        .keywords
+        .has(Keyword::Deathtouch));
+    assert_eq!(counters_of(&s, ajani, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 3);
+}
+
+#[test]
+fn your_fate_ends_here_destroys_mv3_plus_and_surveils() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::has_action,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PlayerId, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&[
+        "Your Fate Ends Here",
+        "Teyo, Lightshield Expert",
+        "Chandra, Torch of Defiance",
+        "Plains",
+    ]);
+    let mv2 = s.force_permanent_on_battlefield(1, "Teyo, Lightshield Expert");
+    let mv4_pw = place_pw(&mut s, 1, "Chandra, Torch of Defiance");
+    let spell = force_new_card_in_hand(&mut s, 0, "Your Fate Ends Here");
+    cast_card(&mut s, spell);
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(mv2))),
+        "MV 2 creature is not a legal target"
+    );
+    assert!(s.choose_target(Target::Permanent(mv4_pw)));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    // Surveil 1: put top card into graveyard.
+    let gy_before = s.game().state.zones.size(ZoneType::Graveyard, PlayerId(0));
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    settle(&mut s);
+    assert!(s.game().state.permanents[mv4_pw].is_none());
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Graveyard, PlayerId(0)),
+        gy_before + 2, // spell itself + surveiled card
+    );
+}
+
+#[test]
+fn terminal_criticism_destroys_blue_or_red_and_gains_life() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::has_action,
+        play::{cast_card, settle},
+    };
+    use managym::{agent::action::Action, state::target::Target};
+
+    let mut s = auto_setup(&[
+        "Terminal Criticism",
+        "Teyo, Lightshield Expert",
+        "Chandra, Torch of Defiance",
+    ]);
+    let white_creature = s.force_permanent_on_battlefield(1, "Teyo, Lightshield Expert");
+    let red_pw = place_pw(&mut s, 1, "Chandra, Torch of Defiance");
+    let life_before = s.game().state.players[0].life;
+    let spell = force_new_card_in_hand(&mut s, 0, "Terminal Criticism");
+    cast_card(&mut s, spell);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(white_creature))
+    ));
+    assert!(s.choose_target(Target::Permanent(red_pw)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[red_pw].is_none());
+    assert_eq!(s.game().state.players[0].life, life_before + 1);
+}
+
+#[test]
+fn refute_destiny_exiles_green_or_blue_and_surveils() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{card_of, has_action, now, zone_of},
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Refute Destiny", "Hill Giant", "Vivien Reid", "Plains"]);
+    let red = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let green_pw = place_pw(&mut s, 1, "Vivien Reid");
+    let green_obj = card_of(&s, green_pw);
+    let spell = force_new_card_in_hand(&mut s, 0, "Refute Destiny");
+    cast_card(&mut s, spell);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(red))
+    ));
+    assert!(s.choose_target(Target::Permanent(green_pw)));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, now(&s, green_obj)), Some(ZoneType::Exile));
+}
+
+#[test]
+fn extended_absence_exiles_and_drains() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{card_of, now, zone_of},
+        play::{cast_card, settle},
+    };
+    use managym::state::{target::Target, zone::ZoneType};
+
+    let mut s = auto_setup(&["Extended Absence", "Ajani Resolute"]);
+    let pw = place_pw(&mut s, 1, "Ajani Resolute");
+    let pw_obj = card_of(&s, pw);
+    let my_life = s.game().state.players[0].life;
+    let opp_life = s.game().state.players[1].life;
+    let spell = force_new_card_in_hand(&mut s, 0, "Extended Absence");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(pw)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, now(&s, pw_obj)), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.players[0].life, my_life + 1);
+    assert_eq!(s.game().state.players[1].life, opp_life - 1);
+}
+
+#[test]
+fn fulminous_forte_modes() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, target::Target},
+    };
+
+    let mut s = auto_setup(&["Fulminous Forte", "Hill Giant", "Vivien Reid"]);
+    let own_pw = place_pw(&mut s, 0, "Vivien Reid");
+    set_counters(&mut s, own_pw, CounterKind::Loyalty, 5);
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 6);
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+
+    // Mode 0: 1 damage to each creature and planeswalker opponents control (not own).
+    let spell1 = force_new_card_in_hand(&mut s, 0, "Fulminous Forte");
+    cast_card(&mut s, spell1);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, own_pw, CounterKind::Loyalty), 5);
+    assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 5);
+    assert_eq!(
+        s.game().state.permanents[opp_giant].as_ref().unwrap().damage,
+        1
+    );
+
+    // Mode 1: 5 damage to target planeswalker -> lethal 0 loyalty.
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Fulminous Forte");
+    cast_card(&mut s, spell2);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[opp_pw].is_none());
+}
+
+#[test]
+fn essence_burn_deals_five_and_exiles_on_death() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::{card_of, has_action, now, zone_of},
+        play::{cast_card, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Essence Burn", "Hill Giant", "Vivien Reid"]);
+    let red = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let green_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, green_pw, CounterKind::Loyalty, 5);
+    let pw_obj = card_of(&s, green_pw);
+    let spell = force_new_card_in_hand(&mut s, 0, "Essence Burn");
+    cast_card(&mut s, spell);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(red))
+    ));
+    assert!(s.choose_target(Target::Permanent(green_pw)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[green_pw].is_none());
+    assert_eq!(
+        zone_of(&s, now(&s, pw_obj)),
+        Some(ZoneType::Exile),
+        "dying to Essence Burn exiles the planeswalker instead"
+    );
+}
+
+#[test]
+fn wrath_of_the_bloodmane_cost_reduction_and_damage() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{cast_card, castable, settle},
+    };
+    use managym::state::{permanent::CounterKind, player::ManaPayment, target::Target};
+
+    let mut s = five_color_unfunded_setup(&[
+        "Wrath of the Bloodmane",
+        "Teyo, Lightshield Expert",
+        "Vivien Reid",
+    ]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 5);
+    let spell = force_new_card_in_hand(&mut s, 0, "Wrath of the Bloodmane");
+    s.set_player_mana_pool(0, "1R");
+    assert!(
+        !castable(&mut s, spell),
+        "costs {{2}}{{R}} without a legendary creature"
+    );
+    s.force_permanent_on_battlefield(0, "Teyo, Lightshield Expert");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        castable(&mut s, spell),
+        "costs {{1}}{{R}} with a legendary creature"
+    );
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 1);
+}
+
+#[test]
+fn silence_the_echo_sacrifice_or_mana() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_new_card_in_hand},
+        inspect::card_of,
+        play::{cast_card, choose, select_card, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{player::ManaPayment, target::Target},
+    };
+
+    // Path 1: sacrifice a planeswalker + pay {1}{B}.
+    let mut s = five_color_unfunded_setup(&["Silence the Echo", "Ajani Resolute", "Vivien Reid"]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let own_pw = place_pw(&mut s, 0, "Ajani Resolute");
+    let own_pw_card = card_of(&s, own_pw);
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    s.set_player_mana_pool(0, "1B");
+    let spell = force_new_card_in_hand(&mut s, 0, "Silence the Echo");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    select_card(&mut s, own_pw_card);
+    settle(&mut s);
+    assert!(s.game().state.permanents[own_pw].is_none());
+    assert!(s.game().state.permanents[opp_pw].is_none());
+
+    // Path 2: pay {4}{B} instead of sacrificing.
+    let opp_pw2 = place_pw(&mut s, 1, "Vivien Reid");
+    let own_pw2 = place_pw(&mut s, 0, "Ajani Resolute");
+    s.set_player_mana_pool(0, "4B");
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Silence the Echo");
+    cast_card(&mut s, spell2);
+    assert!(s.choose_target(Target::Permanent(opp_pw2)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert!(s.game().state.permanents[own_pw2].is_some());
+    assert!(s.game().state.permanents[opp_pw2].is_none());
+}
+
+#[test]
+fn break_under_pressure_sacrifices_tied_max_mv_and_gains_life() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::has_action,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PlayerId, target::Target},
+    };
+
+    let mut s = auto_setup(&[
+        "Break Under Pressure",
+        "Teyo, Lightshield Expert",
+        "Hill Giant",
+        "Chandra, Torch of Defiance",
+    ]);
+    let mv2 = s.force_permanent_on_battlefield(1, "Teyo, Lightshield Expert");
+    let mv4_creature = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let mv4_pw = place_pw(&mut s, 1, "Chandra, Torch of Defiance");
+    let mv2_obj = s.game().permanent_object(mv2).unwrap();
+    let mv4_pw_obj = s.game().permanent_object(mv4_pw).unwrap();
+    let life_before = s.game().state.players[0].life;
+
+    let spell = force_new_card_in_hand(&mut s, 0, "Break Under Pressure");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    // Opponent chooses among tied MV 4 permanents only (not MV 2).
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == mv2_obj)
+    ));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == mv4_pw_obj),
+    );
+    settle(&mut s);
+    assert!(s.game().state.permanents[mv4_pw].is_none());
+    assert!(s.game().state.permanents[mv4_creature].is_some());
+    assert!(s.game().state.permanents[mv2].is_some());
+    assert_eq!(s.game().state.players[0].life, life_before + 2);
+}
+
+#[test]
+fn awaken_the_inferno_damage_counter_and_landcycling() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Awaken the Inferno", "Hill Giant", "Vivien Reid", "Mountain"]);
+    let own_giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 7);
+
+    // Cast: 6 damage to opp planeswalker + 1 +1/+1 counter on own creature.
+    let spell = force_new_card_in_hand(&mut s, 0, "Awaken the Inferno");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    assert!(s.choose_target(Target::Permanent(own_giant)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 1);
+    assert_eq!(counters_of(&s, own_giant, CounterKind::PlusOnePlusOne), 1);
+
+    // Basic landcycling {2} from hand searches for Mountain.
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Awaken the Inferno");
+    let hand_before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == spell2),
+    );
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand_before, // discarded 1, fetched 1 basic land
+    );
+}
+
+#[test]
+fn craftwork_crusher_etb_choose_two() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::{counters_of, has_action},
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Craftwork Crusher", "Vivien Reid", "Plains"]);
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 5);
+    let hand_before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+
+    let crusher = force_new_card_in_hand(&mut s, 0, "Craftwork Crusher");
+    cast_card(&mut s, crusher);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::Decline { .. })),
+        "cannot decline before choosing two modes"
+    );
+    // Pick mode 2 (draw) first, then mode 0 (4 damage); still cannot decline after 1 mode.
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 2, .. }));
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::Decline { .. })),
+        "cannot decline with only one mode chosen"
+    );
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 1);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand_before + 1,
+    );
+    assert!(s.battlefield_permanents_named(0, "Cadet").is_empty());
+}
+
+#[test]
+fn compel_brutality_creature_and_planeswalker_modes() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, target::Target},
+    };
+
+    let mut s = auto_setup(&[
+        "Compel Brutality",
+        "Mabel, Bitter Recluse",
+        "Hill Giant",
+        "Vivien Reid",
+    ]);
+    let own_deathtouch = s.force_permanent_on_battlefield(0, "Mabel, Bitter Recluse");
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+
+    // Mode 0: Mabel (1/1 deathtouch) deals 1 damage to 3/3 Hill Giant -> deathtouch kills it!
+    let spell1 = force_new_card_in_hand(&mut s, 0, "Compel Brutality");
+    cast_card(&mut s, spell1);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert!(s.choose_target(Target::Permanent(own_deathtouch)));
+    assert!(s.choose_target(Target::Permanent(opp_giant)));
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[opp_giant].is_none(),
+        "source attribution preserves deathtouch on creature bite"
+    );
+
+    // Mode 1: own planeswalker with 4 loyalty deals 4 damage to opp planeswalker with 5 loyalty.
+    let own_pw = place_pw(&mut s, 0, "Vivien Reid");
+    set_counters(&mut s, own_pw, CounterKind::Loyalty, 4);
+    let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 5);
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Compel Brutality");
+    cast_card(&mut s, spell2);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    assert!(s.choose_target(Target::Permanent(own_pw)));
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 1);
+}
+
+#[test]
+fn edgar_ancient_bloodlord_death_trigger_and_sacrifice_pump() {
+    use crate::support::{
+        inspect::counters_of,
+        play::{activate, settle},
+    };
+    use managym::state::{card::Keyword, permanent::CounterKind};
+
+    let mut s = auto_setup(&["Edgar, Ancient Bloodlord", "Ajani Resolute"]);
+    let edgar = s.force_permanent_on_battlefield(0, "Edgar, Ancient Bloodlord");
+    let pw = place_pw(&mut s, 0, "Ajani Resolute");
+    let life_before = s.game().state.players[0].life;
+
+    // {2}, Sacrifice another planeswalker -> +1/+1 counter + menace + death trigger gains 1 life.
+    activate(&mut s, edgar, 0);
+    settle(&mut s);
+    assert!(s.game().state.permanents[pw].is_none());
+    assert_eq!(counters_of(&s, edgar, CounterKind::PlusOnePlusOne), 1);
+    assert!(s
+        .game()
+        .characteristics(edgar)
+        .keywords
+        .has(Keyword::Menace));
+    assert_eq!(s.game().state.players[0].life, life_before + 1);
+}
+
+#[test]
+fn liliana_the_faultless_entry_life_and_hexproof() {
+    use crate::support::{
+        game::{clear_summoning_sickness, force_new_card_in_hand},
+        play::{activate, cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{card::Keyword, target::Target},
+    };
+
+    let mut s = auto_setup(&["Liliana the Faultless", "Ajani Resolute", "Plains"]);
+    let liliana = s.force_permanent_on_battlefield(0, "Liliana the Faultless");
+    clear_summoning_sickness(&mut s, liliana);
+    let life_before = s.game().state.players[0].life;
+    let pw_card = force_new_card_in_hand(&mut s, 0, "Ajani Resolute");
+    cast_card(&mut s, pw_card);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, life_before + 1);
+    let pw = s.battlefield_permanents_named(0, "Ajani Resolute")[0];
+
+    let discard_card = force_new_card_in_hand(&mut s, 0, "Plains");
+    activate(&mut s, liliana, 0);
+    assert!(s.choose_target(Target::Permanent(pw)));
+    if s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard { object, .. } if *object == discard_card))
+    {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == discard_card),
+        );
+    }
+    settle(&mut s);
+    assert!(s.game().characteristics(pw).keywords.has(Keyword::Hexproof));
+}
+
+#[test]
+fn liliana_the_repentant_entry_mill_and_exhaust() {
+    use crate::support::{
+        game::{force_new_card_in_hand, move_from_library},
+        inspect::{counters_of, has_action},
+        play::{activate, cast_card, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Liliana the Repentant", "Ajani Resolute", "Plains"]);
+    let liliana = s.force_permanent_on_battlefield(0, "Liliana the Repentant");
+    let gy_before = s.game().state.zones.size(ZoneType::Graveyard, PlayerId(0));
+    let pw_card = force_new_card_in_hand(&mut s, 0, "Ajani Resolute");
+    cast_card(&mut s, pw_card);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Graveyard, PlayerId(0)),
+        gy_before + 2,
+        "another planeswalker entering mills 2"
+    );
+
+    let gy_pw = move_from_library(&mut s, 0, "Ajani Resolute", ZoneType::Graveyard);
+    let existing = s.battlefield_permanents_named(0, "Ajani Resolute")[0];
+    let existing_obj = s.game().permanent_object(existing).unwrap();
+    s.game_mut().move_object(existing_obj, ZoneType::Exile);
+
+    activate(&mut s, liliana, 0);
+    assert!(s.choose_target(Target::GraveyardCard(gy_pw)));
+    settle(&mut s);
+    let returned = s.battlefield_permanents_named(0, "Ajani Resolute");
+    assert_eq!(returned.len(), 1);
+    assert_eq!(counters_of(&s, returned[0], CounterKind::Loyalty), 2);
+    assert_eq!(counters_of(&s, liliana, CounterKind::PlusOnePlusOne), 1);
+
+    // Exhaust: cannot activate a second time.
+    move_from_library(&mut s, 0, "Ajani Resolute", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == liliana)
+    ));
+}
+
+#[test]
+fn massacre_girl_most_wanted_death_drain_and_noncombat_growth() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::counters_of,
+        play::{cast_card, settle},
+    };
+    use managym::state::{permanent::CounterKind, target::Target};
+
+    let mut s = auto_setup(&[
+        "Massacre Girl, Most Wanted",
+        "Chandra, Torch of Defiance",
+        "Your Fate Ends Here",
+    ]);
+    let mg = s.force_permanent_on_battlefield(0, "Massacre Girl, Most Wanted");
+    let pw = place_pw(&mut s, 0, "Chandra, Torch of Defiance");
+    let my_life = s.game().state.players[0].life;
+    let opp_life = s.game().state.players[1].life;
+
+    // Destroy own planeswalker so a real death event fires Massacre Girl's trigger.
+    let kill = force_new_card_in_hand(&mut s, 0, "Your Fate Ends Here");
+    cast_card(&mut s, kill);
+    assert!(s.choose_target(Target::Permanent(pw)));
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, my_life + 1);
+    assert_eq!(s.game().state.players[1].life, opp_life - 1);
+    assert_eq!(
+        counters_of(&s, mg, CounterKind::PlusOnePlusOne),
+        1,
+        "noncombat damage to opponent grows Massacre Girl"
+    );
+}
+
+#[test]
+fn winter_tormented_loner_sacrifice_reflexive_and_graveyard_power() {
+    use crate::support::{
+        game::{force_new_card_in_hand, move_from_library},
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::zone::ZoneType,
+    };
+
+    let mut s = auto_setup(&[
+        "Winter, Tormented Loner",
+        "Ajani Resolute",
+        "Hill Giant",
+        "Plains",
+    ]);
+    let own_pw = place_pw(&mut s, 0, "Ajani Resolute");
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    move_from_library(&mut s, 0, "Hill Giant", ZoneType::Graveyard);
+    move_from_library(&mut s, 0, "Plains", ZoneType::Graveyard);
+
+    let winter_card = force_new_card_in_hand(&mut s, 0, "Winter, Tormented Loner");
+    cast_card(&mut s, winter_card);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    // Choose own_pw to sacrifice.
+    let own_pw_obj = s.game().permanent_object(own_pw).unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == own_pw_obj),
+    );
+    settle(&mut s);
+    assert!(s.game().state.permanents[own_pw].is_none());
+    assert!(
+        s.game().state.permanents[opp_giant].is_none(),
+        "reflexive trigger forced opponent to sacrifice their creature"
+    );
+    let winter = s.battlefield_permanents_named(0, "Winter, Tormented Loner")[0];
+    // Graveyard has 1 creature (Hill Giant) + 1 planeswalker (Ajani Resolute) + 1 land (ignored) => 2/3.
+    assert_eq!(s.game().characteristics(winter).pt(), (2, 3));
+}
+
+#[test]
+fn mabel_bitter_recluse_removes_up_to_three_counters() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Mabel, Bitter Recluse", "Ajani Resolute"]);
+    let opp_pw = place_pw(&mut s, 1, "Ajani Resolute");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 3);
+
+    // Remove all 3 loyalty counters -> SBA puts opp_pw into graveyard!
+    let mabel = force_new_card_in_hand(&mut s, 0, "Mabel, Bitter Recluse");
+    cast_card(&mut s, mabel);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    for _ in 0..3 {
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+        choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    }
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[opp_pw].is_none(),
+        "removing 3 loyalty counters sends planeswalker to graveyard via SBA"
+    );
+
+    // Partial removal: stop after removing 1 of 4 loyalty counters.
+    let opp_pw2 = place_pw(&mut s, 1, "Ajani Resolute");
+    set_counters(&mut s, opp_pw2, CounterKind::Loyalty, 4);
+    let mabel_old = s.battlefield_permanents_named(0, "Mabel, Bitter Recluse")[0];
+    let mabel_old_obj = s.game().permanent_object(mabel_old).unwrap();
+    s.game_mut().move_object(mabel_old_obj, ZoneType::Graveyard);
+    let mabel2 = force_new_card_in_hand(&mut s, 0, "Mabel, Bitter Recluse");
+    cast_card(&mut s, mabel2);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(opp_pw2)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    let stop_mode = s.action_space().actions.len() - 1;
+    choose(
+        &mut s,
+        |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == stop_mode),
+    );
+    settle(&mut s);
+    assert_eq!(counters_of(&s, opp_pw2, CounterKind::Loyalty), 3);
+}
+
+#[test]
+fn living_library_shuffles_into_owners_library() {
+    use crate::support::{
+        inspect::{card_of, now, zone_of},
+        play::{activate, settle},
+    };
+    use managym::state::{game_object::PlayerId, target::Target, zone::ZoneType};
+
+    let mut s = auto_setup(&["Living Library", "Ajani Resolute"]);
+    let lib_creature = s.force_permanent_on_battlefield(0, "Living Library");
+    let opp_pw = place_pw(&mut s, 1, "Ajani Resolute");
+    let opp_pw_obj = card_of(&s, opp_pw);
+    let opp_lib_before = s.game().state.zones.size(ZoneType::Library, PlayerId(1));
+
+    activate(&mut s, lib_creature, 0);
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[lib_creature].is_none());
+    assert!(s.game().state.permanents[opp_pw].is_none());
+    assert_eq!(zone_of(&s, now(&s, opp_pw_obj)), Some(ZoneType::Library));
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Library, PlayerId(1)),
+        opp_lib_before + 1
+    );
+}
+
+#[test]
+fn identity_echo_exiles_and_puts_revealed_onto_battlefield() {
+    use crate::support::{
+        inspect::{card_of, counters_of, now, zone_of},
+        play::{activate, settle},
+    };
+    use managym::state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType};
+
+    let mut s = auto_setup(&["Identity Echo", "Hill Giant", "Ajani Resolute", "Plains"]);
+    let echo = s.force_permanent_on_battlefield(0, "Identity Echo");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let giant_obj = card_of(&s, giant);
+    // Arrange library top-to-bottom as: Plains, Plains, Ajani Resolute.
+    let lib_objs: Vec<_> = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .to_vec();
+    let ajani_lib = lib_objs
+        .iter()
+        .copied()
+        .find(|&o| s.game().state[o].name == "Ajani Resolute")
+        .unwrap();
+    let plains_libs: Vec<_> = lib_objs
+        .iter()
+        .copied()
+        .filter(|&o| s.game().state[o].name == "Plains")
+        .take(2)
+        .collect();
+    let top_idx = lib_objs.len() - 1;
+    s.game_mut()
+        .state
+        .zones
+        .reposition(ZoneType::Library, PlayerId(0), ajani_lib, top_idx);
+    for p in plains_libs {
+        s.game_mut()
+            .state
+            .zones
+            .reposition(ZoneType::Library, PlayerId(0), p, top_idx);
+    }
+
+    activate(&mut s, echo, 0);
+    assert!(s.choose_target(Target::Permanent(giant)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, now(&s, giant_obj)), Some(ZoneType::Exile));
+    let pws = s.battlefield_permanents_named(0, "Ajani Resolute");
+    assert_eq!(pws.len(), 1);
+    assert_eq!(
+        counters_of(&s, pws[0], CounterKind::Loyalty),
+        2,
+        "revealed planeswalker enters battlefield with starting loyalty"
+    );
+    // Empty hit is legal when library has only lands.
+    let mut s2 = auto_setup(&["Identity Echo", "Hill Giant", "Plains"]);
+    let echo2 = s2.force_permanent_on_battlefield(0, "Identity Echo");
+    let giant2 = s2.force_permanent_on_battlefield(0, "Hill Giant");
+    let to_exile: Vec<_> = s2
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .copied()
+        .filter(|obj| s2.game().state[*obj].name != "Plains")
+        .collect();
+    for obj in to_exile {
+        s2.game_mut().move_object(obj, ZoneType::Exile);
+    }
+    let lib_before = s2.game().state.zones.size(ZoneType::Library, PlayerId(0));
+    activate(&mut s2, echo2, 0);
+    assert!(s2.choose_target(Target::Permanent(giant2)));
+    settle(&mut s2);
+    assert!(s2.game().state.permanents[giant2].is_none());
+    assert_eq!(
+        s2.game().state.zones.size(ZoneType::Library, PlayerId(0)),
+        lib_before
+    );
+}
+
+#[test]
+fn vindictive_triumph_exiles_and_returns_mv3_or_less() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{card_of, now, zone_of},
+        play::{cast_card, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, target::Target, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&[
+        "Vindictive Triumph",
+        "Teyo, Lightshield Expert",
+        "Vivien Reid",
+    ]);
+    // Case 1: MV 5 planeswalker stays exiled.
+    let mv5 = place_pw(&mut s, 1, "Vivien Reid");
+    let mv5_obj = card_of(&s, mv5);
+    let spell1 = force_new_card_in_hand(&mut s, 0, "Vindictive Triumph");
+    cast_card(&mut s, spell1);
+    assert!(s.choose_target(Target::Permanent(mv5)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, now(&s, mv5_obj)), Some(ZoneType::Exile));
+
+    // Case 2: MV 2 creature returns tapped under your control, then is exiled at next end step!
+    let mv2 = s.force_permanent_on_battlefield(1, "Teyo, Lightshield Expert");
+    let mv2_obj = card_of(&s, mv2);
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Vindictive Triumph");
+    cast_card(&mut s, spell2);
+    assert!(s.choose_target(Target::Permanent(mv2)));
+    settle(&mut s);
+    let stolen = s.battlefield_permanents_named(0, "Teyo, Lightshield Expert");
+    assert_eq!(stolen.len(), 1);
+    assert!(s.game().state.permanents[stolen[0]].as_ref().unwrap().tapped);
+    assert_eq!(
+        s.game().state.permanents[stolen[0]]
+            .as_ref()
+            .unwrap()
+            .controller,
+        PlayerId(0)
+    );
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(s
+        .battlefield_permanents_named(0, "Teyo, Lightshield Expert")
+        .is_empty());
+    assert_eq!(zone_of(&s, now(&s, mv2_obj)), Some(ZoneType::Exile));
+}
+
+#[test]
+fn entrust_the_spark_sacrifices_and_fetches_planeswalker() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::counters_of,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::permanent::CounterKind,
+    };
+
+    let mut s = auto_setup(&["Entrust the Spark", "Ajani Resolute", "Vivien Reid"]);
+    let ajani = place_pw(&mut s, 0, "Ajani Resolute");
+    let ajani_obj = s.game().permanent_object(ajani).unwrap();
+
+    let spell = force_new_card_in_hand(&mut s, 0, "Entrust the Spark");
+    cast_card(&mut s, spell);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    // Choose to sacrifice Ajani.
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == ajani_obj),
+    );
+    // Search library for Vivien Reid.
+    let vivien_obj = s
+        .action_space()
+        .actions
+        .iter()
+        .find_map(|a| match a {
+            Action::SelectCard { object, .. }
+                if s.game().state[*object].name == "Vivien Reid" =>
+            {
+                Some(*object)
+            }
+            _ => None,
+        })
+        .expect("Vivien Reid in search options");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == vivien_obj),
+    );
+    settle(&mut s);
+    assert!(s.game().state.permanents[ajani].is_none());
+    let viviens = s.battlefield_permanents_named(0, "Vivien Reid");
+    assert_eq!(viviens.len(), 1);
+    assert_eq!(counters_of(&s, viviens[0], CounterKind::Loyalty), 5);
+}
+
+#[test]
+fn loyal_tutor_reveals_shuffles_and_puts_on_top() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PlayerId, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Loyal Tutor", "Vivien Reid", "Plains"]);
+    let spell = force_new_card_in_hand(&mut s, 0, "Loyal Tutor");
+    cast_card(&mut s, spell);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let vivien_obj = s
+        .action_space()
+        .actions
+        .iter()
+        .find_map(|a| match a {
+            Action::SelectCard { object, .. }
+                if s.game().state[*object].name == "Vivien Reid" =>
+            {
+                Some(*object)
+            }
+            _ => None,
+        })
+        .expect("Vivien Reid in search options");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == vivien_obj),
+    );
+    settle(&mut s);
+    let top = *s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .last()
+        .unwrap();
+    assert_eq!(s.game().state[top].name, "Vivien Reid");
+}
+
+#[test]
+fn mind_meanderer_vigilance_with_jace_and_etb_fight() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::Keyword, target::Target},
+    };
+
+    let mut s = auto_setup(&["Mind Meanderer", "Hill Giant", "Jace, Reality Sculptor"]);
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let card = force_new_card_in_hand(&mut s, 0, "Mind Meanderer");
+    cast_card(&mut s, card);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(opp_giant)));
+    settle(&mut s);
+
+    let mm = s.battlefield_permanents_named(0, "Mind Meanderer")[0];
+    assert!(
+        s.game().state.permanents[opp_giant].is_none(),
+        "4/4 Mind Meanderer killed 3/3 Hill Giant in fight"
+    );
+    assert_eq!(
+        s.game().state.permanents[mm].as_ref().unwrap().damage,
+        3,
+        "Hill Giant dealt 3 damage back simultaneously"
+    );
+    assert!(
+        !s.game()
+            .characteristics(mm)
+            .keywords
+            .has(Keyword::Vigilance),
+        "no vigilance without a Jace planeswalker"
+    );
+    place_pw(&mut s, 0, "Jace, Reality Sculptor");
+    assert!(
+        s.game()
+            .characteristics(mm)
+            .keywords
+            .has(Keyword::Vigilance),
+        "gains vigilance while controlling a Jace planeswalker"
+    );
+}
+
+#[test]
+fn lichs_relic_optional_pay_reflexive_and_equip() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{activate, cast_card, choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::target::Target,
+    };
+
+    let mut s = auto_setup(&["Lich's Relic", "Ajani Resolute", "Hill Giant"]);
+    let opp_pw = place_pw(&mut s, 1, "Ajani Resolute");
+    let own_giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+
+    let relic_card = force_new_card_in_hand(&mut s, 0, "Lich's Relic");
+    cast_card(&mut s, relic_card);
+    while s.action_space().kind == ActionSpaceKind::Priority {
+        choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    }
+    // Pay {2} for the optional ETB payment -> reflexive trigger asks target!
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Permanent(opp_pw)));
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[opp_pw].is_none(),
+        "reflexive trigger destroyed opponent's planeswalker"
+    );
+
+    // Equip to own Hill Giant -> gets +2/+1 (5/4).
+    let relic = s.battlefield_permanents_named(0, "Lich's Relic")[0];
+    activate(&mut s, relic, 0);
+    assert!(s.choose_target(Target::Permanent(own_giant)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(own_giant).pt(), (5, 4));
+}
+
+#[test]
+fn face_yourself_copies_creatures_with_haste_and_conditional_sacrifice() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::PlayerId, target::Target},
+    };
+
+    // Case 1: without a planeswalker, copies have haste and sacrifice at end step.
+    let mut s = auto_setup(&["Face Yourself", "Hill Giant", "Ajani Resolute"]);
+    s.force_permanent_on_battlefield(1, "Hill Giant");
+    let spell = force_new_card_in_hand(&mut s, 0, "Face Yourself");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    let copies = s.battlefield_permanents_named(0, "Hill Giant");
+    assert_eq!(copies.len(), 1);
+    assert!(s
+        .game()
+        .characteristics(copies[0])
+        .keywords
+        .has(Keyword::Haste));
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert!(
+        s.battlefield_permanents_named(0, "Hill Giant").is_empty(),
+        "sacrificed at end step without a planeswalker"
+    );
+
+    // Case 2: with a planeswalker, intervening-if is false and copy survives end step.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "5RR");
+    place_pw(&mut s, 0, "Ajani Resolute");
+    let spell2 = force_new_card_in_hand(&mut s, 0, "Face Yourself");
+    cast_card(&mut s, spell2);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Hill Giant").len(), 1);
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Hill Giant").len(),
+        1,
+        "copy survives end step while you control a planeswalker"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Integrated interaction checks (plan synergies)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn integrated_doubling_season_planeswalker_entry_cost_and_empower() {
+    use crate::support::{
+        inspect::counters_of,
+        play::{activate, settle},
+    };
+    use managym::state::permanent::CounterKind;
+
+    let mut s = auto_setup(&["Doubling Season", "Jace, Reality Sculptor", "Island"]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    s.force_permanent_on_battlefield(0, "Island");
+    // Entry doubled: printed 5 -> 10.
+    let jace = place_pw(&mut s, 0, "Jace, Reality Sculptor");
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 10);
+    // +1 cost NOT doubled -> 11; Empower Jace 1 creates two 0-loyalty Jace tokens,
+    // puts 2 doubled loyalty on the chosen one, and SBA cleans up the 0-loyalty twin!
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 11);
+    let tokens = s.battlefield_permanents_named(0, "Jace");
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(
+        counters_of(&s, tokens[0], CounterKind::Loyalty),
+        2,
+        "Doubling Season doubles empower counters on the chosen Jace token"
+    );
+}
+
+#[test]
+fn integrated_machinations_instant_speed_jace_token_on_opponents_turn() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{counters_of, has_action},
+        play::{activate, cast_card, choose, pass_until, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::permanent::CounterKind,
+    };
+
+    let mut s = auto_setup(&["Jace's Machinations", "Plains"]);
+    let mach = force_new_card_in_hand(&mut s, 0, "Jace's Machinations");
+
+    // Advance to opponent's main phase; pass opponent priority so seat 0 casts the Instant!
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(0, "2U");
+    choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    cast_card(&mut s, mach);
+    settle(&mut s);
+    let token = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, token, CounterKind::Loyalty), 8);
+
+    // Opponent passes priority -> seat 0 activates the Jace token at instant speed on opponent's turn!
+    choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    assert!(
+        has_action(
+            &s,
+            |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == token)
+        ),
+        "Jace's Machinations grants instant-speed loyalty activation on opponent's turn"
+    );
+    activate(&mut s, token, 0); // -1: Surveil 1
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, token, CounterKind::Loyalty), 7);
+    // Quota still enforced: cannot activate again this turn.
+    choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == token)
+    ));
+}
+
+#[test]
+fn integrated_sanctum_lurker_zero_loyalty_and_way_growth() {
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::{activate, cast_card, settle},
+    };
+    use managym::state::{permanent::CounterKind, target::Target};
+
+    let mut s = auto_setup(&[
+        "Sanctum Lurker",
+        "Way of the Mentor",
+        "Way of the Necromancer",
+        "Extended Absence",
+        "Your Fate Ends Here",
+        "Hill Giant",
+    ]);
+    let lurker_card = force_new_card_in_hand(&mut s, 0, "Sanctum Lurker");
+    cast_card(&mut s, lurker_card);
+    settle(&mut s);
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    set_counters(&mut s, jace, CounterKind::Loyalty, 3);
+    // -3 to 0 loyalty -> survives under Sanctum Lurker!
+    activate(&mut s, jace, 1);
+    settle(&mut s);
+    assert!(s.game().state.permanents[jace].is_some());
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 0);
+
+    // Way of the Mentor + Way of the Necromancer grow it back via life gain and creature death.
+    s.force_permanent_on_battlefield(0, "Way of the Mentor");
+    s.force_permanent_on_battlefield(0, "Way of the Necromancer");
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let abs = force_new_card_in_hand(&mut s, 0, "Extended Absence");
+    cast_card(&mut s, abs);
+    assert!(s.choose_target(Target::Permanent(opp_giant)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 1);
+
+    let own_giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let kill = force_new_card_in_hand(&mut s, 0, "Your Fate Ends Here");
+    cast_card(&mut s, kill);
+    assert!(s.choose_target(Target::Permanent(own_giant)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 2);
+}
+
+#[test]
+fn integrated_ajani_unrelenting_paradox_and_ajani_resolute() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::counters_of,
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&[
+        "Ajani Unrelenting",
+        "Way of the Paradox",
+        "Ajani Resolute",
+        "Plains",
+    ]);
+    let unrelenting = place_pw(&mut s, 0, "Ajani Unrelenting");
+    let resolute = place_pw(&mut s, 0, "Ajani Resolute");
+    s.force_permanent_on_battlefield(0, "Way of the Paradox");
+    let life_before = s.game().state.players[0].life;
+    let land1 = move_from_library(&mut s, 0, "Plains", ZoneType::Hand);
+    let land2 = move_from_library(&mut s, 0, "Plains", ZoneType::Hand);
+
+    // One +1 activation on Ajani Unrelenting triggers:
+    // - Ajani Unrelenting: Cadet token
+    // - Way of the Paradox: gain 1 life + extra land play
+    // - Ajani Resolute (from that life gain): +1 loyalty counter on Ajani Resolute (2 -> 3)!
+    activate(&mut s, unrelenting, 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Cadet").len(), 1);
+    assert_eq!(s.game().state.players[0].life, life_before + 1);
+    assert_eq!(counters_of(&s, resolute, CounterKind::Loyalty), 3);
+    for land in [land1, land2] {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::PlayLand { object, .. } if *object == land),
+        );
+    }
+}
+
+#[test]
+fn integrated_vivien_emblem_survives_combat_death_and_opponent_sees_it() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        inspect::counters_of,
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        flow::{combat::AttackTarget, turn::StepKind},
+        state::{card::Keyword, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+
+    let mut s = auto_setup(&["Vivien Reid", "Hill Giant"]);
+    let vivien = place_pw(&mut s, 0, "Vivien Reid");
+    set_counters(&mut s, vivien, CounterKind::Loyalty, 10);
+    let own_giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    clear_summoning_sickness(&mut s, opp_giant);
+
+    // -8 creates Vivien's emblem; Vivien left at 2 loyalty.
+    activate(&mut s, vivien, 2);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, vivien, CounterKind::Loyalty), 2);
+
+    // Opponent attacks Vivien with 3/3 Hill Giant -> Vivien dies!
+    let vivien_obj = s.game().permanent_object(vivien).unwrap();
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == opp_giant && *obj == vivien_obj),
+        );
+    }
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(s.game().state.permanents[vivien].is_none());
+    assert_eq!(s.game().characteristics(own_giant).pt(), (5, 5));
+    assert!(s
+        .game()
+        .characteristics(own_giant)
+        .keywords
+        .has(Keyword::Indestructible));
+
+    // Opponent viewer sees the emblem in command zone.
+    let opp_obs = Observation::for_player(s.game(), PlayerId(1));
+    let opp_emblems: Vec<_> = opp_obs
+        .opponent_cards
+        .iter()
+        .filter(|row| row.zone == ZoneType::Command)
+        .collect();
+    assert_eq!(
+        opp_emblems.len(),
+        1,
+        "opponent viewer sees Vivien's emblem after Vivien dies"
+    );
+}
+
+#[test]
+fn integrated_tomik_and_kaito_planeswalker_combat() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::has_action,
+        play::{choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::{combat::AttackTarget, turn::StepKind},
+        state::{game_object::PlayerId, zone::ZoneType},
+    };
+
+    // Part A: Tomik + two attackers at one planeswalker: second offer absent; both can still attack player.
+    let mut s = auto_setup(&["Tomik, Orzhov Lawmage", "Ajani Resolute", "Hill Giant"]);
+    s.force_permanent_on_battlefield(1, "Tomik, Orzhov Lawmage");
+    let opp_pw = place_pw(&mut s, 1, "Ajani Resolute");
+    let opp_pw_obj = s.game().permanent_object(opp_pw).unwrap();
+    let a1 = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let a2 = s.force_permanent_on_battlefield(0, "Hill Giant");
+    clear_summoning_sickness(&mut s, a1);
+    clear_summoning_sickness(&mut s, a2);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    // First attacker attacks opp_pw.
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { attack: Some(AttackTarget::Permanent(obj)), .. } if *obj == opp_pw_obj),
+    );
+    // Second attacker cannot attack opp_pw, but CAN still attack Player 1!
+    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::DeclareAttacker { attack: Some(AttackTarget::Permanent(obj)), .. } if *obj == opp_pw_obj)
+    ));
+    assert!(has_action(
+        &s,
+        |a| matches!(a, Action::DeclareAttacker { attack: Some(AttackTarget::Player(p)), .. } if *p == PlayerId(1))
+    ));
+
+    // Part B: Kaito unblockable creature attacks opponent's planeswalker -> NO Kaito draw trigger.
+    let mut s2 = auto_setup(&["Kaito, Cunning Infiltrator", "Ajani Resolute", "Hill Giant"]);
+    place_pw(&mut s2, 0, "Kaito, Cunning Infiltrator");
+    let opp_pw2 = place_pw(&mut s2, 1, "Ajani Resolute");
+    let opp_pw2_obj = s2.game().permanent_object(opp_pw2).unwrap();
+    let attacker = s2.force_permanent_on_battlefield(0, "Hill Giant");
+    clear_summoning_sickness(&mut s2, attacker);
+    let hand_before = s2.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+
+    s2.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(
+        &mut s2,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == attacker && *obj == opp_pw2_obj),
+    );
+    settle(&mut s2);
+    s2.advance_to_active_step(0, StepKind::End);
+    assert_eq!(
+        s2.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand_before,
+        "damage to a planeswalker does not trigger Kaito's combat-damage-to-player trigger"
+    );
+}

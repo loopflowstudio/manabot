@@ -193,6 +193,21 @@
       "R"
     ]
   },
+  "Academic Ascent": {
+    "name": "Academic Ascent",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Target creature gets +2/+2 and gains flying until end of turn.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
   "Accumulate Wisdom": {
     "name": "Accumulate Wisdom",
     "mana_cost": "{1}{U}",
@@ -369,6 +384,32 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card.",
     "colors": []
   },
+  "Ajani Resolute": {
+    "name": "Ajani Resolute",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a loyalty counter on Ajani.\n0: You gain 1 life.\n−4: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n−10: You get an emblem with \"Creatures you control get +2/+2.\"",
+    "colors": [
+      "W"
+    ],
+    "loyalty": "2"
+  },
+  "Ajani Unrelenting": {
+    "name": "Ajani Unrelenting",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "Whenever you activate a loyalty ability, create a 2/2 colorless Wizard Soldier creature token named Cadet.\n+1: Creatures you control get +1/+0 and gain haste until end of turn.\n−2: Discard your hand, then draw a card for each creature you control.\n−3: Ajani deals 4 damage to each creature except for tokens you control.",
+    "colors": [
+      "R"
+    ]
+  },
   "Ajani's Pridemate": {
     "name": "Ajani's Pridemate",
     "mana_cost": "{1}{W}",
@@ -377,6 +418,19 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Ajani, Caller of the Pride": {
+    "name": "Ajani, Caller of the Pride",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "loyalty": "4",
+    "keywords": [],
+    "oracle_text": "+1: Put a +1/+1 counter on up to one target creature.\n−3: Target creature gains flying and double strike until end of turn.\n−8: Create X 2/2 white Cat creature tokens, where X is your life total.",
     "colors": [
       "W"
     ]
@@ -506,6 +560,20 @@
       "W"
     ]
   },
+  "Angelic Destiny": {
+    "name": "Angelic Destiny",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +4/+4, has flying and first strike, and is an Angel in addition to its other types.\nWhen enchanted creature dies, return this card to its owner's hand.",
+    "colors": [
+      "W"
+    ]
+  },
   "Angelic Edict": {
     "name": "Angelic Edict",
     "mana_cost": "{4}{W}",
@@ -612,6 +680,22 @@
     "oracle_text": "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.",
     "colors": [
       "W"
+    ]
+  },
+  "Arcane Amphisbaena": {
+    "name": "Arcane Amphisbaena",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Snake",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nWhen this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G"
     ]
   },
   "Arcanis the Omnipotent": {
@@ -814,6 +898,23 @@
     "oracle_text": "Flying\nWhenever you cast your second spell each turn, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
     "colors": []
   },
+  "Avatar of Burgeoning Echoes": {
+    "name": "Avatar of Burgeoning Echoes",
+    "mana_cost": "{G}{U}",
+    "type_line": "Creature — Avatar",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−10]: Put a +1/+1 counter on target creature for each land you control.\"",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
   "Avatar's Wrath": {
     "name": "Avatar's Wrath",
     "mana_cost": "{2}{W}{W}",
@@ -826,6 +927,23 @@
     "oracle_text": "Choose up to one target creature, then airbend all other creatures. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nUntil your next turn, your opponents can't cast spells from anywhere other than their hands.\nExile Avatar's Wrath.",
     "colors": [
       "W"
+    ]
+  },
+  "Awaken the Inferno": {
+    "name": "Awaken the Inferno",
+    "mana_cost": "{4}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Landcycling",
+      "Basic landcycling",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Awaken the Inferno deals 6 damage to target creature or planeswalker an opponent controls. Put a +1/+1 counter on up to one target creature you control.\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "R"
     ]
   },
   "Axgard Cavalry": {
@@ -1002,6 +1120,18 @@
     "colors": [
       "R",
       "U"
+    ]
+  },
+  "Banishing Light": {
+    "name": "Banishing Light",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, exile target nonland permanent an opponent controls until this enchantment leaves the battlefield.",
+    "colors": [
+      "W"
     ]
   },
   "Barrels of Blasting Jelly": {
@@ -1566,6 +1696,18 @@
       "R"
     ]
   },
+  "Break Under Pressure": {
+    "name": "Break Under Pressure",
+    "mana_cost": "{2}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent sacrifices a creature or planeswalker with the greatest mana value among creatures and planeswalkers they control. You gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Bribery": {
     "name": "Bribery",
     "mana_cost": "{3}{U}{U}",
@@ -1796,6 +1938,21 @@
       "U"
     ]
   },
+  "Campus Crier": {
+    "name": "Campus Crier",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Advisor",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "{1}, Exile this card from your graveyard: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
   "Campus Guide": {
     "name": "Campus Guide",
     "mana_cost": "{2}",
@@ -1959,6 +2116,52 @@
       "W"
     ]
   },
+  "Cecil, Dark Knight": {
+    "name": "Cecil, Dark Knight",
+    "mana_cost": "{B}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Darkness",
+      "Deathtouch",
+      "Transform"
+    ],
+    "oracle_text": "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Cecil, Redeemed Paladin": {
+    "name": "Cecil, Redeemed Paladin",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Lifelink",
+      "Protect"
+    ],
+    "oracle_text": "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Celestial Armor": {
+    "name": "Celestial Armor",
+    "mana_cost": "{2}{W}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this Equipment enters, attach it to target creature you control. That creature gains hexproof and indestructible until end of turn.\nEquipped creature gets +2/+0 and has flying.\nEquip {3}{W} ({3}{W}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": [
+      "W"
+    ]
+  },
   "Cemetery Recruitment": {
     "name": "Cemetery Recruitment",
     "mana_cost": "{1}{B}",
@@ -1970,6 +2173,32 @@
     "colors": [
       "B"
     ]
+  },
+  "Chandra, Flameshaper": {
+    "name": "Chandra, Flameshaper",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Legendary Planeswalker — Chandra",
+    "power": null,
+    "toughness": null,
+    "loyalty": "6",
+    "keywords": [],
+    "oracle_text": "+2: Add {R}{R}{R}. Exile the top three cards of your library. Choose one. You may play that card this turn.\n+1: Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\n−4: Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Chandra, Torch of Defiance": {
+    "name": "Chandra, Torch of Defiance",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Planeswalker — Chandra",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "+1: Exile the top card of your library. You may cast that card. If you don't, Chandra deals 2 damage to each opponent.\n+1: Add {R}{R}.\n−3: Chandra deals 4 damage to target creature.\n−7: You get an emblem with \"Whenever you cast a spell, this emblem deals 5 damage to any target.\"",
+    "colors": [
+      "R"
+    ],
+    "loyalty": "4"
   },
   "Chart a Course": {
     "name": "Chart a Course",
@@ -2139,6 +2368,18 @@
       "W"
     ]
   },
+  "Compel Brutality": {
+    "name": "Compel Brutality",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Target creature you control deals damage equal to its power to target creature or planeswalker an opponent controls.\n• Target planeswalker you control deals damage equal to its loyalty to target creature or planeswalker an opponent controls.",
+    "colors": [
+      "G"
+    ]
+  },
   "Consider": {
     "name": "Consider",
     "mana_cost": "{U}",
@@ -2237,6 +2478,21 @@
     "keywords": [],
     "oracle_text": "Whenever you cast a noncreature spell, this creature gets +3/+0 until end of turn.",
     "colors": [
+      "R"
+    ]
+  },
+  "Craftwork Crusher": {
+    "name": "Craftwork Crusher",
+    "mana_cost": "{3}{R}{R}{G}{G}",
+    "type_line": "Artifact Creature — Boar Construct",
+    "power": "7",
+    "toughness": "5",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhen this creature enters, choose two —\n• This creature deals 4 damage to target creature or planeswalker.\n• Create a 2/2 colorless Wizard Soldier creature token named Cadet.\n• Draw a card.",
+    "colors": [
+      "G",
       "R"
     ]
   },
@@ -2999,6 +3255,18 @@
       "B"
     ]
   },
+  "Driver of the Dead": {
+    "name": "Driver of the Dead",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature dies, return target creature card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "B"
+    ]
+  },
   "Drogskol Reaver": {
     "name": "Drogskol Reaver",
     "mana_cost": "{5}{W}{U}",
@@ -3014,6 +3282,18 @@
     "colors": [
       "U",
       "W"
+    ]
+  },
+  "Dropkick Bomber": {
+    "name": "Dropkick Bomber",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"",
+    "colors": [
+      "R"
     ]
   },
   "Druid of the Cowl": {
@@ -3252,6 +3532,19 @@
       "U"
     ]
   },
+  "Edgar, Ancient Bloodlord": {
+    "name": "Edgar, Ancient Bloodlord",
+    "mana_cost": "{W}{B}",
+    "type_line": "Legendary Creature — Vampire Noble",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever another creature or planeswalker you control dies, you gain 1 life.\n{2}, Sacrifice another creature or planeswalker: Put a +1/+1 counter on Edgar. He gains menace until end of turn. (He can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
   "Eladamri's Call": {
     "name": "Eladamri's Call",
     "mana_cost": "{G}{W}",
@@ -3263,6 +3556,20 @@
     "colors": [
       "G",
       "W"
+    ]
+  },
+  "Electroduplicate": {
+    "name": "Electroduplicate",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
     ]
   },
   "Elemental Bond": {
@@ -3557,6 +3864,19 @@
       "B"
     ]
   },
+  "Entrust the Spark": {
+    "name": "Entrust the Spark",
+    "mana_cost": "{3}{G}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "You may sacrifice a planeswalker. If you do, search your library for a planeswalker card, put it onto the battlefield, then shuffle.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
   "Epic Downfall": {
     "name": "Epic Downfall",
     "mana_cost": "{1}{B}",
@@ -3579,6 +3899,34 @@
     "oracle_text": "Whenever you draw your second card each turn, put a +1/+1 counter on this creature.",
     "colors": [
       "U"
+    ]
+  },
+  "Esper Origins": {
+    "name": "Esper Origins",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Transform",
+      "Flashback"
+    ],
+    "oracle_text": "Surveil 2. You gain 2 life. If this spell was cast from a graveyard, exile it, then put it onto the battlefield transformed under its owner's control with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)\nFlashback {3}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Essence Burn": {
+    "name": "Essence Burn",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Essence Burn deals 5 damage to target black or green creature or planeswalker. If that permanent would die this turn, exile it instead.",
+    "colors": [
+      "R"
     ]
   },
   "Essence Scatter": {
@@ -3675,6 +4023,30 @@
       "B"
     ]
   },
+  "Extended Absence": {
+    "name": "Extended Absence",
+    "mana_cost": "{3}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Exile target creature or planeswalker. Extended Absence deals 1 damage to each opponent and you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Extravagant Replication": {
+    "name": "Extravagant Replication",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.",
+    "colors": [
+      "U"
+    ]
+  },
   "Eyetwitch": {
     "name": "Eyetwitch",
     "mana_cost": "{B}",
@@ -3700,6 +4072,18 @@
     "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.",
     "colors": []
   },
+  "Face Yourself": {
+    "name": "Face Yourself",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "For each creature target player controls, create a token that's a copy of that creature, except it has haste and \"At the beginning of the end step, if you don't control a planeswalker, sacrifice this token.\"",
+    "colors": [
+      "R"
+    ]
+  },
   "Faebloom Trick": {
     "name": "Faebloom Trick",
     "mana_cost": "{2}{U}",
@@ -3710,6 +4094,20 @@
     "oracle_text": "Create two 1/1 blue Faerie creature tokens with flying. When you do, tap target creature an opponent controls.",
     "colors": [
       "U"
+    ]
+  },
+  "Fake Your Own Death": {
+    "name": "Fake Your Own Death",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "Until end of turn, target creature gets +2/+0 and gains \"When this creature dies, return it to the battlefield tapped under its owner's control and you create a Treasure token.\" (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "B"
     ]
   },
   "Fanatical Firebrand": {
@@ -3736,6 +4134,18 @@
     "oracle_text": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
     "colors": [
       "W"
+    ]
+  },
+  "Fang, Fearless l'Cie": {
+    "name": "Fang, Fearless l'Cie",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)",
+    "colors": [
+      "B"
     ]
   },
   "Fatal Fissure": {
@@ -3775,6 +4185,21 @@
     "keywords": [],
     "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {W} or {U}.",
     "colors": []
+  },
+  "Fatehold Charm": {
+    "name": "Fatehold Charm",
+    "mana_cost": "{W}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "Choose one —\n• Draw a card. Empower Jace 2.\n• Return target spell or creature to its owner's hand.\n• Creatures you control get +1/+2 until end of turn.",
+    "colors": [
+      "U",
+      "W"
+    ]
   },
   "Fatehold Chronologist": {
     "name": "Fatehold Chronologist",
@@ -4494,6 +4919,18 @@
       "G"
     ]
   },
+  "Fulminous Forte": {
+    "name": "Fulminous Forte",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Fulminous Forte deals 1 damage to each creature and planeswalker your opponents control.\n• Fulminous Forte deals 5 damage to target creature or planeswalker.",
+    "colors": [
+      "R"
+    ]
+  },
   "Fumigate": {
     "name": "Fumigate",
     "mana_cost": "{3}{W}{W}",
@@ -4543,6 +4980,32 @@
     "colors": [
       "B",
       "R"
+    ]
+  },
+  "Garruk, Curse Breaker": {
+    "name": "Garruk, Curse Breaker",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Planeswalker — Garruk",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control with power 4 or greater enters, draw a card.\n+2: Untap up to two target lands.\n−3: Create a 4/4 green Beast creature token with trample.\n−4: Until your next turn, whenever one or more creatures attack one of your opponents, those creatures get +2/+2 and gain trample until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Garruk, Veiled Butcher": {
+    "name": "Garruk, Veiled Butcher",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Legendary Planeswalker — Garruk",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "If a creature an opponent controls would die, exile it instead.\n+2: Up to one target creature gets -4/-1 until your next turn.\n−2: Each player sacrifices a creature of their choice. If you sacrificed a creature this way, create a 4/4 green Beast creature token with trample.\n−3: Each opponent discards two cards. For each opponent who didn't discard two nonland cards this way, you draw a card.",
+    "colors": [
+      "B"
     ]
   },
   "Gateway Sneak": {
@@ -4668,6 +5131,20 @@
     "oracle_text": "Reach (This creature can block creatures with flying.)",
     "colors": [
       "G"
+    ]
+  },
+  "Gideon the Oathless": {
+    "name": "Gideon the Oathless",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Mercenary",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Ward"
+    ],
+    "oracle_text": "Ward—Discard a card.\nWhenever a creature an opponent controls enters, Gideon deals 1 damage to that player.\nWhenever an opponent activates a loyalty ability, Gideon deals 1 damage to that player.",
+    "colors": [
+      "B"
     ]
   },
   "Gigantosaurus": {
@@ -5392,6 +5869,25 @@
       "W"
     ]
   },
+  "Hexhaven Battalion": {
+    "name": "Hexhaven Battalion",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Landcycling",
+      "Basic landcycling",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Create three 2/2 colorless Wizard Soldier creature tokens named Cadet. Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "W"
+    ]
+  },
   "Hidetsugu's Second Rite": {
     "name": "Hidetsugu's Second Rite",
     "mana_cost": "{3}{R}",
@@ -5481,6 +5977,20 @@
     "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Hoarding Dragon": {
+    "name": "Hoarding Dragon",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you may search your library for an artifact card, exile it, then shuffle.\nWhen this creature dies, you may put the exiled card into its owner's hand.",
+    "colors": [
+      "R"
     ]
   },
   "Hog-Monkey": {
@@ -5588,6 +6098,18 @@
       "U"
     ]
   },
+  "Identity Echo": {
+    "name": "Identity Echo",
+    "mana_cost": "{2}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{3}{R}: Exile target creature or planeswalker you control. Reveal cards from the top of your library until you reveal a creature or planeswalker card. Put that card onto the battlefield and the rest on the bottom of your library in a random order. Activate only as a sorcery.",
+    "colors": [
+      "R"
+    ]
+  },
   "Igneous Inspiration": {
     "name": "Igneous Inspiration",
     "mana_cost": "{2}{R}",
@@ -5683,6 +6205,18 @@
       "R"
     ]
   },
+  "Infernal Vessel": {
+    "name": "Infernal Vessel",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature dies, if it wasn't a Demon, return it to the battlefield under its owner's control with two +1/+1 counters on it. It's a Demon in addition to its other types.",
+    "colors": [
+      "B"
+    ]
+  },
   "Infestation Sage": {
     "name": "Infestation Sage",
     "mana_cost": "{B}",
@@ -5745,6 +6279,21 @@
     "keywords": [],
     "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {U} or {R}.",
     "colors": []
+  },
+  "Inspired Tethermage": {
+    "name": "Inspired Tethermage",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Warrior",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Whenever you put one or more loyalty counters on a planeswalker, put a +1/+1 counter on this creature.\n{6}: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G"
+    ]
   },
   "Inspiring Call": {
     "name": "Inspiring Call",
@@ -5977,6 +6526,36 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.",
     "colors": []
   },
+  "Jace's Machinations": {
+    "name": "Jace's Machinations",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Until end of turn, you may activate loyalty abilities of Jace planeswalkers you control on any player's turn any time you could cast an instant.\nEmpower Jace 8. (Put eight loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Jace, Reality Sculptor": {
+    "name": "Jace, Reality Sculptor",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Legendary Planeswalker — Jace",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "+1: Empower Jace X, where X is the number of Islands you control.\n−3: Until your next turn, whenever a creature attacks you or a planeswalker you control, it gets -5/-0 until end of turn.\n0: Exile all but the bottom card of each opponent's library. Activate only if there are twenty-five or more loyalty counters among Jaces you control.",
+    "colors": [
+      "U"
+    ]
+  },
   "Jadzi, Steward of Fate": {
     "name": "Jadzi, Steward of Fate",
     "mana_cost": "{2}{U}",
@@ -6157,6 +6736,19 @@
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {B} or {G}.",
     "colors": []
   },
+  "Kaito, Cunning Infiltrator": {
+    "name": "Kaito, Cunning Infiltrator",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Legendary Planeswalker — Kaito",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"",
+    "colors": [
+      "U"
+    ],
+    "loyalty": "3"
+  },
   "Kalastria Highborn": {
     "name": "Kalastria Highborn",
     "mana_cost": "{B}{B}",
@@ -6239,6 +6831,19 @@
       "W"
     ]
   },
+  "Keeper of the Quiet Hour": {
+    "name": "Keeper of the Quiet Hour",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Chimera",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": []
+  },
   "Kellan, Planar Trailblazer": {
     "name": "Kellan, Planar Trailblazer",
     "mana_cost": "{R}",
@@ -6273,6 +6878,19 @@
     "oracle_text": "When this creature enters, draw a card.",
     "colors": [
       "W"
+    ]
+  },
+  "Kiora of Salt and Sand": {
+    "name": "Kiora of Salt and Sand",
+    "mana_cost": "{1}{G}{U}",
+    "type_line": "Legendary Creature — Merfolk Noble",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever you attack, if you've activated a loyalty ability this turn, untap target attacking creature. It can't be blocked this turn.\nPlaneswalkers you control have \"[−8]: Create an 8/8 blue Leviathan creature token with hexproof.\"",
+    "colors": [
+      "G",
+      "U"
     ]
   },
   "Kiora, the Rising Tide": {
@@ -6401,6 +7019,21 @@
     "oracle_text": "{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.",
     "colors": [
       "R"
+    ]
+  },
+  "Kykar, Zephyr Awakener": {
+    "name": "Kykar, Zephyr Awakener",
+    "mana_cost": "{2}{W}{U}",
+    "type_line": "Legendary Creature — Bird Wizard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a noncreature spell, choose one —\n• Exile another target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.\n• Create a 1/1 white Spirit creature token with flying.",
+    "colors": [
+      "U",
+      "W"
     ]
   },
   "Kyoshi Battle Fan": {
@@ -6570,6 +7203,20 @@
     "oracle_text": "If this card is in your opening hand, you may begin the game with it on the battlefield.\nEquipped creature gets +1/+1 and has double strike and trample.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
     "colors": []
   },
+  "Lich's Relic": {
+    "name": "Lich's Relic",
+    "mana_cost": "{B}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, you may pay {2}. When you do, for each opponent, destroy up to one target creature or planeswalker that player controls.\nEquipped creature gets +2/+1.\nEquip {2}",
+    "colors": [
+      "B"
+    ]
+  },
   "Lightning Bolt": {
     "name": "Lightning Bolt",
     "mana_cost": "{R}",
@@ -6609,6 +7256,46 @@
       "U"
     ]
   },
+  "Liliana the Faultless": {
+    "name": "Liliana the Faultless",
+    "mana_cost": "{W}",
+    "type_line": "Legendary Creature — Human Cleric",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever another creature or planeswalker you control enters, you gain 1 life.\n{1}, {T}, Discard a card: Another target creature or planeswalker you control gains hexproof until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Liliana the Repentant": {
+    "name": "Liliana the Repentant",
+    "mana_cost": "{1}{B}",
+    "type_line": "Legendary Creature — Human Warlock",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Exhaust",
+      "Mill"
+    ],
+    "oracle_text": "Whenever another creature or planeswalker you control enters, mill two cards.\nExhaust — {5}{B}: Return target creature or planeswalker card from your graveyard to the battlefield. Put a +1/+1 counter on Liliana. Activate only as a sorcery. (Activate each exhaust ability only once.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Liliana, Dreadhorde General": {
+    "name": "Liliana, Dreadhorde General",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Legendary Planeswalker — Liliana",
+    "power": null,
+    "toughness": null,
+    "loyalty": "6",
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control dies, draw a card.\n+1: Create a 2/2 black Zombie creature token.\n−4: Each player sacrifices two creatures of their choice.\n−9: Each opponent chooses a permanent they control of each permanent type and sacrifices the rest.",
+    "colors": [
+      "B"
+    ]
+  },
   "Linden, the Steadfast Queen": {
     "name": "Linden, the Steadfast Queen",
     "mana_cost": "{W}{W}{W}",
@@ -6636,6 +7323,16 @@
     "colors": [
       "W"
     ]
+  },
+  "Living Library": {
+    "name": "Living Library",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Book Illusion",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{6}, Sacrifice this creature: Choose target creature or planeswalker an opponent controls. Its owner shuffles it into their library.",
+    "colors": []
   },
   "Llanowar Elves": {
     "name": "Llanowar Elves",
@@ -6710,6 +7407,18 @@
     "oracle_text": "Landfall — Whenever a land you control enters, add one mana of any color.",
     "colors": [
       "G"
+    ]
+  },
+  "Loyal Tutor": {
+    "name": "Loyal Tutor",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a planeswalker card, reveal it, then shuffle and put that card on top.",
+    "colors": [
+      "W"
     ]
   },
   "Lumen-Class Frigate": {
@@ -6787,6 +7496,20 @@
     "toughness": "4",
     "keywords": [],
     "oracle_text": "When this creature dies, create two 2/2 black Zombie creature tokens.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Mabel, Bitter Recluse": {
+    "name": "Mabel, Bitter Recluse",
+    "mana_cost": "{B}",
+    "type_line": "Legendary Creature — Mouse Warlock",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nWhen Mabel enters, remove up to three counters from another target creature or planeswalker.",
     "colors": [
       "B"
     ]
@@ -6910,6 +7633,21 @@
       "U"
     ]
   },
+  "Manifest Dread": {
+    "name": "Manifest Dread",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Manifest",
+      "Manifest dread"
+    ],
+    "oracle_text": "Manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Marang River Regent": {
     "name": "Marang River Regent",
     "mana_cost": "{4}{U}{U}",
@@ -6932,6 +7670,18 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "Whenever you gain life, each opponent loses 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Massacre Girl, Most Wanted": {
+    "name": "Massacre Girl, Most Wanted",
+    "mana_cost": "{4}{B}",
+    "type_line": "Legendary Creature — Human Assassin",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever another creature or planeswalker you control dies, Massacre Girl deals 1 damage to target opponent and you gain 1 life.\nWhenever an opponent is dealt noncombat damage, put a +1/+1 counter on Massacre Girl.",
     "colors": [
       "B"
     ]
@@ -7154,6 +7904,49 @@
     "oracle_text": "Raid — At the beginning of your end step, if you attacked this turn, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n{2}{B}, Sacrifice this enchantment: Target opponent loses X life, where X is the amount of life you gained this turn.",
     "colors": [
       "B"
+    ]
+  },
+  "Mild-Mannered Librarian": {
+    "name": "Mild-Mannered Librarian",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Human",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{3}{G}: This creature becomes a Werewolf. Put two +1/+1 counters on it and you draw a card. Activate only once.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Mind Meanderer": {
+    "name": "Mind Meanderer",
+    "mana_cost": "{3}{G}{U}{U}",
+    "type_line": "Creature — Bird Fish Illusion",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Fight"
+    ],
+    "oracle_text": "Flying\nThis creature has vigilance as long as you control a Jace planeswalker.\nWhen this creature enters, it fights up to one target creature an opponent controls. (Each deals damage equal to its power to the other.)",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Mindseeker Oculus": {
+    "name": "Mindseeker Oculus",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Homunculus",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
     ]
   },
   "Mindsparker": {
@@ -7480,6 +8273,18 @@
       "G"
     ]
   },
+  "Nine-Lives Familiar": {
+    "name": "Nine-Lives Familiar",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Creature — Cat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "This creature enters with eight revival counters on it if you cast it.\nWhen this creature dies, if it had a revival counter on it, return it to the battlefield with one fewer revival counter on it at the beginning of the next end step.",
+    "colors": [
+      "B"
+    ]
+  },
   "Niv-Mizzet, Visionary": {
     "name": "Niv-Mizzet, Visionary",
     "mana_cost": "{4}{U}{R}",
@@ -7493,6 +8298,21 @@
     "colors": [
       "R",
       "U"
+    ]
+  },
+  "No Admittance": {
+    "name": "No Admittance",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "No Admittance deals 3 damage to any target.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "R"
     ]
   },
   "North Pole Gates": {
@@ -7541,6 +8361,22 @@
       "Menace"
     ],
     "oracle_text": "Menace\nWhen this creature enters, you may destroy another target creature. If a creature is destroyed this way, you gain life equal to its toughness.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Nullpriest of Oblivion": {
+    "name": "Nullpriest of Oblivion",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Menace",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {3}{B} (You may pay an additional {3}{B} as you cast this spell.)\nLifelink\nMenace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, if it was kicked, return target creature card from your graveyard to the battlefield.",
     "colors": [
       "B"
     ]
@@ -7629,6 +8465,20 @@
       "U"
     ]
   },
+  "Ordeal of Nylea": {
+    "name": "Ordeal of Nylea",
+    "mana_cost": "{1}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
+  },
   "Origin of Metalbending": {
     "name": "Origin of Metalbending",
     "mana_cost": "{1}{G}",
@@ -7687,6 +8537,21 @@
     "oracle_text": "Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Overwrite the Multiverse": {
+    "name": "Overwrite the Multiverse",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Exile all creatures. Empower Jace X, where X is the number of creatures exiled this way. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
     ]
   },
   "Ozai's Cruelty": {
@@ -7907,6 +8772,21 @@
     "oracle_text": "({T}: Add {W}.)",
     "colors": []
   },
+  "Plan for All Outcomes": {
+    "name": "Plan for All Outcomes",
+    "mana_cost": "{3}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this enchantment enters, the owner of up to one other target nonland permanent puts it on their choice of the top or bottom of their library.\nWhenever you cast your first noncreature spell each turn, empower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
   "Planetarium of Wan Shi Tong": {
     "name": "Planetarium of Wan Shi Tong",
     "mana_cost": "{6}",
@@ -7986,6 +8866,20 @@
     "oracle_text": "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature.",
     "colors": [
       "B"
+    ]
+  },
+  "Prayer of Binding": {
+    "name": "Prayer of Binding",
+    "mana_cost": "{3}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this enchantment enters, exile up to one target nonland permanent an opponent controls until this enchantment leaves the battlefield. You gain 2 life.",
+    "colors": [
+      "W"
     ]
   },
   "Predator Ooze": {
@@ -8134,6 +9028,21 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Each player draws X cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Protege's Awakening": {
+    "name": "Protege's Awakening",
+    "mana_cost": "{3}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nDraw a card.",
     "colors": [
       "U"
     ]
@@ -8327,6 +9236,37 @@
     "oracle_text": "Double strike (This creature deals both first-strike and regular combat damage.)",
     "colors": [
       "R"
+    ]
+  },
+  "Ragnarok, Divine Deliverance": {
+    "name": "Ragnarok, Divine Deliverance",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Beast Avatar",
+    "power": "7",
+    "toughness": "6",
+    "keywords": [
+      "Reach",
+      "Vigilance",
+      "Haste",
+      "Trample",
+      "Menace"
+    ],
+    "oracle_text": "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Raise the Past": {
+    "name": "Raise the Past",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "W"
     ]
   },
   "Rakdos Guildgate": {
@@ -8543,6 +9483,20 @@
       "U"
     ]
   },
+  "Refute Destiny": {
+    "name": "Refute Destiny",
+    "mana_cost": "{1}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Exile target creature or planeswalker that's green or blue. Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
+    "colors": [
+      "W"
+    ]
+  },
   "Regal Caracal": {
     "name": "Regal Caracal",
     "mana_cost": "{3}{W}{W}",
@@ -8579,6 +9533,18 @@
       "W"
     ]
   },
+  "Relm's Sketching": {
+    "name": "Relm's Sketching",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create a token that's a copy of target artifact, creature, or land.",
+    "colors": [
+      "U"
+    ]
+  },
   "Rending Volley": {
     "name": "Rending Volley",
     "mana_cost": "{R}",
@@ -8589,6 +9555,21 @@
     "oracle_text": "This spell can't be countered.\nRending Volley deals 4 damage to target white or blue creature.",
     "colors": [
       "R"
+    ]
+  },
+  "Repurposed Enforcer": {
+    "name": "Repurposed Enforcer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Whenever this creature attacks, empower Jace X, where X is the number of creatures you control. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
     ]
   },
   "Resolute Reinforcements": {
@@ -8631,6 +9612,21 @@
       "B"
     ]
   },
+  "Rewrite Regrets": {
+    "name": "Rewrite Regrets",
+    "mana_cost": "{3}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Return target creature or planeswalker card with mana value 6 or less from your graveyard to the battlefield.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
   "Rhys the Redeemed": {
     "name": "Rhys the Redeemed",
     "mana_cost": "{G/W}",
@@ -8657,6 +9653,32 @@
     "oracle_text": "Flying, vigilance\nAt the beginning of combat on your turn, another target creature you control gets +1/+0 until end of turn.",
     "colors": [
       "W"
+    ]
+  },
+  "Rise of the Dark Realms": {
+    "name": "Rise of the Dark Realms",
+    "mana_cost": "{7}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put all creature cards from all graveyards onto the battlefield under your control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Rite of Replication": {
+    "name": "Rite of Replication",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.",
+    "colors": [
+      "U"
     ]
   },
   "Rite of the Dragoncaller": {
@@ -8926,6 +9948,20 @@
     "colors": [
       "U",
       "R"
+    ]
+  },
+  "Sanctum Lurker": {
+    "name": "Sanctum Lurker",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Horror",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 1.\nPlaneswalkers you control aren't put into their owners' graveyards for having 0 loyalty.\nPlaneswalkers you control have \"[+2]: This planeswalker deals 1 damage to each opponent and you gain 1 life.\"",
+    "colors": [
+      "B"
     ]
   },
   "Sandbender Scavengers": {
@@ -9226,6 +10262,20 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {G} or {W}.",
     "colors": []
   },
+  "Self-Reflection": {
+    "name": "Self-Reflection",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Semester Foreseer": {
     "name": "Semester Foreseer",
     "mana_cost": "{3}{U}",
@@ -9330,6 +10380,18 @@
     "oracle_text": "Flying\n{R}: This creature gets +1/+0 until end of turn.",
     "colors": [
       "R"
+    ]
+  },
+  "Silence the Echo": {
+    "name": "Silence the Echo",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature or planeswalker or pay {3}.\nDestroy target creature or planeswalker.",
+    "colors": [
+      "B"
     ]
   },
   "Simic Guildgate": {
@@ -9625,6 +10687,21 @@
       "R"
     ]
   },
+  "Solve for Disappointment": {
+    "name": "Solve for Disappointment",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
   "Soul-Guide Lantern": {
     "name": "Soul-Guide Lantern",
     "mana_cost": "{1}",
@@ -9633,6 +10710,16 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "When this artifact enters, exile target card from a graveyard.\n{T}, Sacrifice this artifact: Exile each opponent's graveyard.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
+    "colors": []
+  },
+  "Soulstone Sanctuary": {
+    "name": "Soulstone Sanctuary",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
     "colors": []
   },
   "South Pole Voyager": {
@@ -9825,6 +10912,20 @@
       "U"
     ]
   },
+  "Stasis Snare": {
+    "name": "Stasis Snare",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this enchantment enters, exile target creature an opponent controls until this enchantment leaves the battlefield.",
+    "colors": [
+      "W"
+    ]
+  },
   "Steel Hellkite": {
     "name": "Steel Hellkite",
     "mana_cost": "{6}",
@@ -9996,6 +11097,18 @@
       "W"
     ]
   },
+  "Summon: Esper Maduin": {
+    "name": "Summon: Esper Maduin",
+    "mana_cost": "",
+    "type_line": "Enchantment Creature — Saga Elemental",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Reveal the top card of your library. If it's a permanent card, put it into your hand.\nII — Add {G}{G}.\nIII — Other creatures you control get +2/+2 and gain trample until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
   "Sun Warriors": {
     "name": "Sun Warriors",
     "mana_cost": "{2}{R}{W}",
@@ -10008,6 +11121,21 @@
     "oracle_text": "Firebending X, where X is the number of creatures you control. (Whenever this creature attacks, add X {R}. This mana lasts until end of combat.)\n{5}: Create a 1/1 white Ally creature token.",
     "colors": [
       "R",
+      "W"
+    ]
+  },
+  "Sun-Blessed Healer": {
+    "name": "Sun-Blessed Healer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
       "W"
     ]
   },
@@ -10193,6 +11321,22 @@
     "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Tam's Resistance": {
+    "name": "Tam's Resistance",
+    "mana_cost": "{1}{G/U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Put a +1/+1 counter on up to one target creature. It gains vigilance until end of turn.\nEmpower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G",
+      "U"
     ]
   },
   "Tam, Observant Sequencer": {
@@ -10406,6 +11550,18 @@
       "U"
     ]
   },
+  "Terminal Criticism": {
+    "name": "Terminal Criticism",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target creature or planeswalker that's blue or red. You gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Terror of Mount Velus": {
     "name": "Terror of Mount Velus",
     "mana_cost": "{5}{R}{R}",
@@ -10436,6 +11592,34 @@
       "B",
       "G",
       "U"
+    ]
+  },
+  "Teyo, Diamondblade Mage": {
+    "name": "Teyo, Diamondblade Mage",
+    "mana_cost": "{3}{B}",
+    "type_line": "Legendary Creature — Human Warlock",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen Teyo enters, target permanent you control gains deathtouch until end of turn. Put a +1/+1 counter on it if it's a creature. Put a loyalty counter on it if it's a planeswalker.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Teyo, Lightshield Expert": {
+    "name": "Teyo, Lightshield Expert",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Creature — Human Cleric",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen Teyo enters, target permanent you control gains hexproof until end of turn. Put a +1/+1 counter on it if it's a creature. Put a loyalty counter on it if it's a planeswalker. (It can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "W"
     ]
   },
   "The Arkenstone": {
@@ -10510,6 +11694,18 @@
     "oracle_text": "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.",
     "colors": [
       "G"
+    ]
+  },
+  "The Fire Crystal": {
+    "name": "The Fire Crystal",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.",
+    "colors": [
+      "R"
     ]
   },
   "The Fire Nation Drill": {
@@ -10701,6 +11897,22 @@
     ],
     "oracle_text": "Defender\nOther permanents you control have indestructible.",
     "colors": []
+  },
+  "Theorist's Proxy": {
+    "name": "Theorist's Proxy",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Illusion",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this creature enters, empower Jace 3. (Put three loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\n{U}, Sacrifice this creature: The next spell you cast this turn can't be countered.",
+    "colors": [
+      "U"
+    ]
   },
   "Theorix Annex": {
     "name": "Theorix Annex",
@@ -10915,6 +12127,19 @@
       "U"
     ]
   },
+  "Tolls of War": {
+    "name": "Tolls of War",
+    "mana_cost": "{W}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you sacrifice a permanent during your turn, create a 1/1 white Ally creature token. This ability triggers only once each turn.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
   "Tomik, Orzhov Lawmage": {
     "name": "Tomik, Orzhov Lawmage",
     "mana_cost": "{1}{W}",
@@ -10926,19 +12151,6 @@
     ],
     "oracle_text": "Flying\nPlaneswalkers you control have \"No more than one creature can attack this planeswalker each combat.\"\n{T}: Target creature with a +1/+1 counter on it gains flying until end of turn.",
     "colors": [
-      "W"
-    ]
-  },
-  "Tolls of War": {
-    "name": "Tolls of War",
-    "mana_cost": "{W}{B}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you sacrifice a permanent during your turn, create a 1/1 white Ally creature token. This ability triggers only once each turn.",
-    "colors": [
-      "B",
       "W"
     ]
   },
@@ -11352,6 +12564,18 @@
       "G"
     ]
   },
+  "Undying Malice": {
+    "name": "Undying Malice",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Until end of turn, target creature gains \"When this creature dies, return it to the battlefield tapped under its owner's control with a +1/+1 counter on it.\"",
+    "colors": [
+      "B"
+    ]
+  },
   "Unflinching Courage": {
     "name": "Unflinching Courage",
     "mana_cost": "{1}{G}{W}",
@@ -11440,6 +12664,18 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhenever a Mountain you control enters, if you control at least five other Mountains, you may have this land deal 3 damage to any target.\n{T}: Add {R}.",
     "colors": []
+  },
+  "Valkyrie's Call": {
+    "name": "Valkyrie's Call",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a nontoken, non-Angel creature you control dies, return that card to the battlefield under its owner's control with a +1/+1 counter on it. It has flying and is an Angel in addition to its other types.",
+    "colors": [
+      "W"
+    ]
   },
   "Valorous Stance": {
     "name": "Valorous Stance",
@@ -11532,6 +12768,21 @@
     "oracle_text": "Flying\nWhenever you gain life for the first time each turn, surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
     "colors": [
       "W"
+    ]
+  },
+  "Vanille, Cheerful l'Cie": {
+    "name": "Vanille, Cheerful l'Cie",
+    "mana_cost": "{3}{G}",
+    "type_line": "Legendary Creature — Human Cleric",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Meld",
+      "Mill"
+    ],
+    "oracle_text": "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.",
+    "colors": [
+      "G"
     ]
   },
   "Vastlands Scavenger": {
@@ -11653,6 +12904,19 @@
       "B"
     ]
   },
+  "Vindictive Triumph": {
+    "name": "Vindictive Triumph",
+    "mana_cost": "{W}{B}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Exile target creature or planeswalker. If that permanent's mana value was 3 or less, return it to the battlefield tapped under your control. Exile it at the beginning of the next end step.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
   "Vindictive Warden": {
     "name": "Vindictive Warden",
     "mana_cost": "{2}{B/R}",
@@ -11666,6 +12930,21 @@
     "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nFirebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\n{3}: This creature deals 1 damage to each opponent.",
     "colors": [
       "B",
+      "R"
+    ]
+  },
+  "Violent Echoes": {
+    "name": "Violent Echoes",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Violent Echoes deals 6 damage to target creature or planeswalker. If excess damage was dealt to that permanent this way, empower Jace X, where X is that excess damage. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
       "R"
     ]
   },
@@ -11690,6 +12969,19 @@
     "colors": [
       "U"
     ]
+  },
+  "Vivien Reid": {
+    "name": "Vivien Reid",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Planeswalker — Vivien",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"",
+    "colors": [
+      "G"
+    ],
+    "loyalty": "5"
   },
   "Vizier of the Menagerie": {
     "name": "Vizier of the Menagerie",
@@ -11757,6 +13049,21 @@
     "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, counter target artifact or creature spell.",
     "colors": [
       "U"
+    ]
+  },
+  "Vraska's Final Mercy": {
+    "name": "Vraska's Final Mercy",
+    "mana_cost": "{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Choose one —\n• You lose 2 life. Destroy target creature or planeswalker.\n• You lose 2 life. Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
     ]
   },
   "Wall of Stone": {
@@ -12009,6 +13316,156 @@
       "U"
     ]
   },
+  "Way of the Cryomancer": {
+    "name": "Way of the Cryomancer",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Cryomancer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−3]: When you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.\"",
+    "colors": [
+      "U"
+    ]
+  },
+  "Way of the Deathbringer": {
+    "name": "Way of the Deathbringer",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Deathbringer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: You may sacrifice a creature. If you do, create a 4/4 green Beast creature token with trample.\"",
+    "colors": [
+      "B"
+    ]
+  },
+  "Way of the Healer": {
+    "name": "Way of the Healer",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Healer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1.\"",
+    "colors": [
+      "W"
+    ]
+  },
+  "Way of the Mentor": {
+    "name": "Way of the Mentor",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Mentor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you gain life, put a loyalty counter on each planeswalker you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Way of the Mind Sculptor": {
+    "name": "Way of the Mind Sculptor",
+    "mana_cost": "{4}{U}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Mind Sculptor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, if you removed two or more loyalty counters to activate it, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Way of the Necromancer": {
+    "name": "Way of the Necromancer",
+    "mana_cost": "{1}{B}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Necromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever a creature you control dies, put a loyalty counter on each planeswalker you control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Way of the Paradox": {
+    "name": "Way of the Paradox",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Paradox enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, you gain 1 life. You may play an additional land this turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Way of the Pyromancer": {
+    "name": "Way of the Pyromancer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Pyromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[+1]: Add {R}.\"",
+    "colors": [
+      "R"
+    ]
+  },
+  "Way of the Warlord": {
+    "name": "Way of the Warlord",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Warlord enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: This planeswalker deals 2 damage to up to one target creature or planeswalker and 2 damage to target player.\"",
+    "colors": [
+      "R"
+    ]
+  },
+  "Way of the Wildspeaker": {
+    "name": "Way of the Wildspeaker",
+    "mana_cost": "{4}{G}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Wildspeaker enters, empower Jace 7. (Put seven loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: Create a 4/4 green Beast creature token with trample.\"",
+    "colors": [
+      "G"
+    ]
+  },
   "Weaponize the Monsters": {
     "name": "Weaponize the Monsters",
     "mana_cost": "{R}",
@@ -12122,6 +13579,18 @@
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {R} or {W}.",
     "colors": []
   },
+  "Winter, Tormented Loner": {
+    "name": "Winter, Tormented Loner",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Warlock",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When Winter enters, you may sacrifice a creature or planeswalker. When you do, each opponent sacrifices a creature of their choice.\nWinter gets +1/+0 for each creature and planeswalker card in your graveyard.",
+    "colors": [
+      "B"
+    ]
+  },
   "Witness Protection": {
     "name": "Witness Protection",
     "mana_cost": "{U}",
@@ -12177,6 +13646,18 @@
       "R"
     ]
   },
+  "Wrath of the Bloodmane": {
+    "name": "Wrath of the Bloodmane",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {1} less to cast if you control a legendary creature.\nWrath of the Bloodmane deals 4 damage to target creature or planeswalker.",
+    "colors": [
+      "R"
+    ]
+  },
   "Yip Yip!": {
     "name": "Yip Yip!",
     "mana_cost": "{W}",
@@ -12185,6 +13666,20 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Your Fate Ends Here": {
+    "name": "Your Fate Ends Here",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Destroy target creature or planeswalker with mana value 3 or greater. Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
     "colors": [
       "W"
     ]
@@ -12395,1137 +13890,6 @@
     "oracle_text": "Ward—Pay 2 life. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays 2 life.)\n{T}: You may cast target Zombie creature card from your graveyard this turn.",
     "colors": [
       "B"
-    ]
-  },
-  "Valkyrie's Call": {
-    "name": "Valkyrie's Call",
-    "mana_cost": "{3}{W}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Whenever a nontoken, non-Angel creature you control dies, return that card to the battlefield under its owner's control with a +1/+1 counter on it. It has flying and is an Angel in addition to its other types.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Nine-Lives Familiar": {
-    "name": "Nine-Lives Familiar",
-    "mana_cost": "{1}{B}{B}",
-    "type_line": "Creature — Cat",
-    "power": "1",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "This creature enters with eight revival counters on it if you cast it.\nWhen this creature dies, if it had a revival counter on it, return it to the battlefield with one fewer revival counter on it at the beginning of the next end step.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Infernal Vessel": {
-    "name": "Infernal Vessel",
-    "mana_cost": "{2}{B}",
-    "type_line": "Creature — Human Cleric",
-    "power": "2",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "When this creature dies, if it wasn't a Demon, return it to the battlefield under its owner's control with two +1/+1 counters on it. It's a Demon in addition to its other types.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Kykar, Zephyr Awakener": {
-    "name": "Kykar, Zephyr Awakener",
-    "mana_cost": "{2}{W}{U}",
-    "type_line": "Legendary Creature — Bird Wizard",
-    "power": "3",
-    "toughness": "4",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "Flying\nWhenever you cast a noncreature spell, choose one —\n• Exile another target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.\n• Create a 1/1 white Spirit creature token with flying.",
-    "colors": [
-      "U",
-      "W"
-    ]
-  },
-  "Banishing Light": {
-    "name": "Banishing Light",
-    "mana_cost": "{2}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "When this enchantment enters, exile target nonland permanent an opponent controls until this enchantment leaves the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Stasis Snare": {
-    "name": "Stasis Snare",
-    "mana_cost": "{1}{W}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flash"
-    ],
-    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this enchantment enters, exile target creature an opponent controls until this enchantment leaves the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Prayer of Binding": {
-    "name": "Prayer of Binding",
-    "mana_cost": "{3}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flash"
-    ],
-    "oracle_text": "Flash\nWhen this enchantment enters, exile up to one target nonland permanent an opponent controls until this enchantment leaves the battlefield. You gain 2 life.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Hoarding Dragon": {
-    "name": "Hoarding Dragon",
-    "mana_cost": "{3}{R}{R}",
-    "type_line": "Creature — Dragon",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "Flying\nWhen this creature enters, you may search your library for an artifact card, exile it, then shuffle.\nWhen this creature dies, you may put the exiled card into its owner's hand.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Angelic Destiny": {
-    "name": "Angelic Destiny",
-    "mana_cost": "{2}{W}{W}",
-    "type_line": "Enchantment — Aura",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Enchant"
-    ],
-    "oracle_text": "Enchant creature\nEnchanted creature gets +4/+4, has flying and first strike, and is an Angel in addition to its other types.\nWhen enchanted creature dies, return this card to its owner's hand.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Fake Your Own Death": {
-    "name": "Fake Your Own Death",
-    "mana_cost": "{1}{B}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Treasure"
-    ],
-    "oracle_text": "Until end of turn, target creature gets +2/+0 and gains \"When this creature dies, return it to the battlefield tapped under its owner's control and you create a Treasure token.\" (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Undying Malice": {
-    "name": "Undying Malice",
-    "mana_cost": "{B}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Until end of turn, target creature gains \"When this creature dies, return it to the battlefield tapped under its owner's control with a +1/+1 counter on it.\"",
-    "colors": [
-      "B"
-    ]
-  },
-  "Relm's Sketching": {
-    "name": "Relm's Sketching",
-    "mana_cost": "{2}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Create a token that's a copy of target artifact, creature, or land.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Extravagant Replication": {
-    "name": "Extravagant Replication",
-    "mana_cost": "{4}{U}{U}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Self-Reflection": {
-    "name": "Self-Reflection",
-    "mana_cost": "{4}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flashback"
-    ],
-    "oracle_text": "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "U"
-    ]
-  },
-  "Ragnarok, Divine Deliverance": {
-    "name": "Ragnarok, Divine Deliverance",
-    "mana_cost": "",
-    "type_line": "Legendary Creature — Beast Avatar",
-    "power": "7",
-    "toughness": "6",
-    "keywords": [
-      "Reach",
-      "Vigilance",
-      "Haste",
-      "Trample",
-      "Menace"
-    ],
-    "oracle_text": "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.",
-    "colors": [
-      "B",
-      "G"
-    ]
-  },
-  "Vanille, Cheerful l'Cie": {
-    "name": "Vanille, Cheerful l'Cie",
-    "mana_cost": "{3}{G}",
-    "type_line": "Legendary Creature — Human Cleric",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Meld",
-      "Mill"
-    ],
-    "oracle_text": "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Fang, Fearless l'Cie": {
-    "name": "Fang, Fearless l'Cie",
-    "mana_cost": "{2}{B}",
-    "type_line": "Legendary Creature — Human Warrior",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [],
-    "oracle_text": "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)",
-    "colors": [
-      "B"
-    ]
-  },
-  "Manifest Dread": {
-    "name": "Manifest Dread",
-    "mana_cost": "{1}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Manifest",
-      "Manifest dread"
-    ],
-    "oracle_text": "Manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
-    "colors": [
-      "G"
-    ]
-  },
-  "Esper Origins": {
-    "name": "Esper Origins",
-    "mana_cost": "{1}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Transform",
-      "Flashback"
-    ],
-    "oracle_text": "Surveil 2. You gain 2 life. If this spell was cast from a graveyard, exile it, then put it onto the battlefield transformed under its owner's control with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)\nFlashback {3}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "G"
-    ]
-  },
-  "Summon: Esper Maduin": {
-    "name": "Summon: Esper Maduin",
-    "mana_cost": "",
-    "type_line": "Enchantment Creature — Saga Elemental",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [],
-    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Reveal the top card of your library. If it's a permanent card, put it into your hand.\nII — Add {G}{G}.\nIII — Other creatures you control get +2/+2 and gain trample until end of turn.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Cecil, Dark Knight": {
-    "name": "Cecil, Dark Knight",
-    "mana_cost": "{B}",
-    "type_line": "Legendary Creature — Human Knight",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [
-      "Darkness",
-      "Deathtouch",
-      "Transform"
-    ],
-    "oracle_text": "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Cecil, Redeemed Paladin": {
-    "name": "Cecil, Redeemed Paladin",
-    "mana_cost": "",
-    "type_line": "Legendary Creature — Human Knight",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [
-      "Lifelink",
-      "Protect"
-    ],
-    "oracle_text": "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Driver of the Dead": {
-    "name": "Driver of the Dead",
-    "mana_cost": "{3}{B}",
-    "type_line": "Creature — Vampire",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "When this creature dies, return target creature card with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Electroduplicate": {
-    "name": "Electroduplicate",
-    "mana_cost": "{2}{R}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flashback"
-    ],
-    "oracle_text": "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "R"
-    ]
-  },
-  "Rite of Replication": {
-    "name": "Rite of Replication",
-    "mana_cost": "{2}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.",
-    "colors": [
-      "U"
-    ]
-  },
-  "The Fire Crystal": {
-    "name": "The Fire Crystal",
-    "mana_cost": "{2}{R}{R}",
-    "type_line": "Legendary Artifact",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Nullpriest of Oblivion": {
-    "name": "Nullpriest of Oblivion",
-    "mana_cost": "{1}{B}",
-    "type_line": "Creature — Vampire Cleric",
-    "power": "2",
-    "toughness": "1",
-    "keywords": [
-      "Lifelink",
-      "Menace",
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {3}{B} (You may pay an additional {3}{B} as you cast this spell.)\nLifelink\nMenace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, if it was kicked, return target creature card from your graveyard to the battlefield.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Sun-Blessed Healer": {
-    "name": "Sun-Blessed Healer",
-    "mana_cost": "{1}{W}",
-    "type_line": "Creature — Human Cleric",
-    "power": "3",
-    "toughness": "1",
-    "keywords": [
-      "Lifelink",
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Raise the Past": {
-    "name": "Raise the Past",
-    "mana_cost": "{2}{W}{W}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Rise of the Dark Realms": {
-    "name": "Rise of the Dark Realms",
-    "mana_cost": "{7}{B}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Put all creature cards from all graveyards onto the battlefield under your control.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Ordeal of Nylea": {
-    "name": "Ordeal of Nylea",
-    "mana_cost": "{1}{G}",
-    "type_line": "Enchantment — Aura",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Enchant"
-    ],
-    "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Soulstone Sanctuary": {
-    "name": "Soulstone Sanctuary",
-    "mana_cost": "",
-    "type_line": "Land",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
-    "colors": []
-  },
-  "Dropkick Bomber": {
-    "name": "Dropkick Bomber",
-    "mana_cost": "{2}{R}",
-    "type_line": "Creature — Goblin Warrior",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [],
-    "oracle_text": "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"",
-    "colors": [
-      "R"
-    ]
-  },
-  "Celestial Armor": {
-    "name": "Celestial Armor",
-    "mana_cost": "{2}{W}",
-    "type_line": "Artifact — Equipment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Equip",
-      "Flash"
-    ],
-    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this Equipment enters, attach it to target creature you control. That creature gains hexproof and indestructible until end of turn.\nEquipped creature gets +2/+0 and has flying.\nEquip {3}{W} ({3}{W}: Attach to target creature you control. Equip only as a sorcery.)",
-    "colors": [
-      "W"
-    ]
-  },
-  "Mild-Mannered Librarian": {
-    "name": "Mild-Mannered Librarian",
-    "mana_cost": "{G}",
-    "type_line": "Creature — Human",
-    "power": "1",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "{3}{G}: This creature becomes a Werewolf. Put two +1/+1 counters on it and you draw a card. Activate only once.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Academic Ascent": {
-    "name": "Academic Ascent",
-    "mana_cost": "{1}{W}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Target creature gets +2/+2 and gains flying until end of turn.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "W"
-    ]
-  },
-  "Arcane Amphisbaena": {
-    "name": "Arcane Amphisbaena",
-    "mana_cost": "{1}{G}",
-    "type_line": "Creature — Snake",
-    "power": "1",
-    "toughness": "1",
-    "keywords": [
-      "Surveil",
-      "Empower Jace",
-      "Deathtouch"
-    ],
-    "oracle_text": "Deathtouch\nWhen this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "G"
-    ]
-  },
-  "Campus Crier": {
-    "name": "Campus Crier",
-    "mana_cost": "{1}{W}",
-    "type_line": "Creature — Human Advisor",
-    "power": "3",
-    "toughness": "1",
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "{1}, Exile this card from your graveyard: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "W"
-    ]
-  },
-  "Fatehold Charm": {
-    "name": "Fatehold Charm",
-    "mana_cost": "{W}{U}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Empower Jace"
-    ],
-    "oracle_text": "Choose one —\n• Draw a card. Empower Jace 2.\n• Return target spell or creature to its owner's hand.\n• Creatures you control get +1/+2 until end of turn.",
-    "colors": [
-      "U",
-      "W"
-    ]
-  },
-  "Hexhaven Battalion": {
-    "name": "Hexhaven Battalion",
-    "mana_cost": "{4}{W}{W}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace",
-      "Landcycling",
-      "Basic landcycling",
-      "Typecycling",
-      "Cycling"
-    ],
-    "oracle_text": "Create three 2/2 colorless Wizard Soldier creature tokens named Cadet. Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
-    "colors": [
-      "W"
-    ]
-  },
-  "Inspired Tethermage": {
-    "name": "Inspired Tethermage",
-    "mana_cost": "{2}{G}",
-    "type_line": "Creature — Elf Warrior",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Whenever you put one or more loyalty counters on a planeswalker, put a +1/+1 counter on this creature.\n{6}: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "G"
-    ]
-  },
-  "Jace's Machinations": {
-    "name": "Jace's Machinations",
-    "mana_cost": "{2}{U}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Until end of turn, you may activate loyalty abilities of Jace planeswalkers you control on any player's turn any time you could cast an instant.\nEmpower Jace 8. (Put eight loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "U"
-    ]
-  },
-  "Keeper of the Quiet Hour": {
-    "name": "Keeper of the Quiet Hour",
-    "mana_cost": "{3}",
-    "type_line": "Artifact Creature — Chimera",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": []
-  },
-  "Mindseeker Oculus": {
-    "name": "Mindseeker Oculus",
-    "mana_cost": "{2}{U}",
-    "type_line": "Creature — Homunculus",
-    "power": "2",
-    "toughness": "1",
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When this creature enters, empower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "U"
-    ]
-  },
-  "No Admittance": {
-    "name": "No Admittance",
-    "mana_cost": "{1}{R}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "No Admittance deals 3 damage to any target.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "R"
-    ]
-  },
-  "Overwrite the Multiverse": {
-    "name": "Overwrite the Multiverse",
-    "mana_cost": "{4}{B}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Exile all creatures. Empower Jace X, where X is the number of creatures exiled this way. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Plan for All Outcomes": {
-    "name": "Plan for All Outcomes",
-    "mana_cost": "{3}{U}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When this enchantment enters, the owner of up to one other target nonland permanent puts it on their choice of the top or bottom of their library.\nWhenever you cast your first noncreature spell each turn, empower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "U"
-    ]
-  },
-  "Protege's Awakening": {
-    "name": "Protege's Awakening",
-    "mana_cost": "{3}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nDraw a card.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Repurposed Enforcer": {
-    "name": "Repurposed Enforcer",
-    "mana_cost": "{1}{W}",
-    "type_line": "Creature — Human Soldier",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Whenever this creature attacks, empower Jace X, where X is the number of creatures you control. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "W"
-    ]
-  },
-  "Rewrite Regrets": {
-    "name": "Rewrite Regrets",
-    "mana_cost": "{3}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Return target creature or planeswalker card with mana value 6 or less from your graveyard to the battlefield.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Solve for Disappointment": {
-    "name": "Solve for Disappointment",
-    "mana_cost": "{1}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Tam's Resistance": {
-    "name": "Tam's Resistance",
-    "mana_cost": "{1}{G/U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Put a +1/+1 counter on up to one target creature. It gains vigilance until end of turn.\nEmpower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "G",
-      "U"
-    ]
-  },
-  "Theorist's Proxy": {
-    "name": "Theorist's Proxy",
-    "mana_cost": "{1}{U}",
-    "type_line": "Creature — Illusion",
-    "power": "0",
-    "toughness": "3",
-    "keywords": [
-      "Surveil",
-      "Empower Jace",
-      "Flash"
-    ],
-    "oracle_text": "Flash\nWhen this creature enters, empower Jace 3. (Put three loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\n{U}, Sacrifice this creature: The next spell you cast this turn can't be countered.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Violent Echoes": {
-    "name": "Violent Echoes",
-    "mana_cost": "{2}{R}{R}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Violent Echoes deals 6 damage to target creature or planeswalker. If excess damage was dealt to that permanent this way, empower Jace X, where X is that excess damage. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "R"
-    ]
-  },
-  "Vraska's Final Mercy": {
-    "name": "Vraska's Final Mercy",
-    "mana_cost": "{B}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "Choose one —\n• You lose 2 life. Destroy target creature or planeswalker.\n• You lose 2 life. Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Way of the Mentor": {
-    "name": "Way of the Mentor",
-    "mana_cost": "{2}{W}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Mentor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you gain life, put a loyalty counter on each planeswalker you control.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Way of the Necromancer": {
-    "name": "Way of the Necromancer",
-    "mana_cost": "{1}{B}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Necromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever a creature you control dies, put a loyalty counter on each planeswalker you control.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Ajani Resolute": {
-    "name": "Ajani Resolute",
-    "mana_cost": "{1}{W}",
-    "type_line": "Legendary Planeswalker — Ajani",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Whenever you gain life, put a loyalty counter on Ajani.\n0: You gain 1 life.\n−4: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n−10: You get an emblem with \"Creatures you control get +2/+2.\"",
-    "colors": [
-      "W"
-    ],
-    "loyalty": "2"
-  },
-  "Chandra, Torch of Defiance": {
-    "name": "Chandra, Torch of Defiance",
-    "mana_cost": "{2}{R}{R}",
-    "type_line": "Legendary Planeswalker — Chandra",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "+1: Exile the top card of your library. You may cast that card. If you don't, Chandra deals 2 damage to each opponent.\n+1: Add {R}{R}.\n−3: Chandra deals 4 damage to target creature.\n−7: You get an emblem with \"Whenever you cast a spell, this emblem deals 5 damage to any target.\"",
-    "colors": [
-      "R"
-    ],
-    "loyalty": "4"
-  },
-  "Kaito, Cunning Infiltrator": {
-    "name": "Kaito, Cunning Infiltrator",
-    "mana_cost": "{1}{U}{U}",
-    "type_line": "Legendary Planeswalker — Kaito",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"",
-    "colors": [
-      "U"
-    ],
-    "loyalty": "3"
-  },
-  "Vivien Reid": {
-    "name": "Vivien Reid",
-    "mana_cost": "{3}{G}{G}",
-    "type_line": "Legendary Planeswalker — Vivien",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "+1: Look at the top four cards of your library. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\n−3: Destroy target artifact, enchantment, or creature with flying.\n−8: You get an emblem with \"Creatures you control get +2/+2 and have vigilance, trample, and indestructible.\"",
-    "colors": [
-      "G"
-    ],
-    "loyalty": "5"
-  },
-  "Avatar of Burgeoning Echoes": {
-    "name": "Avatar of Burgeoning Echoes",
-    "mana_cost": "{G}{U}",
-    "type_line": "Creature — Avatar",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [
-      "Surveil",
-      "Empower Jace",
-      "Landfall"
-    ],
-    "oracle_text": "Landfall — Whenever a land you control enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−10]: Put a +1/+1 counter on target creature for each land you control.\"",
-    "colors": [
-      "G",
-      "U"
-    ]
-  },
-  "Gideon the Oathless": {
-    "name": "Gideon the Oathless",
-    "mana_cost": "{2}{B}",
-    "type_line": "Legendary Creature — Human Mercenary",
-    "power": "3",
-    "toughness": "3",
-    "keywords": [
-      "Ward"
-    ],
-    "oracle_text": "Ward—Discard a card.\nWhenever a creature an opponent controls enters, Gideon deals 1 damage to that player.\nWhenever an opponent activates a loyalty ability, Gideon deals 1 damage to that player.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Kiora of Salt and Sand": {
-    "name": "Kiora of Salt and Sand",
-    "mana_cost": "{1}{G}{U}",
-    "type_line": "Legendary Creature — Merfolk Noble",
-    "power": "2",
-    "toughness": "4",
-    "keywords": [],
-    "oracle_text": "Whenever you attack, if you've activated a loyalty ability this turn, untap target attacking creature. It can't be blocked this turn.\nPlaneswalkers you control have \"[−8]: Create an 8/8 blue Leviathan creature token with hexproof.\"",
-    "colors": [
-      "G",
-      "U"
-    ]
-  },
-  "Sanctum Lurker": {
-    "name": "Sanctum Lurker",
-    "mana_cost": "{2}{B}",
-    "type_line": "Creature — Horror",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Empower Jace"
-    ],
-    "oracle_text": "When this creature enters, empower Jace 1.\nPlaneswalkers you control aren't put into their owners' graveyards for having 0 loyalty.\nPlaneswalkers you control have \"[+2]: This planeswalker deals 1 damage to each opponent and you gain 1 life.\"",
-    "colors": [
-      "B"
-    ]
-  },
-  "Way of the Cryomancer": {
-    "name": "Way of the Cryomancer",
-    "mana_cost": "{2}{U}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Cryomancer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−3]: When you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.\"",
-    "colors": [
-      "U"
-    ]
-  },
-  "Way of the Deathbringer": {
-    "name": "Way of the Deathbringer",
-    "mana_cost": "{2}{B}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Deathbringer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: You may sacrifice a creature. If you do, create a 4/4 green Beast creature token with trample.\"",
-    "colors": [
-      "B"
-    ]
-  },
-  "Way of the Healer": {
-    "name": "Way of the Healer",
-    "mana_cost": "{3}{W}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Healer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1.\"",
-    "colors": [
-      "W"
-    ]
-  },
-  "Way of the Mind Sculptor": {
-    "name": "Way of the Mind Sculptor",
-    "mana_cost": "{4}{U}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Mind Sculptor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, if you removed two or more loyalty counters to activate it, draw a card.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Way of the Paradox": {
-    "name": "Way of the Paradox",
-    "mana_cost": "{2}{G}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Paradox enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, you gain 1 life. You may play an additional land this turn.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Way of the Pyromancer": {
-    "name": "Way of the Pyromancer",
-    "mana_cost": "{1}{R}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Pyromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[+1]: Add {R}.\"",
-    "colors": [
-      "R"
-    ]
-  },
-  "Way of the Warlord": {
-    "name": "Way of the Warlord",
-    "mana_cost": "{2}{R}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Warlord enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: This planeswalker deals 2 damage to up to one target creature or planeswalker and 2 damage to target player.\"",
-    "colors": [
-      "R"
-    ]
-  },
-  "Way of the Wildspeaker": {
-    "name": "Way of the Wildspeaker",
-    "mana_cost": "{4}{G}",
-    "type_line": "Legendary Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Empower Jace"
-    ],
-    "oracle_text": "When Way of the Wildspeaker enters, empower Jace 7. (Put seven loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: Create a 4/4 green Beast creature token with trample.\"",
-    "colors": [
-      "G"
-    ]
-  },
-  "Ajani, Caller of the Pride": {
-    "name": "Ajani, Caller of the Pride",
-    "mana_cost": "{1}{W}{W}",
-    "type_line": "Legendary Planeswalker — Ajani",
-    "power": null,
-    "toughness": null,
-    "loyalty": "4",
-    "keywords": [],
-    "oracle_text": "+1: Put a +1/+1 counter on up to one target creature.\n−3: Target creature gains flying and double strike until end of turn.\n−8: Create X 2/2 white Cat creature tokens, where X is your life total.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Chandra, Flameshaper": {
-    "name": "Chandra, Flameshaper",
-    "mana_cost": "{5}{R}{R}",
-    "type_line": "Legendary Planeswalker — Chandra",
-    "power": null,
-    "toughness": null,
-    "loyalty": "6",
-    "keywords": [],
-    "oracle_text": "+2: Add {R}{R}{R}. Exile the top three cards of your library. Choose one. You may play that card this turn.\n+1: Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\n−4: Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Liliana, Dreadhorde General": {
-    "name": "Liliana, Dreadhorde General",
-    "mana_cost": "{4}{B}{B}",
-    "type_line": "Legendary Planeswalker — Liliana",
-    "power": null,
-    "toughness": null,
-    "loyalty": "6",
-    "keywords": [],
-    "oracle_text": "Whenever a creature you control dies, draw a card.\n+1: Create a 2/2 black Zombie creature token.\n−4: Each player sacrifices two creatures of their choice.\n−9: Each opponent chooses a permanent they control of each permanent type and sacrifices the rest.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Ajani Unrelenting": {
-    "name": "Ajani Unrelenting",
-    "mana_cost": "{4}{R}{R}",
-    "type_line": "Legendary Planeswalker — Ajani",
-    "power": null,
-    "toughness": null,
-    "loyalty": "5",
-    "keywords": [],
-    "oracle_text": "Whenever you activate a loyalty ability, create a 2/2 colorless Wizard Soldier creature token named Cadet.\n+1: Creatures you control get +1/+0 and gain haste until end of turn.\n−2: Discard your hand, then draw a card for each creature you control.\n−3: Ajani deals 4 damage to each creature except for tokens you control.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Garruk, Curse Breaker": {
-    "name": "Garruk, Curse Breaker",
-    "mana_cost": "{3}{G}{G}",
-    "type_line": "Legendary Planeswalker — Garruk",
-    "power": null,
-    "toughness": null,
-    "loyalty": "5",
-    "keywords": [],
-    "oracle_text": "Whenever a creature you control with power 4 or greater enters, draw a card.\n+2: Untap up to two target lands.\n−3: Create a 4/4 green Beast creature token with trample.\n−4: Until your next turn, whenever one or more creatures attack one of your opponents, those creatures get +2/+2 and gain trample until end of turn.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Garruk, Veiled Butcher": {
-    "name": "Garruk, Veiled Butcher",
-    "mana_cost": "{3}{B}{B}",
-    "type_line": "Legendary Planeswalker — Garruk",
-    "power": null,
-    "toughness": null,
-    "loyalty": "5",
-    "keywords": [],
-    "oracle_text": "If a creature an opponent controls would die, exile it instead.\n+2: Up to one target creature gets -4/-1 until your next turn.\n−2: Each player sacrifices a creature of their choice. If you sacrificed a creature this way, create a 4/4 green Beast creature token with trample.\n−3: Each opponent discards two cards. For each opponent who didn't discard two nonland cards this way, you draw a card.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Jace, Reality Sculptor": {
-    "name": "Jace, Reality Sculptor",
-    "mana_cost": "{3}{U}{U}",
-    "type_line": "Legendary Planeswalker — Jace",
-    "power": null,
-    "toughness": null,
-    "loyalty": "5",
-    "keywords": [
-      "Empower Jace"
-    ],
-    "oracle_text": "+1: Empower Jace X, where X is the number of Islands you control.\n−3: Until your next turn, whenever a creature attacks you or a planeswalker you control, it gets -5/-0 until end of turn.\n0: Exile all but the bottom card of each opponent's library. Activate only if there are twenty-five or more loyalty counters among Jaces you control.",
-    "colors": [
-      "U"
     ]
   }
 }
