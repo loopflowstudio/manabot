@@ -143,3 +143,25 @@ Slice 3 choices (2026-11-24, headless):
   (a fetch after game over); with no count it is omitted rather than parsed
   from the move list.
 - Readers of a shared finished game may read its numbers.
+
+Slice 4 choices (2026-11-24, headless):
+
+- **See its line is a computed play-out, not a playable Study branch.** The
+  policy's first choice, then the policy (first choices) in your seat and the
+  game's own opponent (its own choices, seeded) in theirs, to the end of the
+  next turn. "The person plays on" is not built: Study's Retry authority needs
+  the live session's retained roots and plays one command. A playable branch
+  from a re-executed root is the next step if wanted (a `StudyForkProvider`
+  over `agent_line`'s walk, or a new Play game whose prefix is the record's).
+- The line plays in the real game's world (not re-dealt): the game is over and
+  Show both hands is already allowed. It can show cards the real game never
+  drew. Opponent moves are named by their actions only for a complete game.
+- The agent's choices in the line are its first choices (argmax), not samples,
+  matching "its choice" in the analysis.
+- Key moments: up to five differences (largest probability gap, ≥ 5 points)
+  and three estimate movements (largest change by your next analysed decision,
+  ≥ 5 points), in game order, computed in the client. Untrained policies
+  produce few or none.
+- In the throwaway proof the default analysis did not start: the first
+  registered descriptor (Heuristic) was the opponent, not the Reader. Not a bug
+  in this slice.

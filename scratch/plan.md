@@ -589,6 +589,31 @@ slice 6.
 
 Next: slice 4 (See its line) with key moments, then slice 6.
 
+## Status (2026-11-24, after slice 4)
+
+Built in 9308d9f73a (docs in the commit after it):
+
+- `analysis.agent_line` and `POST /api/traces/{id}/analyses/{analysis}/line`:
+  re-execute to an analysed decision, play the policy's first choice on a
+  copy, continue (policy in the seat, `build_villain_policy` in the other) to
+  the end of the next turn; each step carries the seat's own board. Nothing
+  saved. Test: `test_see_its_line_plays_the_policys_first_choice_on_from_a_decision`.
+- Review: **See its line** at an analysed decision draws the line on the same
+  board (move list, Previous/Next, arrow keys, Escape/Return to the game);
+  **Next key moment** and a "Key moment · …" line (`keyMoments`,
+  `analysis.test.ts`).
+- Cost: a line on a 90-event game is 30–100 ms with the fixture policy.
+- Browser proof (static build, throwaway server, Lessons v Allies vs Heuristic,
+  Reader analysis): `scratch/shots/review-key-moment-{light,dark}.png`,
+  `review-line-{light,dark}.png`.
+
+What it taught: the existing Study branch cannot be reused for finished games
+(its roots live in the live session for 15 minutes), so the line is a
+read-only play-out. Playing on yourself from the line is not built
+(questions.md, slice 4 choices); the plan's "the person plays on" is open.
+
+Next: slice 6 (analysis while you play).
+
 ## Slices
 
 1. **(built)** **A played game plays again.** `record_of`, the walk's self-check
@@ -618,8 +643,9 @@ Next: slice 4 (See its line) with key moments, then slice 6.
 3. **(built)** **The game in numbers.** The reducer, `numbers_json`, the summary on the
    result card and Review's Menu, Games' columns and the My games record
    table with intervals.
-4. **See its line.** From an analysed decision, a Study branch with the
-   agent's choice played (walk to decision N, apply the agent's choice).
+4. **(built, read-only)** **See its line.** From an analysed decision, the
+   agent's choice played and its line to the end of the next turn, plus key
+   moments. Playing on yourself from it is not built.
 5. **(built)** **Watch: revealed hands and branch boundaries** (MTG-423). Independent of
    slices 1–4; may go first if slice 1 stalls.
 6. **Analysis while you play.** The toggle, the catch-up walk, the live
