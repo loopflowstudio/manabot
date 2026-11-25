@@ -47,7 +47,7 @@ use managym::{
         card::{Keyword, Keywords, SpellProfile, StaticAbility},
         effect::{CopyEffect, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
-        mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
+        mana::{Color, Mana, ManaCost, ManaExpiry, ManaRestriction, SpendingContext},
         payment::{Contribution, How, Toward},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -15246,11 +15246,9 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
     attack_with(&mut s, azula);
     settle(&mut s);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    let pool = &mut s.game_mut().state.players[0].mana_pool;
-    let (surviving, _) = std::mem::take(pool)
-        .split_expiring(|expiry| expiry == managym::state::mana::ManaExpiry::Step);
-    *pool = surviving;
-    pool.add(&Mana::parse("R"), None);
+    s.game_mut().state.players[0]
+        .mana_pool
+        .add(&Mana::parse("R"), None);
     cast(&mut s, "Lightning Bolt");
     target_opponent(&mut s);
     // Spend firebending mana before regular red; both expiries are offered.
@@ -15258,7 +15256,7 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
         label == "Spend {R} (expires at end of combat)"
     });
     let mut expected = Mana::parse("R");
-    expected.add(&Mana::parse("R").with_expiry(managym::state::mana::ManaExpiry::EndOfCombat));
+    expected.add(&Mana::parse("R").with_expiry(ManaExpiry::EndOfCombat));
     assert_eq!(s.game().state.players[0].mana_pool, expected);
     // The copy keeps the opponent as its target.
     for _ in 0..10 {

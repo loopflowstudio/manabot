@@ -674,19 +674,23 @@ def test_a_chosen_sacrifice_is_committed_once_and_not_already_paid() -> None:
     )
 
 
+def _single_changed_line(before: str, after: str) -> str:
+    before_lines = before.splitlines()
+    after_lines = after.splitlines()
+    assert len(before_lines) == len(after_lines)
+    changed = [new for old, new in zip(before_lines, after_lines) if old != new]
+    assert len(changed) == 1
+    return changed[0]
+
+
 def test_face_down_card_text_appears_only_when_present() -> None:
     env = priority_root(("Gray Ogre",), ())
     decision = capture_text_decision(env)
     assert "face down" not in decision.text
     payload = json.loads(decision.capture_json)
     payload["observation"]["viewer_state"]["agent_cards"][0]["face_down"] = True
-    text = render_decision(_redigest(payload)).text
-    changed = [
-        (old, new)
-        for old, new in zip(decision.text.splitlines(), text.splitlines())
-        if old != new
-    ]
-    assert len(changed) == 1 and "face down" in changed[0][1]
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "face down" in line
 
 
 def test_put_into_graveyard_this_turn_text_distinguishes_arrival_origin() -> None:
@@ -695,31 +699,16 @@ def test_put_into_graveyard_this_turn_text_distinguishes_arrival_origin() -> Non
     assert "put into the graveyard" not in decision.text
 
     payload = json.loads(decision.capture_json)
-    payload["observation"]["viewer_state"]["agent_cards"][0][
-        "put_into_graveyard_this_turn"
-    ] = True
-    text = render_decision(_redigest(payload)).text
-    changed = [
-        (old, new)
-        for old, new in zip(decision.text.splitlines(), text.splitlines())
-        if old != new
-    ]
-    assert len(changed) == 1
-    assert "; put into the graveyard this turn;" in changed[0][1]
-    assert "from the battlefield" not in changed[0][1]
+    card = payload["observation"]["viewer_state"]["agent_cards"][0]
+    card["put_into_graveyard_this_turn"] = True
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "; put into the graveyard this turn;" in line
+    assert "from the battlefield" not in line
 
-    payload["observation"]["viewer_state"]["agent_cards"][0][
-        "from_battlefield_this_turn"
-    ] = True
-    from_bf = render_decision(_redigest(payload)).text
-    changed_bf = [
-        (old, new)
-        for old, new in zip(decision.text.splitlines(), from_bf.splitlines())
-        if old != new
-    ]
-    assert len(changed_bf) == 1
-    assert "; put into the graveyard from the battlefield this turn;" in changed_bf[0][1]
-    assert "; put into the graveyard this turn;" not in changed_bf[0][1]
+    card["from_battlefield_this_turn"] = True
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "; put into the graveyard from the battlefield this turn;" in line
+    assert "; put into the graveyard this turn;" not in line
 
 
 def test_a_transformed_cecil_token_copy_is_named_by_its_shown_face() -> None:
