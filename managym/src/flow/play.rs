@@ -65,15 +65,7 @@ struct TargetSelection {
 
 impl CastChoices {
     pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
-        if self.profile == SpellProfile::BackFace && object.modal_back {
-            crate::cards::content_pack::default_content_pack()
-                .spell_definition(object, self.profile)
-                .expect("offered spell profile")
-        } else {
-            object
-                .front_or_inset(self.profile)
-                .expect("offered spell profile")
-        }
+        crate::cards::content_pack::spell_face(object, self.profile).expect("offered spell profile")
     }
 
     pub(super) fn matches_spell(
@@ -135,8 +127,7 @@ impl Game {
         profile: SpellProfile,
         authority: CastAuthority<'_>,
     ) -> Option<CastChoices> {
-        let spell = crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], profile)?;
+        let spell = crate::cards::content_pack::spell_face(&self.state[object], profile)?;
         let route = match authority {
             CastAuthority::Resolution { offer, paid } => {
                 // The instruction supplies timing and zone permission for
@@ -353,8 +344,7 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> bool {
-        let Some(face) = crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], cast.profile)
+        let Some(face) = crate::cards::content_pack::spell_face(&self.state[object], cast.profile)
         else {
             return false;
         };
@@ -599,9 +589,8 @@ impl Game {
             let applies = match targets {
                 Some(targets) => targets.iter().any(earns),
                 None => card_ref.target_requirements().iter().any(|requirement| {
-                    self.legal_targets_for_requirement(player, object, cast.profile, requirement)
-                        .iter()
-                        .any(earns)
+                    self.legal_spell_targets(player, object, card_ref, requirement)
+                        .any(|target| earns(&target))
                 }),
             };
             if applies {
@@ -864,11 +853,13 @@ impl Game {
             self.can_pay_cast(player, object, CastChoices { x, ..cast })
         }));
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
-        for requirement in cast.spell(&self.state[object]).target_requirements() {
+        let spell = cast.spell(&self.state[object]);
+        for requirement in spell.target_requirements() {
             if requirement.exact_x() {
-                let legal =
-                    self.legal_targets_for_requirement(player, object, cast.profile, &requirement);
-                values.retain(|x| usize::from(*x) <= legal.len());
+                let legal = self
+                    .legal_spell_targets(player, object, spell, &requirement)
+                    .count();
+                values.retain(|x| usize::from(*x) <= legal);
             }
         }
         values
@@ -1089,14 +1080,9 @@ impl Game {
                         .all(|req| {
                             req.min == 0
                                 || self
-                                    .legal_targets_for_requirement(
-                                        player,
-                                        object,
-                                        cast.profile,
-                                        req,
-                                    )
-                                    .len()
-                                    >= req.min
+                                    .legal_spell_targets(player, object, spell, req)
+                                    .nth(req.min - 1)
+                                    .is_some()
                         })
                 })
                 .collect()
@@ -1233,8 +1219,8 @@ impl Game {
         requirement: &TargetRequirement,
         chosen: &[Target],
     ) -> Vec<Target> {
-        self.legal_targets_for_requirement(player, object, cast.profile, requirement)
-            .into_iter()
+        let spell = cast.spell(&self.state[object]);
+        self.legal_spell_targets(player, object, spell, requirement)
             .filter(|target| {
                 self.can_add_clause_target(requirement, cast.x, chosen.iter().copied(), *target)
             })
@@ -2244,27 +2230,5 @@ impl Game {
             super::resolution::TargetingSource::printed(player, face),
         )
         .filter(move |target| *target != Target::StackSpell(object))
-    }
-
-    /// Legal targets for one targeting requirement of `card`, cast by
-    /// `player`. The card being cast is excluded from stack-spell targets
-    /// (it is not on the stack yet while targets are chosen).
-    pub(crate) fn legal_targets_for_requirement(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-        profile: SpellProfile,
-        requirement: &TargetRequirement,
-    ) -> Vec<Target> {
-        let card = &self.state[object];
-        let face = if profile == SpellProfile::BackFace && card.modal_back {
-            crate::cards::content_pack::default_content_pack()
-                .spell_definition(card, profile)
-                .expect("offered spell profile")
-        } else {
-            card.front_or_inset(profile).expect("offered spell profile")
-        };
-        self.legal_spell_targets(player, object, face, requirement)
-            .collect()
     }
 }

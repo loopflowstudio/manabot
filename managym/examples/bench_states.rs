@@ -749,7 +749,11 @@ fn build(recipe: &Recipe) -> Env {
             }
         }
     }
-    if recipe.state == "names" {
+    if let Some((name, counter)) = match recipe.state.as_str() {
+        "names" => Some(("The Rise of Sozin", CounterKind::Lore)),
+        "myojin-discard" => Some(("Myojin of Night's Reach", CounterKind::Divinity)),
+        _ => None,
+    } {
         let game = env.fixture_game_mut();
         let id = game
             .state
@@ -758,32 +762,14 @@ fn build(recipe: &Recipe) -> Env {
             .enumerate()
             .find_map(|(i, p)| {
                 p.as_ref()
-                    .filter(|p| game.state[p.object].name == "The Rise of Sozin")
+                    .filter(|p| game.state[p.object].name == name)
                     .map(|_| i)
             })
             .unwrap();
         game.state.permanents[managym::state::game_object::PermanentId(id)]
             .as_mut()
             .unwrap()
-            .change_counters(CounterKind::Lore, 1);
-    }
-    if recipe.state == "myojin-discard" {
-        let game = env.fixture_game_mut();
-        let id = game
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .find_map(|(i, p)| {
-                p.as_ref()
-                    .filter(|p| game.state[p.object].name == "Myojin of Night's Reach")
-                    .map(|_| i)
-            })
-            .unwrap();
-        game.state.permanents[managym::state::game_object::PermanentId(id)]
-            .as_mut()
-            .unwrap()
-            .change_counters(CounterKind::Divinity, 1);
+            .change_counters(counter, 1);
     }
     if recipe.state == "herald-statics" {
         env.fixture_game_mut().state.players[0].life = 0;

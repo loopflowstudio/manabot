@@ -113,16 +113,14 @@ pub fn cast_targets(game: &crate::Game) -> Vec<crate::agent::action::Action> {
     else {
         panic!("quality-targets must be choosing targets");
     };
-    let requirements = cast
-        .spell(&game.state[*object])
-        .target_requirements_for_mode(*mode);
+    let spell = cast.spell(&game.state[*object]);
+    let requirements = spell.target_requirements_for_mode(*mode);
     let requirement = &requirements[*requirement_index];
     assert_eq!(
         (requirement.min_for(cast.x), requirement.max_for(cast.x)),
         (1, 1)
     );
-    game.legal_targets_for_requirement(*player, *object, cast.profile, requirement)
-        .into_iter()
+    game.legal_spell_targets(*player, *object, spell, requirement)
         .map(|target| crate::agent::action::Action::ChooseTarget {
             player: *player,
             target,

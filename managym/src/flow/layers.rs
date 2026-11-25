@@ -76,6 +76,7 @@ struct StaticEntry {
 const DIRTY_TYPES: u8 = 1 << 0;
 const DIRTY_ACTIVATIONS: u8 = 1 << 1;
 const DIRTY_STATICS: u8 = 1 << 2;
+const DIRTY_ALL: u8 = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
@@ -97,22 +98,24 @@ pub(super) struct Context<'a> {
 
 #[derive(Clone)]
 enum NodeKind {
-    Static(Arc<SourcePlan>),
+    Static {
+        plan: Arc<SourcePlan>,
+        /// Populated on first application for multi-layer static effects (CR 613.6).
+        targets: Option<Vec<PermanentId>>,
+    },
     Resolved {
         layer: Layer,
         operation: Operation<i32>,
     },
 }
 
-/// An effect keeps one identity across layers. `targets` is populated on its
-/// first application to objects (CR 613.6). Resolved records already bind
+/// An effect keeps one identity across layers. Resolved records already bind
 /// `source` and carry resolved `i32` amounts.
 #[derive(Clone)]
 struct Node {
     source: PermanentId,
     key: Vec<usize>,
     timestamp: PublicId,
-    targets: Option<Vec<PermanentId>>,
     kind: NodeKind,
 }
 
@@ -129,40 +132,33 @@ struct SourcePlan {
 impl Node {
     fn cda(&self) -> bool {
         match &self.kind {
-            NodeKind::Static(plan) => plan.cda,
+            NodeKind::Static { plan, .. } => plan.cda,
             NodeKind::Resolved { .. } => false,
         }
     }
 
     fn reads(&self) -> ReadSet {
         match &self.kind {
-            NodeKind::Static(plan) => plan.reads,
+            NodeKind::Static { plan, .. } => plan.reads,
             NodeKind::Resolved { .. } => ReadSet::default(),
         }
     }
 
     fn has_layer(&self, layer: Layer) -> bool {
         match &self.kind {
-            NodeKind::Static(plan) => plan.parts.iter().any(|(part, _)| *part == layer),
+            NodeKind::Static { plan, .. } => plan.parts.iter().any(|(part, _)| *part == layer),
             NodeKind::Resolved { layer: part, .. } => *part == layer,
         }
     }
 
-    fn has_later_layer(&self, layer: Layer) -> bool {
-        match &self.kind {
-            NodeKind::Static(plan) => plan.parts.iter().any(|(part, _)| *part > layer),
-            NodeKind::Resolved { .. } => false,
-        }
-    }
-
     fn is_static_unbound(&self) -> bool {
-        matches!(self.kind, NodeKind::Static(_)) && self.targets.is_none()
+        matches!(self.kind, NodeKind::Static { targets: None, .. })
     }
 
     fn is_unconditional_attached_or_self(&self) -> bool {
         matches!(
             &self.kind,
-            NodeKind::Static(plan)
+            NodeKind::Static { plan, .. }
                 if plan.condition.is_none()
                     && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
         )
@@ -328,12 +324,12 @@ impl ReadSet {
 }
 
 impl SourcePlan {
-    fn on_source(parts: Vec<(Layer, Operation)>) -> Self {
+    fn new() -> Self {
         Self {
             cda: false,
             scope: StaticScope::This,
             condition: None,
-            parts,
+            parts: Vec::new(),
             reads: ReadSet::default(),
         }
     }
@@ -387,7 +383,6 @@ impl Node {
             source,
             key,
             timestamp,
-            targets: None,
             kind: NodeKind::Resolved { layer, operation },
         }
     }
@@ -594,18 +589,20 @@ impl<'a> Context<'a> {
                     .collect();
                 for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
                     let index = pending[selected];
-                    if nodes[index].targets.is_none()
-                        && nodes[index].has_later_layer(layer)
-                        && !instructions[selected].is_empty()
-                    {
-                        // Instructions already resolved the affected set. Retain
-                        // it only for effects that continue into a later layer.
-                        let mut targets: Vec<_> = instructions[selected]
-                            .iter()
-                            .map(|instruction| instruction.target)
-                            .collect();
-                        targets.dedup();
-                        nodes[index].targets = Some(targets);
+                    if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
+                        if targets.is_none()
+                            && plan.parts.iter().any(|(part, _)| *part > layer)
+                            && !instructions[selected].is_empty()
+                        {
+                            // Instructions already resolved the affected set. Retain
+                            // it only for effects that continue into a later layer.
+                            let mut bound: Vec<_> = instructions[selected]
+                                .iter()
+                                .map(|instruction| instruction.target)
+                                .collect();
+                            bound.dedup();
+                            *targets = Some(bound);
+                        }
                     }
                     context.apply(&nodes[index], &instructions[selected]);
                     // Only a static grant introduces layer nodes. Removing abilities
@@ -640,7 +637,7 @@ impl<'a> Context<'a> {
             #[cfg(debug_assertions)]
             {
                 let mut expected = (**object).clone();
-                expected.dirty = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
+                expected.dirty = DIRTY_ALL;
                 let record = &game.state[game.live_permanent(id).object];
                 Self::finish_object(&mut expected, record);
                 debug_assert_eq!(
@@ -694,9 +691,9 @@ impl<'a> Context<'a> {
                     ability: ability.clone(),
                 })
                 .collect(),
-            dirty: 0,
+            dirty: DIRTY_ACTIVATIONS | DIRTY_STATICS,
         };
-        Self::finish_abilities(&mut object);
+        Self::finish_object(&mut object, source);
         let nodes = object
             .statics
             .iter()
@@ -737,16 +734,6 @@ impl<'a> Context<'a> {
                 .map(|entry| entry.ability.clone())
                 .collect();
         }
-    }
-
-    fn finish_abilities(object: &mut LayerObject) {
-        let view = Arc::make_mut(&mut object.view);
-        Self::finish_activation_purposes(view);
-        view.static_abilities = object
-            .statics
-            .iter()
-            .map(|entry| entry.ability.clone())
-            .collect();
     }
 
     fn finish_activation_purposes(view: &mut Characteristics) {
@@ -827,7 +814,12 @@ impl<'a> Context<'a> {
             .collect();
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
-            let reads = node.reads().fields | if node.is_static_unbound() { ABILITIES } else { 0 };
+            let reads = node.reads().fields
+                | if node.is_static_unbound() {
+                    ABILITIES
+                } else {
+                    0
+                };
             // An unconditional attachment reads only its own controller
             // in layer 2. Independent Auras can apply in one timestamp pass.
             if layer == Layer::Control
@@ -912,43 +904,48 @@ impl<'a> Context<'a> {
     }
 
     fn exists(&self, node: &Node) -> bool {
-        matches!(node.kind, NodeKind::Resolved { .. })
-            || node.targets.is_some()
-            || self
+        match &node.kind {
+            NodeKind::Resolved { .. }
+            | NodeKind::Static {
+                targets: Some(_), ..
+            } => true,
+            NodeKind::Static { targets: None, .. } => self
                 .objects
                 .get(&node.source)
-                .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key))
+                .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key)),
+        }
     }
-    fn targets(&self, node: &Node, plan: &SourcePlan) -> Vec<PermanentId> {
-        if let Some(targets) = &node.targets {
-            return targets.clone();
+    fn targets(
+        &self,
+        source: PermanentId,
+        plan: &SourcePlan,
+        bound: Option<&[PermanentId]>,
+    ) -> Vec<PermanentId> {
+        if let Some(targets) = bound {
+            return targets.to_vec();
         }
         if plan
             .condition
             .as_ref()
-            .is_some_and(|c| !self.condition(c, node.source))
+            .is_some_and(|c| !self.condition(c, source))
         {
             return Vec::new();
         }
         match plan.scope {
             StaticScope::Attached => {
-                return self
-                    .game
-                    .attached_permanent(node.source)
-                    .into_iter()
-                    .collect()
+                return self.game.attached_permanent(source).into_iter().collect();
             }
-            StaticScope::This => return vec![node.source],
+            StaticScope::This => return vec![source],
             _ => {}
         }
         self.objects
             .keys()
             .copied()
-            .filter(|&id| self.scope(&plan.scope, node.source, id))
+            .filter(|&id| self.scope(&plan.scope, source, id))
             .collect()
     }
     fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
-        let plan = match &node.kind {
+        let (plan, bound_targets) = match &node.kind {
             NodeKind::Resolved {
                 layer: part_layer,
                 operation,
@@ -962,12 +959,12 @@ impl<'a> Context<'a> {
                     })
                     .unwrap_or_default();
             }
-            NodeKind::Static(plan) => plan,
+            NodeKind::Static { plan, targets } => (plan, targets.as_deref()),
         };
         if !self.exists(node) {
             return Vec::new();
         }
-        let targets = self.targets(node, plan);
+        let targets = self.targets(node.source, plan, bound_targets);
         if targets.is_empty() {
             return Vec::new();
         }
@@ -1300,7 +1297,7 @@ impl<'a> Context<'a> {
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
-        let mut plan = SourcePlan::on_source(Vec::new());
+        let mut plan = SourcePlan::new();
         let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
             StaticAbility::Continuous(effect) => {
@@ -1405,8 +1402,10 @@ impl<'a> Context<'a> {
             source,
             key: entry.key.clone(),
             timestamp: entry.timestamp,
-            targets: None,
-            kind: NodeKind::Static(Arc::new(plan.summarize())),
+            kind: NodeKind::Static {
+                plan: Arc::new(plan.summarize()),
+                targets: None,
+            },
         })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
@@ -1432,7 +1431,7 @@ impl<'a> Context<'a> {
                     if !view.is_land() {
                         continue;
                     }
-                    object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
+                    object.dirty |= DIRTY_ALL;
                     view.subtypes
                         .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
                     view.subtypes.push(subtype.clone());

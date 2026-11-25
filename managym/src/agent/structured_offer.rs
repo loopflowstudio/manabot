@@ -1104,12 +1104,8 @@ impl Game {
             && requirement.min == 1
             && requirement.max == 1)
             .then(|| {
-                self.legal_targets_for_requirement(
-                    *player,
-                    *object,
-                    SpellProfile::Front,
-                    requirement,
-                )
+                self.legal_spell_targets(*player, *object, card, requirement)
+                    .collect()
             })
     }
 
@@ -1240,8 +1236,7 @@ impl Game {
             return None;
         }
         Some(
-            self.legal_targets_for_requirement(player, object, profile, requirement)
-                .into_iter()
+            self.legal_spell_targets(player, object, spell, requirement)
                 .filter(|target| {
                     self.target_leaves_cost_payable(player, object, cast, &[], *target)
                 })

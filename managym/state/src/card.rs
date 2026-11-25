@@ -2064,6 +2064,16 @@ impl PrintedCharacteristics {
         })
     }
 
+    /// Bitmask of `Color::bit` for this face's printed colors (CR 202.2),
+    /// allocation-free for targeting and protection checks.
+    #[inline]
+    pub fn color_bits(&self) -> u8 {
+        if let Some(colors) = &self.color_override {
+            return colors.iter().fold(0u8, |mask, &color| mask | color.bit());
+        }
+        self.mana_cost.as_ref().map_or(0, ManaCost::color_bits)
+    }
+
     pub fn colors(&self) -> Colors {
         if let Some(colors) = &self.color_override {
             return colors.clone();

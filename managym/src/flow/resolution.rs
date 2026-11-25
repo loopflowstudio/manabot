@@ -34,7 +34,7 @@ use crate::{
         game_object::{
             AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        mana::{Color, Colors, ManaCost},
+        mana::{Colors, ManaCost},
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
@@ -57,54 +57,12 @@ pub(crate) struct TargetingSource {
 }
 
 #[inline]
-const fn color_bit(color: Color) -> u8 {
-    1u8 << (color as u8)
-}
-
-#[inline]
 const fn card_type_bit(card_type: CardType) -> u16 {
-    match card_type {
-        CardType::Creature => 1 << 0,
-        CardType::Instant => 1 << 1,
-        CardType::Sorcery => 1 << 2,
-        CardType::Planeswalker => 1 << 3,
-        CardType::Land => 1 << 4,
-        CardType::Enchantment => 1 << 5,
-        CardType::Artifact => 1 << 6,
-        CardType::Kindred => 1 << 7,
-        CardType::Battle => 1 << 8,
-    }
+    1u16 << (card_type as u8)
 }
 
 fn colors_mask(colors: &Colors) -> u8 {
-    colors.iter().fold(0u8, |mask, &color| mask | color_bit(color))
-}
-
-fn printed_colors_mask(face: &PrintedCharacteristics) -> u8 {
-    if let Some(colors) = &face.color_override {
-        return colors_mask(colors);
-    }
-    let Some(cost) = &face.mana_cost else {
-        return 0;
-    };
-    let mut mask = 0u8;
-    for pair in &cost.hybrid {
-        for &color in pair {
-            mask |= color_bit(color);
-        }
-    }
-    for color in [
-        Color::White,
-        Color::Blue,
-        Color::Black,
-        Color::Red,
-        Color::Green,
-    ] {
-        if cost.cost[color as usize] > 0 {
-            mask |= color_bit(color);
-        }
-    }
-    mask
+    colors.iter().fold(0u8, |mask, &color| mask | color.bit())
 }
 
 fn types_mask(types: &CardTypes) -> u16 {
@@ -118,7 +76,7 @@ impl TargetingSource {
     pub(crate) fn printed(controller: PlayerId, face: &PrintedCharacteristics) -> Self {
         Self {
             controller,
-            colors: printed_colors_mask(face),
+            colors: face.color_bits(),
             types: types_mask(&face.types),
         }
     }
@@ -135,7 +93,7 @@ impl TargetingSource {
     pub(super) fn matches(&self, quality: SourceQuality) -> bool {
         match quality {
             SourceQuality::Everything => true,
-            SourceQuality::Color(color) => (self.colors & color_bit(color)) != 0,
+            SourceQuality::Color(color) => (self.colors & color.bit()) != 0,
             SourceQuality::CardType(card_type) => (self.types & card_type_bit(card_type)) != 0,
         }
     }
