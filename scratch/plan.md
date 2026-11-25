@@ -373,77 +373,30 @@ Selected cohort `bench_states` medians (ms, sizes 4 / 8 / 16):
   requirement), contributing to `mi_malloc_aligned` + `mi_free` growing **+1.21%** in
   `bench_steps` and **+0.66%** in `bench_search`.
 
-## Planned performance slices (profile-backed)
+## Performance slices P1–P4 · Built (`8fa265d0a8`)
 
-- **P1 · Skip untouched `creature_types` and `static_abilities` rebuilds in `Context::finish_object`**
-  - *Hypothesis:* Any layer-7c P/T buff or counter breaks `Arc::ptr_eq` with `SourceSeed`,
-    causing `finish_object` to unconditionally recompute `CreatureTypes::among(&view.subtypes)`
-    (5.57% `bench_search`, 3.53% `bench_steps`; 426-entry binary search + `Vec<String>`
-    clone/sort/dedup), rebuild `SpendingContext::Activate`, and clone `object.statics` into
-    `view.static_abilities` (1.62% `bench_search`, 0.91% `bench_steps`). Tracking per-object
-    `types_dirty` (layer-4/land-type writes) and `statics_dirty` (layer-6 static/ability-loss
-    writes) in `Context` skips those rebuilds when untouched, targeting ~4–6% recovery on
-    `bench_search`, ~2.5–3.5% on `bench_steps`, and cutting `myojin-discard` `characteristics`.
-  - *Deletes:* Unconditional `CreatureTypes::among`, `SpendingContext::Activate` rebuild,
-    and `view.static_abilities` cloning for objects unmodified in layers 4 and 6.
-  - *Focused check:* Preserve `debug_assert_eq!(*board, self.compute_board(None))` and assert
-    in debug that skipped fields equal recomputation. Run debug `rules_tests`, changeling/layer
-    card tests (`mor`, `fdn`, `shm`), release `bench_steps`/`bench_search` digests +
-    `/usr/bin/time -l` instructions, and `bench_states myojin-discard diverse-statics counted-buffs`.
+- **P1** (`layers.rs`): `LayerObject.dirty` bits (`DIRTY_TYPES`, `DIRTY_ACTIVATIONS`, `DIRTY_STATICS`) skip untouched `is_animated` / `CreatureTypes::among`, `SpendingContext::Activate`, and `view.static_abilities` rebuilds in `Context::finish_object`; debug builds assert the incremental view against full recomputation for every permanent.
+- **P2** (`statics.rs`, `state/src/card.rs`, `state/src/subtype.rs`): `Characteristics::has_all_creature_types` checks `creature_types.is_all()` before `types.has_creature_subtypes()`, with `#[inline]` on cross-crate subtype, `Keywords::has`, `CreatureTypes`, and `PrintedCharacteristics::ward` reads.
+- **P3** (`statics.rs`): `Game::refresh_control`'s fast path scans `state.permanents.iter().flatten()` directly instead of per-seat zone/phasing traversal (phased-out control sources conservatively fall through to `layer_board`).
+- **P4** (`layers.rs`, `resolution.rs`, `play.rs`, `action.rs`): `NodeKind::Resolved` carries `Operation<i32>` directly without `Arc<SourcePlan>` or `i32 -> LayerValue -> i32` conversion; `Context::instructions` hoists `controller`, resolves `Operation<LayerValue>` to `Operation<i32>` via `Modification::resolve`, and reads `live_permanent(id).object` lazily only for `LayerValue::ManaValue`. `TargetingSource` packs colors/types into `Copy` `u8`/`u16` bitmasks with zero allocations; `CastChoices::spell` and `legal_targets_for_requirement` read `front_or_inset` without `default_content_pack()` except for modal back faces; `castable_mana_value` checks `legal_spell_targets(...).next().is_none()` without collecting a `Vec<Target>`.
 
-- **P2 · Short-circuit `has_all_creature_types` and inline cross-crate subtype checks**
-  - *Hypothesis:* `Characteristics::has_all_creature_types` calls non-inlined
-    `CardTypes::has_creature_subtypes()` (two `BTreeSet::contains` probes) before checking the
-    1-byte `self.creature_types.is_all()` tag (false for non-changelings), costing 1.39% self
-    in `bench_search` and 1.33% self in `bench_steps` (especially SBA `finished_sagas` /
-    `aura_attachment_illegal` and `Observation::populate_permanents`). Reversing the `&&` order
-    and adding `#[inline]` on `CardTypes::has_creature_subtypes` and
-    `PrintedCharacteristics::{has_all_creature_types, has_subtype, ward}` removes the
-    cross-crate calls and `BTreeSet` probes on non-changelings, recovering ~1.4–2.1%.
-  - *Deletes:* Premature `has_creature_subtypes` `BTreeSet` probes on every non-changeling
-    `Characteristics::has_subtype` check and out-of-line cross-crate stubs on `has_subtype`/`ward`.
-  - *Focused check:* Debug `rules_tests` and `cards` (`mor`, `fdn`, `dom`, `observability`);
-    release `bench_steps`/`bench_search` digests + `/usr/bin/time -l` instructions.
+Verified in debug (`rules_tests` 207/207; `cards` across `mor`, `fdn`, `shm`, `dom`, `usg`, `emn`, `c17`, `psnc`, `con`, `ogw`, `tla`, `observability` 800/800; `managym-state --lib` 18/18; `managym --lib` `flow::statics` + `flow::action` 12/12) and uninstrumented release on Apple M4 Max (`/usr/bin/time -l`, all four digests identical to `managym/perf/baseline.json`):
 
-- **P3 · Scan `state.permanents` directly in `refresh_control`'s fast path**
-  - *Hypothesis:* When `DerivedCache.board` is absent, `refresh_control` calls
-    `iter_battlefield_permanents` for both seats, running zone iteration, `permanent_of`
-    lookups, and `is_phased_out` (`permanent_has_modification`) on every permanent (+1.13% net
-    in `bench_search`, +0.49% in `bench_steps`). Checking `self.state.effects.is_empty()` and
-    scanning `self.state.permanents.iter().flatten()` directly (a phased-out control Aura
-    conservatively falls through to `layer_board`, which handles phasing accurately) removes
-    the zone and phasing lookups from the no-control fast path, recovering ~0.5–1.0%.
-  - *Deletes:* The `[PlayerId(0), PlayerId(1)].into_iter().flat_map(|seat| self.iter_battlefield_permanents(seat))`
-    indirection and `is_phased_out` check in `refresh_control`'s guard.
-  - *Focused check:* Debug `cards` (`usg`, `emn`, `c17`, `psnc`); release `bench_steps`/`bench_search`
-    digests + `/usr/bin/time -l` instructions; `bench_states control-auras`.
+| Workload | Reference `7d3ac1eb1c` | Pre-slice `055e67dda6` | Built `8fa265d0a8` | vs Pre-slice | vs Reference |
+|---|---:|---:|---:|---:|---:|
+| `bench_steps` instructions (median of 2) | 46.722B | 49.395B | **45.990B** (46.000B, 45.980B) | **-6.89%** | **-1.57%** |
+| `bench_steps` cycles (median) | 10.984B | 11.710B | **10.757B** | **-8.14%** | **-2.06%** |
+| `bench_steps` wall / throughput (median) | 2.750 s (43,116/s) | 2.944 s (40,277/s) | **2.714 s (43,685/s)** | **-7.81%** | **-1.31%** |
+| `bench_search` instructions | 1,027.894B | 1,105.336B | **981.060B** | **-11.24%** | **-4.56%** |
+| `bench_search` cycles | 244.491B | 256.941B | **221.497B** | **-13.79%** | **-9.40%** |
+| `bench_search` wall (total / worst) | — | — | **55.722 s / 1.339 s** | — | — |
 
-- **P4 · Resolve `Context::instructions` to `Modification<i32>` and make `TargetingSource` allocation-free**
-  - *Hypothesis:* (a) `Context::instructions` looks up `self.controller(node.source)` in a
-    `BTreeMap` and `live_permanent(id)` per target and runs `Modification::map_amount` to
-    rebuild `Modification<LayerValue>` for every modification (+1.19% `bench_search`, +1.05%
-    `bench_steps`), while `Node::resolved` converts every `Modification<i32>` record into
-    `Modification<LayerValue>` only for `instructions` to convert it back. Carrying resolved
-    `Modification<i32>` on `Instruction` (via `Modification::resolve`) and hoisting
-    `controller` out of the target loop removes the round-trip and per-target lookups.
-    (b) `legal_targets_for_requirement` calls `default_content_pack().spell_definition` and
-    `TargetingSource::printed`, cloning `CardTypes`'s `BTreeSet` on the heap per requirement
-    (2.38% `bench_search`, 1.63% `bench_steps`). Borrowing `&CardTypes` (or a `Copy` bitmask)
-    in `TargetingSource` and reading `self.state[object].front_or_inset(profile)` when
-    `profile != SpellProfile::BackFace` eliminates those allocations. Combined target: ~1.5–2.2%.
-  - *Deletes:* The `i32 -> LayerValue::Fixed -> i32` round-trip in `Node::resolved` /
-    `Context::instructions`, per-target `self.controller(node.source)` lookups in
-    `Context::instructions`, unreachable non-fixed `LayerValue` arms in `Context::apply`, and
-    the per-check `BTreeSet<CardType>` heap clone in `TargetingSource::printed`.
-  - *Focused check:* Preserves D1 `StaticAbility::continuous` / `LayerValue` serialization and
-    all targeting / LKI / modal-back-face rules. Run debug `rules_tests`, `cards` (`dom`, `fdn`,
-    `con`, `usg`, `ogw`, `shm`, `tla`), release `bench_steps`/`bench_search` digests +
-    `/usr/bin/time -l` instructions, and `bench_states quality-targets counted-buffs myojin-discard`.
+Release `bench_states` (`--features benchmark`): `myojin-discard` `resolution / step:resolve` dropped from 0.094 / 0.187 / 0.490 ms → **0.030 / 0.060 / 0.157 ms** (sz 4 / 8 / 16, **3.1x**); `after-resolution / characteristics` dropped from 0.016 / 0.043 / 0.129 ms → **0.005 / 0.012 / 0.039 ms** (**3.3x**); `control-auras` `characteristics` 0.002 / 0.004 / 0.010 ms; `counted-buffs` `priority / characteristics` 0.005 / 0.007 / 0.016 ms; `quality-targets` `priority / characteristics` 0.004 / 0.007 / 0.016 ms; `diverse-statics` `priority / characteristics` 0.002 / 0.007 / 0.016 ms (all `boards`/`cmp` counts identical).
 
 ### Deferred x86-64 Engine Budget hardware check
 
-Local figures above are Apple M4 Max (arm64 macOS) instruction counts and profiles; no
-x86-64 Linux wall-time claim is made until CI runs on `ubuntu-24.04` after P1–P4 land:
+Local figures above are Apple M4 Max (arm64 macOS) instruction counts; no
+x86-64 Linux wall-time claim is made until CI runs on `ubuntu-24.04`:
 
 ```bash
 gh workflow run ci.yml --ref jack-heart/df83ea-close-foundations-characteristic -f measure=<commit>
@@ -451,8 +404,6 @@ gh workflow run ci.yml --ref jack-heart/df83ea-close-foundations-characteristic 
 
 ## Remaining
 
-1. Implement performance slices P1–P4 and verify digests, debug cache invariants, and
-   `/usr/bin/time -l` instruction recovery on `bench_steps` and `bench_search`.
-2. Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,
+1. Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,
    `--test-threads 2`) and the Engine Budget CI verification on `ubuntu-24.04` (recording a
    new reference only if needed, with its reason).
