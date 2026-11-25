@@ -136,6 +136,7 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByTestId('walk-caption').hover();
   await expect(page.getByTestId('walk-caption')).toHaveAttribute('data-holding', 'true');
+  await expect(page.getByTestId('walk-count')).toHaveText(/^\d+ of \d+ · holding$/);
   await page.waitForTimeout(150);
   await page.screenshot({ path: testInfo.outputPath('walk-holding-wash.png') });
   await page.emulateMedia({ colorScheme: 'dark' });
@@ -242,4 +243,30 @@ test('the Menu turns the walk off, and the browser remembers it', async ({ page 
   await expect(page.getByTestId('game')).toBeVisible();
   await page.getByTestId('game-menu').click();
   await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
+});
+
+test('a reload never walks turns already shown, and the next opponent turn still walks', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const sent = { count: 0 };
+  await startAgainstRandom(page, sent);
+  await playUntil(page, async () => (await page.locator('[data-testid=recent-fact].theirs').count()) > 0, 120);
+  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false', { timeout: 30_000 });
+  const shownLines = await page.locator('[data-testid=game-log] button[data-history-seq]').count();
+
+  await page.reload();
+  await expect(page.getByTestId('game')).toBeVisible();
+  await expect(page.locator('[data-testid=game-log] button[data-history-seq]')).toHaveCount(shownLines);
+  for (let sample = 0; sample < 8; sample += 1) {
+    expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
+    await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
+    await page.waitForTimeout(200);
+  }
+
+  let walked = false;
+  await playUntil(page, async () => {
+    walked = (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) > 0;
+    return walked;
+  }, 120);
+  expect(walked).toBe(true);
 });

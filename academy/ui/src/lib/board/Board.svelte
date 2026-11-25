@@ -440,14 +440,18 @@
       if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
         returnToNow();
         shownSeq = lastSeq;
-      } else if (revision !== shownRevision || lastSeq > shownSeq) {
+      } else if (revision === shownRevision) {
+        // Recovery filled in history the table had already shown before a
+        // reload: those facts are read, never walked again.
+        shownSeq = Math.max(shownSeq, lastSeq);
+      } else {
         const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : unreadWalkStops(currentStops, shownSeq);
         if (fresh.length > 0) {
           walkQueue = fresh.map(stop => stop.seq);
           selection = { seq: walkQueue[0], scope: 'stop' };
           walking = true;
           captionHovered = false;
-        } else if (revision !== shownRevision) {
+        } else {
           returnToNow();
         }
         shownSeq = Math.max(shownSeq, lastSeq);
@@ -1072,7 +1076,7 @@
             <div class="walk-actions type-caption">
               {#if cursor !== null}
                 {#if activeStopIndex >= 0}
-                  <span class="walk-count" data-testid="walk-count">{activeStopIndex + 1} of {scrubber.stops.length}{#if walking && captionHovered} · holding{/if}</span>
+                  <span class="walk-count" data-testid="walk-count">{activeStopIndex + 1} of {scrubber.stops.length}{#if walking && captionHovered}{' · holding'}{/if}</span>
                 {/if}
                 <button type="button" class="walk-btn" data-testid="walk-now" onclick={returnToNow}>Now <kbd>Esc</kbd></button>
               {/if}

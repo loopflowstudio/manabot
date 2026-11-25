@@ -94,8 +94,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
   `npm ci` there, about a minute; Chromium is cached; delete the script
-  afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a game. Triggered abilities
+  afterwards). Click only offers: `[data-testid=action-option]` rows (the
+  "All legal choices" list sits outside `action-panel`, so a selector scoped
+  to the panel misses discard and other list-only prompts) and the panel's
+  `primary-action`/`prompt-action` buttons; other buttons open the deck
+  picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   The configured-launch table (`managym academy play`) has no Rematch in its

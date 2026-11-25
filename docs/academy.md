@@ -1060,8 +1060,9 @@ cursor reaches now. The decision in the rail stays live throughout: pressing
 one of its buttons or a number key (`1`–`9`) returns to now and commits that
 choice. A click on an earlier board, or Space, only returns to now and never
 acts. History lines, scrubber ticks, ← →, caption hover and **Show their turn
-again** always respond directly. Reconnecting returns the cursor to now and
-shows the actual pending decision.
+again** always respond directly. Reconnecting or reloading returns the cursor
+to now and shows the actual pending decision; turns already told are not
+walked again.
 
 **After the opponent acts,** the board starts at their first unread board stop
 and walks forward one kept board at a time: first Lightning Strike on the
