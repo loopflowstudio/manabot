@@ -69,11 +69,11 @@ The three optional fields on `LegacyPermanentView` are:
 - `restrictions` lists the active `cant_be_blocked`, `cant_block`,
   `cant_attack_or_block`, `doesnt_untap` and `must_attack` rules.
 
-False and empty fields are omitted. The remaining UI pass can consume these
-directly on `PermanentState`. The catalog test checks registered definitions,
+False and empty fields are omitted. The UI reads these
+directly from `PermanentState` (`academy/ui/src/lib/types.ts`). The catalog test checks registered definitions,
 where printed Ward has already become a trigger.
 
-### 3. One UI badge vocabulary (`academy/ui/src/lib/board/badges.ts`)
+### One UI badge vocabulary (`academy/ui/src/lib/board/badges.ts`)
 
 Create one pure module `badges.ts` taking `(permanent: PermanentState, face: CardFace | null, blocks?: string | null)` and producing the ordered list of badges and facts used by:
 - `BoardCard.svelte` (board chip subset + width/row fitter),
@@ -184,7 +184,7 @@ Updated in place before implementation so the next pass builds directly to them:
 
 ## Passes
 
-1. **Complete.** Game rules, layered abilities, public-id join, protocol schemas and the Academy reconnect path are implemented and tested.
+1. **Done (74d1830899).** Native `permanent_details_json`, combat legality sharing the restriction rules, public-id join in `decision_surface_view`, protocol schemas, `PermanentState` types. No test results were recorded in scratch; gate reruns the acceptance commands.
 2. **Next. Browser unified vocabulary + fit rule + piling.**
    `academy/ui/src/lib/board/badges.ts` + unit tests, `BoardCard.svelte` (spiral
    mark, measured whole-chip `+N` fitter, struck-through Defender, Flash off the
