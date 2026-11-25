@@ -103,6 +103,18 @@ export class Travel {
   }
 }
 
+/**
+ * A card put down somewhere it does not stay (a cancelled drag, a refused
+ * drop) slides from there back to its slot. Like a travel, it ends in the slot
+ * and holds nothing, and the next frame's travel cancels it.
+ */
+export function settle(element: HTMLElement, from: DOMRect, reduced: boolean): void {
+  for (const animation of element.getAnimations()) if (animation.id === TRAVEL) animation.cancel();
+  const to = element.getBoundingClientRect();
+  if (reduced || !visible(to)) return;
+  move(element, from, to, MOVE_MS, false);
+}
+
 function move(element: HTMLElement, from: DOMRect, to: DOMRect, duration: number, fade: boolean): void {
   const dx = from.left + from.width / 2 - (to.left + to.width / 2);
   const dy = from.top + from.height / 2 - (to.top + to.height / 2);

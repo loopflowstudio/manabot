@@ -1461,9 +1461,15 @@ class GameSession:
             player_token if isinstance(player_token, str) else None,
         )
         if access is None or not access["mine"]:
-            raise ValueError("played_from_unavailable: Only your own games can be played on.")
+            raise ValueError(
+                "played_from_unavailable: Only your own games can be played on."
+            )
         source = self.attempt_store.load(trace_id)
         assert source is not None
+        if source["config"].get("watch_players") is not None:
+            raise ValueError(
+                "played_from_unavailable: A watched game has no seat of yours."
+            )
         if source["end_reason"] == "active":
             raise ValueError("played_from_active: That game is still being played.")
         events = source["events"]
@@ -1472,7 +1478,9 @@ class GameSession:
             or events[event]["actor"] != "hero"
             or events[event].get("auto")
         ):
-            raise ValueError("played_from_decision: That step is not one of your decisions.")
+            raise ValueError(
+                "played_from_decision: That step is not one of your decisions."
+            )
         return PlayedFrom(trace_id, event), source
 
     def _play_recorded_prefix(
@@ -1527,8 +1535,7 @@ class GameSession:
                 event is None
                 or event["actor"] != actor
                 or len(offers) != 1
-                or context.actions[action]["description"]
-                != event["action_description"]
+                or context.actions[action]["description"] != event["action_description"]
             ):
                 raise ValueError(
                     f"played_from_diverged: Step {index + 1} no longer plays as recorded."
@@ -1561,7 +1568,9 @@ class GameSession:
                     }
                 )
                 if result["status"] != "accepted":
-                    raise ValueError("played_from_diverged: A recorded move was refused.")
+                    raise ValueError(
+                        "played_from_diverged: A recorded move was refused."
+                    )
                 apply_due_swaps()
         finally:
             self._villain_offer_policy, self.auto_pass = saved
@@ -4415,14 +4424,23 @@ async def play_socket(websocket: WebSocket) -> None:
                     failed = True
                     dispatched = False
                     try:
-                        response, broadcast = await asyncio.to_thread(
-                            _dispatch_table_request,
-                            record,
-                            participant,
-                            parsed,
-                            committed,
-                            publish_analysis,
-                        )
+                        if isinstance(parsed, ShowAnalysisMessage):
+                            response, broadcast = await asyncio.to_thread(
+                                _dispatch_table_request,
+                                record,
+                                participant,
+                                parsed,
+                                committed,
+                                publish_analysis,
+                            )
+                        else:
+                            response, broadcast = await asyncio.to_thread(
+                                _dispatch_table_request,
+                                record,
+                                participant,
+                                parsed,
+                                committed,
+                            )
                         failed = record.game.mirror_retry is not None
                         dispatched = True
                     finally:
@@ -4961,6 +4979,24 @@ def _recorded_mirrors(players: list[dict[str, Any]]) -> list[dict[str, Any] | No
     return [by_seat.get(seat) for seat in (0, 1)]
 
 
+def _played_from_index(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Source game and starting turn for a game played on from another."""
+    played_from = payload.get("played_from")
+    if not played_from:
+        return None
+    event = played_from["event"]
+    events = payload["events"]
+    observation = (
+        events[event]["observation"]
+        if 0 <= event < len(events)
+        else payload["final_observation"]
+        if event == len(events)
+        else None
+    )
+    turn = observation["turn"].get("turn_number") if observation else None
+    return {**played_from, "turn": turn}
+
+
 @app.get("/api/traces/{trace_id}/recording")
 def get_recording_index(
     trace_id: str,
@@ -5058,14 +5094,7 @@ def get_recording_index(
         "seat_swaps": seat_swaps,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
         # A game played on from another: its source and the turn it starts at.
-        "played_from": {
-            **payload["played_from"],
-            "turn": payload["events"][payload["played_from"]["event"]]["observation"][
-                "turn"
-            ].get("turn_number"),
-        }
-        if payload.get("played_from")
-        else None,
+        "played_from": _played_from_index(payload),
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -5183,35 +5212,38 @@ def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
     with _ANALYSING_LOCK:
         if trace_id in _ANALYSING:
             raise HTTPException(409, "analysis_running")
-        runners: dict[int, PolicyRunner] = {}
+        _ANALYSING.add(trace_id)
+    runners: dict[int, PolicyRunner] = {}
+    try:
         try:
-            with ExitStack() as loaded:
-                setup = config.to_rust()
-                for piloted_seat in seats_piloted:
-                    runner = registry.load(
-                        descriptor.id,
-                        setup,
-                        seat=piloted_seat,
-                        seed=int(config.seed or 0),
-                    )
-                    loaded.callback(runner.close)
-                    runners[piloted_seat] = runner
-                loaded.pop_all()
+            setup = config.to_rust()
+            for piloted_seat in seats_piloted:
+                runners[piloted_seat] = registry.load(
+                    descriptor.id,
+                    setup,
+                    seat=piloted_seat,
+                    seed=int(config.seed or 0),
+                )
         except (ImportError, OSError, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
-        _ANALYSING.add(trace_id)
-    analysis = store.start_analysis(
-        trace_id, final_seat, descriptor.record(), len(events)
-    )
+        analysis = store.start_analysis(
+            trace_id, final_seat, descriptor.record(), len(events)
+        )
 
-    def run() -> None:
-        try:
-            run_analysis(store, analysis, attempt, None, runners)
-        finally:
-            with _ANALYSING_LOCK:
-                _ANALYSING.discard(trace_id)
+        def run() -> None:
+            try:
+                run_analysis(store, analysis, attempt, None, runners)
+            finally:
+                with _ANALYSING_LOCK:
+                    _ANALYSING.discard(trace_id)
 
-    threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+        threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+    except BaseException:
+        for runner in runners.values():
+            runner.close()
+        with _ANALYSING_LOCK:
+            _ANALYSING.discard(trace_id)
+        raise
     return {"id": analysis}
 
 

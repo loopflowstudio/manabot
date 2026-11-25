@@ -128,13 +128,13 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     });
     await page.mouse.move(x, y);
     await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
     await clickCard(page.locator(`[data-object-id="${ownId}"]`));
     await waitForRevision(page, before);
     expect((await page.evaluate(() => window.__mana.commands.at(-1)!)).offer_id).toBeDefined();
     await page.mouse.move(2, 2);
-    await expect(page.locator(`[data-object-id="${ownId}"]`)).toHaveAttribute('aria-label', /tapped/);
+    await expect(page.locator(`[data-object-id="${ownId}"]`)).toHaveAttribute('aria-label', /tapped/i);
 
     // Space pays what remains along the plan the button reads.
     const after = await frame(page);
@@ -146,7 +146,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
       before = after.revision;
       await page.keyboard.press('Space');
       await waitForRevision(page, before);
-      for (const id of remaining) await expect(page.locator(`[data-object-id="${id}"]`)).toHaveAttribute('aria-label', /tapped/);
+      for (const id of remaining) await expect(page.locator(`[data-object-id="${id}"]`)).toHaveAttribute('aria-label', /tapped/i);
     }
     await expect(page.getByTestId('stack-entry').filter({ hasText: 'Lightning Strike' })).toHaveCount(1);
     await expect(planned(page)).toHaveCount(0);

@@ -1,6 +1,7 @@
 /** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
 import { writeFile } from 'node:fs/promises';
 import { expect, test, type Request } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
 
 interface Sample {
   match: string; revision: number; input: number; sent: number | null;
@@ -55,6 +56,8 @@ for (const [seed, width, height, motion] of [
             // Rewrite here: a routed second socket can reach this probe before the app.
             if (message.type === 'new_game') {
               message.config.seed = gameSeed;
+              // The picker lists no standalone Search player; the timed opponent is set on the request.
+              if (gameSeed !== 0) { message.config.villain_type = 'search'; message.config.villain_sims = 64; }
               super.send(JSON.stringify(message));
               return;
             }
@@ -99,7 +102,7 @@ for (const [seed, width, height, motion] of [
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
     await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
+    await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that
@@ -110,6 +113,7 @@ for (const [seed, width, height, motion] of [
       }));
       await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
+      await showEachCreaturesChoice(page);
       const actions = page.getByTestId('action-option');
       if (input === 15) { await page.getByTestId('game-menu').click(); await page.getByTestId('inspect-toggle').check(); await page.getByTestId('game-menu').click(); }
       const labels = await actions.allTextContents();

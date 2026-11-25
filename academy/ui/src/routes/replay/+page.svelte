@@ -247,6 +247,9 @@
 
   async function open(id: string): Promise<void> {
     studyStore.resetSelection(); lastHistoryKey = '';
+    clearTimeout(analysisPoll);
+    line = null; lineAt = 0; lineBusy = false;
+    analyses = null; analysisChoices = null; analysisChoice = null; analyseWith = ''; analysisError = '';
     let saved: { key?: string; near?: number | 'chooser'; reveal?: boolean } = {};
     try { saved = JSON.parse(sessionStorage.getItem(`etude.replay.${id}`) ?? '{}'); } catch { /* Invalid preferences select no private data. */ }
     const params = page.url.searchParams;
@@ -543,7 +546,7 @@
   {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
   {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}
   {#if analyses && analysisChoices && !analysis && !index?.watch}
-    <p class="type-caption text-ink-3" data-testid="analysis-absent">{analysisChoices.unavailable ?? (analysisChoices.policies.length ? 'No analysis yet · Analyse with… in the Menu' : 'No analysis: no registered policy can read this game. Install a policy provider (managym.bots) to analyse it.')}</p>
+    <p class="type-caption text-ink-3" data-testid="analysis-absent">{analysisChoices.unavailable ?? (analysisChoices.policies.length ? 'No analysis yet · Analyse with… in Settings' : 'No analysis: no registered policy can read this game. Install a policy provider (managym.bots) to analyse it.')}</p>
   {/if}
   {#if replayStore.producing && index}
     <section aria-label="Live frontier work" class="type-caption text-ink-2">
@@ -718,7 +721,7 @@
 {#if index && frame}
   <Board
     {frame}
-    live={studying && canRetry}
+    interaction={studying && canRetry ? 'study' : 'read-only'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameAt(viewerSeat), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameAt((1 - viewerSeat) as 0 | 1), deck: deckOf(1 - viewerSeat), description: identityAt((1 - viewerSeat) as 0 | 1).description }}

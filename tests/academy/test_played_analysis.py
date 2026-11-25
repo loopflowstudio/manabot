@@ -592,3 +592,35 @@ def test_showing_analysis_admits_policies_off_the_game_lock(
     # are each shown analysis's own load, on its worker.
     assert factory.admitted_under_lock[0] is False
     assert len(factory.admitted_under_lock) == 1 + len(factory.sessions) == 3
+
+
+def test_failed_analysis_load_releases_game_slot(
+    tmp_path: Path, registry: PolicyRegistry
+) -> None:
+    @dataclass
+    class FlakyLoadFactory(ReadingFactory):
+        fail_load: bool = True
+
+        def load(self, *, seat: int, seed: int) -> ReadingSession:
+            if self.fail_load:
+                raise OSError("checkpoint unreadable")
+            return super().load(seat=seat, seed=seed)
+
+    factory = FlakyLoadFactory()
+    key = registry.register(factory)
+    finished(tmp_path)
+    store = AttemptStore(tmp_path / "play.sqlite")
+    with store.connect() as db:
+        (trace_id,) = db.execute("SELECT id FROM attempts").fetchone()
+    client = TestClient(server.app)
+    first = client.post(
+        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
+    )
+    assert first.status_code == 409
+    assert trace_id not in server._ANALYSING
+    factory.fail_load = False
+    second = client.post(
+        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
+    )
+    assert second.status_code == 200, second.text
+    wait_complete(client, trace_id)

@@ -220,8 +220,8 @@
   const participantStudying = $derived(gameStore.restoredDecision !== null);
   const inputReady = $derived(!gameStore.commandPending && gameStore.work?.state !== 'running' && stopsPending === null && gameStore.connection === 'connected');
   // Study retains its separate retry capability; live play is one authority gate.
-  const canSubmitLive = $derived(gameActive && pilotCanAct && !participantStudying
-    && !gameStore.branchProjection && !gameStore.newGamePending && inputReady);
+  const liveTable = $derived(gameActive && pilotCanAct && !participantStudying && !gameStore.branchProjection);
+  const canSubmitLive = $derived(liveTable && !gameStore.newGamePending && inputReady);
   const canPassTurn = $derived(canSubmitLive && decisionFrame?.action_space === 'PRIORITY' && (decisionFrame?.offers.length ?? 0) > 0);
   const canStudyRetry = $derived(participantStudying && !gameStore.branchAttemptId && gameStore.hasCapability('explore_study') && inputReady);
   // A Study branch shows its own projection with no live offers.
@@ -569,7 +569,7 @@
   {#if inGame && boardFrame}
     <Board
       frame={boardFrame}
-      live={participantStudying ? canStudyRetry : canSubmitLive}
+      interaction={canSubmitLive ? 'play' : canStudyRetry ? 'study' : 'read-only'}
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}
@@ -588,8 +588,9 @@
       interrupted={gameStore.resumeFailed}
       payment={paymentState}
       onpreview={previewPayment}
-      combatPreview={canSubmitLive && !participantStudying ? fetchCombatPreview : undefined}
+      combatPreview={liveTable ? fetchCombatPreview : undefined}
       onact={handleActionSelect}
+      pending={gameStore.commandPending}
       onpassturn={handlePassTurn}
       {notices}
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),

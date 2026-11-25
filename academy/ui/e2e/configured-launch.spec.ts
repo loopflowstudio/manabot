@@ -113,7 +113,7 @@ test('imported launch setup shows selected sources and switches back to bundled 
   await expect(page.getByText('Selected source: my-deck.txt', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/launch/imported-setup.png', fullPage: true });
   await imports.uncheck();
-  await page.getByText('Browse decks and cards',{exact:true}).click();
+  await page.getByText('Browse bundled decks and cards',{exact:true}).click();
   await expect(page.getByTestId('deck-browser')).toBeVisible();
   await imports.check();
   await expect(page.getByTestId('deck-browser')).toHaveCount(0);

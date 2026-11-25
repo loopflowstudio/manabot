@@ -4,11 +4,12 @@ import json
 from pathlib import Path
 import random
 
+from fastapi.testclient import TestClient
 import pytest
 
-from managym.academy import server
+from managym.academy import server, trace
 from managym.academy.recording import ReplayedViews
-from tests.academy.test_played_replay import BOLT, played, play
+from tests.academy.test_played_replay import BOLT, play, played
 
 
 def decision(events: list[dict], nth: int) -> int:
@@ -85,3 +86,61 @@ def test_a_game_played_on_is_left_out_of_my_record(tmp_path: Path) -> None:
     assert numbers is not None and numbers[1] is not None
     assert json.loads(numbers[1])["played_from"] == event
     assert game.attempt_store.record(owners) == [before]
+
+
+def test_recording_index_handles_played_on_game_before_first_new_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
+    token = "p" * 36
+    game, source = played(tmp_path, player_token=token)
+    event = decision(source.trace["events"], 2)
+    source_id = game.match_id
+    game.new_game(
+        {
+            "played_from": {"trace_id": source_id, "event": event},
+            "player_token": token,
+        }
+    )
+    # Stop before committing a move at `event`: len(events) == event.
+    game.close(end_reason="new_game")
+    client = TestClient(server.app)
+    response = client.get(
+        f"/api/traces/{game.match_id}/recording",
+        headers={"x-etude-player-token": token},
+    )
+    assert response.status_code == 200, response.text
+    played_from = response.json()["played_from"]
+    assert played_from["trace_id"] == source_id
+    assert played_from["event"] == event
+    assert (
+        played_from["turn"]
+        == source.trace["events"][event]["observation"]["turn"]["turn_number"]
+    )
+
+
+def test_watch_game_cannot_be_played_on(tmp_path: Path) -> None:
+    game = server.GameSession(tmp_path)
+    game.new_game(
+        {
+            "hero_deck": BOLT,
+            "villain_deck": BOLT,
+            "villain_type": "random",
+            "seed": 11,
+        }
+    )
+    game.close(end_reason="new_game")
+    # Mark the stored trace as a Watch recording.
+    store = game.attempt_store
+    with store.connect() as db:
+        (raw,) = db.execute(
+            "SELECT trace_json FROM attempts WHERE id=?", (game.match_id,)
+        ).fetchone()
+        payload = json.loads(raw)
+        payload["config"]["watch_players"] = ["random", "random"]
+        db.execute(
+            "UPDATE attempts SET trace_json=? WHERE id=?",
+            (json.dumps(payload), game.match_id),
+        )
+    with pytest.raises(ValueError, match="played_from_unavailable"):
+        game.new_game({"played_from": {"trace_id": game.match_id, "event": 0}})

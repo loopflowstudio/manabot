@@ -603,6 +603,32 @@ with several actions opens them beside the card; choose one, or press Escape to
 close the list without acting. A card with no action sends nothing when
 clicked.
 
+You can also play or cast from hand by dragging (mouse, pen or touch). Press a
+playable land or castable spell and drag it onto the battlefield: the full card
+follows the pointer — even when lifted from a covered fan — while its slot stays
+stepped back in your hand. Any lands the automatic payer would tap stay outlined
+on the board, and a dashed frame over the battlefield names what releasing does
+(**Play Island**, **Cast Lightning Bolt**, or **Choose how to play …** when the
+card has several legal offers). Over your hand, the rail or the bars, the frame
+softens and reads **Release to cancel**. Release over the battlefield to commit
+a single offer — the card travels from where you dropped it onto the stack or
+battlefield — or to open the card's choices at the drop point when it has
+several; choosing an offer commits it, while **Cancel** or Escape returns the
+card to your hand and restores focus to it. Release outside the battlefield, or
+press Escape while dragging, to return the card with nothing sent. If the server
+rejects a dropped play, the card returns to your hand and the notice explains
+why. Discard and "choose a card" prompts in hand, and choices in an out-of-board
+tray, stay click-only, and casting a spell stays separate from choosing its
+target.
+
+When a spell or ability asks for a target, click a legal target or pull a line
+from the source — the casting spell or ability on the stack, or the asked
+permanent on the battlefield — onto any legal permanent, player plate or stack
+entry (including non-spell abilities). A dashed outline marks each legal
+permanent while you drag. The outline turns solid when the line snaps to it.
+When the line snaps to a target, the board previews any lands it would tap.
+Release to choose that target, or release elsewhere or press Escape to cancel.
+
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
@@ -610,11 +636,11 @@ symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
-outlined plate. Identical permanents with the same choices share a pile, its
-count after the top copy's name ("Forest ×4"; the copies beneath show no name of
-their own), and each copy remains its own control. Crowded rows shrink their cards
-and wrap onto a further line before anything scrolls, and each half gives the
-crowded row more of its height.
+outlined plate. Identical permanents with the same effective abilities, status
+and choices share a pile, its count after the top copy's name ("Forest ×4"; the
+copies beneath show no name of their own), and each copy remains its own
+control. Crowded rows shrink their cards and wrap onto a further line before
+anything scrolls, and each half gives the crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
 a bar above its art, wrapping to a second line rather than being cut; its mana
@@ -623,22 +649,46 @@ colours: a pale tint in light mode and a solid bar in dark mode, white a
 neutral ivory-grey and colourless a cool grey, a land the colour of its basic
 land types, and a card of several colours blended left to right as printed
 hybrid frames are. Power and toughness sit on a plate at the lower right, and
-on a row above it the permanent's state: attacking, blocking, damage marked on
-it, summoning sickness, counters and the keywords it has now (one it was
-granted is edged in green). Mana symbols carry their letter, and ◇ for
-colourless. A tapped permanent turns a quarter onto its side, in room its row
-keeps for it so it never covers a neighbour; its name bar stays across the
-top. An attacker steps toward the player it attacks and tilts a few degrees:
-one that tapped lies just past the quarter, a vigilant one stays upright.
-Something a spell on the stack targets has a dashed red edge. Cards in hand
-have the type line under the name and the cost on the art; a hand card's name
-stays on one line, shortened with an ellipsis when long, and its full name is
-in the inspection.
+above it sit the permanent's active state chips, in priority order: damage
+marked (`2 damage` in red), a small spiral mark when a creature is summoning
+sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
+`Can't attack or block`, `Doesn't untap`, `Must attack`, `Struck first`, or
+`No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
+the effective battlefield keywords and keyword abilities it has now (evergreen
+keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
+by an effect or another permanent is edged in green). Mana symbols carry their
+letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+in room its row keeps for it so it never covers a neighbour; its name bar stays
+across the top.
+
+Battlefield chips show what applies right now rather than static printed text.
+For example, **Platypus-Bear** displays plain `Defender` when you have no
+Lesson in your graveyard and strikes `Defender` through in muted ink once a
+Lesson is in your graveyard to show it can attack; **Fire Nation Cadets**
+displays `Firebending 2` only while a Lesson is in your graveyard; **Mai,
+Jaded Edge** shows `Prowess`, and an Ally beside **Sokka, Tenacious Tactician**
+shows green-edged `Prowess` alongside granted `Menace`; printed and granted
+Ward show their cost (`Ward {2}`, `Ward—Pay 7 life`, `Ward—Discard a card`);
+and **Ty Lee, Chi Blocker** shows `Prowess` on the board while leaving `Flash`
+to the inspection. Permanents with different effective abilities or status
+never share a pile, so a vanilla 1/1 Soldier token stays separate from a
+Firebending 1 Soldier token. Attacking and blocking do not take chip space: an
+attacker steps toward the player it attacks and tilts a few degrees (one that
+tapped lies just past the quarter, a vigilant one stays upright), and a blocker
+is joined to its attacker by a line. Chips are placed whole and never clipped
+mid-word. A narrow card can show `Firebend 2` or `Ward`. Hover the chip or
+inspect the card for the full ability and Ward cost. Chips use the space beside
+power/toughness when available. Hover a trailing `+N` for the hidden badges.
+The inspection and the card’s accessible name include every badge. On a short
+tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
+Cards in hand have the type line under the name and the cost on the art; a hand
+card's name stays on one line, shortened with an ellipsis when long, and its
+full name is in the inspection.
 
 While you may act, what you can act on is raised and what you cannot steps
 back: a card in hand you cannot play now is dimmed most, a permanent of yours
 nothing acts on is slightly muted, and lands and the opponent's side are never
-dimmed. Summoning sickness is told by its label, not by more dimming. The
+dimmed. Summoning sickness is told by its spiral mark, not by more dimming. The
 selected card, such as the spell whose targets you are choosing, rises higher
 with a thin ink edge. In light mode the grounds are white and grey and what you
 act with is charcoal; in dark mode they are near-black and it is near-white.
@@ -646,17 +696,26 @@ Academy follows the system setting. Card and player names, life, and the
 rail's moves and legal choices are set in Spectral; everything else is in Work
 Sans. The top bar shows the connection only when it has a problem.
 
-Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
-keywords with why it has each (printed, the effect that granted it, or
-"another ability" for a grant from another permanent's static ability), where its power and toughness come
-from (printed or set, counters, each effect by its source and duration, and
-whatever those do not explain as "other effects"), and its state. The
+Rest the pointer on a card for a moment, or focus it with the keyboard, to
+inspect it: its rules text, type line and cost, effective keywords and keyword
+abilities (including `Flash`, and `Defender · can attack anyway` when Defender
+is overridden) with why it has each (printed, the effect that granted it with
+source and duration, the counter for a keyword counter such as a double strike
+counter, or the permanent granting the ability, such as Sokka), where its power and toughness come from (printed or set,
+counters, each effect by its source and duration, and whatever those do not
+explain as "other effects"), and its full battlefield state (summoning sickness
+in words, attacking or blocking, active restrictions from static abilities or
+effects with their provenance, and ability loss). For example, a creature
+enchanted by Watery Grasp reads “Doesn’t untap · Watery Grasp”. Older recordings without
+extended permanent details still render plain `Defender`, effective keywords,
+recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane at the top of the rail
-instead, showing the last card you inspected. The top bar shows the turn. Along
-the bottom of the screen runs the step bar: one cell per step, a line between
-phases, the current step shaded, and in each cell the stop for your turn above
+until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane in the left sidebar
+instead, showing the last card you inspected. Along
+the bottom of the screen runs the step bar: the turn number and whose turn it is,
+then one cell per step, a line between
+phases, the current step shaded in that side's colour, and in each cell the stop for your turn above
 the step's name and the stop for the opponent's turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
@@ -699,7 +758,8 @@ The rail holds:
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
-  nine.
+  nine. During a live combat draft the per-creature answers fold under a closed
+  disclosure (see combat below).
 - **Moves**: the game's moves grouped by turn, each turn headed by whose turn
   it was. Each move names the player who made it; priority-stop automation is
   marked **auto** and never counts as your move. A run of the opponent's and
@@ -723,11 +783,24 @@ opaque and sit above the lines between targets, so a line never crosses them.
 
 Combat is drafted whole. At an attack, every creature that can attack is
 outlined; click one (or focus it and press Enter) to add it to the attack or
-leave it out. Drafted attackers are ringed with a dashed line and lean in, and
-a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
-rail. At a block, click a blocker, then the attacker it blocks; a blocker
-that can block only one attacker takes it at once, and the block's line is
-drawn. The prompt reads the whole plan ("Attack with 3 · not with
+leave it out, or press inside the battlefield rows and drag a box across the
+creatures you want. Every declarable creature touching the box highlights as you
+sweep and joins the drafted attack on release; dragging a box only adds (click a
+creature or **Clear the draft** to remove one), and box selection starts only
+inside the battlefield rows during an attack draft — never on player plates,
+your hand, the rail or the bars, and never for lands or cards that commit one
+action at a time. Drafted attackers are ringed with a dashed line and lean in,
+and a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, drag a declarable blocker onto an attacker it can block, or
+click the blocker and then the attacker. Dragging draws a live blocking line,
+lights up legal attackers and hides an already-assigned blocker's old line while
+you move it; release on a legal attacker to assign or move the block, or release
+elsewhere or press Escape to put it back without disturbing a blocker you
+clicked. On click, a blocker that can block only one attacker still takes it at
+once, and clicking still takes a block back. When combat preview is unavailable
+and blocks are asked one creature at a time, dragging from the blocker onto an
+attacker still draws a blocking line and submits that block. The prompt reads
+the whole plan ("Attack with 3 · not with
 Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
 nothing is declared while drafting. The engine still asks about one creature
 at a time: Academy's read-only combat preview replays the draft on a copy of
@@ -735,15 +808,30 @@ the game and returns the exact answers that declare it, or the first one it
 refuses and why (a lone blocker of a creature with menace, a creature that
 cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
-where the game stands. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. Each creature's own
-answers stay in the full list of legal choices. **Pass turn** (F6) passes
+where the game stands. While a priority stop updates, your draft and selected
+blocker stay in place. If the first declaration is refused at the same
+decision, you can edit the draft and confirm again. If a later declaration
+is refused, the board keeps the accepted declarations and lets you draft
+from that decision. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. While a draft is
+open in live play it is the only way to declare: each creature's own answers
+stay in the list of legal choices under a closed **Each creature's choice**
+disclosure and are not numbered keys. Replay and Study keep them listed, since
+recorded policy probabilities attach to them. **Pass turn** (F6) passes
 priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
-(unless a control with its own action has focus), F6 passes the turn and Escape
-closes an open list. **Menu** holds the session controls, priority stops, the
-sharing and Study tools and feedback.
+(unless a control with its own action has focus), F6 passes the turn, `?` opens
+the shortcuts sheet (which also lists drag gestures) and Escape cancels an
+active drag or closes an open list — cancelling a drag does not also close a
+menu or clear a click-selected blocker. Dragging adds no actions a click or key
+cannot take: short clicks still act as clicks, floating card inspection stays
+closed mid-drag, a new frame, disconnect or opponent read-out cancels a drag
+with nothing sent, and read-only recordings and Watch never start a drag. With
+reduced motion, dragged cards, lines and selection boxes still follow the
+pointer directly, without the return-to-hand or post-drop travel transitions.
+**Menu** holds the session controls, priority stops, the sharing and Study
+tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload in the same tab to
@@ -808,14 +896,16 @@ The game remains one game through the end:
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
-(`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
+(`{1}{G}`). Point at the Cub in your hand, focus it, or drag it toward the
+battlefield. The lands the
 automatic payer would tap get a dashed outline and a mark with their order and
 what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. A planned land
 in a pile of identical lands leaves the pile while the plan is shown, so each
 planned land has its own outline and its mark sits at the same corner of its
 art. Nothing has
-happened yet; pointing and focusing send no action. Pointing at a row of **All
-legal choices** previews that choice the same way.
+happened yet; pointing, focusing and dragging before release send no action.
+Pointing at a row of **All legal choices**, or snapping a targeting line onto a
+target that previews a payment, previews that choice the same way.
 
 Cast the Cub. At the payment prompt the same lands stay dashed and the primary
 button reads **Pay {1}{G}**; its accessible name reads the plan, "Pay {1}{G} ·
@@ -1235,14 +1325,14 @@ The moves before the decision are not listed in the new game's live move list;
 its Review lists them all. If this build no longer plays the old game the same
 way, Play says which step differs and nothing starts.
 
-**Analyse with…** in **Menu** runs any other registered trained policy; each
+**Analyse with…** in **Settings** runs any other registered trained policy; each
 run is saved beside the game, and **Shown** switches between them. Analyses
 are never part of the game's recording or its exports. Readers of a shared
 finished game see its saved analyses; only you can start one.
 
 | You see | Why | What to do |
 |---|---|---|
-| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
+| **No analysis yet · Analyse with… in Settings** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
 | **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
 | **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
 | A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
@@ -1292,7 +1382,7 @@ their marks. A game you play without it saves exactly as before.
 
 The result card of a game you played ends with one line of its numbers, such as
 **9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
-2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
+2 times**. In Review, **This game** in **Settings** gives turns, whether you were on
 the play or the draw (noting starting and final order when a mid-game swap
 changed it) and how long the game took, and a table of both seats (in a game
 where you swapped sides mid-game, each column counts that native seat across the
