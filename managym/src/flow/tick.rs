@@ -331,58 +331,48 @@ impl Game {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
+                    if first == combat.attack_targets.len() {
+                        return None;
+                    }
                     let declared = combat.attack_targets[first..].to_vec();
-                    let permanent_defenders: Vec<_> = declared
+                    let mut attackers = Vec::with_capacity(declared.len());
+                    let mut permanent_defenders = Vec::new();
+                    let mut visible_defenders = Vec::new();
+                    self.state.turn.history[active.0].attacked = true;
+                    for (attacker, target) in declared {
+                        attackers.push(attacker);
+                        let object = self.permanent_object(attacker).expect("declared attacker");
+                        self.state.turn.record_attack(object);
+                        if let Some(target @ super::combat::AttackTarget::Permanent(defender)) =
+                            target
+                        {
+                            permanent_defenders.push((attacker, target));
+                            if let (Some(a), Some(d)) = (
+                                self.permanent_event_ref(attacker),
+                                self.object_event_ref(defender),
+                            ) {
+                                visible_defenders.push((a, d));
+                            }
+                        }
+                    }
+                    let visible_attackers: Vec<_> = attackers
                         .iter()
-                        .filter_map(|&(attacker, target)| match target {
-                            Some(target @ super::combat::AttackTarget::Permanent(_)) => {
-                                Some((attacker, target))
-                            }
-                            _ => None,
-                        })
+                        .filter_map(|&permanent| self.permanent_event_ref(permanent))
                         .collect();
-                    if !declared.is_empty() {
-                        let mut attackers = Vec::with_capacity(declared.len());
-                        self.state.turn.history[active.0].attacked = true;
-                        for (attacker, target) in declared {
-                            attackers.push(attacker);
-                            let object =
-                                self.permanent_object(attacker).expect("declared attacker");
-                            if let Some(target) = target {
-                                self.state.turn.record_attack(object, target);
-                            }
-                        }
-                        let visible_defenders: Vec<_> = permanent_defenders
-                            .iter()
-                            .filter_map(|&(attacker, target)| {
-                                let super::combat::AttackTarget::Permanent(object) = target else {
-                                    return None;
-                                };
-                                Some((
-                                    self.permanent_event_ref(attacker)?,
-                                    self.object_event_ref(object)?,
-                                ))
-                            })
-                            .collect();
-                        self.emit(GameEvent::AttackersDeclared {
-                            permanent_defenders: (!permanent_defenders.is_empty())
-                                .then(|| Box::new(permanent_defenders)),
+                    self.emit(GameEvent::AttackersDeclared {
+                        permanent_defenders: (!permanent_defenders.is_empty())
+                            .then(|| Box::new(permanent_defenders)),
+                        player: active,
+                        attackers,
+                    });
+                    if !visible_attackers.is_empty() {
+                        self.emit_observation_event(GameEvent::CombatAttackersDeclared {
                             player: active,
-                            attackers: attackers.clone(),
+                            defender: self.non_active_player(),
+                            permanent_defenders: (!visible_defenders.is_empty())
+                                .then(|| Box::new(visible_defenders)),
+                            attackers: visible_attackers,
                         });
-                        let attackers = attackers
-                            .into_iter()
-                            .filter_map(|permanent| self.permanent_event_ref(permanent))
-                            .collect::<Vec<_>>();
-                        if !attackers.is_empty() {
-                            self.emit_observation_event(GameEvent::CombatAttackersDeclared {
-                                player: active,
-                                defender: self.non_active_player(),
-                                permanent_defenders: (!visible_defenders.is_empty())
-                                    .then(|| Box::new(visible_defenders)),
-                                attackers,
-                            });
-                        }
                     }
                     return None;
                 };

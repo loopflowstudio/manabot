@@ -856,20 +856,8 @@ impl<'a> Context<'a> {
             StaticScope::SpellsYouControl(_) => return Vec::new(),
             _ => {}
         }
-        let source_controller = source.map_or_else(
-            || {
-                self.game
-                    .state
-                    .zones
-                    .holder_in(node.source, ZoneType::Command)
-                    .expect("live command-zone source")
-            },
-            |id| self.controller(id),
-        );
-        let source_name = Some(source.map_or_else(
-            || self.game.state[node.source].name.as_str(),
-            |id| self.objects[&id].view.name.as_str(),
-        ));
+        let source_controller = self.controller_of(node.source, source);
+        let source_name = Some(self.source_name(node.source, source));
         self.objects
             .iter()
             .filter_map(|(&id, object)| {
@@ -954,8 +942,8 @@ impl<'a> Context<'a> {
             toughness: LayerValue::Fixed(buff.toughness * times),
         })
     }
-    fn source_controller(&self, source: ObjectId) -> PlayerId {
-        self.game.state.permanent_of(source).map_or_else(
+    fn controller_of(&self, source: ObjectId, permanent: Option<PermanentId>) -> PlayerId {
+        permanent.map_or_else(
             || {
                 self.game
                     .state
@@ -964,6 +952,15 @@ impl<'a> Context<'a> {
                     .expect("live command-zone source")
             },
             |id| self.controller(id),
+        )
+    }
+    fn source_controller(&self, source: ObjectId) -> PlayerId {
+        self.controller_of(source, self.game.state.permanent_of(source))
+    }
+    fn source_name(&self, source: ObjectId, permanent: Option<PermanentId>) -> &str {
+        permanent.map_or_else(
+            || self.game.state[source].name.as_str(),
+            |id| self.objects[&id].view.name.as_str(),
         )
     }
     fn controller(&self, id: PermanentId) -> PlayerId {
@@ -1203,8 +1200,9 @@ impl<'a> Context<'a> {
                 predicate,
                 distinct_names,
             } => {
+                let controller = self.source_controller(source);
                 let matching = self.objects.keys().filter(|&&id| {
-                    self.controller(id) == self.source_controller(source)
+                    self.controller(id) == controller
                         && self.matches(id, predicate, Some(source))
                 });
                 super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
@@ -1237,12 +1235,7 @@ impl<'a> Context<'a> {
             id,
             predicate,
             &self.objects[&id].view,
-            source.map(|s| {
-                self.game.state.permanent_of(s).map_or_else(
-                    || self.game.state[s].name.as_str(),
-                    |id| self.objects[&id].view.name.as_str(),
-                )
-            }),
+            source.map(|s| self.source_name(s, self.game.state.permanent_of(s))),
         )
     }
     fn node(&self, source: ObjectId, entry: &StaticEntry) -> Option<Node> {

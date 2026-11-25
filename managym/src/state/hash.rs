@@ -90,11 +90,6 @@ struct CanonicalTurn<'a> {
         serialize_with = "crate::state::game_object::exact"
     )]
     attacks_this_turn: &'a Vec<(ObjectId, u32)>,
-    #[serde(
-        skip_serializing_if = "Vec::is_empty",
-        serialize_with = "crate::state::game_object::exact"
-    )]
-    attacked_permanents: &'a Vec<(ObjectId, usize, crate::flow::combat::AttackTarget)>,
 
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -129,7 +124,6 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
             attacks_this_turn: &turn.attacks_this_turn,
-            attacked_permanents: &turn.attacked_permanents,
 
             history: turn.history,
             used_trigger_grants: &turn.used_trigger_grants,

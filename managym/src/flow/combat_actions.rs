@@ -230,10 +230,11 @@ impl Game {
         if removed.is_empty() {
             return;
         }
-        if let Some(combat) = self.state.combat.as_mut() {
-            for object in removed {
-                combat.remove_defender(object);
-            }
+        // Only borrow tracked state mutably when a defender actually leaves so
+        // no-op checks preserve layer caches.
+        let combat = self.state.combat.as_mut().expect("checked above");
+        for object in removed {
+            combat.remove_defender(object);
         }
     }
 

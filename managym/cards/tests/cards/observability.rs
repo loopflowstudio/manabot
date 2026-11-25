@@ -628,7 +628,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 8] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 36] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 35] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -640,7 +640,6 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 36] {
         ability_triggers_this_turn: _,
         used_trigger_grants: _,
         attacks_this_turn: _,
-        attacked_permanents: _,
         damage_pairs: _,
         ability_resolutions_this_turn: _,
         extra_turns: _,
@@ -674,7 +673,6 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 36] {
         ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
         ("used_trigger_grants", Seen::Via("permanent once_each_turn_used")),
         ("attacks_this_turn", Seen::Via("exact attacking permanent")),
-        ("attacked_permanents", Seen::Via("exact attacking permanent")),
         ("active_player", Seen::Player(player::IS_ACTIVE, player::LIBRARY_COUNT)),
         (
             "turn_number",

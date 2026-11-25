@@ -2168,6 +2168,10 @@ impl Game {
                     permanent_defenders,
                 },
             ) => {
+                let permanent_defenders = permanent_defenders
+                    .as_deref()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
                 size.matches(attackers.len())
                     && attackers.iter().any(|&id| {
                         self.attacker_matches(
@@ -2178,10 +2182,7 @@ impl Game {
                             source_object,
                             source_controller,
                             *player,
-                            permanent_defenders
-                                .as_deref()
-                                .map(Vec::as_slice)
-                                .unwrap_or_default(),
+                            permanent_defenders,
                             id,
                         )
                     })

@@ -294,13 +294,6 @@ pub struct TurnState {
         serialize_with = "crate::state::game_object::exact"
     )]
     pub attacks_this_turn: Vec<(ObjectId, u32)>,
-    /// Permanent defenders declared for an attacker's Nth attack this turn
-    /// (zero-based), sorted by `(attacker, index)`. Omitted for player attacks.
-    #[serde(
-        skip_serializing_if = "Vec::is_empty",
-        serialize_with = "crate::state::game_object::exact"
-    )]
-    pub attacked_permanents: Vec<(ObjectId, usize, super::combat::AttackTarget)>,
     /// Once-each-turn uses by `(exact source, printed face, ability index)`: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
@@ -360,28 +353,13 @@ impl TurnState {
             .map_or(0, |index| self.attacks_this_turn[index].1)
     }
 
-    pub fn record_attack(&mut self, object: ObjectId, target: super::combat::AttackTarget) {
-        let attack_index = match self
+    pub fn record_attack(&mut self, object: ObjectId) {
+        match self
             .attacks_this_turn
             .binary_search_by_key(&object, |entry| entry.0)
         {
-            Ok(index) => {
-                let count = &mut self.attacks_this_turn[index].1;
-                let current = *count as usize;
-                *count += 1;
-                current
-            }
-            Err(index) => {
-                self.attacks_this_turn.insert(index, (object, 1));
-                0
-            }
-        };
-        if matches!(target, super::combat::AttackTarget::Permanent(_)) {
-            let pos = self
-                .attacked_permanents
-                .partition_point(|&(attacker, idx, _)| (attacker, idx) < (object, attack_index));
-            self.attacked_permanents
-                .insert(pos, (object, attack_index, target));
+            Ok(index) => self.attacks_this_turn[index].1 += 1,
+            Err(index) => self.attacks_this_turn.insert(index, (object, 1)),
         }
     }
 
@@ -394,7 +372,6 @@ impl TurnState {
             spells_cast: [Vec::new(), Vec::new()],
 
             attacks_this_turn: Vec::new(),
-            attacked_permanents: Vec::new(),
             damage_pairs: Default::default(),
             history: Default::default(),
             graveyard_from_battlefield: Vec::new(),
@@ -547,7 +524,6 @@ impl TurnState {
 
         self.damage_pairs.0.clear();
         self.attacks_this_turn.clear();
-        self.attacked_permanents.clear();
         self.history = Default::default();
         self.graveyard_from_battlefield.clear();
         self.spells_cast = [Vec::new(), Vec::new()];
