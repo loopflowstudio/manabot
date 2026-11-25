@@ -1,4 +1,4 @@
-at: 6841e0df924da3816ce7dd845adb44b492e752c4
+at: ba306254103d90052a05f8ec556a5bf59698e4a3
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
@@ -9,7 +9,7 @@ first:
   - path: managym/state/src/permanent.rs
     why: Per-turn loyalty activation quota and available loyalty accounting
   - path: managym/src/flow/game.rs
-    why: SpellTargeting, ActivatedTargeting and DivisionParent pipeline state
+    why: SpellTargeting, ActivatedTargeting, DivisionParent and counter/life revisions
   - path: managym/src/flow/play.rs
     why: Loyalty X filtering, sorcery/instant timing and sequential target division
   - path: managym/src/flow/combat.rs
@@ -19,7 +19,9 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics, Way grants and per-permanent SBA exemptions
+    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads and NodeSource
+  - path: managym/src/flow/statics.rs
+    why: LayerBoard invalidation on StateReads and dynamic activation cache tests
   - path: managym/src/flow/sba.rs
     why: Layer-projected zero-loyalty and legend-rule SBA exemptions and streaming checks
   - path: managym/src/flow/triggers.rs
