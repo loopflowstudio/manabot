@@ -20,3 +20,11 @@
   The November 6 CR 205.3m list has 367 entries. Scryfall’s creature-type
   catalog contained all 367 and ten extra names, including Automaton and Naga.
   Only the rules list supplies legal choices.
+- The 168-byte permanent budget still holds. A shared entry answer takes one
+  pointer, and the rarely populated exhaust history uses a boxed slice with
+  the same serialized list. Academy displays the private look from the native
+  known-hand counts and viewer-visible definition names.
+- The new advice schema property matches the Python model. Comparing the
+  whole permanent schema also found earlier differences in seven unrelated
+  properties, including missing `face_down` and `keywords`. Those properties
+  match the checked-in schema before Slice 1.

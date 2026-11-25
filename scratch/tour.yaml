@@ -1,19 +1,41 @@
-at: 2e7a5bbe465b644242b849b77671dfe6ebf13486
+at: 832c7434810f3a553b77cf5b11ce294766794f33
 first:
   - path: docs/engine.md
-    why: What happens when a land loses its entry abilities
-  - path: managym/state/src/subtype.rs
-    why: Legal creature types beyond the installed cards
-  - path: managym/src/flow/zones.rs
-    why: Which face enters or leaves a zone
-  - path: managym/src/flow/layers.rs
-    why: Capture land type effects before abilities disappear
-  - path: managym/src/flow/statics.rs
-    why: Match the incoming face and its controller
+    why: Simultaneous entry choices and battlefield copy behavior
+  - path: managym/state/src/permanent.rs
+    why: The answer belongs to one battlefield incarnation
+  - path: managym/state/src/card.rs
+    why: Choices and restrictions attached to a printing
+  - path: managym/cards/src/neo.rs
+    why: Two lands bind mana to different choices
+  - path: managym/cards/src/xln.rs
+    why: Spyglass inspects a hand before naming
   - path: managym/src/flow/proposed_event.rs
-    why: Find applicable replacements before committing each entry
-  - path: managym/cards/tests/cards/tla.rs
-    why: Zhao changes Dark Depths and modal land entry
+    why: Order entrants, retain answers and commit them together
+  - path: managym/src/flow/decision.rs
+    why: Grouped choices and what follows a name
+  - path: managym/state/src/subtype.rs
+    why: All legal creature types
+  - path: managym/src/flow/layers.rs
+    why: Read the source's choice for creature characteristics
+  - path: managym/src/flow/triggers.rs
+    why: Compare a spell with its watcher’s chosen color
+  - path: managym/state/src/mana.rs
+    why: Record which spells and activations can spend mana
+  - path: managym/src/flow/mana.rs
+    why: Bind the restriction when producing mana
+  - path: managym/src/flow/statics.rs
+    why: Check activation prohibitions in the source's zone
+  - path: managym/src/agent/observation_encoder.rs
+    why: Public choices become facts about individual permanents
+  - path: managym/experience_projection.py
+    why: Carry the same answers into Academy
+  - path: managym/cards/tests/cards/xln.rs
+    why: Private look timing, order, forks and stale Commands
+  - path: managym/cards/tests/cards/neo.rs
+    why: Check mana restrictions and suppressed land choices
+  - path: tests/semantic/test_text_observation.py
+    why: Play and replay Haven through text and Academy
   - path: managym/README.md
     why: What players can choose for each copy
   - path: managym/cards/src/grn.rs

@@ -1,16 +1,12 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Five of the 56 scoped rows in
-`.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl` have verified
-implementations. Slice 5 delivered Thousand-Year Storm, Bolt Bend and Teach
-by Example. Demonic Pact and Maze's End were already playable and have
-directed evidence in their ledger rows. MTG-428 covers the same two rows.
+Eleven of the 56 scoped Foundations rows have directed implementation evidence.
+Slice 1 delivered the six entry-choice cards and Slice 5 delivered the three
+stack-copy cards. Demonic Pact and Maze's End already had working definitions.
 
-**Next: Slice 1, all six entry-choice cards.** The CR 205.3m vocabulary and
-the land entry replacement prerequisite are in place. The choice continuation
-must preserve ordering when several permanents enter together (below). Each card goes in its first
-printing's set file (lookup below). Secluded Courtyard and Uncharted Haven
-create `cards/src/neo.rs`, registered in `cards/src/lib.rs`.
+**Next: Slice 2, Curator of Destinies.** Its controller partitions five cards
+privately and the opponent chooses a pile. The visibility of each pile is the
+first point to exercise.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
 
@@ -65,110 +61,29 @@ Vocabulary edits that are table data, not primitives:
 
 ## Build order (riskiest primitive first)
 
-### Slice 1 — Choices made as a permanent enters (6 cards)
+### Slice 1 — Choices made as a permanent enters (complete)
 
-Cards: Heraldic Banner, Uncharted Haven, Diamond Mare, Adaptive Automaton,
-Secluded Courtyard, Sorcerous Spyglass.
+Heraldic Banner, Uncharted Haven, Diamond Mare, Adaptive Automaton, Secluded
+Courtyard and Sorcerous Spyglass have directed play tests and ledger evidence.
+The choice belongs to one battlefield incarnation. A batch retains each answer
+until all entrants are ready. The active player answers first and each player
+chooses their entrants in either order. Brought Back now returns all its chosen
+cards together. Its previous selector moved only its first target.
 
-The first pass completed the 367 creature types from CR 205.3m (2026-11-06)
-and corrected how the event batch finds an entrant’s own replacements. Zhao
-with a conqueror counter turns an entering nonbasic land into a Mountain.
-Dark Depths then enters with zero ice counters. Haven and Courtyard must
-likewise enter without a recorded choice, even if Zhao later leaves.
-`Game::entry_replacements` reads the face that will enter and accounts for
-the land-type overwrite at layer 4. Use it for the new replacement.
+The 12 entry-choice tests cover both orders of Spyglass and Banner, the timing
+of the private look, Command replay and stale rejection, independent copies,
+both players' chosen-value facts, the 367-type prompt, Zhao and spending
+restricted mana for abilities in hand and on the battlefield. Academy keeps
+permanents with different choices in separate piles. On the rebuilt CPython
+3.13 extension both bundled pilots replayed. The optional u1952 checkpoint
+was unconfigured. Four Academy demos replayed 192 Commands and five navigation
+positions refreshed. Both viewer seats passed policy fact admission for chosen
+Blue, Atog and Lightning Bolt. Scryfall conformance and the Rust replay,
+experience and study schema checks passed.
 
-Verified at `2e7a5bbe46`: 3 subtype tests and 9 focused Zhao, Dark Depths
-and Clone tests passed. The rebuilt CPython 3.13 extension exposed 2,868
-distinct record names. Both committed pinned pilots (v9 and v11) replayed;
-the optional u1952 checkpoint was unavailable.
-
-**Batch-order counterexample.** Genesis Wave can put Spyglass and Heraldic
-Banner onto the battlefield together. The controller may inspect the hand
-and name a card before choosing Banner’s color, or choose the color first
-(CR 101.4c, 614.12a and the two-token example in 616.1g).
-`advance_event_batch` asks about members in cursor order, which would fix
-these choices in card enumeration order. Retain each answer with its member and
-offer the player their outstanding entry choices in either order, observing
-APNAP across players. Open the private look only when Spyglass is selected.
-Preserve the batch’s original event ordinals and commit it once every
-member is ready. Skip the entrant selection when only one remains.
-
-All six definitions and their evidence remain pending.
-
-- **The choice.** `ReplacementEffect::AsEntersChoose(EntryChoiceKind)`, with
-  `EntryChoiceKind = Color | CreatureType | CardName`. It runs as a step of the
-  entry itself under CR 614.12a, after earlier copy replacements. A lone
-  Haven asks once for its color. Use the retained event batch for choices
-  across simultaneous entrants.
-- **The record.** `Permanent.chosen: Option<EntryChoice>`. It belongs to one
-  incarnation: a copy entering makes its own choice, and the choice never
-  crosses a zone change.
-- **Predicates.** Source-relative `CardPredicate` bits `chosen_color` and
-  `chosen_subtype`, modeled on `namesake` (`layers.rs:1606`). They read the
-  source's record. The layer read-set (`layers.rs:137`) declares COLORS and
-  SUBTYPES reads respectively.
-- **Mana.** A chosen-color mana output on the existing dynamic-output path
-  (`card.rs:668`), fixed when characteristics are read. Courtyard's
-  restriction is fixed when its mana is produced. Add
-  `SpendPredicate::CastCreatureSubtype` (creature spell *and* subtype) plus an
-  activation-source arm that requires a creature source. `SpendingObject`
-  currently snapshots only subtypes. Capture whether the source is a creature
-  when its activation is priced, in hand as well as on the battlefield. A
-  noncreature Kindred Elf matches neither purpose.
-- **Cast triggers.** Diamond Mare's `casts(You, chosen_color)` needs the source
-  threaded into `object_matches_predicate` (`triggers.rs:2027`).
-- **Creature-type prompt.** The CR 205.3m list exceeds `NAME_BRANCHING`. The
-  category table in `managym/state/src/subtype.rs` now includes legal types
-  absent from the catalog, including Atog and Servo. Test selecting one.
-  The prompt reuses `NameScope`'s grouped navigation (`src/cards/names.rs`)
-  over subtypes. It is never one action per type.
-- **Spyglass.** It looks at an opponent's hand with the existing private
-  `remember_hand` (`zones.rs:189`). The `Decision::NameCard` leaf
-  (`decision.rs:3168`) becomes a continuation instead of always queueing
-  `ExileNamed`, so the name can land in `Permanent.chosen`. The ban is
-  `Restriction::CantActivate { predicate: chosen_name, mana_abilities: false }`
-  as a `StaticRestriction`. It covers sources with that name in every zone
-  (cycling and graveyard activations included) and spares mana abilities.
-  `CantActivateAbilities` stays per permanent.
-
-Checks:
-
-- `cargo test -p managym-cards --test cards -- entry_choice` plus one directed
-  test per card in its set file.
-- Interactions:
-  - Banner choosing red pumps a red creature and not a blue one, and its mana
-    is red only.
-  - On an ordinary board Haven enters tapped with exactly one prompt. Under
-    an active Zhao, neither Haven nor Courtyard asks. Removing Zhao restores
-    their printed abilities with no choice recorded for that incarnation.
-  - A single batch of Spyglass and Banner admits both choice orders and
-    commits neither object early. A fork at the first decision can take the
-    other order; neither the unselected look nor the other player's hidden
-    cards are exposed.
-  - Automaton choosing Elf pumps other Elves and is itself an Elf; a second
-    Automaton choosing Construct pumps the first.
-  - Courtyard choosing Elf pays for an Elf creature spell and an Elf's
-    activated ability, but not a Kindred Elf instant.
-  - Spyglass naming a card stops its cycling from hand and its non-mana
-    abilities on the battlefield, while its mana abilities still work.
-  - A Spyglass naming a card outside both decks is legal.
-- Observations:
-  - The chosen value reaches policy input as a fact row on the permanent
-    (open vocabulary), plus LLM text and learning tokens.
-  - Extend `observability.rs` for the new replacement and restriction
-    variants.
-  - The opponent's view of Spyglass shows the chosen name, not the hand.
-  - Replay and forks reproduce the choice.
-  - `tests/model/test_pinned_pilot.py` either passes or needs a declared
-    column append.
-- Stress states:
-  - 8–16 Secluded Courtyards with distinct chosen types (distinct restricted
-    classes in payment search; compare `distinct-restrictions`).
-  - 8 Heraldic Banners or Adaptive Automatons with different choices
-    (layer dependency scan).
-- Deletes: nothing existing. `NameCard`'s hard-coded `ExileNamed` leaf becomes
-  one continuation case.
+At the integrated gate exercise 8–16 Courtyards with distinct mana restrictions
+and eight differently chosen Banners or Automatons. Compare the payment and
+layer results against Engine Budget.
 
 ### Slice 2 — Two piles, chosen by an opponent (Curator of Destinies)
 
@@ -452,4 +367,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-51 scoped rows remain pending, including Abyssal Harvester.
+45 scoped rows remain pending, including Abyssal Harvester.
