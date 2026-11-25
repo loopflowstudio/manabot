@@ -356,9 +356,9 @@ def collect_frozen_policy(
                 frame = DecisionFrame.from_json(
                     env._engine.semantic_decision_frame_json()
                 )
-                if (
-                    len(frame.offers) != len(obs.action_space.actions)
-                    or len(frame.offers) > obs_space.config.max_actions
+                if len(frame.offers) != len(obs.action_space.actions) or (
+                    obs_space.config.action_overflow == "first-legal"
+                    and len(frame.offers) > obs_space.config.max_actions
                 ):
                     raise ValueError("frozen policy cannot encode every legal offer")
                 action = player.act(env, obs)
