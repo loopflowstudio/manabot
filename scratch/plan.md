@@ -180,7 +180,7 @@ Checks:
   fight.
 - Stress: a Drakuseth trigger with 16 creatures per side plus both players.
   Target enumeration must stay a per-clause sequence.
-- Deletes: `Effect::FightLastTarget`.
+- `Effect::FightLastTarget` is deleted (`Fight { first, second }`, commit 30fd60f499).
 
 ### Slice 5 — Stack copies and retargeting (complete)
 
