@@ -762,7 +762,9 @@ aliases that warn and are removed in 0.3.0. Replace the first with
 `max_events`, `max_stack_objects`, `max_focus_objects`, `*_dim` widths,
 `library_shape`, and the `num_*` enum counts) warn and are removed in 0.3.0
 too. Read capacities from `space.config`, table shapes and widths from
-`space.shapes`, and enum counts from `managym.enums` instead:
+`space.shapes`, and enum counts from `managym.enums`. On v9 and v10,
+the compatibility attribute `max_stack_objects` returns zero and
+`library_shape` returns the v11 known-library shape.
 
 ```python
 space = ObservationSpace()
