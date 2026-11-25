@@ -1,15 +1,27 @@
-at: b17ed61f623efb725abb42160456a25ac7f91408
+at: 39b9cb6c4a4c01e637b92b1a238e2eb39700d0b0
 first:
-  - path: scratch/plan.md
-    why: Places the land cycle within the planeswalker work
+  - path: docs/engine.md
+    why: Shows what happens when Jace pays loyalty
   - path: managym/cards/src/fra.rs
-    why: Ten printings share entry and mana rules
+    why: The Theorist and the Commons and Annex lands
+  - path: managym/state/src/card.rs
+    why: Printed starting loyalty and signed activation costs
+  - path: managym/state/src/permanent.rs
+    why: Shares the activation limit across one permanent's abilities
+  - path: managym/src/flow/proposed_event.rs
+    why: Applies starting loyalty through entry replacements
+  - path: managym/src/flow/payment.rs
+    why: Pays the loyalty symbol before resolution
+  - path: managym/src/agent/observation_layout.rs
+    why: Names the policy columns for loyalty
   - path: managym/cards/tests/cards/fra.rs
-    why: Plays each land and checks both mana colors
-  - path: .lf/wave/coverage/research/standard-2026-11/sets/fra.jsonl
-    why: Records the behavior verified for each printing
+    why: Exercises timing, payment, Doubling Season and the lands
+  - path: tests/academy/test_loyalty.py
+    why: Casts Jace and commits his activation across forks
+  - path: scratch/plan.md
+    why: Explains the outstanding X and combat decisions
 hide:
   - path: managym/academy/fixtures/
-    why: Replayed catalog identities and digests
+    why: Replayed manifests, frames and digests
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Oracle snapshots for the ten land printings
+    why: Snapshotted Oracle characteristics
