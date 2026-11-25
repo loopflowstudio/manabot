@@ -304,14 +304,19 @@
     const frame = gameStore.protocolFrame;
     if (!frame || frame.revision === onceChecked) return;
     onceChecked = frame.revision;
-    if (gameStore.watchMode || frame.status === 'game_over' || frame.prompt?.actor !== frame.projection.agent.player_index) return;
+    if (
+      gameStore.watchMode ||
+      frame.status === 'game_over' ||
+      frame.action_space !== 'PRIORITY' ||
+      frame.prompt?.actor !== frame.projection.agent.player_index
+    ) return;
     const turn = frame.projection.turn;
     const at = `${frame.match_id}:${turn.turn_number}:${turn.step}`;
     if (at === arrivedAt) return;
     arrivedAt = at;
     untrack(() => {
       const yourTurn = turn.active_player_id === frame.projection.agent.id;
-      const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops);
+      const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops, frame.action_space);
       if (!spent) return;
       gameStore.spendOnce(spent.side, spent.step);
       syncStopsToServer();

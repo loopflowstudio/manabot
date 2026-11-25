@@ -99,7 +99,14 @@ export function stopStepOf(step: string): string | null {
  * where the turn's side has a once stop. Clearing it is the client's
  * automation, so it is reported, never hidden.
  */
-export function spentOnce(turn: Observation['turn'], yourTurn: boolean, stops: StopsConfig, once: OnceStops): { side: StopSide; step: string } | null {
+export function spentOnce(
+  turn: Observation['turn'],
+  yourTurn: boolean,
+  stops: StopsConfig,
+  once: OnceStops,
+  actionSpace = 'PRIORITY',
+): { side: StopSide; step: string } | null {
+  if (actionSpace !== 'PRIORITY') return null;
   const step = stopStepOf(turn.step);
   const side: StopSide = yourTurn ? 'my' : 'opponent';
   if (!step || !stops.auto_pass || stateOf(stops, once, side, step) !== 'once') return null;

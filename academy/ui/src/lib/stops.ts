@@ -17,17 +17,27 @@ export const STOP_STEPS = [
 const STOP_STEP_KEYS = new Set<string>(STOP_STEPS.map((step) => step.key));
 
 export const STOPS_STORAGE_KEY = 'etude.gui.stops';
+export const STOPS_DEFAULTS_VERSION_KEY = 'academy.stops.defaults_version';
+const STOPS_DEFAULTS_VERSION = '2';
 
-// Mirrors the server defaults (gui/server.py DEFAULT_STOPS): act in your own
-// main phases, hold up interaction at the opponent's end step, always stop
-// when the stack is non-empty.
+const LEGACY_V1_MY = ['main1', 'main2'];
+const LEGACY_V1_OPPONENT = ['end_step'];
+
+// Mirrors the server defaults (managym/academy/server.py DEFAULT_STOPS): act in
+// your own main phases, pause in active combat steps when you have a non-mana
+// play, hold up interaction at the opponent's end step, and stop when the stack
+// is non-empty.
 export function defaultStops(): StopsConfig {
   return {
-    my: ['main1', 'main2'],
-    opponent: ['end_step'],
+    my: ['main1', 'declare_attackers', 'declare_blockers', 'main2'],
+    opponent: ['declare_attackers', 'declare_blockers', 'end_step'],
     stop_on_stack: true,
     auto_pass: true,
   };
+}
+
+function sameSteps(actual: readonly string[], expected: readonly string[]): boolean {
+  return actual.length === expected.length && expected.every((step) => actual.includes(step));
 }
 
 function sanitizeSteps(value: unknown): string[] | null {
@@ -79,7 +89,26 @@ export function loadStoredStops(): StopsConfig {
     if (!raw) {
       return defaultStops();
     }
-    return sanitizeStops(JSON.parse(raw)) ?? defaultStops();
+    const parsed = sanitizeStops(JSON.parse(raw));
+    if (!parsed) {
+      return defaultStops();
+    }
+    const version = localStorage.getItem(STOPS_DEFAULTS_VERSION_KEY);
+    if (
+      version !== STOPS_DEFAULTS_VERSION &&
+      sameSteps(parsed.my, LEGACY_V1_MY) &&
+      sameSteps(parsed.opponent, LEGACY_V1_OPPONENT)
+    ) {
+      const defaults = defaultStops();
+      const migrated: StopsConfig = {
+        ...parsed,
+        my: defaults.my,
+        opponent: defaults.opponent,
+      };
+      saveStoredStops(migrated);
+      return migrated;
+    }
+    return parsed;
   } catch {
     return defaultStops();
   }
@@ -91,6 +120,7 @@ export function saveStoredStops(stops: StopsConfig): void {
   }
   try {
     localStorage.setItem(STOPS_STORAGE_KEY, JSON.stringify(stops));
+    localStorage.setItem(STOPS_DEFAULTS_VERSION_KEY, STOPS_DEFAULTS_VERSION);
   } catch {
     // Storage full or unavailable: stops simply won't persist.
   }

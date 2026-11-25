@@ -33,6 +33,13 @@ describe('stops per step, for both turns', () => {
     expect(spentOnce(turn('ENDING_END'), false, stops, once)).toBeNull();
     // With priority stops off the game stops everywhere; nothing is spent.
     expect(spentOnce(turn('BEGINNING_UPKEEP'), false, { ...stops, auto_pass: false }, once)).toBeNull();
+    // Non-priority decisions (declaring attackers/blockers) never spend a once stop.
+    const combatOnce = withStopState(defaultStops(), emptyOnce(), 'my', 'declare_attackers', 'once');
+    expect(spentOnce(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'DECLARE_ATTACKER')).toBeNull();
+    expect(spentOnce(turn('COMBAT_DECLARE_ATTACKERS'), true, combatOnce.stops, combatOnce.once, 'PRIORITY')).toEqual({
+      side: 'my',
+      step: 'declare_attackers',
+    });
   });
 
   it('forgets once for a stop the Menu turned off', () => {
