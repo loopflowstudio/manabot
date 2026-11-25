@@ -37,6 +37,19 @@ from managym.decision_memory import (
 
 REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
+_SOURCE_CARD_TYPES = frozenset(
+    (
+        "artifact",
+        "battle",
+        "creature",
+        "enchantment",
+        "instant",
+        "kindred",
+        "land",
+        "planeswalker",
+        "sorcery",
+    )
+)
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
     "untap",
@@ -1128,20 +1141,7 @@ class _Renderer:
         ):
             for quality in qualities:
                 label = (
-                    f"{quality} sources"
-                    if quality
-                    in {
-                        "artifact",
-                        "battle",
-                        "creature",
-                        "enchantment",
-                        "instant",
-                        "kindred",
-                        "land",
-                        "planeswalker",
-                        "sorcery",
-                    }
-                    else quality
+                    f"{quality} sources" if quality in _SOURCE_CARD_TYPES else quality
                 )
                 parts.append(f"{ability} from {label}")
         if permanent.abilities_lost:

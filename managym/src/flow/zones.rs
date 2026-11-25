@@ -606,10 +606,6 @@ impl Game {
         self.state.observation_events_mut().push(event);
     }
 
-    pub(crate) fn was_cast_from_graveyard(&self, spell: &SpellOnStack) -> bool {
-        spell.cast_from == ZoneType::Graveyard && self.state[spell.object].is_card()
-    }
-
     pub(crate) fn push_spell_to_stack(
         &mut self,
         object: ObjectId,
@@ -1192,14 +1188,22 @@ impl Game {
         permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;
         permanent.summoning_sick = true;
-        permanent.attacking = false;
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
-        if let Some(combat) = self.state.combat.as_mut() {
-            combat.remove_from_combat(permanent_id);
-        }
+        self.remove_permanent_from_combat(permanent_id);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
+        }
+    }
+
+    /// Remove a permanent from combat (CR 506.4), keeping its attacking flag
+    /// aligned with `CombatState`.
+    pub(crate) fn remove_permanent_from_combat(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+            permanent.attacking = false;
+        }
+        if let Some(combat) = self.state.combat.as_mut() {
+            combat.remove_from_combat(permanent_id);
         }
     }
 

@@ -618,12 +618,13 @@
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
+  const playerName = (id: number): string => (id === boardProjection.agent.id ? you.name : opponent.name);
   const castTerms = $derived(permissionTerms(shownCard,
     id => permanents.get(id)?.name ?? `permanent #${id}`,
-    id => id === boardProjection.agent.id ? you.name : opponent.name));
+    playerName));
   const enteredUnder = $derived(
-    shownPermanent?.entry_controller_id !== undefined && shownPermanent.entry_controller_id !== shownPermanent.controller_id
-      ? possessive(shownPermanent.entry_controller_id === boardProjection.agent.id ? you.name : opponent.name)
+    shownPermanent?.entry_controller_id !== undefined
+      ? possessive(playerName(shownPermanent.entry_controller_id))
       : null,
   );
 

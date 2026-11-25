@@ -8,7 +8,7 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
-  import { counterTerms, keywordsOf, labelText, ptProvenance, signed, statusesOf } from './inspect';
+  import { counterTerms, keywordsOf, labelText, ptProvenance, signed, sourceQuality, statusesOf } from './inspect';
   import Pips from './Pips.svelte';
 
   interface Props {
@@ -26,14 +26,6 @@
   }
 
   let { name, text, permanent = null, card = null, castTerms = [], blocks = null, enteredUnder = null, art = 128 }: Props = $props();
-
-  const SOURCE_CARD_TYPES = new Set([
-    'artifact', 'battle', 'creature', 'enchantment',
-    'instant', 'kindred', 'land', 'planeswalker', 'sorcery',
-  ]);
-  function sourceQuality(quality: string): string {
-    return SOURCE_CARD_TYPES.has(quality) ? `${quality} sources` : quality;
-  }
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));

@@ -640,15 +640,12 @@ fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
             (None, Some(Actor::Opponent)) => "you cast it from an opponent's zone".into(),
             (None, Some(Actor::AnyPlayer)) => "it was cast".into(),
             (Some(zone), None | Some(Actor::AnyPlayer)) => {
-                format!("this spell was cast from a {}", format!("{zone:?}").to_lowercase())
+                format!("this spell was cast from {}", zone_phrase(*zone))
             }
-            (Some(zone), Some(Actor::You)) => {
-                format!("you cast it from your {}", format!("{zone:?}").to_lowercase())
+            (Some(zone), Some(who @ (Actor::You | Actor::Opponent))) => {
+                let owner = if *who == Actor::You { "your" } else { "an opponent's" };
+                format!("you cast it from {owner} {}", format!("{zone:?}").to_lowercase())
             }
-            (Some(zone), Some(Actor::Opponent)) => format!(
-                "you cast it from an opponent's {}",
-                format!("{zone:?}").to_lowercase()
-            ),
         },
         Condition::Not(condition) => match condition.as_ref() {
             Condition::YourTurn => "it's an opponent's turn".into(),

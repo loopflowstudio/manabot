@@ -55,35 +55,34 @@ impl Game {
         modification: Modification,
         duration: EffectDuration,
     ) {
-        let affected: Vec<Affected> = affected.into_iter().collect();
-        if modification == Modification::PhasedOut {
-            // CR 506.4, 702.26b: a phased-out permanent leaves combat.
-            for item in &affected {
-                if let Affected::Object(object) = item {
-                    if let Ok(id) = self.lookup_current_permanent(*object) {
-                        if let Some(permanent) = self.state.permanents[id].as_mut() {
-                            permanent.attacking = false;
-                        }
-                        if let Some(combat) = self.state.combat.as_mut() {
-                            combat.remove_from_combat(id);
-                        }
-                    }
-                }
-            }
-        }
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
-        self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
-            timestamp,
-            source,
-            controller,
-            affected,
-            modification: modification.clone(),
-            duration,
-            source_object,
+        let phasing_out = modification == Modification::PhasedOut;
+        let mut phased_out = Vec::new();
+        self.push_effects(affected.into_iter().map(|affected| {
+            if phasing_out {
+                if let Affected::Object(object) = affected {
+                    phased_out.push(object);
+                }
+            }
+            ContinuousEffect {
+                timestamp,
+                source,
+                controller,
+                affected,
+                modification: modification.clone(),
+                duration,
+                source_object,
+            }
         }));
+        // CR 506.4, 702.26b: a phased-out permanent leaves combat.
+        for object in phased_out {
+            if let Ok(id) = self.lookup_current_permanent(object) {
+                self.remove_permanent_from_combat(id);
+            }
+        }
     }
 
     /// Earthbend's animation (CR 702.182a): the object becomes a 0/0 creature

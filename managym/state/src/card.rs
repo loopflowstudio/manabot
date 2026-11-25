@@ -1183,26 +1183,15 @@ impl SourceQuality {
     }
 
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        match name {
-            "everything" => Some(Self::Everything),
-            "white" => Some(Self::Color(Color::White)),
-            "blue" => Some(Self::Color(Color::Blue)),
-            "black" => Some(Self::Color(Color::Black)),
-            "red" => Some(Self::Color(Color::Red)),
-            "green" => Some(Self::Color(Color::Green)),
-            "colorless" => Some(Self::Color(Color::Colorless)),
-            "generic" => Some(Self::Color(Color::Generic)),
-            "artifact" => Some(Self::CardType(CardType::Artifact)),
-            "battle" => Some(Self::CardType(CardType::Battle)),
-            "creature" => Some(Self::CardType(CardType::Creature)),
-            "enchantment" => Some(Self::CardType(CardType::Enchantment)),
-            "instant" => Some(Self::CardType(CardType::Instant)),
-            "kindred" => Some(Self::CardType(CardType::Kindred)),
-            "land" => Some(Self::CardType(CardType::Land)),
-            "planeswalker" => Some(Self::CardType(CardType::Planeswalker)),
-            "sorcery" => Some(Self::CardType(CardType::Sorcery)),
-            _ => None,
-        }
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|quality| quality.wire_name() == name)
+            .or(match name {
+                "colorless" => Some(Self::Color(Color::Colorless)),
+                "generic" => Some(Self::Color(Color::Generic)),
+                _ => None,
+            })
     }
 
     /// The leaf variant in this quality's learning-token representation.

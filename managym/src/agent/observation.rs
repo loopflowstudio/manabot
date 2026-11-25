@@ -1642,7 +1642,7 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_copy: !object.is_card(),
             has_announced_x: has_x,
-            cast_from_graveyard: game.was_cast_from_graveyard(spell),
+            cast_from_graveyard: object.is_card() && spell.cast_from == ZoneType::Graveyard,
             characteristics: {
                 let (power, toughness) = game.object_pt(spell.object);
                 CharacteristicsData {
