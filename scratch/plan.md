@@ -4,18 +4,41 @@ Base `cf73d9778f`. MTG-420 (PR #593, head `c133c0308f`) still open and main
 unmoved on 2026-11-24. `lf sync main` once it merges, before slice 3 (emblem
 sources need its persistent ability-source representation). Slice 1 keeps its
 quota in its own `loyalty_activated_this_turn` field and does not extend
-`activated_this_turn`/`activation_used`, so it need not wait; expect only a
+`activated_this_turn`, so it need not wait; expect only a
 textual conflict at the reset site when syncing.
 
 Done: slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
 pending-authority ledger notes (`cc77598c9e`).
 
+Done: fixed loyalty and The Theorist (`a5534ee7bb`). Three directed native
+cases covered entry, payment, resolution, timing and the turn limit. The
+CPython 3.13 wheel passed the shared offer, fork and observation checks,
+and replayed all five Academy opening fixtures. The Academy inspector shows
+starting loyalty and activation history. Its pile test and Svelte check passed.
+
 ## Passes remaining
 
-1. Slices 1 + 2: loyalty abilities/quota/timing override and attack targets,
-   proved on The Theorist (definition may land early as the test subject) and
-   a constructed planeswalker. Teaches whether the action-row and wire changes
-   for `AttackTarget` hold the pinned pilot and Engine Budget.
+1. Slice 1 fixed loyalty, The Theorist and the player timing permission are
+   implemented. The remaining pass needs two changes to the proposed data model.
+
+   - Variable loyalty needs an announced X that can preserve every payable
+     counter count through targeting, payment, stack and resolution. At 256
+     loyalty the legal −256 is lost by the current mana-X path. A targeted
+     −X also bypasses the targeting decision in `choose_activation_x_action`.
+     Carry the chosen quantity through the shared activation continuation.
+     Prove X = 256 on a targeted ability and that declining an optional target
+     preserves X. Do not cap the legal action space at 255.
+   - Combat needs the defending player or permanent for **every attacking
+     creature**. Fire Navy Trebuchet's Ballistic Boulder enters attacking
+     during trigger resolution, and Doubling Season makes two. Each can attack
+     a different defender, even one Tomik would prohibit when declaring
+     attackers (CR 508.4, 508.4c). The controller chooses as they enter.
+     Store that choice with each entry before publishing the simultaneous
+     results. Share the defender representation with declared attackers.
+     A declaration-only change would force the player as defender for both
+     Boulders. Exercise this position alongside the declaration, trample,
+     removal, attack-history and Academy checks below.
+
 2. Slices 3 + 4 (after #593 sync): emblems and empower/Jace token cards.
 3. Slices 5 + 6: granted loyalty abilities, zero-loyalty exception, loyalty
    activation events and their cards.
@@ -27,7 +50,7 @@ adjacent FRA rows that depend on 05 and compose once it exists. Oracle text
 fetched from Scryfall 2026-11-24 (`set:fra (t:planeswalker or o:empower or
 o:loyalty or o:emblem)`, `set:fra o:planeswalker`, `set:fdn t:planeswalker`).
 
-## What exists today (checked against code, not the ledger)
+## Engine starting points
 
 - `CardType::Planeswalker`, `CounterKind::Loyalty`, damage removing loyalty
   (`src/flow/damage.rs:172`), zero-loyalty SBA (`src/flow/sba.rs:171`),
@@ -46,10 +69,9 @@ o:loyalty or o:emblem)`, `set:fra o:planeswalker`, `set:fdn t:planeswalker`).
   `AdditionalLandPlay`, `CantBeCountered`, `EntersTappedUnlessControls`.
 - `ZoneType::Command` storage exists; nothing ever moves there.
 
-Missing: printed loyalty, loyalty costs, the CR 606.3 quota and timing
-overrides, attack targets other than the defending player, emblems, divided
-damage, a loyalty-activation trigger/history, a zero-loyalty SBA exception,
-proliferate, behold. No planeswalker card is defined.
+The Theorist is the first defined planeswalker. Remaining primitives include
+variable loyalty costs, combat defenders, emblems, divided damage, loyalty
+activation events, a zero-loyalty SBA exception, proliferate and behold.
 
 ## Classes and Rooms against loyalty (decided before fixing the representation)
 
@@ -86,24 +108,24 @@ Everything else in the cohort is built here, on the slices below.
 
 ## Slices (build order, riskiest first)
 
-### Slice 1 — Loyalty abilities and starting loyalty (primitive)
+### Slice 1 — Loyalty abilities and starting loyalty (fixed costs implemented)
 
 Types:
 - `PrintedCharacteristics.loyalty: Option<i32>` (CR 306.5b printed starting
   loyalty; tokens may print `Some(0)` or `None`). Entry applies it as an
-  intrinsic enters-with counter in the same place as Saga lore
-  (`src/flow/zones.rs:676`): CR 306.5b makes it an intrinsic "enters with"
+  intrinsic enters-with counter in `src/flow/proposed_event.rs`.
+  CR 306.5b makes it an intrinsic "enters with"
   replacement (CR 614.1c), so Doubling Season doubles it.
 - `ActivatedAbilityDefinition.loyalty: Option<LoyaltyCost>` with
   `LoyaltyCost::{Fixed(i16), MinusX}` (signed; `+1`, `0`, `−3`, `−X`). Lowered
-  to one `CostComponent::Loyalty(i32)` in `payment.rs` whose counter change is
+  in `payment.rs` to the ordinary source-counter components with
   `EventCause::Cost` — never doubled (Doubling Season acceptance). A negative
-  cost needs at least that many loyalty counters (CR 606.6); −X chooses X in
-  0..=loyalty through the existing activation-X path.
+  cost needs at least that many loyalty counters (CR 606.6). For −X the
+  shared activation-X path needs the quantity and targeting changes above.
 - Quota: `Permanent.loyalty_activated_this_turn: bool` (CR 606.3), checked for
-  every ability with `loyalty.is_some()`, cleared at untap/turn start beside
+  every ability with `loyalty.is_some()`, cleared at cleanup beside
   `activated_this_turn`. Default timing: main phase, own turn, empty stack.
-- Timing override: `PlayerModification::LoyaltyAtInstantSpeed { predicate }`
+- Timing override: `Modification::LoyaltyAtInstantSpeed(predicate)`
   as an `ApplyContinuous` record on the player (Jace's Machinations: Jace
   planeswalkers you control, until end of turn). It relaxes timing only; the
   quota still holds.
@@ -119,9 +141,7 @@ appended named column (`ValueLayout` count kind). LLM/ability text renders
 ability label with its cost. Observability guard rows for the new field and
 cost component.
 
-Cards (proof cards; definitions land in slice 7): use a fixture-free real card
-— The Theorist, Jace Beleren (+1 token, −2 per-opponent bounce, −6) — as the
-directed test subject.
+The proof card The Theorist, Jace Beleren is defined in FRA with its draw-step trigger, Illusion token and three fixed loyalty abilities.
 
 Checks: `cargo test -p managym-cards loyalty`; directed tests in
 `cards/tests/cards/fra.rs`: second loyalty activation same turn rejected;
@@ -145,7 +165,7 @@ Deletes: none (new capability).
   linear (attackers × targets).
 - Combat damage to an attacked planeswalker uses the existing permanent damage
   path; trample excess goes to the attacked planeswalker, not its controller
-  (CR 702.19c); an attacker whose planeswalker left combat deals no combat
+  (CR 702.19b, 702.19f); an attacker whose planeswalker left combat deals no combat
   damage unless blocked (CR 506.4c). Defending player = controller of the
   attacked planeswalker (CR 506.2).
 - No damage redirection: CR 306.7 was removed (Dominaria, 2018); noncombat
@@ -168,7 +188,7 @@ map `true` → `Player(defender)` on read (serialized keys keep their spelling).
 Combat history (`AttackedThisTurn`, attack-batch triggers) records the target.
 
 Checks: `cargo test combat` + new `managym/tests/rules/attack_targets.rs`:
-attack planeswalker, damage removes loyalty, SBA; trample over planeswalker;
+attack planeswalker, damage removes loyalty, SBA; ordinary trample over a blocker to the attacked planeswalker;
 planeswalker removed mid-combat; Tomik limit; Jace −3 fires for attacks on you
 and your planeswalker. Python env/Academy tests for declare-attackers offers;
 Academy parity fixtures refreshed. Engine Budget: `bench_steps` digest moves
@@ -342,8 +362,8 @@ Flameshaper +2 (`ExileTopCardsToPlay` choose one of three) and +1
 result), Garruk Veiled Butcher's opponent death-exile replacement and
 discard-receipt draw, Jace Reality Sculptor 0 (aggregate Jace loyalty
 condition via `BattlefieldMatching` sum — add `EffectValue::CountersAmong`
-if absent), The Theorist's opponent draw-step trigger and per-opponent
-target clause.
+if absent). The Theorist’s draw trigger and optional opposing permanent
+target are in slice 1.
 
 Checks: one directed test per planeswalker covering each loyalty ability, in
 `cards/tests/cards/{fdn,fra,kld}.rs` (Chandra, Torch of Defiance's first

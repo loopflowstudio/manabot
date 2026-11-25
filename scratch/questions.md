@@ -17,3 +17,14 @@
 - Moved the ten Commons and Annex lands ahead of the activation-ledger work.
   PR #593 was open at `c133c0308f`. These lands use the existing planeswalker
   type predicate and modal mana, so they can be played and tested independently.
+
+- Fixed loyalty lowers to the existing source-counter payment components. Both
+  produce the signed counter event with `EventCause::Cost`; zero pays no
+  counters and still spends the permanent's loyalty activation.
+- The declaration model has a second producer. Fire Navy Trebuchet and Suki
+  create tokens already attacking. CR 508.4 requires their controller to
+  choose who or what each attacks as it enters. The current resolution path
+  (`finish_created_token`) has no declaration or defender choice.
+- Ordinary trample against a planeswalker uses CR 702.19b and 702.19f.
+  CR 702.19c and 702.19e cover the separate “trample over planeswalkers”
+  ability. [Comprehensive Rules, November 6, 2026](https://media.wizards.com/2026/downloads/MagicCompRules%2020261106.txt).
