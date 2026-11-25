@@ -762,9 +762,15 @@
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
+  const playerName = (id: number): string => (id === boardProjection.agent.id ? you.name : opponent.name);
   const castTerms = $derived(permissionTerms(shownCard,
     id => permanents.get(id)?.name ?? `permanent #${id}`,
-    id => id === boardProjection.agent.id ? you.name : opponent.name));
+    playerName));
+  const enteredUnder = $derived(
+    shownPermanent?.entry_controller_id !== undefined
+      ? possessive(playerName(shownPermanent.entry_controller_id))
+      : null,
+  );
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
@@ -1458,7 +1464,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrolling region must be reachable by keyboard) -->
   <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
     {#if docked}
-      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms}
+      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms} {enteredUnder}
         blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
       <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
@@ -1468,7 +1474,7 @@
 
 {#if inspectMode === 'float' && hovered}
   <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
-    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms}
+    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms} {enteredUnder}
       blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}

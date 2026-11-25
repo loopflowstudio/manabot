@@ -1,18 +1,21 @@
 //! Magic Origins.
 use managym_state::ability::{
-    Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
+    Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec,
     TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-    Keywords, PrintedCharacteristics,
+    Keywords, PrintedCharacteristics, StaticAbility, StaticScope,
 };
+use managym_state::effect::Modification;
 use managym_state::mana::{Color, Mana, ManaCost, SpendEffect};
 use managym_state::predicate::CardPredicate;
 use std::sync::Arc;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        dwynen_gilt_leaf_daen(),
+        joraga_invocation(),
         dwynens_elite(),
         boggart_brute(),
         demonic_pact(),
@@ -219,6 +222,69 @@ fn harbinger_of_the_tides() -> CardDefinition {
                     }],
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn joraga_invocation() -> CardDefinition {
+    let text_box = "Each creature you control gets +3/+3 until end of turn and must be blocked this turn if able.";
+    CardDefinition {
+        key: "ori.joraga_invocation",
+        scryfall_id: "65c89431-0881-4aa6-ac15-d4c13b075273",
+        printed: PrintedCharacteristics {
+            name: "Joraga Invocation".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::pump(3, 3),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::MustBeBlocked,
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dwynen_gilt_leaf_daen() -> CardDefinition {
+    let elf = CardPredicate::subtype("Elf");
+    let text_box = "Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.";
+    CardDefinition {
+        key: "ori.dwynen_gilt_leaf_daen",
+        scryfall_id: "91c143a9-c642-425a-a469-a9d158e43c21",
+        printed: PrintedCharacteristics {
+            name: "Dwynen, Gilt-Leaf Daen".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elf".into(), "Warrior".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..elf.clone()
+                }),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::gain_life(EffectValue::AttackingMatching {
+                    predicate: elf,
+                })],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

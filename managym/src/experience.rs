@@ -527,12 +527,21 @@ pub struct LegacyPermanentView {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
+    /// Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_controller_id: Option<u32>,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hexproof_from: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protection_from: Vec<String>,
     /// Face down (CR 708.2).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
@@ -615,6 +624,8 @@ pub struct LegacyPlayerView {
     pub hand_only_until: Option<u32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hexproof: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

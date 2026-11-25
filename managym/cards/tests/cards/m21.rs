@@ -268,3 +268,67 @@ fn heartfire_immolator_deals_its_sacrificed_appearances_pumped_power() {
     );
     assert!(s.game().state.permanents[returned].is_some());
 }
+
+#[test]
+fn garruks_uprising_checks_power_on_entry_and_on_resolution() {
+    use crate::support::play::enter_and_settle;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Garruk's Uprising", "Goblin Boarders", "Hill Giant"]);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 0);
+    assert!(s
+        .game()
+        .characteristics(giant)
+        .keywords
+        .has(Keyword::Trample));
+    s.game_mut().state.turn.history[0].attacked = true;
+    let boarders = enter_and_settle(&mut s, "Goblin Boarders");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+    let third = crate::support::inspect::library_card(&s, 0, "Garruk's Uprising");
+    move_card(&mut s, third, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    move_card(&mut s, boarders, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+}
+
+#[test]
+fn wildwood_scourge_enters_with_x_and_grows_only_for_other_non_hydras() {
+    use crate::support::{
+        inspect::{counters, permanent_named},
+        play::{choose_mode, enter_and_settle},
+    };
+    let mut s = five_color_setup(&[
+        "Wildwood Scourge",
+        "Heroes' Bane",
+        "Giada, Font of Hope",
+        "Angel of Vitality",
+        "Rise of the Dark Realms",
+    ]);
+    cast(&mut s, "Wildwood Scourge");
+    choose_mode(&mut s, 2);
+    settle(&mut s);
+    let hydra = permanent_named(&s, "Wildwood Scourge");
+    assert_eq!(counters(&s, hydra), 2);
+    enter_and_settle(&mut s, "Heroes' Bane");
+    assert_eq!(counters(&s, hydra), 2);
+    s.force_permanent_on_battlefield(0, "Giada, Font of Hope");
+    for player in 0..2 {
+        crate::support::game::plant_in_graveyard(&mut s, player, "Angel of Vitality");
+    }
+    cast(&mut s, "Rise of the Dark Realms");
+    settle(&mut s);
+    let angels = s.battlefield_permanents_named(0, "Angel of Vitality");
+    assert_eq!(angels.len(), 2);
+    for angel in angels {
+        assert_eq!(
+            counters(&s, angel),
+            1,
+            "only Giada was already on the battlefield"
+        );
+    }
+    assert_eq!(counters(&s, hydra), 4);
+}

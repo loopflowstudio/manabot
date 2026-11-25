@@ -19,7 +19,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
-        mana::{Mana, ManaCost, ManaRestriction, SpendPredicate},
+        mana::{Color, Mana, ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -84,6 +84,8 @@ pub struct PlayerData {
     /// No maximum hand size for the rest of the game (Spirit Water Revival).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hexproof: bool,
     pub known_hand: BTreeMap<u32, u32>,
     /// Exact definitions at zero-based library positions, counted from top.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -400,13 +402,15 @@ pub struct KeywordData {
     pub menace: bool,
     pub hexproof: bool,
     pub indestructible: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub changeling: bool,
 }
 
-/// Number of `KeywordData` flags; tensor keyword blocks follow field order.
+/// Number of evergreen keyword columns in each policy keyword block.
 pub const KEYWORD_COUNT: usize = 14;
 
 impl KeywordData {
-    /// Every flag in field order, for fixed-width policy columns.
+    /// Evergreen flags in policy column order.
     pub fn flags(&self) -> [bool; KEYWORD_COUNT] {
         let Self {
             flying,
@@ -423,6 +427,7 @@ impl KeywordData {
             menace,
             hexproof,
             indestructible,
+            changeling: _, // Open keyword fact.
         } = *self;
         [
             flying,
@@ -442,8 +447,7 @@ impl KeywordData {
         ]
     }
 
-    /// The evergreen keywords' columns. Every `Keyword` is evergreen today;
-    /// a non-evergreen keyword gets a fact row instead of a column.
+    /// Evergreen keywords have fixed columns. Other keywords use fact rows.
     pub fn from_keywords(keywords: &Keywords) -> Self {
         Self {
             flying: keywords.has(Keyword::Flying),
@@ -460,6 +464,7 @@ impl KeywordData {
             menace: keywords.has(Keyword::Menace),
             hexproof: keywords.has(Keyword::Hexproof),
             indestructible: keywords.has(Keyword::Indestructible),
+            changeling: keywords.has(Keyword::Changeling),
         }
     }
 }
@@ -653,7 +658,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 41] = [
+pub const MODIFICATION_NAMES: [&str; 44] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -687,13 +692,16 @@ pub const MODIFICATION_NAMES: [&str; 41] = [
     "LifeTotalCantChange",
     "ProtectionFromEverything",
     "PhasedOut",
-    "ControlChanged",
+    "Control",
+    "ChosenCreatureType",
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
     "AdditionalLandPlay",
     "SetName",
     "PreventCombatDamage",
+    "MustBeBlocked",
+    "Hexproof",
     "AllCreatureTypes",
 ];
 
@@ -789,6 +797,7 @@ impl ContinuousEffectData {
             Modification::DoesntUntap => "DoesntUntap",
             Modification::Saddled => "Saddled",
             Modification::CantActivateAbilities => "CantActivateAbilities",
+            Modification::MustBeBlocked => "MustBeBlocked",
             Modification::MustBeBlockedByAllAble => "MustBeBlockedByAllAble",
             Modification::LoseKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
@@ -806,11 +815,14 @@ impl ContinuousEffectData {
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
             Modification::LifeTotalCantChange => "LifeTotalCantChange",
+            Modification::Hexproof => "Hexproof",
             Modification::ProtectionFromEverything => "ProtectionFromEverything",
             Modification::PhasedOut => "PhasedOut",
-            Modification::ControlChanged { previous } => {
-                data.amount = Some(previous.0 as i32);
-                "ControlChanged"
+            Modification::Control => "Control",
+            Modification::ChosenCreatureType(name) => {
+                data.subtypes.push(name.clone());
+                data.description = Some(format!("chosen type: {name}"));
+                "ChosenCreatureType"
             }
             Modification::ModeChosen { mode } => {
                 data.amount = Some(i32::from(*mode));
@@ -870,6 +882,10 @@ pub struct PermanentData {
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
     pub attacking: bool,
+    pub blocked: bool,
+    /// Public player ID of the controller this permanent entered under
+    /// (CR 110.2), present only when it differs from `controller_id`.
+    pub entry_controller_id: Option<i32>,
     pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
@@ -899,6 +915,8 @@ pub struct PermanentData {
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     pub abilities_lost: bool,
+    pub hexproof_from: Vec<String>,
+    pub protection_from: Vec<String>,
     /// Face down (CR 708.2): a manifest, even one an effect names. A face-up
     /// copy of a manifest is nameless but not face down.
     pub face_down: bool,
@@ -1468,6 +1486,7 @@ impl Observation {
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
+            hexproof: game.player_has(player, &Modification::Hexproof),
             no_maximum_hand_size: game.has_no_maximum_hand_size_effect(player),
             known_library: game
                 .library_facts(player, viewer)
@@ -1640,7 +1659,7 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_copy: !object.is_card(),
             has_announced_x: has_x,
-            cast_from_graveyard: game.was_cast_from_graveyard(spell),
+            cast_from_graveyard: object.is_card() && spell.cast_from == ZoneType::Graveyard,
             characteristics: {
                 let (power, toughness) = game.object_pt(spell.object);
                 CharacteristicsData {
@@ -1700,7 +1719,7 @@ impl Observation {
                 .is_some_and(|faces| faces.back_up && !faces.front.1.modal_back)
                 || game.state.zones.melded_card(permanent.object).is_some())
             .then(|| game.object_mana_value(permanent.object)),
-            colors: (characteristics.colors != object.colors()).then(|| {
+            colors: (Color::bits(&characteristics.colors) != object.color_bits()).then(|| {
                 characteristics
                     .colors
                     .iter()
@@ -1727,6 +1746,14 @@ impl Observation {
                 && characteristics.restricted_by_summoning_sickness(),
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
+            blocked: game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.is_blocked(perm_id)),
+            entry_controller_id: permanent
+                .control_differs_from_entry
+                .then(|| game.state.players[permanent.entry_controller().0].id.0 as i32),
             first_strike_participant: game
                 .state
                 .combat
@@ -1790,6 +1817,26 @@ impl Observation {
                     .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
                     .map(|attacker| attacker.id.0 as i32)
             }),
+            hexproof_from: characteristics
+                .static_abilities
+                .iter()
+                .filter_map(|ability| match ability {
+                    crate::state::card::StaticAbility::HexproofFrom(quality) => {
+                        Some(quality.wire_name().to_owned())
+                    }
+                    _ => None,
+                })
+                .collect(),
+            protection_from: characteristics
+                .static_abilities
+                .iter()
+                .filter_map(|ability| match ability {
+                    crate::state::card::StaticAbility::Protection(quality) => {
+                        Some(quality.wire_name().to_owned())
+                    }
+                    _ => None,
+                })
+                .collect(),
             abilities_lost: characteristics.abilities_lost,
             face_down: object.is_face_down(),
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
