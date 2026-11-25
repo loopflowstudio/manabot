@@ -520,7 +520,23 @@ export const PRESENTATION_KIND_NAMES = [
   'land_played',
   'discarded',
   'revealed',
+  'activated',
+  'triggered',
+  'ability_resolved',
+  'countered',
+  'counters',
 ] as const;
+
+export const PRESENTATION_RULES = [
+  'lethal_damage',
+  'zero_toughness',
+  'zero_loyalty',
+  'zero_defense',
+  'legend_rule',
+  'unattached_aura',
+] as const;
+/** The state-based action (CR 704.5) that did what an event tells. */
+export type PresentationRule = (typeof PRESENTATION_RULES)[number];
 
 /**
  * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
@@ -588,6 +604,31 @@ export type PresentationKind =
       kind: 'revealed';
       cards: string[];
       player: number;
+    }
+  | {
+      kind: 'activated' | 'triggered';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      /** An activated or triggered ability began to resolve. */
+      kind: 'ability_resolved';
+      source: ObjectRenderId;
+      stack: number;
+    }
+  | {
+      /** A spell left the stack without resolving. */
+      kind: 'countered';
+      stack: number;
+    }
+  | {
+      kind: 'counters';
+      object: ObjectRenderId;
+      counter: string;
+      count: number;
+      /** The permanent's count of that kind after. */
+      total: number;
     };
 
 export interface PresentationEvent {
@@ -600,6 +641,9 @@ export interface PresentationEvent {
   suggested_ms: number;
   sound: string | null;
   kind: PresentationKind;
+  /** The earlier event on this track this one follows from; absent for a root. */
+  cause?: number;
+  rule?: PresentationRule;
 }
 
 export interface FrameUpdate {

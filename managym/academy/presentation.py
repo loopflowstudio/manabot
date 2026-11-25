@@ -1,16 +1,21 @@
 """Authority-side projection of committed engine facts into presentation events.
 
-The projector follows committed spells, land plays, discards, reveals and
-combat-to-turn sequences. Meaning
-comes from server-authored interaction offers confirmed by
-``recent_events``; observation snapshots are viewer-safe label catalogs only
-and are never diffed to invent game facts.
+The engine's presentation sink (``managym/src/flow/presentation.rs``) tells
+one step's facts in order, each with the fact it follows from and the rule
+that did it, through the observation's own viewer-safe event filter. The
+projector words them as typed ``PresentationEvent``s and binds each fact's
+cause to the ``seq`` of the nearest told ancestor. Targets come from the
+committed offers, which name them before the step resolves them; the
+post-step ``presentation_subjects`` name battlefield and graveyard objects.
+Observation snapshots are label catalogs only and are never diffed to invent
+game facts.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import json
 from typing import Any
 
 import managym
@@ -24,6 +29,8 @@ class _PresentationFact:
     suggested_ms: int
     sound: str | None
     kind: dict[str, Any]
+    fact: int
+    rule: str | None = None
 
 
 @dataclass(frozen=True)
@@ -33,35 +40,85 @@ class _PendingSpell:
     targets: tuple[dict[str, Any], ...] = ()
 
 
-def _event_type(event: managym.EventData) -> str:
+@dataclass(frozen=True)
+class EventRow:
+    """One viewer-safe event row, as ``managym.EventData`` names its fields."""
+
+    event_type: int
+    source_kind: int
+    source_id: int
+    target_kind: int
+    target_id: int
+    amount: int
+    controller_id: int
+    from_zone: int
+    to_zone: int
+    source_incarnation: int
+    target_incarnation: int
+
+
+@dataclass(frozen=True)
+class SinkFact:
+    """One fact the engine told: its event rows or a note, and why."""
+
+    id: int
+    cause: int | None
+    rule: str | None
+    events: tuple[EventRow, ...]
+    note: dict[str, Any] | None
+
+
+def read_facts(payload: str) -> list[SinkFact]:
+    """Decode ``Env.take_presentation_facts_json``."""
+    return [
+        SinkFact(
+            id=int(fact["id"]),
+            cause=None if fact["cause"] is None else int(fact["cause"]),
+            rule=fact["rule"],
+            events=tuple(EventRow(**row) for row in fact["events"]),
+            note=fact["note"],
+        )
+        for fact in json.loads(payload)
+    ]
+
+
+def _event_type(event: EventRow) -> str:
     try:
         return EventTypeEnum(int(event.event_type)).name
     except (TypeError, ValueError):
         return "UNKNOWN"
 
 
-def _event_object_id(event: managym.EventData, *, source: bool) -> dict[str, int]:
+def _event_object_id(event: EventRow, *, source: bool) -> dict[str, int]:
     entity = event.source_id if source else event.target_id
     incarnation = event.source_incarnation if source else event.target_incarnation
     return {"entity": int(entity), "incarnation": int(incarnation)}
 
 
+def _render_id(reference: Mapping[str, Any]) -> dict[str, int]:
+    return {
+        "entity": int(reference["entity"]),
+        "incarnation": int(reference["incarnation"]),
+    }
+
+
 class PresentationProjector:
-    """Stateful match-local projection of committed authored sequences."""
+    """Stateful match-local projection of the engine's told facts."""
 
     def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
         self._next_seq = 0
         self._facts: list[_PresentationFact] = []
         self._spell_stacks: dict[int, int] = {}
         self._pending_spell: _PendingSpell | None = None
         self._pending_land = False
-
-    def reset(self) -> None:
-        self._next_seq = 0
-        self._facts = []
-        self._spell_stacks = {}
-        self._pending_spell = None
-        self._pending_land = False
+        self._resolving_spell: tuple[int, int] | None = None
+        # Every fact's cause, told or not, so a cause climbs to a told one.
+        self._causes: dict[int, int | None] = {}
+        self._told: dict[int, int] = {}
+        self._roots: dict[int, int] = {}
 
     @property
     def next_seq(self) -> int:
@@ -97,33 +154,173 @@ class PresentationProjector:
 
     def observe(
         self,
-        observation: managym.Observation,
+        facts: list[SinkFact],
         *,
         event_subjects: dict[str, dict[str, Any]],
         definition_names: Mapping[int, str],
     ) -> None:
-        """Consume the committed semantic events produced by one engine step.
+        """Word the facts one engine step told, in the order they happened.
 
         ``definition_names`` names the game's card definitions by id
-        (``definition_names(env)``); a reveal reports only a definition.
+        (``definition_names(env)``); a reveal reports only a definition. One
+        step's discards and reveals by one player are one event each, at the
+        first of them.
         """
+        played = self._pending_land
+        self._pending_land = False
+        discarded: dict[int, tuple[int, list[dict[str, int]]]] = {}
+        revealed: dict[int, tuple[int, list[str]]] = {}
+        for fact in facts:
+            self._causes[fact.id] = fact.cause
+            if fact.note is not None:
+                self._observe_note(fact, fact.note)
+            rows = fact.events
+            if not rows:
+                continue
+            event_type = _event_type(rows[0])
+            if event_type == "SPELL_CAST":
+                self._observe_cast(rows[0], fact)
+            elif event_type == "SPELL_COUNTERED":
+                stack = self._spell_stacks.pop(int(rows[0].source_id), None)
+                if stack is not None:
+                    self._tell(
+                        fact, "normal", 450, None, {"kind": "countered", "stack": stack}
+                    )
+            elif event_type == "DAMAGE_DEALT":
+                self._observe_damage(rows[0], fact, event_subjects)
+            elif event_type == "CARD_MOVED":
+                row = rows[0]
+                subject = event_subjects.get(f"object:{int(row.source_id)}")
+                if (
+                    int(row.source_id) < 0
+                    or subject is None
+                    or subject.get("kind") != "object"
+                ):
+                    continue
+                moved = (int(row.from_zone), int(row.to_zone))
+                if played and moved == (int(ZoneEnum.HAND), int(ZoneEnum.BATTLEFIELD)):
+                    played = False
+                    self._tell(
+                        fact,
+                        "normal",
+                        400,
+                        None,
+                        {
+                            "kind": "land_played",
+                            "object": subject["id"],
+                            "player": int(row.controller_id),
+                        },
+                    )
+                elif moved == (int(ZoneEnum.HAND), int(ZoneEnum.GRAVEYARD)):
+                    first, objects = discarded.setdefault(
+                        int(row.controller_id), (fact.id, [])
+                    )
+                    objects.append(subject["id"])
+            elif event_type == "CARD_REVEALED":
+                name = definition_names.get(int(rows[0].source_id))
+                if name is not None:
+                    _, cards = revealed.setdefault(
+                        int(rows[0].controller_id), (fact.id, [])
+                    )
+                    cards.append(name)
+            else:
+                self._observe_combat_death_and_turn(rows, fact)
+        for player, (first, objects) in discarded.items():
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=450,
+                    sound=None,
+                    kind={"kind": "discarded", "objects": objects, "player": player},
+                    fact=first,
+                )
+            )
+        for player, (first, cards) in revealed.items():
+            self._facts.append(
+                _PresentationFact(
+                    importance="normal",
+                    suggested_ms=450,
+                    sound=None,
+                    kind={"kind": "revealed", "cards": cards, "player": player},
+                    fact=first,
+                )
+            )
 
-        events = list(observation.recent_events)
-        cast_events = [event for event in events if _event_type(event) == "SPELL_CAST"]
-        for event in cast_events:
-            self._observe_cast(event)
+    def _tell(
+        self,
+        fact: SinkFact,
+        importance: str,
+        suggested_ms: int,
+        sound: str | None,
+        kind: dict[str, Any],
+    ) -> None:
+        self._facts.append(
+            _PresentationFact(
+                importance=importance,
+                suggested_ms=suggested_ms,
+                sound=sound,
+                kind=kind,
+                fact=fact.id,
+                rule=fact.rule,
+            )
+        )
 
-        for event in events:
-            if _event_type(event) == "SPELL_COUNTERED":
-                self._spell_stacks.pop(int(event.source_id), None)
-        resolved_events = [
-            event for event in events if _event_type(event) == "SPELL_RESOLVED"
-        ]
-        for event in resolved_events:
-            self._observe_resolution(event, events, event_subjects)
-        self._observe_moves(events, event_subjects)
-        self._observe_reveals(events, definition_names)
-        self._observe_combat_death_and_turn(events)
+    def _observe_note(self, fact: SinkFact, note: Mapping[str, Any]) -> None:
+        kind = note["kind"]
+        if kind == "resolving":
+            self._resolving_spell = None
+            if note["spell"]:
+                if fact.events:
+                    slot = int(fact.events[0].source_id)
+                    stack = self._spell_stacks.pop(slot, None)
+                    if stack is not None:
+                        self._resolving_spell = (slot, stack)
+                        self._tell(
+                            fact,
+                            "emphasized",
+                            450,
+                            "spell.resolve",
+                            {"kind": "resolved", "stack": stack},
+                        )
+            elif note["source"] is not None:
+                self._tell(
+                    fact,
+                    "normal",
+                    450,
+                    None,
+                    {
+                        "kind": "ability_resolved",
+                        "source": _render_id(note["source"]),
+                        "stack": int(note["stack"]),
+                    },
+                )
+        elif kind in {"activated", "triggered"} and note["source"] is not None:
+            self._tell(
+                fact,
+                "emphasized" if kind == "activated" else "normal",
+                550,
+                None,
+                {
+                    "kind": kind,
+                    "source": _render_id(note["source"]),
+                    "controller": int(note["controller"]),
+                    "stack": int(note["stack"]),
+                },
+            )
+        elif kind == "counters":
+            self._tell(
+                fact,
+                "normal",
+                450,
+                None,
+                {
+                    "kind": "counters",
+                    "object": _render_id(note["object"]),
+                    "counter": str(note["counter"]),
+                    "count": int(note["count"]),
+                    "total": int(note["total"]),
+                },
+            )
 
     def drain(
         self,
@@ -132,33 +329,46 @@ class PresentationProjector:
         to_revision: int,
         caused_by: str | None,
     ) -> list[dict[str, Any]]:
-        """Bind pending facts to one authoritative revision transition."""
+        """Bind pending facts to one authoritative revision transition.
+
+        An event's ``cause`` is the first told event of its fact's nearest
+        told ancestor (or of its own fact, for a cast's targets), and its
+        ``group`` is the root of that chain.
+        """
 
         payloads: list[dict[str, Any]] = []
         for fact in self._facts:
             seq = self._next_seq
             self._next_seq += 1
+            cause = self._told.get(fact.fact)
+            if cause is None:
+                self._told[fact.fact] = seq
+                ancestor = self._causes.get(fact.fact)
+                while ancestor is not None and ancestor not in self._told:
+                    ancestor = self._causes.get(ancestor)
+                cause = None if ancestor is None else self._told[ancestor]
+            group = seq if cause is None else self._roots[cause]
+            self._roots[seq] = group
             event = PresentationEvent.model_validate(
                 {
                     "seq": seq,
                     "from_revision": from_revision,
                     "to_revision": to_revision,
                     "caused_by": caused_by,
-                    "group": seq,
+                    "group": group,
                     "importance": fact.importance,
                     "suggested_ms": fact.suggested_ms,
                     "sound": fact.sound,
                     "kind": fact.kind,
+                    "cause": cause,
+                    "rule": fact.rule,
                 }
             )
             payloads.append(event.model_dump(mode="json"))
         self._facts = []
         return payloads
 
-    def _observe_cast(
-        self,
-        event: managym.EventData,
-    ) -> None:
+    def _observe_cast(self, event: EventRow, fact: SinkFact) -> None:
         pending = self._pending_spell
         self._pending_spell = None
         if pending is None:
@@ -168,272 +378,139 @@ class PresentationProjector:
         # adapter intentionally reuses the visible spell card's render ID.
         stack_id = int(pending.object_id["entity"])
         self._spell_stacks[int(event.source_id)] = stack_id
-        self._facts.append(
-            _PresentationFact(
-                importance="emphasized",
-                suggested_ms=650,
-                sound="spell.cast",
-                kind={
-                    "kind": "cast",
-                    "object": pending.object_id,
-                    "controller": pending.controller,
-                    "stack": stack_id,
-                },
-            )
+        self._tell(
+            fact,
+            "emphasized",
+            650,
+            "spell.cast",
+            {
+                "kind": "cast",
+                "object": pending.object_id,
+                "controller": pending.controller,
+                "stack": stack_id,
+            },
         )
         source = {"kind": "stack", "id": stack_id}
         for target in pending.targets:
-            self._facts.append(
-                _PresentationFact(
-                    importance="normal",
-                    suggested_ms=500,
-                    sound=None,
-                    kind={"kind": "targeted", "source": source, "target": target},
-                )
+            self._tell(
+                fact,
+                "normal",
+                500,
+                None,
+                {"kind": "targeted", "source": source, "target": target},
             )
 
-    def _observe_resolution(
+    def _observe_damage(
         self,
-        resolved: managym.EventData,
-        events: list[managym.EventData],
+        damage: EventRow,
+        fact: SinkFact,
         event_subjects: dict[str, dict[str, Any]],
     ) -> None:
-        source_id = int(resolved.source_id)
-        stack_id = self._spell_stacks.pop(source_id, None)
-        if stack_id is None:
+        """Damage from the resolving spell, or from a named object."""
+        namespace = {2: "permanent", 3: "player"}.get(int(damage.target_kind))
+        target = event_subjects.get(f"{namespace}:{int(damage.target_id)}")
+        if target is None:
             return
-
-        self._facts.append(
-            _PresentationFact(
-                importance="emphasized",
-                suggested_ms=450,
-                sound="spell.resolve",
-                kind={"kind": "resolved", "stack": stack_id},
-            )
+        resolving = self._resolving_spell
+        if resolving is not None and int(damage.source_id) == resolving[0]:
+            source: dict[str, Any] | None = {"kind": "stack", "id": resolving[1]}
+        elif int(damage.source_kind) == int(managym.EventEntityKindEnum.OBJECT):
+            source = {"kind": "object", "id": _event_object_id(damage, source=True)}
+        else:
+            source = event_subjects.get(f"object:{int(damage.source_id)}")
+        self._tell(
+            fact,
+            "critical",
+            700,
+            "damage.fire",
+            {
+                "kind": "damage",
+                "source": source,
+                "target": target,
+                "amount": int(damage.amount),
+            },
         )
 
-        damage_events = [
-            event
-            for event in events
-            if _event_type(event) == "DAMAGE_DEALT"
-            and int(event.source_id) == source_id
-        ]
-        for damage in damage_events:
-            namespace = {2: "permanent", 3: "player"}.get(int(damage.target_kind))
-            target = event_subjects.get(f"{namespace}:{int(damage.target_id)}")
-            if target is None:
-                continue
-            self._facts.append(
-                _PresentationFact(
-                    importance="critical",
-                    suggested_ms=700,
-                    sound="damage.fire",
-                    kind={
-                        "kind": "damage",
-                        "source": {"kind": "stack", "id": stack_id},
-                        "target": target,
-                        "amount": int(damage.amount),
+    def _observe_combat_death_and_turn(
+        self, rows: tuple[EventRow, ...], fact: SinkFact
+    ) -> None:
+        """One fact's rows: an attack, the blocks, combat damage, a batch of
+        deaths or a turn's start."""
+        event_type = _event_type(rows[0])
+        if event_type == "COMBAT_ATTACKERS_DECLARED":
+            self._tell(
+                fact,
+                "emphasized",
+                500,
+                "combat.attack",
+                {
+                    "kind": "attack_group",
+                    "attackers": [_event_object_id(row, source=True) for row in rows],
+                    "defender": {"kind": "player", "id": int(rows[0].target_id)},
+                },
+            )
+        elif event_type == "BLOCKERS_DECLARED":
+            assignments: dict[tuple[int, int], list[dict[str, int]]] = {}
+            for row in rows:
+                attacker = _event_object_id(row, source=True)
+                key = (attacker["entity"], attacker["incarnation"])
+                assignments.setdefault(key, []).append(
+                    _event_object_id(row, source=False)
+                )
+            for (entity, incarnation), blockers in assignments.items():
+                self._tell(
+                    fact,
+                    "normal",
+                    450,
+                    "combat.block",
+                    {
+                        "kind": "blocked",
+                        "attacker": {"entity": entity, "incarnation": incarnation},
+                        "blockers": blockers,
                     },
                 )
+        elif event_type == "COMBAT_DAMAGE_DEALT":
+            row = rows[0]
+            target = (
+                {"kind": "object", "id": _event_object_id(row, source=False)}
+                if int(row.target_kind) == int(managym.EventEntityKindEnum.OBJECT)
+                else {"kind": "player", "id": int(row.target_id)}
             )
-
-    def _observe_moves(
-        self,
-        events: list[managym.EventData],
-        event_subjects: dict[str, dict[str, Any]],
-    ) -> None:
-        """Land plays and discards, named by the public objects they became.
-
-        A land played is the committed play-land offer confirmed by its move
-        from hand to the battlefield; any other arrival from hand (an effect
-        putting a land onto the battlefield) is not a land play. A card moved
-        from hand to its owner's graveyard is a discard (CR 701.9a); one
-        step's discards by one player form one event. ``event_subjects`` is
-        read after the step, where ``object:<slot>`` names each battlefield
-        and graveyard appearance.
-        """
-        played = self._pending_land
-        self._pending_land = False
-        discarded: dict[int, list[dict[str, int]]] = {}
-        for event in events:
-            if _event_type(event) != "CARD_MOVED" or int(event.source_id) < 0:
-                continue
-            subject = event_subjects.get(f"object:{int(event.source_id)}")
-            if subject is None or subject.get("kind") != "object":
-                continue
-            moved = (int(event.from_zone), int(event.to_zone))
-            if played and moved == (int(ZoneEnum.HAND), int(ZoneEnum.BATTLEFIELD)):
-                played = False
-                self._facts.append(
-                    _PresentationFact(
-                        importance="normal",
-                        suggested_ms=400,
-                        sound=None,
-                        kind={
-                            "kind": "land_played",
-                            "object": subject["id"],
-                            "player": int(event.controller_id),
-                        },
-                    )
-                )
-            elif moved == (int(ZoneEnum.HAND), int(ZoneEnum.GRAVEYARD)):
-                discarded.setdefault(int(event.controller_id), []).append(subject["id"])
-        for player, objects in discarded.items():
-            self._facts.append(
-                _PresentationFact(
-                    importance="normal",
-                    suggested_ms=450,
-                    sound=None,
-                    kind={"kind": "discarded", "objects": objects, "player": player},
-                )
-            )
-
-    def _observe_reveals(
-        self, events: list[managym.EventData], definition_names: Mapping[int, str]
-    ) -> None:
-        """Cards revealed to every player, one event per player and step.
-
-        A reveal (a hand revealed, a card revealed as it is put into a hand, a
-        Lesson revealed from outside the game) names a definition, never an
-        object, so the event carries the names themselves.
-        """
-        revealed: dict[int, list[str]] = {}
-        for event in events:
-            if _event_type(event) != "CARD_REVEALED":
-                continue
-            name = definition_names.get(int(event.source_id))
-            if name is not None:
-                revealed.setdefault(int(event.controller_id), []).append(name)
-        for player, cards in revealed.items():
-            self._facts.append(
-                _PresentationFact(
-                    importance="normal",
-                    suggested_ms=450,
-                    sound=None,
-                    kind={"kind": "revealed", "cards": cards, "player": player},
-                )
-            )
-
-    def _observe_combat_death_and_turn(self, events: list[managym.EventData]) -> None:
-        index = 0
-        while index < len(events):
-            event = events[index]
-            event_type = _event_type(event)
-
-            if event_type == "COMBAT_ATTACKERS_DECLARED":
-                attackers: list[dict[str, int]] = []
-                defender = int(event.target_id)
-                while (
-                    index < len(events)
-                    and _event_type(events[index]) == "COMBAT_ATTACKERS_DECLARED"
-                ):
-                    attackers.append(_event_object_id(events[index], source=True))
-                    index += 1
-                self._facts.append(
-                    _PresentationFact(
-                        importance="emphasized",
-                        suggested_ms=500,
-                        sound="combat.attack",
-                        kind={
-                            "kind": "attack_group",
-                            "attackers": attackers,
-                            "defender": {"kind": "player", "id": defender},
-                        },
-                    )
-                )
-                continue
-
-            if event_type == "BLOCKERS_DECLARED":
-                assignments: dict[tuple[int, int], list[dict[str, int]]] = {}
-                while (
-                    index < len(events)
-                    and _event_type(events[index]) == "BLOCKERS_DECLARED"
-                ):
-                    current = events[index]
-                    attacker = _event_object_id(current, source=True)
-                    key = (attacker["entity"], attacker["incarnation"])
-                    assignments.setdefault(key, []).append(
-                        _event_object_id(current, source=False)
-                    )
-                    index += 1
-                for (entity, incarnation), blockers in assignments.items():
-                    self._facts.append(
-                        _PresentationFact(
-                            importance="normal",
-                            suggested_ms=450,
-                            sound="combat.block",
-                            kind={
-                                "kind": "blocked",
-                                "attacker": {
-                                    "entity": entity,
-                                    "incarnation": incarnation,
-                                },
-                                "blockers": blockers,
-                            },
-                        )
-                    )
-                continue
-
-            if event_type == "COMBAT_DAMAGE_DEALT":
-                target = (
-                    {
+            self._tell(
+                fact,
+                "critical",
+                500,
+                "combat.damage",
+                {
+                    "kind": "damage",
+                    "source": {
                         "kind": "object",
-                        "id": _event_object_id(event, source=False),
-                    }
-                    if int(event.target_kind) == int(managym.EventEntityKindEnum.OBJECT)
-                    else {"kind": "player", "id": int(event.target_id)}
-                )
-                self._facts.append(
-                    _PresentationFact(
-                        importance="critical",
-                        suggested_ms=500,
-                        sound="combat.damage",
-                        kind={
-                            "kind": "damage",
-                            "source": {
-                                "kind": "object",
-                                "id": _event_object_id(event, source=True),
-                            },
-                            "target": target,
-                            "amount": int(event.amount),
-                        },
-                    )
-                )
-                index += 1
-                continue
-
-            if event_type == "PERMANENTS_DIED":
-                objects: list[dict[str, int]] = []
-                batch_size = max(1, int(event.amount))
-                while (
-                    index < len(events)
-                    and _event_type(events[index]) == "PERMANENTS_DIED"
-                    and len(objects) < batch_size
-                ):
-                    objects.append(_event_object_id(events[index], source=True))
-                    index += 1
-                self._facts.append(
-                    _PresentationFact(
-                        importance="critical",
-                        suggested_ms=650,
-                        sound="creature.died",
-                        kind={"kind": "died", "objects": objects},
-                    )
-                )
-                continue
-
-            if event_type == "TURN_STARTED":
-                self._facts.append(
-                    _PresentationFact(
-                        importance="emphasized",
-                        suggested_ms=350,
-                        sound="turn.start",
-                        kind={
-                            "kind": "turn_started",
-                            "player": int(event.source_id),
-                            "turn_number": int(event.amount),
-                        },
-                    )
-                )
-
-            index += 1
+                        "id": _event_object_id(row, source=True),
+                    },
+                    "target": target,
+                    "amount": int(row.amount),
+                },
+            )
+        elif event_type == "PERMANENTS_DIED":
+            self._tell(
+                fact,
+                "critical",
+                650,
+                "creature.died",
+                {
+                    "kind": "died",
+                    "objects": [_event_object_id(row, source=True) for row in rows],
+                },
+            )
+        elif event_type == "TURN_STARTED":
+            self._tell(
+                fact,
+                "emphasized",
+                350,
+                "turn.start",
+                {
+                    "kind": "turn_started",
+                    "player": int(rows[0].source_id),
+                    "turn_number": int(rows[0].amount),
+                },
+            )

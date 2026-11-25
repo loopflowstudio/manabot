@@ -586,6 +586,7 @@ impl Game {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }
+        self.presentation_event(&event);
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);
@@ -603,6 +604,7 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
+        self.presentation_event(&event);
         self.state.observation_events_mut().push(event);
     }
 

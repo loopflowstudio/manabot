@@ -17,6 +17,7 @@ from managym.decision import Command as SemanticCommand, DecisionFrame
 from managym.experience import Command
 from managym.experience_projection import decision_surface_view, definition_names
 
+from .presentation import SinkFact, read_facts
 from .replay_index import (
     CanonicalReplayV1,
     DecisionNotFoundError,
@@ -66,6 +67,7 @@ class StudyBranch:
         source: managym.Env,
         source_digest: str,
     ) -> None:
+        env.enable_presentation()
         self._env: managym.Env | None = env
         self._restored: RestoredReplayDecision | None = restored.model_copy(deep=True)
         self._source: managym.Env | None = source
@@ -114,6 +116,11 @@ class StudyBranch:
         """Native public event-address map, captured at the transition boundary."""
         env, _ = self._require_open()
         return json.loads(env.presentation_subjects_json())
+
+    def presentation_facts(self) -> list[SinkFact]:
+        """The facts the branch told since the last read."""
+        env, _ = self._require_open()
+        return read_facts(env.take_presentation_facts_json())
 
     def definition_names(self) -> dict[int, str]:
         """The branch game's card definitions by id (`definition_names`)."""

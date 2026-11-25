@@ -8,6 +8,7 @@ import type {
   PresentationLabels,
   SubjectRef,
 } from './types';
+import { PRESENTATION_RULES } from './types';
 
 export type {
   ObjectRenderId,
@@ -224,6 +225,27 @@ function validatePresentationKind(value: unknown, seq: number): void {
       }
       requireInteger(value.player, 'kind.player', seq);
       return;
+    case 'activated':
+    case 'triggered':
+      validateObjectRenderId(value.source, 'kind.source', seq);
+      requireInteger(value.controller, 'kind.controller', seq);
+      requireInteger(value.stack, 'kind.stack', seq);
+      return;
+    case 'ability_resolved':
+      validateObjectRenderId(value.source, 'kind.source', seq);
+      requireInteger(value.stack, 'kind.stack', seq);
+      return;
+    case 'countered':
+      requireInteger(value.stack, 'kind.stack', seq);
+      return;
+    case 'counters':
+      validateObjectRenderId(value.object, 'kind.object', seq);
+      if (typeof value.counter !== 'string') {
+        throw new Error(`Presentation event ${seq} has invalid kind.counter`);
+      }
+      requireInteger(value.count, 'kind.count', seq);
+      requireInteger(value.total, 'kind.total', seq);
+      return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
   }
@@ -249,6 +271,15 @@ export function validatePresentationEvents(events: readonly PresentationEvent[])
       throw new Error(`Presentation event ${event.seq} has invalid suggested_ms`);
     }
     validatePresentationKind(event.kind, event.seq);
+    if (
+      event.cause !== undefined &&
+      !(Number.isSafeInteger(event.cause) && event.cause >= 0 && event.cause < event.seq)
+    ) {
+      throw new Error(`Presentation event ${event.seq} has invalid cause`);
+    }
+    if (event.rule !== undefined && !(PRESENTATION_RULES as readonly string[]).includes(event.rule)) {
+      throw new Error(`Presentation event ${event.seq} has invalid rule`);
+    }
     previousSeq = event.seq;
   }
 }
@@ -395,6 +426,14 @@ export function presentationBeat(
       detail = `${player} reveals ${event.kind.cards.join(', ')}.`;
       break;
     }
+    case 'activated':
+    case 'triggered':
+    case 'ability_resolved':
+    case 'countered':
+    case 'counters':
+      heading = event.kind.kind;
+      detail = '';
+      break;
   }
 
   return {
@@ -425,6 +464,10 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
     case 'discarded': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
     case 'revealed': return [{ kind: 'player', id: kind.player }];
+    case 'activated': case 'triggered': return [object(kind.source), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
+    case 'ability_resolved': return [object(kind.source), { kind: 'stack', id: kind.stack }];
+    case 'countered': return [{ kind: 'stack', id: kind.stack }];
+    case 'counters': return [object(kind.object)];
   }
 }
 

@@ -925,6 +925,47 @@ pub enum PresentationKind {
         cards: Vec<String>,
         player: PlayerId,
     },
+    /// An activated ability put on the stack (CR 602.2) from `source`.
+    Activated {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// A triggered ability put on the stack (CR 603.3) from `source`.
+    Triggered {
+        source: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    /// An activated or triggered ability began to resolve (CR 608.2).
+    AbilityResolved {
+        source: ObjectRenderId,
+        stack: StackRenderId,
+    },
+    /// A spell left the stack without resolving (CR 701.6a, 608.2b).
+    Countered {
+        stack: StackRenderId,
+    },
+    /// Counters put on a permanent (CR 122.6); `total` is its count after.
+    Counters {
+        object: ObjectRenderId,
+        counter: String,
+        count: i32,
+        total: i32,
+    },
+}
+
+/// The state-based action (CR 704.5) that did what an event tells, when no
+/// player chose it.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PresentationRule {
+    LethalDamage,
+    ZeroToughness,
+    ZeroLoyalty,
+    ZeroDefense,
+    LegendRule,
+    UnattachedAura,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -941,6 +982,12 @@ pub struct PresentationEvent {
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub sound: RequiredNullable<String>,
     pub kind: PresentationKind,
+    /// The earlier event on this viewer's track this one follows from;
+    /// absent for a move or a turn heading. `group` is its root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cause: Option<PresentationSeq>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<PresentationRule>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

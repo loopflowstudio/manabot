@@ -822,6 +822,39 @@ class RevealedPresentation(ProtocolModel):
     player: UInt8
 
 
+class ActivatedPresentation(ProtocolModel):
+    kind: Literal["activated"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class TriggeredPresentation(ProtocolModel):
+    kind: Literal["triggered"]
+    source: ObjectRenderId
+    controller: UInt8
+    stack: UInt64
+
+
+class AbilityResolvedPresentation(ProtocolModel):
+    kind: Literal["ability_resolved"]
+    source: ObjectRenderId
+    stack: UInt64
+
+
+class CounteredPresentation(ProtocolModel):
+    kind: Literal["countered"]
+    stack: UInt64
+
+
+class CountersPresentation(ProtocolModel):
+    kind: Literal["counters"]
+    object: ObjectRenderId
+    counter: str
+    count: Int32
+    total: Int32
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -834,8 +867,22 @@ PresentationKind: TypeAlias = Annotated[
     | TurnStartedPresentation
     | LandPlayedPresentation
     | DiscardedPresentation
-    | RevealedPresentation,
+    | RevealedPresentation
+    | ActivatedPresentation
+    | TriggeredPresentation
+    | AbilityResolvedPresentation
+    | CounteredPresentation
+    | CountersPresentation,
     Field(discriminator="kind"),
+]
+
+PresentationRule: TypeAlias = Literal[
+    "lethal_damage",
+    "zero_toughness",
+    "zero_loyalty",
+    "zero_defense",
+    "legend_rule",
+    "unattached_aura",
 ]
 
 
@@ -849,6 +896,10 @@ class PresentationEvent(ProtocolModel):
     suggested_ms: UInt32
     sound: str | None
     kind: PresentationKind
+    cause: UInt64 | None = Field(default=None, exclude_if=lambda value: value is None)
+    rule: PresentationRule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class CommandReceipt(ProtocolModel):

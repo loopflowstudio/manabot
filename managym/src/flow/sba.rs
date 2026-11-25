@@ -5,6 +5,7 @@ use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
         game::{Game, GameOutcome, GameProcedure, LossCauses},
+        presentation::Rule,
         proposed_event::{EventBinding, ProposedEvent},
         statics::Characteristics,
     },
@@ -159,6 +160,7 @@ impl Game {
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
         let mut candidates = Vec::new();
+        let mut rules = Vec::new();
         for (permanent_id, characteristics) in
             self.layer_views((0..self.state.permanents.len()).map(PermanentId))
         {
@@ -189,9 +191,26 @@ impl Game {
             let Some(object_ref) = self.permanent_object(permanent_id) else {
                 continue;
             };
+            let rule = if zero_toughness {
+                Rule::ZeroToughness
+            } else if zero_counters && characteristics.types.is_planeswalker() {
+                Rule::ZeroLoyalty
+            } else if zero_counters {
+                Rule::ZeroDefense
+            } else if legend_loser {
+                Rule::LegendRule
+            } else if illegal_aura {
+                Rule::UnattachedAura
+            } else {
+                Rule::LethalDamage
+            };
+            rules.push((object_ref, rule));
             candidates.push((object_ref, destroy));
         }
         candidates.sort_by_key(|(object_ref, _)| *object_ref);
+        for (object, rule) in rules {
+            self.presentation_rule(object, rule);
+        }
 
         let mut events: Vec<_> = candidates
             .into_iter()

@@ -415,7 +415,7 @@ impl Serialize for StackTargetJson<'_> {
     }
 }
 
-struct EventsJson<'a>(&'a [EventData]);
+pub(crate) struct EventsJson<'a>(pub(crate) &'a [EventData]);
 
 impl Serialize for EventsJson<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

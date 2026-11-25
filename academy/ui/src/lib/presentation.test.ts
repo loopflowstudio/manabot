@@ -55,6 +55,28 @@ describe('Lightning Bolt presentation fixture', () => {
     );
   });
 
+  it('accepts a death that names its rule and an earlier cause, and rejects a later one', () => {
+    const events = structuredClone(LIGHTNING_BOLT_PRESENTATION.events);
+    const died = events.find((event) => event.kind.kind === 'died')!;
+    died.cause = events[0].seq;
+    died.rule = 'lethal_damage';
+    events.push({
+      ...died,
+      seq: died.seq + 100,
+      kind: { kind: 'triggered', source: { entity: 9, incarnation: 1 }, controller: 1, stack: 40 },
+      cause: died.seq,
+      rule: undefined,
+    });
+    expect(() => validatePresentationEvents(events)).not.toThrow();
+
+    const forward = structuredClone(events);
+    forward[0].cause = forward[0].seq;
+    expect(() => validatePresentationEvents(forward)).toThrow(/invalid cause/);
+    const unknownRule = structuredClone(events);
+    unknownRule[0].rule = 'bad_luck' as never;
+    expect(() => validatePresentationEvents(unknownRule)).toThrow(/invalid rule/);
+  });
+
   it('accepts ordered per-action transitions inside one authoritative FrameUpdate', () => {
     expect(() =>
       validatePresentationUpdate(LIGHTNING_BOLT_PRESENTATION.events, 41, 43),

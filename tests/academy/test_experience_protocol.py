@@ -88,6 +88,11 @@ UNION_VARIANTS = {
         "LandPlayedPresentation",
         "DiscardedPresentation",
         "RevealedPresentation",
+        "ActivatedPresentation",
+        "TriggeredPresentation",
+        "AbilityResolvedPresentation",
+        "CounteredPresentation",
+        "CountersPresentation",
     ),
 }
 

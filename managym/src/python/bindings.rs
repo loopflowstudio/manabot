@@ -4489,6 +4489,27 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Tell this game's facts from now on (Academy); see
+    /// `managym/src/flow/presentation.rs`.
+    fn enable_presentation(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_presentation()
+            .map_err(map_agent_err)
+    }
+
+    /// The facts told since the last take, as JSON, then cleared.
+    fn take_presentation_facts_json(&self) -> PyResult<String> {
+        let facts = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_presentation_facts()
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&facts).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Public event identities used to explain a committed transition.
     fn presentation_subjects_json(&self) -> PyResult<String> {
         let env = self

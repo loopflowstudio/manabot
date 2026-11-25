@@ -883,6 +883,26 @@ impl Env {
             .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
     }
 
+    /// Tell the current game's facts until it ends; see
+    /// [`crate::flow::presentation`].
+    pub fn enable_presentation(&mut self) -> Result<(), AgentError> {
+        self.game
+            .as_mut()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .enable_presentation();
+        Ok(())
+    }
+
+    pub fn take_presentation_facts(
+        &mut self,
+    ) -> Result<Vec<crate::flow::presentation::PresentationFact>, AgentError> {
+        Ok(self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .take_presentation_facts())
+    }
+
     /// Public event identities used to explain a committed transition.
     pub fn presentation_subjects(
         &self,
@@ -1628,6 +1648,8 @@ impl Env {
     pub fn scenario_refresh(&mut self) -> Result<Observation, AgentError> {
         let game = self.scenario_game_mut("scenario_refresh")?;
         game.scenario_refresh_priority()?;
+        // A constructed position tells nothing: it starts with no events.
+        game.take_presentation_facts();
         Ok(Observation::new(game, &[]))
     }
 

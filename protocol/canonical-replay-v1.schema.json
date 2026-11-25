@@ -2138,6 +2138,15 @@
     "PresentationEvent": {
       "type": "object",
       "properties": {
+        "cause": {
+          "description": "The earlier event on this viewer's track this one follows from;\nabsent for a move or a turn heading. `group` is its root.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "caused_by": {
           "$ref": "#/$defs/RequiredNullable3"
         },
@@ -2156,6 +2165,16 @@
         },
         "kind": {
           "$ref": "#/$defs/PresentationKind"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationRule"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "seq": {
           "type": "integer",
@@ -2491,7 +2510,157 @@
             "cards",
             "player"
           ]
+        },
+        {
+          "description": "An activated ability put on the stack (CR 602.2) from `source`.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "activated"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "controller",
+            "stack"
+          ]
+        },
+        {
+          "description": "A triggered ability put on the stack (CR 603.3) from `source`.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "triggered"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "controller",
+            "stack"
+          ]
+        },
+        {
+          "description": "An activated or triggered ability began to resolve (CR 608.2).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "ability_resolved"
+            },
+            "source": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "stack"
+          ]
+        },
+        {
+          "description": "A spell left the stack without resolving (CR 701.6a, 608.2b).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "countered"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stack"
+          ]
+        },
+        {
+          "description": "Counters put on a permanent (CR 122.6); `total` is its count after.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "counter": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "counters"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "total": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "counter",
+            "count",
+            "total"
+          ]
         }
+      ]
+    },
+    "PresentationRule": {
+      "description": "The state-based action (CR 704.5) that did what an event tells, when no\nplayer chose it.",
+      "type": "string",
+      "enum": [
+        "lethal_damage",
+        "zero_toughness",
+        "zero_loyalty",
+        "zero_defense",
+        "legend_rule",
+        "unattached_aura"
       ]
     },
     "PromptView": {

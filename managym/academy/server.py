@@ -118,7 +118,7 @@ from .play_session import (
     request_fingerprint,
     setup_draft,
 )
-from .presentation import PresentationProjector
+from .presentation import PresentationProjector, read_facts
 from .recording import Recording, narrate_move, own_steps, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -1067,6 +1067,7 @@ class GameSession:
                 # engine only captures when asked.
                 env = managym.Env(seed=seed, decision_memory=True)
                 obs, _ = env.reset(config.to_rust())
+                env.enable_presentation()
                 observe_policies((policy,), env, obs)
             except BaseException as exc:
                 # PyO3's PanicException derives directly from BaseException and has
@@ -1724,7 +1725,7 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(
-            next_obs,
+            read_facts(self.env.take_presentation_facts_json()),
             event_subjects=event_subjects,
             definition_names=definition_names(self.env),
         )
@@ -2770,12 +2771,12 @@ class GameSession:
         projector = PresentationProjector()
         projector.note_action(canonical_offer)
         try:
-            observation = branch.submit_semantic(command)
+            branch.submit_semantic(command)
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
             raise StudyCommandUnavailableError("study_command_rejected") from exc
         event_subjects.update(branch.presentation_subjects())
         projector.observe(
-            observation,
+            branch.presentation_facts(),
             event_subjects=event_subjects,
             definition_names=branch.definition_names(),
         )
