@@ -1,22 +1,19 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Eleven of the 56 scoped Foundations rows have directed implementation evidence.
-Slice 1 delivered the six entry-choice cards and Slice 5 delivered the three
-stack-copy cards. Demonic Pact and Maze's End already had working definitions.
+Thirteen of the 56 scoped Foundations rows have directed implementation evidence.
+Slices 1, 2, 3 and 5 delivered eleven cards. Demonic Pact and Maze's End
+already had working definitions.
 
-**Next pass: Slices 2 and 3, the two new decision shapes** (Curator of
-Destinies, Biogenic Upgrade). Curator's controller partitions five cards
-privately and the opponent chooses a pile; pile visibility is the first point
-to exercise. Biogenic Upgrade announces per-target shares at cast.
+**Next pass: Slices 4 and 7.** Carry target relations, fighting, last known
+information and shared sacrifice through the eight cards in those slices.
 
-Remaining passes (ledger checked 2026-11-24: 11 implemented, 45 pending):
+Remaining passes (13 implemented, 43 pending):
 
-1. Slices 2 + 3 — new decision shapes (2 cards).
-2. Slices 4 + 7 — target relations, `Fight`, LKI of moved objects, shared
+1. Slices 4 + 7 — target relations, `Fight`, LKI of moved objects, shared
    sacrifice (8 cards).
-3. Slices 6 + 8 — library-top selection, kicked entries, composite ward,
+2. Slices 6 + 8 — library-top selection, kicked entries, composite ward,
    mana expiry, Changeling, keyword predicate (11 cards).
-4. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
+3. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
    integrated validation below.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
@@ -96,53 +93,27 @@ At the integrated gate exercise 8–16 Courtyards with distinct mana restriction
 and eight differently chosen Banners or Automatons. Compare the payment and
 layer results against Engine Budget.
 
-### Slice 2 — Two piles, chosen by an opponent (Curator of Destinies)
+### Slice 2 — Two piles, chosen by an opponent (complete)
 
-One card, because it alone needs a new decision shape:
+Curator of Destinies offers two choices for each inspected card. At handoff
+the opponent sees the face-up identities and the face-down count. Directed
+play covers all six split sizes, both destinations, restore and hidden-world
+sampling, Flying and an attempted Counterspell. The Academy reconnect frame
+and an exact fork both kept the face-down names private. On the CPython 3.13
+release wheel, five alternating partition steps through the opponent handoff
+took a median 0.065 ms across 101 forks, excluding cloning.
 
-- A private partition decision for the controller: per card, face-up or
-  face-down.
-- A `ChoosePile` decision for an opponent. Its observation shows the face-up
-  pile's identities and only the face-down pile's size.
-- Knowledge afterwards: a face-down pile that goes to hand stays hidden from
-  the opponent; whichever pile goes to the graveyard becomes public.
-- Hidden-world sampling keeps the face-up cards fixed.
+### Slice 3 — Counters divided among targets at cast (complete)
 
-Do not approximate it with `Modal`: its action space is a bare mode index
-(`decision.rs:2134`). `OpponentSplitsRevealed` is a different shape: the
-opponent picks among revealed cards, with no piles.
-
-Checks:
-
-- Curator test in `fdn.rs`. Partition sequences cover 0–5 face-up cards.
-- The opponent's action space names both piles.
-- Reconnect and fork keep face-down identities redacted for the opponent.
-- `CantBeCountered` with Flying.
-- Stress: the partition is a sequence of per-card binary choices, never
-  2^5 enumerated actions. Benchmark the decision once with 5 cards.
-
-### Slice 3 — Counters divided among targets at cast (Biogenic Upgrade)
-
-One card. It announces a per-target share during casting (CR 601.2d):
-
-- Store the shares on the stack object beside `targets`. Copies carry them.
-- Read a share per target slot with an `EffectValue::TargetShare`.
-- An illegal target's share is lost, never redistributed.
-- Replace the resolution-time
-  `Effect::DistributeCountersToTappedOpponentCreatures` only if its card's
-  oracle text announces at cast. Otherwise leave it alone.
-
-Doubling then composes:
-`ForEachTarget { PutCounters { amount: Property { of: Target, Counters(+1/+1) } } }`.
-
-Checks:
-
-- Shares 3 / 2+1 / 1+1+1 resolve to 6 / 4+2 / 2+2+2.
-- One target removed in response: the others double their own shares only.
-- A copy keeps the shares.
-- The action surface states the share per target.
-- Stress: three counters over three targets is at most 10 distributions.
-  Keep it a per-target choice sequence.
+Biogenic Upgrade announces a positive share for each target before payment.
+Copies retain the original shares by target slot. Distribution and doubling
+each use a simultaneous batch, so doubling reads each creature's counters
+after distribution. Directed play covers all three target counts, a target
+leaving, and a copy changing targets. Both viewers see the announced amounts
+on the stack. Text play and policy input admitted both new decision shapes.
+Scryfall conformance, card-program observability and the two bundled pilot
+replays passed. The optional u1952 checkpoint was unconfigured. Four Academy
+demos replayed 192 Commands and five navigation positions refreshed.
 
 ### Slice 4 — Target relations and targeting cardinality (6 cards)
 
@@ -378,4 +349,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-45 scoped rows remain pending, including Abyssal Harvester.
+43 scoped rows remain pending, including Abyssal Harvester.

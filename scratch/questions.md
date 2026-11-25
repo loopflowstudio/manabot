@@ -28,3 +28,6 @@
   whole permanent schema also found earlier differences in seven unrelated
   properties, including missing `face_down` and `keywords`. Those properties
   match the checked-in schema before Slice 1.
+- Biogenic Upgrade uses one simultaneous counter batch for distribution and
+  another for doubling. Each recipient reads its own pre-batch counter count.
+  Sequential child programs would split one instruction into separate events.
