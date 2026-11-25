@@ -21,6 +21,7 @@ pub mod cr_712_modal_faces;
 pub mod decklist_disclosure;
 pub mod engine_events;
 pub mod event_observations;
+pub mod group;
 pub mod presentation_events;
 pub mod structured_attacker_offers;
 pub mod structured_offers;

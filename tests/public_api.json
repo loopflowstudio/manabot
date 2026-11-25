@@ -2084,6 +2084,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "apply_group_json": {
+            "kind": "method",
+            "signature": "(self, viewer, revision, fingerprint, plan_json)"
+          },
           "capture_decision": {
             "kind": "method",
             "signature": "(self, viewer, history_capacity=...)"
@@ -2182,6 +2186,10 @@
             "kind": "method",
             "signature": "(self, viewer, space_identity, world_indexes, world_seeds, rollouts, max_steps=...)"
           },
+          "group_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
           "hand_snapshot": {
             "kind": "method",
             "signature": "(self, player)"
@@ -2241,6 +2249,10 @@
           "presentation_subjects_json": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "preview_group_json": {
+            "kind": "method",
+            "signature": "(self, viewer, revision, fingerprint, plan_json)"
           },
           "public_schedule_json": {
             "kind": "method",

@@ -870,6 +870,7 @@ impl Env {
     }
 
     /// Read-only whole-declaration preview; see [`Game::combat_preview`].
+    /// Deprecated wrapper over [`Env::preview_group`], removed in 0.3.0.
     pub fn combat_preview(
         &self,
         viewer: usize,
@@ -881,6 +882,67 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
             .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
+    }
+
+    /// Active grouped decision for `viewer`; see [`Game::group`].
+    pub fn group(&self, viewer: usize) -> Result<Option<crate::flow::group::Group>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .group(PlayerId(viewer)))
+    }
+
+    /// Read-only preview of a grouped plan; see [`Game::preview_group`].
+    pub fn preview_group(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan: &crate::flow::group::GroupPlan,
+    ) -> Result<crate::flow::group::GroupPreview, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .preview_group(PlayerId(viewer), revision, fingerprint, plan)
+    }
+
+    /// Validate and atomically apply a grouped plan; see [`Game::apply_group`].
+    pub fn apply_group(
+        &mut self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan: &crate::flow::group::GroupPlan,
+    ) -> Result<crate::flow::group::GroupPreview, AgentError> {
+        self.require_external_chooser()?;
+        let (preview, recent_events) = {
+            let game = self
+                .game
+                .as_mut()
+                .ok_or_else(|| AgentError("no active game".into()))?;
+            let preview = game.apply_group(PlayerId(viewer), revision, fingerprint, plan)?;
+            // Drain observation_events as `Env::step` does so `state_digest`
+            // matches stepping `preview.steps` through `Env::step` by hand.
+            let events = game.take_observation_events();
+            let recent_events = self
+                .player_policies
+                .contains(&PlayerPolicy::Heuristic)
+                .then(|| Observation::new(game, &events).recent_events);
+            (preview, recent_events)
+        };
+        if let Some(events) = recent_events {
+            self.heuristic_events = events;
+        }
+        if let Some(trace) = &mut self.provenance {
+            for step in &preview.steps {
+                trace.push(RecordedAction::Index(step.action_index as i64));
+            }
+        }
+        Ok(preview)
     }
 
     /// Public event identities used to explain a committed transition.

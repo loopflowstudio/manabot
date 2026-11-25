@@ -1,23 +1,18 @@
 """Typed, read-only previews of a whole combat declaration.
 
-The engine declares attackers and blockers one creature at a time. A preview
-replays its own per-creature answers to a drafted plan on a native clone and
-returns the exact offers that declare it, or the first creature it refuses and
-why. The semantic address authorizes the query; nothing is committed.
+Deprecated wrapper over :mod:`managym.group` (scheduled for removal in 0.3.0).
+New callers should use :func:`managym.group.group`,
+:func:`managym.group.preview_group`, and :func:`managym.group.apply_group`.
 """
 
 from typing import Literal
+import warnings
 
 from pydantic import BaseModel, ConfigDict
 
 import managym
 from managym.experience import ObjectRenderId
-
-
-class PlannedBlock(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    blocker: ObjectRenderId
-    attacker: ObjectRenderId
+from managym.group import PlannedBlock
 
 
 class CombatPlan(BaseModel):
@@ -75,6 +70,15 @@ def preview_combat(
     plan: CombatPlan,
 ) -> CombatPreview:
     """Reject stale/non-actor requests without advancing the native game."""
-    return CombatPreview.model_validate_json(
-        env.combat_preview_json(viewer, revision, fingerprint, plan.model_dump_json())
+    warnings.warn(
+        "managym.combat.preview_combat is deprecated and removed in 0.3.0; "
+        "use managym.group.preview_group",
+        DeprecationWarning,
+        stacklevel=2,
     )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        raw = env.combat_preview_json(
+            viewer, revision, fingerprint, plan.model_dump_json()
+        )
+    return CombatPreview.model_validate_json(raw)

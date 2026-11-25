@@ -4458,14 +4458,19 @@ impl PyEnv {
     }
 
     /// Read-only whole combat declaration preview for a JSON plan; see
-    /// `managym.combat`.
+    /// `managym.combat`. Deprecated in favor of `preview_group_json` (removed in 0.3.0).
     fn combat_preview_json(
         &self,
+        py: Python<'_>,
         viewer: usize,
         revision: u64,
         fingerprint: &str,
         plan_json: &str,
     ) -> PyResult<String> {
+        warn_deprecated(
+            py,
+            "Env.combat_preview_json is deprecated and removed in 0.3.0; use Env.preview_group_json",
+        )?;
         let plan: crate::flow::combat_preview::CombatPlan = serde_json::from_str(plan_json)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         let env = self
@@ -4474,6 +4479,61 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let preview = env
             .combat_preview(viewer, revision, fingerprint, &plan)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Active grouped decision for `viewer` as JSON, or `None`; see `managym.group`.
+    fn group_json(&self, viewer: usize) -> PyResult<Option<String>> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let Some(group) = env.group(viewer).map_err(map_agent_err)? else {
+            return Ok(None);
+        };
+        serde_json::to_string(&group)
+            .map(Some)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Read-only preview of a grouped plan; see `managym.group`.
+    fn preview_group_json(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan_json: &str,
+    ) -> PyResult<String> {
+        let plan: crate::flow::group::GroupPlan = serde_json::from_str(plan_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let preview = env
+            .preview_group(viewer, revision, fingerprint, &plan)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Validate and atomically apply a grouped plan; see `managym.group`.
+    fn apply_group_json(
+        &self,
+        viewer: usize,
+        revision: u64,
+        fingerprint: &str,
+        plan_json: &str,
+    ) -> PyResult<String> {
+        self.reject_guarded_mutation("Env.apply_group_json")?;
+        let plan: crate::flow::group::GroupPlan = serde_json::from_str(plan_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let preview = env
+            .apply_group(viewer, revision, fingerprint, &plan)
             .map_err(map_agent_err)?;
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }

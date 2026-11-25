@@ -9,6 +9,7 @@ pub mod decision;
 pub mod effects;
 pub mod event;
 pub mod game;
+pub mod group;
 pub mod identity;
 mod knowledge;
 mod layers;

@@ -1,33 +1,17 @@
-//! Read-only preview of a whole combat declaration.
+//! Deprecated combat-preview wrapper over `flow::group` (removed in 0.3.0).
 //!
-//! The engine declares attackers and blockers one creature at a time
-//! (`flow/tick.rs`). `Game::combat_preview` takes the current declaration
-//! decision and a proposed plan (a set of attackers, or blocker → attacker
-//! pairs) and replays the engine's own per-creature answers on a clone. It
-//! returns the exact sequence of offers that declares the plan, each at the
-//! revision and fingerprint it will be asked at, or the first creature whose
-//! answer the engine refuses and why. It also says which creatures can attack
-//! or block from here.
-//!
-//! Nothing is committed: the live game is only read, and its offers, events,
-//! observations, hashed state and decision progression are unchanged. A
-//! caller sends the returned steps as ordinary per-creature Commands, so
-//! recordings, replay and forks see ordinary decisions.
+//! Preserves the `0.2.6` `CombatPlan` / `CombatPreview` surface by delegating
+//! to [`Game::preview_group`]. New callers should use [`Game::group`],
+//! [`Game::preview_group`] and [`Game::apply_group`].
 use serde::{Deserialize, Serialize};
 
-use crate::agent::action::{Action, ActionSpaceKind, AgentError};
+use crate::agent::action::{ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
-use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
-use crate::state::game_object::{PermanentId, PlayerId};
+use crate::flow::group::{GroupOutcome, GroupPlan, GroupSpec};
+use crate::state::game_object::PlayerId;
 
-/// One proposed block: `blocker` blocks `attacker`.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct PlannedBlock {
-    pub blocker: ObjectRenderId,
-    pub attacker: ObjectRenderId,
-}
+pub use crate::flow::group::PlannedBlock;
 
 /// The whole declaration a person drafts. An attack plan lists attackers;
 /// a block plan lists blocks. A creature left out declines.
@@ -96,11 +80,35 @@ pub struct CombatPreview {
     pub declared_blocks: Vec<PlannedBlock>,
 }
 
+fn declarable_from_spec(spec: &GroupSpec) -> Vec<DeclarableCreature> {
+    match spec {
+        GroupSpec::DeclareAttackers { declarable, .. } => declarable
+            .iter()
+            .map(|item| DeclarableCreature {
+                creature: item.item,
+                label: item.label.clone(),
+                can_block: Vec::new(),
+                must_block: false,
+                must_attack: item.must_attack,
+            })
+            .collect(),
+        GroupSpec::DeclareBlockers { declarable, .. } => declarable
+            .iter()
+            .map(|item| DeclarableCreature {
+                creature: item.item,
+                label: item.label.clone(),
+                can_block: item.can_block.clone(),
+                must_block: item.must_block,
+                must_attack: false,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 impl Game {
     /// Preview `plan` at the current declaration, bound to its exact semantic
-    /// address. Fails on a stale or non-actor address or when the decision is
-    /// not a declaration; a plan the engine would not declare is a
-    /// `refused` result, not an error.
+    /// address. Deprecated wrapper over [`Game::preview_group`] (removed in 0.3.0).
     pub fn combat_preview(
         &self,
         viewer: PlayerId,
@@ -125,462 +133,97 @@ impl Game {
             ActionSpaceKind::DeclareBlocker => DeclarationKind::Blockers,
             _ => return Err(AgentError("not a combat declaration".into())),
         };
-        let order = self.declaration_order(kind, viewer)?;
-        let declarable = order
-            .iter()
-            .map(|creature| self.declarable(kind, *creature))
-            .collect::<Vec<_>>();
-        let mut preview = CombatPreview {
+
+        // Preserve cross-field refusal messages from the flat `CombatPlan` shape.
+        if kind == DeclarationKind::Attackers && !plan.blocks.is_empty() {
+            let group = self
+                .group(viewer)
+                .ok_or_else(|| AgentError("not a combat declaration".into()))?;
+            let id = plan.blocks[0].blocker;
+            let label = self.permanent_render_label(id);
+            return Ok(CombatPreview {
+                kind,
+                declarable: declarable_from_spec(&group.spec),
+                steps: Vec::new(),
+                refused: Some(DeclarationRefusal {
+                    creature: id,
+                    reason: format!("{label} is not blocking now: this is an attack."),
+                    label,
+                }),
+                declared_attackers: Vec::new(),
+                declared_blocks: Vec::new(),
+            });
+        }
+        if kind == DeclarationKind::Blockers && !plan.attackers.is_empty() {
+            let group = self
+                .group(viewer)
+                .ok_or_else(|| AgentError("not a combat declaration".into()))?;
+            let id = plan.attackers[0];
+            let label = self.permanent_render_label(id);
+            return Ok(CombatPreview {
+                kind,
+                declarable: declarable_from_spec(&group.spec),
+                steps: Vec::new(),
+                refused: Some(DeclarationRefusal {
+                    creature: id,
+                    reason: format!("{label} is not attacking now: this is a block."),
+                    label,
+                }),
+                declared_attackers: Vec::new(),
+                declared_blocks: Vec::new(),
+            });
+        }
+
+        let group_plan = match kind {
+            DeclarationKind::Attackers => GroupPlan::DeclareAttackers {
+                attackers: plan.attackers.clone(),
+            },
+            DeclarationKind::Blockers => GroupPlan::DeclareBlockers {
+                blocks: plan.blocks.clone(),
+            },
+        };
+        let preview = self.preview_group(viewer, revision, fingerprint, &group_plan)?;
+        let declarable = declarable_from_spec(&preview.group.spec);
+        let steps = preview
+            .steps
+            .into_iter()
+            .map(|step| {
+                let creature = step.item.expect("combat step names a creature");
+                DeclarationStep {
+                    revision: step.revision,
+                    fingerprint: step.fingerprint,
+                    creature,
+                    action_index: step.action_index,
+                    attack: kind == DeclarationKind::Attackers
+                        && plan.attackers.contains(&creature),
+                    blocks: (kind == DeclarationKind::Blockers)
+                        .then(|| {
+                            plan.blocks
+                                .iter()
+                                .find(|block| block.blocker == creature)
+                                .map(|block| block.attacker)
+                        })
+                        .flatten(),
+                }
+            })
+            .collect();
+        let refused = preview.refused.map(|refusal| DeclarationRefusal {
+            creature: refusal.item.expect("combat refusal names a creature"),
+            label: refusal.label,
+            reason: refusal.reason,
+        });
+        let (declared_attackers, declared_blocks) = match preview.outcome {
+            Some(GroupOutcome::DeclareAttackers { attackers }) => (attackers, Vec::new()),
+            Some(GroupOutcome::DeclareBlockers { blocks }) => (Vec::new(), blocks),
+            _ => (Vec::new(), Vec::new()),
+        };
+        Ok(CombatPreview {
             kind,
             declarable,
-            steps: Vec::new(),
-            refused: None,
-            declared_attackers: Vec::new(),
-            declared_blocks: Vec::new(),
-        };
-        if let Some(refusal) = self.unaskable(kind, &order, plan) {
-            preview.refused = Some(refusal);
-            return Ok(preview);
-        }
-
-        let mut position = self.clone();
-        let events_from = position.state.observation_events.len();
-        let mut remaining = order.as_slice();
-        // A creature with one legal answer is answered by the engine without
-        // asking (`skip_trivial`); the declaration ends when the decision is
-        // about none of the creatures still to declare.
-        while let Some(asked) = position.asked_creature(kind, viewer) {
-            let Some(at) = remaining.iter().position(|creature| *creature == asked) else {
-                break;
-            };
-            remaining = &remaining[at + 1..];
-            let wanted = self.planned_answer(kind, asked, plan);
-            let space = position.action_space().expect("asked decision");
-            let index = space
-                .actions
-                .iter()
-                .position(|action| match (action, wanted) {
-                    (Action::DeclareAttacker { attack, .. }, Answer::Attack(want)) => {
-                        *attack == want
-                    }
-                    (Action::DeclareBlocker { attacker, .. }, Answer::Block(want)) => {
-                        *attacker == want
-                    }
-                    _ => false,
-                });
-            let Some(index) = index else {
-                preview.refused = Some(self.refusal(asked, wanted, space));
-                return Ok(preview);
-            };
-            let frame = position
-                .semantic_decision_frame()
-                .map_err(|error| AgentError(error.to_string()))?;
-            preview.steps.push(DeclarationStep {
-                revision: frame.revision,
-                fingerprint: frame.fingerprint,
-                creature: self.render_id(asked),
-                action_index: index,
-                attack: matches!(wanted, Answer::Attack(true)),
-                blocks: match wanted {
-                    Answer::Block(Some(attacker)) => Some(self.render_id(attacker)),
-                    _ => None,
-                },
-            });
-            position.step(index)?;
-            if position.is_game_over() {
-                break;
-            }
-        }
-        self.read_declaration(&position, events_from, &mut preview);
-        if preview.refused.is_none() {
-            preview.refused = self.undeclared(kind, plan, &preview);
-        }
-        Ok(preview)
+            steps,
+            refused,
+            declared_attackers,
+            declared_blocks,
+        })
     }
-
-    /// The creature asked now, then those the engine will ask after it.
-    fn declaration_order(
-        &self,
-        kind: DeclarationKind,
-        viewer: PlayerId,
-    ) -> Result<Vec<PermanentId>, AgentError> {
-        let combat = self
-            .state
-            .combat
-            .as_ref()
-            .ok_or_else(|| AgentError("declaration without combat".into()))?;
-        let current = self
-            .asked_creature(kind, viewer)
-            .ok_or_else(|| AgentError("declaration names no creature".into()))?;
-        let queue = match kind {
-            DeclarationKind::Attackers => &combat.attackers_to_declare,
-            DeclarationKind::Blockers => &combat.blockers_to_declare,
-        };
-        Ok(std::iter::once(current)
-            .chain(queue.iter().rev().copied())
-            .collect())
-    }
-
-    fn asked_creature(&self, kind: DeclarationKind, viewer: PlayerId) -> Option<PermanentId> {
-        let space = self.action_space()?;
-        if space.player != Some(viewer) {
-            return None;
-        }
-        space
-            .actions
-            .iter()
-            .find_map(|action| match (action, kind) {
-                (Action::DeclareAttacker { permanent, .. }, DeclarationKind::Attackers) => {
-                    Some(*permanent)
-                }
-                (Action::DeclareBlocker { blocker, .. }, DeclarationKind::Blockers) => {
-                    Some(*blocker)
-                }
-                _ => None,
-            })
-    }
-
-    fn render_id(&self, permanent: PermanentId) -> ObjectRenderId {
-        self.permanent_event_ref(permanent)
-            .expect("declared creature is on the battlefield")
-            .into()
-    }
-
-    fn label(&self, permanent: PermanentId) -> String {
-        self.permanent_object(permanent)
-            .map_or_else(String::new, |object| self.observed_object_name(object))
-    }
-
-    /// The attackers `blocker` may block now, and whether it must block.
-    fn block_options(&self, blocker: PermanentId) -> (Vec<PermanentId>, bool) {
-        let attackers = self
-            .state
-            .combat
-            .as_ref()
-            .map(|combat| combat.attackers.clone())
-            .unwrap_or_default();
-        let options: Vec<_> = attackers
-            .into_iter()
-            .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
-            .collect();
-        let required: Vec<_> = options
-            .iter()
-            .copied()
-            .filter(|attacker| self.must_be_blocked_by_all_able(*attacker))
-            .collect();
-        if required.is_empty() {
-            (options, false)
-        } else {
-            (required, true)
-        }
-    }
-
-    fn declarable(&self, kind: DeclarationKind, creature: PermanentId) -> DeclarableCreature {
-        let (can_block, must_block) = match kind {
-            DeclarationKind::Attackers => (Vec::new(), false),
-            DeclarationKind::Blockers => self.block_options(creature),
-        };
-        DeclarableCreature {
-            creature: self.render_id(creature),
-            label: self.label(creature),
-            can_block: can_block.into_iter().map(|id| self.render_id(id)).collect(),
-            must_block,
-            must_attack: kind == DeclarationKind::Attackers && self.must_attack(creature),
-        }
-    }
-
-    /// Attackers already declared in this combat, before the current
-    /// decision (a creature that must attack and was offered no choice).
-    fn declared_attackers(&self) -> Vec<ObjectRenderId> {
-        self.state
-            .combat
-            .iter()
-            .flat_map(|combat| &combat.attackers)
-            .map(|attacker| self.render_id(*attacker))
-            .collect()
-    }
-
-    /// Blocks already declared in this combat, before the current decision
-    /// (a creature that must block and was offered no choice).
-    fn declared_blocks(&self) -> Vec<PlannedBlock> {
-        self.state
-            .combat
-            .iter()
-            .flat_map(|combat| &combat.attacker_to_blockers)
-            .flat_map(|(attacker, blockers)| {
-                blockers.iter().map(|blocker| PlannedBlock {
-                    blocker: self.render_id(*blocker),
-                    attacker: self.render_id(*attacker),
-                })
-            })
-            .collect()
-    }
-
-    /// The permanent's label, or "That creature" once it is gone.
-    fn render_label(&self, id: ObjectRenderId) -> String {
-        self.permanent_by_render_id(id).map_or_else(
-            || "That creature".to_string(),
-            |permanent| self.label(permanent),
-        )
-    }
-
-    fn permanent_by_render_id(&self, id: ObjectRenderId) -> Option<PermanentId> {
-        self.state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, permanent)| permanent.as_ref().map(|_| PermanentId(slot)))
-            .find(|permanent| {
-                self.permanent_event_ref(*permanent).is_some_and(|event| {
-                    event.entity.0 == id.entity && event.incarnation == id.incarnation
-                })
-            })
-    }
-
-    /// A planned creature the declaration never asks about, or a blocker
-    /// planned twice, refuses the plan before anything is replayed.
-    fn unaskable(
-        &self,
-        kind: DeclarationKind,
-        order: &[PermanentId],
-        plan: &CombatPlan,
-    ) -> Option<DeclarationRefusal> {
-        let refuse = |id: ObjectRenderId, reason: &str| {
-            let label = self.render_label(id);
-            Some(DeclarationRefusal {
-                creature: id,
-                reason: format!("{label} {reason}"),
-                label,
-            })
-        };
-        let asked = |id: ObjectRenderId| {
-            self.permanent_by_render_id(id)
-                .is_some_and(|permanent| order.contains(&permanent))
-        };
-        match kind {
-            DeclarationKind::Attackers => {
-                if !plan.blocks.is_empty() {
-                    return refuse(
-                        plan.blocks[0].blocker,
-                        "is not blocking now: this is an attack.",
-                    );
-                }
-                let declared = self.declared_attackers();
-                plan.attackers
-                    .iter()
-                    .find(|id| !asked(**id) && !declared.contains(id))
-                    .and_then(|id| refuse(*id, "can't attack now."))
-            }
-            DeclarationKind::Blockers => {
-                if let Some(id) = plan.attackers.first() {
-                    return refuse(*id, "is not attacking now: this is a block.");
-                }
-                let declared = self.declared_blocks();
-                for (index, block) in plan.blocks.iter().enumerate() {
-                    if !asked(block.blocker) && !declared.contains(block) {
-                        let reason =
-                            match declared.iter().find(|other| other.blocker == block.blocker) {
-                                Some(other) => {
-                                    format!("already blocks {}.", self.render_label(other.attacker))
-                                }
-                                None => "can't block now.".to_string(),
-                            };
-                        return refuse(block.blocker, &reason);
-                    }
-                    if plan.blocks[..index]
-                        .iter()
-                        .any(|other| other.blocker == block.blocker)
-                    {
-                        return refuse(block.blocker, "can block only one attacker.");
-                    }
-                }
-                None
-            }
-        }
-    }
-
-    fn planned_answer(
-        &self,
-        kind: DeclarationKind,
-        creature: PermanentId,
-        plan: &CombatPlan,
-    ) -> Answer {
-        let id = self.render_id(creature);
-        match kind {
-            DeclarationKind::Attackers => Answer::Attack(plan.attackers.contains(&id)),
-            DeclarationKind::Blockers => Answer::Block(
-                plan.blocks
-                    .iter()
-                    .find(|block| block.blocker == id)
-                    .and_then(|block| self.permanent_by_render_id(block.attacker)),
-            ),
-        }
-    }
-
-    fn refusal(
-        &self,
-        creature: PermanentId,
-        wanted: Answer,
-        space: &crate::agent::action::ActionSpace,
-    ) -> DeclarationRefusal {
-        let label = self.label(creature);
-        let offered: Vec<_> = space
-            .actions
-            .iter()
-            .filter_map(|action| match action {
-                Action::DeclareBlocker {
-                    attacker: Some(attacker),
-                    ..
-                } => Some(*attacker),
-                _ => None,
-            })
-            .collect();
-        let reason = match wanted {
-            Answer::Block(None) => match offered.as_slice() {
-                [attacker] => format!("{label} must block {}.", self.label(*attacker)),
-                _ => format!("{label} must block an attacker that requires it."),
-            },
-            Answer::Block(Some(attacker)) => {
-                format!("{label} can't block {}.", self.label(attacker))
-            }
-            Answer::Attack(false) => format!("{label} must attack."),
-            Answer::Attack(true) => format!("{label} can't attack now."),
-        };
-        DeclarationRefusal {
-            creature: self.render_id(creature),
-            label,
-            reason,
-        }
-    }
-
-    /// Read the completed declaration from the clone's own declaration event,
-    /// before any later turn could declare again.
-    fn read_declaration(&self, position: &Game, from: usize, preview: &mut CombatPreview) {
-        for event in &position.state.observation_events[from..] {
-            match event {
-                GameEvent::TurnStarted { .. } => return,
-                GameEvent::CombatAttackersDeclared { attackers, .. }
-                    if preview.kind == DeclarationKind::Attackers =>
-                {
-                    preview.declared_attackers = attackers
-                        .iter()
-                        .map(|event| ObjectRenderId::from(*event))
-                        .collect();
-                    return;
-                }
-                GameEvent::BlockersDeclared { assignments }
-                    if preview.kind == DeclarationKind::Blockers =>
-                {
-                    preview.declared_blocks = assignments
-                        .iter()
-                        .flat_map(|(attacker, blockers)| {
-                            blockers.iter().map(move |blocker| PlannedBlock {
-                                blocker: (*blocker).into(),
-                                attacker: (*attacker).into(),
-                            })
-                        })
-                        .collect();
-                    return;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    /// The engine finished the declaration but did not declare the plan:
-    /// a requirement answered a skipped creature, or a restriction such as
-    /// menace (CR 702.110b) removed a block once every blocker was declared.
-    fn undeclared(
-        &self,
-        kind: DeclarationKind,
-        plan: &CombatPlan,
-        preview: &CombatPreview,
-    ) -> Option<DeclarationRefusal> {
-        let named = |id: ObjectRenderId| self.render_label(id);
-        match kind {
-            DeclarationKind::Attackers => {
-                // Creatures declared before this decision (a skipped
-                // creature that must attack) are not part of the plan.
-                let mut planned = plan.attackers.clone();
-                planned.extend(
-                    self.declared_attackers()
-                        .into_iter()
-                        .filter(|id| !plan.attackers.contains(id)),
-                );
-                let mut declared = preview.declared_attackers.clone();
-                planned.sort_by_key(|id| (id.entity, id.incarnation));
-                declared.sort_by_key(|id| (id.entity, id.incarnation));
-                (planned != declared).then(|| {
-                    let creature = planned
-                        .iter()
-                        .find(|id| !preview.declared_attackers.contains(id))
-                        .or_else(|| {
-                            preview
-                                .declared_attackers
-                                .iter()
-                                .find(|id| !planned.contains(id))
-                        })
-                        .copied()
-                        .expect("differing attacker sets");
-                    let label = named(creature);
-                    let must_attack = self
-                        .permanent_by_render_id(creature)
-                        .is_some_and(|attacker| self.must_attack(attacker));
-                    let reason = if must_attack && !planned.contains(&creature) {
-                        format!("{label} must attack.")
-                    } else {
-                        format!("The engine would not declare {label} as planned.")
-                    };
-                    DeclarationRefusal {
-                        creature,
-                        reason,
-                        label,
-                    }
-                })
-            }
-            DeclarationKind::Blockers => {
-                // Blocks declared before this decision (a skipped creature
-                // that must block) are not part of the plan.
-                let mut planned = plan.blocks.clone();
-                // `unaskable` admits a declared blocker only in its declared block.
-                planned.extend(
-                    self.declared_blocks()
-                        .into_iter()
-                        .filter(|block| !plan.blocks.contains(block)),
-                );
-                let missing = planned
-                    .iter()
-                    .find(|block| !preview.declared_blocks.contains(block));
-                if let Some(block) = missing {
-                    let label = named(block.blocker);
-                    let attacker = named(block.attacker);
-                    return Some(DeclarationRefusal {
-                        creature: block.blocker,
-                        reason: format!(
-                            "{attacker} can't be blocked that way (menace or a blocking limit), so the engine removes {label}'s block."
-                        ),
-                        label,
-                    });
-                }
-                preview
-                    .declared_blocks
-                    .iter()
-                    .find(|block| !planned.contains(block))
-                    .map(|block| {
-                        let label = named(block.blocker);
-                        DeclarationRefusal {
-                            creature: block.blocker,
-                            reason: format!("{label} must block {}.", named(block.attacker)),
-                            label,
-                        }
-                    })
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum Answer {
-    Attack(bool),
-    Block(Option<PermanentId>),
 }
