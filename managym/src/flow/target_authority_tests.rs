@@ -1350,7 +1350,7 @@ fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     let stack = game.state.stack_objects.last().unwrap().as_target();
-    assert!(game.next_retarget(player, stack, 0, true).is_some());
+    assert!(game.next_retarget(player, stack, Vec::new(), true).is_some());
     assert_eq!(
         game.retarget_candidates(stack, 0),
         vec![Target::GraveyardCard(second)]
