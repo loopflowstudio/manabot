@@ -156,13 +156,18 @@ compress (`ba30625410`).
 
 ## Remaining
 
-- **Gate / CI verification** on PR #607:
-  full workspace debug nextest, Python extension rebuild +
-  contract/Academy/model/pinned-pilot suites (including #601's
-  `tests/academy/test_deck_pools.py` and #610's Academy changes), protocol
-  schema byte-equality after the #610 merge, and clean Ubuntu runner Engine Budget
-  via PR CI (or
-  `gh workflow run ci.yml --ref jack-heart/7ff13d-implement-planeswalkers-loyalty -f measure=HEAD`).
+- **PR publish verification** on PR #607:
+  removed redundant unread v11 `action::ATTACK_TARGET` column (`action_focus[1]`
+  already carries the planeswalker defender, matching `DeclareBlocker`;
+  `actions` width 31 with `DIVISION` at column 30), updated
+  `test_bucketed_shapes.py` to assert `attacked_permanent` remapping alongside
+  `attached_to`/`blocking`, updated `test_native_observation_contract.py` v11
+  action width to 31, and updated `test_catalog_naming.py` to pick an in-leaf
+  peer for `"Gray Ogre"` instead of hardcoded `"Glory Seeker"`. Verified
+  `public_api.py check`, `experience_protocol_tests`, Academy UI (`svelte-check`
+  + 660 vitest + `play-session.spec.ts` mana-float e2e), full Rust debug
+  nextest + benchmark tests, pinned pilot, and Python model/contract/Academy
+  suites. Clean Ubuntu `Engine Budget` passed on PR #607 CI.
 
 ## Target model (updated by concept review)
 

@@ -48,20 +48,13 @@ fn ordinary_trample_assigns_excess_to_the_chosen_planeswalker() {
         s.action_space().actions[1],
         Action::DeclareAttacker { attack: None, .. }
     ));
-    use managym::agent::{
-        observation_encoder::{encode, ObservationEncoderConfig},
-        observation_layout::action,
-    };
+    use managym::agent::observation_encoder::{encode, ObservationEncoderConfig};
     let config = ObservationEncoderConfig::default();
     let encoded = encode(&Observation::for_player(s.game(), PlayerId(0)), &config).unwrap();
-    let width = config.action_dim();
-    assert_eq!(encoded.actions[action::ATTACK_TARGET], 0.0);
-    assert_eq!(encoded.actions[width + action::ATTACK_TARGET], 0.0);
-    assert_eq!(
-        encoded.actions[2 * width + action::ATTACK_TARGET],
-        (encoded.action_focus[2 * config.max_focus_objects + 1] + 1) as f32
-    );
-    assert!(encoded.actions[2 * width + action::ATTACK_TARGET] > 0.0);
+    let focus = config.max_focus_objects;
+    assert_eq!(encoded.action_focus[1], -1);
+    assert_eq!(encoded.action_focus[focus + 1], -1);
+    assert!(encoded.action_focus[2 * focus + 1] >= 0);
     command(
         &mut s,
         |a| matches!(a, Action::DeclareAttacker { attack: Some(AttackTarget::Permanent(d)), .. } if *d == object),

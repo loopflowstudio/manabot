@@ -3960,7 +3960,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     fields.extend(encoding!(ActionOption {
         description => [Excluded("text for the selectors encoded beside it")],
         action_type => [Columns(Action, action::PLAY_LAND, 17)],
-        focus => [Rows("action_focus"), Join(Action, action::ATTACK_TARGET)],
+        focus => [Rows("action_focus")],
         declared => [column(Action, action::DECLARED)],
         mode_index => [column(Action, action::MODE), column(Action, action::X)],
         name_definition => [Rows("name_candidates columns 0-1 (v9)")],

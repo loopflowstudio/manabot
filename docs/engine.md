@@ -1101,11 +1101,11 @@ turn.
 ### Attacking a planeswalker
 
 Each attacker can attack the defending player or one of that player’s
-planeswalkers. In v11 the action’s `attack_target` joins the defending
-permanent, and `attacked_permanent` on an attacking permanent identifies
-its current defender. Both use one-based object references. A player attack
-has a zero permanent reference. The first two ordinary declaration offers
-still attack the player and decline, respectively.
+planeswalkers. In v11 a planeswalker attack puts the defending permanent in the
+action’s second `action_focus` slot, and `attacked_permanent` on an attacking
+permanent joins its current defender (a one-based object reference; 0 for a
+player attack). The first two ordinary declaration offers still attack the
+player and decline, respectively.
 
 Combat damage removes loyalty from the planeswalker. Ordinary trample can
 assign excess damage to that planeswalker. If it leaves combat before damage,

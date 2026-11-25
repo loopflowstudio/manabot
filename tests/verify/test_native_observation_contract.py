@@ -706,7 +706,7 @@ def test_merchant_food_tap_count_is_the_payment_frame_mode() -> None:
         submit_response(env, decision, decision.actions[0].reference)
 
 
-@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 30)])
+@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 31)])
 def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     version: int, width: int
 ) -> None:

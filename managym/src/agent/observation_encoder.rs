@@ -2291,13 +2291,6 @@ fn encode_actions(
         if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
             *route = Integer(i64::from(action.play_route.unwrap_or_default()));
         }
-        if let (crate::agent::action::ActionType::DeclareAttacker, Some(column), Some(index)) = (
-            action.action_type,
-            row.get_mut(action::ATTACK_TARGET),
-            action.focus.get(1).and_then(|id| object_to_index.get(id)),
-        ) {
-            *column = Integer(i64::from(*index) + 1);
-        }
         if let (Some(amount), Some(column)) =
             (action.division_amount, row.get_mut(action::DIVISION))
         {

@@ -534,8 +534,7 @@ columns! { action {
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
-    30: ATTACK_TARGET => ("attack_target", ValueLayout::OBJECT_REFERENCE),
-    31: DIVISION => ("division", ValueLayout::COUNT),
+    30: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -1290,7 +1289,7 @@ mod tests {
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 32 } else { 22 },
+                    if one_token { 31 } else { 22 },
                 ),
                 (
                     "events",

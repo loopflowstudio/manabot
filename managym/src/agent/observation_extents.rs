@@ -33,10 +33,7 @@ pub(crate) fn joins(
             Object(relation::REFERENCE, 1),
             Extent("relations", relation::FRAME),
         ],
-        "actions" if layout == super::observation_encoder::InputLayout::OneToken => &[
-            Extent("relations", action::CONTINUATION),
-            Object(action::ATTACK_TARGET, 1),
-        ],
+        "actions" => &[Extent("relations", action::CONTINUATION)],
         "agent_permanents" | "opponent_permanents"
             if layout == super::observation_encoder::InputLayout::OneToken =>
         {
@@ -46,7 +43,6 @@ pub(crate) fn joins(
                 Object(permanent::ATTACKED_PERMANENT, 1),
             ]
         }
-        "actions" => &[Extent("relations", action::CONTINUATION)],
         "agent_permanents" | "opponent_permanents" => &[
             Object(permanent::ATTACHED_TO, 1),
             Object(permanent::BLOCKING, 1),

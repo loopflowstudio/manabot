@@ -218,7 +218,7 @@ def test_remapped_references_are_every_object_table_column() -> None:
         ]
     for i, name in enumerate(("source_context", "target_context")):
         destinations["events", name] = batch.events.focus[:, 0, i]
-    for i, name in enumerate(("attached_to", "blocking")):
+    for i, name in enumerate(("attached_to", "blocking", "attacked_permanent")):
         targets = batch.link_targets[i].reshape(count, 2, -1)
         for seat, key in enumerate(("agent_permanents", "opponent_permanents")):
             destinations[key, name] = targets[:, seat, 0]
