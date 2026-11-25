@@ -136,7 +136,7 @@ things ask.
   and one new reducer beside it for turns, spells cast, damage dealt and
   taken and cards drawn per seat. They are engine reducers, usable by any
   managym loop, not Academy code. The result is saved once, at completion,
-  as the game's `summary_json`, so `/games` lists never re-execute.
+  as the game's `numbers_json`, so `/games` lists never re-execute.
 
 Access keeps today's rules. A reading from the person's seat shows nothing
 they did not see. Both seats' views need what `reveal_hidden` needs now: an
@@ -235,7 +235,7 @@ on the existing board, read-only:
 ### 5. Games: a history you can read
 
 `/games` keeps its filters and addresses. Rows for your games gain turns,
-duration, play/draw (from `summary_json`) and agreement (from the game's
+duration, play/draw (from `numbers_json`) and agreement (from the game's
 default analysis, blank when none). Above the list, for **My games**, a
 record table: wins, losses and draws over completed games by opponent
 identity and by matchup, each with the win rate and its 95% Wilson interval,
@@ -284,10 +284,10 @@ explain where one flag per decision says the same thing more exactly).
 | `committed_at` | `TraceEvent`, optional UTC ISO 8601, absent on older rows | recorded (built, slice 1) |
 | `analysis_shown` | `TraceEvent`, optional, absent = false | recorded (new, slice 6) |
 | Any seat's view at any step, named opponent moves | Re-executed on open | derived, not stored |
-| `summary_json` | New nullable column on `attempts`, written at completion | derived, saved |
+| `numbers_json` | New nullable column on `attempts`, written at completion | derived, saved |
 | Analyses | New `analyses` table | derived, saved |
 
-`RECORD_VERSION` stays 2. Old rows have no `summary_json`; it is computed on
+`RECORD_VERSION` stays 2. Old rows have no `numbers_json`; it is computed on
 first open where the game re-executes, otherwise the columns are blank.
 
 Consumers that change: `Recording` (boards and narration from views;
@@ -580,7 +580,14 @@ Built in fde4bb32f5, a2226d0a13, 2c74f2ca2d:
 Not built (questions.md): Games' agreement column; the record split by
 opponent alone and by matchup alone (one table grouped by both).
 
-Next: slice 4 (See its line), then slice 6.
+Remaining outside the numbered slices (found on realign, 2026-11-24): key
+moments are not built: the plan's "largest disagreements" (where the person
+and the agent differed most, and where the estimate moved most) with **Next
+key moment** in Review, which the demo uses. Build it with slice 4, since both
+start from an analysed decision. The Games "analysis shown" column belongs to
+slice 6.
+
+Next: slice 4 (See its line) with key moments, then slice 6.
 
 ## Slices
 
@@ -608,7 +615,7 @@ Next: slice 4 (See its line), then slice 6.
    policy-runtime fixture server (`tests/fixtures/policy_runtime_server`),
    since no current-world checkpoint exists on this machine; the time for
    one whole analysis is recorded.
-3. **(built)** **The game in numbers.** The reducer, `summary_json`, the summary on the
+3. **(built)** **The game in numbers.** The reducer, `numbers_json`, the summary on the
    result card and Review's Menu, Games' columns and the My games record
    table with intervals.
 4. **See its line.** From an analysed decision, a Study branch with the
