@@ -7,12 +7,26 @@ use crate::state::{
     game_object::PermanentId,
 };
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct BlockRequirements {
     first: usize,
     each: usize,
     menace: bool,
     limited: bool,
+}
+
+impl BlockRequirements {
+    fn capacity(self, committed: usize, able: usize) -> usize {
+        if self.limited {
+            1usize.saturating_sub(committed).min(able)
+        } else {
+            able
+        }
+    }
+
+    fn next_reward(self, blockers: usize) -> usize {
+        self.each + usize::from(blockers == 0) * self.first
+    }
 }
 
 impl Game {
@@ -68,6 +82,19 @@ impl Game {
         let _scan = self.board_scan();
         let combat = self.state.combat.as_ref().expect("declaring blockers");
         let attackers = &combat.attackers;
+        let rules: Vec<_> = attackers
+            .iter()
+            .map(|&id| self.block_requirements(id))
+            .collect();
+        if rules.iter().all(|r| !r.menace && r.first + r.each == 0) {
+            return attackers
+                .iter()
+                .copied()
+                .filter(|&a| self.blocker_can_block_attacker(blocker, a))
+                .map(Some)
+                .chain([None])
+                .collect();
+        }
         let options: Vec<_> = attackers
             .iter()
             .enumerate()
@@ -75,16 +102,6 @@ impl Game {
             .map(|(i, _)| Some(i))
             .chain([None])
             .collect();
-        let rules: Vec<_> = attackers
-            .iter()
-            .map(|&id| self.block_requirements(id))
-            .collect();
-        if rules.iter().all(|r| !r.menace && r.first + r.each == 0) {
-            return options
-                .into_iter()
-                .map(|choice| choice.map(|i| attackers[i]))
-                .collect();
-        }
         let counts: Vec<_> = attackers
             .iter()
             .map(|a| combat.attacker_to_blockers.get(a).map_or(0, Vec::len))
@@ -104,14 +121,7 @@ impl Game {
             let fast = non_menace_best_choices(&rules, &edges, remaining.len(), &counts, &options);
             #[cfg(debug_assertions)]
             if attackers.len() <= 16 {
-                let mut counts_check = counts.clone();
-                let slow = general_best_choices(
-                    &rules,
-                    &edges,
-                    remaining.len(),
-                    &mut counts_check,
-                    &options,
-                );
+                let slow = general_best_choices(&rules, &edges, remaining.len(), &counts, &options);
                 debug_assert_eq!(
                     fast, slow,
                     "non-menace residual solver diverged from general bound"
@@ -119,8 +129,7 @@ impl Game {
             }
             fast
         } else {
-            let mut counts = counts;
-            general_best_choices(&rules, &edges, remaining.len(), &mut counts, &options)
+            general_best_choices(&rules, &edges, remaining.len(), &counts, &options)
         };
         chosen
             .into_iter()
@@ -133,9 +142,10 @@ fn general_best_choices(
     rules: &[BlockRequirements],
     edges: &[Vec<usize>],
     blockers: usize,
-    counts: &mut [usize],
+    counts: &[usize],
     options: &[Option<usize>],
 ) -> Vec<Option<usize>> {
+    let mut counts = counts.to_vec();
     let mut best = None;
     let mut legal = Vec::new();
     let mut blocked = vec![None; rules.len()];
@@ -143,7 +153,7 @@ fn general_best_choices(
         if let Some(i) = choice {
             counts[i] += 1;
         }
-        let bound = block_requirement_bound(rules, edges, blockers, counts, &mut blocked);
+        let bound = block_requirement_bound(rules, edges, blockers, &counts, &mut blocked);
         if let Some(i) = choice {
             counts[i] -= 1;
         }
@@ -179,26 +189,19 @@ fn non_menace_best_choices(
 ) -> Vec<Option<usize>> {
     let mut slot_groups = Vec::with_capacity(rules.len() * 2);
     let mut capacity = Vec::with_capacity(rules.len());
-    for (i, r) in rules.iter().enumerate() {
-        let cap = if r.limited {
-            1usize.saturating_sub(counts[i]).min(edges[i].len())
-        } else {
-            edges[i].len()
-        };
+    for (i, &r) in rules.iter().enumerate() {
+        let cap = r.capacity(counts[i], edges[i].len());
         capacity.push(cap);
         if cap == 0 {
             continue;
         }
-        let first_reward = r.each + usize::from(counts[i] == 0) * r.first;
-        if first_reward > 0 {
-            if first_reward == r.each {
-                slot_groups.push((r.each, i, cap));
-            } else {
-                slot_groups.push((first_reward, i, 1));
-                if r.each > 0 && cap > 1 {
-                    slot_groups.push((r.each, i, cap - 1));
-                }
+        if counts[i] == 0 && r.first > 0 {
+            slot_groups.push((r.first + r.each, i, 1));
+            if r.each > 0 && cap > 1 {
+                slot_groups.push((r.each, i, cap - 1));
             }
+        } else if r.each > 0 {
+            slot_groups.push((r.each, i, cap));
         }
     }
     slot_groups.sort_unstable_by(|a, b| b.cmp(a));
@@ -226,9 +229,9 @@ fn non_menace_best_choices(
     // traversal in the residual graph to find the best replacement for every
     // matched attacker simultaneously in O(A log A + E).
     let mut sources = Vec::new();
-    for (j, r) in rules.iter().enumerate() {
+    for (j, &r) in rules.iter().enumerate() {
         if matched[j] < capacity[j] {
-            let weight = r.each + usize::from(counts[j] == 0 && matched[j] == 0) * r.first;
+            let weight = r.next_reward(counts[j] + matched[j]);
             if weight > 0 {
                 sources.push((weight, j));
             }
@@ -265,13 +268,13 @@ fn non_menace_best_choices(
         let delta = match choice {
             None => 0,
             Some(a) => {
-                let r = &rules[a];
+                let r = rules[a];
                 let c = counts[a];
                 if c == 0 && (r.limited || r.first > 0) && matched[a] > 0 {
                     let new_weight = if r.limited { 0 } else { r.each };
                     best_repl[a].max(new_weight)
                 } else {
-                    r.each + usize::from(c == 0) * r.first
+                    r.next_reward(c)
                 }
             }
         };
@@ -315,11 +318,7 @@ fn block_requirement_bound(
         } else {
             0
         };
-        let capacity = if r.limited {
-            (1usize.saturating_sub(n)).min(edges[i].len())
-        } else {
-            edges[i].len()
-        };
+        let capacity = r.capacity(n, edges[i].len());
         if required > capacity {
             return None;
         }
@@ -513,11 +512,7 @@ mod tests {
                 (3, 4, 2),
                 (5, 5, 1),
             ] {
-                let rules = [
-                    BlockRequirements { ..rule_profiles[r0] },
-                    BlockRequirements { ..rule_profiles[r1] },
-                    BlockRequirements { ..rule_profiles[r2] },
-                ];
+                let rules = [rule_profiles[r0], rule_profiles[r1], rule_profiles[r2]];
                 for counts in [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 0, 1], [2, 0, 0]] {
                     if rules.iter().zip(counts).any(|(r, c)| r.limited && c > 1) {
                         continue;
@@ -528,8 +523,7 @@ mod tests {
                         .chain([None])
                         .collect();
                     let fast = non_menace_best_choices(&rules, &edges, 3, &counts, &options);
-                    let mut counts_copy = counts;
-                    let slow = general_best_choices(&rules, &edges, 3, &mut counts_copy, &options);
+                    let slow = general_best_choices(&rules, &edges, 3, &counts, &options);
                     assert_eq!(
                         fast, slow,
                         "mask={mask}, rules=({r0},{r1},{r2}), counts={counts:?}, options={options:?}"

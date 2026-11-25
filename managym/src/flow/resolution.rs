@@ -34,7 +34,7 @@ use crate::{
         game_object::{
             AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        mana::{Colors, ManaCost},
+        mana::{Color, Colors, ManaCost},
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
@@ -61,10 +61,6 @@ const fn card_type_bit(card_type: CardType) -> u16 {
     1u16 << (card_type as u8)
 }
 
-fn colors_mask(colors: &Colors) -> u8 {
-    colors.iter().fold(0u8, |mask, &color| mask | color.bit())
-}
-
 fn types_mask(types: &CardTypes) -> u16 {
     types
         .types
@@ -84,7 +80,7 @@ impl TargetingSource {
     fn from_characteristics(controller: PlayerId, colors: &Colors, types: &CardTypes) -> Self {
         Self {
             controller,
-            colors: colors_mask(colors),
+            colors: Color::bits(colors),
             types: types_mask(types),
         }
     }

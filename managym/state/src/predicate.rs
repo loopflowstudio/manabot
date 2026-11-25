@@ -247,8 +247,12 @@ impl CardPredicate {
             return false;
         }
         if !self.colors_any.is_empty() {
-            let colors = object.colors();
-            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+            let colors = object.color_bits();
+            if !self
+                .colors_any
+                .iter()
+                .any(|color| colors & color.bit() != 0)
+            {
                 return false;
             }
         }

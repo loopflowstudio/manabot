@@ -70,6 +70,11 @@ impl Layer {
     const fn bit(self) -> u16 {
         1u16 << (self as u8)
     }
+
+    #[inline]
+    const fn after_mask(self) -> u16 {
+        !0u16 << (self as u8 + 1)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -517,7 +522,6 @@ impl<'a> Context<'a> {
         };
         let mut nodes = Vec::new();
         let mut active_layers = 0u16;
-        let mut known = BTreeSet::new();
         seeds.resize(game.state.permanents.len(), None);
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
             let Some(p) = permanent else {
@@ -541,27 +545,25 @@ impl<'a> Context<'a> {
             // (CR 702.26b); its own view still takes the records on it.
             if !game.is_phased_out(id) {
                 for node in &seed.nodes {
-                    let reads = node.reads();
-                    context.reads_mana |= reads.mana;
-                    context.reads_tapped |= reads.tapped;
-                    context.reads_life |= reads.life;
-                    active_layers |= node.layers();
-                    nodes.push(node.clone());
+                    context.push_node(&mut nodes, &mut active_layers, node.clone());
                 }
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
-                    active_layers |= Layer::Ability.bit();
-                    nodes.push(Node::resolved(
-                        id,
-                        vec![slot, usize::MAX - 1, kind as usize],
-                        p.keyword_counter_timestamps
-                            .get(&kind)
-                            .copied()
-                            .unwrap_or(p.timestamp),
-                        Layer::Ability,
-                        Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
-                    ));
+                    context.push_node(
+                        &mut nodes,
+                        &mut active_layers,
+                        Node::resolved(
+                            id,
+                            vec![slot, usize::MAX - 1, kind as usize],
+                            p.keyword_counter_timestamps
+                                .get(&kind)
+                                .copied()
+                                .unwrap_or(p.timestamp),
+                            Layer::Ability,
+                            Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
+                        ),
+                    );
                 }
             }
             for (i, record) in game.effects_on(id).enumerate() {
@@ -575,14 +577,17 @@ impl<'a> Context<'a> {
                 } else {
                     Operation::Modify(record.modification.clone())
                 };
-                active_layers |= layer.bit();
-                nodes.push(Node::resolved(
-                    id,
-                    vec![slot, usize::MAX, i],
-                    record.timestamp,
-                    layer,
-                    operation,
-                ));
+                context.push_node(
+                    &mut nodes,
+                    &mut active_layers,
+                    Node::resolved(
+                        id,
+                        vec![slot, usize::MAX, i],
+                        record.timestamp,
+                        layer,
+                        operation,
+                    ),
+                );
             }
         }
         if !retain_sources {
@@ -590,6 +595,7 @@ impl<'a> Context<'a> {
         }
         let mut pending = Vec::new();
         let mut applied = Vec::new();
+        let mut granted = Vec::new();
         for layer in Layer::ALL {
             if active_layers & layer.bit() != 0 {
                 applied.clear();
@@ -613,11 +619,11 @@ impl<'a> Context<'a> {
                     let selected = context.next_effects(&nodes, &pending, &instructions, layer);
                     let all_applied = selected.len() == pending.len();
                     let mut discovered_this_layer = false;
-                    for slot in selected {
+                    for &slot in &selected {
                         let index = pending[slot];
                         if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
                             if targets.is_none()
-                                && plan.parts.iter().any(|(part, _)| *part > layer)
+                                && plan.layers & layer.after_mask() != 0
                                 && !instructions[slot].is_empty()
                             {
                                 // Instructions already resolved the affected set. Retain
@@ -630,38 +636,27 @@ impl<'a> Context<'a> {
                                 *targets = Some(bound);
                             }
                         }
-                        context.apply(&nodes[index], &instructions[slot]);
-                        // Only a static grant introduces layer nodes. Removing abilities
-                        // changes existence, which the pending filter checks directly.
-                        if instructions[slot].iter().any(|i| {
-                            matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
-                        }) {
-                            let added = context.discover(&mut nodes, &mut active_layers, &mut known);
+                        context.apply(&nodes[index], &instructions[slot], Some(&mut granted));
+                        for granted_node in granted.drain(..) {
+                            let added =
+                                context.push_node(&mut nodes, &mut active_layers, granted_node);
                             discovered_this_layer |= added & layer.bit() != 0;
                         }
-                        if !all_applied {
-                            if applied.len() <= index {
-                                applied.resize(nodes.len(), false);
-                            }
-                            applied[index] = true;
-                        }
                     }
-                    if all_applied {
-                        if !discovered_this_layer {
-                            debug_assert!(nodes.iter().enumerate().all(|(i, node)| {
-                                applied.get(i).copied().unwrap_or(false)
-                                    || pending.contains(&i)
-                                    || !node.has_layer(layer)
-                                    || !context.exists(node)
-                            }));
-                            break;
-                        }
-                        if applied.len() < nodes.len() {
-                            applied.resize(nodes.len(), false);
-                        }
-                        for &index in &pending {
-                            applied[index] = true;
-                        }
+                    if all_applied && !discovered_this_layer {
+                        debug_assert!(nodes.iter().enumerate().all(|(i, node)| {
+                            applied.get(i).copied().unwrap_or(false)
+                                || pending.contains(&i)
+                                || !node.has_layer(layer)
+                                || !context.exists(node)
+                        }));
+                        break;
+                    }
+                    if applied.len() < nodes.len() {
+                        applied.resize(nodes.len(), false);
+                    }
+                    for slot in selected {
+                        applied[pending[slot]] = true;
                     }
                 }
             } else {
@@ -749,7 +744,7 @@ impl<'a> Context<'a> {
         let nodes = object
             .statics
             .iter()
-            .filter_map(|entry| self.node(id, entry))
+            .filter_map(|entry| Self::static_node(self.game, id, entry))
             .collect();
         SourceSeed {
             source: source.clone(),
@@ -818,35 +813,15 @@ impl<'a> Context<'a> {
             }
         }
     }
-    fn discover(
-        &mut self,
-        nodes: &mut Vec<Node>,
-        active_layers: &mut u16,
-        known: &mut BTreeSet<Vec<usize>>,
-    ) -> u16 {
-        // Seed statics use two-element keys `[slot, index]` and are already in
-        // `nodes`; granted statics extend the granting node's key so length > 2.
-        let mut added_layers = 0u16;
-        for (&id, object) in &self.objects {
-            if self.game.is_phased_out(id) {
-                continue;
-            }
-            for entry in &object.statics {
-                if entry.key.len() > 2 && known.insert(entry.key.clone()) {
-                    if let Some(node) = self.node(id, entry) {
-                        let reads = node.reads();
-                        self.reads_mana |= reads.mana;
-                        self.reads_tapped |= reads.tapped;
-                        self.reads_life |= reads.life;
-                        let layers = node.layers();
-                        added_layers |= layers;
-                        *active_layers |= layers;
-                        nodes.push(node);
-                    }
-                }
-            }
-        }
-        added_layers
+    fn push_node(&mut self, nodes: &mut Vec<Node>, active_layers: &mut u16, node: Node) -> u16 {
+        let reads = node.reads();
+        self.reads_mana |= reads.mana;
+        self.reads_tapped |= reads.tapped;
+        self.reads_life |= reads.life;
+        let layers = node.layers();
+        *active_layers |= layers;
+        nodes.push(node);
+        layers
     }
 
     /// Select a pending effect under CR 613.8: dependencies first, then
@@ -923,7 +898,7 @@ impl<'a> Context<'a> {
                 });
                 self.clone()
             };
-            after.apply(&nodes[index], &instructions[b]);
+            after.apply(&nodes[index], &instructions[b], None);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda() == nodes[index].cda() {
                     if !cfg!(debug_assertions) && !plausible(a, b) {
@@ -1358,7 +1333,7 @@ impl<'a> Context<'a> {
             self.game.chosen_type_for(predicate, source),
         )
     }
-    fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
+    fn static_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
         let mut plan = SourcePlan::new();
         let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
@@ -1429,14 +1404,13 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let object = &self.game.state[self.game.live_permanent(source).object];
+                let object = &game.state[game.live_permanent(source).object];
                 let index = object
                     .attached_grants()
                     .position(|a| a == ability)
                     .unwrap_or(0);
                 let mut granted = ability.clone();
-                granted.granted_by = self
-                    .game
+                granted.granted_by = game
                     .permanent_object(source)
                     .map(|grantor| AbilityGrant { grantor, index });
                 add(
@@ -1470,7 +1444,12 @@ impl<'a> Context<'a> {
             },
         })
     }
-    fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
+    fn apply(
+        &mut self,
+        node: &Node,
+        instructions: &[Instruction],
+        mut granted: Option<&mut Vec<Node>>,
+    ) {
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             condition.once_each_turn().then(|| GrantClock {
@@ -1666,11 +1645,20 @@ impl<'a> Context<'a> {
                         }
                         let mut key = node.key.clone();
                         key.extend([id.0, ordinal]);
-                        object.statics.push(StaticEntry {
+                        let entry = StaticEntry {
                             key,
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
-                        });
+                        };
+                        if let Some(granted) = granted.as_mut() {
+                            if !self.game.is_phased_out(id) {
+                                if let Some(granted_node) = Self::static_node(self.game, id, &entry)
+                                {
+                                    granted.push(granted_node);
+                                }
+                            }
+                        }
+                        object.statics.push(entry);
                     }
                     Modification::SetBasePt { power, toughness } => {
                         if let Some(p) = power {

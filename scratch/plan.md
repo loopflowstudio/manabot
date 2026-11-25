@@ -38,7 +38,7 @@ Prime Speaker Zegana, Giada, Banner of Kinship, Angel of Vitality.
 - Performance P5–P7: single baseline matching + residual reachability for non-menace
   `block_options`, allocation-free `Color::bits` comparison in `Observation::add_permanent`,
   and `active_layers: u16` bitmask skipping + reusable buffers + single-batch exit +
-  length-based `discover` filtering in `Context::evaluate`.
+  direct granted-static node emission in `Context::evaluate`.
 
 Findings that still explain the code:
 
