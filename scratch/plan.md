@@ -5,28 +5,34 @@ Slices 1–16 are complete. Demonic Pact and Maze’s End already had working
 definitions.
 
 Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
-`blocked_by` is cleared. Slice 11's four concept defects, Slice 12's three
-behavior-review defects, Performance Slices 13–16, and Academy's holistic
-Curator of Destinies pile-partition UI (`cfa110e6d8`) are built and verified.
+`blocked_by` is cleared. Slices 1–17 (including Slice 11's four concept
+defects, Slice 12's three behavior-review defects, Performance Slices 13–16,
+Academy's holistic Curator of Destinies pile-partition UI (`cfa110e6d8`), and
+Slice 17's mana refinements + PR #605 CI fixes) are built and verified.
 
-**Next: Slice 17 — Mana architecture & feasibility projection refinements (plus PR #605 CI fix), then `pr-publish` → `demo`.**
+**Next: `pr-publish` → CI (`Engine Budget`, `Academy UI`, `Integration`, `Academy Integration`) → `demo`.**
 
-### Planned Slice 17 — Adapt three mana ideas from `phase-rs` (keep grouped `ManaPool` and exact DFS witness solver)
+### Completed Slice 17 — Mana refinements & PR #605 CI fixes
 
-Do **not** replace our grouped `[u8; 6]`-per-`ManaClass` `ManaPool` with per-unit `ManaUnit` storage, and do **not** replace our exact DFS witness solver with heuristic auto-tap. Adapt these three targeted improvements into `managym/state/src/mana.rs` and `managym/src/flow/mana.rs`, preserving all digests, learning tokens, checkpoint compatibility, and `bench_steps`/`bench_search` gains:
-
-1. **Feasibility-only `ProjectedClass` stripping (profile-backed on `mixed-pools`):**
-   - **Profile:** `mixed-pools --sizes 16` (`/usr/bin/sample`, 1,740 samples) spends **53.62%** in `PaymentModel::witness` and **17.76%** in `PaymentSearch::insert` (`visited` `HashMap::insert` `13.91%`, `[(ManaClass, [u8; 6])]::hash_slice` `8.33%`, `CardPredicate::hash` inside `SpendEffect` `4.89%`), with `SearchEquivalence::insert_projected` at **`0.00%`** because `state_has_restriction` only projects classes where `restriction.is_some()`, plus `7.59%` in `Mana::spending_choices` iteration across 5 uncollapsed `{R}` classes.
-   - **Hypothesis:** In pure feasibility searches (`PaymentModel::witness` / `SearchEquivalence` — never `ManaSpend`, live pools, or `SourceClassCache` for player-visible `mana_ability_actions`/`useful_payment_taps`), strip `expiry` and `effect` (`SpendEffect`) from `ProjectedClass` so unrestricted non-ordinary classes merge straight into `ProjectedMana.mana`, activate feasibility projection whenever a search state/model carries any non-ordinary `ManaClass` (`!classes().is_empty()`), and deduplicate feasibility-only `spending_choices` inside `witness` when two classes differ only in `expiry`/`effect`. That eliminates `CardPredicate::hash` and `ManaClass` hashing from `PaymentSearch::visited` and collapses mixed Ventmaw / Firebending / ordinary / spend-effect pools into fewer search states without changing any first-in-source-order witness or player choice.
-   - **Deletes:** `expiry: ManaExpiry` and `effect: Option<SpendEffect>` fields on feasibility `ProjectedClass` (and `state_has_restriction` / `model_has_restriction` restriction-only guards in `PaymentSearch`, replaced by non-ordinary class checks while keeping `SourceClassCache` exact on `expiry`/`effect`).
-   - **Focused check:** debug `nextest` (`flow::mana::`), debug `bench_states mixed-pools --sizes 2,3`, `entry-choices --sizes 4,8`, `changeling-anthems --sizes 4,8` (debug search oracle), release `bench_states mixed-pools --sizes 2,3,4` and `--sizes 4,8,16` (fewer states & instructions, identical witness/action surface), plus `ventmaw-pools`, `entry-choices`, `changeling-anthems`, `float-origins`.
-2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying (architectural cleanup; `< 0.1%` in curated profiles):**
-   - Refactor `clear_mana_pools` (`managym/src/flow/mana.rs`) into a small per-class emptying disposition pass (`Drop | Keep | Recolor(Color)`) over `ManaPool` that deletes the dual `split_expiring` (`combat_expiring` + `regular_expiring`) / `unspent_mana_retained` branching cleanly while preserving identical Firebending, Savage Ventmaw, and Ozai semantics (and zero new `Player` fields).
-   - **Focused check:** debug `nextest` (`flow::mana::`, `tla::fire_lord_azula`, `ozai`, `ventmaw`), identical `bench_steps`/`bench_search` digests and retired instructions `≤ 45.71B` / `≤ 972.65B`.
-3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle (architectural cleanup; `Mana::can_pay` is `0.32%` in `bench_search`, `< 0.1%` in `bench_steps`):**
-   - Replace ad-hoc hybrid/single-pip branching in `ManaCost` / `flow/mana.rs` where a 6-bit `ManaTypeSet(u8)` pip mask and a small `Copy` payment-permission bundle simplify legality/payment code and delete parallel branches — keeping `ManaCost` serialization, learning tokens (`tests/model/test_pinned_pilot.py`), and `bench_steps`/`bench_search` retired instructions `≤ 45.71B` / `≤ 972.65B`.
-   - **Focused check:** debug `nextest` (`flow::mana::`, `managym_state`), rebuilt release extension + `tests/model/test_pinned_pilot.py`, uninstrumented release `bench_steps` and `bench_search`.
-4. **PR #605 CI fix before `pr-publish`:** Fix `tests/env/test_named_observation_layout.py::test_named_layout_describes_tagged_rows_and_history` (extra set items `{17, 18, 19}` in CI `Integration (model)`), and check why the 4 Playwright tests in `Academy UI` (`choice-navigation.spec.ts` ×2, `decision-surface.spec.ts` ×2) timed out on `getByTestId('game')`.
+1. **Feasibility-only `ProjectedClass` stripping:**
+   - Deleted `ProjectedClass { expiry, restriction, effect }` in `managym/src/flow/mana.rs`; `ProjectedClasses` now carries `PurposeMask` directly and merges unrestricted non-ordinary classes (and restrictions admitting all reachable purposes) straight into `ProjectedMana.mana`.
+   - Replaced `obligation_has_restriction` / `state_has_restriction` / `model_has_restriction` in `PaymentSearch` with non-ordinary class checks (`!mana.classes().is_empty()`) and routed all states to `projected_visited` while projection is active so ordinary and unrestricted classed pools collapse into one table, while keeping `SourceClassCache` exact on `ManaExpiry`/`SpendEffect` for player-visible offers.
+   - Deduplicated feasibility-only `spending_choices` inside `PaymentModel::witness` per `(Option<&ManaRestriction>, color)` using `ManaCost::pop_next_pip` + `Mana::spend_one` (no heap unit-`Mana` allocations).
+2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying:**
+   - Added `EmptyDisposition { Drop, Keep, Recolor(Color) }`, `EmptySummary`, and single-pass `ManaPool::empty_expiring` in `managym/state/src/mana.rs`, deleting `ManaPool::split_expiring`, `become_red`, `red_only`, `Mana::become_red`, `Mana::red_only`, and `Game::unspent_mana_retained`.
+3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle:**
+   - Added `ManaTypeSet(u8)` and `ManaCost::pop_next_pip` in `managym/state/src/mana.rs`; unified `Mana::usable_colors` across `can_pay`/`spendable_units` (with a hybrid-free fast path), `spending_choices`, `paid_with`, `PaymentModel::colors_coverable`, and convoker color masks in `managym/src/flow/mana/help.rs`.
+   - Added copyable `CostPermissionContext { help, waterbend, reserved_tap }` in `managym/src/flow/payment.rs`, deleting parallel `(help, waterbend, also_tapped)` plumbing and `#[allow(clippy::too_many_arguments)]` across `help.rs`, `mana.rs`, `payment.rs`, `play.rs`, and `decision.rs`.
+4. **PR #605 CI fixes:**
+   - Updated `tests/env/test_named_observation_layout.py` for v11 `FactKind`s 17–19 (`ChosenColor`, `ChosenSubtype`, `ChosenName`).
+   - Updated `tests/semantic/test_learn_contract.py` to read named `outside`/`valid` columns instead of hardcoded `-1`/`-2` indices after appended column 56 (`put_into_graveyard_this_turn`).
+   - Rebuilt release `_managym` extension and refreshed `managym/academy/fixtures/*.json` via `scripts/refresh_academy_fixtures.py` (fixing the stale runtime identity / projection digest failures in `Academy Integration` and `Academy UI`).
+5. **Checks run (minimal local checks under high host load; heavy release benchmarks & Playwright E2E deferred to CI):**
+   - Focused debug `nextest` (`managym-state`, `flow::mana::`, `tla::fire_lord_azula|ozai|ventmaw`): all passed.
+   - Debug `bench_states` with debug search oracles (`mixed-pools --sizes 2,3`, `entry-choices --sizes 4,8`, `changeling-anthems --sizes 4,8`): all passed with zero assertions.
+   - `cargo fmt --manifest-path managym/Cargo.toml --all --check`: clean.
+   - Rebuilt release `_managym` + refreshed Academy fixtures + targeted pytest (`test_named_observation_layout.py`, `test_learn_contract.py`, `test_pinned_pilot.py`, `test_choice_navigation.py`, `test_learn_setup.py`, `test_learn_evidence.py`, `test_decision_surface.py`): 91 passed (only 2 pre-existing base-vs-`origin/main` diffs already fixed in `80ef548bf5` on `main` and passing in CI).
+   - Deferred to CI under high host load (~100+): release `bench_steps`/`bench_search` (`Engine Budget`), release `bench_states`, full workspace `nextest`, and Playwright `Academy UI`.
 
 ## Engine measure pass 4 (pre-Slice-17 baseline at `ff0f872c3e`, Apple M4 Max, contended host)
 
