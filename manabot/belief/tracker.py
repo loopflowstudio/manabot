@@ -258,7 +258,7 @@ class BeliefTracker:
 
         prior = BeliefState.compatible_prior(next_space)
         posterior = (
-            prior
+            BeliefState.compatible_prior(next_space, model_id=posterior.model_id)
             if mulligan
             else posterior.transport(
                 next_space,
