@@ -978,6 +978,7 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
             format!("{zone:?}").to_lowercase()
         ),
         ObjectSelector::You => "you".into(),
+        ObjectSelector::NextSpellYouCast => "the next spell you cast".into(),
         ObjectSelector::Chosen { predicate, except } => format!(
             "{}{}",
             if except.is_some() { "another " } else { "a " },
@@ -1379,10 +1380,30 @@ pub(crate) fn effects_description(effects: &[Effect]) -> String {
 /// Effect text whose `ObjectSelector::Triggering` reads "that [triggering]"
 /// (see [`triggering_noun`]).
 fn effects_description_in(triggering: TriggerText, effects: &[Effect]) -> String {
-    let parts: Vec<_> = effects
-        .iter()
-        .filter_map(|effect| effect_description(triggering, effect))
-        .collect();
+    let mut parts = Vec::new();
+    let mut remaining = effects;
+    while let Some((first, rest)) = remaining.split_first() {
+        if let (
+            Effect::If { .. },
+            [Effect::PutCounters {
+                amount,
+                kind: CounterKind::Loyalty,
+                ..
+            }, tail @ ..],
+        ) = (first, rest)
+        {
+            if remaining[..2] == Effect::empower_jace(amount.clone()) {
+                parts.push(format!(
+                    "Empower Jace {}",
+                    value_description(triggering, amount)
+                ));
+                remaining = tail;
+                continue;
+            }
+        }
+        parts.extend(effect_description(triggering, first));
+        remaining = rest;
+    }
     if parts.is_empty() {
         "Do nothing".into()
     } else {
@@ -1796,6 +1817,7 @@ fn continuous_description_in(
         }
         Modification::AdditionalLandPlay => format!("{subject} may play an additional land{until}"),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
+        Modification::CantBeCountered => format!("{subject} can't be countered{until}"),
         Modification::NextCreatureCastFlash => {
             let this_turn = match duration {
                 EffectDuration::EndOfTurn => " this turn",

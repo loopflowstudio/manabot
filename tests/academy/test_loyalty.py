@@ -177,3 +177,47 @@ def test_player_only_attack_accepts_the_pre_planeswalker_command() -> None:
         env.snapshot().to_replay_json()
     ).restore()
     assert restored.state_digest() == env.state_digest()
+
+
+def test_empowered_token_visible_to_both_seats_and_cold_replay() -> None:
+    env = managym.Env(seed=23)
+    deck = {"Island": 20, "Mindseeker Oculus": 12}
+    obs, _ = env.reset([managym.PlayerConfig(label, deck) for label in ("a", "b")])
+    for _ in range(200):
+        if any(
+            permanent.characteristics.name == "Jace"
+            for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
+        ):
+            break
+        index = next(
+            (
+                i
+                for kind in (
+                    managym.ActionEnum.PRIORITY_PLAY_LAND,
+                    managym.ActionEnum.PRIORITY_CAST_SPELL,
+                    managym.ActionEnum.PRIORITY_PASS_PRIORITY,
+                )
+                for i, action in enumerate(obs.action_space.actions)
+                if action.action_type == kind
+            ),
+            0,
+        )
+        obs = env.step(index)[0]
+    else:
+        raise AssertionError("Mindseeker Oculus never empowered Jace")
+    for viewer in (0, 1):
+        board = serialize_observation(env.observation_for_player(viewer))
+        tokens = [
+            permanent
+            for role in ("agent", "opponent")
+            for permanent in board[role]["battlefield"]
+            if permanent["name"] == "Jace"
+        ]
+        assert len(tokens) == 1
+        assert tokens[0]["printed_loyalty"] == 0
+        assert tokens[0]["counters"]["loyalty"] == 4
+    restored = managym.GameSnapshot.from_replay_json(
+        env.snapshot().to_replay_json()
+    ).restore()
+    assert restored.state_digest() == env.state_digest()
+    assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()

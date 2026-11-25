@@ -1097,6 +1097,10 @@ impl Game {
         }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(prior_object, to_zone, followups);
+        } else if old_zone == Some(ZoneType::Stack)
+            && self.state.effects.on(prior_object).next().is_some()
+        {
+            self.end_effects_on(prior_object);
         }
         let second = second.map(|second| {
             let arrival = self.state.mint_appearance(second, owner, to_zone, false);

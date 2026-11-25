@@ -327,7 +327,7 @@ impl Game {
                     let permanent = self.state.permanents[id].as_ref()?;
                     Some((object, permanent.controller, permanent.attached_to))
                 }
-                Affected::Player(_) => None,
+                Affected::Player(_) | Affected::NextSpell(_) => None,
             })
             .collect();
         let is_phased = |object: ObjectId| phased.iter().any(|(other, ..)| *other == object);

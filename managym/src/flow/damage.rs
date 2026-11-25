@@ -42,7 +42,7 @@ impl Game {
         }
     }
 
-    /// Excess after replacement, measured against the pre-commit creature.
+    /// Excess after replacement, measured against each applicable type (CR 120.10).
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
     fn excess_for_damage(
         &self,
@@ -54,16 +54,23 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return 0;
         };
-        if !view.is_creature() {
-            return 0;
+        let mut excess = 0;
+        if view.is_creature() {
+            let remaining = (view.toughness - permanent.damage).max(0);
+            let lethal = if deathtouch {
+                remaining.min(1)
+            } else {
+                remaining
+            };
+            excess = excess.max(amount - lethal);
         }
-        let remaining = (view.toughness - permanent.damage).max(0);
-        let lethal = if deathtouch {
-            remaining.min(1)
-        } else {
-            remaining
-        };
-        (amount - lethal).max(0)
+        if view.types.is_planeswalker() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Loyalty));
+        }
+        if view.types.is_battle() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Defense));
+        }
+        excess
     }
 
     pub(crate) fn commit_damage(

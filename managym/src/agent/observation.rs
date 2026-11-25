@@ -654,7 +654,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 42] = [
+pub const MODIFICATION_NAMES: [&str; 43] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -697,16 +697,30 @@ pub const MODIFICATION_NAMES: [&str; 42] = [
     "PreventCombatDamage",
     "AllCreatureTypes",
     "LoyaltyAtInstantSpeed",
+    "CantBeCountered",
 ];
 
 impl ContinuousEffectData {
     pub(super) fn new(effect: &ContinuousEffect) -> Self {
-        Self::of_modification(
+        let mut data = Self::of_modification(
             &effect.modification,
             format!("{:?}", effect.duration),
             effect.source,
             effect.timestamp.0 as i32,
-        )
+        );
+        if matches!(effect.affected, Affected::NextSpell(_)) {
+            let selector = crate::state::ability::ObjectSelector::NextSpellYouCast;
+            let mut program = crate::cards::tokens::rules_tokens(&selector, default_content_pack())
+                .expect("registered spell selector");
+            program.append(&mut data.program);
+            data.program = program;
+            data.description = Some(super::ability_description::continuous_description(
+                &selector,
+                &effect.modification.map_amount(|n| (*n).into()),
+                effect.duration,
+            ));
+        }
+        data
     }
 
     /// One modification with its provenance: a record's, or a copy
@@ -807,6 +821,7 @@ impl ContinuousEffectData {
             }
             Modification::AdditionalLandPlay => "AdditionalLandPlay",
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::CantBeCountered => "CantBeCountered",
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
             Modification::LifeTotalCantChange => "LifeTotalCantChange",
@@ -835,7 +850,11 @@ impl ContinuousEffectData {
         game.state
             .effects
             .iter()
-            .filter(|effect| Some(effect.affected) == affected)
+            .filter(|effect| {
+                Some(effect.affected) == affected
+                    || matches!((effect.affected, affected),
+                (Affected::NextSpell(caster), Some(Affected::Player(player))) if caster == player)
+            })
             .map(Self::new)
             .collect()
     }

@@ -35,15 +35,19 @@ pub struct EffectObject {
 }
 
 impl EffectObject {
-    fn permanent(game: &Game, object: ObjectId) -> Self {
+    fn object(game: &Game, object: ObjectId) -> Self {
         Self {
-            object_id: game.lookup_current_permanent(object).ok().map(|id| {
-                game.state.permanents[id]
-                    .as_ref()
-                    .expect("current permanent")
-                    .id
-                    .0 as i32
-            }),
+            object_id: game
+                .lookup_current_permanent(object)
+                .ok()
+                .map(|id| {
+                    game.state.permanents[id]
+                        .as_ref()
+                        .expect("current permanent")
+                        .id
+                        .0 as i32
+                })
+                .or_else(|| game.spell_on_stack(object).map(|spell| spell.id.0 as i32)),
             incarnation: Some(
                 game.object_event_ref(object)
                     .map_or(object.generation(), |event| event.incarnation),
@@ -86,10 +90,12 @@ pub fn project(game: &Game) -> Vec<SharedEffectData> {
         let controller_id = game.state.players[record.controller.0].id.0 as i32;
         let source = record
             .source_object
-            .map(|object| EffectObject::permanent(game, object));
+            .map(|object| EffectObject::object(game, object));
         let target = match record.affected {
-            Affected::Player(player) => EffectObject::player(game, player),
-            Affected::Object(object) => EffectObject::permanent(game, object),
+            Affected::Player(player) | Affected::NextSpell(player) => {
+                EffectObject::player(game, player)
+            }
+            Affected::Object(object) => EffectObject::object(game, object),
         };
         let membership = EffectMembership { target, order };
         if let Some(payload) = shared.iter_mut().find(|payload| {

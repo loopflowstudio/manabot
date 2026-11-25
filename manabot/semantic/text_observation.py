@@ -457,6 +457,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBeCountered": "can't be countered",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
         "Saddled": "saddled",

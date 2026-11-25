@@ -12908,5 +12908,340 @@
     "colors": [
       "G"
     ]
+  },
+  "Academic Ascent": {
+    "name": "Academic Ascent",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Target creature gets +2/+2 and gains flying until end of turn.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
+  "Arcane Amphisbaena": {
+    "name": "Arcane Amphisbaena",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Snake",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nWhen this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G"
+    ]
+  },
+  "Campus Crier": {
+    "name": "Campus Crier",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Advisor",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "{1}, Exile this card from your graveyard: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fatehold Charm": {
+    "name": "Fatehold Charm",
+    "mana_cost": "{W}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "Choose one —\n• Draw a card. Empower Jace 2.\n• Return target spell or creature to its owner's hand.\n• Creatures you control get +1/+2 until end of turn.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Hexhaven Battalion": {
+    "name": "Hexhaven Battalion",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Landcycling",
+      "Basic landcycling",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Create three 2/2 colorless Wizard Soldier creature tokens named Cadet. Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Inspired Tethermage": {
+    "name": "Inspired Tethermage",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Warrior",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Whenever you put one or more loyalty counters on a planeswalker, put a +1/+1 counter on this creature.\n{6}: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G"
+    ]
+  },
+  "Jace's Machinations": {
+    "name": "Jace's Machinations",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Until end of turn, you may activate loyalty abilities of Jace planeswalkers you control on any player's turn any time you could cast an instant.\nEmpower Jace 8. (Put eight loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Keeper of the Quiet Hour": {
+    "name": "Keeper of the Quiet Hour",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Chimera",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": []
+  },
+  "Mindseeker Oculus": {
+    "name": "Mindseeker Oculus",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Homunculus",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "No Admittance": {
+    "name": "No Admittance",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "No Admittance deals 3 damage to any target.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Overwrite the Multiverse": {
+    "name": "Overwrite the Multiverse",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Exile all creatures. Empower Jace X, where X is the number of creatures exiled this way. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Plan for All Outcomes": {
+    "name": "Plan for All Outcomes",
+    "mana_cost": "{3}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When this enchantment enters, the owner of up to one other target nonland permanent puts it on their choice of the top or bottom of their library.\nWhenever you cast your first noncreature spell each turn, empower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Protege's Awakening": {
+    "name": "Protege's Awakening",
+    "mana_cost": "{3}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nDraw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Repurposed Enforcer": {
+    "name": "Repurposed Enforcer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Whenever this creature attacks, empower Jace X, where X is the number of creatures you control. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
+  "Rewrite Regrets": {
+    "name": "Rewrite Regrets",
+    "mana_cost": "{3}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Return target creature or planeswalker card with mana value 6 or less from your graveyard to the battlefield.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Solve for Disappointment": {
+    "name": "Solve for Disappointment",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Tam's Resistance": {
+    "name": "Tam's Resistance",
+    "mana_cost": "{1}{G/U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Put a +1/+1 counter on up to one target creature. It gains vigilance until end of turn.\nEmpower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Theorist's Proxy": {
+    "name": "Theorist's Proxy",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Illusion",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this creature enters, empower Jace 3. (Put three loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\n{U}, Sacrifice this creature: The next spell you cast this turn can't be countered.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Violent Echoes": {
+    "name": "Violent Echoes",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Violent Echoes deals 6 damage to target creature or planeswalker. If excess damage was dealt to that permanent this way, empower Jace X, where X is that excess damage. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Vraska's Final Mercy": {
+    "name": "Vraska's Final Mercy",
+    "mana_cost": "{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "Choose one —\n• You lose 2 life. Destroy target creature or planeswalker.\n• You lose 2 life. Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Way of the Mentor": {
+    "name": "Way of the Mentor",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Mentor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you gain life, put a loyalty counter on each planeswalker you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Way of the Necromancer": {
+    "name": "Way of the Necromancer",
+    "mana_cost": "{1}{B}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Necromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever a creature you control dies, put a loyalty counter on each planeswalker you control.",
+    "colors": [
+      "B"
+    ]
   }
 }

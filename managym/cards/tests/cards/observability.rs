@@ -380,6 +380,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::AllCreatureTypes",
             Seen::Via("its shared-effect row"),
         ),
+        Modification::CantBeCountered => ("Modification::CantBeCountered", Seen::Via("its shared-effect row on the spell")),
         Modification::NextCreatureCastFlash => (
             "Modification::NextCreatureCastFlash",
             Seen::Via("its shared-effect row"),
@@ -476,6 +477,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         (true, Modification::AdditionalLandPlay),
         (true, Modification::LoyaltyAtInstantSpeed(Box::default())),
         (true, Modification::NextCreatureCastFlash),
+        permanent(Modification::CantBeCountered),
         (true, Modification::SkipsCombatPhasesNextTurn),
         (true, Modification::LifeTotalCantChange),
         (true, Modification::ProtectionFromEverything),
@@ -522,13 +524,14 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::TargetPlayersZone { .. } => "ObjectSelector::TargetPlayersZone",
         ObjectSelector::You => "ObjectSelector::You",
+        ObjectSelector::NextSpellYouCast => "ObjectSelector::NextSpellYouCast",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
         ObjectSelector::ZoneMatching { .. } => "ObjectSelector::ZoneMatching",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 22] {
+fn selector_witnesses() -> [ObjectSelector; 23] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -555,6 +558,7 @@ fn selector_witnesses() -> [ObjectSelector; 22] {
             zone: ZoneType::Library,
         },
         ObjectSelector::You,
+        ObjectSelector::NextSpellYouCast,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
             of: Scope::YouControl,

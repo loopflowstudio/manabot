@@ -68,6 +68,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         inkling(),
         red_white_spirit(),
         rat(),
+        jace(),
         token(
             "token.illusion_1_1_u",
             "7bda0b63-fd0f-495d-9eb0-20057571c0ee",
@@ -122,6 +123,28 @@ fn creature(
         color_override: Some(Colors::from_iter(colors)),
         ..definition
     }
+}
+
+fn jace() -> TokenDefinition {
+    let text_box = "−1: Surveil 1. (Look at the top card of your library. You may put that card into your graveyard.)\n−3: Draw a card.";
+    let ability = |cost, effect| ActivatedAbilityDefinition {
+        loyalty: Some(managym_state::card::LoyaltyCost::Fixed(cost)),
+        effects: vec![effect],
+        ..Default::default()
+    };
+    token(
+        "token.jace",
+        "8d1e424f-6407-4f8c-bed2-eaf148237c81",
+        PrintedCharacteristics {
+            loyalty: Some(0),
+            color_override: Some(Colors::from_iter([Color::Blue])),
+            activated_abilities: vec![
+                ability(-1, Effect::Surveil { count: 1 }),
+                ability(-3, Effect::DrawCards { count: 1.into() }),
+            ],
+            ..face("Jace", [CardType::Planeswalker], &["Jace"], text_box)
+        },
+    )
 }
 
 fn goblin() -> TokenDefinition {

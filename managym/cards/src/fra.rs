@@ -2,13 +2,14 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, KeywordAction, LibraryEnd, ObjectSelector, Per,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, KeywordAction, LibraryEnd,
+        ObjectSelector, Per, PlayerSelector, Scope, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
-        Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect, Restriction,
-        StaticAbility, StaticContinuous, StaticRestriction, StaticScope,
+        ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
+        InsetSpell, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
+        Restriction, StaticAbility, StaticContinuous, StaticRestriction, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost, ManaRestriction},
@@ -77,6 +78,28 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         void_extrapolator(),
         the_theorist(),
         tomik_orzhov_lawmage(),
+        academic_ascent(),
+        arcane_amphisbaena(),
+        campus_crier(),
+        fatehold_charm(),
+        hexhaven_battalion(),
+        inspired_tethermage(),
+        jaces_machinations(),
+        keeper_of_the_quiet_hour(),
+        mindseeker_oculus(),
+        no_admittance(),
+        overwrite_the_multiverse(),
+        plan_for_all_outcomes(),
+        proteges_awakening(),
+        repurposed_enforcer(),
+        rewrite_regrets(),
+        solve_for_disappointment(),
+        tams_resistance(),
+        theorists_proxy(),
+        violent_echoes(),
+        vraskas_final_mercy(),
+        way_of_the_mentor(),
+        way_of_the_necromancer(),
     ]
 }
 
@@ -125,7 +148,7 @@ fn tomik_orzhov_lawmage() -> CardDefinition {
 }
 
 fn the_theorist() -> CardDefinition {
-    use managym_state::{ability::EffectValue, card::LoyaltyCost};
+    use managym_state::card::LoyaltyCost;
     let text_box = "At the beginning of each opponent's draw step, you draw a card.\n+1: Create a 1/1 blue Illusion creature token.\n−2: For each opponent, return up to one target artifact or creature that player controls to its owner's hand.\n−6: Draw three cards. Then put X +1/+1 counters on each creature you control, where X is the number of cards in your hand.";
     let bounce = TargetSpec::PermanentOpponentControls {
         predicate: CardPredicate {
@@ -923,4 +946,635 @@ fn vigorbloom_annex() -> CardDefinition {
         "Vigorbloom Annex",
         ["G", "W"],
     )
+}
+
+fn academic_ascent() -> CardDefinition {
+    let text_box = "Target creature gets +2/+2 and gains flying until end of turn.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = Effect::pump_and_grant_until_end_of_turn(
+        ObjectSelector::Target(TargetSpec::Creature),
+        2,
+        2,
+        Keyword::Flying,
+    );
+    effects.extend(Effect::empower_jace(2));
+    CardDefinition {
+        key: "fra.academic_ascent",
+        scryfall_id: "730d8c28-1e58-4b8e-89e9-445d154d2e83",
+        printed: PrintedCharacteristics {
+            name: "Academic Ascent".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn arcane_amphisbaena() -> CardDefinition {
+    let text_box = "Deathtouch\nWhen this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.arcane_amphisbaena",
+        scryfall_id: "1bf923c4-f0b7-4271-978c-fd2e79fe1cc8",
+        printed: PrintedCharacteristics {
+            name: "Arcane Amphisbaena".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Snake".into()],
+            power: Some(1),
+            toughness: Some(1),
+            text_box: text_box.into(),
+            abilities: vec![Ability::enters(Effect::empower_jace(2))],
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn campus_crier() -> CardDefinition {
+    let text_box = "{1}, Exile this card from your graveyard: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.campus_crier",
+        scryfall_id: "6047b14c-91d5-4f8e-af3f-057a541e2546",
+        printed: PrintedCharacteristics {
+            name: "Campus Crier".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(3),
+            toughness: Some(1),
+            text_box: text_box.into(),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Graveyard,
+                exile_source: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: Effect::empower_jace(2),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fatehold_charm() -> CardDefinition {
+    let text_box = "Choose one —\n• Draw a card. Empower Jace 2.\n• Return target spell or creature to its owner's hand.\n• Creatures you control get +1/+2 until end of turn.";
+    let mut draw = vec![Effect::DrawCards { count: 1.into() }];
+    draw.extend(Effect::empower_jace(2));
+    CardDefinition {
+        key: "fra.fatehold_charm",
+        scryfall_id: "cfc54011-647e-4428-bcdb-59400e1da49d",
+        printed: PrintedCharacteristics {
+            name: "Fatehold Charm".into(),
+            mana_cost: Some(ManaCost::parse("{W}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: text_box.into(),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    draw,
+                    vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::CreatureOrSpell,
+                    ))],
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        Modification::pump(1, 2),
+                    )],
+                ],
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn hexhaven_battalion() -> CardDefinition {
+    let text_box = "Create three 2/2 colorless Wizard Soldier creature tokens named Cadet. Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nBasic landcycling {2} ({2}, Discard this card: Search your library for a basic land card, reveal it, put it into your hand, then shuffle.)";
+    let mut effects = vec![Effect::create_tokens("token.cadet", 3)];
+    effects.extend(Effect::empower_jace(2));
+    CardDefinition {
+        key: "fra.hexhaven_battalion",
+        scryfall_id: "3b6ac80e-c726-4bd0-893a-e666041a04a6",
+        printed: PrintedCharacteristics {
+            name: "Hexhaven Battalion".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        card_type: Some(CardType::Land),
+                        supertype: Some("Basic".into()),
+                        ..Default::default()
+                    },
+                    1.into(),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn inspired_tethermage() -> CardDefinition {
+    let text_box = "Whenever you put one or more loyalty counters on a planeswalker, put a +1/+1 counter on this creature.\n{6}: Empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.inspired_tethermage",
+        scryfall_id: "073f4998-a204-447b-93d5-746ae87fd6a1",
+        printed: PrintedCharacteristics {
+            name: "Inspired Tethermage".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Warrior".into()],
+            power: Some(3),
+            toughness: Some(2),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::PutsCounters {
+                    who: Actor::You,
+                    kind: CounterKind::Loyalty,
+                    on: CardPredicate {
+                        card_type: Some(CardType::Planeswalker),
+                        ..Default::default()
+                    },
+                },
+                intervening_if: None,
+                effects: vec![Effect::PutCounters {
+                    on: ObjectSelector::This,
+                    kind: CounterKind::PlusOnePlusOne,
+                    amount: 1.into(),
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{6}"),
+                effects: Effect::empower_jace(2),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn jaces_machinations() -> CardDefinition {
+    let text_box = "Until end of turn, you may activate loyalty abilities of Jace planeswalkers you control on any player's turn any time you could cast an instant.\nEmpower Jace 8. (Put eight loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = vec![Effect::until_end_of_turn(
+        ObjectSelector::You,
+        Modification::LoyaltyAtInstantSpeed(Box::new(CardPredicate {
+            card_type: Some(CardType::Planeswalker),
+            subtype: Some("Jace".into()),
+            ..Default::default()
+        })),
+    )];
+    effects.extend(Effect::empower_jace(8));
+    CardDefinition {
+        key: "fra.jaces_machinations",
+        scryfall_id: "282588b9-3656-453b-aa25-2419e078ddc1",
+        printed: PrintedCharacteristics {
+            name: "Jace's Machinations".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn keeper_of_the_quiet_hour() -> CardDefinition {
+    let text_box = "When this creature enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.keeper_of_the_quiet_hour",
+        scryfall_id: "b6331218-dbb8-44a9-8ba5-5fb1ab41c5c0",
+        printed: PrintedCharacteristics {
+            name: "Keeper of the Quiet Hour".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Chimera".into()],
+            power: Some(3),
+            toughness: Some(2),
+            text_box: text_box.into(),
+            abilities: vec![Ability::enters(Effect::empower_jace(2))],
+
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mindseeker_oculus() -> CardDefinition {
+    let text_box = "When this creature enters, empower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.mindseeker_oculus",
+        scryfall_id: "f5324741-353a-4a70-adb2-b631b00806dd",
+        printed: PrintedCharacteristics {
+            name: "Mindseeker Oculus".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Homunculus".into()],
+            power: Some(2),
+            toughness: Some(1),
+            text_box: text_box.into(),
+            abilities: vec![Ability::enters(Effect::empower_jace(4))],
+
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn no_admittance() -> CardDefinition {
+    let text_box = "No Admittance deals 3 damage to any target.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = vec![Effect::deal_damage(
+        3,
+        ObjectSelector::Target(TargetSpec::AnyTarget),
+    )];
+    effects.extend(Effect::empower_jace(1));
+    CardDefinition {
+        key: "fra.no_admittance",
+        scryfall_id: "11ba4fdd-cc03-4bb6-a493-91a9785771d0",
+        printed: PrintedCharacteristics {
+            name: "No Admittance".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn overwrite_the_multiverse() -> CardDefinition {
+    let text_box = "Exile all creatures. Empower Jace X, where X is the number of creatures exiled this way. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = vec![Effect::exile(ObjectSelector::each(
+        Scope::Battlefield,
+        CardPredicate::creature(),
+    ))];
+    effects.extend(Effect::empower_jace(EffectValue::Objects {
+        of: Box::new(ObjectSelector::Moved),
+        predicate: None,
+        in_zone: Some(ZoneType::Exile),
+    }));
+    CardDefinition {
+        key: "fra.overwrite_the_multiverse",
+        scryfall_id: "c4554f5b-791b-48f6-bf54-ad28699e1beb",
+        printed: PrintedCharacteristics {
+            name: "Overwrite the Multiverse".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn plan_for_all_outcomes() -> CardDefinition {
+    let text_box = "When this enchantment enters, the owner of up to one other target nonland permanent puts it on their choice of the top or bottom of their library.\nWhenever you cast your first noncreature spell each turn, empower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let spec = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            not_card_types: vec![CardType::Land],
+            ..Default::default()
+        },
+    };
+    CardDefinition {
+        key: "fra.plan_for_all_outcomes",
+        scryfall_id: "c4effc17-0d0e-423a-b5f2-597ea6c71f67",
+        printed: PrintedCharacteristics {
+            name: "Plan for All Outcomes".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            text_box: text_box.into(),
+            abilities: vec![
+                Ability::enters(vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::up_to(1, spec.clone())
+                    },
+                    effects: vec![Effect::OwnerPutsIntoLibrary {
+                        target: spec,
+                        top: true,
+                    }],
+                }]),
+                Ability::Triggered {
+                    condition: TriggerCondition::Casts {
+                        who: Actor::You,
+                        predicate: CardPredicate::noncreature(),
+                        nth: Some(1),
+                        targets: managym_state::ability::SpellTargetFilter::Any,
+                    },
+                    intervening_if: None,
+                    effects: Effect::empower_jace(1),
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn proteges_awakening() -> CardDefinition {
+    let text_box = "Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nDraw a card.";
+    let mut effects = Effect::empower_jace(6);
+    effects.push(Effect::DrawCards { count: 1.into() });
+    CardDefinition {
+        key: "fra.proteges_awakening",
+        scryfall_id: "a08c7ec2-4c6a-4db2-85a7-41afe8731523",
+        printed: PrintedCharacteristics {
+            name: "Protege's Awakening".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn repurposed_enforcer() -> CardDefinition {
+    let text_box = "Whenever this creature attacks, empower Jace X, where X is the number of creatures you control. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.repurposed_enforcer",
+        scryfall_id: "35000e93-85d3-44f8-976a-5918ee4c71e0",
+        printed: PrintedCharacteristics {
+            name: "Repurposed Enforcer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(3),
+            toughness: Some(2),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: Effect::empower_jace(EffectValue::BattlefieldMatching {
+                    predicate: CardPredicate::creature(),
+                }),
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rewrite_regrets() -> CardDefinition {
+    let text_box = "Return target creature or planeswalker card with mana value 6 or less from your graveyard to the battlefield.\nEmpower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = vec![Effect::return_to_battlefield(
+        ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                max_mana_value: Some(6),
+                ..Default::default()
+            },
+        }),
+        false,
+    )];
+    effects.extend(Effect::empower_jace(2));
+    CardDefinition {
+        key: "fra.rewrite_regrets",
+        scryfall_id: "453cfde7-c460-4b55-9472-b714e16f24bb",
+        printed: PrintedCharacteristics {
+            name: "Rewrite Regrets".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn solve_for_disappointment() -> CardDefinition {
+    let text_box = "Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\nEmpower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let mut effects = vec![Effect::RevealHandDiscardChosen {
+        target: TargetSpec::Opponent,
+        predicate: CardPredicate {
+            not_card_types: vec![CardType::Land, CardType::Instant, CardType::Sorcery],
+            ..Default::default()
+        },
+    }];
+    effects.extend(Effect::empower_jace(1));
+    CardDefinition {
+        key: "fra.solve_for_disappointment",
+        scryfall_id: "7beaa8c9-1a2c-4c88-b579-91e371d8d9e3",
+        printed: PrintedCharacteristics {
+            name: "Solve for Disappointment".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tams_resistance() -> CardDefinition {
+    let text_box = "Put a +1/+1 counter on up to one target creature. It gains vigilance until end of turn.\nEmpower Jace 4. (Put four loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let creature = ObjectSelector::Target(TargetSpec::Creature);
+    let mut effects = vec![Effect::TargetClause {
+        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+        effects: vec![
+            Effect::PutCounters {
+                on: creature.clone(),
+                kind: CounterKind::PlusOnePlusOne,
+                amount: 1.into(),
+            },
+            Effect::until_end_of_turn(
+                creature,
+                Modification::AddKeywords(Keywords::of(&[Keyword::Vigilance])),
+            ),
+        ],
+    }];
+    effects.extend(Effect::empower_jace(4));
+    CardDefinition {
+        key: "fra.tams_resistance",
+        scryfall_id: "b3d33df2-a77b-4c2e-ba7f-2cc9c1505f9b",
+        printed: PrintedCharacteristics {
+            name: "Tam's Resistance".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G/U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: effects,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn theorists_proxy() -> CardDefinition {
+    let text_box = "Flash\nWhen this creature enters, empower Jace 3. (Put three loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\n{U}, Sacrifice this creature: The next spell you cast this turn can't be countered.";
+    CardDefinition {
+        key: "fra.theorists_proxy",
+        scryfall_id: "710302ca-c4be-4069-8ce1-f531414c74e9",
+        printed: PrintedCharacteristics {
+            name: "Theorist's Proxy".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Illusion".into()],
+            power: Some(0),
+            toughness: Some(3),
+            text_box: text_box.into(),
+            abilities: vec![Ability::enters(Effect::empower_jace(3))],
+            keywords: Keywords::of(&[Keyword::Flash]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{U}"),
+                sacrifice_source: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::NextSpellYouCast,
+                    Modification::CantBeCountered,
+                )],
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn violent_echoes() -> CardDefinition {
+    let text_box = "Violent Echoes deals 6 damage to target creature or planeswalker. If excess damage was dealt to that permanent this way, empower Jace X, where X is that excess damage. (Put that many loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    CardDefinition {
+        key: "fra.violent_echoes",
+        scryfall_id: "ad03ba90-2442-4a71-94df-2088b5b63662",
+        printed: PrintedCharacteristics {
+            name: "Violent Echoes".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: text_box.into(),
+            spell_effects: vec![
+                Effect::deal_damage(
+                    6,
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                            ..Default::default()
+                        },
+                    }),
+                ),
+                Effect::If {
+                    condition: Condition::compare(EffectValue::ExcessDamage, CompareOp::Gt, 0),
+                    then: Effect::empower_jace(EffectValue::ExcessDamage),
+                    otherwise: vec![],
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vraskas_final_mercy() -> CardDefinition {
+    let text_box = "Choose one —\n• You lose 2 life. Destroy target creature or planeswalker.\n• You lose 2 life. Empower Jace 6. (Put six loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")";
+    let lose_life = Effect::LoseLife {
+        player: PlayerSelector::You,
+        amount: 2.into(),
+    };
+    let mut empower = vec![lose_life.clone()];
+    empower.extend(Effect::empower_jace(6));
+    CardDefinition {
+        key: "fra.vraskas_final_mercy",
+        scryfall_id: "992bd991-7cfb-459f-bafd-9a44f3c925c5",
+        printed: PrintedCharacteristics {
+            name: "Vraska's Final Mercy".into(),
+            mana_cost: Some(ManaCost::parse("{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![
+                        lose_life,
+                        Effect::Destroy {
+                            what: ObjectSelector::Target(TargetSpec::Permanent {
+                                predicate: CardPredicate {
+                                    card_types_any: vec![
+                                        CardType::Creature,
+                                        CardType::Planeswalker,
+                                    ],
+                                    ..Default::default()
+                                },
+                            }),
+                        },
+                    ],
+                    empower,
+                ],
+            }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn way_of_the_mentor() -> CardDefinition {
+    let text_box = "When Way of the Mentor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you gain life, put a loyalty counter on each planeswalker you control.";
+    CardDefinition {
+        key: "fra.way_of_the_mentor",
+        scryfall_id: "1a59d5b1-12d6-486b-bd29-ca371359addd",
+        printed: PrintedCharacteristics {
+            name: "Way of the Mentor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            text_box: text_box.into(),
+            abilities: vec![
+                Ability::enters(Effect::empower_jace(5)),
+                Ability::when_you_gain_life(Effect::PutCounters {
+                    on: ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Planeswalker),
+                        ..Default::default()
+                    }),
+                    kind: CounterKind::Loyalty,
+                    amount: 1.into(),
+                }),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn way_of_the_necromancer() -> CardDefinition {
+    let text_box = "When Way of the Necromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever a creature you control dies, put a loyalty counter on each planeswalker you control.";
+    CardDefinition {
+        key: "fra.way_of_the_necromancer",
+        scryfall_id: "a0ff9689-ea49-4fff-b37c-4abbaeb0f73d",
+        printed: PrintedCharacteristics {
+            name: "Way of the Necromancer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            text_box: text_box.into(),
+            abilities: vec![
+                Ability::enters(Effect::empower_jace(2)),
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::PutCounters {
+                        on: ObjectSelector::each_you_control(CardPredicate {
+                            card_type: Some(CardType::Planeswalker),
+                            ..Default::default()
+                        }),
+                        kind: CounterKind::Loyalty,
+                        amount: 1.into(),
+                    }],
+                },
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

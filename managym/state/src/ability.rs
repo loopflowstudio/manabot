@@ -261,7 +261,7 @@ pub enum TriggerCondition {
         subject: TriggerSubject,
     },
     /// "Whenever [who] casts a [predicate] spell" (CR 601.2i); with `nth`,
-    /// only the spell that is the Nth its caster cast this turn ("whenever
+    /// only the Nth matching spell its caster cast this turn ("whenever
     /// you cast your second spell each turn"). The caster is "that player".
     Casts {
         who: Actor,
@@ -1009,7 +1009,7 @@ pub enum EffectValue {
         of: Box<ObjectSelector>,
     },
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
-    /// dealt to its creature; 0 outside a resolution.
+    /// dealt to its permanent; 0 outside a resolution.
     ExcessDamage,
     /// Actual amount of the damage event that triggered this ability.
     TriggerDamage,
@@ -1236,6 +1236,8 @@ pub enum ObjectSelector {
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
     You,
+    /// The next spell the resolving player casts, captured at commitment.
+    NextSpellYouCast,
     /// A permanent the resolving player controls matching [predicate],
     /// chosen by them as the instruction resolves ("sacrifice a creature",
     /// "tap a creature you control"); the instruction suspends on the choice
@@ -1380,6 +1382,7 @@ impl ObjectSelector {
             | Self::Paid(_)
             | Self::Zone(_)
             | Self::You
+            | Self::NextSpellYouCast
             | Self::Chosen { .. }
             | Self::Each { .. }
             | Self::ZoneMatching { .. } => None,
@@ -2846,6 +2849,33 @@ impl Effect {
             what: ObjectSelector::You,
             count: 1,
         }
+    }
+
+    /// Empower Jace N (CR 701.71a). Both instructions resolve in the same frame,
+    /// so the choice sees all tokens actually created by replacement effects.
+    pub fn empower_jace(amount: impl Into<EffectValue>) -> Vec<Self> {
+        let jace = CardPredicate {
+            card_type: Some(super::card::CardType::Planeswalker),
+            subtype: Some("Jace".into()),
+            token: Some(true),
+            ..Default::default()
+        };
+        vec![
+            Self::If {
+                condition: Condition::not(Condition::ControlsAtLeast {
+                    distinct_names: false,
+                    count: 1,
+                    predicate: jace.clone(),
+                }),
+                then: vec![Self::create_tokens("token.jace", 1)],
+                otherwise: Vec::new(),
+            },
+            Self::PutCounters {
+                on: ObjectSelector::chosen(jace),
+                kind: CounterKind::Loyalty,
+                amount: amount.into(),
+            },
+        ]
     }
 
     /// "Create [count] [token] tokens", naming the token by its key.

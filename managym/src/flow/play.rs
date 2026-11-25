@@ -1484,6 +1484,9 @@ impl Game {
         let object =
             self.push_spell_to_stack(object, player, targets.clone(), target_req_indices, cast);
         self.state.name_last_cast(player, object);
+        if self.state.effects.awaits_spell(player) {
+            self.state.effects.bind_next_spell(player, object);
+        }
         let Some(crate::state::stack_object::StackObject::Spell(spell)) =
             self.state.stack_objects_mut().last_mut()
         else {

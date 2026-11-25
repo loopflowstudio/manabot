@@ -2165,6 +2165,7 @@ impl Game {
                     && nth.is_none_or(|n| {
                         self.state.turn.spells_cast[caster.0]
                             .iter()
+                            .filter(|&&cast| self.recorded_cast_matches_predicate(cast, predicate))
                             .position(|cast| cast.object == *object)
                             == Some(n as usize - 1)
                     })

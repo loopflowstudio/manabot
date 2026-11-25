@@ -505,3 +505,357 @@ fn tomik_grants_a_restriction_to_each_planeswalker_and_flying_to_a_countered_cre
     ));
     s.declare_attack();
 }
+
+#[test]
+fn empower_choices_survive_doubling_and_spend_loyalty() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup},
+        inspect::{card_of, counters_of, hand},
+        play::{activate, cast_owned, pay_rest, resolve_top, select_card, settle},
+    };
+    use managym::state::permanent::CounterKind;
+
+    let mut s = five_color_setup(&["Doubling Season", "Protege's Awakening"]);
+    enter_battlefield(&mut s, "Doubling Season");
+    enter_battlefield(&mut s, "Doubling Season");
+    cast_owned(&mut s, "Protege's Awakening");
+    if s.game().state.stack_objects.is_empty() {
+        pay_rest(&mut s);
+    }
+    resolve_top(&mut s);
+    while s.action_space().kind == managym::agent::action::ActionSpaceKind::Modal {
+        s.step_action(0);
+    }
+    let candidates = s.battlefield_permanents_named(0, "Jace");
+    assert_eq!(candidates.len(), 4);
+    assert_eq!(s.action_space().actions.len(), 4);
+    for id in candidates {
+        let mut fork = s.clone();
+        let object = card_of(&fork, id);
+        select_card(&mut fork, object);
+        settle(&mut fork);
+        assert_eq!(fork.battlefield_permanents_named(0, "Jace"), [id]);
+        assert_eq!(counters_of(&fork, id, CounterKind::Loyalty), 24);
+        let before = hand(&fork, 0).len();
+        activate(&mut fork, id, 1);
+        settle(&mut fork);
+        assert_eq!(hand(&fork, 0).len(), before + 1);
+        assert_eq!(counters_of(&fork, id, CounterKind::Loyalty), 21);
+        cast_owned(&mut fork, "Protege's Awakening");
+        settle(&mut fork);
+        assert_eq!(fork.battlefield_permanents_named(0, "Jace"), [id]);
+        assert_eq!(counters_of(&fork, id, CounterKind::Loyalty), 45);
+    }
+}
+
+#[test]
+fn empower_measures_exiled_creatures_and_planeswalker_excess() {
+    use crate::support::{
+        game::{five_color_setup, put_onto_battlefield},
+        inspect::counters_of,
+        play::{activate, cast_owned, settle},
+    };
+    use managym::state::{game_object::Target, permanent::CounterKind};
+    let walker = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&[
+        walker,
+        "Gray Ogre",
+        "Overwrite the Multiverse",
+        "Violent Echoes",
+    ]);
+    let opposing = put_onto_battlefield(&mut s, 1, walker);
+    let mine = put_onto_battlefield(&mut s, 0, walker);
+    activate(&mut s, mine, 0);
+    settle(&mut s);
+    for seat in [0, 1] {
+        put_onto_battlefield(&mut s, seat, "Gray Ogre");
+    }
+    cast_owned(&mut s, "Overwrite the Multiverse");
+    settle(&mut s);
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 3);
+    assert_eq!(counters_of(&s, mine, CounterKind::Loyalty), 4);
+    cast_owned(&mut s, "Violent Echoes");
+    assert!(s.choose_target(Target::Permanent(opposing)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[opposing].is_none());
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 6);
+}
+
+#[test]
+fn empower_resolves_after_lethal_damage_but_requires_legal_targets() {
+    use crate::support::{
+        game::{five_color_setup, put_onto_battlefield},
+        inspect::{card_of, counters_of},
+        play::{cast_owned, pay_rest, settle},
+    };
+    use managym::state::{game_object::Target, permanent::CounterKind, zone::ZoneType};
+    let mut s = five_color_setup(&["Gray Ogre", "Academic Ascent", "No Admittance"]);
+    let gone = put_onto_battlefield(&mut s, 1, "Gray Ogre");
+    cast_owned(&mut s, "Academic Ascent");
+    assert!(s.choose_target(Target::Permanent(gone)));
+    if s.game().state.stack_objects.is_empty() {
+        pay_rest(&mut s);
+    }
+    let card = card_of(&s, gone);
+    s.game_mut().move_object(card, ZoneType::Hand);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Jace").is_empty());
+    let ogre = put_onto_battlefield(&mut s, 1, "Gray Ogre");
+    cast_owned(&mut s, "No Admittance");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none());
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 1);
+}
+
+#[test]
+fn empower_entry_and_way_triggers_put_counters_on_the_same_jace() {
+    use crate::support::{
+        game::{five_color_setup, put_onto_battlefield},
+        inspect::counters_of,
+        play::{cast_owned, settle},
+    };
+    use managym::state::{game_object::Target, permanent::CounterKind};
+    let cards = [
+        ("Arcane Amphisbaena", 2),
+        ("Keeper of the Quiet Hour", 2),
+        ("Mindseeker Oculus", 4),
+        ("Theorist's Proxy", 3),
+        ("Way of the Mentor", 5),
+        ("Way of the Necromancer", 2),
+    ];
+    let mut names: Vec<_> = cards.iter().map(|(name, _)| *name).collect();
+    names.extend([
+        "Inspired Tethermage",
+        "Inspiring Overseer",
+        "Gray Ogre",
+        "Lightning Bolt",
+    ]);
+    let mut s = five_color_setup(&names);
+    let mage = put_onto_battlefield(&mut s, 0, "Inspired Tethermage");
+    let mut total = 0;
+    for (i, (name, amount)) in cards.iter().enumerate() {
+        s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+        cast_owned(&mut s, name);
+        settle(&mut s);
+        total += amount;
+        let walkers = s.battlefield_permanents_named(0, "Jace");
+        assert_eq!(walkers.len(), 1, "{name}");
+        assert_eq!(
+            counters_of(&s, walkers[0], CounterKind::Loyalty),
+            total,
+            "{name}"
+        );
+        assert_eq!(
+            counters_of(&s, mage, CounterKind::PlusOnePlusOne),
+            i as i32 + 1,
+            "{name}"
+        );
+    }
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    let ogre = put_onto_battlefield(&mut s, 0, "Gray Ogre");
+    s.set_player_mana_pool(0, "R");
+    cast_owned(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), total + 1);
+    s.set_player_mana_pool(0, "2W");
+    cast_owned(&mut s, "Inspiring Overseer");
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), total + 2);
+}
+
+#[test]
+fn proxy_protects_the_next_cast_and_plan_counts_only_noncreature_casts() {
+    use crate::support::{
+        game::{five_color_setup, put_onto_battlefield},
+        inspect::{counters_of, now, zone_of},
+        play::{activate, cast_owned, settle},
+    };
+    use managym::{
+        agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+        },
+        state::{
+            game_object::{PlayerId, Target},
+            permanent::CounterKind,
+            player::ManaPayment,
+            zone::ZoneType,
+        },
+    };
+    let mut s = five_color_setup(&[
+        "Plan for All Outcomes",
+        "Theorist's Proxy",
+        "Counterspell",
+        "Gray Ogre",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let proxy = put_onto_battlefield(&mut s, 0, "Theorist's Proxy");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    settle(&mut s);
+    put_onto_battlefield(&mut s, 0, "Plan for All Outcomes");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    settle(&mut s);
+    activate(&mut s, proxy, 0);
+    settle(&mut s);
+    let waiting = Observation::for_player(s.game(), PlayerId(0));
+    let permission = waiting
+        .agent
+        .effects
+        .iter()
+        .find(|effect| effect.modification == "CantBeCountered")
+        .unwrap();
+    assert!(permission
+        .description
+        .as_deref()
+        .unwrap()
+        .contains("next spell you cast"));
+    encode(&waiting, &ObservationEncoderConfig::default()).unwrap();
+    for expected in [ZoneType::Battlefield, ZoneType::Graveyard] {
+        s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+        let ogre = cast_owned(&mut s, "Gray Ogre");
+        let spell = now(&s, ogre);
+        let obs = Observation::for_player(s.game(), PlayerId(1));
+        let protected = obs
+            .shared_effects
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .find(|effect| effect.effect.modification == "CantBeCountered");
+        if expected == ZoneType::Battlefield {
+            encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            assert_eq!(
+                protected.unwrap().members[0].target.object_id,
+                Some(obs.stack_objects[0].stack_object_id)
+            );
+        } else {
+            assert!(protected.is_none());
+        }
+        cast_owned(&mut s, "Counterspell");
+        assert!(s.choose_target(Target::StackSpell(spell)));
+        settle(&mut s);
+        assert_eq!(zone_of(&s, ogre), Some(expected));
+        let jace = s.battlefield_permanents_named(0, "Jace")[0];
+        assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 4);
+    }
+}
+
+#[test]
+fn empower_spells_and_graveyard_activation_keep_their_other_instructions() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{counters_of, now, zone_of},
+        play::{activate_card, cast_owned, choose_mode, settle},
+    };
+    use managym::state::{
+        game_object::{PlayerId, Target},
+        permanent::CounterKind,
+        player::ManaPayment,
+        zone::ZoneType,
+    };
+    let mut s = five_color_setup(&[
+        "Campus Crier",
+        "Hexhaven Battalion",
+        "Rewrite Regrets",
+        "Gray Ogre",
+        "Vraska's Final Mercy",
+        "Fatehold Charm",
+        "Solve for Disappointment",
+        "Tam's Resistance",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let crier = move_from_library(&mut s, 0, "Campus Crier", ZoneType::Graveyard);
+    activate_card(&mut s, crier, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, crier), Some(ZoneType::Exile));
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 2);
+
+    s.set_player_mana_pool(0, "4WW");
+    cast_owned(&mut s, "Hexhaven Battalion");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Cadet").len(), 3);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 4);
+
+    let ogre = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "3B");
+    cast_owned(&mut s, "Rewrite Regrets");
+    assert!(s.choose_target(Target::GraveyardCard(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 6);
+
+    let life = s.life(0);
+    s.set_player_mana_pool(0, "BB");
+    cast_owned(&mut s, "Vraska's Final Mercy");
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(s.life(0), life - 2);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 12);
+
+    s.set_player_mana_pool(0, "WU");
+    cast_owned(&mut s, "Fatehold Charm");
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 14);
+
+    let discard = move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+    s.set_player_mana_pool(0, "1B");
+    cast_owned(&mut s, "Solve for Disappointment");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, discard), Some(ZoneType::Graveyard));
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 15);
+
+    let returned = s.game().state.permanent_of(now(&s, ogre)).unwrap();
+    s.set_player_mana_pool(0, "1G");
+    cast_owned(&mut s, "Tam's Resistance");
+    assert!(s.choose_target(Target::Permanent(returned)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, returned, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 19);
+}
+
+#[test]
+fn enforcer_counts_creatures_on_resolution_and_machinations_allows_one_activation() {
+    use crate::support::{
+        game::{
+            clear_summoning_sickness, enter_battlefield, five_color_setup, put_onto_battlefield,
+        },
+        inspect::{card_of, counters_of},
+        play::{activate, attack_with, cast_owned, offers_ability, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{permanent::CounterKind, player::ManaPayment, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Repurposed Enforcer", "Gray Ogre", "Jace's Machinations"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let enforcer = enter_battlefield(&mut s, "Repurposed Enforcer");
+    clear_summoning_sickness(&mut s, enforcer);
+    let ogre = put_onto_battlefield(&mut s, 0, "Gray Ogre");
+    s.advance_to_step(StepKind::DeclareAttackers);
+    attack_with(&mut s, enforcer);
+    let removed = card_of(&s, ogre);
+    s.game_mut().move_object(removed, ZoneType::Hand);
+    settle(&mut s);
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 1);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    assert!(!offers_ability(&mut s, jace, 0));
+    s.set_player_mana_pool(0, "2U");
+    cast_owned(&mut s, "Jace's Machinations");
+    settle(&mut s);
+    if s.action_space().player == Some(managym::state::game_object::PlayerId(1)) {
+        s.pass_priority();
+    }
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 9);
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 8);
+    assert!(!offers_ability(&mut s, jace, 1));
+}

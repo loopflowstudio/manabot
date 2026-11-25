@@ -491,6 +491,11 @@ impl Game {
             .statics
             .iter()
             .any(|ability| matches!(ability, StaticAbility::CantBeCountered))
+            || self
+                .state
+                .effects
+                .on(object)
+                .any(|effect| effect.modification == Modification::CantBeCountered)
         {
             return;
         }
@@ -895,7 +900,11 @@ impl Game {
                 modification,
                 duration,
             } => {
-                let mut affected = self.resolve_affected(affected, frame);
+                let mut affected = if *affected == ObjectSelector::NextSpellYouCast {
+                    vec![Affected::NextSpell(frame.controller)]
+                } else {
+                    self.resolve_affected(affected, frame)
+                };
                 let modification = modification.resolve(|value| self.effect_value(value, frame));
                 if modification == Modification::PhasedOut {
                     affected = self.phase_out_set(affected);
@@ -1812,6 +1821,9 @@ impl Game {
                     .map(|affected| ProposedEvent::Damage {
                         source,
                         target: match affected {
+                            Affected::NextSpell(_) => {
+                                unreachable!("damage selects only present recipients")
+                            }
                             Affected::Player(player) => ProposedDamageTarget::Player(player),
                             Affected::Object(object) => ProposedDamageTarget::Object(object),
                         },
@@ -2671,7 +2683,7 @@ impl Game {
                     .filter_map(|card| self.state.live(self.state.object_of(card)))
                     .collect()
             }
-            ObjectSelector::You => Vec::new(),
+            ObjectSelector::You | ObjectSelector::NextSpellYouCast => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");
                 frame

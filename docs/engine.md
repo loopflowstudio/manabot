@@ -1050,6 +1050,16 @@ loyalty among its counter facts, and the per-turn limit in
 `loyalty_activated_this_turn`. Each available loyalty activation names its
 cost and effect in the shared offer.
 
+Empower Jace first creates a blue Jace planeswalker token if you control
+none. You choose one Jace planeswalker token you control and put the stated
+number of loyalty counters on it. A nontoken Jace does not satisfy the
+instruction. With Doubling Season, two tokens enter and one receives twice
+the stated counters. The other goes to the graveyard when state-based
+actions next run. The chosen token has two loyalty abilities, −1 to surveil
+1 and −3 to draw a card. Jace’s Machinations lets you activate a Jace’s
+loyalty ability on another player’s turn and still uses its one activation
+for that turn.
+
 ### Attacking a planeswalker
 
 Each attacker can attack the defending player or one of that player’s
