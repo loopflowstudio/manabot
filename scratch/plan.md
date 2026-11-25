@@ -9,6 +9,12 @@ Maze’s End already had working definitions.
 Valid swaps on a copy disprove the proposed per-slot restriction filter.
 The correction and its response cases are recorded in Slice 4 below.
 
+The five new cards passed directed native play. Existing fight and Edict
+tests, effect/selector observability, and Scryfall conformance passed.
+Four Academy demos replayed 192 Commands against the rebuilt CPython 3.13
+extension. All five retained navigation positions reached their recorded
+decision kinds.
+
 Remaining passes (18 implemented, 38 pending):
 
 1. Finish Slice 4 — Drakuseth, Fiery Annihilation and Run Away Together.

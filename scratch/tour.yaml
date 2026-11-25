@@ -1,13 +1,33 @@
-at: 83cdd93faa6b6ea82c2e335a319b1ee45731cbc1
+at: cd0414463823df108df0cac5a2547863f677ea6f
 first:
+  - path: managym/README.md
+    why: Player choices for fights, sacrifices, and kicked spells
+  - path: managym/cards/src/grn.rs
+    why: Indrik targets its opponent before choosing whether to fight
+  - path: managym/cards/src/isd.rs
+    why: Tribute reads toughness from the sacrificed creature
+  - path: managym/cards/src/stx.rs
+    why: Brew binds its caster’s sacrifices for the optional return
+  - path: managym/cards/src/eld.rs
+    why: Prince blinks a creature its controller owns
+  - path: managym/cards/src/fdn.rs
+    why: Resilience sets target bounds when kicker is chosen
+  - path: managym/state/src/ability.rs
+    why: Target clauses, fight participants, sacrifice predicates and exclusions
+  - path: managym/src/flow/play.rs
+    why: Determine legal casts before offering the kicker choice
+  - path: managym/src/flow/decision.rs
+    why: Commit simultaneous sacrifices and retain departures and arrivals
+  - path: managym/src/flow/resolution.rs
+    why: Read last known toughness and resolve both fight participants
+  - path: managym/cards/tests/cards/stx.rs
+    why: Check simultaneous choice timing and the excluded graveyard card
+  - path: managym/cards/tests/cards/grn.rs
+    why: Accept, decline or remove the fighter in response
   - path: docs/engine.md
     why: What each viewer sees during a split and what a divided spell retains
-  - path: managym/cards/src/fdn.rs
-    why: Curator defines the inspection on entry
   - path: managym/cards/src/rna.rs
     why: Biogenic separates cast-time division from two counter instructions
-  - path: managym/src/flow/play.rs
-    why: Choose the division after targets and before paying
   - path: managym/src/flow/knowledge.rs
     why: Preserve face-up witnesses during hidden-world sampling
   - path: managym/src/agent/effect_execution.rs
@@ -26,8 +46,6 @@ first:
     why: Spyglass inspects a hand before naming
   - path: managym/src/flow/proposed_event.rs
     why: Order entrants, retain answers and commit them together
-  - path: managym/src/flow/decision.rs
-    why: Private partition, public pile choice and entry choices
   - path: managym/state/src/subtype.rs
     why: All legal creature types
   - path: managym/src/flow/layers.rs
@@ -50,26 +68,12 @@ first:
     why: Check mana restrictions and suppressed land choices
   - path: tests/semantic/test_text_observation.py
     why: Reconnect at the pile choice and replay an announced target share
-  - path: managym/README.md
-    why: What players can choose for each copy
-  - path: managym/cards/src/grn.rs
-    why: Thousand-Year Storm expresses its count and copy instruction
-  - path: managym/cards/src/stx.rs
-    why: Teach by Example watches the next qualifying cast
   - path: managym/cards/src/war.rs
     why: Bolt Bend's single target and conditional discount
-  - path: managym/state/src/ability.rs
-    why: Counted instructions and the shared delayed copy trigger
   - path: managym/state/src/stack_object.rs
     why: The choices preserved when a spell leaves
-  - path: managym/src/flow/resolution.rs
-    why: Read each legal target’s share and resolve counter changes together
   - path: managym/src/flow/retarget.rs
     why: Create copies and announce their final targets
-  - path: managym/cards/tests/cards/grn.rs
-    why: Earlier casts, countered originals and eight independent choices
-  - path: managym/cards/tests/cards/stx.rs
-    why: Ward and interactions between Teach and Storm
   - path: managym/cards/tests/cards/war.rs
     why: Legal spells and mana actually spent on Bolt Bend
 hide:
