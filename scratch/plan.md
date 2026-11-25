@@ -72,6 +72,26 @@ Done:
   Realign moved the Ajani/Liliana tests into `tests/cards/m13.rs`/`war.rs`
   (their set files) and ran `cargo fmt` (the slice's fmt check had not
   passed); the three tests pass from their new files.
+- Slice 8: three orthogonal engine primitives (`TriggerModes.min` for exact
+  multi-mode triggers, `RevealUntilToHand.to_battlefield`, `Effect::Fight`
+  sharing `fight_permanents` with `FightLastTarget`, plus `Mouse` subtype),
+  28 adjacent FRA cards in `managym/cards/src/fra.rs` (Teyo ×2, Your Fate Ends
+  Here, Terminal Criticism, Refute Destiny, Extended Absence, Fulminous Forte,
+  Essence Burn, Wrath of the Bloodmane, Silence the Echo, Break Under Pressure,
+  Awaken the Inferno, Craftwork Crusher, Compel Brutality, Edgar, Liliana the
+  Faultless, Liliana the Repentant, Massacre Girl, Winter, Mabel, Living
+  Library, Identity Echo, Vindictive Triumph, Entrust the Spark, Loyal Tutor,
+  Mind Meanderer, Lich's Relic, Face Yourself) with one directed test each plus
+  all integrated synergy checks in `managym/cards/tests/cards/fra.rs` (68/68
+  `fra::` tests, `conformance_tests`, all four Rust protocol schema tests —
+  no `protocol/*.schema.json` drift — and `cargo fmt --check` pass in debug).
+  Rebuilt the cp313 extension and refreshed all five Academy opening fixtures
+  and nine choice-navigation positions via `scripts/refresh_academy_fixtures.py`
+  with identical offer labels and Commands. Closed `fdn.jsonl` (fixing the
+  moved `m13.rs`/`war.rs` evidence paths) and `fra.jsonl`; `Return to the Light
+  Realms` (CR 303.4f non-cast batch Aura attachment choices) and `Loot, the
+  Anomaly` (negative-power combat damage assignment substitution) marked
+  pending with their missing authorities.
 
 Already red on CI at `d1ef91d814` (run 45568225341), before slices 5–6, and
 left for gate: `observability::` legacy card-row parity (four tests,
@@ -83,15 +103,11 @@ semantic-conformance cases.
 
 ## Passes remaining
 
-1. Slice 8's remaining ~30 adjacent cards plus the integrated interaction
-   checks, then close the ledger. First, rebuild the cp313 extension and
-   refresh Academy fixtures (`scripts/refresh_academy_fixtures.py`): slice 7
-   added eight definitions and no fixture refresh, and slices 5–7 recorded no
-   Python/wheel runs. `protocol/*.schema.json` was not patched for slice 7's
-   `target_divisions`/delayed-attack types; run the Rust schema tests and
-   patch if they differ. At gate run debug nextest, Engine Budget and the
-   pinned pilot, recording a reason if its output moves. Keep main's MTG-420
-   receipts at their original revision.
+None — all eight implementation slices are built and verified in debug plus
+cp313 wheel/Academy fixture refresh. Ready for gate: run debug nextest, Engine
+Budget, the pinned pilot (recording a reason if its output moves), and resolve
+the pre-existing CI failures listed above. Keep main's MTG-420 receipts at
+their original revision.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text
@@ -151,6 +167,10 @@ This Task ships neither; record the table in `docs/engine.md` with slice 1.
 - Chandra, Chill of Compliance — "spend only to cast a noncreature spell" mana:
   same `ManaUse` dependency. Its emblem and −X stun compose; card waits as a
   whole rather than shipping a partial definition.
+- Return to the Light Realms — non-cast batch Aura attachment choices
+  (CR 303.4f, resumable results/choices authority).
+- Loot, the Anomaly — negative-power combat damage assignment substitution
+  (characteristics/combat rules authority).
 
 Everything else in the cohort is built here, on the slices below.
 
@@ -166,7 +186,7 @@ expected unchanged; curated decks attack no planeswalker).
 Open defect (slice 4): no replacement can divert a battlefield-to-exile move,
 so Overwrite's diverted-exile case stays untested until one exists.
 
-Slices 1–7 are built (see `Done:` above). Remaining work is Slice 8 below.
+Slices 1–8 are built (see `Done:` above). Ready for gate.
 
 ### Slice 8 — Adjacent planeswalker-aware composition
 

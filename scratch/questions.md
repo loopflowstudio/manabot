@@ -81,3 +81,16 @@
   ("each creature except for tokens you control") needs a controller-scoped
   exception, which `CardPredicate` lacks. Garruk's −4 is an until-your-next-turn
   attack trigger.
+- Slice 8 pending authorities (not shortcutted):
+  - **Return to the Light Realms**: non-cast Aura batch entry requires CR 303.4f
+    attachment choices (`02_resumable_results_choices` authority); currently only
+    cast Aura spells carry `attach_to` and non-cast Auras die to CR 704.5m SBA.
+  - **Loot, the Anomaly**: negative-power combat damage assignment substitution
+    ("assigns combat damage as though his power were positive") belongs to
+    combat-damage rules/characteristics authority (`07_characteristics_identity` /
+    `08_replacements_rules_procedure`).
+- Slice 8 orthogonal primitives: added `TriggerModes.min` (skipped when 0) for
+  exact multi-mode triggers (Craftwork Crusher), `RevealUntilToHand.to_battlefield`
+  (skipped when false) for Identity Echo, and `Effect::Fight { first, second }`
+  (sharing `fight_permanents` with `FightLastTarget`, leaving existing tokens
+  unchanged) for Mind Meanderer. Added `("Mouse", Creature)` to `subtype.rs`.
