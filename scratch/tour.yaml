@@ -1,4 +1,4 @@
-at: 5cad3a2c14152d5c698b86a5fa9502fd65eca400
+at: 30d702e22ad455abb7f123e23e7f1f52fdb363d9
 first:
   - path: docs/academy.md
     why: Play, block, target and draft attackers by pointer
@@ -6,9 +6,15 @@ first:
     why: Gesture lifecycle, discriminated connections and release outcomes
   - path: academy/ui/src/lib/board/combat.ts
     why: Add swept attackers and place individual blockers
+  - path: academy/ui/src/routes/+page.svelte
+    why: Separate live-play table mode from transient input waits
   - path: academy/ui/src/lib/board/Board.svelte
-    why: Hit testing, live highlights and revision-bound drops
+    why: Hit testing, live highlights, connect outlines and steady combat draft
+  - path: academy/ui/src/lib/board/Rail.svelte
+    why: Keep per-creature combat choices folded across transient waits
   - path: academy/ui/src/lib/board/Lines.svelte
     why: Standing and dragged lines share endpoint geometry
   - path: academy/ui/e2e/drag-play.spec.ts
     why: Pointer interactions and Commands received by the authority
+  - path: academy/ui/e2e/combat-presentation.spec.ts
+    why: Joint combat waits, priority stops and rejection recovery
