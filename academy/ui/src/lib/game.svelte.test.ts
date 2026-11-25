@@ -176,32 +176,32 @@ describe('GameStore', () => {
   it('starts with default stops and toggles individual stop steps', () => {
     const store = createGameStore();
     expect(store.stops).toEqual({
-      my: ['main1', 'main2'],
-      opponent: ['end_step'],
+      my: ['main1', 'declare_attackers', 'declare_blockers', 'main2'],
+      opponent: ['declare_attackers', 'declare_blockers', 'end_step'],
       stop_on_stack: true,
       auto_pass: true,
     });
 
     store.toggleStop('my', 'upkeep');
-    expect(store.stops.my).toEqual(['main1', 'main2', 'upkeep']);
+    expect(store.stops.my).toEqual(['main1', 'declare_attackers', 'declare_blockers', 'main2', 'upkeep']);
     store.toggleStop('my', 'main1');
-    expect(store.stops.my).toEqual(['main2', 'upkeep']);
+    expect(store.stops.my).toEqual(['declare_attackers', 'declare_blockers', 'main2', 'upkeep']);
     store.setStopOnStack(false);
     store.setAutoPass(false);
     expect(store.stops.stop_on_stack).toBe(false);
     expect(store.stops.auto_pass).toBe(false);
     store.resetStops();
-    expect(store.stops.my).toEqual(['main1', 'main2']);
+    expect(store.stops.my).toEqual(['main1', 'declare_attackers', 'declare_blockers', 'main2']);
   });
 
   it('includes the stops config in new_game configs', () => {
     const store = createGameStore();
-    store.toggleStop('opponent', 'declare_blockers');
+    store.toggleStop('opponent', 'upkeep');
 
     const config = store.newGameConfig();
     expect(config.stops).toEqual({
-      my: ['main1', 'main2'],
-      opponent: ['end_step', 'declare_blockers'],
+      my: ['main1', 'declare_attackers', 'declare_blockers', 'main2'],
+      opponent: ['declare_attackers', 'declare_blockers', 'end_step', 'upkeep'],
     });
     expect(config.stop_on_stack).toBe(true);
     expect(config.auto_pass).toBe(true);
@@ -363,5 +363,25 @@ describe('stop changes in flight', () => {
     // After the last echo the server's config holds again.
     store.applyServerStops({ ...before, my: ['main1'] });
     expect(store.stops.my).toEqual(['main1']);
+  });
+
+  it('does not persist passive server echoes to localStorage', () => {
+    const backing = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => backing.set(key, value),
+      removeItem: (key: string) => backing.delete(key),
+    };
+    try {
+      const store = createGameStore();
+      store.applyServerStops({ my: ['main1'], opponent: [], stop_on_stack: true, auto_pass: true });
+      expect(store.stops.my).toEqual(['main1']);
+      expect(backing.size).toBe(0);
+
+      store.toggleStop('my', 'upkeep');
+      expect(backing.size).toBeGreaterThan(0);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 });

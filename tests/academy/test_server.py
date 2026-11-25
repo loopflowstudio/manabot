@@ -86,6 +86,12 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
         "villain_type": "passive",
         "seed": 3,
         "auto_pass": False,
+        "stops": {
+            "my": PROTOCOL_V1_BOLT_FIXTURE["recovery"]["frame"]["stops"]["my"],
+            "opponent": PROTOCOL_V1_BOLT_FIXTURE["recovery"]["frame"]["stops"][
+                "opponent"
+            ],
+        },
     }
 
     with TestClient(app) as client:
@@ -366,7 +372,12 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
-            websocket.send_json({"type": "new_game", "config": {"seed": 5}})
+            websocket.send_json(
+                {
+                    "type": "new_game",
+                    "config": {"seed": 5, "villain_type": "passive"},
+                }
+            )
             payload = settled_message(websocket)
             assert payload["type"] == "observation"
             session_id = payload["session_id"]

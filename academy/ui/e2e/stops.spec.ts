@@ -112,12 +112,14 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await selectDeck(page, 'hero', 'interactive');
   await selectDeck(page, 'villain', 'interactive');
 
-  // ---- Run 1: no-stops baseline (auto-pass off = pre-stops behavior). ----
+  // ---- Run 1: no-stops baseline (Full control: auto-pass off). ----
   await openStopsPanel(page);
   await setCheckbox(page, 'auto-pass-toggle', false);
+  await expect(page.getByTestId('stops-panel').locator('summary')).toContainText('full control');
 
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('stop-bar')).toContainText('Full control: every priority choice pauses');
   const baselineInputs = await playUntilComparisonTurn(page);
 
   // ---- Run 2: same seed, stops on main phases only. ----
@@ -185,9 +187,13 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
-  // Default stops: your main phases and the opponent's end step stop every time.
+  // Default stops: main phases, active combat steps, and opponent end step stop every time.
   const stop = (side: string, step: string) => page.getByTestId(`bar-stop-${side}-${step}`);
   await expect(stop('my', 'main1')).toHaveAttribute('data-state', 'every');
+  await expect(stop('my', 'declare_attackers')).toHaveAttribute('data-state', 'every');
+  await expect(stop('my', 'declare_blockers')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'declare_attackers')).toHaveAttribute('data-state', 'every');
+  await expect(stop('opponent', 'declare_blockers')).toHaveAttribute('data-state', 'every');
   await expect(stop('opponent', 'end_step')).toHaveAttribute('data-state', 'every');
   await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
 
@@ -251,6 +257,14 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await page.keyboard.press('Space');
   await page.keyboard.press('Space');
   await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'off');
+
+  // Combat defaults can be cycled directly on the stop bar: every → once → off → every.
+  await stop('my', 'declare_attackers').click();
+  await expect(stop('my', 'declare_attackers')).toHaveAttribute('data-state', 'once');
+  await stop('my', 'declare_attackers').click();
+  await expect(stop('my', 'declare_attackers')).toHaveAttribute('data-state', 'off');
+  await stop('my', 'declare_attackers').click();
+  await expect(stop('my', 'declare_attackers')).toHaveAttribute('data-state', 'every');
 
   // Your first main phase set to once: the next time the game arrives there it stops, and the
   // client turns that stop off, saying so in the moves as automation.
