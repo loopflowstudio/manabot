@@ -1,5 +1,10 @@
 Read when the change touches Academy (`managym/academy`, `academy/ui`): the table, replays, launch, recovery or browser scripts.
 
+- For the default Playwright config, choose unused `ACADEMY_API_PORT` and
+  `ACADEMY_FRONTEND_PORT`. The config reuses servers on the selected ports,
+  even from another checkout. Set `VIRTUAL_ENV` to the checkout's `.venv`
+  for the backend's `uv run --active`. Tab enters an unused board region on
+  its first control with an offer. Use arrow keys to move within the region.
 - Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
