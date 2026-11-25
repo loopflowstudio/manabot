@@ -27,14 +27,14 @@
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { region } from './region';
-  import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
+  import { BEAT_MS, beatsFor, turnAt, type Beat } from './beats';
   import { boardAt, type StepBoard } from './boards';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
-  import { primaryLabel, promptHint, promptLine } from './prompt';
+  import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
   import DeckTracker from './DeckTracker.svelte';
@@ -101,8 +101,6 @@
     notices?: Snippet;
     result?: Snippet;
     menu?: Snippet;
-    /** How fast the opponent's moves are read out in live play; "off" reads none. */
-    beatPace?: BeatPace;
     /** The native combat preview, when this table may draft a whole declaration (live play). */
     combatPreview?: CombatFetcher;
     /** The person's board after each step that led to this frame: each beat is shown on its own. */
@@ -119,7 +117,7 @@
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
-    beatPace = 'quick', combatPreview, stepBoards = [],
+    combatPreview, stepBoards = [],
     autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
   }: Props = $props();
 
@@ -391,7 +389,7 @@
         endReadOut();
         shownSeq = lastSeq;
       } else {
-        const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : beatsFor(facts, shownSeq, players);
+        const fresh = prefersReducedMotion() ? [] : beatsFor(facts, shownSeq, players);
         if (fresh.length || revision !== shownRevision) { beats = fresh; beatAt = 0; }
         shownSeq = Math.max(shownSeq, lastSeq);
       }
@@ -402,8 +400,7 @@
   });
   $effect(() => {
     if (!beat) return;
-    if (beatPace === 'off') { endReadOut(); return; }
-    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS[beatPace]);
+    const timer = setTimeout(() => { beatAt += 1; }, BEAT_MS);
     return () => clearTimeout(timer);
   });
   /**
@@ -699,9 +696,12 @@
   /** A crowded hand's cards shrink to the width of a card in the crowded strip before they overlap. */
   const HAND_FLOOR = Math.floor((HAND_CROWDED - 22) * CARD_RATIO);
   const handFull = $derived(Math.max(56, Math.min(150, Math.floor((handHeight - 22) * CARD_RATIO))));
-  const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24, { min: HAND_FLOOR, max: handFull }, 10));
+  // Cards offered from outside the board (a castable card in exile, Lessons outside the game) sit beside the hand, a size smaller, and take their width from it.
+  const trayCard = $derived(Math.round(Math.min(handFull, 120) * 0.78));
+  const trayReserve = $derived(view.tray.length && !finished ? Math.min(Math.floor(handWidth * 0.45), view.tray.length * (trayCard + 10) + 30) : 0);
+  const fan = $derived(handFan(board.hand.length, handWidth - HAND_LABEL_WIDTH - 24 - trayReserve, { min: HAND_FLOOR, max: handFull }, 10));
   // Shrunk cards give the strip's spare height back to the board.
-  const handTrack = $derived(board.hand.length === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
+  const handTrack = $derived(board.hand.length === 0 && trayReserve === 0 ? '30px' : `${Math.min(handHeight, Math.ceil(fan.card / CARD_RATIO) + 22)}px`);
 
   // ———————————————— Keyboard
 
@@ -975,6 +975,24 @@
           </div>
         {/each}
       </div>
+      {#if view.tray.length && !finished}
+        <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
+          {#each view.tray as item (item.placed.offer.id)}
+            {#if item.name}
+              <div class="tray-card" style:width={`${trayCard}px`}>
+                <span class="type-caption tray-caption" title={offerText(item.placed.offer)}>{offerText(item.placed.offer)}</span>
+                <BoardCard name={item.name} width={trayCard} offers={[item.placed]} {live}
+                  onactivate={() => act(item.placed)}
+                  onpreview={element => previewTray(item, element)} />
+              </div>
+            {:else}
+              <button type="button" class="btn btn-secondary btn-sm" disabled={!live} onclick={() => act(item.placed)}>
+                <kbd>{item.placed.number}</kbd>{offerText(item.placed.offer)}
+              </button>
+            {/if}
+          {/each}
+        </div>
+      {/if}
     </section>
 
     {#if finished}
@@ -986,28 +1004,6 @@
           {@render result?.()}
           <button type="button" class="fold type-caption" onclick={() => (resultFolded = true)}>Look at the board</button>
         {/if}
-      </section>
-    {/if}
-
-    {#if view.tray.length && !finished}
-      <section class="tray" aria-label="Choices from outside the board" data-testid="tray">
-        <h2 class="type-heading text-ink-2">{frame.prompt?.title ?? 'Choose'}</h2>
-        <div class="tray-items">
-          {#each view.tray as item (item.placed.offer.id)}
-            {#if item.name}
-              <div class="tray-card">
-                <BoardCard name={item.name} width={104} offers={[item.placed]} {live}
-                  onactivate={() => act(item.placed)}
-                  onpreview={element => previewTray(item, element)} />
-                <span class="type-caption">{item.placed.offer.label}</span>
-              </div>
-            {:else}
-              <button type="button" class="btn btn-secondary" disabled={!live} onclick={() => act(item.placed)}>
-                <kbd>{item.placed.number}</kbd>{item.placed.offer.label}
-              </button>
-            {/if}
-          {/each}
-        </div>
       </section>
     {/if}
   </div>
@@ -1081,7 +1077,7 @@
     style:left={`${menuAt.x}px`} style:top={`${menuAt.y}px`}>
     <p class="type-heading text-ink-2">{menuAt.title}</p>
     {#each menuAt.offers as placed (placed.offer.id)}
-      <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd>{placed.offer.label}</button>
+      <button type="button" role="menuitem" onclick={() => act(placed)} data-offer-id={placed.offer.id}><kbd>{placed.number}</kbd>{offerText(placed.offer)}</button>
     {/each}
     <button type="button" role="menuitem" class="cancel" onclick={closeMenu}><kbd>Esc</kbd>Cancel</button>
   </div>
@@ -1134,7 +1130,7 @@
 <style>
   /*
    * The board's one layering order, lowest first: cards, the lines between
-   * cards and their targets, floating panels (the tray and the result card).
+   * cards and their targets, floating panels (the result card).
    * Each row of permanents and the hand keep their own stacking, so a raised,
    * attacking or lifted card orders only among its neighbours and never climbs
    * over a line or a panel. Above the whole game (itself at 10) float the inspect
@@ -1199,13 +1195,10 @@
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
   .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
 
-  .tray {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -60%); z-index: var(--layer-panel);
-    padding: 12px 16px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md);
-    background: var(--bg-surface); box-shadow: var(--shadow-raised); max-width: 90%;
-  }
-  .tray-items { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; align-items: flex-start; }
-  .tray-card { display: grid; justify-items: center; gap: 6px; width: 120px; text-align: center; }
+  /* Beside the hand, never over the battlefield: the same strip holds what you can play from your hand and from elsewhere. */
+  .tray { flex: none; align-self: stretch; display: flex; align-items: flex-end; gap: 10px; margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--border-strong); overflow-x: auto; }
+  .tray-card { flex: none; display: grid; justify-items: center; gap: 4px; text-align: center; }
+  .tray-caption { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; color: var(--text-secondary); }
 
   .result-card {
     position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: var(--layer-panel); width: min(440px, 80%);

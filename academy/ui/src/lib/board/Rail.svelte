@@ -16,8 +16,8 @@
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { MoveTurn } from './moves';
-  import { committed, type PrimaryLabel } from './prompt';
-  import type { RecentView } from './recent';
+  import { committed, offerText, type PrimaryLabel } from './prompt';
+  import { targetNames, type RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
@@ -156,12 +156,13 @@
           {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
           {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
           {@const provenance = stackProvenance(item.entry)}
+          {@const targets = targetNames(item.entry, frame, { you: 'You', opponent: opponentName })}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
-              data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
+              data-testid="stack-entry" data-stack-entry={item.entry.id} data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${targets.length ? `, targeting ${targets.join(' and ')}` : ''}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
@@ -170,6 +171,7 @@
                   <span class="truncate entry-name">{stackName(item.entry)}</span>
                   {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
                 </span>
+                {#if targets.length}<span class="type-caption targets" data-testid="stack-targets">→ {targets.join(', ')}</span>{/if}
                 {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
@@ -252,14 +254,14 @@
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
-          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? view.primary.offer.label} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
+          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? offerText(view.primary.offer)} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={placed.offer.label} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
@@ -292,12 +294,12 @@
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            aria-label={`${offerText(placed.offer)}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
             disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={offerText(placed.offer)} /></span>
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}
@@ -365,6 +367,7 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; }
   .entry-name { font-family: var(--font-serif); font-weight: 600; }
+  .targets { color: var(--text); overflow-wrap: anywhere; }
   .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
   .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .recent { margin-top: 8px; }

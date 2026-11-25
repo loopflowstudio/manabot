@@ -34,11 +34,11 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   }
 }
 
-/** On the board, stops live in the top bar's Settings. */
+/** On the board, the stops panel and the session live in the top bar's Game popover. */
 async function openMenu(page: Page): Promise<void> {
-  const menu = page.locator('details.game-menu').filter({ has: page.getByTestId('game-settings') });
+  const menu = page.locator('details.game-menu');
   if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) {
-    await page.getByTestId('game-settings').click();
+    await page.getByTestId('game-menu').click();
   }
 }
 

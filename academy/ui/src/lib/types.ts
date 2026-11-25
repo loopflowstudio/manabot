@@ -286,6 +286,8 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** What the spell or ability targets, in the order chosen. */
+  targets?: SubjectRef[];
   /** The announced value of X, when above zero. */
   x?: number;
   /** A spell cast from a prepared copy; its stack copies are not. */

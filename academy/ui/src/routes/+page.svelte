@@ -25,7 +25,6 @@
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
-  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
   import { logMarks } from '$lib/board/replay';
   import { spentOnce } from '$lib/board/phases';
@@ -375,9 +374,6 @@
   const liveMarks = $derived(logMarks(gameStore.actionLog));
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 
-  // How the opponent's moves are read out, remembered per browser.
-  let beatPace = $state<BeatPace>(loadBeatPace());
-  const BEAT_PACE_LABELS: Record<BeatPace, string> = { off: 'Off', quick: 'Quick', slow: 'Slow' };
 </script>
 
 {#snippet notices()}
@@ -434,30 +430,18 @@
 
 {#snippet menu()}
   <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
-  <!-- Two short popovers, one open at a time: how play behaves, and this game's session and tools. -->
-  <details class="game-menu" name="game-popover">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-settings">Settings</summary>
-    <div class="menu-panel" role="region" aria-label="Play settings">
-      <fieldset class="beat-pace" data-testid="beat-pace">
-        <legend class="type-caption text-ink-2">Opponent's moves</legend>
-        {#each BEAT_PACES as pace (pace)}
-          <label class="type-caption"><input type="radio" name="beat-pace" value={pace} checked={beatPace === pace}
-            onchange={() => { beatPace = pace; saveBeatPace(pace); }} />{BEAT_PACE_LABELS[pace]}</label>
-        {/each}
-      </fieldset>
+  <details class="game-menu">
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Game</summary>
+    <div class="menu-panel" role="region" aria-label="Session, stops and tools">
+      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+      <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
       <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
       <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
         <legend class="sr-only">Pilot stop controls</legend>
         <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
           onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
       </fieldset>
-    </div>
-  </details>
-  <details class="game-menu" name="game-popover">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Game</summary>
-    <div class="menu-panel" role="region" aria-label="Session and tools">
-      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
       {#if gameStore.table}
         <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
           <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
@@ -509,7 +493,6 @@
         note: gameStore.gameOver ? null : 'Positions open in Review after the game' }}
       result={gameStore.gameOver ? result : undefined}
       {menu}
-      {beatPace}
       {stepBoards}
       {autoTap}
       {fullControl}
@@ -636,7 +619,4 @@
   }
   .menu-panel > :global(*) { width: 100%; }
   .menu-panel > a { width: auto; }
-  .beat-pace { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; border: 0; padding: 0; margin: 0; }
-  .beat-pace legend { float: left; margin-right: 4px; padding: 0; }
-  .beat-pace label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 </style>

@@ -4,7 +4,7 @@
    * them, laid out as MTGO does: one cell per step, your turn's stop above
    * the step's name and the opponent's below, a rule between phases, the
    * current step marked. Pressing a stop cycles it off → every time → once
-   * (`nextStopState`); the Menu's checkboxes edit the same `StopsConfig` and
+   * (`nextStopState`); the Game popover's checkboxes edit the same `StopsConfig` and
    * stay the full-size control. The stops are one toolbar: Tab reaches it
    * once, arrow keys move between them. Without `oncycle` (a recording) the
    * bar is read-only.
