@@ -24,6 +24,8 @@ use super::mana::Color;
 )]
 #[serde(default)]
 pub struct CardPredicate {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chosen_type_of_source: bool,
     /// Shares the asking source permanent's layered name. Requires a source;
     /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -166,9 +168,15 @@ impl CardPredicate {
         }
     }
 
+    pub fn reads_chosen_type(&self) -> bool {
+        self.chosen_type_of_source || self.any_of.iter().any(Self::reads_chosen_type)
+    }
+
     /// Whether matching needs the asking ability's source permanent.
     pub fn reads_source(&self) -> bool {
-        self.namesake || self.any_of.iter().any(CardPredicate::reads_source)
+        self.namesake
+            || self.chosen_type_of_source
+            || self.any_of.iter().any(CardPredicate::reads_source)
     }
 
     /// Whether matching compares power, here or in an alternative.
@@ -210,7 +218,8 @@ impl CardPredicate {
         added_types: &[CardType],
     ) -> bool {
         let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
-        if self.namesake
+        if self.chosen_type_of_source
+            || self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped
@@ -233,17 +242,17 @@ impl CardPredicate {
         {
             return false;
         }
-        if !self.subtypes_any.is_empty()
-            && !self
-                .subtypes_any
-                .iter()
-                .any(|s| object.subtypes.iter().any(|value| value == s))
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
         {
             return false;
         }
         if !self.colors_any.is_empty() {
-            let colors = object.colors();
-            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+            let colors = object.color_bits();
+            if !self
+                .colors_any
+                .iter()
+                .any(|color| colors & color.bit() != 0)
+            {
                 return false;
             }
         }
@@ -254,11 +263,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if self
-            .not_subtypes
-            .iter()
-            .any(|s| object.subtypes.iter().any(|value| value == s))
-        {
+        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
             return false;
         }
         if self
@@ -299,7 +304,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !object.subtypes.contains(subtype) {
+            if !object.has_subtype(subtype) {
                 return false;
             }
         }

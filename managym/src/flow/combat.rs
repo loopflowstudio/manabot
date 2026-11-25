@@ -14,11 +14,32 @@ pub struct CombatState {
     pub attacker_to_blockers: BTreeMap<PermanentId, Vec<PermanentId>>,
     /// Prefix already in combat before declaration (CR 508.4).
     pub already_attacking: usize,
+    /// Attackers that became blocked in this combat (CR 509.1h).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub blocked: Vec<PermanentId>,
     pub attackers_to_declare: Vec<PermanentId>,
     pub blockers_to_declare: Vec<PermanentId>,
 }
 
 impl CombatState {
+    pub fn is_blocked(&self, attacker: PermanentId) -> bool {
+        self.blocked.contains(&attacker)
+    }
+
+    pub fn remove_from_combat(&mut self, id: PermanentId) {
+        if let Some(index) = self.attackers.iter().position(|&p| p == id) {
+            self.attackers.remove(index);
+            self.already_attacking -= usize::from(index < self.already_attacking);
+        }
+        self.attackers_to_declare.retain(|&p| p != id);
+        self.blockers_to_declare.retain(|&p| p != id);
+        self.attacker_to_blockers.remove(&id);
+        self.blocked.retain(|&p| p != id);
+        for blockers in self.attacker_to_blockers.values_mut() {
+            blockers.retain(|&p| p != id);
+        }
+    }
+
     pub fn in_first_strike_damage_step(&self) -> bool {
         !self.first_strikers.is_empty() && !self.regular_damage_step
     }

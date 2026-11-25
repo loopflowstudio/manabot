@@ -238,6 +238,15 @@ describe('where decisions land', () => {
     expect(piles.some(pile => pile.items.length > 1)).toBe(true);
     expect(piles.flatMap(pile => pile.items).length).toBe(navigation.CHOOSE_TARGET.frame.projection.agent.battlefield.length);
   });
+
+  it('keeps a land that entered under a different player’s control distinguishable', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 1)!;
+    const land = lands.items[0].permanent;
+    land.entry_controller_id = frame.projection.opponent.id;
+    const after = boardView(frame, PLAYERS).you.support.find(pile => pile.items.some(item => item.permanent.id === land.id))!;
+    expect(after.items.map(item => item.permanent.id)).toEqual([land.id]);
+  });
 });
 
 describe('fitRow', () => {
