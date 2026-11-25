@@ -1,8 +1,0 @@
-- coverage-decomposition
-- loop:
-    - loop:
-        - implement                    # one shared mechanism and the callers it moves
-        - cmd: sync
-        - realign                 # decides: next slice, or on
-    - compress
-    - coverage-decomposition-review    # decides: cards compose, or back to implement
