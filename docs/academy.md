@@ -645,7 +645,7 @@ tapped lies just past the quarter, a vigilant one stays upright), and a blocker
 is joined to its attacker by a line. Chips are placed whole and never clipped
 mid-word: on a narrow or crowded card, any chips that do not fit whole collapse
 into a trailing `+N`, with the full list in the inspection and the card's
-accessible name. Something a spell on the stack targets has a dashed red edge.
+accessible name. On a short tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
 Cards in hand have the type line under the name and the cost on the art; a hand
 card's name stays on one line, shortened with an ellipsis when long, and its
 full name is in the inspection.

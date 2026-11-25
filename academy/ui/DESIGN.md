@@ -128,7 +128,8 @@ Battlefield cards and the inspection share one effective state vocabulary:
   the first-strike combat-damage window.
 - **Whole-chip fit**: `.chip` never uses `text-overflow: ellipsis` or clips
   mid-word (`scrollWidth <= clientWidth` at every card width). Chips that do not
-  fit whole in the card's available rows fold into a trailing `+N`.
+  fit whole in the card's available rows fold into a trailing `+N`. When the
+  name and power/toughness plate leave no full row, the count sits beside the name.
 
 ## Checks
 

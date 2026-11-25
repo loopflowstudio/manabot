@@ -70,7 +70,7 @@ The optional fields on `LegacyPermanentView` are:
 - `restrictions` lists the active `cant_be_blocked`, `cant_block`,
   `cant_attack_or_block`, `doesnt_untap` and `must_attack` rules.
 
-False and empty fields are omitted. The UI reads these
+An empty `keyword_grants` on a permanent with keywords means all are its own. Other false or empty details are omitted. The UI reads these
 directly from `PermanentState` (`academy/ui/src/lib/types.ts`). The catalog test checks registered definitions,
 where printed Ward has already become a trigger.
 
@@ -186,18 +186,18 @@ Updated in place before implementation so the next pass builds directly to them:
 ## Passes
 
 1. **Done (74d1830899).** Native `permanent_details_json`, combat legality sharing the restriction rules, public-id join in `decision_surface_view`, protocol schemas, `PermanentState` types. No test results were recorded in scratch; gate reruns the acceptance commands.
-2. **Next. Browser unified vocabulary + fit rule + piling.**
-   `academy/ui/src/lib/board/badges.ts` + unit tests, `BoardCard.svelte` (spiral
-   mark, measured whole-chip `+N` fitter, struck-through Defender, Flash off the
-   field, enriched `aria-label`), `Inspect.svelte` (full provenance + active
-   restrictions), `view.ts:pileKey` update + tests, `academy/ui/DESIGN.md`
-   "Card state" section, and `e2e/card-badges.spec.ts` covering all scenarios in
-   light and dark at 1280×800 with `scrollWidth <= clientWidth` assertions and
-   inspected screenshots.
+2. **Done.** Board cards, Inspect, accessible names and piles use the same effective badges. The fitter measures whole chips and preserves the exact overflow count even on a short tapped card. The dark-mode browser fixture with no card faces confirmed that grant provenance comes from the frame.
 3. **Gate.**
    Full targeted Rust, Python, protocol conformance, `scripts/public_api.py check`
    (additive `record` for the new `Env` method if in public surface), Vitest,
-   Playwright e2e in both themes, and `docs/academy.md` update.
+   and Playwright e2e in both themes. The card state docs are updated.
+
+## Pass 2 checks
+
+- Native release filter `permanent_details_` passed both card tests, including static Menace and record-granted Ward after layer evaluation.
+- The recovery-after-Lesson test and Python/Rust field conformance test passed with the rebuilt CPython 3.13 extension. The recovery test checks historical observation bytes.
+- Badge, pile, Inspect and design Vitest filters passed (315 tests). TypeScript protocol conformance passed. Svelte check reported zero errors and warnings.
+- Playwright passed both 1280×800 themes. Inspected battlefield, Inspect and crowded screenshots in `academy/ui/test-results/`. The fixture exercised a face-service outage, later grants after ability loss and a crowded row of upright and turned cards. Every measured chip and row fit.
 
 ## Acceptance check at gate
 

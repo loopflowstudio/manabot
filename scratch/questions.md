@@ -13,3 +13,6 @@ Choices made with nobody present during concept review (see `scratch/concept-rev
 
 - Regenerating the advice schema with its documented Pydantic exporter also picked up existing fields such as payment context. Keep the generated file reproducible.
 - Warm local CPython 3.13 release build, 40 battlefield permanents, median of five batches: native details JSON 0.003 ms/call (100 calls per batch), full Academy projection 0.745 ms/call (10 calls per batch).
+
+- A turned card with a two-line name can have less than 16 px of art above its power/toughness plate. Put the overflow count beside its name in that case.
+- Use the resolved effect timestamp for provenance on a granted trigger or evergreen keyword. The record already carries the source and duration. Current evergreen rows include an empty grant map when all keywords are the card’s own.

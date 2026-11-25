@@ -14,7 +14,7 @@
    * blended left to right as printed hybrid frames are. A tapped permanent
    * lies on its side: its footprint and art turn a quarter, while the name
    * bar stays across the top so it still reads. State chips (counters,
-   * keywords, summoning sickness, attacking, blocking, damage) sit on their
+   * abilities, summoning sickness, restrictions, damage) sit on their
    * own row above power and toughness. Rules text lives in the inspect view.
    *
    * Lift + Quiet: a card a legal offer acts on is raised with a soft shadow;
@@ -27,10 +27,9 @@
    */
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace, frameColors } from '$lib/card-faces.svelte';
-  import { labelText } from './inspect';
+  import { badgeReading, badgesOf, chipWidth, fitBadges } from './badges';
   import type { CardState, PermanentState } from '$lib/types';
-  import { getContext } from 'svelte';
-  import { keywordsOf } from './inspect';
+  import { getContext, onMount } from 'svelte';
   import { cardEvidence, EVIDENCE, formatProbability, type OfferEvidence } from './replay';
   import type { PlannedSource } from './payment';
   import Pips from './Pips.svelte';
@@ -106,12 +105,6 @@
   const power = $derived(permanent?.power ?? card?.power ?? null);
   const toughness = $derived(permanent?.toughness ?? card?.toughness ?? null);
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
-  const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
-  const counters = $derived(Object.entries({
-    ...(permanent?.plus1_counters ? { '+1/+1': permanent.plus1_counters } : {}),
-    ...(permanent?.counters ?? {}),
-  }).filter(([, amount]) => amount > 0));
-
   // Type comes from the six sizes of DESIGN.md, each with its line height.
   // Battlefield names are 12 px at every size: a crowded row wraps them.
   const LINE: Record<number, number> = { 12: 16, 14: 20 };
@@ -121,23 +114,19 @@
   const pip = $derived(clamp(upright * 0.07, 10, 14));
   const showCost = $derived(!field && width >= 58);
   const plate = $derived(upright >= 110 ? 14 : 12);
-  const keywordRoom = $derived(boxWidth >= 120 ? 3 : width >= 64 ? 1 : 0);
   const hasPt = $derived(creature && power !== null);
-  /**
-   * State chips, on their own row above power and toughness. Combat and
-   * damage come first: the row wraps upward and a small card keeps its
-   * first chips, so keywords (also in inspect) give way before them.
-   */
-  const chips = $derived(!field ? [] : [
-    ...(permanent?.first_strike_participant ? [{ key: 'first-strike-participant', text: 'First-strike participant', kind: 'combat', granted: false }] : []),
-    ...(permanent?.attacking ? [{ key: 'attacking', text: 'Attacking', kind: 'combat', granted: false }] : []),
-    ...(permanent?.blocking !== undefined ? [{ key: 'blocking', text: 'Blocking', kind: 'combat', granted: false }] : []),
-    ...(permanent?.damage ? [{ key: 'damage', text: `${permanent.damage} damage`, kind: 'damage', granted: false }] : []),
-    ...(permanent?.summoning_sick && creature ? [{ key: 'sick', text: width >= 100 ? 'Summoning sick' : 'Sick', kind: 'sick', granted: false }] : []),
-    ...counters.map(([kind, amount]) => ({ key: `counter-${kind}`, text: kind === '+1/+1' ? `+${amount}/+${amount}` : `${labelText(kind)} ×${amount}`, kind: 'counter', granted: false })),
-    ...keywords.slice(0, keywordRoom).map(fact => ({ key: `keyword-${fact.keyword}`, text: labelText(fact.keyword), kind: 'keyword', granted: fact.source !== null })),
-    ...(keywords.length > keywordRoom && keywordRoom > 0 ? [{ key: 'keyword-more', text: `${keywords.length - keywordRoom} more`, kind: 'keyword', granted: false }] : []),
-  ]);
+  const below = $derived(hasPt ? LINE[plate] + 4 : 3);
+  const badges = $derived(permanent ? badgesOf(permanent, face, blocks) : []);
+  let artHeight = $state(0);
+  let chipFont = $state('12px system-ui');
+  onMount(() => {
+    // Refit after the webfont swaps in, even when the card has not resized.
+    void document.fonts.ready.then(() => {
+      chipFont = `12px ${getComputedStyle(document.documentElement).getPropertyValue('--font-sans')}`;
+    });
+  });
+  const rows = $derived(Math.max(0, Math.floor((artHeight - below + 2) / 18)));
+  const chips = $derived(fitBadges(badges, boxWidth - 8, rows, text => chipWidth(text, chipFont)));
 
   // The name bar's colour: one colour's tint, several blended left to right
   // (each holds its side, blended across the middle), colourless grey.
@@ -166,14 +155,7 @@
   const art = $derived(loaded === url ? url : null);
 
   const facts = $derived([
-    tapped ? 'tapped' : '',
-    permanent?.summoning_sick && creature ? 'summoning sick' : '',
-    permanent?.attacking ? 'attacking' : '',
-    permanent?.first_strike_participant ? 'first-strike participant' : '',
-    permanent?.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
-    permanent?.damage ? `${permanent.damage} damage` : '',
-    ...counters.map(([kind, amount]) => `${amount} ${kind} counter${amount === 1 ? '' : 's'}`),
-    permanent?.is_token ? 'token' : '',
+    ...badges.map(badgeReading),
     dealt ? `dealt ${dealt} since your last move` : '',
     paid ? `committed to this cost: ${paid}` : '',
     planned ? `would tap for ${planned.output || 'mana'} (payment plan, source ${planned.order})` : '',
@@ -238,7 +220,8 @@
     onblur={() => onpreview?.(null)}
   >
     <span class="bar" aria-hidden="true" style={barStyle} style:--slice={slice === null ? undefined : `${slice - 10}px`}>
-      <span class="title">
+      <span class="title" class:with-overflow={field && !rows && chips.hidden > 0}>
+        {#if field && !rows && chips.hidden}<i class="chip overflow">+{chips.hidden}</i>{/if}
         {#if slice !== null && face?.cost && !showType}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
       </span>
@@ -247,7 +230,7 @@
         <span class="type">{face.type_line}</span>
       {/if}
     </span>
-    <span class="art" aria-hidden="true">
+    <span class="art" aria-hidden="true" bind:clientHeight={artHeight}>
       <span class="picture" style:background-image={art ? `url('${art}')` : undefined}>
         {#if !art}<span class="no-art">{face?.type_line ?? ''}</span>{/if}
       </span>
@@ -255,9 +238,19 @@
         {#if showCost && face?.cost}<span class="cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
       </span>
-      {#if chips.length}
-        <span class="chips" style:--below={`${hasPt ? LINE[plate] + 4 : 3}px`}>
-          {#each chips as chip (chip.key)}<i class={`chip ${chip.kind}`} class:granted={chip.granted}>{chip.text}</i>{/each}
+      {#if field && rows && (chips.visible.length || chips.hidden)}
+        <span class="chips" style:bottom={`${below}px`}>
+          {#each chips.visible as chip}
+            <i class={`chip ${chip.kind}`} class:granted={chip.granted} class:overridden={chip.overridden} title={badgeReading(chip)}>
+              {#if chip.kind === 'sick'}
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                  <title>Summoning sick</title>
+                  <path d="M8 8c.9-1 2.4-.2 2.1 1.1-.4 1.9-3.2 2.2-4.5.5-1.9-2.4 0-5.9 3-6 3.6-.2 6.1 3.5 4.5 7.1-1.8 4-7.2 4.4-10 1"/>
+                </svg>
+              {:else}{chip.label}{/if}
+            </i>
+          {/each}
+          {#if chips.hidden}<i class="chip overflow">+{chips.hidden}</i>{/if}
         </span>
       {/if}
       {#if hasPt}
@@ -312,6 +305,9 @@
   .title { display: flex; align-items: center; gap: 3px; min-width: 0; }
   .bar-cost { flex: none; display: flex; }
   .field .title { display: block; }
+  /* On a short turned card the art may have no row above P/T. Keep the
+     count beside the name, where both it and the plate can still be read. */
+  .field .title.with-overflow { display: flex; flex-direction: row-reverse; justify-content: space-between; }
   .tcard:not(.field) .name { display: block; flex: 1 1 auto; min-width: 0; white-space: nowrap; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Lifted by pointer or focus, a covered card shows whole, as it is laid out uncovered. */
   .sliced:not(:hover, :focus-visible) :is(.title, .type) { max-width: var(--slice); }
@@ -340,19 +336,18 @@
     color: var(--on-accent); background: var(--accent);
   }
 
-  /* Chips: one row above power and toughness, wrapping upward, never under the plate; only whole rows that fit the art show. */
   .chips {
-    position: absolute; left: 3px; right: 3px; bottom: var(--below); display: flex; flex-wrap: wrap-reverse; align-content: flex-start; gap: 2px; overflow: hidden;
-    max-height: round(down, calc(100cqh - var(--below) + 2px), 18px);
+    position: absolute; left: 3px; right: 3px; display: flex; flex-wrap: wrap; gap: 2px;
   }
   .chip {
-    max-width: 100%; padding: 0 5px; border-radius: var(--radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: none; padding: 0 5px; border-radius: var(--radius-sm); white-space: nowrap;
     font: 400 12px/16px var(--font-sans);
-    color: var(--text); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border);
+    color: var(--text); background: var(--bg-surface); box-shadow: inset 0 0 0 1px var(--border);
   }
-  .chip.combat, .chip.counter { font-weight: 600; }
-  .chip.damage { font-weight: 600; color: var(--damage); }
-  .chip.granted { box-shadow: 0 0 0 1px var(--gain); }
+  .chip.sick { width: 16px; height: 16px; padding: 0; color: var(--text-secondary); }
+  .chip.damage { color: var(--damage); }
+  .chip.overridden { color: var(--text-tertiary); text-decoration: line-through; }
+  .chip.granted { box-shadow: inset 0 0 0 1px var(--gain); }
 
   /* Lift: what a legal offer acts on is raised; the selected card higher, with an ink edge. */
   .tcard.legal { --rise: -6px; box-shadow: var(--lift); }
