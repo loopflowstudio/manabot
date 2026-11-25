@@ -13,7 +13,13 @@ from itertools import zip_longest
 from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.records import Aligned, CheckpointPlayer, Fraction, checkpoint_player
+from etude.eval.records import (
+    Aligned,
+    CheckpointPlayer,
+    Earlier,
+    Fraction,
+    checkpoint_player,
+)
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Variable
@@ -46,6 +52,8 @@ HALF_TRAINING_SEATINGS = tuple(f"Colab half-training deal {i + 1}" for i in rang
 HALF_TRAINING_EXTRA_SEATINGS = tuple(
     f"Colab half-training deal {i + 1}" for i in EXTRA_PAIRS
 )
+LAG_200 = "tla-trophies-colab-lag-200-32"
+LAG_200_SEATINGS = tuple(f"Colab -200 updates deal {i + 1}" for i in range(32))
 LARGE_VS_SMALL = "tla-trophies-colab-w160l8-vs-w64-32"
 LARGE_VS_SMALL_EXTRA = "tla-trophies-colab-w160l8-vs-w64-extra-128"
 LARGE_VS_SMALL_SEATINGS = tuple(f"Colab w160l8 vs w64 deal {i + 1}" for i in range(32))
@@ -290,7 +298,13 @@ def size_evaluations(
         for c in shared.checkpoints
         if c.at.get("updates", 0) > 0 and (c.at["updates"] / 2) in trained_updates
     ]
+    lag_200_checkpoints = [
+        c
+        for c in shared.checkpoints
+        if c.at.get("updates", 0) > 0 and (c.at["updates"] - 200) in trained_updates
+    ]
     half = Fraction(clock="updates", value=0.5, trained=True)
+    lag_200 = Earlier(clock="updates", by=200, trained=True)
     jobs = [
         against(f"{HELD_OUT}-{size}", shared.checkpoints),
         *extra_against(
@@ -314,6 +328,15 @@ def size_evaluations(
                 half_checkpoints,
                 HALF_TRAINING_EXTRA_SEATINGS,
                 half,
+            )
+        )
+    if lag_200_checkpoints:
+        jobs.append(
+            against(
+                f"{LAG_200}-{size}",
+                lag_200_checkpoints,
+                LAG_200_SEATINGS,
+                lag_200,
             )
         )
     if size == "w160l8":
@@ -421,6 +444,10 @@ def report() -> Report:
             head_to_head(
                 "Against itself at half its updates",
                 (*HALF_TRAINING_SEATINGS, *HALF_TRAINING_EXTRA_SEATINGS),
+            ),
+            head_to_head(
+                "Against itself 200 updates earlier",
+                LAG_200_SEATINGS,
             ),
             head_to_head(
                 "Large (w160l8) against Small (w64) at equal training time",
