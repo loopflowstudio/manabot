@@ -219,18 +219,17 @@ impl Game {
         let Some(combat) = &self.state.combat else {
             return;
         };
-        let removed: Vec<_> = combat
-            .attack_targets
-            .iter()
-            .filter_map(|&(_, target)| match target {
-                Some(AttackTarget::Permanent(object))
-                    if !self.is_valid_permanent_defender(object) =>
-                {
-                    Some(object)
+        let mut removed = Vec::new();
+        for &(_, target) in &combat.attack_targets {
+            if let Some(AttackTarget::Permanent(object)) = target {
+                if !self.is_valid_permanent_defender(object) {
+                    removed.push(object);
                 }
-                _ => None,
-            })
-            .collect();
+            }
+        }
+        if removed.is_empty() {
+            return;
+        }
         if let Some(combat) = self.state.combat.as_mut() {
             for object in removed {
                 combat.remove_defender(object);
