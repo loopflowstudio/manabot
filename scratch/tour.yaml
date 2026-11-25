@@ -1,0 +1,21 @@
+at: 993ac802961b5729679a0b65dd289836e6bf2c25
+first:
+  - path: manabot/README.md
+    why: Running the belief intervention on a real decision
+  - path: manabot/backends/README.md
+    why: Calling a policy with explicit viewer marginals
+  - path: manabot/belief/encoding.py
+    why: Schema-bound marginals become batched belief rows
+  - path: manabot/belief/agent.py
+    why: One decision path for generated and supplied beliefs
+  - path: manabot/belief/likelihood.py
+    why: Score possible worlds in bounded native batches
+  - path: manabot/policy/admission.py
+    why: Validate marginals against batch size and checkpoint
+  - path: manabot/policy/prepare.py
+    why: Preserve belief coordinates when compacting attention
+  - path: tests/model/test_prepare_rows.py
+    why: Check sparse belief masks and compact token coordinates
+  - path: tests/model/test_mlx_backend.py
+    why: Compare Torch and MLX through a learner step
+hide: []
