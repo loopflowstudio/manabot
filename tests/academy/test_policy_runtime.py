@@ -736,3 +736,101 @@ def test_watch_setup_failure_closes_candidates_and_never_retries_a_read(
     assert not server.SESSION_REGISTRY
     client = TestClient(server.app)
     assert client.get(f"/api/watch/setups/{uuid4().hex}").status_code == 404
+
+
+def test_register_rejects_distinct_factories_with_same_policy_id(
+    registry: PolicyRegistry,
+) -> None:
+    @dataclass
+    class SameProviderFactory(IndependentFactory):
+        def describe(self) -> PolicyDescriptor:
+            return PolicyDescriptor(self.name, "jace", self.runner)
+
+    first = SameProviderFactory("Baseline")
+    second = SameProviderFactory("Candidate")
+    first_key = registry.register(first, name="baseline")
+    # Re-registering the exact same factory with an alias still works.
+    assert registry.register(first, name="baseline-alias") == first_key
+    with pytest.raises(ValueError, match="shares Policy ID"):
+        registry.register(second, name="candidate")
+    assert "candidate" not in registry.aliases
+    assert registry.descriptor("baseline").name == "Baseline"
+
+
+def test_observe_policies_delivers_recent_events_to_waiting_seat(
+    registry: PolicyRegistry,
+) -> None:
+    first, second = IndependentFactory("Seat1"), IndependentFactory("Seat2")
+    keys = [registry.register(first), registry.register(second)]
+    created = create_watch(
+        WatchRequest(players=[f"policy:{key}" for key in keys], seed=7)
+    )
+    for revision in range(12):
+        step_watch(created["id"], created["token"], revision)
+    waiting_with_events = [
+        view
+        for factory in (first, second)
+        for view in factory.sessions[0].seen
+        if not view.choices and view.observation.recent_events
+    ]
+    assert waiting_with_events
+    for view in waiting_with_events:
+        assert all(
+            int(card.zone) != int(managym.enums.ZoneEnum.HAND)
+            for card in view.observation.opponent_cards
+        )
+
+
+def test_policy_load_observe_and_watch_failures_log_tracebacks(
+    registry: PolicyRegistry, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+    from uuid import uuid4
+
+    from managym.academy.watch import start_setup
+
+    class LoadErrorFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            raise RuntimeError("cuda oom loading weights")
+
+    class ObserveErrorSession(IndependentSession):
+        def observe(self, view: PolicyView) -> None:
+            raise KeyError("missing_program_token")
+
+    class ObserveErrorFactory(IndependentFactory):
+        def load(self, *, seat: int, seed: int) -> IndependentSession:
+            session = ObserveErrorSession(seat)
+            self.sessions.append(session)
+            return session
+
+    load_key = registry.register(LoadErrorFactory("LoadErr"))
+    obs_factory = ObserveErrorFactory("ObsErr")
+    obs_key = registry.register(obs_factory)
+
+    with caplog.at_level(logging.ERROR):
+        game = server.GameSession()
+        with pytest.raises(ValueError, match=r"RuntimeError.*see the server log"):
+            game.new_game(
+                {"villain_type": "policy", "opponent_sha256": load_key, "seed": 1}
+            )
+        assert "cuda oom loading weights" in caplog.text
+        caplog.clear()
+
+        with pytest.raises(
+            ValueError, match=r"Bot observation failed \(KeyError\); see the server log"
+        ):
+            game.new_game(
+                {"villain_type": "policy", "opponent_sha256": obs_key, "seed": 1}
+            )
+        assert "missing_program_token" in caplog.text
+        assert obs_factory.sessions[0].closed
+        caplog.clear()
+
+        result = start_setup(
+            uuid4().hex,
+            WatchRequest(players=[f"policy:{load_key}", "random"], seed=1),
+            uuid4().hex,
+        )
+        assert result["error"] is not None
+        assert "cuda oom loading weights" not in result["error"]
+        assert "cuda oom loading weights" in caplog.text

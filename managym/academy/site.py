@@ -37,8 +37,12 @@ class SpaStaticFiles(StaticFiles):
 
 def frontend_directory() -> Path:
     override = os.environ.get("ACADEMY_FRONTEND_BUILD")
-    return (
-        Path(override).expanduser().resolve()
-        if override
-        else Path(__file__).parent / "site"
-    )
+    if override:
+        return Path(override).expanduser().resolve()
+    packaged = Path(__file__).parent / "site"
+    if (packaged / "index.html").is_file():
+        return packaged
+    checkout = Path(__file__).resolve().parents[2] / "academy" / "ui" / "build"
+    if (checkout / "index.html").is_file():
+        return checkout
+    return packaged

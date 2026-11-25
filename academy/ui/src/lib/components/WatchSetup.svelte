@@ -15,21 +15,33 @@
   let busy = $state(false);
   let error = $state('');
   onMount(() => {
-    if (setup) {
-      gameStore.applySetupDraft(setup);
-      const players = setup.watch_players as string[] | null;
-      if (players?.length === 2) { gameStore.watchPlayerChoice = players[0] as PlayerChoice; gameStore.opponentChoice = players[1] as PlayerChoice; }
-      if (setup.watch_mirrors) { const mirrors = parseSearchConfigs(setup.watch_mirrors); gameStore.watchSearchConfig = mirrors[0]; gameStore.searchConfig = mirrors[1]; }
-    }
-    gameStore.watchMode = true;
-    const params = new URLSearchParams(location.search);
-    gameStore.watchPlayerChoice = (params.get('seat1') ?? gameStore.watchPlayerChoice) as PlayerChoice;
-    gameStore.setOpponentChoice((params.get('seat2') ?? gameStore.opponentChoice) as PlayerChoice);
-    const searchParam = params.get('search') ?? params.get('mirror');
-    if (searchParam !== null) {
-      try { const search = parseSearchConfigs(JSON.parse(searchParam)); gameStore.watchSearchConfig = search[0]; gameStore.searchConfig = search[1]; } catch (reason) { fail(reason); }
-    }
-    setupReady = true;
+    void (async () => {
+      if (setup) {
+        gameStore.applySetupDraft(setup);
+        const players = setup.watch_players as string[] | null;
+        if (players?.length === 2) { gameStore.watchPlayerChoice = players[0] as PlayerChoice; gameStore.opponentChoice = players[1] as PlayerChoice; }
+        if (setup.watch_mirrors) { const mirrors = parseSearchConfigs(setup.watch_mirrors); gameStore.watchSearchConfig = mirrors[0]; gameStore.searchConfig = mirrors[1]; }
+      }
+      const params = new URLSearchParams(location.search);
+      const launchId = params.get('launch');
+      if (launchId) {
+        try {
+          const response = await fetch(`/api/launch/${encodeURIComponent(launchId)}`);
+          if (response.ok) {
+            const launched = await response.json() as Record<string, unknown>;
+            gameStore.applySetupDraft(launched);
+          }
+        } catch (reason) { fail(reason); }
+      }
+      gameStore.watchMode = true;
+      gameStore.watchPlayerChoice = (params.get('seat1') ?? gameStore.watchPlayerChoice) as PlayerChoice;
+      gameStore.setOpponentChoice((params.get('seat2') ?? gameStore.opponentChoice) as PlayerChoice);
+      const searchParam = params.get('search') ?? params.get('mirror');
+      if (searchParam !== null) {
+        try { const search = parseSearchConfigs(JSON.parse(searchParam)); gameStore.watchSearchConfig = search[0]; gameStore.searchConfig = search[1]; } catch (reason) { fail(reason); }
+      }
+      setupReady = true;
+    })();
   });
   function fail(reason: unknown): void { error = reason instanceof Error ? reason.message : String(reason); }
   async function start(): Promise<void> {

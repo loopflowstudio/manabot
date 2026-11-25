@@ -9,9 +9,15 @@ class DeckFileInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: str = Field(max_length=managym.MAX_DECKLIST_BYTES)
     filename: str = Field(default="deck.txt", max_length=255)
+    name: str | None = Field(default=None, max_length=120)
 
     def decklist(self) -> managym.Decklist:
         return managym.Decklist(self.source, self.filename)
+
+    def display_name(self) -> str:
+        if self.name is not None and self.name.strip():
+            return self.name.strip()
+        return "imported"
 
 
 class DeckImportInput(BaseModel):
