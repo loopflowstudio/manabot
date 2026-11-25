@@ -762,6 +762,26 @@ Then gate. Deferred to gate/CI: the policy e2e spec on a clean run, the
 configured-launch e2e, `test:e2e:release`, timing with a current-world
 checkpoint, and the pre-existing control-fixture schema test failure.
 
+## Status (2026-11-25, item 3)
+
+Built: `PolicyAdmissions` (`managym/academy/analysis.py`) admits a
+registry's policies once per (registered policy ids, each seat's deck,
+sideboard and world) and serves all three callers: Play's `show_analysis`,
+`GET /analyses/policies` and `POST /analyses` (the last still re-walks the
+game in `analysis_choices`, which is cheap next to admission; loading the
+runner still admits). The websocket handler admits a `show_analysis`'s
+setups off the game lock before taking it; `show_analysis` then reads the
+cache. `GameSession._analysing_policies` is gone. Tests in
+`tests/academy/test_played_analysis.py`: two games with the same decks and a
+repeat Review admit once, a newly registered policy is admitted; Show analysis
+admits with the lock free (fails when the off-lock admission is removed).
+
+What it taught: the cache is shared across games, not just per game, since
+admission reads no game state; a failed admission (OSError included) is
+remembered until a policy registers or the process restarts.
+
+Remaining: item 4 stays unbuilt (headless choice). Next is gate.
+
 ## Slices
 
 1. **(built)** **A played game plays again.** `record_of`, the walk's self-check

@@ -21,7 +21,8 @@ map to expected score ((v + 1) / 2, a draw half a win) and `win_logit` values
 to a win chance. An undeclared semantic has no scale, so its offers have no
 estimate. Entry points: `analyse_game`, a generator of decisions;
 `run_analysis`, which saves them (`AttemptStore.analyses`) as they come;
-`analysis_choices`, the policies that may analyse a game; `agent_line`,
+`analysis_choices`, the policies that may analyse a game, admitted once per
+setup by `PolicyAdmissions`; `agent_line`,
 the policy's own line from one analysed decision; and `LiveAnalysis`, the same
 reading of a game while it is played, when the person shows it.
 """
@@ -29,6 +30,7 @@ reading of a game while it is played, when the person shows it.
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
+import json
 import logging
 import math
 import queue
@@ -39,12 +41,12 @@ from pydantic import BaseModel, ConfigDict
 
 import managym
 from managym.academy.attempts import AttemptStore, RetainedAttempt
-from managym.academy.opponent import Opponent
+from managym.academy.opponent import Opponent, policy_registry
 from managym.academy.recording import record_of, recorded_build, step_matches
 from managym.academy.trace import GameConfig, academy_actions
 from managym.bots import BotPolicy, choose_bot
 from managym.experience_projection import decision_surface_view
-from managym.policy import PolicyRegistry, PolicyRunner
+from managym.policy import PolicyDescriptor, PolicyRegistry, PolicyRunner
 from managym.recording import DecisionAnnotation
 from managym.replay import RecordWalker, walk
 
@@ -255,8 +257,82 @@ class AnalysisChoices:
     unavailable: str | None
 
 
+type AdmissionKey = tuple[tuple[str, ...], tuple[str, ...]]
+
+
+class PolicyAdmissions:
+    """Which of a registry's policies may analyse a game's setups, admitted once.
+
+    Admitting every registered policy takes seconds with many checkpoints, and
+    reads only the registered policies and each seat's deck, sideboard and
+    world, never the game. So Play's Show analysis and Review's two analysis
+    endpoints share one answer per (registered policy ids, setups).
+
+    Guarded invariant: each key is admitted at most once; a second asker for a
+    key being admitted waits for the first. Registering a policy changes the
+    key. `PolicyRegistry.load` still admits, so a cached answer never stands
+    in for the check at load.
+    """
+
+    def __init__(self, registry: PolicyRegistry) -> None:
+        self.registry = registry
+        self._lock = threading.Lock()
+        self._keys: dict[AdmissionKey, threading.Lock] = {}
+        self._admitted: dict[AdmissionKey, tuple[str, ...]] = {}
+
+    def admitted(self, setup: managym.GameSetup) -> list[PolicyDescriptor]:
+        """The registered policies, in registration order, that admit `setup`
+        and read probabilities: neither search nor a scripted player."""
+        descriptors = self.registry.descriptors()
+        key = (
+            tuple(descriptor.id for descriptor in descriptors),
+            tuple(
+                json.dumps(
+                    [dict(player.decklist), dict(player.sideboard), player.world],
+                    sort_keys=True,
+                )
+                for player in setup.players
+            ),
+        )
+        with self._lock:
+            admitting = self._keys.setdefault(key, threading.Lock())
+        with admitting:
+            ids = self._admitted.get(key)
+            if ids is None:
+                ids = tuple(
+                    descriptor.id
+                    for descriptor in descriptors
+                    if self._admits(descriptor, setup)
+                )
+                self._admitted[key] = ids
+        return [descriptor for descriptor in descriptors if descriptor.id in ids]
+
+    def _admits(self, descriptor: PolicyDescriptor, setup: managym.GameSetup) -> bool:
+        if descriptor.base_policy is not None or not descriptor.artifacts:
+            # Search plays out from the walk's real hidden cards; a scripted
+            # player has no probabilities to read.
+            return False
+        try:
+            self.registry.admit(descriptor.id, setup)
+        except (ImportError, OSError, ValueError):
+            return False
+        return True
+
+
+_admissions: PolicyAdmissions | None = None
+
+
+def policy_admissions() -> PolicyAdmissions:
+    """The server registry's admissions, renewed when the registry is replaced."""
+    global _admissions
+    registry = policy_registry()
+    if _admissions is None or _admissions.registry is not registry:
+        _admissions = PolicyAdmissions(registry)
+    return _admissions
+
+
 def analysis_choices(
-    attempt: RetainedAttempt, registry: PolicyRegistry
+    attempt: RetainedAttempt, admissions: PolicyAdmissions
 ) -> AnalysisChoices:
     config = GameConfig(**attempt.trace["config"])
     if config.watch_players is not None:
@@ -270,25 +346,19 @@ def analysis_choices(
             "Analysis re-executes the game, which needs the build that recorded it "
             f"({recorded_build(attempt.world_json)}).",
         )
-    return analysing_policies(config, registry)
+    return analysing_policies(config, admissions)
 
 
-def analysing_policies(config: GameConfig, registry: PolicyRegistry) -> AnalysisChoices:
+def analysing_policies(
+    config: GameConfig, admissions: PolicyAdmissions
+) -> AnalysisChoices:
     """The registered policies that can read `config`'s game: admitted for its
     decks and giving probabilities, without search. The default is the
     opponent's own policy when it is one of them."""
-    setup = config.to_rust()
-    policies = []
-    for descriptor in registry.descriptors():
-        if descriptor.base_policy is not None or not descriptor.artifacts:
-            # Search plays out from the walk's real hidden cards; a scripted
-            # player has no probabilities to read.
-            continue
-        try:
-            registry.admit(descriptor.id, setup)
-        except (ImportError, OSError, ValueError):
-            continue
-        policies.append({"sha256": descriptor.id, "name": Opponent(descriptor).name})
+    policies = [
+        {"sha256": descriptor.id, "name": Opponent(descriptor).name}
+        for descriptor in admissions.admitted(config.to_rust())
+    ]
     opponent = (config.opponent or {}) if config.villain_type == "policy" else {}
     key = opponent.get("base_sha256", opponent.get("sha256"))
     default = key if any(p["sha256"] == key for p in policies) else None

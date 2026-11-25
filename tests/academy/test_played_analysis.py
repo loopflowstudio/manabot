@@ -30,6 +30,7 @@ from managym.policy import (
 )
 from managym.replay import walk
 from managym.search import SearchConfig, search_descriptor
+from tests.academy.socket_messages import settled_message
 from tests.academy.test_played_replay import BOLT, play
 
 TOKEN = "t" * 36
@@ -476,3 +477,75 @@ def test_showing_analysis_needs_a_policy_that_can_read_the_game(
     assert not state["shown"] and state["policies"] == []
     assert state["unavailable"] == "No registered policy can read this game."
     assert "analysis" not in game.current_message()
+
+
+@dataclass
+class CountedFactory(ReadingFactory):
+    """Counts its admissions, noting whether a game's lock was held for each."""
+
+    admitted_under_lock: list[bool] = field(default_factory=list)
+
+    def admit(self, setup: Sequence[managym.PlayerConfig]) -> None:
+        self.admitted_under_lock.append(
+            any(record.lock.locked() for record in server.SESSION_REGISTRY.values())
+        )
+
+
+def test_reviewing_a_game_again_admits_no_policy_again(
+    tmp_path: Path, registry: PolicyRegistry
+) -> None:
+    factory = CountedFactory()
+    key = registry.register(factory)
+    finished(tmp_path)
+    finished(tmp_path, seed=12)
+    store = AttemptStore(tmp_path / "play.sqlite")
+    with store.connect() as db:
+        ids = [row[0] for row in db.execute("SELECT id FROM attempts")]
+    client = TestClient(server.app)
+    for trace_id in (*ids, ids[0]):
+        body = client.get(f"/api/traces/{trace_id}/analyses/policies").json()
+        assert [p["sha256"] for p in body["policies"]] == [key]
+    # Two games with the same decks: one admission between them.
+    assert len(factory.admitted_under_lock) == 1
+    started = client.post(
+        f"/api/traces/{ids[0]}/analyses", json={"policy": key}, headers=headers()
+    )
+    assert started.status_code == 200, started.text
+    # Only loading the runner admits again.
+    assert len(factory.admitted_under_lock) == 2
+    wait_complete(client, ids[0])
+    # A newly registered policy is admitted for the same decks.
+    other = CountedFactory(name="Other")
+    registry.register(other)
+    body = client.get(f"/api/traces/{ids[1]}/analyses/policies").json()
+    assert len(body["policies"]) == 2 and len(other.admitted_under_lock) == 1
+
+
+def test_showing_analysis_admits_policies_off_the_game_lock(
+    tmp_path: Path, registry: PolicyRegistry
+) -> None:
+    factory = CountedFactory()
+    key = registry.register(factory)
+    server.SESSION_REGISTRY.clear()
+    config = {
+        "hero_deck": BOLT,
+        "villain_deck": BOLT,
+        "villain_type": "random",
+        "seed": 11,
+    }
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            assert settled_message(websocket)["type"] == "observation"
+            for shown in (True, False, True):
+                websocket.send_json({"type": "show_analysis", "shown": shown})
+                message = settled_message(websocket)
+                while message["type"] != "analysis_state":
+                    message = settled_message(websocket)
+                assert message["shown"] is shown
+                assert [p["sha256"] for p in message["policies"]] == [key]
+    server.SESSION_REGISTRY.clear()
+    # Listed once for the game, while its lock was free; the other admissions
+    # are each shown analysis's own load, on its worker.
+    assert factory.admitted_under_lock[0] is False
+    assert len(factory.admitted_under_lock) == 1 + len(factory.sessions) == 3

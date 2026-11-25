@@ -346,7 +346,11 @@ re-executes the game to list the eligible policies, the default (the
 opponent's own policy), why none may run and the events an analysis of the
 person's seat reads. Eligible means registered, admitted for the game's decks, with an
 artifact and no Search composition: Search plays out from the walk's real
-hidden cards. A game still being played is refused (`analysis_game_active`);
+hidden cards. Admission takes seconds with many checkpoints and reads only the
+registered policies and each seat's deck, sideboard and world, so
+`PolicyAdmissions` admits each (registered policies, setups) once per process,
+for every game with those decks, Review and Play alike; loading a runner still
+admits it again. A game still being played is refused (`analysis_game_active`);
 one analysis runs per game per process (`analysis_running`).
 
 At each of the seat's deliberate decisions (automation is skipped) the runner
@@ -399,8 +403,10 @@ with the turn it starts on.
 
 The pilot's `show_analysis {"shown": true, "policy": <Policy ID or null>}`
 request (`SUBMIT_LIVE_COMMAND`) answers `analysis_state` with the policy shown,
-the policies that may read the game (`analysing_policies`, admitted once per
-game) and why none may. Showing starts a `LiveAnalysis` on its own daemon
+the policies that may read the game (`analysing_policies`, from
+`PolicyAdmissions`) and why none may. The connection admits them off the game
+lock before dispatching the request, so the first Show analysis of a game's
+decks never holds play while checkpoints are admitted. Showing starts a `LiveAnalysis` on its own daemon
 thread: it loads a fresh runner, walks the game so far with `seat_decisions`
 (asking the runner at each earlier decision, as an analysis after the game
 does, so decision memory matches), then applies each step the game commits and
