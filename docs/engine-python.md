@@ -17,10 +17,9 @@ uv run --no-project --python .venv/bin/python python -c 'import managym; print(m
 The last command prints the engine version (`managym.__version__`) and card
 digest, both read directly from the compiled extension without requiring
 installed package metadata. The `managym` distribution contains the compiled
-engine and its Python API. It
-installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
-native observation buffers; Pydantic supports the structured decision API.
-No Rust compiler is needed when installing a wheel.
+engine and its Python API. It installs without Torch, Gymnasium, Etude or the
+training CLI. NumPy supports native observation buffers; Pydantic supports the
+structured decision API. No Rust compiler is needed when installing a wheel.
 
 To play in the browser instead of from Python, install the `academy` extra and
 run `uv run --no-project managym academy` ([running Academy](academy.md#running-academy)); it adds

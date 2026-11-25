@@ -1,7 +1,5 @@
 """Default art uses only explicit visible-name requests, with no test network."""
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 import importlib.metadata
 import io
 import json
@@ -93,26 +91,14 @@ def test_seeded_cache_works_without_fetcher(tmp_path: Path) -> None:
 
 def _without_installed_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
     """A source launch: no `managym` distribution metadata on the path."""
-    version = importlib.metadata.version
     distribution = importlib.metadata.distribution
-
-    def missing_version(name: str) -> str:
-        if name == "managym":
-            raise importlib.metadata.PackageNotFoundError(name)
-        return version(name)
 
     def missing_distribution(name: str) -> importlib.metadata.Distribution:
         if name == "managym":
             raise importlib.metadata.PackageNotFoundError(name)
         return distribution(name)
 
-    monkeypatch.setattr(importlib.metadata, "version", missing_version)
     monkeypatch.setattr(importlib.metadata, "distribution", missing_distribution)
-
-
-@contextmanager
-def _response(body: bytes) -> Iterator[io.BytesIO]:
-    yield io.BytesIO(body)
 
 
 def test_source_launch_fetches_uncached_art(
@@ -121,14 +107,14 @@ def test_source_launch_fetches_uncached_art(
     _without_installed_metadata(monkeypatch)
     requests: list[Request] = []
 
-    def scryfall(request: Request, timeout: float) -> object:
+    def scryfall(request: Request, timeout: float) -> io.BytesIO:
         requests.append(request)
         if request.get_header("Accept") == "application/json":
-            return _response(json.dumps({"artist": "Test Artist"}).encode())
-        return _response(JPEG)
+            return io.BytesIO(json.dumps({"artist": "Test Artist"}).encode())
+        return io.BytesIO(JPEG)
 
     monkeypatch.setattr(card_art, "urlopen", scryfall)
-    art = CardArt(tmp_path, enabled=True)
+    art = CardArt(tmp_path)
     monkeypatch.setattr(server, "card_art", lambda: art)
     with TestClient(server.app) as client:
         response = client.get(f"/api/card-art/full/{art_slug(NAME)}.jpg")
