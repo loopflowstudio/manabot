@@ -1,0 +1,13 @@
+# Open questions (MTG-436)
+
+Assumptions and choices made for review while planning with nobody present (see `scratch/concept-review.html` for full context and options). Each is reversible.
+
+1. **Opaque handles (`Prepared`, `Collector`, `Prefix`, `MemoryArchive`).** Recorded as `kind: "opaque"` so internal RL routing/stream fields stay free to evolve on `0.2.x`. Alternative: freeze a small allowlist on `Collector` (e.g. `stats`, `game_error_state`) or freeze all dataclass fields.
+2. **Legacy internal `__all__` lists removed.** Unused `__all__` lists in `manabot/belief/*.py` and `manabot/semantic/learning.py` are removed (with `manabot/sim/search/flat.py` kept exempt as a `0.3.0`-deprecated shim) so `__all__` has one unambiguous meaning in `manabot/`. Alternative: leave them in place and rely solely on `PUBLIC_MODULES` + `tests/public_api.json`.
+3. **Narrow initial `__all__` without speculative exports.** `RuntimeConfig`, `SimulationConfig`, `collect_pair`, `load_metadata`, `MemoryStore`, and `catalog_programs` are omitted for now (no known external consumer); adding any later is patch-compatible. The `*_INDEX`/`*_DIM` constants of `manabot.env.observation` stay internal.
+4. **Contract records shape, not types.** Parameter names, kinds, and required-ness; field/attribute names and required-ness; enum member values; no annotations, return types, or defaults (avoids 3.12 vs 3.13 `pathlib._local.Path` and NumPy formatting drift).
+5. **managym submodules are outside MTG-436.** jace imports `managym.recording` (`ScalarCapture`, `read_records`), `managym.enums` (`ActionEnum`, `ActionSpaceEnum`), `managym.policy` (`PolicyRegistry`, `PolicySpec`), and `managym.disclosure` (`DecklistDisclosure`). Auditing `managym/*.py` to publish them belongs in a follow-up Task.
+6. **`managym.reduce_card_capture_json` is internal.** It exists on `managym` only via `from ._managym import *` and is called as `managym._managym.reduce_card_capture_json` in `managym/statistics.py`; leaving it out of `managym/__init__.pyi` and the contract is intentional.
+7. **MTG-437 coordination.** MTG-437 adds `concatenate` and `max_actions` (and fixes `obs_space.encoder.max_actions`). Whichever Task lands second runs plain `scripts/public_api.py record` (additions only). `test_external_consumer.py` does not exercise `obs_space.encoder.max_actions` here.
+
+8. **Stub imports.** On CPython 3.13, `hasattr(managym, name)` was false for `DecklistDisclosure` and `GameStatistics`. Both are annotation imports in the stub. Use the explicit same-name alias convention for stub re-exports, which includes `format as format`.
