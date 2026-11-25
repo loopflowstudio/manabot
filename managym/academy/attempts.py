@@ -573,6 +573,13 @@ class AttemptStore:
         retained = self.load_attempt(attempt)
         return retained.trace if retained is not None else None
 
+    def has_attempt(self, attempt: str) -> bool:
+        with self.connect() as db:
+            return (
+                db.execute("SELECT 1 FROM attempts WHERE id=?", (attempt,)).fetchone()
+                is not None
+            )
+
     def load_attempt(self, attempt: str) -> RetainedAttempt | None:
         """Read the private trace and its world from the same database snapshot."""
         with self.connect() as db:

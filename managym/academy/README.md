@@ -336,8 +336,11 @@ shows it yet.
 `POST /api/traces/{id}/analyses {"policy": <Policy ID>}` (participant only)
 loads a fresh `PolicyRunner` in the person's seat and walks the game on a
 daemon thread; `GET` lists the game's analyses with their decisions so far,
-the eligible policies, the default (the opponent's own policy) and why none
-may run. Eligible means registered, admitted for the game's decks, with an
+reading only their rows, so Review follows a running analysis with it.
+`GET /api/traces/{id}/analyses/policies`, read once when Review opens,
+re-executes the game to list the eligible policies, the default (the
+opponent's own policy), why none may run and the events an analysis of the
+person's seat reads. Eligible means registered, admitted for the game's decks, with an
 artifact and no Search composition: Search plays out from the walk's real
 hidden cards. A game still being played is refused (`analysis_game_active`);
 one analysis runs per game per process (`analysis_running`).

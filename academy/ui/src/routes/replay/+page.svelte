@@ -31,7 +31,7 @@
   import {
     analysedEvidence, analysedMarks, bottomSeat, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
-  import { analysisStatus, byEvent, scoreName, type AnalysisList } from '$lib/analysis';
+  import { analysisStatus, byEvent, scoreName, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
@@ -113,12 +113,13 @@
   const viewerSeat = $derived(studying ? (studyFrame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
   // ———————————————— Analysis: a policy's reading of your decisions
 
-  let analyses = $state.raw<AnalysisList | null>(null);
+  let analyses = $state.raw<Analysis[] | null>(null);
+  let analysisChoices = $state.raw<AnalysisChoices | null>(null);
   let analysisChoice = $state<string | null>(null);
   let analyseWith = $state('');
   let analysisError = $state('');
   let analysisPoll: ReturnType<typeof setTimeout> | undefined;
-  const analysis = $derived(analyses?.analyses.find(item => item.id === analysisChoice) ?? analyses?.analyses.at(-1) ?? null);
+  const analysis = $derived(analyses?.find(item => item.id === analysisChoice) ?? analyses?.at(-1) ?? null);
   const analysed = $derived(byEvent(analysis));
   const analysisName = $derived(analysis ? shortName(analysis.policy.name) : '');
   const analysisScale = $derived.by(() => {
@@ -192,23 +193,27 @@
   }
 
   /**
-   * Reads this game's analyses, following one that is running. Your own game,
-   * once nobody is playing it, opens its default analysis if it has none.
+   * Reads this game's analyses, following one that is running. Opening reads
+   * who may analyse it once (it re-executes the game); following reads only the
+   * saved analyses. Your own game, once nobody is playing it, opens its default
+   * analysis if it has none.
    */
-  async function loadAnalyses(id: string, startDefault = false): Promise<void> {
+  async function loadAnalyses(id: string, opening = false): Promise<void> {
     clearTimeout(analysisPoll);
     const index = replayStore.index;
-    if (!index || index.id !== id || index.watch) { analyses = null; return; }
+    if (!index || index.id !== id || index.watch) { analyses = null; analysisChoices = null; return; }
+    const path = `/api/traces/${encodeURIComponent(id)}/analyses`;
     try {
-      let list = await replayStore.api<AnalysisList>(`/api/traces/${encodeURIComponent(id)}/analyses`);
-      if (startDefault && !list.analyses.length && list.default && index.can_feedback && index.status !== 'waiting') {
-        await replayStore.api(`/api/traces/${encodeURIComponent(id)}/analyses`, { policy: list.default });
-        list = await replayStore.api<AnalysisList>(`/api/traces/${encodeURIComponent(id)}/analyses`);
+      const choices = opening ? await replayStore.api<AnalysisChoices>(`${path}/policies`) : analysisChoices;
+      let list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
+      if (opening && !list.length && choices?.default && index.can_feedback && index.status !== 'waiting') {
+        await replayStore.api(path, { policy: choices.default });
+        list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
       }
       if (replayStore.index?.id !== id) return;
-      analyses = list; analysisError = '';
-      if (!analyseWith) analyseWith = list.default ?? list.policies[0]?.sha256 ?? '';
-      if (list.analyses.some(item => item.status === 'running')) analysisPoll = setTimeout(() => void loadAnalyses(id), 1000);
+      analysisChoices = choices; analyses = list; analysisError = '';
+      if (!analyseWith) analyseWith = choices?.default ?? choices?.policies[0]?.sha256 ?? '';
+      if (list.some(item => item.status === 'running')) analysisPoll = setTimeout(() => void loadAnalyses(id), 1000);
     } catch (reason) { analysisError = reason instanceof Error ? reason.message : String(reason); }
   }
 
@@ -454,8 +459,8 @@
   {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
   {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
   {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}
-  {#if analyses && !analysis && !index?.watch}
-    <p class="type-caption text-ink-3" data-testid="analysis-absent">{analyses.unavailable ?? (analyses.policies.length ? 'No analysis yet · Analyse with… in the Menu' : 'No analysis: no registered policy can read this game. Install a policy provider (managym.bots) to analyse it.')}</p>
+  {#if analyses && analysisChoices && !analysis && !index?.watch}
+    <p class="type-caption text-ink-3" data-testid="analysis-absent">{analysisChoices.unavailable ?? (analysisChoices.policies.length ? 'No analysis yet · Analyse with… in the Menu' : 'No analysis: no registered policy can read this game. Install a policy provider (managym.bots) to analyse it.')}</p>
   {/if}
   {#if replayStore.producing && index}
     <section aria-label="Live frontier work" class="type-caption text-ink-2">
@@ -503,23 +508,23 @@
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-      {#if analyses && !index?.watch}
+      {#if analyses && analysisChoices && !index?.watch}
         <section class="analysis-menu type-caption" aria-label="Analysis" data-testid="analysis-menu">
           <p class="type-label text-ink-2">Analysis</p>
-          {#if analyses.analyses.length > 1}
+          {#if analyses.length > 1}
             <label>Shown
               <select aria-label="Shown analysis" value={analysis?.id} onchange={event => (analysisChoice = event.currentTarget.value)}>
-                {#each analyses.analyses as item, at (item.id)}<option value={item.id}>{at + 1}. {item.policy.name} · {item.status}</option>{/each}
+                {#each analyses as item, at (item.id)}<option value={item.id}>{at + 1}. {item.policy.name} · {item.status}</option>{/each}
               </select>
             </label>
           {:else if analysis}<p class="text-ink-2">By {analysis.policy.name}</p>{/if}
-          {#if analyses.unavailable}<p class="text-ink-3">{analyses.unavailable}</p>
-          {:else if analyses.policies.length && index?.can_feedback}
+          {#if analysisChoices.unavailable}<p class="text-ink-3">{analysisChoices.unavailable}</p>
+          {:else if analysisChoices.policies.length && index?.can_feedback}
             <div class="analyse-with">
-              <select aria-label="Policy to analyse with" bind:value={analyseWith} disabled={analyses.analyses.some(item => item.status === 'running')}>
-                {#each analyses.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
+              <select aria-label="Policy to analyse with" bind:value={analyseWith} disabled={analyses.some(item => item.status === 'running')}>
+                {#each analysisChoices.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
               </select>
-              <button class="btn btn-secondary btn-sm" data-testid="analyse-with" disabled={!analyseWith || analyses.analyses.some(item => item.status === 'running') || index?.status === 'waiting'}
+              <button class="btn btn-secondary btn-sm" data-testid="analyse-with" disabled={!analyseWith || analyses.some(item => item.status === 'running') || index?.status === 'waiting'}
                 onclick={() => void analyse(analyseWith)}>{analysis?.status === 'stopped' && analysis.policy.id === analyseWith ? 'Analyse again' : 'Analyse with…'}</button>
             </div>
           {/if}

@@ -4275,13 +4275,24 @@ def _analysed_attempt(trace_id: str) -> tuple[AttemptStore, RetainedAttempt]:
 
 @app.get("/api/traces/{trace_id}/analyses")
 def get_analyses(trace_id: str) -> dict[str, Any]:
-    store, attempt = _analysed_attempt(trace_id)
+    """The game's saved analyses: a read of their rows only, cheap enough to
+    follow a running analysis."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    if not store.has_attempt(trace_id):
+        raise HTTPException(404, "recording_not_found")
+    return {"analyses": store.analyses(trace_id)}
+
+
+@app.get("/api/traces/{trace_id}/analyses/policies")
+def get_analysis_policies(trace_id: str) -> dict[str, Any]:
+    """Who may analyse this game, read once when Review opens: it re-executes
+    the game and admits every registered policy."""
+    _, attempt = _analysed_attempt(trace_id)
     try:
         choices = analysis_choices(attempt, policy_registry())
     except (ImportError, OSError, ValueError) as exc:
         choices = AnalysisChoices([], None, f"Policies could not be listed: {exc}")
     return {
-        "analyses": store.analyses(trace_id),
         "policies": choices.policies,
         "default": choices.default,
         "unavailable": choices.unavailable,

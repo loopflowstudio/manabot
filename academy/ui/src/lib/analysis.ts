@@ -32,8 +32,8 @@ export interface Analysis {
   decisions: AnalysedDecision[];
 }
 
-export interface AnalysisList {
-  analyses: Analysis[];
+/** Who may analyse a game (`/analyses/policies`), read once when Review opens. */
+export interface AnalysisChoices {
   /** Policies that may analyse this game, by registered id. */
   policies: { sha256: string; name: string }[];
   /** The opponent's own policy, when it may analyse the game. */

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 import managym
-from managym.academy import server, trace
+from managym.academy import analysis as analysis_module, server, trace
 from managym.academy.analysis import AnalysisStop, analyse_game, analysed_events
 from managym.academy.attempts import AttemptStore, RetainedAttempt, participant_id
 from managym.academy.opponent import set_policy_registry
@@ -210,9 +210,10 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     with store.connect() as db:
         trace_id, before = db.execute("SELECT id, trace_json FROM attempts").fetchone()
     client = TestClient(server.app)
-    listed = client.get(f"/api/traces/{trace_id}/analyses").json()
+    choices = client.get(f"/api/traces/{trace_id}/analyses/policies").json()
     # The opponent's own policy opens by default.
-    assert listed["default"] == key and listed["analyses"] == []
+    assert choices["default"] == key
+    assert client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"] == []
     assert (
         client.post(
             f"/api/traces/{trace_id}/analyses", json={"policy": key}
@@ -227,8 +228,8 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     analysis = body["analyses"][-1]
     assert analysis["status"] == "complete", analysis["reason"]
     assert analysis["policy"]["id"] == key
-    assert [d["event"] for d in analysis["decisions"]] == body["events"]
-    assert analysis["total"] == len(body["events"])
+    assert [d["event"] for d in analysis["decisions"]] == choices["events"]
+    assert analysis["total"] == len(choices["events"])
     # A second analysis of the same game is its own row.
     client.post(
         f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
@@ -243,6 +244,26 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     ).replace("analysis_observation", "")
 
 
+def test_following_an_analysis_does_not_re_execute_the_game(
+    tmp_path: Path, registry: PolicyRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    finished(tmp_path)
+    store = AttemptStore(tmp_path / "play.sqlite")
+    with store.connect() as db:
+        (trace_id,) = db.execute("SELECT id FROM attempts").fetchone()
+    store.start_analysis(trace_id, 0, {"name": "Reader"}, 3)
+
+    def walked(*_: object) -> None:
+        raise AssertionError("the poll re-executed the game")
+
+    monkeypatch.setattr(analysis_module, "walk", walked)
+    monkeypatch.setattr(server, "policy_registry", walked)
+    client = TestClient(server.app)
+    (running,) = client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"]
+    assert running["status"] == "running"
+    assert client.get("/api/traces/missing/analyses").status_code == 404
+
+
 def test_analysis_by_search_is_refused(
     tmp_path: Path, registry: PolicyRegistry
 ) -> None:
@@ -254,7 +275,9 @@ def test_analysis_by_search_is_refused(
     client = TestClient(server.app)
     assert all(
         p["sha256"] != key
-        for p in client.get(f"/api/traces/{trace_id}/analyses").json()["policies"]
+        for p in client.get(f"/api/traces/{trace_id}/analyses/policies").json()[
+            "policies"
+        ]
     )
     refused = client.post(
         f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
