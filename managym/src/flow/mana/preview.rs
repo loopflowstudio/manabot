@@ -234,8 +234,9 @@ impl Game {
                     helped = keyword_help(&owed);
                     let requirements = card.target_requirements_for_mode(targeting.mode);
                     let completes = targeting.requirement_index + 1 == requirements.len()
-                        && targeting.clause_slots(targeting.requirement_index).len() + 1
-                            >= requirements[targeting.requirement_index].max_for(targeting.cast.x);
+                        && targeting.clause_slots(targeting.requirement_index).count() + 1
+                            >= requirements[targeting.requirement_index]
+                                .max_for(i32::from(targeting.cast.x));
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
                             "Choose the remaining targets before previewing this target-dependent cost."));

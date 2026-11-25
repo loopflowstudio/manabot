@@ -804,6 +804,44 @@ impl Game {
         frame
     }
 
+    fn fill_spell_targeting(
+        &self,
+        targeting: &crate::flow::game::SpellTargeting,
+        viewer: PlayerId,
+        frame: &mut ContinuationFrame,
+    ) {
+        frame.source = self.object_reference(targeting.object, viewer);
+        frame.kicked = targeting.cast.kicked;
+        frame.spell_profile = spell_profile_code(targeting.cast.profile);
+        frame.x = i32::from(targeting.cast.x);
+        frame.mode = targeting.mode;
+        frame.active_clause = Some(targeting.requirement_index);
+        frame.targets = self.clause_targets(
+            &targeting.chosen,
+            &targeting.chosen_req_indices,
+            &targeting.target_divisions,
+            viewer,
+        );
+    }
+
+    fn fill_activated_targeting(
+        &self,
+        targeting: &crate::flow::game::ActivatedTargeting,
+        viewer: PlayerId,
+        frame: &mut ContinuationFrame,
+    ) {
+        frame.source = self.activation_reference(targeting.source, viewer);
+        frame.x = targeting.x;
+        frame.ability = Some(targeting.ability_index);
+        frame.active_clause = Some(targeting.requirement);
+        frame.targets = self.clause_targets(
+            &targeting.chosen,
+            &targeting.target_req_indices,
+            &targeting.target_divisions,
+            viewer,
+        );
+    }
+
     fn announcement_frame(&self, pending: &PendingChoice, viewer: PlayerId) -> ContinuationFrame {
         let mut frame = ContinuationFrame {
             kind: 4,
@@ -850,18 +888,7 @@ impl Game {
                 );
             }
             PendingChoice::ChooseTargets { targeting, .. } => {
-                frame.source = self.object_reference(targeting.object, viewer);
-                frame.kicked = targeting.cast.kicked;
-                frame.spell_profile = spell_profile_code(targeting.cast.profile);
-                frame.x = i32::from(targeting.cast.x);
-                frame.mode = targeting.mode;
-                frame.active_clause = Some(targeting.requirement_index);
-                frame.targets = self.clause_targets(
-                    &targeting.chosen,
-                    &targeting.chosen_req_indices,
-                    &targeting.target_divisions,
-                    viewer,
-                );
+                self.fill_spell_targeting(targeting, viewer, &mut frame);
             }
             PendingChoice::DivideAmount {
                 slots,
@@ -877,30 +904,10 @@ impl Game {
                     .map(|t| self.target_reference(*t, viewer));
                 match parent.as_ref() {
                     crate::flow::game::DivisionParent::Spell(targeting) => {
-                        frame.source = self.object_reference(targeting.object, viewer);
-                        frame.kicked = targeting.cast.kicked;
-                        frame.spell_profile = spell_profile_code(targeting.cast.profile);
-                        frame.x = i32::from(targeting.cast.x);
-                        frame.mode = targeting.mode;
-                        frame.active_clause = Some(targeting.requirement_index);
-                        frame.targets = self.clause_targets(
-                            &targeting.chosen,
-                            &targeting.chosen_req_indices,
-                            &targeting.target_divisions,
-                            viewer,
-                        );
+                        self.fill_spell_targeting(targeting, viewer, &mut frame);
                     }
                     crate::flow::game::DivisionParent::Activation(targeting) => {
-                        frame.source = self.activation_reference(targeting.source, viewer);
-                        frame.x = targeting.x;
-                        frame.ability = Some(targeting.ability_index);
-                        frame.active_clause = Some(targeting.requirement);
-                        frame.targets = self.clause_targets(
-                            &targeting.chosen,
-                            &targeting.target_req_indices,
-                            &targeting.target_divisions,
-                            viewer,
-                        );
+                        self.fill_activated_targeting(targeting, viewer, &mut frame);
                     }
                 }
             }
@@ -915,22 +922,8 @@ impl Game {
                 frame.source = self.object_reference(*object, viewer);
                 frame.spell_profile = spell_profile_code(cast.profile);
             }
-            PendingChoice::ActivatedTarget(crate::flow::game::ActivatedTargeting {
-                player: _,
-                source,
-                ability_index,
-                chosen,
-                target_req_indices,
-                target_divisions,
-                requirement,
-                x,
-            }) => {
-                frame.x = *x;
-                frame.source = self.activation_reference(*source, viewer);
-                frame.ability = Some(*ability_index);
-                frame.active_clause = Some(*requirement);
-                frame.targets =
-                    self.clause_targets(chosen, target_req_indices, target_divisions, viewer);
+            PendingChoice::ActivatedTarget(targeting) => {
+                self.fill_activated_targeting(targeting, viewer, &mut frame);
             }
             PendingChoice::ActivationX {
                 permanent,

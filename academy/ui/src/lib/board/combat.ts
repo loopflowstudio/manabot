@@ -40,8 +40,8 @@ export type CombatFetcher = (request: CombatAddress & { plan: CombatPlan }, sign
 
 // ———————————————————————————————————————— Drafts
 
-/** Attackers in the attack, or blocker → attacker; display ids. */
-export interface Draft { attackers: number[]; defenders?: Record<number, number | null>; blocks: [number, number][] }
+/** Attackers in the attack (optional non-player defender per attacker), or blocker → attacker; display ids. */
+export interface Draft { attackers: number[]; defenders?: Record<number, number>; blocks: [number, number][] }
 export const EMPTY_DRAFT: Draft = { attackers: [], blocks: [] };
 
 export function isDeclaration(frame: ExperienceFrame): boolean {
@@ -112,14 +112,13 @@ export function drawDraft(frame: ExperienceFrame, draft: Draft): ExperienceFrame
   if (!draft.attackers.length && !draft.blocks.length) return frame;
   const attacking = new Set(draft.attackers);
   const blocking = new Map(draft.blocks);
-  const draw = (permanent: ExperienceFrame['projection']['agent']['battlefield'][number]) =>
-    attacking.has(permanent.id)
-      ? {
-          ...permanent,
-          attacking: true,
-          ...(draft.defenders?.[permanent.id] != null ? { attacked_permanent: draft.defenders[permanent.id]! } : {}),
-        }
-      : blocking.has(permanent.id) ? { ...permanent, blocking: blocking.get(permanent.id) } : permanent;
+  const draw = (permanent: ExperienceFrame['projection']['agent']['battlefield'][number]) => {
+    if (attacking.has(permanent.id)) {
+      const defender = draft.defenders?.[permanent.id];
+      return { ...permanent, attacking: true, ...(defender !== undefined && { attacked_permanent: defender }) };
+    }
+    return blocking.has(permanent.id) ? { ...permanent, blocking: blocking.get(permanent.id) } : permanent;
+  };
   const { agent, opponent } = frame.projection;
   return {
     ...frame,
@@ -182,7 +181,7 @@ export function draftWords(
     const text = count === 1 && one.length <= PRIMARY_CHARS ? one : `Attack with ${count}`;
     const defenders = { ...committed.defenders, ...drafted.defenders };
     if (Object.keys(defenders).length) {
-      const assignments = draft.attackers.map(id => `${name(id)} attacks ${defenders[id] == null ? 'the defending player' : name(defenders[id]!)}`);
+      const assignments = draft.attackers.map(id => `${name(id)} attacks ${defenders[id] === undefined ? 'the defending player' : name(defenders[id])}`);
       return { text, plan: assignments.join(' · ') };
     }
     if (!out.length) return { text, plan: count > 1 ? `Attack with all ${count}` : `Attack with ${name(draft.attackers[0])}` };

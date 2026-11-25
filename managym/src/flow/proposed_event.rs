@@ -792,38 +792,10 @@ impl Game {
                     if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
                         return BatchProgress::Decision(Box::new(decision));
                     }
-                    if let (
-                        EventBinding::Created { attacking: true },
-                        ProposedEvent::ZoneMove {
-                            object_id,
-                            to: ZoneType::Battlefield,
-                            entry,
-                            ..
-                        },
-                    ) = (&batch.binding, &pending.event)
+                    if let Some(choice) =
+                        self.enter_attacking_choice(&batch.binding, &mut batch.events[batch.cursor])
                     {
-                        if entry.attack_target.is_none() {
-                            let player = entry
-                                .controller
-                                .unwrap_or(self.state.entry_object(*object_id).owner);
-                            if player == self.active_player() && self.state.combat.is_some() {
-                                let defenders: Vec<_> = self.attack_targets(player).collect();
-                                if defenders.len() > 1 {
-                                    return BatchProgress::Decision(Box::new(
-                                        Decision::EnterAttacking {
-                                            player,
-                                            object: *object_id,
-                                            defenders,
-                                        },
-                                    ));
-                                }
-                                if let ProposedEvent::ZoneMove { entry, .. } =
-                                    &mut batch.events[batch.cursor].event
-                                {
-                                    entry.attack_target = defenders.first().copied();
-                                }
-                            }
-                        }
+                        return choice;
                     }
                     batch.cursor += 1;
                 }
@@ -1085,6 +1057,49 @@ impl Game {
             object_id: object,
             candidates,
         })))
+    }
+
+    /// CR 508.4: a token created attacking chooses its defender as it enters
+    /// when multiple defenders are legal, and defaults to the sole defender
+    /// otherwise.
+    fn enter_attacking_choice(
+        &self,
+        binding: &EventBinding,
+        pending: &mut PendingEvent,
+    ) -> Option<BatchProgress> {
+        let (
+            EventBinding::Created { attacking: true },
+            ProposedEvent::ZoneMove {
+                object_id,
+                to: ZoneType::Battlefield,
+                entry,
+                ..
+            },
+        ) = (binding, &mut pending.event)
+        else {
+            return None;
+        };
+        if entry.attack_target.is_some() || self.state.combat.is_none() {
+            return None;
+        }
+        let player = entry
+            .controller
+            .unwrap_or(self.state.entry_object(*object_id).owner);
+        if player != self.active_player() {
+            return None;
+        }
+        let defenders: Vec<_> = self.attack_targets(player).collect();
+        if defenders.len() > 1 {
+            return Some(BatchProgress::Decision(Box::new(
+                Decision::EnterAttacking {
+                    player,
+                    object: *object_id,
+                    defenders,
+                },
+            )));
+        }
+        entry.attack_target = defenders.first().copied();
+        None
     }
 
     /// Answer the cursor member's entry-copy question: it becomes a copy of

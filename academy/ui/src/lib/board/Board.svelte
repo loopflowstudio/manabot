@@ -948,7 +948,7 @@
               <span class="type-caption attack-who">{names.get(attacker)}</span>
               <span class="type-caption text-ink-3" aria-hidden="true">→</span>
               <select class="type-caption" aria-label={`Defender for ${names.get(attacker)}`}
-                value={draft.defenders?.[attacker] == null ? 'player' : String(draft.defenders[attacker])}
+                value={draft.defenders?.[attacker] === undefined ? 'player' : String(draft.defenders[attacker])}
                 onfocus={() => { armed = attacker; }}
                 onchange={event => {
                   armed = attacker;

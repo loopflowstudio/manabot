@@ -455,20 +455,16 @@ impl SpellTargeting {
     }
 
     /// Indices into `chosen` belonging to clause `requirement`.
-    pub fn clause_slots(&self, requirement: usize) -> Vec<usize> {
+    pub fn clause_slots(&self, requirement: usize) -> impl Iterator<Item = usize> + Clone + '_ {
         self.chosen_req_indices
             .iter()
             .enumerate()
-            .filter_map(|(slot, &req)| (req == requirement).then_some(slot))
-            .collect()
+            .filter_map(move |(slot, &req)| (req == requirement).then_some(slot))
     }
 
     /// The targets already chosen for clause `requirement`.
-    pub fn clause_targets(&self, requirement: usize) -> Vec<Target> {
-        self.clause_slots(requirement)
-            .into_iter()
-            .map(|slot| self.chosen[slot])
-            .collect()
+    pub fn clause_targets(&self, requirement: usize) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.clause_slots(requirement).map(|slot| self.chosen[slot])
     }
 }
 
@@ -480,6 +476,13 @@ pub enum DivisionParent {
 }
 
 impl DivisionParent {
+    pub(crate) fn player(&self) -> PlayerId {
+        match self {
+            Self::Spell(targeting) => targeting.player,
+            Self::Activation(targeting) => targeting.player,
+        }
+    }
+
     pub(crate) fn chosen(&self) -> &[Target] {
         match self {
             Self::Spell(targeting) => &targeting.chosen,
@@ -507,18 +510,15 @@ impl ActivatedTargeting {
     }
 
     /// Indices into `chosen` belonging to clause `requirement`.
-    pub fn clause_slots(&self, requirement: usize) -> Vec<usize> {
-        (0..self.chosen.len())
-            .filter(|slot| self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement)
-            .collect()
+    pub fn clause_slots(&self, requirement: usize) -> impl Iterator<Item = usize> + Clone + '_ {
+        (0..self.chosen.len()).filter(move |slot| {
+            self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement
+        })
     }
 
     /// The targets already chosen for clause `requirement`.
-    pub fn clause_targets(&self, requirement: usize) -> Vec<Target> {
-        self.clause_slots(requirement)
-            .into_iter()
-            .map(|slot| self.chosen[slot])
-            .collect()
+    pub fn clause_targets(&self, requirement: usize) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.clause_slots(requirement).map(|slot| self.chosen[slot])
     }
 }
 

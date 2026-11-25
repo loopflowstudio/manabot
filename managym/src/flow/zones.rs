@@ -491,7 +491,7 @@ impl Game {
 
     /// Allocate a newly created token or spell copy outside every zone.
     /// All companion stores grow here, in the same creation order.
-    fn add_object(&mut self, object: Object) -> ObjectId {
+    pub(super) fn add_object(&mut self, object: Object) -> ObjectId {
         self.state.objects.push(object);
         self.state.object_to_permanent.push(None);
         self.state.zones.allocate()

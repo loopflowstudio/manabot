@@ -2364,7 +2364,7 @@ impl TargetRequirement {
     }
 
     /// The fewest targets this requirement allows with X announced as `x`.
-    pub fn min_for_x(&self, x: i32) -> usize {
+    pub fn min_for(&self, x: i32) -> usize {
         if self.exact_x() {
             usize::try_from(x).unwrap_or(0)
         } else {
@@ -2372,23 +2372,13 @@ impl TargetRequirement {
         }
     }
 
-    /// The fewest targets this requirement allows with X announced as `x`.
-    pub fn min_for(&self, x: u8) -> usize {
-        self.min_for_x(i32::from(x))
-    }
-
     /// The most targets this requirement allows with X announced as `x`.
-    pub fn max_for_x(&self, x: i32) -> usize {
+    pub fn max_for(&self, x: i32) -> usize {
         if self.max_x {
             usize::try_from(x).unwrap_or(0)
         } else {
             self.max
         }
-    }
-
-    /// The most targets this requirement allows with X announced as `x`.
-    pub fn max_for(&self, x: u8) -> usize {
-        self.max_for_x(i32::from(x))
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {

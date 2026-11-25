@@ -1330,21 +1330,31 @@ fn exude_toxin_target_threshold_uses_the_announced_x() {
     }
 }
 
-#[test]
-fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x() {
-    use crate::{
-        agent::{
-            action::{Action, ActionSpaceKind},
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
-            observation_layout::{action, relation},
-        },
-        flow::turn::StepKind,
-        state::{
-            card::{ActivatedAbilityDefinition, LoyaltyCost},
-            permanent::CounterKind,
-        },
-    };
+fn step_action(game: &mut Game, target: &crate::agent::action::Action) {
+    let index = game
+        .current_action_space
+        .as_ref()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| a == target)
+        .unwrap_or_else(|| panic!("action {target:?} not offered"));
+    game.step(index).unwrap();
+}
+
+fn resolve_stack(game: &mut Game) {
+    while !game.state.stack_objects.is_empty() {
+        let player = game.state.priority.holder;
+        step_action(game, &crate::agent::action::Action::PassPriority { player });
+    }
+}
+
+fn chandra_with_granted_ability(
+    seed: u64,
+    loyalty: i32,
+    ability: crate::state::card::ActivatedAbilityDefinition,
+) -> (Game, PermanentId) {
+    use crate::{agent::action::Action, flow::turn::StepKind, state::permanent::CounterKind};
 
     let deck = BTreeMap::from([
         ("Chandra, Flameshaper".to_string(), 4),
@@ -1355,21 +1365,10 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
             PlayerConfig::new("p0", deck.clone()),
             PlayerConfig::new("p1", deck),
         ],
-        430_001,
+        seed,
         false,
     );
     game.keep_opening_hands();
-    let step_action = |game: &mut Game, target: &Action| {
-        let index = game
-            .current_action_space
-            .as_ref()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| a == target)
-            .unwrap_or_else(|| panic!("action {target:?} not offered"));
-        game.step(index).unwrap();
-    };
     while !(game.active_player() == PlayerId(0)
         && game.state.turn.current_step_kind() == StepKind::Main)
     {
@@ -1383,24 +1382,36 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
             .unwrap_or(0);
         game.step(pass_index).unwrap();
     }
-
     let chandra = game
         .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
         .unwrap();
-    // `scenario_force_battlefield` bypasses ETB replacement, so seed 5 loyalty directly.
+    // `scenario_force_battlefield` bypasses ETB replacement, so seed loyalty directly.
     game.state.permanents[chandra]
         .as_mut()
         .unwrap()
-        .change_counters(CounterKind::Loyalty, 5);
-    let b1 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1))
-        .unwrap();
-    let b2 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1))
-        .unwrap();
-    let b3 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1))
-        .unwrap();
+        .change_counters(CounterKind::Loyalty, loyalty);
+    let affected = game.affected_permanent(chandra).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::GrantActivated(Box::new(ability)),
+        EffectDuration::Indefinite,
+    );
+    (game, chandra)
+}
+
+#[test]
+fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x() {
+    use crate::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+            observation_layout::{action, relation},
+        },
+        state::card::{ActivatedAbilityDefinition, LoyaltyCost},
+    };
 
     // Grant −X: deal X damage divided among at least 1 target creature.
     let ability = ActivatedAbilityDefinition {
@@ -1419,14 +1430,16 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         }],
         ..Default::default()
     };
-    let affected = game.affected_permanent(chandra).unwrap();
-    game.apply_continuous(
-        None,
-        PlayerId(0),
-        [affected],
-        Modification::GrantActivated(Box::new(ability)),
-        EffectDuration::Indefinite,
-    );
+    let (mut game, chandra) = chandra_with_granted_ability(430_001, 5, ability);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b3 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
     game.current_action_space = None;
     game.finish_action_step();
 
@@ -1548,10 +1561,7 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
             mode: 1,
         },
     );
-    while !game.state.stack_objects.is_empty() {
-        let player = game.state.priority.holder;
-        step_action(&mut game, &Action::PassPriority { player });
-    }
+    resolve_stack(&mut game);
     assert_eq!(game.state.permanents[b1].as_ref().unwrap().damage, 2);
     assert_eq!(game.state.permanents[b2].as_ref().unwrap().damage, 1);
     assert_eq!(game.state.permanents[b3].as_ref().unwrap().damage, 2);
@@ -1561,75 +1571,8 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
 fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
     use crate::{
         agent::action::Action,
-        flow::turn::StepKind,
-        state::{
-            card::{ActivatedAbilityDefinition, LoyaltyCost},
-            permanent::CounterKind,
-        },
+        state::card::{ActivatedAbilityDefinition, LoyaltyCost},
     };
-
-    let deck = BTreeMap::from([
-        ("Chandra, Flameshaper".to_string(), 4),
-        ("Mountain".to_string(), 36),
-    ]);
-    let mut game = Game::new(
-        vec![
-            PlayerConfig::new("p0", deck.clone()),
-            PlayerConfig::new("p1", deck),
-        ],
-        430_002,
-        false,
-    );
-    game.keep_opening_hands();
-    let step_action = |game: &mut Game, target: &Action| {
-        let index = game
-            .current_action_space
-            .as_ref()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| a == target)
-            .unwrap_or_else(|| panic!("action {target:?} not offered"));
-        game.step(index).unwrap();
-    };
-    while !(game.active_player() == PlayerId(0)
-        && game.state.turn.current_step_kind() == StepKind::Main)
-    {
-        let pass_index = game
-            .current_action_space
-            .as_ref()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::PassPriority { .. }))
-            .unwrap_or(0);
-        game.step(pass_index).unwrap();
-    }
-
-    let chandra = game
-        .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
-        .unwrap();
-    game.state.permanents[chandra]
-        .as_mut()
-        .unwrap()
-        .change_counters(CounterKind::Loyalty, 6);
-    let b1 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1))
-        .unwrap();
-    let b2 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1))
-        .unwrap();
-    // Give both Beasts +0/+3 so they survive 4+ damage and exact damage can be asserted.
-    for id in [b1, b2] {
-        let affected = game.affected_permanent(id).unwrap();
-        game.apply_continuous(
-            None,
-            PlayerId(1),
-            [affected],
-            Modification::pump(0, 3),
-            EffectDuration::EndOfTurn,
-        );
-    }
 
     // Clause divides 4 among up to 2 targets, then ALSO deals 1 fixed damage to those targets.
     let ability = ActivatedAbilityDefinition {
@@ -1649,14 +1592,24 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
         }],
         ..Default::default()
     };
-    let affected = game.affected_permanent(chandra).unwrap();
-    game.apply_continuous(
-        None,
-        PlayerId(0),
-        [affected],
-        Modification::GrantActivated(Box::new(ability)),
-        EffectDuration::Indefinite,
-    );
+    let (mut game, chandra) = chandra_with_granted_ability(430_002, 6, ability);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
+        .unwrap();
+    // Give both Beasts +0/+3 so they survive 4+ damage and exact damage can be asserted.
+    for id in [b1, b2] {
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(1),
+            [affected],
+            Modification::pump(0, 3),
+            EffectDuration::EndOfTurn,
+        );
+    }
     game.current_action_space = None;
     game.finish_action_step();
 
@@ -1668,20 +1621,15 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
             ability_index: 3,
         },
     );
-    step_action(
-        &mut game,
-        &Action::ChooseTarget {
-            player: PlayerId(0),
-            target: Target::Permanent(b1),
-        },
-    );
-    step_action(
-        &mut game,
-        &Action::ChooseTarget {
-            player: PlayerId(0),
-            target: Target::Permanent(b2),
-        },
-    );
+    for target in [b1, b2] {
+        step_action(
+            &mut game,
+            &Action::ChooseTarget {
+                player: PlayerId(0),
+                target: Target::Permanent(target),
+            },
+        );
+    }
     // Assign 3 to b1 (auto-assigns 1 to b2).
     step_action(
         &mut game,
@@ -1690,10 +1638,7 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
             mode: 3,
         },
     );
-    while !game.state.stack_objects.is_empty() {
-        let player = game.state.priority.holder;
-        step_action(&mut game, &Action::PassPriority { player });
-    }
+    resolve_stack(&mut game);
     assert_eq!(
         game.state.permanents[b1].as_ref().unwrap().damage,
         4,

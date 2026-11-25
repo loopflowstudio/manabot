@@ -492,9 +492,7 @@ mod tests {
             std::sync::Arc::new(printed),
             ObjectKind::Emblem,
         );
-        game.state.objects.push(emblem);
-        game.state.object_to_permanent.push(None);
-        let object = game.state.zones.allocate();
+        let object = game.add_object(emblem);
         game.state
             .place_object(object, PlayerId(0), ZoneType::Command);
 

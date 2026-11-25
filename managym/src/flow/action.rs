@@ -787,13 +787,14 @@ impl Game {
                     };
                     self.tap_activation_payment_possible(player, &payment, None)
                         && (!ability.announces_x()
-                            || !self
-                                .legal_activation_x_values(player, permanent_id, ability_index)
-                                .is_empty())
+                            || self.has_legal_activation_x(
+                                player,
+                                permanent_id,
+                                ability_index,
+                                ability,
+                            ))
                 } else if ability.announces_x() {
-                    !self
-                        .legal_activation_x_values(player, permanent_id, ability_index)
-                        .is_empty()
+                    self.has_legal_activation_x(player, permanent_id, ability_index, ability)
                 } else if ability.waterbend {
                     self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
@@ -1015,8 +1016,8 @@ impl Game {
                     .collect();
                 let clause =
                     self.activation_target_requirement(*source, *ability_index, *requirement)?;
-                let in_clause = targeting.clause_targets(*requirement).len();
-                if in_clause >= clause.min_for_x(targeting.x) {
+                let in_clause = targeting.clause_slots(*requirement).count();
+                if in_clause >= clause.min_for(targeting.x) {
                     actions.push(Action::Decline { player: chooser });
                 }
                 Some(ActionSpace {
@@ -1122,12 +1123,13 @@ impl Game {
                     .cast
                     .spell(&self.state[targeting.object])
                     .target_requirements_for_mode(targeting.mode);
-                let chosen_in_req = targeting.clause_slots(targeting.requirement_index).len();
+                let chosen_in_req = targeting.clause_slots(targeting.requirement_index).count();
+                let x = i32::from(targeting.cast.x);
                 let min_met = requirements
                     .get(targeting.requirement_index)
                     .is_some_and(|req| {
-                        let min = req.min_for(targeting.cast.x);
-                        chosen_in_req >= min && req.max_for(targeting.cast.x) > min
+                        let min = req.min_for(x);
+                        chosen_in_req >= min && req.max_for(x) > min
                     });
                 if min_met {
                     actions.push(Action::Decline {

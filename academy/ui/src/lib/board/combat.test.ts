@@ -138,6 +138,6 @@ it('keeps each chosen defender on its own attacker through preview and confirmat
   expect(draftWords('attackers', retargeted, declarable, new Map([...names, [7, 'Jace']]), EMPTY_DRAFT).plan)
     .toBe('Tiger-Seal attacks Jace · Otter-Penguin attacks the defending player');
   expect(setAttackerDefender(retargeted, 1, null).defenders).toBeUndefined();
-  const draft = { attackers: [1, 2], defenders: { 1: 7, 2: null }, blocks: [] };
-  expect(toggleAttacker(draft, 1).defenders).toEqual({ 2: null });
+  const both = setAttackerDefender(retargeted, 2, 7);
+  expect(toggleAttacker(both, 1).defenders).toEqual({ 2: 7 });
 });
