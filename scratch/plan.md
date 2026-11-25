@@ -12,70 +12,15 @@ Remaining implementation passes: **0 (all 11 slices complete)**. Every one of
 the 56 scoped ledger rows is `implemented`; Abyssal Harvester's `blocked_by` is
 cleared.
 
-## Slice 11 — Concept-Alignment Pass (from `scratch/concept-review.html`) — DONE
+## Follow-ups outside MTG-431 (separate Tasks)
 
-Implemented and verified with directed Rust, Python, and Academy UI tests:
-
-1. **Project `Decision::Retarget`'s already-chosen targets (`chosen: Vec<Target>`):**
-   - Added `"new target"` to `EXECUTION_TEXT` in `managym/src/agent/effect_execution.rs`,
-     emitted `out.target("new target", *target)` for every chosen target in
-     `Decision::Retarget` plus a `"New targets chosen so far: ..."` summary,
-     and included `"retarget"` in `manabot/semantic/text_observation.py`'s
-     pending-summary stages.
-   - Verified in `rna::retarget_projects_earlier_chosen_targets_before_final_commit`
-     and `tests/semantic/test_text_observation.py::test_retarget_and_keep_permanents_surface_in_text_and_academy`.
-2. **One mana-expiry authority (`ManaExpiry`) from pool storage through Academy & text play:**
-   - Unified `Player.combat_mana_pool` into `Player.mana_pool` with
-     `ManaExpiry::EndOfCombat`, deleted `Player.combat_mana_pool`,
-     `mana_pools_mut`, `combat_mana_pool_mut`, `clear_combat_mana_pools()`, and
-     the strip-and-fallback branch in `spend_mana_unit`, bumped
-     `MATCH_STATE_HASH_VERSION` to 33, and derived `PlayerData.combat_mana`
-     from `Mana::expiry_total(ManaExpiry::EndOfCombat)`.
-   - Added additive `expiry` (`"step"` / `"end_of_combat"` / `"end_of_turn"`,
-     omitted/defaulting to `"step"` for backward compatibility) to
-     `PooledManaClassData`, `PyPooledManaClass`, `managym/__init__.pyi`,
-     `PooledManaView` (Rust + Python + all 6 `protocol/*.schema.json`),
-     `experience_projection.py`, and `academy/ui/src/lib/types.ts`, keeping
-     `combat: bool` derived as `expiry == EndOfCombat`. Recorded additive
-     `tests/public_api.json` snapshot.
-   - Updated `manabot/semantic/text_observation.py` and
-     `academy/ui/src/lib/mana.ts` (`pooledManaTerms`) to distinguish `step`,
-     `end_of_combat`, and `end_of_turn`.
-   - Verified in `dtk::savage_ventmaw_mana_survives_until_cleanup`,
-     `tle::animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect`,
-     `tla::ozai_keeps_unspent_mana_as_red_and_flies_on_six`,
-     `tla::firebending_mana_lasts_until_end_of_combat_and_casts_spells`,
-     `tests/semantic/test_text_observation.py::test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy`,
-     and `academy/ui/src/lib/mana.test.ts`.
-3. **Decision-memory hygiene, offer-kind alignment & Academy prompt lines:**
-   - `managym/src/agent/decision_memory.rs`: skipped non-leaf `NameOption::Group(_)`
-     clicks on `Decision::ChooseEntryValue` and recorded the canonical leaf row
-     (`choose_entry_value_skips_group_navigation_and_records_canonical_leaf_row`).
-   - `managym/src/flow/decision.rs`: emitted `ActionSpaceKind::Modal` for
-     `Decision::PartitionPiles` and `Decision::ChoosePile` (updated
-     `fdn::curator_of_destinies_keeps_the_split_private_and_resolves_either_pile`).
-   - `managym/src/decision_context.rs`: emitted `"keep_permanents"` for
-     `Decision::KeepPermanents`, keeping `"keep_creatures"` accepted alongside
-     it in `managym/academy/recording.py` and `manabot/semantic/text_observation.py`.
-   - `academy/ui/src/lib/board/prompt.ts`: added `promptLine` cases for
-     `target_shares`, `entry_choice`, `order_entry_choices`, `partition_piles`,
-     and `choose_pile` (`academy/ui/src/lib/board/prompt.test.ts`, `svelte-check`).
-
-### Choices made for review & explicitly deferred work
-
-- **Unifying `combat_mana_pool` while keeping `Effect::AddMana.until_end_of_combat`:**
-  removes the duplicate pool lifecycle inside MTG-431 without churning TLA
-  pinned-pilot definition tokens.
-- **Keeping `PooledManaClassData.combat: bool` alongside additive `expiry`:**
-  preserves patch-clean 0.2.x compatibility.
-- **Outside MTG-431 (separate follow-up Tasks):**
-  - Semantic candidate-token encoding for `Decision::ChooseEntryValue` (Color
-    and 367 CreatureTypes) — generalizing `NameCandidateEncoder` to
-    `RecordNamespace::Token` vocabularies across `managym`,
-    `manabot/policy/prepare.py`, Torch, and MLX.
-  - Retiring legacy `Effect::LookAndSelect` onto `SelectCards { from: LibraryTop }`
-    and replacing `Effect::AddMana.until_end_of_combat` with `ManaExpiry` on
-    definitions (pinned-pilot rollover).
+- Semantic candidate-token encoding for `Decision::ChooseEntryValue` (Color and
+  367 creature types): generalize `NameCandidateEncoder` to
+  `RecordNamespace::Token` vocabularies across `managym`,
+  `manabot/policy/prepare.py`, Torch and MLX.
+- Retire `Effect::LookAndSelect` onto `SelectCards { from: LibraryTop }`, and
+  replace `Effect::AddMana.until_end_of_combat` with `ManaExpiry` on
+  definitions (pinned-pilot rollover).
 
 ## Finished slices (detail in git and the ledger)
 
@@ -89,6 +34,8 @@ Implemented and verified with directed Rust, Python, and Academy UI tests:
 8. Kicked entries, composite ward, `ManaExpiry`, Changeling, `CardPredicate.keyword`, `CounterKind::Wish` (Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush) — `460fe18685`.
 9. 23 compose-only cards (`token.raccoon_3_3_g`, `token.cat_beast_2_2_w`, `Effect::double_counters`, graveyard trigger `intervening_if` and `source_present` fixes for Flamewake Phoenix and Gate Colossus) — `1eb342e57b`.
 10. Abyssal Harvester (`TurnState::graveyard_arrivals`, `CardPredicate.put_into_graveyard_this_turn`, `Except::CreatedThisWay`, `CardData.put_into_graveyard_this_turn`, v11 `card::PUT_INTO_GRAVEYARD_THIS_TURN` column 56) — `1eb342e57b`; `blocked_by` cleared on its ledger row.
+
+11. Concept alignment: Retarget projects chosen `"new target"`s; one `Player.mana_pool` with `ManaExpiry` (combat pool deleted, additive `expiry` beside derived `combat`, `MATCH_STATE_HASH_VERSION` 33); group clicks skipped in decision memory; `PartitionPiles`/`ChoosePile` are `Modal`; `keep_permanents` stage (`keep_creatures` still read); Academy prompt lines — `e1f42473b0`. The commit records no test output; its directed tests run first at gate.
 
 ## Integrated validation
 
@@ -118,6 +65,8 @@ Implemented and verified with directed Rust, Python, and Academy UI tests:
     battlefield simultaneously: each asks its entry choice.
   - Deadly Brew against Desecration Demon.
   - Gate Colossus with Maze's End.
+- Hash version 33 moves match-state digests: expect Engine Budget digest and
+  retained-fixture changes; adopt with `scripts/engine_budget.py record --reason`.
 - Pinned pilot: v11 card column 56 (`put_into_graveyard_this_turn`) is an
   appended input column; `tests/model/test_pinned_pilot.py` must pass or the
   change must be declared with `scripts/pinned_pilot.py record --reason`.
