@@ -45,10 +45,6 @@
           "label": "Cast Wind Drake"
         },
         {
-          "offer_id": 4,
-          "label": "Pay the cost"
-        },
-        {
           "offer_id": 1,
           "label": "Do not attack with Wind Drake"
         },
@@ -540,14 +536,14 @@
       "digest": "218e114f98938b71768b07c2ed65372de48b36b28944ea74a81564499c854739",
       "frame": {
         "protocol": 1,
-        "match_id": "btt-Qjc3-hf2DaVKaCHuWQ",
-        "revision": 191,
-        "frame_hash": "5ad65a1ab09d37464da48f188aef3bfc64198248341990aaf315319e2843b03f",
+        "match_id": "UlaZgfJRGeQS8vputJ9ABQ",
+        "revision": 190,
+        "frame_hash": "24632c808bcef5dee05260f9d3bfccd01c8c4061b95e83e9955c63c13d13abf6",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 192,
+          "id": 191,
           "actor": 0,
           "kind": "choose_target",
           "title": "Trigger targets",
@@ -3182,9 +3178,9 @@
       "digest": "fdebe121817c1a825f288c94b36c672303f5e5235fd182ec9536d123de92f200",
       "frame": {
         "protocol": 1,
-        "match_id": "oFT4MfOIyN0ucMKW38Y8Ig",
+        "match_id": "xr9xkZN8ZodTkph48dyvJA",
         "revision": 58,
-        "frame_hash": "434f7b977eb5f711bd23960d30ac2af6aa323efedafb93a7a77ff5494ba7e32b",
+        "frame_hash": "1cfb5f47e747c82a662e028825bf5df0cb0bdfbf30a24223d50827de55ce4d99",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5149,9 +5145,9 @@
       "digest": "161b2ebc4cc3ac66a62771c300096c61884ac79cb3e1bfbc1ccf0e1fb573d2cb",
       "frame": {
         "protocol": 1,
-        "match_id": "LppdXSoRNAjL82AqHlXnpw",
+        "match_id": "821UtsmUvUc_UGt6fBTl_w",
         "revision": 9,
-        "frame_hash": "43dec2e453b8c545c145c2d6d437d76381573d1d36313dad5d2c0085caffad77",
+        "frame_hash": "a280d91ad280b9009e16300806085542a3bfce56b8cd3006870d8005e653c532",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6895,9 +6891,9 @@
       "digest": "7b8e70e424c14db56a92e4f474ac925f643cf1876f8a2683c80ed1401ab2f14c",
       "frame": {
         "protocol": 1,
-        "match_id": "12BO33zfGZmUuSnrEcPTVA",
+        "match_id": "uwA3FWRCMDFJA-YApatyqw",
         "revision": 7,
-        "frame_hash": "a174d4400ebc01de2f34b4adfbd77160f30d34b2800e7f8d6f4ac81dab0d1cce",
+        "frame_hash": "3d80c14df21eb2e166035318d64eb4838f81e4722c204d815d33891604847d80",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -8754,9 +8750,9 @@
       "digest": "ba333f81768dba23808e839fbdb4d19941a082de0f698db9a66d15c93af9748b",
       "frame": {
         "protocol": 1,
-        "match_id": "Go6xq38YlJZ2cxNQanZplQ",
+        "match_id": "ppI7pT9EWmJa1cT4iAJzVg",
         "revision": 101,
-        "frame_hash": "b5ebc60ff53df4f2e113050925d8f45686d041b70da1e5ce4e14db00356f604a",
+        "frame_hash": "b36727fdc2c91e1f1589b8aa294734a4c2f638165f46c9281c6508bb4be9e696",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",

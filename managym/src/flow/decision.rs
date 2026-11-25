@@ -1871,7 +1871,9 @@ impl Game {
                     });
                 }
                 let can_pay = self.can_pay_mana_cost(player, cost);
-                let mut actions = self.resolution_mana_abilities(player, cost, help, can_pay);
+                let include_simple =
+                    !can_pay || help.waterbend != 0 || self.offers_extra_payment_taps(player);
+                let mut actions = self.mana_ability_actions(player, include_simple);
                 actions.extend(
                     self.help_taps(
                         player,

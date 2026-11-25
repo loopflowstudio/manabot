@@ -2341,38 +2341,6 @@ impl Game {
         actions
     }
 
-    /// A resolution cost already offers automatic payment from fixed sources.
-    /// Omit a simple activation only if accepting the cost determines its
-    /// sources as well. A spare dual beside a Sol Ring can leave a different
-    /// permanent untapped and a different floating pool.
-    pub(super) fn resolution_mana_abilities(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        help: Help,
-        can_pay: bool,
-    ) -> Vec<Action> {
-        let _scan = self.payment_scan();
-        if !can_pay || help.waterbend != 0 || self.offers_extra_payment_taps(player) {
-            return self.mana_ability_actions(player, true);
-        }
-        let mut actions = self.mana_ability_actions(player, false);
-        let model = self.payment_model(player, None);
-        if model
-            .sources
-            .iter()
-            .any(|source| source.abilities.iter().any(|a| a.automatic))
-        {
-            let taps = self.useful_payment_taps(&model, player, cost, help, !actions.is_empty());
-            actions.extend(
-                taps.offers()
-                    .into_iter()
-                    .filter(|a| matches!(a, Action::ActivateAbility { .. })),
-            );
-        }
-        actions
-    }
-
     /// Count a permanent's best useful output once, even if it has several
     /// abilities. If all units are required there is no source decision,
     /// unless the choice of output can change the receipt or floating pool.
@@ -2704,7 +2672,7 @@ impl Game {
                 };
                 rest = next;
             }
-            if !same_spend_effects(*first_output.get_or_insert(output), output) {
+            if !same_spend_effects(first_output.get_or_insert(output), output) {
                 return false;
             }
             if !remainders.contains(&rest) {

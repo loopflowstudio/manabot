@@ -960,7 +960,11 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   Any distinguishing state — a land targeted on the stack,
   enchanted, animated, carrying counters, or referenced by a trigger or
   continuous effect — places that permanent in its own class and keeps the
-  prompt.
+  prompt. Plain non-creature, non-animating lands played this turn are
+  interchangeable with earlier copies, while creatures, non-lands,
+  self-animating lands (such as Soulstone Sanctuary), and permanents with
+  `power_up` abilities stay distinct when summoning sickness or turn of entry
+  differs.
 - **What always stops.** Non-simple mana abilities (sacrifices such as
   Treasure, life payments such as pain lands, mana fees such as filter lands,
   counted taps, once-per-turn limits, non-mana side effects, or triggered mana
@@ -984,10 +988,12 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   `skip_trivial` enabled, `Decision::ManaChoice` skips automatically when
   every legal mode leaves the same remaining state or the same determined
   completion with no floating surplus; deliberate floats at priority always
-  keep the color choice. With floats off, turning a creature face up pays an
-  exact cost from a dual and a basic immediately. Ward offers pay or decline
-  for the same sources. If paying ward with a dual can leave a different
-  source untapped or mana floating, its tap remains available.
+  keep the color choice. With floats off, resolution payments (`TurnFaceUp`,
+  `Ward`, and other `Decision::Payment` prompts) treat simple choice taps
+  identically to fixed sources: when automatic payment can fund the cost
+  without waterbend or floats, turning a creature face up pays immediately and
+  ward offers only pay or decline, while non-simple mana abilities (such as
+  Treasure) remain offered.
 
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat

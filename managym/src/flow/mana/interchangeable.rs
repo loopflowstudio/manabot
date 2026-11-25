@@ -4,8 +4,14 @@
 
 use super::{Game, Mana, ManaSource, Obligation, PaymentModel, UsefulTap};
 use crate::{
-    flow::trigger::DelayedTriggerEvent,
-    state::{game_object::Target, stack_object::StackObject},
+    flow::{statics::Characteristics, trigger::DelayedTriggerEvent},
+    state::{
+        ability::{Ability, Effect},
+        card::{CardType, StaticAbility},
+        effect::Modification,
+        game_object::Target,
+        stack_object::StackObject,
+    },
 };
 
 impl Game {
@@ -76,17 +82,41 @@ impl Game {
         let right = self.state.permanents[b.permanent].as_ref().unwrap();
         let l = &self.state[a.object];
         let r = &self.state[b.object];
+        if l.owner != r.owner
+            || l.kind() != r.kind()
+            || l.definition_id != r.definition_id
+            || l.form != r.form
+            || left.controller != right.controller
+            || left.spell_entry != right.spell_entry
+            || !a.same_payment_profile(b)
+        {
+            return false;
+        }
+        let view = self.characteristics(a.permanent);
+        if view != self.characteristics(b.permanent) {
+            return false;
+        }
+        // Summoning sickness matters for creatures (CR 302.6), non-lands
+        // (such as Vehicles or Spacecraft), and self-animating lands
+        // (Soulstone Sanctuary, Treetop Village, Crawling Barrens). Earthbend
+        // grants haste (CR 702.182a) and no catalog card animates another
+        // land without haste, so plain lands played this turn are
+        // interchangeable with earlier copies.
+        if (view.is_creature() || !view.is_land() || can_become_creature(&view))
+            && left.summoning_sick != right.summoning_sick
+        {
+            return false;
+        }
         let turn = self.state.turn.turn_number;
-        l.owner == r.owner
-            && l.kind() == r.kind()
-            && l.definition_id == r.definition_id
-            && l.form == r.form
-            && left.controller == right.controller
-            && left.summoning_sick == right.summoning_sick
-            && left.entered_this_turn(turn) == right.entered_this_turn(turn)
-            && left.spell_entry == right.spell_entry
-            && a.same_payment_profile(b)
-            && self.characteristics(a.permanent) == self.characteristics(b.permanent)
+        if view
+            .activated_abilities
+            .iter()
+            .any(|ability| ability.power_up)
+            && left.entered_this_turn(turn) != right.entered_this_turn(turn)
+        {
+            return false;
+        }
+        true
     }
 
     fn unbound_mana_source(&self, source: &ManaSource) -> bool {
@@ -200,4 +230,26 @@ impl Game {
                 || matches!(t.event, DelayedTriggerEvent::Leaves { watched, .. } if watched == object)
         })
     }
+}
+
+fn can_become_creature(view: &Characteristics) -> bool {
+    view.activated_abilities
+        .iter()
+        .any(|ability| ability.effects.iter().any(Effect::may_become_creature))
+        || view
+            .triggered_abilities
+            .iter()
+            .any(|trigger| match &trigger.ability {
+                Ability::Triggered { effects, .. } => {
+                    effects.iter().any(Effect::may_become_creature)
+                }
+            })
+        || view.static_abilities.iter().any(|ability| match ability {
+            StaticAbility::Continuous(continuous) => continuous
+                .modifications
+                .iter()
+                .any(Modification::grants_creature_type),
+            StaticAbility::TypeGrant(grant) => grant.types.contains(&CardType::Creature),
+            _ => false,
+        })
 }

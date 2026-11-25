@@ -128,3 +128,42 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
     assert tapped == ["Kyoshi Village", "Plains"]
     assert len(untapped_plains) == 2
     assert not any(after.projection.agent.mana)
+
+
+def test_played_plains_for_turn_skips_redundant_modal(tmp_path: Path) -> None:
+    session, frame = _setup(
+        tmp_path,
+        ["Kyoshi Village", "Plains", "Plains"],
+        extra_hand=("Plains", "Youthful Knight"),
+    )
+    play_plains = next(offer for offer in frame.offers if offer.label == "Play Plains")
+    after_land = _choose(session, frame, play_plains)
+    cast = next(
+        offer for offer in after_land.offers if offer.label == "Cast Youthful Knight"
+    )
+
+    payment = _choose(session, after_land, cast)
+    assert payment.action_space == "PAY_OR_NOT"
+    assert [offer.label for offer in payment.offers] == [
+        "Tap Kyoshi Village for {G}/{W}",
+        "Tap Plains for {W}",
+        "Tap Plains for {W}",
+        "Tap Plains for {W}",
+        "Pay the cost",
+    ]
+
+    # Even with the 3rd Plains played this turn, tapping Kyoshi Village leaves
+    # 3 interchangeable Plains and skips the color modal and second stop.
+    after = _choose(session, payment, payment.offers[0])
+    assert after.action_space == "PRIORITY"
+    battlefield = after.projection.agent.battlefield
+    assert any(permanent.name == "Youthful Knight" for permanent in battlefield)
+    tapped = sorted(permanent.name for permanent in battlefield if permanent.tapped)
+    untapped_plains = [
+        permanent
+        for permanent in battlefield
+        if permanent.name == "Plains" and not permanent.tapped
+    ]
+    assert tapped == ["Kyoshi Village", "Plains"]
+    assert len(untapped_plains) == 2
+    assert not any(after.projection.agent.mana)

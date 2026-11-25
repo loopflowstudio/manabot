@@ -60,6 +60,18 @@ fn cast(game: &mut Game) {
     game.step(index).unwrap();
 }
 
+fn play_land(game: &mut Game, land: &str) {
+    let space = game.action_space().expect("priority").clone();
+    let index = space
+        .actions
+        .iter()
+        .position(|action| {
+            matches!(action, Action::PlayLand { object, .. } if game.state[*object].name == land)
+        })
+        .unwrap_or_else(|| panic!("{land} is playable from hand"));
+    game.step(index).unwrap();
+}
+
 fn name(game: &Game, permanent: PermanentId) -> String {
     let object = game.state.permanents[permanent].as_ref().unwrap().object;
     game.state[object].name.clone()
@@ -275,6 +287,95 @@ fn choosing_village_keeps_two_plains_and_skips_the_color_choice() {
 }
 
 #[test]
+fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
+    let player = PlayerId(0);
+    // 4th Mountain played this turn still skips Gray Ogre {2}{R}.
+    let mut mountains = payment_position("Gray Ogre", &["Mountain"; 3]);
+    mountains
+        .scenario_force_card_in_hand(player, "Mountain")
+        .unwrap();
+    mountains.scenario_refresh_priority().unwrap();
+    play_land(&mut mountains, "Mountain");
+    assert!(mountains
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .any(|p| p.summoning_sick && p.entered_this_turn(mountains.state.turn.turn_number)));
+    cast(&mut mountains);
+    assert!(mountains.pending_choice.is_none());
+    assert_eq!(untapped(&mountains), ["Mountain"]);
+    assert_eq!(spell_receipt(&mountains, "Gray Ogre").total(), 3);
+    assert_eq!(mountains.state.players[0].mana_pool.total(), 0);
+
+    // 2nd Plains played this turn beside Kyoshi Village still skips Badgermole Cub {1}{G}.
+    let mut village_pair = payment_position("Badgermole Cub", &["Plains", "Kyoshi Village"]);
+    village_pair
+        .scenario_force_card_in_hand(player, "Plains")
+        .unwrap();
+    village_pair.scenario_refresh_priority().unwrap();
+    play_land(&mut village_pair, "Plains");
+    cast(&mut village_pair);
+    assert!(village_pair.pending_choice.is_none());
+    assert_eq!(
+        untapped(&village_pair)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        1
+    );
+    assert!(!untapped(&village_pair).contains(&"Kyoshi Village".to_string()));
+    assert_eq!(village_pair.state.players[0].mana_pool.total(), 0);
+
+    // 3rd Plains played this turn beside Kyoshi Village + 2 Plains: tapping Village
+    // skips the color modal and finishes directly.
+    let mut village_three =
+        payment_position("Youthful Knight", &["Kyoshi Village", "Plains", "Plains"]);
+    village_three
+        .scenario_force_card_in_hand(player, "Plains")
+        .unwrap();
+    village_three.scenario_refresh_priority().unwrap();
+    play_land(&mut village_three, "Plains");
+    cast(&mut village_three);
+    assert_eq!(
+        payment_labels(&village_three),
+        [
+            "Tap Kyoshi Village for {G}/{W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "Tap Plains for {W}",
+            "PayCost",
+        ]
+    );
+    village_three.step(0).unwrap();
+    assert!(village_three.pending_choice.is_none());
+    assert_eq!(
+        untapped(&village_three)
+            .iter()
+            .filter(|name| name.as_str() == "Plains")
+            .count(),
+        2
+    );
+    assert!(!untapped(&village_three).contains(&"Kyoshi Village".to_string()));
+    assert_eq!(spell_receipt(&village_three, "Youthful Knight").total(), 2);
+    assert_eq!(village_three.state.players[0].mana_pool.total(), 0);
+}
+
+#[test]
+fn self_animating_land_played_this_turn_stays_distinct() {
+    let player = PlayerId(0);
+    let mut game = payment_position("Sol Ring", &["Soulstone Sanctuary"]);
+    game.scenario_force_card_in_hand(player, "Soulstone Sanctuary")
+        .unwrap();
+    game.scenario_refresh_priority().unwrap();
+    play_land(&mut game, "Soulstone Sanctuary");
+    cast(&mut game);
+    // One Soulstone Sanctuary can animate and attack this turn; the newly
+    // played one is summoning-sick, so the choice of which to tap stays open.
+    assert_eq!(taps(&game).len(), 2);
+}
+
+#[test]
 fn a_targeted_plains_keeps_its_tap_offer_in_response() {
     use managym::state::game_object::Target;
 
@@ -422,32 +523,42 @@ fn mana_abilities_on_one_permanent_only_fund_one_tap() {
 #[test]
 fn turning_a_manifest_face_up_pays_with_a_dual_and_a_basic() {
     let player = PlayerId(0);
-    let mut game = payment_position("Compassionate Healer", &["Kyoshi Village", "Plains"]);
-    let card = game
-        .state
-        .zones
-        .zone_objects(managym::state::zone::ZoneType::Hand, player)
-        .iter()
-        .copied()
-        .next()
-        .unwrap();
-    let face_down = game.manifest(card, player);
-    game.scenario_refresh_priority().unwrap();
-    let index = game
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
-        .unwrap();
-    game.step(index).unwrap();
-    assert!(!game.state[face_down].is_face_down());
-    assert_eq!(game.state.players[0].mana_pool.total(), 0);
-    assert_eq!(untapped(&game), ["Compassionate Healer"]);
+    for (sources, expected_untapped_lands) in [
+        (&["Kyoshi Village", "Plains"][..], 0_usize),
+        (&["Kyoshi Village", "Plains", "Forest"][..], 1_usize),
+        (&["Plains", "Plains", "Forest"][..], 1_usize),
+    ] {
+        let mut game = payment_position("Compassionate Healer", sources);
+        let card = game
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .next()
+            .unwrap();
+        let face_down = game.manifest(card, player);
+        game.scenario_refresh_priority().unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+            .unwrap();
+        game.step(index).unwrap();
+        assert!(!game.state[face_down].is_face_down(), "{sources:?}");
+        assert_eq!(game.state.players[0].mana_pool.total(), 0, "{sources:?}");
+        let untapped_lands = untapped(&game)
+            .into_iter()
+            .filter(|name| name != "Compassionate Healer")
+            .count();
+        assert_eq!(untapped_lands, expected_untapped_lands, "{sources:?}");
+    }
 }
 
 #[test]
-fn ward_keeps_pay_or_decline_and_keeps_source_choices_when_they_matter() {
+fn ward_treats_simple_choice_sources_like_fixed_sources_and_keeps_treasure() {
     let player = PlayerId(0);
     let deck = [
         ("Mountain", 20),
@@ -457,33 +568,79 @@ fn ward_keeps_pay_or_decline_and_keeps_source_choices_when_they_matter() {
         ("Waterfall Aerialist", 4),
         ("Sol Ring", 4),
     ];
-    for other in ["Plains", "Sol Ring"] {
-        let mut game = position(&["Kyoshi Village", other], &deck, "Lightning Bolt");
+    let cast_at_ward = |sources: &[&str], with_treasure: bool| {
+        let mut game = position(sources, &deck, "Lightning Bolt");
         let target = game
             .scenario_force_battlefield(PlayerId(1), "Waterfall Aerialist", true)
             .unwrap();
+        let treasure =
+            with_treasure.then(|| game.create_token("token.treasure", player, false).unwrap());
         game.state.players[0].mana_pool = Mana::parse("R").into();
         game.scenario_refresh_priority().unwrap();
         cast(&mut game);
-        let index = game.action_space().unwrap().actions.iter().position(|a| matches!(a, Action::ChooseTarget { target: managym::state::game_object::Target::Permanent(p), .. } if *p == target)).unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::ChooseTarget {
+                        target: managym::state::game_object::Target::Permanent(p),
+                        ..
+                    } if *p == target
+                )
+            })
+            .unwrap();
         game.step(index).unwrap();
-        let actions = &game.action_space().unwrap().actions;
-        if other == "Sol Ring" {
-            assert!(actions
-                .iter()
-                .any(|a| matches!(a, Action::ActivateAbility { .. })));
-        } else {
-            assert_eq!(
-                actions,
-                &[Action::PayCost { player }, Action::Decline { player }]
-            );
-            let mut decline = game.clone();
-            decline.step(1).unwrap();
-            assert!(untapped(&decline).contains(&"Kyoshi Village".into()));
-            game.step(0).unwrap();
-            assert!(!untapped(&game).contains(&"Kyoshi Village".into()));
+        if game.pending_choice.is_some() {
+            pay_cost(&mut game);
         }
+        (game, treasure)
+    };
+
+    // Exact dual + basic: PayCost or Decline.
+    let (mut exact, _) = cast_at_ward(&["Kyoshi Village", "Plains"], false);
+    assert_eq!(
+        exact.action_space().unwrap().actions,
+        [Action::PayCost { player }, Action::Decline { player }]
+    );
+    let mut decline = exact.clone();
+    decline.step(1).unwrap();
+    assert!(untapped(&decline).contains(&"Kyoshi Village".into()));
+    exact.step(0).unwrap();
+    assert!(!untapped(&exact).contains(&"Kyoshi Village".into()));
+
+    // Spare dual beside Sol Ring matches fixed Plains beside Sol Ring:
+    // PayCost or Decline, and paying taps Sol Ring while leaving Village untapped.
+    for first in ["Kyoshi Village", "Plains"] {
+        let (mut game, _) = cast_at_ward(&[first, "Sol Ring"], false);
+        assert_eq!(
+            game.action_space().unwrap().actions,
+            [Action::PayCost { player }, Action::Decline { player }],
+            "{first}"
+        );
+        game.step(0).unwrap();
+        assert!(untapped(&game).contains(&first.to_string()), "{first}");
+        assert!(
+            !untapped(&game).contains(&"Sol Ring".to_string()),
+            "{first}"
+        );
     }
+
+    // Non-simple mana abilities (Treasure) remain offered alongside PayCost/Decline.
+    let (with_treasure, treasure) = cast_at_ward(&["Plains", "Plains"], true);
+    let treasure = treasure.unwrap();
+    let actions = &with_treasure.action_space().unwrap().actions;
+    assert!(
+        actions.iter().any(
+            |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == treasure)
+        ),
+        "{actions:?}"
+    );
+    assert!(actions.contains(&Action::PayCost { player }));
+    assert!(actions.contains(&Action::Decline { player }));
 }
 
 #[test]

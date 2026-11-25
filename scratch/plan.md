@@ -61,7 +61,7 @@ Quoted from the Task's steers, newest governing:
   state."
 - "Switch from coverage graph to code graph" (done; the Task runs `code`).
 
-## Built (Passes 1–3 + QA fix)
+## Built (Passes 1–4 + QA fix)
 
 - Pass 1 (`72a12fa277`): exact simple-tap payments skip (one useful output per
   permanent, riders preserved, color choice cannot change a rule-visible
@@ -81,8 +81,25 @@ Quoted from the Task's steers, newest governing:
 - QA (`44ebea8e8e`): fixed Academy's `MODAL` prompt for `stage === 'mana_color'`
   to read `"Choose the mana to add"` instead of `"Choose a mode for <Spell>"`
   (`academy/ui/src/lib/board/prompt.ts`).
+- Pass 4: fixed both post-build concept-review mismatches — (1) relaxed
+  `summoning_sick` comparison in `interchangeable.rs` for plain non-creature,
+  non-animating lands (keeping creatures, non-lands, and self-animating lands
+  such as `Soulstone Sanctuary` / `Treetop Village` / `Crawling Barrens`
+  distinct via `Effect::may_become_creature` / `Modification::grants_creature_type`)
+  and gated `entered_this_turn` on `ability.power_up`; (2) deleted
+  `resolution_mana_abilities` from `managym/src/flow/mana.rs` so
+  `Decision::Payment` (`TurnFaceUp`, `Ward`) calls
+  `mana_ability_actions(player, include_simple)` identically to fixed sources.
+  Added real `Action::PlayLand` and `Soulstone Sanctuary` tests in
+  `managym/tests/source_taps.rs` and `tests/academy/test_dual_land_payment.py`,
+  updated `managym/README.md`, rebuilt the extension, and refreshed the three
+  Academy fixtures (`precision-demo-opening-v1.json`,
+  `precision-mana-demo-opening-v1.json`, `choice-navigation-opening-v1.json`)
+  plus `tests/academy/test_choice_navigation.py` where real-play land-drop
+  casts now skip redundant `Pay the cost` stops. Verified debug `source_taps`
+  (32/32), acceptance pytest suite (23/23), and `test_pinned_pilot.py` (v9/v11).
 
-## Post-build concept review findings → Pass 4 (to build now)
+## Post-build concept review findings → Pass 4 (built)
 
 Post-build review + live Academy QA (`scratch/concept-review.html`,
 `scratch/qa.html`) caught two model mismatches in Passes 1–3 that must be fixed
@@ -229,13 +246,7 @@ turn-of-entry equivalence.
 
 ## Remaining
 
-1. **Pass 4 (implement):** Apply the two post-build concept-review fixes above
-   (`interchangeable.rs` land-for-turn equivalence + deleting
-   `resolution_mana_abilities` in `mana.rs`/`decision.rs`), add real-`PlayLand`
-   and `Soulstone Sanctuary` tests, update `managym/README.md`, rebuild the
-   Python extension, re-verify Academy fixtures and tests, and run the debug
-   acceptance commands.
-2. **Gate/CI only:** After the PR's CI run, download its `engine-budget`
+1. **Gate/CI only:** After the PR's CI run, download its `engine-budget`
    artifact (`measurement.json`) and run `uv run scripts/engine_budget.py record
    --reason "<skipped identical-source payments move bench_steps>"` to adopt the
    moved digest in `managym/perf/baseline.json`.
