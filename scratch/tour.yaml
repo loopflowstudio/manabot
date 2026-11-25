@@ -1,0 +1,19 @@
+at: 72a12fa27799dc08a9213d53187cc5a310ba8a08
+first:
+  - path: scratch/plan.md
+    why: Completed slice and the remaining source-equivalence cases.
+  - path: docs/academy.md
+    why: The intended experience when choosing mana in Academy.
+  - path: managym/README.md
+    why: Which payments skip and which choices stay visible.
+  - path: managym/state/src/card.rs
+    why: What makes a mana tap simple.
+  - path: managym/src/flow/mana.rs
+    why: Source offers, color equivalence, and automatic tap selection.
+  - path: managym/src/flow/payment.rs
+    why: How new mana commits to an announced cost.
+  - path: managym/src/flow/decision.rs
+    why: Which source choices remain during resolution.
+  - path: managym/tests/source_taps.rs
+    why: Casts, ward, receipts, and divergent color choices.
+hide: []
