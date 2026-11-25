@@ -362,6 +362,19 @@ a seat that is not choosing.
 A runner error or divergence stops the analysis with its reason; saved
 decisions stay. A `running` row whose process is gone reads as stopped.
 
+`POST /api/traces/{id}/analyses/{analysis}/line {"event": <analysed event>}`
+(participant only; `agent_line`) re-executes the game to that decision with a
+fresh runner of the analysing policy in the seat and the game's own opponent
+(`build_villain_policy`) in the other, plays the analysis's first choice on a
+copy and continues with the policy's first choice and the opponent's own
+choice to the end of the next turn (`LINE_TURNS`), the end of the game or
+`MAX_LINE_STEPS`. A recurrent policy is asked at each of its seat's earlier
+decisions so it has its history. Each step returns the seat's own
+`decision_surface_view`; the opponent's actions are named only for a complete
+game. The line is computed per request in the real game's world and never
+saved. Key moments are derived in the client from the analysis
+(`keyMoments`).
+
 ### Numbers and record
 
 When a played game is no longer being played, `game_numbers` walks it once

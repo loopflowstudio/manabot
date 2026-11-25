@@ -1145,6 +1145,25 @@ the measure: **Expected score** for a policy whose values are signed outcomes
 (a draw counts half), **Win chance** for one whose values are win logits.
 Dots mark where you and the policy chose differently.
 
+**Next key moment** jumps to the next of up to eight decisions worth a look,
+in game order: the five where the policy's first choice had the most
+probability over yours, and the three where its estimate moved most by your
+next decision. At one of them a line names why, such as **Key moment ·
+Differs · 62% on its first choice, 8% on yours** or **Its expected score moved
+48 → 71 by your next decision**. A reading that barely moves, as an untrained
+policy's does, has none.
+
+**See its line**, at any analysed decision of your own game, plays the
+policy's first choice there and carries on: the policy's first choice at each
+of your decisions and your opponent's own choice at theirs, to the end of the
+next turn or the end of the game. The board shows each move from your seat;
+**Previous** and **Next**, or the arrow keys, step through it, and **Return to
+the game**, or Escape, goes back to the decision. The line is one play-out of
+the real game's cards, not a forecast, and nothing about it is saved. Your
+opponent's moves are named once the game is over; in a game that stopped
+early they read **Opponent's move**. Priority passes fold into the move
+before them.
+
 **Analyse with…** in **Menu** runs any other registered trained policy; each
 run is saved beside the game, and **Shown** switches between them. Analyses
 are never part of the game's recording or its exports. Readers of a shared
