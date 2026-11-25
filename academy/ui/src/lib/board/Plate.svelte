@@ -3,7 +3,7 @@
    * A player's plate: who they are, life, zones and floating mana. The plate
    * is the player as a target, so offers on the player outline it.
    */
-  import { floatingTotal, manaText, pooledManaText, spendPhrase, spendingText } from '$lib/mana';
+  import { floatingTotal, manaText, pooledManaTerms, spendPhrase, spendingText } from '$lib/mana';
   import { poolSymbols } from './payment';
   import Pips from './Pips.svelte';
   import type { CardState, PlayerState } from '$lib/types';
@@ -13,7 +13,7 @@
     player: PlayerState;
     name: string;
     definitionNames?: Record<string, string>;
-    deck: string | null;
+    caption: string | null;
     offers: PlacedOffer[];
     live: boolean;
     /** Damage this player was dealt since your last move. */
@@ -25,7 +25,7 @@
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, definitionNames, deck, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, definitionNames, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -41,9 +41,12 @@
   // Mana that is not plain (restricted, with an effect when spent, or lasting
   // only to end of combat) says so beside the pips; each is part of the total.
   const special = $derived([
-    ...(player.restricted_mana ?? []).map(part => `${manaText(part.mana)} ${spendPhrase(spendingText(part))}`),
-    ...(player.pooled_mana_classes ?? []).map(pooledManaText),
+    ...(player.restricted_mana ?? []).map(part => ({ mana: part.mana, terms: spendPhrase(spendingText(part)) })),
+    ...(player.pooled_mana_classes ?? []).map(pool => ({ mana: pool.mana, terms: pooledManaTerms(pool) })),
   ]);
+  /** Floating mana no class line describes: plain mana, by colour. */
+  const plain = $derived(total.map((amount, color) => Math.max(0, amount - special.reduce((sum, part) => sum + (part.mana[color] ?? 0), 0))));
+  const hasPlain = $derived(plain.some(Boolean));
   const counters = $derived(Object.entries(player.counters ?? {}).map(([kind, count]) => `${count} ${kind}`).join(', '));
   const label = $derived(`${name}, ${player.life} life${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
@@ -60,7 +63,7 @@
     onclick={event => onactivate(event.currentTarget)}
   >
     <span class="type-title text-display block truncate">{name}</span>
-    {#if deck}<span class="type-caption block truncate text-ink-2">{deck}</span>{/if}
+    {#if caption}<span class="type-caption caption text-ink-2">{caption}</span>{/if}
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
       {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
@@ -84,32 +87,42 @@
     <details class="type-caption"><summary>Known hand cards</summary><ul>{#each knownHand as card}<li>{card}</li>{/each}</ul></details>
   {/if}
   <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">
-    {#if pool}<span class="text-ink-3" aria-hidden="true">Floating</span><span aria-hidden="true"><Pips cost={poolSymbols(total)} size={16} /></span><span class="sr-only">Floating: {pool}</span>{:else}No floating mana{/if}
+    {#if pool}
+      <span class="text-ink-3" aria-hidden="true">Floating</span><span class="sr-only">Floating: {pool}</span>
+      {#if hasPlain}<span aria-hidden="true"> <Pips cost={poolSymbols(plain)} size={16} /></span>{/if}
+      <!-- Each class of mana is its pips and what sets it apart; with no plain mana the first joins the Floating line. -->
+      {#each special as part, index (index)}
+        <span class="pool-class" class:own-line={index > 0 || hasPlain} data-testid="mana-pool-class">{' '}<span aria-hidden="true"><Pips cost={poolSymbols(part.mana)} size={14} /></span><span class="sr-only">{manaText(part.mana)}{' '}</span>{part.terms}</span>
+      {/each}
+    {:else}No floating mana{/if}
   </p>
-  {#each special as text, index (index)}<p class="type-caption pool-class" data-testid="mana-pool-class">{text}</p>{/each}
 </section>
 
 <style>
-  .plate { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; overflow-y: auto; padding: 10px 10px 8px; }
+  .plate { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; overflow-y: auto; padding: 10px 10px 8px; }
   /* A short half scrolls the plate; its parts keep their height rather than overlap. */
   .plate > * { flex-shrink: 0; }
   .who { display: block; text-align: left; border-radius: var(--radius-sm); padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
   .who[aria-disabled=true] { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
+  /* Kind and deck wrap to a second line rather than cut a long deck name. */
+  .caption { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .choosing { display: block; margin-top: 2px; color: var(--warning-text); }
   .life { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
   .numeral { font-family: var(--font-serif); font-size: 40px; font-weight: 600; line-height: 44px; color: var(--text); font-variant-numeric: lining-nums tabular-nums; }
   .zones { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
   .zones > li, .zone-open {
-    display: flex; justify-content: space-between; gap: 4px; padding: 0 4px; border-radius: var(--radius-sm);
-    font-family: var(--font-sans); font-size: 12px; line-height: 20px; color: var(--text-secondary); min-width: 0;
+    display: flex; justify-content: space-between; gap: 4px; padding: 1px 4px; border-radius: var(--radius-sm);
+    font-family: var(--font-sans); font-size: 12px; line-height: 16px; color: var(--text-secondary); min-width: 0;
   }
   .zones > li:has(.zone-open) { padding: 0; }
-  .zone-open { width: 100%; height: 20px; min-height: 0; cursor: pointer; text-decoration: underline dotted color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
+  .zone-open { width: 100%; height: 18px; min-height: 0; cursor: pointer; text-decoration: underline dotted color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; }
   .zone-open:hover, .zone-open:focus-visible { background: var(--bg-field); color: var(--text); }
   .zones span { overflow: hidden; text-overflow: ellipsis; }
   .zones b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
-  .pool { color: var(--text-secondary); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  /* Floating mana reads as one wrapped sentence: the label, plain pips, then each class of mana. */
+  .pool { color: var(--text-secondary); overflow-wrap: anywhere; }
+  .pool :global(.pips) { display: inline-flex; vertical-align: -3px; margin-right: 2px; }
   .dealt {
     align-self: center; margin-left: auto; padding: 0 5px; border-radius: var(--radius-sm);
     font: 600 16px/24px var(--font-sans); color: var(--bg); background: var(--damage);
@@ -118,5 +131,5 @@
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }
   .pool.empty { color: var(--text-secondary); }
-  .pool-class { color: var(--text-secondary); margin-top: -3px; }
+  .pool-class.own-line { display: block; }
 </style>
