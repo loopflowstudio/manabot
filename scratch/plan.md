@@ -59,26 +59,15 @@ Quoted from the Task's steers, newest governing:
   state."
 - "Switch from coverage graph to code graph" (done; the Task runs `code`).
 
-## Implemented payment rule
+## Built
 
-An announced manual payment uses the same native action list to decide whether
-to stop and what to publish. The exact-cost shortcut counts at most one useful
-output per permanent. A simple tap can skip when all units are needed, every
-applicable rider is preserved and a choice of colors cannot change a
-rule-visible result. Help, deliberate floats and legal activations with
-additional costs or effects stay explicit. The color modal compares the
-remaining cost using the same pip commitment as execution. The automatic
-payer and preview share the pruned witness. A convoke or waterbend split
-belongs to the current announced cost; only actual suspended callers add
-further obligations.
-
-A resolution payment uses the exact-cost test for simple activations when
-automatic mana can pay. Ward {2} with Village and Plains offers pay or decline.
-With Village and Sol Ring it also offers the Village, since accepting the cost
-can leave mana floating or the Village untapped.
-
-The 25 source-tap tests passed in the debug test profile. Fourteen Forests
-under Great Divide Guide produced 29 payment actions for Firebrand Archer.
+Pass 1 (`72a12fa277`): exact simple-tap payments skip (one useful output per
+permanent, riders preserved, color choice cannot change a rule-visible result),
+surplus-pruned automatic payer shared with preview, native
+`"Tap <Name> for {G}/{W}"` / `"any color"` labels, immediate color-equivalence
+modal skip, exact resolution payments (Ward {2} with Village + Sol Ring still
+offers the Village). 25 `source_taps` tests passed in debug; fourteen Forests
+under Great Divide Guide gave 29 payment actions for Firebrand Archer.
 
 ## Remaining determinism rule
 
@@ -205,8 +194,7 @@ Drafted in place before implementation (recheck wording against final implementa
 
 ## Passes
 
-1. **Implemented** — exact simple-tap payments, surplus pruning, native labels,
-   immediate color equivalence and exact resolution payments.
+1. Done — `72a12fa277` (see Built).
 2. **Next — interchangeable sources and determined-completion modal skip.**
    - Count taps by equivalence class in each residual completion. Anthem of
      Champions ({G}{W}) with Village, Forest and Plains provides the
