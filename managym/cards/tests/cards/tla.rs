@@ -14246,6 +14246,35 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     );
 }
 
+/// CR 614.12 and 305.7: with Zhao's Mountain effect active, the entering
+/// land has no printed replacement ability. Zhao still makes it enter tapped.
+#[test]
+fn zhao_removes_dark_depths_ice_counter_ability_before_entry() {
+    for loses_abilities in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Dark Depths"]);
+        let zhao = s.force_permanent_on_battlefield(1, "Zhao, the Moon Slayer");
+        set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
+        if loses_abilities {
+            // Layer 6 removes "nonbasic lands enter tapped" after layer 4
+            // has already made the land a Mountain.
+            until_end_of_turn(&mut s, zhao, Modification::LoseAllAbilities);
+        }
+        let depths = play_land(&mut s, "Dark Depths");
+        assert_eq!(tapped(&s, depths), !loses_abilities);
+        assert!(s.game().characteristics(depths).has_subtype("Mountain"));
+        assert_eq!(counters_of(&s, depths, CounterKind::Ice), 0);
+    }
+}
+
+#[test]
+fn zhao_taps_a_modal_land_played_on_its_back_face() {
+    let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Tidal Errand"]);
+    s.force_permanent_on_battlefield(1, "Zhao, the Moon Slayer");
+    let haven = play_land(&mut s, "Tidal Errand");
+    assert_eq!(s.game().characteristics(haven).name, "Tidal Haven");
+    assert!(tapped(&s, haven));
+}
+
 /// Land-type effects follow counters and departure independently in each fork;
 /// layer-6 ability loss cannot erase a type effect already applied in layer 4.
 #[test]

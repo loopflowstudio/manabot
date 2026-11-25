@@ -11,7 +11,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::{CardDefId, Restriction, StaticAbility},
+        card::{CardDefId, PrintedCharacteristics, Restriction, SpellProfile, StaticAbility},
         effect::{CopyEffect, Modification},
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
@@ -672,7 +672,7 @@ impl Game {
             to_zone
         };
         entry = entry.for_zone(to_zone);
-        if to_zone == ZoneType::Battlefield && self.enters_as_saga(object_id, &entry) {
+        if to_zone == ZoneType::Battlefield && self.entry_printing(object_id, &entry).is_saga() {
             entry.counters.change(CounterKind::Lore, 1);
         }
         ProposedEvent::ZoneMove {
@@ -683,16 +683,24 @@ impl Game {
         }
     }
 
-    /// Whether the face that enters is a Saga: the back face when it enters
-    /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
-    fn enters_as_saga(&self, object: ObjectId, entry: &ZoneEntry) -> bool {
-        let printed = self.state.entry_object(object);
+    /// The copiable face entering the battlefield, including a resolving
+    /// spell copy, a copy chosen during this entry, or a transformed entry.
+    pub(super) fn entry_printing(
+        &self,
+        object: ObjectId,
+        entry: &ZoneEntry,
+    ) -> &PrintedCharacteristics {
+        let row = self.state.entry_object(object);
+        let (id, printing) = if entry.entry_copy || !row.is_card() {
+            (row.definition_id, &**row)
+        } else {
+            row.retained_base()
+        };
         if entry.transformed {
-            if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
-                return back.is_saga();
-            }
+            default_content_pack().recorded_spell(id, printing, SpellProfile::BackFace)
+        } else {
+            printing
         }
-        printed.is_saga()
     }
 
     /// Return the appearance minted by this move (CR 400.7), including

@@ -6,6 +6,7 @@ use crate::{
         decision::EffectFrame,
         game::{Game, Revisions},
         layers::{matches_view, Context, SourceSeed},
+        proposed_event::ZoneEntry,
         triggers::TriggerIndex,
         turn::RecordedCast,
     },
@@ -212,6 +213,7 @@ pub(super) struct LayerBoard {
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
     restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
+    pub(super) land_type_overwrites: Vec<CardPredicate>,
     reads_mana: bool,
     reads_tapped: bool,
     reads_life: bool,
@@ -326,6 +328,7 @@ impl Game {
             reads_life: context.reads_life,
             dynamic_activations,
             restrictions,
+            land_type_overwrites: context.land_type_overwrites,
             objects,
             play_permissions,
         }
@@ -734,26 +737,32 @@ impl Game {
         predicate.matches_printed_spell(self.recorded_spell_printing(object, profile), kind)
     }
 
-    /// Entry replacements inspect allocated tokens before placement. This is
-    /// distinct from rules predicates on current zone appearances.
-    pub(crate) fn entry_matches_predicate(
+    /// Match the face entering under its prospective controller (CR 614.12).
+    /// A resolving permanent spell copy enters as a token (CR 608.3f).
+    pub(super) fn entry_matches_predicate(
         &self,
         object: ObjectId,
+        entry: &ZoneEntry,
         predicate: &CardPredicate,
     ) -> bool {
-        if self.state.live(object).is_some() {
-            return self.object_matches_predicate(object, predicate);
-        }
-        if predicate.from_battlefield_this_turn {
-            return false;
-        }
         let row = self.state.entry_object(object);
+        let face = self.entry_printing(object, entry);
         let power = if predicate.reads_power() {
-            self.printed_power(&row, row.owner)
+            self.printed_power(face, entry.controller.unwrap_or(row.owner))
         } else {
             0
         };
-        predicate.matches_object_with_power(row, power)
+        let kind = if row.is_card() {
+            crate::state::game_object::ObjectKind::Card
+        } else {
+            crate::state::game_object::ObjectKind::Token
+        };
+        let cost = if entry.transformed && !row.modal_back {
+            row.mana_value_cost()
+        } else {
+            face.mana_cost.as_ref()
+        };
+        predicate.matches_printing(face, kind, cost.map_or(0, |c| c.mana_value), power, &[])
     }
 
     fn creature_count(&self, controller: PlayerId) -> usize {

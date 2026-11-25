@@ -900,7 +900,7 @@ impl Game {
         if pending.copy_chosen {
             return None;
         }
-        let (scope, predicate, _) = self.entry_copy_terms(*object)?;
+        let (scope, predicate, _) = self.entry_copy_terms(*object, entry)?;
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
@@ -928,7 +928,9 @@ impl Game {
         let pending = &mut batch.events[batch.cursor];
         pending.copy_chosen = true;
         let ProposedEvent::ZoneMove {
-            object_id: object, ..
+            object_id: object,
+            ref entry,
+            ..
         } = pending.event
         else {
             return;
@@ -937,7 +939,7 @@ impl Game {
             return;
         };
         let source = self.state[source.object].clone();
-        let Some((_, _, exceptions)) = self.entry_copy_terms(object) else {
+        let Some((_, _, exceptions)) = self.entry_copy_terms(object, entry) else {
             return;
         };
         let exceptions = exceptions.to_vec();
@@ -949,19 +951,36 @@ impl Game {
         }
     }
 
+    /// Own replacements of the face that would enter (CR 614.12). Setting a
+    /// land to a basic land type removes its printed abilities (CR 305.7).
+    /// Other permanents can still replace the same entry.
+    fn entry_replacements(&self, object: ObjectId, entry: &ZoneEntry) -> &[ReplacementEffect] {
+        let face = self.entry_printing(object, entry);
+        if !face.replacement_effects.is_empty() && face.types.is_land() {
+            if self
+                .layer_board()
+                .land_type_overwrites
+                .iter()
+                .any(|predicate| self.entry_matches_predicate(object, entry, predicate))
+            {
+                return &[];
+            }
+        }
+        &face.replacement_effects
+    }
+
     /// The scope, predicate and copy exceptions of the card's "enter as a
     /// copy" replacement, if it has one.
     fn entry_copy_terms(
         &self,
         object: ObjectId,
+        entry: &ZoneEntry,
     ) -> Option<(
         crate::state::ability::Scope,
         &crate::state::predicate::CardPredicate,
         &[crate::state::effect::Modification],
     )> {
-        self.state
-            .entry_object(object)
-            .replacement_effects
+        self.entry_replacements(object, entry)
             .iter()
             .find_map(|effect| match effect {
                 ReplacementEffect::EntersAsCopy {
@@ -1261,9 +1280,7 @@ impl Game {
                     .controller
                     .unwrap_or(self.state.entry_object(*object_id).owner);
                 let mut entries: Vec<_> = self
-                    .state
-                    .entry_object(*object_id)
-                    .replacement_effects
+                    .entry_replacements(*object_id, entry)
                     .iter()
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
@@ -1317,7 +1334,7 @@ impl Game {
                             }
                             _ => continue,
                         };
-                        if self.entry_matches_predicate(*object_id, predicate) {
+                        if self.entry_matches_predicate(*object_id, entry, predicate) {
                             entries.push(ReplacementCandidate::printed_static(
                                 source,
                                 definition_index,
@@ -1377,7 +1394,10 @@ impl Game {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
-                        _ => self.entry_matches_predicate(object_id, predicate),
+                        ProposedEvent::ZoneMove { entry, .. } => {
+                            self.entry_matches_predicate(object_id, entry, predicate)
+                        }
+                        _ => unreachable!("counter recipient is an entry or a permanent"),
                     };
                     let matches_kind = match event {
                         ProposedEvent::CounterChange { kind: placed, .. } => {

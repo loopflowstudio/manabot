@@ -77,6 +77,9 @@ pub(super) struct LayerObject {
 pub(super) struct Context<'a> {
     game: &'a Game,
     pub objects: BTreeMap<PermanentId, Arc<LayerObject>>,
+    /// Land-type overwrites active in layer 4, including when the battlefield
+    /// has no matching land yet. Entry consults them before a land exists.
+    pub land_type_overwrites: Vec<CardPredicate>,
     /// Includes conditional nodes discovered in any layer, even when an earlier
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
@@ -429,6 +432,7 @@ impl<'a> Context<'a> {
         let mut context = Self {
             game,
             objects: BTreeMap::new(),
+            land_type_overwrites: Vec::new(),
             reads_mana: false,
             reads_tapped: false,
             reads_life: false,
@@ -535,7 +539,18 @@ impl<'a> Context<'a> {
                         targets.dedup();
                         nodes[index].targets = Some(targets);
                     }
-                    context.apply(&nodes[index], &instructions[selected]);
+                    // A layer-6 ability loss can remove the printed static
+                    // after its type effect has already applied (CR 613.6).
+                    let node = &nodes[index];
+                    if layer == Layer::Type
+                        && matches!(node.parts.as_slice(), [(_, Operation::LandType(_))])
+                        && context.condition_met(node)
+                    {
+                        if let StaticScope::All(predicate) = &node.scope {
+                            context.land_type_overwrites.push(predicate.clone());
+                        }
+                    }
+                    context.apply(node, &instructions[selected]);
                     // Only a static grant introduces layer nodes. Removing abilities
                     // changes existence, which the pending filter checks directly.
                     if instructions[selected].iter().any(|i| {
@@ -800,15 +815,17 @@ impl<'a> Context<'a> {
                 .get(&node.source)
                 .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key))
     }
+    fn condition_met(&self, node: &Node) -> bool {
+        node.condition
+            .as_ref()
+            .is_none_or(|c| self.condition(c, node.source))
+    }
+
     fn targets(&self, node: &Node) -> Vec<PermanentId> {
         if let Some(targets) = &node.targets {
             return targets.clone();
         }
-        if node
-            .condition
-            .as_ref()
-            .is_some_and(|c| !self.condition(c, node.source))
-        {
+        if !self.condition_met(node) {
             return Vec::new();
         }
         self.objects

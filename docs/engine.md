@@ -1284,6 +1284,11 @@ minting consumes those values in place. Without a new copy choice, minting
 uses the retained printing, including any fixture edits, and discards the old
 appearance's copy effect.
 
+When Zhao, the Moon Slayer has a conqueror counter, Dark Depths enters
+as a Mountain with zero ice counters. Zhao’s separate ability makes it
+enter tapped. If Zhao has also lost all abilities, the Mountain effect
+still applies in layer 4 and Dark Depths enters untapped.
+
 CR 400.7a to c (effects and prevention applied to a permanent spell continuing
 on the permanent) carry nothing, because no supported effect applies to a
 spell. Madness and stickers (CR 400.7k, m) are not modeled.
