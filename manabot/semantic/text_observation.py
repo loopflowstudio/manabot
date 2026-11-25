@@ -96,6 +96,7 @@ _STAGES = frozenset(
         "opening_entry",
         "priority",
         "targets",
+        "target_shares",
         "announcement",
         "additional_cost",
         "payment",
@@ -129,6 +130,8 @@ _STAGES = frozenset(
         "trigger_mode",
         "revealed_hand",
         "split_revealed",
+        "partition_piles",
+        "choose_pile",
         "free_cast",
         "linked_exile",
         "distribute_counters",
@@ -232,6 +235,8 @@ _OBLIGATIONS = (
     "order melded cards",
     "order entry choices",
     "choose as a permanent enters",
+    "partition piles",
+    "choose a pile",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -1389,6 +1394,8 @@ class _Renderer:
                 f"Announcing this {context.announcing.replace('_', ' ')}: "
                 "it is on the stack until its costs are paid."
             )
+        if context.stage in {"partition_piles", "choose_pile", "target_shares"}:
+            lines.extend(context.pending)
         if context.chosen_mode is not None:
             lines.append(f"Chosen mode: {context.chosen_mode + 1}.")
         if context.targets:

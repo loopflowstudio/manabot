@@ -41,6 +41,7 @@ from manabot.verify.text_observation import (
     run_demo,
 )
 import managym
+from managym.academy.server import GameSession
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
@@ -1929,12 +1930,10 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> 
         _replay_text_choice(env, action.reference)
 
 
-def _lightshell_position(
-    library: tuple[str, ...], *, wisdom: bool = False
+def _inspection_position(
+    library: tuple[str, ...], spells: tuple[str, ...], lands: int
 ) -> managym.Env:
     env = managym.Env(seed=23)
-    lands = 6 if wisdom else 4
-    spells = ("Lightshell Duo", "Accumulate Wisdom") if wisdom else ("Lightshell Duo",)
     deck = dict.fromkeys((*spells, *library), 1)
     deck["Island"] = lands + 1
     raw, _ = env.reset(
@@ -1961,7 +1960,7 @@ def _lightshell_position(
 
 
 def _lightshell_surveil(first: str, second: str) -> managym.Env:
-    env = _lightshell_position((first, second))
+    env = _inspection_position((first, second), ("Lightshell Duo",), 4)
     _choose(env, "Cast ")
     return env
 
@@ -2040,7 +2039,7 @@ def _assert_private_library(env: managym.Env, expected: dict[int, str]) -> None:
 
 def test_lightshell_duo_reorders_only_the_inspected_prefix() -> None:
     library = ("Gray Ogre", "Hill Giant", "Forest", "Plains", "Mountain", "Swamp")
-    env = _lightshell_position(library, wisdom=True)
+    env = _inspection_position(library, ("Lightshell Duo", "Accumulate Wisdom"), 6)
     for wording in (
         "Accumulate Wisdom",
         "Gray Ogre",
@@ -2712,3 +2711,77 @@ def test_entry_choice_replays_through_text_and_academy() -> None:
         haven = next(p for p in lands if p["name"] == "Uncharted Haven")
         assert haven["chosen"] == "color Blue"
         assert haven["tapped"]
+
+
+def test_curator_pile_handoff_survives_viewer_reconnect_and_command_replay(
+    tmp_path: Path,
+) -> None:
+    names = ("Gray Ogre", "Hill Giant", "Forest", "Plains", "Swamp")
+    env = _inspection_position(names, ("Curator of Destinies",), 6)
+    _choose(env, "Cast ")
+    for i, name in enumerate(names):
+        decision = capture_text_decision(env)
+        assert len(decision.actions) == 2
+        assert all(name in action.description for action in decision.actions)
+        assert not decision_surface_view(env, 1)["agent"].get("inspected")
+        _assert_policy_input_holds_the_decision(env, decision)
+        _choose(env, "face-up pile" if i % 2 == 0 else "face-down pile")
+
+    face_up = set(names[::2])
+    face_down = set(names[1::2])
+    assert env.current_agent_index() == 1
+    for fork in (env, env.clone_env()):
+        decision = capture_text_decision(fork)
+        _assert_policy_input_holds_the_decision(fork, decision)
+        assert {
+            card["name"]
+            for card in decision_surface_view(fork, 1)["agent"]["inspected"]
+        } == face_up
+        for name in face_down:
+            assert name not in decision.text
+            assert name not in json.dumps(decision_surface_view(fork, 1))
+        session = GameSession(trace_dir=tmp_path)
+        session.human_seat = 1
+        session.env = fork
+        session.obs = fork.observation_for_player(1)
+        recovered = session.current_recovery("reconnect")
+        labels = [offer["label"] for offer in recovered["frame"]["offers"]]
+        assert len(labels) == 2 and all(name in labels[0] for name in face_up)
+        assert "face-down pile (2 cards)" in labels[1]
+        assert all(name not in json.dumps(recovered) for name in face_down)
+        choice = next(
+            a for a in decision.actions if "face-down pile (2 cards)" in a.description
+        )
+        branch = _replay_text_choice(fork, choice.reference)
+        opponent = decision_surface_view(branch, 1)
+        assert {c["name"] for c in opponent["opponent"]["graveyard"]} >= face_up
+        assert not branch.observation_for_player(1).opponent.known_hand
+        assert not opponent["opponent"].get("known_hand")
+        for name in face_down:
+            assert name not in json.dumps(opponent)
+
+
+def test_biogenic_shares_are_announced_in_text_and_visible_on_both_tables() -> None:
+    env = priority_root(
+        ("Biogenic Upgrade",),
+        ("Forest",) * 6 + ("Gray Ogre",),
+        opponent=("Hill Giant",),
+    )
+    _choose(env, "Cast ")
+    _choose(env, "(Gray Ogre)")
+    _choose(env, "(Hill Giant)")
+    decision = capture_text_decision(env)
+    assert "Stage: target shares." in decision.text
+    _assert_policy_input_holds_the_decision(env, decision)
+    share = next(
+        a for a in decision.actions if "Assign 2 to Gray Ogre" in a.description
+    )
+    branch = _replay_text_choice(env, share.reference)
+    assert "2 assigned to Gray Ogre" in capture_text_decision(branch).text
+    _choose(branch, "Assign 1 to Hill Giant")
+    if not branch.observation_for_player(0).stack_objects:
+        _choose(branch, "Pay the offered cost")
+    for viewer in (0, 1):
+        [spell] = decision_surface_view(branch, viewer)["stack_objects"]
+        assert "2 assigned to Gray Ogre" in spell["label"]
+        assert "1 assigned to Hill Giant" in spell["label"]
