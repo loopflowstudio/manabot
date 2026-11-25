@@ -1048,9 +1048,12 @@ first position.
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
 newest first, with filters for player, deck, status, result and date. Player 1
 is always on the play. A finished game you played shows its turns and how long
-it took. **My games** narrows the list to this browser, under **My record**:
-your completed games across sessions, grouped by opponent and by the two decks,
-with wins, losses and draws and the win rate with its 95% Wilson interval.
+it took, and how many of your choices were made with
+[analysis shown](#analysis-while-you-play). **My games** narrows the list to
+this browser, under **My record**: your completed games across sessions,
+grouped by opponent and by the two decks, with wins, losses and draws, the win
+rate with its 95% Wilson interval, and **With analysis**, the games among them
+with a choice made while analysis was shown.
 Draws count as games, not wins. Rows that differ only in seat or disclosure are
 combined. These are counts of recorded games, not a rating. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
@@ -1180,6 +1183,33 @@ A policy with Search is not offered: Search plays out from the real hidden
 cards. One analysis runs per game at a time; a stopped or interrupted game is
 analysed up to its last recorded position.
 
+#### Analysis while you play
+
+**Show analysis**, at the top of the rail during your game, reads your
+decisions as you play. It is off at the start of every game. Turned on, it
+reads with your opponent's policy when that is a registered trained policy,
+otherwise with the first that can read the game; with more than one, a menu
+beside the switch changes it. The reading is the same as Review's: the
+heading reads **Analysis by** the policy, and each option on its card and row
+carries the policy's probability and its estimate after it. Nothing is
+chosen, raised or reordered for you, and no key plays the policy's choice.
+
+Academy first replays the game so far with the policy in your seat, which takes
+a few seconds, then reads each new decision once its board is on the table.
+The board never waits for a reading: it arrives in its own message after the
+decision, and a choice you make before it arrives reads as made without it.
+
+Each choice you commit after its reading reached you is saved as made with
+analysis shown. Review marks that move **analysis shown**, **This game**
+counts them, and Games shows them on the game's row and in **My record**.
+Turning **Show analysis** off stops the marking from your next decision; it
+never unmarks a choice. A game you play without it saves exactly as before.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No registered policy can read this game** under the switch | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| A reason under the switch, and no probabilities | The policy failed, or the game could not be replayed here. Your game goes on. | Turn the switch off and on to start again. |
+
 #### The game in numbers
 
 The result card of a game you played ends with one line of its numbers, such as
@@ -1199,7 +1229,9 @@ the play or the draw and how long the game took, and a table of both seats:
 With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
 chose as Reader would: 8 of 20**, where the policy's first choice was yours,
 and the policy's estimate from your seat at the start, at its highest and at
-the end. A game that stopped early is counted to where it stopped. Academy
+the end. A game with choices made while [analysis was
+shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
+decisions**. A game that stopped early is counted to where it stopped. Academy
 counts each game once, by replaying it when it ends. An older game is counted
 the first time you open it. A game recorded by another build has no counts.
 

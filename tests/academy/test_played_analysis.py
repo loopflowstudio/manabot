@@ -415,6 +415,8 @@ def test_shown_analysis_reads_each_decision_live_and_marks_it(
     commit_first(game, 0)
     commit_first(game, 1)
     delivered = Delivered()
+    with pytest.raises(server.TableDispatchError, match="cannot read"):
+        game.show_analysis(True, "0" * 64, delivered)
     state = game.show_analysis(True, None, delivered)
     assert state["shown"] and state["policy"]["sha256"] == key
     message = game.current_message()
@@ -474,6 +476,3 @@ def test_showing_analysis_needs_a_policy_that_can_read_the_game(
     assert not state["shown"] and state["policies"] == []
     assert state["unavailable"] == "No registered policy can read this game."
     assert "analysis" not in game.current_message()
-    registry.register(ReadingFactory())
-    with pytest.raises(server.TableDispatchError, match="cannot read"):
-        game.show_analysis(True, "0" * 64, Delivered())

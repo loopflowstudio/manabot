@@ -58,7 +58,8 @@ pending choice with the same legal offers and permitted information.
   and actions, so a played game is re-executed like any other record.
 - **`analysis.py`**: a policy's reading of one seat of a played game
   (`analyse_game`), saved per decision in the `analyses` and
-  `analysed_decisions` tables beside the game, never in its trace.
+  `analysed_decisions` tables beside the game, never in its trace; and the
+  same reading during play (`LiveAnalysis`).
 - **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
   `managym.statistics` over one re-execution and saved in
   `attempts.numbers_json`; `wilson_interval` for the My games record.
@@ -375,6 +376,33 @@ game. The line is computed per request in the real game's world and never
 saved. Key moments are derived in the client from the analysis
 (`keyMoments`).
 
+### Analysis while you play
+
+The pilot's `show_analysis {"shown": true, "policy": <Policy ID or null>}`
+request (`SUBMIT_LIVE_COMMAND`) answers `analysis_state` with the policy shown,
+the policies that may read the game (`analysing_policies`, admitted once per
+game) and why none may. Showing starts a `LiveAnalysis` on its own daemon
+thread: it loads a fresh runner, walks the game so far with `seat_decisions`
+(asking the runner at each earlier decision, as an analysis after the game
+does, so decision memory matches), then applies each step the game commits and
+reads each decision the game publishes to the person (`_publish_current_prompt`)
+with `read_decision`. Steps and decisions reach the worker in the game's order
+on one queue; the worker never reads the game's Env, so nothing it does holds
+the game lock or a frame.
+
+Each reading goes to the pilot's sockets as its own
+`{"type": "analysis", "policy", "event", "revision", "annotation", "semantic",
+"after"}` message (or `{"stopped": reason}`), scheduled on the server loop
+without waiting. The client draws it only while its frame's revision matches.
+Once a send completes the event is `shown`, and committing that decision stores
+`analysis_shown: true` on its `TraceEvent`. The field is written only when true,
+so a game played without analysis saves the same row as before. Frames carry
+`analysis: {"policy"}` only while it is shown, so a reload reads the switch.
+`show_analysis {"shown": false}` closes the worker; a new game or a closed
+session closes it too. `GameNumbers.analysis_shown` counts the marked
+decisions, the Review position index exposes `analysis_shown` per choice, and
+`/api/traces/record` counts games with any (`with_analysis`).
+
 ### Numbers and record
 
 When a played game is no longer being played, `game_numbers` walks it once
@@ -387,8 +415,9 @@ game or a game still being played reads `null`. `GET /api/traces` rows carry
 `numbers` from the column and never re-execute.
 
 `GET /api/traces/record` groups the caller's completed games by opponent
-identity and both decks: games, wins, draws, losses and a 95% Wilson interval
-on wins over games.
+identity and both decks: games, wins, draws, losses, games with a decision made
+while analysis was shown (`with_analysis`), and a 95% Wilson interval on wins
+over games.
 
 
 ## Elemental roster

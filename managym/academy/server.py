@@ -904,6 +904,8 @@ class GameSession:
         # A policy reading the person's decisions, while they show it; off at
         # the start of every game (`show_analysis`).
         self._live_analysis: LiveAnalysis | None = None
+        # The policies that may read this match's game (`show_analysis`), by match.
+        self._analysing_policies: tuple[str, AnalysisChoices] | None = None
         self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -2862,7 +2864,15 @@ class GameSession:
         if self.watch_mode:
             raise TableDispatchError("conflict", "A watched game has no seat of yours.")
         self._end_live_analysis()
-        choices = analysing_policies(self.trace.config, policy_registry())
+        if self._analysing_policies is None or (
+            self._analysing_policies[0] != self.match_id
+        ):
+            # Admitting every registered policy takes seconds; once per game.
+            self._analysing_policies = (
+                self.match_id,
+                analysing_policies(self.trace.config, policy_registry()),
+            )
+        choices = self._analysing_policies[1]
         state: dict[str, Any] = {
             "type": "analysis_state",
             "shown": False,
