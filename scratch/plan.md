@@ -365,3 +365,11 @@ methods in `SnapshotVector`/`BufferedStreams`; decide questions 11. Debug
 `cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
 and clippy. Then `AGENTS.md`, `.lf/qa/*.md`, 0.3.0 release-notes entry, and a
 boundary test asserting removed names are absent.
+Also re-run `uv run python scripts/public_api.py check` and
+`tests/test_public_api_contract.py` after the native deletions. Open choice
+(questions 19), needed before gate: this branch removes non-deprecated 0.2.x
+surface (`PackedActions.native/fields/unpack`, `RecordedObservations.memory*`,
+`RolloutBatch.policy_rows/ordered_obs`, `managym.input_v10_state`,
+`observation_layout(legacy=, turn_state=)`), so either record the snapshot
+with `record --allow-break --reason "MTG-433 0.3.0 removal"` and hold the PR
+for the 0.3.0 cut, or restore 0.3.0-deprecated aliases for those names.
