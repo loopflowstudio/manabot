@@ -116,6 +116,7 @@ impl Game {
             ProposedDamageTarget::Player(player) => {
                 // Damage is still dealt to a player whose life total can't
                 // change; only the life loss doesn't happen (CR 119.7).
+                self.player_damage_capture(source, player, amount);
                 let locked = self.life_total_cant_change(player);
                 let Some(life) = self.state.life_mut(player) else {
                     return result;

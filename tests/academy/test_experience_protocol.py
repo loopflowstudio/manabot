@@ -35,6 +35,9 @@ STRUCT_MODELS = (
     "LegacyCardView",
     "LegacyHeroObservation",
     "PlayerControlView",
+    "AbilityGrantView",
+    "KeywordAbilityView",
+    "RestrictionView",
     "LegacyPermanentView",
     "LegacyPlayerView",
     "PooledManaView",
@@ -49,6 +52,7 @@ STRUCT_MODELS = (
 ENUM_MODELS = (
     "AuthorityStatus",
     "OfferVerb",
+    "PermanentRestriction",
     "PresentationImportance",
     "RecoveryReason",
 )

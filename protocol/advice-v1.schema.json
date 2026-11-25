@@ -25,6 +25,44 @@
       "title": "AbiIdentity",
       "type": "object"
     },
+    "AbilityGrantView": {
+      "additionalProperties": false,
+      "properties": {
+        "counter": {
+          "default": false,
+          "title": "Counter",
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "title": "AbilityGrantView",
+      "type": "object"
+    },
     "AdviceRequest": {
       "additionalProperties": false,
       "description": "The sole POST /api/advice body, bridging legacy and advice-v1 callers.",
@@ -2271,6 +2309,51 @@
       "title": "InteractionOffer",
       "type": "object"
     },
+    "KeywordAbilityView": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
+        "granted": {
+          "default": false,
+          "title": "Granted",
+          "type": "boolean"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "KeywordAbilityView",
+      "type": "object"
+    },
     "LegacyCardTypesView": {
       "additionalProperties": false,
       "properties": {
@@ -2707,6 +2790,11 @@
           "title": "Attacking",
           "type": "boolean"
         },
+        "attacks_despite_defender": {
+          "default": false,
+          "title": "Attacks Despite Defender",
+          "type": "boolean"
+        },
         "base_power": {
           "anyOf": [
             {
@@ -2907,6 +2995,28 @@
           "default": null,
           "title": "Is Token"
         },
+        "keyword_abilities": {
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          },
+          "title": "Keyword Abilities",
+          "type": "array"
+        },
+        "keyword_grants": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/AbilityGrantView"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyword Grants"
+        },
         "keywords": {
           "items": {
             "type": "string"
@@ -2956,6 +3066,13 @@
             "type": "string"
           },
           "title": "Protection From",
+          "type": "array"
+        },
+        "restrictions": {
+          "items": {
+            "$ref": "#/$defs/RestrictionView"
+          },
+          "title": "Restrictions",
           "type": "array"
         },
         "summoning_sick": {
@@ -3853,6 +3970,17 @@
       "title": "PaymentPlanCandidateValue",
       "type": "object"
     },
+    "PermanentRestriction": {
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
+      ],
+      "title": "PermanentRestriction",
+      "type": "string"
+    },
     "PersonalAudience": {
       "additionalProperties": false,
       "properties": {
@@ -4190,6 +4318,31 @@
       "title": "PromptView",
       "type": "object"
     },
+    "RestrictionView": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "RestrictionView",
+      "type": "object"
+    },
     "SampledWorldRobustness": {
       "additionalProperties": false,
       "properties": {
@@ -4489,6 +4642,31 @@
           ],
           "default": null,
           "title": "Source Permanent"
+        },
+        "targets": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "object": "#/$defs/ObjectSubject",
+                "player": "#/$defs/PlayerSubject",
+                "stack": "#/$defs/StackSubject"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ObjectSubject"
+              },
+              {
+                "$ref": "#/$defs/StackSubject"
+              },
+              {
+                "$ref": "#/$defs/PlayerSubject"
+              }
+            ]
+          },
+          "title": "Targets",
+          "type": "array"
         },
         "x": {
           "anyOf": [

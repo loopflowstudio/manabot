@@ -55,7 +55,7 @@ test('loads replay history when navigating from Watch to Replay', async ({ page 
   await page.goto('/replay?watch=1');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
   const history = page.waitForResponse(response => new URL(response.url()).pathname === '/api/traces');
-  await page.getByRole('banner').getByRole('link', { name: 'Games', exact: true }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'History', exact: true }).click();
   expect((await history).ok()).toBe(true);
   await expect(page.getByRole('heading', { name: 'Games', exact: true })).toBeAttached();
 });

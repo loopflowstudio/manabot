@@ -14717,6 +14717,14 @@ fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_av
         land.keywords.has(Keyword::Trample) && land.keywords.has(Keyword::Hexproof),
         "lands have both"
     );
+    let board = s.game().permanent_details(PlayerId(0));
+    let grants = board[&permanent(&s, forest).id.0]
+        .keyword_grants
+        .as_ref()
+        .unwrap();
+    for keyword in ["trample", "hexproof"] {
+        assert_eq!(grants[keyword].source.as_deref(), Some("Avatar Kyoshi"));
+    }
     clear_summoning_sickness(&mut s, kyoshi);
     s.set_player_mana_pool(0, "");
     activate(&mut s, kyoshi, 0);
@@ -17146,4 +17154,157 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
         assert_eq!(witness(s.game()), witness(replay.game()));
         assert_eq!(witness(&root), before);
     }
+}
+
+#[test]
+fn permanent_details_follow_public_board_and_layer_six_grants() {
+    use managym::experience::{
+        AbilityGrantView, KeywordAbilityView, PermanentRestriction, RestrictionView,
+    };
+    use managym::state::ability::PaymentCost;
+
+    let mut s = five_color_unfunded_setup(&[
+        "Platypus-Bear",
+        "Mai, Jaded Edge",
+        "Fire Nation Cadets",
+        "Sokka, Tenacious Tactician",
+        "Sire of Seven Deaths",
+        "Abandon Attachments",
+        "Watery Grasp",
+        "Tiger-Dillo",
+        "Foggy Swamp Hunters",
+    ]);
+    let bear = s.force_permanent_on_battlefield(0, "Platypus-Bear");
+    let mai = s.force_permanent_on_battlefield(0, "Mai, Jaded Edge");
+    let cadets = s.force_permanent_on_battlefield(0, "Fire Nation Cadets");
+    let sire = s.force_permanent_on_battlefield(1, "Sire of Seven Deaths");
+    s.force_permanent_on_battlefield(1, "Sokka, Tenacious Tactician");
+    let token =
+        |s: &mut Scenario, key: &str| s.game_mut().create_token(key, PlayerId(1), false).unwrap();
+    let ally = token(&mut s, "token.ally");
+    let soldier = token(&mut s, "token.soldier");
+    let vanilla = token(&mut s, "token.soldier_1_1_w");
+    let details = |s: &Scenario, id: PermanentId| {
+        s.game()
+            .permanent_details(PlayerId(0))
+            .remove(&permanent(s, id).id.0)
+            .unwrap()
+    };
+    let tiger = s.force_permanent_on_battlefield(0, "Tiger-Dillo");
+    assert_eq!(
+        details(&s, tiger).restrictions,
+        [RestrictionView {
+            kind: PermanentRestriction::CantAttackOrBlock,
+            source: None
+        }]
+    );
+    let hunters = s.force_permanent_on_battlefield(0, "Foggy Swamp Hunters");
+    s.game_mut().state.turn.history[0].cards_drawn = 2;
+    assert!(observed_keywords(&s, hunters).lifelink);
+    assert!(details(&s, hunters).keyword_grants.unwrap().is_empty());
+    add_counters(&mut s, mai, CounterKind::DoubleStrike, 1);
+    assert!(details(&s, mai).keyword_grants.unwrap()["double_strike"].counter);
+    add_counters(&mut s, sire, CounterKind::Trample, 1);
+    assert!(!details(&s, sire)
+        .keyword_grants
+        .unwrap()
+        .contains_key("trample"));
+    let sokka = "Sokka, Tenacious Tactician";
+    let label = |name: &str, granted, effect_timestamp| KeywordAbilityView {
+        source: None,
+        label: name.into(),
+        granted,
+        effect_timestamp,
+    };
+    assert_eq!(
+        details(&s, ally).keyword_grants.unwrap().get("menace"),
+        Some(&AbilityGrantView {
+            effect_timestamp: None,
+            source: Some(sokka.into()),
+            counter: false
+        })
+    );
+    assert!(details(&s, bear).keyword_grants.unwrap().is_empty());
+    assert!(!details(&s, bear).attacks_despite_defender);
+    assert!(details(&s, cadets).keyword_abilities.is_empty());
+    plant_in_graveyard(&mut s, 0, "Abandon Attachments");
+    assert!(details(&s, bear).attacks_despite_defender);
+    assert_eq!(
+        details(&s, cadets).keyword_abilities,
+        [label("Firebending 2", false, None)]
+    );
+    assert_eq!(
+        details(&s, mai).keyword_abilities,
+        [label("Prowess", false, None)]
+    );
+    assert_eq!(
+        details(&s, ally).keyword_abilities,
+        [KeywordAbilityView {
+            source: Some(sokka.into()),
+            ..label("Prowess", true, None)
+        }]
+    );
+    assert_eq!(
+        details(&s, soldier).keyword_abilities,
+        [label("Firebending 1", false, None)]
+    );
+    assert!(details(&s, vanilla).keyword_abilities.is_empty());
+
+    until_end_of_turn(
+        &mut s,
+        sire,
+        Modification::GrantStatic(Box::new(StaticAbility::Ward(PaymentCost::Discard))),
+    );
+    assert_eq!(
+        details(&s, sire).keyword_abilities,
+        [
+            label("Ward—Pay 7 life", false, None),
+            label(
+                "Ward—Discard a card",
+                true,
+                Some(s.game().effects_on(sire).last().unwrap().timestamp.0)
+            )
+        ]
+    );
+    until_end_of_turn(&mut s, sire, Modification::LoseAllAbilities);
+    until_end_of_turn(&mut s, sire, Modification::Firebending(3));
+    assert_eq!(
+        details(&s, sire).keyword_abilities,
+        [label(
+            "Firebending 3",
+            true,
+            Some(s.game().effects_on(sire).last().unwrap().timestamp.0)
+        )]
+    );
+    enchant(&mut s, "Watery Grasp", "U", vanilla);
+    assert_eq!(
+        details(&s, vanilla).restrictions,
+        [RestrictionView {
+            kind: PermanentRestriction::DoesntUntap,
+            source: Some("Watery Grasp".into())
+        }]
+    );
+}
+
+#[test]
+fn permanent_details_hide_manifest_and_foretold_identities() {
+    let mut s = five_color_unfunded_setup(&["Mai, Jaded Edge", "Sozin's Comet"]);
+    let mai = library_card(&s, 0, "Mai, Jaded Edge");
+    let manifested = s.game_mut().manifest(mai, PlayerId(0));
+    let id = permanent(&s, permanent_of(&s, manifested).unwrap()).id.0;
+    let before = s.game().permanent_details(PlayerId(1));
+    assert_eq!(before.len(), 1);
+    assert!(before[&id].keyword_abilities.is_empty());
+    let comet = move_to_hand(&mut s, "Sozin's Comet");
+    s.set_player_mana_pool(0, "2");
+    assert!(foretell_offered(&mut s, comet));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell {object, ..} if *object == comet),
+    );
+    assert_eq!(zone_of(&s, comet), Some(ZoneType::Exile));
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(s.game().permanent_details(PlayerId(1))).unwrap()
+    );
 }

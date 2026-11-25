@@ -125,7 +125,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
 **Training resume and game errors.**
-`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py tests/training/test_training_game_journals.py -q`.
 Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
 for portable state, sampling-domain changes and historical Torch saves.
 On Apple Silicon, run the Metal subprocess cases serially. Resume restores
@@ -201,7 +201,7 @@ When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
 Moves between Academy and checkout-only conformance tools also require
-`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/academy/test_learn_evidence.py -q`
+`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_learn_evidence.py -q`
 to catch stale module-level imports before running the affected behavior checks.
 Academy package, bot or fixture moves also require
 `uv run --extra dev pytest tests/model/test_world.py tests/model/test_policy_input_rejection.py -q`
@@ -298,7 +298,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
-| Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
+| Academy Integration | `academy-integration.yml` (two matrix groups: world bindings, Elemental admission, replay/study contracts, play, recovery, game records and card art) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v6` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
@@ -342,7 +342,9 @@ When a job passes 8 minutes, in order of preference:
 2. Cut the shared installation and build time.
 3. Move test files to a faster group, or add a group to the matrix, balanced by
    the measured times; `tests/infra/test_ci_selection.py` checks that every
-   path a group names exists.
+   path a group names exists, that every non-nightly `tests/**/test_*.py` file
+   is run in full by a PR job, and that `.github/ci/select-tests.sh` selects an
+   owning job when that file changes.
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
 single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
@@ -371,17 +373,21 @@ neither skipped nor succeeded.
 | Other Academy UI | UI |
 | Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
-| Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `tests/model/test_world.py`, `tests/semantic/test_elemental_world.py`, `tests/semantic/test_decklist_import.py`, `tests/semantic/fixtures/elemental/` | Academy integration |
+| `scripts/play`, `scripts/play.py`, `tests/academy/test_play_launcher.py`, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
+| `tests/academy/test_clean_machine_verifier.py` | Python unit, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
-| `manabot/README.md` (published API table), other `manabot/`, training/eval/sim tests, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
+| `manabot/README.md` (published API table), other `manabot/`, other training/eval/sim/belief/semantic/model/verify/config tests, `tests/academy/test_qwen_policy.py`, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/`, `tests/infra/test_external_consumer.py` | Python unit, integration |
 | `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
 
 Runtime inputs such as experiment Markdown and benchmark data are not prose-only.
-`tests/infra/test_ci_selection.py` covers these boundaries and the aggregate;
-update both when adding a package or consumer.
+`tests/infra/test_ci_selection.py` covers these boundaries, the aggregate, and the
+invariant that every non-nightly `tests/**/test_*.py` file is run in full by a PR
+job that `.github/ci/select-tests.sh` selects when that file changes; update both
+when adding a package or consumer.
 
 **Other workflows.** `macos-nightly.yml` reruns both integration suites on
 `macos-latest` nightly. `baseline.yml` trains the CPU test variant nightly on

@@ -61,7 +61,7 @@
    colour only where Magic puts it, on the cards. Every value a component
    draws resolves through these tokens. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   accent-color: var(--accent);
 
   /* The vivid pie: full-saturation Magic colors for the fixed rich worlds
@@ -189,57 +189,58 @@
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px rgb(0 0 0 / 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121213;
-    --bg-surface: #1f1f22;
-    --bg-muted: #18181a;
-    --bg-field: #26262a;
-    --border: #323236;
-    --border-strong: #4b4b52;
-    --text: #ececee;
-    --text-secondary: #a9a9b0;
-    --text-tertiary: #8f8f97;
-    /* The dark theme's act colour is near-white; its hover deepens. */
-    --accent: #ececee;
-    --accent-text: #ececee;
-    --accent-hover: #d6d6da;
-    --accent-pressed: #c0c0c6;
-    --accent-soft: #2a2a2e;
-    --on-accent: #121213;
-    --success-text: #8cc79a;
-    --warning-text: #d9bc66;
-    --error: #f2846c;
-    --error-text: #f2846c;
-    --info-text: #8ab8e8;
-    --neutral-text: #b4a9d1;
-    --damage: #f2846c;
-    --gain: #8cc79a;
-    --planned: #e0b04e;
-    --planned-text: #ecc779;
-    --card-w: #e4e1d8;
-    --card-u: #2c5f9c;
-    --card-b: #4a4052;
-    --card-r: #a83f28;
-    --card-g: #2e7344;
-    --card-c: #5b6068;
-    --card-w-ink: #1d1b16;
-    --card-u-ink: #ffffff;
-    --card-b-ink: #ffffff;
-    --card-r-ink: #ffffff;
-    --card-g-ink: #ffffff;
-    --card-c-ink: #ffffff;
-    --lift: 0 8px 18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.18);
-    --lift-selected: 0 12px 24px rgb(0 0 0 / 0.6);
-    --lift-attacking: 0 10px 20px rgb(0 0 0 / 0.6);
-    --dim-hand: saturate(0.35) brightness(0.72) contrast(0.9);
-    --dim-idle: saturate(0.8) brightness(0.94);
-    /* Washes lift on dark grounds: 10% vanishes there. */
-    --wash-strength: 26%;
-    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
-    --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 56px rgb(0 0 0 / 0.45);
-    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.4);
-  }
+/* The dark theme. `app.html` resolves `data-theme` before first paint: the
+   reader's stored choice, else the system's preference. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121213;
+  --bg-surface: #1f1f22;
+  --bg-muted: #18181a;
+  --bg-field: #26262a;
+  --border: #323236;
+  --border-strong: #4b4b52;
+  --text: #ececee;
+  --text-secondary: #a9a9b0;
+  --text-tertiary: #8f8f97;
+  /* The dark theme's act colour is near-white; its hover deepens. */
+  --accent: #ececee;
+  --accent-text: #ececee;
+  --accent-hover: #d6d6da;
+  --accent-pressed: #c0c0c6;
+  --accent-soft: #2a2a2e;
+  --on-accent: #121213;
+  --success-text: #8cc79a;
+  --warning-text: #d9bc66;
+  --error: #f2846c;
+  --error-text: #f2846c;
+  --info-text: #8ab8e8;
+  --neutral-text: #b4a9d1;
+  --damage: #f2846c;
+  --gain: #8cc79a;
+  --planned: #e0b04e;
+  --planned-text: #ecc779;
+  --card-w: #e4e1d8;
+  --card-u: #2c5f9c;
+  --card-b: #4a4052;
+  --card-r: #a83f28;
+  --card-g: #2e7344;
+  --card-c: #5b6068;
+  --card-w-ink: #1d1b16;
+  --card-u-ink: #ffffff;
+  --card-b-ink: #ffffff;
+  --card-r-ink: #ffffff;
+  --card-g-ink: #ffffff;
+  --card-c-ink: #ffffff;
+  --lift: 0 8px 18px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.18);
+  --lift-selected: 0 12px 24px rgb(0 0 0 / 0.6);
+  --lift-attacking: 0 10px 20px rgb(0 0 0 / 0.6);
+  --dim-hand: saturate(0.35) brightness(0.72) contrast(0.9);
+  --dim-idle: saturate(0.8) brightness(0.94);
+  /* Washes lift on dark grounds: 10% vanishes there. */
+  --wash-strength: 26%;
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
+  --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 56px rgb(0 0 0 / 0.45);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.4);
 }
 
 /* The semantic vocabulary: every component color resolves through these. */
@@ -550,4 +551,12 @@ summary {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Academy's header on every page and the table's bar: paper, with the color
+   pie as a thin W-U-B-R-G rule beneath. */
+.chrome-bar { position: relative; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
+.chrome-bar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, var(--vivid-w) 0 20%, var(--vivid-u) 20% 40%, var(--vivid-b) 40% 60%, var(--vivid-r) 60% 80%, var(--vivid-g) 80%);
 }

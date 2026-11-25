@@ -21,6 +21,7 @@ import type {
   PlayerState,
   StackEntryView,
 } from '$lib/types';
+import { badgesOf } from './badges';
 
 // ———————————————————————————————————————— Types
 
@@ -194,8 +195,8 @@ function isLand(permanent: PermanentState): boolean {
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
   if (item.paid || item.attached.length || p.attacking || p.first_strike_participant || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
-  return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
-    p.plus1_counters, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false, p.entry_controller_id ?? null, p.hexproof_from ?? [], p.protection_from ?? [],
+  return JSON.stringify([p.name, p.controller_id, p.power, p.toughness, p.face_down ?? false,
+    p.summoning_sick, badgesOf(p),
     item.offers.map(placed => placed.offer.label)]);
 }
 
@@ -210,15 +211,23 @@ function piles(items: PermanentItem[]): Pile[] {
   return [...byKey.values()];
 }
 
-function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): SideView {
-  const items = new Map<number, PermanentItem>(player.battlefield.map(permanent => [permanent.id,
+/** Every permanent on the battlefield by id, each host holding its attachments, whoever controls them. */
+function attachedItems(players: readonly PlayerState[], offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): Map<number, PermanentItem> {
+  const items = new Map<number, PermanentItem>(players.flatMap(player => player.battlefield).map(permanent => [permanent.id,
     { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [], paid: paid.get(permanent.id) ?? null }]));
-  const hosts: PermanentItem[] = [];
   for (const item of items.values()) {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
     if (host && host !== item) host.attached.push(item);
-    else hosts.push(item);
   }
+  return items;
+}
+
+/** One player's rows. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
+function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
+  const hosts = player.battlefield.map(permanent => items.get(permanent.id)!).filter(item => {
+    const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
+    return !host || host === item;
+  });
   const creatures = hosts.filter(item => isCreature(item.permanent));
   const rest = hosts.filter(item => !isCreature(item.permanent));
   const support = [...rest.filter(item => isLand(item.permanent)), ...rest.filter(item => !isLand(item.permanent))];
@@ -344,8 +353,9 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   // What the pending cost has already taken, by the object as it is now.
   const paid = new Map((frame.projection.decision_context?.paid ?? [])
     .flatMap(entry => (entry.object ? [[entry.object.display_id, entry.phrase] as const] : [])));
-  const you = side(agent, offersAt, paid);
-  const them = side(opponent, offersAt, paid);
+  const items = attachedItems([agent, opponent], offersAt, paid);
+  const you = side(agent, items, offersAt);
+  const them = side(opponent, items, offersAt);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
   const hand = agent.hand.filter(card => !onStack.has(card.id))

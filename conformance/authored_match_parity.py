@@ -33,7 +33,7 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
 )
-AUTHORITY_SHA256 = "a9022e0e6d17b25c0761ee0d7d10aab63c4a0219f137f36bbdb360e1cf4bb21c"
+AUTHORITY_SHA256 = "d19b3d9f9cd58e55f1f3f51aa5d8bb0fb65a4614ef6fcab3f397ccf01b951045"
 TERMINAL_STATE = "e66017eba0a088666cfe1171f470e9fcddc82f65686eb02aac5f4af4c191ea1d"
 
 COMMAND_COUNT = 174
@@ -261,8 +261,12 @@ def _run_engine(
     *,
     prove_stale: bool = False,
     config: trace_store.GameConfig | None = None,
+    decision_memory: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    env = managym.Env(seed=0 if config is None else config.seed)
+    env = managym.Env(
+        seed=0 if config is None else config.seed,
+        decision_memory=decision_memory,
+    )
     observation, _ = env.reset(
         config.to_rust()
         if config is not None

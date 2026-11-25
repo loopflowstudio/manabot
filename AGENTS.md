@@ -98,16 +98,16 @@ separate from deliberate human decisions.
 Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
 `GameConfig.human_seat` orders them at the native boundary. Record and project
 actual native seats; Watch keeps its two-seat acting-view contract.
-Academy resume credentials and the started-launch marker live in browser
-`sessionStorage`. Keep them scoped together; a launch must not resume another
-tab's or another launch's game.
-Game-file imports send original JSON source spans: JavaScript numeric parsing and
-re-encoding can round u64 identities and invalidate retained digests.
-Watch history is the selected acting viewer's recorded track strictly before
-that decision's `presentation_cursor`; spectator reveal never supplies history
-labels. Event emphasis stays separate from choice focus and lane navigation.
-This direction does not approve a particular redesign or change frozen worlds,
-checkpoints or experiment evidence.
+Scope Academy resume credentials and the started-launch marker together in
+`sessionStorage` so a launch never resumes another tab's or launch's game.
+Game-file imports send original JSON source spans: JS numeric re-encoding can
+round u64 identities and invalidate digests. Watch history is the selected
+acting viewer's recorded track strictly before that decision's
+`presentation_cursor`; spectator reveal never supplies history labels. Event
+emphasis stays separate from choice focus and lane navigation. Frame policy
+comparisons neutrally to explain the agent—never grade disagreements as
+mistakes. Default trained policies to `PolicyDescriptor.recommended` before the
+first eligible one. Reserve preview space so hover never shifts layout.
 
 ## Style
 

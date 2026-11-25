@@ -6,8 +6,8 @@ use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
         ability::{
-            Ability, Condition, Effect, EffectValue, EffectiveTrigger, Except, GrantClock,
-            ObjectProperty, ObjectSelector, Scope,
+            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
+            GrantClock, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -79,6 +79,7 @@ impl Layer {
 
 #[derive(Clone, Debug, PartialEq)]
 struct StaticEntry {
+    origin: AbilityOrigin,
     key: Vec<usize>,
     timestamp: PublicId,
     ability: StaticAbility,
@@ -123,6 +124,7 @@ enum NodeKind {
 /// `source` and carry resolved `i32` amounts.
 #[derive(Clone)]
 struct Node {
+    origin: AbilityOrigin,
     source: PermanentId,
     key: Vec<usize>,
     timestamp: PublicId,
@@ -394,6 +396,7 @@ impl Node {
     /// Counters and resolved records already bind one affected object; their
     /// existence and membership no longer depend on a generating static ability.
     fn resolved(
+        origin: AbilityOrigin,
         source: PermanentId,
         key: Vec<usize>,
         timestamp: PublicId,
@@ -401,6 +404,7 @@ impl Node {
         operation: Operation<i32>,
     ) -> Self {
         Self {
+            origin,
             source,
             key,
             timestamp,
@@ -554,6 +558,7 @@ impl<'a> Context<'a> {
                         &mut nodes,
                         &mut active_layers,
                         Node::resolved(
+                            AbilityOrigin::Counter,
                             id,
                             vec![slot, usize::MAX - 1, kind as usize],
                             p.keyword_counter_timestamps
@@ -581,6 +586,7 @@ impl<'a> Context<'a> {
                     &mut nodes,
                     &mut active_layers,
                     Node::resolved(
+                        AbilityOrigin::Effect(record.timestamp),
                         id,
                         vec![slot, usize::MAX, i],
                         record.timestamp,
@@ -721,6 +727,7 @@ impl<'a> Context<'a> {
                     .iter()
                     .cloned()
                     .map(|ability| EffectiveTrigger {
+                        origin: AbilityOrigin::Own,
                         clock: None,
                         ability,
                         program: false,
@@ -733,6 +740,7 @@ impl<'a> Context<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, ability)| StaticEntry {
+                    origin: AbilityOrigin::Own,
                     key: vec![id.0, i],
                     timestamp: permanent.timestamp,
                     ability: ability.clone(),
@@ -1435,6 +1443,7 @@ impl<'a> Context<'a> {
             _ => return None,
         }
         Some(Node {
+            origin: entry.origin,
             source,
             key: entry.key.clone(),
             timestamp: entry.timestamp,
@@ -1461,6 +1470,11 @@ impl<'a> Context<'a> {
         };
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
+            let origin = if id == node.source {
+                node.origin
+            } else {
+                AbilityOrigin::Permanent(node.source)
+            };
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             if let Operation::Control(controller) = instruction.operation {
                 object.controller = controller;
@@ -1491,6 +1505,7 @@ impl<'a> Context<'a> {
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
+                                    origin,
                                     clock: clock(&ability, index),
                                     ability,
                                     program: false,
@@ -1501,6 +1516,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
+                        origin,
                         clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
@@ -1588,9 +1604,22 @@ impl<'a> Context<'a> {
                     Modification::SetColors(colors) => view.colors = colors.clone(),
                     Modification::AddColors(colors) => view.colors.extend(colors),
                     Modification::AddKeywords(keywords) => {
+                        if origin != AbilityOrigin::Own {
+                            view.keyword_grants.extend(
+                                keywords
+                                    .without(view.keywords)
+                                    .iter()
+                                    .map(|keyword| (keyword, origin)),
+                            );
+                        } else {
+                            view.keyword_grants
+                                .retain(|(keyword, _)| !keywords.has(*keyword));
+                        }
                         view.keywords = view.keywords.union(*keywords)
                     }
                     Modification::LoseKeywords(keywords) => {
+                        view.keyword_grants
+                            .retain(|(keyword, _)| !keywords.has(*keyword));
                         view.keywords = view.keywords.without(*keywords);
                         if keywords.has(Keyword::Hexproof) {
                             let before = object.statics.len();
@@ -1617,6 +1646,7 @@ impl<'a> Context<'a> {
                     Modification::Firebending(n) => {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
+                            origin,
                             clock: None,
                             ability: Ability::firebending(*n),
                             program: true,
@@ -1628,6 +1658,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
+                            origin,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
@@ -1638,6 +1669,7 @@ impl<'a> Context<'a> {
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
+                                origin,
                                 clock: None,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,
@@ -1646,6 +1678,7 @@ impl<'a> Context<'a> {
                         let mut key = node.key.clone();
                         key.extend([id.0, ordinal]);
                         let entry = StaticEntry {
+                            origin,
                             key,
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
@@ -1691,6 +1724,7 @@ impl Game {
 fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Vec<StaticEntry>) {
     view.abilities_lost = true;
     view.keywords = Keywords::default();
+    view.keyword_grants.clear();
     view.ward = None;
     view.firebending = 0;
     view.activated_abilities

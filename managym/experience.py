@@ -354,7 +354,9 @@ class PlayerTurnHistoryView(ProtocolModel):
     life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
-    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
@@ -413,7 +415,49 @@ class CopyView(ProtocolModel):
     )
 
 
+class AbilityGrantView(ProtocolModel):
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    counter: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class KeywordAbilityView(ProtocolModel):
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    effect_timestamp: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    label: str
+    granted: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class PermanentRestriction(str, Enum):
+    CANT_BE_BLOCKED = "cant_be_blocked"
+    CANT_BLOCK = "cant_block"
+    CANT_ATTACK_OR_BLOCK = "cant_attack_or_block"
+    DOESNT_UNTAP = "doesnt_untap"
+    MUST_ATTACK = "must_attack"
+
+
+class RestrictionView(ProtocolModel):
+    kind: PermanentRestriction
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
 class LegacyPermanentView(ProtocolModel):
+    keyword_grants: dict[str, AbilityGrantView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    keyword_abilities: list[KeywordAbilityView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    attacks_despite_defender: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    restrictions: list[RestrictionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -603,7 +647,9 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
-    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    creature_died_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     turn_number: UInt32
     phase: str
     step: str
@@ -629,6 +675,10 @@ class StackEntryView(ProtocolModel):
     )
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    # What the spell or ability targets, in the order chosen.
+    targets: list[SubjectRef] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     # A spell cast from a prepared copy; its stack copies are not.

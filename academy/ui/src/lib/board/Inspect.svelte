@@ -8,7 +8,8 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
-  import { counterTerms, keywordsOf, labelText, ptProvenance, signed, sourceQuality, statusesOf } from './inspect';
+  import { counterTerms, labelText, ptProvenance, signed } from './inspect';
+  import { badgeReading, badgesOf, type Badge } from './badges';
   import Pips from './Pips.svelte';
 
   interface Props {
@@ -28,29 +29,12 @@
   let { name, text, permanent = null, card = null, castTerms = [], blocks = null, enteredUnder = null, art = 128 }: Props = $props();
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
-  const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
-  const statuses = $derived(permanent ? statusesOf(permanent) : []);
+  const badges: Badge[] = $derived(permanent ? badgesOf(permanent, face, blocks, enteredUnder) :
+    (face?.keywords ?? []).map(keyword => ({ kind: 'ability', label: labelText(keyword) })));
+  const abilities = $derived(badges.filter(badge => badge.kind === 'ability' || badge.kind === 'status'));
+  const facts = $derived(badges.filter(badge => badge.kind !== 'ability' && badge.kind !== 'status').map(badgeReading).join(' · '));
   const pt = $derived(permanent ? ptProvenance(permanent, face) : null);
   const plain = $derived(!permanent && card?.types.is_creature ? `${card.power}/${card.toughness}` : face?.power != null && !permanent ? `${face.power}/${face.toughness}` : null);
-  const facts = $derived(permanent ? [
-    permanent.tapped ? 'Tapped' : 'Untapped',
-    permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
-    ...(permanent.hexproof_from ?? []).map(quality => `hexproof from ${sourceQuality(quality)}`),
-    ...(permanent.protection_from ?? []).map(quality => `protection from ${sourceQuality(quality)}`),
-    permanent.blocked ? 'blocked' : '',
-    permanent.entry_controller_id !== undefined && permanent.entry_controller_id !== permanent.controller_id
-      ? `entered under ${enteredUnder ?? `player #${permanent.entry_controller_id}'s`} control`
-      : '',
-    permanent.first_strike_participant ? 'first-strike participant' : '',
-    permanent.attacking ? 'attacking' : '',
-    permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
-    ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
-    permanent.damage ? `${permanent.damage} damage marked` : '',
-    ...counterTerms(permanent.counters),
-    permanent.abilities_lost ? 'has lost all abilities' : '',
-    permanent.is_token ? 'token' : '',
-  ].filter(Boolean).join(' · ') : null);
-
   const url = $derived(artUrl(name));
   let loaded = $state<string | null>(null);
   $effect(() => {
@@ -65,10 +49,11 @@
   <div class="art" style:height={`${art}px`} style:background-image={loaded === url ? `url('${url}')` : undefined}></div>
   <p class="name"><span>{name}</span>{#if face?.cost}<Pips cost={face.cost} size={14} />{/if}</p>
   {#if face}<p class="type">{face.type_line}</p>{/if}
-  {#if keywords.length || statuses.length}
+  {#if abilities.length}
     <p class="keywords">
-      {#each statuses as status (status)}<span class="granted">{status}</span>{/each}
-      {#each keywords as fact (fact.keyword)}<span class:granted={fact.source !== null} title={fact.source ?? 'Printed'}>{labelText(fact.keyword)}{#if fact.source}<small> · {fact.source}</small>{/if}</span>{/each}
+      {#each abilities as badge}
+        <span class:granted={badge.granted} title={badge.source ?? (badge.kind === 'ability' ? 'Printed' : undefined)}>{badge.detail ?? badge.label}{#if badge.source}<small>{' · '}{badge.source}</small>{/if}</span>
+      {/each}
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
@@ -101,7 +86,7 @@
     font: 600 12px/16px var(--font-sans); padding: 0 6px; border-radius: var(--radius-sm);
     background: var(--bg-muted); color: var(--text);
   }
-  .keywords span.granted { background: var(--success-wash); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 50%, transparent); }
+  .keywords span.granted { background: var(--success-wash); box-shadow: inset 0 0 0 1px var(--gain); }
   .keywords small { font-weight: 400; color: var(--text-secondary); }
   .text { font: 14px/20px var(--font-sans); color: var(--text); white-space: pre-line; }
   .pt { border-top: 1px solid var(--border); padding-top: 4px; display: grid; gap: 2px; }

@@ -565,12 +565,12 @@
           "label": "Pay the cost"
         }
       ],
-      "digest": "86334c6d7b42786b16cbfc25630063cb5253da5c53284c62f1541abfe4ca1eec",
+      "digest": "fac689624c68a787dfcf94b7a49b4a3ad5a1d0533e1e0720238b8bf06e358a6b",
       "frame": {
         "protocol": 1,
-        "match_id": "qRzJy5eGiqldYiRCFc5RRA",
+        "match_id": "QZ0D4OY4p_lc1Zc81RV5Bg",
         "revision": 198,
-        "frame_hash": "cda75bad39a57de183aaef96db86d7fd503d40837a4f3e4e16a02161440a9d71",
+        "frame_hash": "e332f3f5a3ecef182e331ab9989d2f60f1acc142351ef9216182c8596f36e439",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2034,6 +2034,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2085,6 +2086,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2112,6 +2114,7 @@
                 ]
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2139,6 +2142,7 @@
                 ]
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2166,6 +2170,7 @@
                 ]
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2217,6 +2222,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2292,6 +2298,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -2319,6 +2326,7 @@
                 ]
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -3236,12 +3244,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "4f0d36188eb055c092e9c5a8fb836c6fd6d8508e474a1846fc9fd27458de5d0f",
+      "digest": "3cdad7b5cdba9d9742824aced5f0ee634495136e96f52ccd001933fe0f4c3176",
       "frame": {
         "protocol": 1,
-        "match_id": "GN1eGlK_XyNxHc4AAKk0sQ",
+        "match_id": "2wlGfvYYtNVgH5DTMQYSBQ",
         "revision": 58,
-        "frame_hash": "dd3b7ec74bd47efe129d6f2737d4aa44102657307fbd09fdf68085f21f9ef09b",
+        "frame_hash": "bdc7bb57131d4275c222157d486421dcbc152e7aaf652d13fdeb5f612daac57d",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5232,12 +5240,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "b8b6d5a073f738309475dab8d8fbc84c64544a7f5bddd7b7d1211ff909797dc8",
+      "digest": "e19a8802e59de76a8ddb0b5bc1e4aeaca66c14761a3d016983a982dfe17a03b6",
       "frame": {
         "protocol": 1,
-        "match_id": "0G2e032nWUbvojjn-FNDAw",
+        "match_id": "afN3XhekUcrUJdYR1BVUeA",
         "revision": 9,
-        "frame_hash": "380fda93e811f6a410e302459541f64ce3d31038bcd0b174c28df8f296279d07",
+        "frame_hash": "c1f1fe3deaa00747d26a16e3152c99130c9251d6b26c0c34f0f007664b7579f8",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -7007,12 +7015,12 @@
           "label": "Cast Callous Inspector"
         }
       ],
-      "digest": "a83025773e8ff71777a78292b6247e15611e01183230baf2391b98269f260c9c",
+      "digest": "436532b89223e3b98dadaf1f0805a51685f9474313f4b1cff807264cde601370",
       "frame": {
         "protocol": 1,
-        "match_id": "xJStX_3HRf0DqsbiIbpcNQ",
+        "match_id": "dMcn83lgRIXE95UOENrUWg",
         "revision": 7,
-        "frame_hash": "2a7718edfaac59fc8e721491a74fee5daac9ea8010c344ff6a1fe9bbf08b398a",
+        "frame_hash": "5fd669c9fbdbb5c3b82023a5fd6da2dcbf31d26764fe14112b230d24007ce5eb",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -8290,6 +8298,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -8400,6 +8409,7 @@
                 "entered_this_turn": true
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,
@@ -8883,12 +8893,12 @@
           "label": "Cast Savannah Lions"
         }
       ],
-      "digest": "f78914dd2717d048b25bb0274896ad01d4df655603149eed60b25871d6f26661",
+      "digest": "56d8887080ff44a4bd396837e95ba1b5c03b0315396e3862d3068887f30aca2a",
       "frame": {
         "protocol": 1,
-        "match_id": "IkFhbNzRkbE-qx_ZA77wIg",
+        "match_id": "nwpO9V_UAK0J4_YIRWSs8Q",
         "revision": 98,
-        "frame_hash": "f86151f8cb7338479c70c5ce779d7846ae2f8b5d00ce8d31753e14da3ccaa095",
+        "frame_hash": "fb560c1345082d598bf85fc13c09e3722f2dc3b938419d382d10985f1d0de917",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -10255,6 +10265,7 @@
                 "plus1_counters": 0
               },
               {
+                "keyword_grants": {},
                 "types": {
                   "is_creature": true,
                   "is_land": false,

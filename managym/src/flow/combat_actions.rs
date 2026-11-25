@@ -8,6 +8,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
+        statics::Characteristics,
     },
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
@@ -17,23 +18,47 @@ use crate::{
 };
 
 impl Game {
-    fn combat_condition_met(&self, id: PermanentId) -> bool {
-        let Some(permanent) = self.state.permanents[id].as_ref() else {
-            return false;
-        };
-        if self.has_restriction(id, Restriction::CantAttackOrBlock) {
-            return false;
-        }
-        self.characteristics(id)
-            .static_abilities
-            .iter()
-            .all(|ability| match ability {
-                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => self
-                    .battlefield_permanents(permanent.controller)
-                    .into_iter()
+    pub(crate) fn cant_attack_or_block(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        self.has_restriction(id, Restriction::CantAttackOrBlock)
+            || view.static_abilities.iter().any(|ability| match ability {
+                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => !self
+                    .iter_battlefield_permanents(controller)
                     .any(|other| other != id && self.permanent_matches_predicate(other, predicate)),
-                _ => true,
+                _ => false,
             })
+    }
+
+    pub(crate) fn attacks_despite_defender(
+        &self,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        view.keywords.has(Keyword::Defender) && view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, controller)))
+    }
+
+    pub(crate) fn cant_block_unconditionally(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+    ) -> bool {
+        self.cant_block(id) || view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate)) if *predicate == CardPredicate::default()))
+    }
+
+    pub(crate) fn cant_be_blocked_unconditionally(
+        &self,
+        id: PermanentId,
+        view: &Characteristics,
+        controller: PlayerId,
+    ) -> bool {
+        self.cant_be_blocked(id) || view.static_abilities.iter().any(|ability| matches!(ability,
+            StaticAbility::CantBeBlockedIf(condition) if self.check_static_condition(condition, controller)))
     }
 
     pub(crate) fn declare_attacker(
@@ -324,12 +349,11 @@ impl Game {
         };
         let view = self.characteristics(permanent_id);
         let defender_applies = view.keywords.has(Keyword::Defender)
-            && !view.static_abilities.iter().any(|ability| matches!(ability,
-                StaticAbility::AttacksDespiteDefender(condition) if self.check_static_condition(condition, permanent.controller)));
+            && !self.attacks_despite_defender(&view, permanent.controller);
         view.is_creature()
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
-            && self.combat_condition_met(permanent_id)
+            && !self.cant_attack_or_block(permanent_id, &view, permanent.controller)
             && self
                 .state
                 .turn
@@ -355,15 +379,8 @@ impl Game {
         let view = self.characteristics(id);
         !permanent.tapped
             && view.is_creature()
-            && self.combat_condition_met(id)
-            && !self.cant_block(id)
-            && !view.static_abilities.iter().any(|ability| {
-                matches!(
-                    ability,
-                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
-                        if *predicate == CardPredicate::default()
-                )
-            })
+            && !self.cant_attack_or_block(id, &view, permanent.controller)
+            && !self.cant_block_unconditionally(id, &view)
     }
 
     pub(crate) fn blocker_can_block_attacker(
@@ -393,9 +410,6 @@ impl Game {
             .static_abilities
             .iter()
             .any(|ability| match ability {
-                StaticAbility::CantBeBlockedIf(condition) => {
-                    self.check_static_condition(condition, attacker.controller)
-                }
                 StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(predicate)) => {
                     self.permanent_matches_predicate(blocker_id, predicate)
                 }
@@ -406,7 +420,7 @@ impl Game {
         {
             return false;
         }
-        if self.cant_be_blocked(attacker_id) {
+        if self.cant_be_blocked_unconditionally(attacker_id, &attacker_view, attacker.controller) {
             return false;
         }
         // Blockers are declared one at a time; a second blocker is refused.

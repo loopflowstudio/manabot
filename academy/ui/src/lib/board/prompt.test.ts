@@ -31,6 +31,17 @@ describe('promptLine', () => {
     expect(line).not.toMatch(/offer|commit|clause|nonparticipation/i);
   });
 
+  it('leaves the live keyboard out of a recording', () => {
+    const frame = structuredClone(frames[0]);
+    frame.action_space = 'PRIORITY';
+    for (const stack of [[], [{ id: 9, kind: 'spell', controller: 1, label: 'Lightning Bolt' }]]) {
+      frame.projection.stack_objects = stack as typeof frame.projection.stack_objects;
+      const view = boardView(frame, PLAYERS);
+      expect(promptLine(frame, view)).toMatch(/Space/);
+      expect(promptLine(frame, view, false)).not.toMatch(/Space/);
+    }
+  });
+
   it('asks for the cost in the line and says how Space pays it in the hint', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost);
     expect(pay).toBeDefined();
@@ -136,7 +147,7 @@ describe('primaryLabel', () => {
 
   it('shows the cost a payment pays', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
-    expect(primaryLabel(pay, boardView(pay, PLAYERS))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
+    expect(primaryLabel(pay, boardView(pay, PLAYERS))?.text).toBe(`Auto pay ${pay.projection.decision_context!.mana_cost}`);
   });
 
   it('says the cost on the button and the lands it taps in its accessible name', () => {
@@ -151,9 +162,9 @@ describe('primaryLabel', () => {
     const names = lands.map(land => land.name);
     const listed = names[0] === names[1] ? `${names[0]} ×2` : names.join(', ');
     const label = primaryLabel(pay, boardView(pay, PLAYERS), preview);
-    expect(label?.text).toBe(`Pay ${cost}`);
+    expect(label?.text).toBe(`Auto pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
     // A preview that is not exact draws nothing; the button keeps the cost.
-    expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
+    expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Auto pay ${cost}`);
   });
 });

@@ -1,7 +1,9 @@
 /**
  * The prompt's one line: what to do now, in plain words.
  *
- * `promptLine(frame, view)` names the decision ("Choose blockers", "Pay {2}{U}").
+ * `promptLine(frame, view, keys)` names the decision ("Choose blockers", "Pay {2}{U}");
+ * `keys` false (a recording, where Space plays the transport) leaves out the
+ * live keyboard's words.
  * `promptHint(frame, view)` describes how to answer a mana payment. The engine's
  * own instruction stays available behind the prompt's details; this line adds
  * no rules and chooses nothing.
@@ -30,16 +32,16 @@ function askedCreature(frame: ExperienceFrame, view: BoardView): string | null {
 }
 
 /** What the decision asks, in one stable line: hovering a choice never rewrites it. */
-export function promptLine(frame: ExperienceFrame, view: BoardView): string {
+export function promptLine(frame: ExperienceFrame, view: BoardView, keys = true): string {
   const context = frame.projection.decision_context;
   const creature = askedCreature(frame, view);
   const source = context?.source?.label ?? null;
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   switch (frame.action_space) {
     case 'PRIORITY':
-      if (top) return `${top} is on the stack. Respond, or Space to let it resolve`;
-      if (!anyCards(view)) return 'Nothing to play. Space passes';
-      return yourMain(frame) ? 'Play a land or cast a spell, or Space to pass' : 'Cast or activate now, or Space to pass';
+      if (top) return `${top} is on the stack. Respond, or ${keys ? 'Space to ' : ''}let it resolve`;
+      if (!anyCards(view)) return keys ? 'Nothing to play. Space passes' : 'Nothing to play';
+      return `${yourMain(frame) ? 'Play a land or cast a spell' : 'Cast or activate now'}, or ${keys ? 'Space to ' : ''}pass`;
     case 'PAY_OR_NOT':
       return context?.mana_cost
         ? `Pay ${context.mana_cost}${source ? ` for ${source}` : ''}`
@@ -109,6 +111,15 @@ export interface PrimaryLabel {
 }
 
 /**
+ * An offer's words on the board. The payment offer hands the choice of lands
+ * to the automatic payer, so it reads "Auto pay"; the recorded label stays
+ * "Pay the cost".
+ */
+export function offerText(offer: { verb?: string; label: string }): string {
+  return offer.verb === 'pay' ? offer.label.replace(/^Pay the cost/, 'Auto pay') : offer.label;
+}
+
+/**
  * The primary button's words: what pressing it does next rather than the
  * offer's verb. Passing with a spell on the stack lets it resolve (if the
  * other player passes too); on an empty stack it moves to the next step. The
@@ -123,7 +134,8 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
     const full = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
     // The button says the price on one line; the lands it taps are drawn on
     // the board and named in its accessible name.
-    return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
+    if (full) return { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Auto pay '.length)}` };
+    return { text: offerText(primary.offer), description: offerText(primary.offer) };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   // A card name is never cut: when it does not fit beside the verb, the

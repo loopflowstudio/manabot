@@ -20,9 +20,9 @@ MAX_HERO_MOVES = 3000
 
 # Decks that reproduce the live complaint: the hero holds instants, so the
 # engine offers a priority window at every step of both players' turns.
-BOLT_DECK = {"Mountain": 12, "Lightning Bolt": 12}
-COUNTER_DECK = {"Island": 14, "Counterspell": 8}
-OGRE_DECK = {"Mountain": 14, "Gray Ogre": 8}
+BOLT_DECK = {"Mountain": 8, "Lightning Bolt": 8}
+COUNTER_DECK = {"Island": 10, "Counterspell": 6}
+OGRE_DECK = {"Mountain": 10, "Gray Ogre": 6}
 
 
 def _recorded_traces(directory):
@@ -126,7 +126,7 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
                     "villain_type": "passive",
                     "seed": 3,
                     "hero_deck": BOLT_DECK,
-                    "villain_deck": {"Island": 20},
+                    "villain_deck": {"Island": 12},
                 },
                 _lands_then_pass_policy,
                 on_payload=observe,
@@ -164,7 +164,7 @@ def test_disabling_auto_pass_surfaces_every_window(isolated_traces):
         "villain_type": "passive",
         "seed": 3,
         "hero_deck": BOLT_DECK,
-        "villain_deck": {"Island": 20},
+        "villain_deck": {"Island": 12},
     }
 
     def run(extra: dict) -> tuple[int, dict]:
@@ -271,12 +271,15 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
                         "villain_type": "passive",
                         "seed": 3,
                         "hero_deck": BOLT_DECK,
-                        "villain_deck": {"Island": 20},
+                        "villain_deck": {"Island": 12},
                     },
                 }
             )
             payload = settled_message(websocket)
             assert payload["type"] == "observation"
+            if payload["data"]["turn"]["turn_number"] == 0:
+                websocket.send_json({"type": "action", "index": 0})
+                payload = settled_message(websocket)
             # Default stops: game opens at my main1, with the config echoed.
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
             assert payload["stops"] == {
@@ -341,11 +344,14 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
                         "villain_type": "passive",
                         "seed": 3,
                         "hero_deck": BOLT_DECK,
-                        "villain_deck": {"Island": 20},
+                        "villain_deck": {"Island": 12},
                     },
                 }
             )
             payload = settled_message(websocket)
+            if payload["data"]["turn"]["turn_number"] == 0:
+                websocket.send_json({"type": "action", "index": 0})
+                payload = settled_message(websocket)
             assert payload["data"]["turn"]["turn_number"] == 1
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
 
