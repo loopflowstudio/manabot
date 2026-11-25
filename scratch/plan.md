@@ -1,99 +1,65 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
 All 56 of the 56 scoped Foundations rows have directed implementation evidence.
-Slices 1–10 are complete. Demonic Pact and Maze’s End already had working
+Slices 1–11 are complete. Demonic Pact and Maze’s End already had working
 definitions.
 
-**Next step: Slice 11 (Concept-Alignment Pass)** — close the four
-state/observation/UI mismatches found in `scratch/concept-review.html`, then
-run **Gate / Integrated validation** (full debug suite, extension rebuild,
-Academy fixtures, current-world admission, pinned-pilot checks, Engine Budget,
-stress states, and cross-card synergies).
+**Next step: Gate / Integrated validation** — full debug suite, extension
+rebuild, Academy fixtures, current-world admission, pinned-pilot checks,
+Engine Budget, stress states, and cross-card synergies.
 
-Remaining implementation passes: **1 (Slice 11 below)**. Every one of the 56
-scoped ledger rows is `implemented`; Abyssal Harvester's `blocked_by` is
+Remaining implementation passes: **0 (all 11 slices complete)**. Every one of
+the 56 scoped ledger rows is `implemented`; Abyssal Harvester's `blocked_by` is
 cleared.
 
-## Slice 11 — Concept-Alignment Pass (from `scratch/concept-review.html`)
+## Slice 11 — Concept-Alignment Pass (from `scratch/concept-review.html`) — DONE
 
-Behavior review (2026-11-25, head `bc39f13ca3`): none of Slice 11 is built yet —
-`Retarget` projects no `"new target"`, `Player.combat_mana_pool` and
-`clear_combat_mana_pools` remain (`flow/mana.rs:2969,3476`), `KeepPermanents`
-still emits `keep_creatures` (`decision_context.rs:527-528`), and `prompt.ts`
-has no cases for the new decision kinds. These four items are the open defects.
-
-Build in this order; each piece is independently testable and preserves
-patch-clean 0.2.x compatibility and pinned-pilot tokens:
+Implemented and verified with directed Rust, Python, and Academy UI tests:
 
 1. **Project `Decision::Retarget`'s already-chosen targets (`chosen: Vec<Target>`):**
-   - *Model:* Whole-assignment retargeting keeps the stack object's original
-     targets until the last slot commits (CR 115.7e), so `Decision::Retarget`
-     is the sole owner of earlier slot choices. Projecting only `chosen.len()`
-     erases those choices from policies, text play, and Academy reconnect.
-   - *Changes:* In `managym/src/agent/effect_execution.rs`, add `"new target"`
-     to `EXECUTION_TEXT` and emit `out.target("new target", *target)` for every
-     target in `chosen` inside `project_decision` for `Decision::Retarget`
-     (keep the existing `"retargeted stack object"` and `"retarget"` fields).
-     Verify `record_vocabulary.rs` registers the new label cleanly and confirm
-     text play / `decision_context` shows the pending new targets.
-   - *Verification:* Add a directed test copying a multi-target spell
-     (Biogenic Upgrade with `[2, 1]` shares or Drakuseth on a 4-creature board),
-     choosing two different targets for slot 0 on two forks, and asserting that
-     the encoded observations and text descriptions at slot 1 differ and name
-     the slot-0 new target while the stack object still holds its original
-     targets.
-
+   - Added `"new target"` to `EXECUTION_TEXT` in `managym/src/agent/effect_execution.rs`,
+     emitted `out.target("new target", *target)` for every chosen target in
+     `Decision::Retarget` plus a `"New targets chosen so far: ..."` summary,
+     and included `"retarget"` in `manabot/semantic/text_observation.py`'s
+     pending-summary stages.
+   - Verified in `rna::retarget_projects_earlier_chosen_targets_before_final_commit`
+     and `tests/semantic/test_text_observation.py::test_retarget_and_keep_permanents_surface_in_text_and_academy`.
 2. **One mana-expiry authority (`ManaExpiry`) from pool storage through Academy & text play:**
-   - *Model:* Mana expiry (`Step`, `EndOfCombat`, `EndOfTurn`) is one concept on
-     `ManaClass`, not two pools (`mana_pool` + `combat_mana_pool`) or a boolean
-     (`combat: bool`). Today Savage Ventmaw's `EndOfTurn` mana renders as
-     *"expires at step end"* in text play, Academy, and payment preview, and
-     `ManaSpend` gives `EndOfCombat` and `EndOfTurn` identical blank suffixes.
-   - *Changes:*
-     - Unify `Player.combat_mana_pool` into `Player.mana_pool` using
-       `ManaExpiry::EndOfCombat`. Delete `Player.combat_mana_pool`,
-       `combat_mana_pool_mut`, `clear_combat_mana_pools()`, and the
-       strip-and-fallback branch in `spend_mana_unit`. Route
-       `Effect::AddMana { until_end_of_combat: true, .. }` into `mana_pool`
-       with `ManaExpiry::EndOfCombat` (keeping `record_bending(Fire)` and
-       keeping the `until_end_of_combat` field on serialized card definitions
-       unchanged so TLA pinned-pilot tokens stay intact). Update
-       `state/hash.rs`, `mana/preview.rs`, and `card_capture.rs`.
-     - Derive `PlayerData.combat_mana` by summing `ManaExpiry::EndOfCombat`
-       units from `mana_pool`.
-     - Add an additive `expiry` field (defaulting to `Step` when omitted for
-       backward compatibility) to `PooledManaClassData`, `PyPooledManaClass`,
-       `PooledManaView`, `managym/experience.py`, `protocol/*.schema.json`, and
-       `academy/ui/src/lib/types.ts`, while keeping `combat: bool` derived as
-       `expiry == EndOfCombat` for patch-clean 0.2.x compatibility.
-     - Update `managym/src/flow/action.rs` (`ManaSpend` descriptions),
-       `manabot/semantic/text_observation.py`, and
-       `academy/ui/src/lib/mana.ts` (`pooledManaTerms`) to distinguish
-       `Step`, `EndOfCombat`, and `EndOfTurn` accurately.
-   - *Verification:* Directed Rust + Python/Academy tests verifying Savage
-     Ventmaw's floating mana renders *"expires at end of turn"* in text play,
-     Academy `pooledManaTerms`, payment preview, and `ManaSpend` labels, and
-     that firebending (`EndOfCombat`), Ozai retention, and Ventmaw (`EndOfTurn`)
-     all behave identically through the single `mana_pool`.
-
+   - Unified `Player.combat_mana_pool` into `Player.mana_pool` with
+     `ManaExpiry::EndOfCombat`, deleted `Player.combat_mana_pool`,
+     `mana_pools_mut`, `combat_mana_pool_mut`, `clear_combat_mana_pools()`, and
+     the strip-and-fallback branch in `spend_mana_unit`, bumped
+     `MATCH_STATE_HASH_VERSION` to 33, and derived `PlayerData.combat_mana`
+     from `Mana::expiry_total(ManaExpiry::EndOfCombat)`.
+   - Added additive `expiry` (`"step"` / `"end_of_combat"` / `"end_of_turn"`,
+     omitted/defaulting to `"step"` for backward compatibility) to
+     `PooledManaClassData`, `PyPooledManaClass`, `managym/__init__.pyi`,
+     `PooledManaView` (Rust + Python + all 6 `protocol/*.schema.json`),
+     `experience_projection.py`, and `academy/ui/src/lib/types.ts`, keeping
+     `combat: bool` derived as `expiry == EndOfCombat`. Recorded additive
+     `tests/public_api.json` snapshot.
+   - Updated `manabot/semantic/text_observation.py` and
+     `academy/ui/src/lib/mana.ts` (`pooledManaTerms`) to distinguish `step`,
+     `end_of_combat`, and `end_of_turn`.
+   - Verified in `dtk::savage_ventmaw_mana_survives_until_cleanup`,
+     `tle::animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect`,
+     `tla::ozai_keeps_unspent_mana_as_red_and_flies_on_six`,
+     `tla::firebending_mana_lasts_until_end_of_combat_and_casts_spells`,
+     `tests/semantic/test_text_observation.py::test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy`,
+     and `academy/ui/src/lib/mana.test.ts`.
 3. **Decision-memory hygiene, offer-kind alignment & Academy prompt lines:**
-   - *Changes:*
-     - `managym/src/agent/decision_memory.rs`: skip non-leaf
-       `NameOption::Group(_)` clicks on `Decision::ChooseEntryValue` (matching
-       `Decision::NameCard`), so tree-navigation steps do not pollute public
-       decision memory.
-     - `managym/src/flow/decision.rs`: emit `ActionSpaceKind::Modal` (matching
-       `Action::ChooseMode { 0 | 1 }`) for `Decision::PartitionPiles` and
-       `Decision::ChoosePile` instead of `ActionSpaceKind::LookAndSelect`.
-       Update any Curator tests checking the action space kind.
-     - `managym/src/decision_context.rs`: emit stage `"keep_permanents"` for
-       `Decision::KeepPermanents`, keeping `"keep_creatures"` accepted
-       alongside `"keep_permanents"` in `managym/academy/recording.py` and
-       `manabot/semantic/text_observation.py` for older recordings.
-     - `academy/ui/src/lib/board/prompt.ts`: add explicit `promptLine` cases
-       for `target_shares`, `entry_choice`, `order_entry_choices`,
-       `partition_piles`, and `choose_pile` (with unit tests in
-       `academy/ui/src/lib/board/`).
+   - `managym/src/agent/decision_memory.rs`: skipped non-leaf `NameOption::Group(_)`
+     clicks on `Decision::ChooseEntryValue` and recorded the canonical leaf row
+     (`choose_entry_value_skips_group_navigation_and_records_canonical_leaf_row`).
+   - `managym/src/flow/decision.rs`: emitted `ActionSpaceKind::Modal` for
+     `Decision::PartitionPiles` and `Decision::ChoosePile` (updated
+     `fdn::curator_of_destinies_keeps_the_split_private_and_resolves_either_pile`).
+   - `managym/src/decision_context.rs`: emitted `"keep_permanents"` for
+     `Decision::KeepPermanents`, keeping `"keep_creatures"` accepted alongside
+     it in `managym/academy/recording.py` and `manabot/semantic/text_observation.py`.
+   - `academy/ui/src/lib/board/prompt.ts`: added `promptLine` cases for
+     `target_shares`, `entry_choice`, `order_entry_choices`, `partition_piles`,
+     and `choose_pile` (`academy/ui/src/lib/board/prompt.test.ts`, `svelte-check`).
 
 ### Choices made for review & explicitly deferred work
 

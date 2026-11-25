@@ -1027,9 +1027,10 @@ class RestrictedMana:
     mana: tuple[int, int, int, int, int, int]
 
 class PooledManaClass:
-    """One pooled class with a spend effect or combat expiry."""
+    """One pooled class with a spend effect or non-step expiry."""
 
     combat: bool
+    expiry: str
     restriction: str | None
     effect: str | None
     mana: tuple[int, int, int, int, int, int]

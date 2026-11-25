@@ -58,6 +58,7 @@ impl From<&Mana> for PreviewPool {
                 .map(|(class, amounts)| PooledManaView {
                     mana: amounts.map(i32::from),
                     combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
+                    expiry: class.expiry.as_str().into(),
                     restriction: class.restriction.as_ref().map(|r| r.describe()),
                     effect: class
                         .effect
@@ -682,14 +683,14 @@ mod tests {
             &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), blue),
             None,
         );
-        game.state.combat_mana_pool_mut(payer).add(
+        game.state.mana_pool_mut(payer).add(
             &Mana::of_class(
                 ManaClass {
                     restriction: Some(ManaRestriction::spell(["Pirate"])),
                     effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
                         without_subtype: "Human".into(),
                     }),
-                    expiry: crate::state::mana::ManaExpiry::Step,
+                    expiry: crate::state::mana::ManaExpiry::EndOfCombat,
                 },
                 blue,
             ),
@@ -747,9 +748,17 @@ mod tests {
         let rider = crate::state::mana::SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),
         };
-        game.state
-            .combat_mana_pool_mut(PlayerId(0))
-            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]), None);
+        game.state.mana_pool_mut(PlayerId(0)).add(
+            &Mana::of_class(
+                crate::state::mana::ManaClass {
+                    expiry: crate::state::mana::ManaExpiry::EndOfCombat,
+                    restriction: None,
+                    effect: Some(rider),
+                },
+                [0, 0, 0, 1, 0, 0],
+            ),
+            None,
+        );
         let result = preview(&game, cast_index(&game));
         assert!(result.sources.is_empty());
         let final_pool = result.pool_after_spending.unwrap();

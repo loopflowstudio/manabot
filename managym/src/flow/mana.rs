@@ -2963,11 +2963,9 @@ impl Game {
         ) || self.automatic_choice_taps(player, cost, model).is_some()
     }
 
-    /// Both pools combined (regular + until-end-of-combat).
+    /// Pooled mana with every class and expiry intact.
     pub(crate) fn pooled_mana(&self, player: PlayerId) -> Mana {
-        let mut total = self.state.players[player.0].mana_pool.mana().clone();
-        total.add_combat(&self.state.players[player.0].combat_mana_pool);
-        total
+        self.state.players[player.0].mana_pool.mana().clone()
     }
 
     /// `object` as the producer of mana it is adding to a pool.
@@ -3262,30 +3260,17 @@ impl Game {
         unit: &Mana,
         cost: &ManaCost,
     ) -> Vec<SpentMana> {
-        let (regular, combat) = self.state.mana_pools_mut(player);
-        if let Some((class, amounts)) = unit
+        let combat_unit = unit
             .classes()
             .first()
-            .filter(|(class, _)| class.expiry == ManaExpiry::EndOfCombat)
-        {
-            let mut stripped = class.clone();
-            stripped.expiry = ManaExpiry::Step;
-            let combat_unit = if stripped.restriction.is_none() && stripped.effect.is_none() {
-                Mana {
-                    mana: *amounts,
-                    ..Mana::default()
-                }
-            } else {
-                Mana::of_class(stripped, *amounts)
-            };
-            if combat.mana().contains(&combat_unit) {
-                return combat.spend(&combat_unit, &cost.purpose);
+            .is_some_and(|(class, _)| class.expiry == ManaExpiry::EndOfCombat);
+        let pool = self.state.mana_pool_mut(player);
+        let spent = pool.spend(unit, &cost.purpose);
+        if !combat_unit {
+            let remaining_non_combat = pool.total() - pool.expiry_total(ManaExpiry::EndOfCombat);
+            if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
+                exposure.mana[player.0].remove(unit.total(), remaining_non_combat, false);
             }
-        }
-        let spent = regular.spend(unit, &cost.purpose);
-        let pooled = regular.total();
-        if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
-            exposure.mana[player.0].remove(unit.total(), pooled, false);
         }
         spent
     }
@@ -3440,9 +3425,8 @@ impl Game {
         total
     }
 
-    /// CR 106.4 — regular pools empty as each step/phase ends, except mana
-    /// whose class lasts until end of combat or end of turn. The firebending
-    /// combat pool also empties in `clear_combat_mana_pools`.
+    /// CR 106.4 — pools empty as each step/phase ends, respecting classes
+    /// whose expiry lasts until end of combat (firebending) or end of turn.
     pub(crate) fn clear_mana_pools(&mut self, step: StepKind) {
         let expires = |expiry: ManaExpiry| match expiry {
             ManaExpiry::Step => true,
@@ -3454,37 +3438,29 @@ impl Game {
                 continue;
             }
             let pool = std::mem::take(self.state.mana_pool_mut(player));
-            let (mut surviving, expiring) = pool.split_expiring(expires);
-            let before = expiring.total();
-            if before > 0 {
-                let kept = self.unspent_mana_retained(player, expiring);
+            let (rest, combat_expiring) =
+                pool.split_expiring(|expiry| expiry == ManaExpiry::EndOfCombat && expires(expiry));
+            let (mut surviving, regular_expiring) = rest.split_expiring(expires);
+            let regular_before = regular_expiring.total();
+            if regular_before > 0 {
+                let kept = self.unspent_mana_retained(player, regular_expiring);
                 if let Some(capture) = self.mana_capture(player) {
-                    capture.remove(
-                        before - kept.total(),
-                        surviving.total() + kept.total(),
-                        true,
-                    );
+                    let remaining_non_combat = surviving.total()
+                        - surviving.expiry_total(ManaExpiry::EndOfCombat)
+                        + kept.total();
+                    capture.remove(regular_before - kept.total(), remaining_non_combat, true);
+                }
+                surviving.absorb(kept);
+            }
+            let combat_before = combat_expiring.total();
+            if combat_before > 0 {
+                let kept = self.unspent_mana_retained(player, combat_expiring);
+                if let Some(capture) = self.mana_capture(player) {
+                    capture.combat_expired += u64::from(combat_before - kept.total());
                 }
                 surviving.absorb(kept);
             }
             *self.state.mana_pool_mut(player) = surviving;
-        }
-    }
-
-    /// Until-end-of-combat mana (firebending) empties as combat ends. What
-    /// `unspent_mana_retained` keeps joins the ordinary pool.
-    pub(crate) fn clear_combat_mana_pools(&mut self) {
-        for player in [PlayerId(0), PlayerId(1)] {
-            if self.state.players[player.0].combat_mana_pool.total() == 0 {
-                continue;
-            }
-            let combat = std::mem::take(self.state.combat_mana_pool_mut(player));
-            let before = combat.total();
-            let kept = self.unspent_mana_retained(player, combat);
-            if let Some(capture) = self.mana_capture(player) {
-                capture.combat_expired += u64::from(before - kept.total());
-            }
-            self.state.mana_pool_mut(player).absorb(kept);
         }
     }
 

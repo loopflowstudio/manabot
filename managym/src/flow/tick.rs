@@ -268,9 +268,6 @@ impl Game {
             self.finish_combat_capture();
             self.state.combat = None;
         }
-        if matches!(step, StepKind::EndOfCombat | StepKind::Cleanup) {
-            self.clear_combat_mana_pools();
-        }
         self.remember_controlled_hands();
     }
 

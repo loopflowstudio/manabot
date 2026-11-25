@@ -1329,6 +1329,12 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
     payload["observation"]["viewer_state"]["agent"]["pooled_mana_classes"] = [
         {"mana": [0, 0, 0, 2, 0, 0], "combat": True, "program": []},
         {
+            "mana": [0, 0, 0, 3, 3, 0],
+            "combat": False,
+            "expiry": "end_of_turn",
+            "program": [],
+        },
+        {
             "mana": [0, 0, 0, 0, 1, 0],
             "restriction": "creature spells",
             "effect": "a +1/+1 counter on a non-Human creature spell it casts",
@@ -1344,6 +1350,7 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
     ]
     text = render_decision(_redigest(payload)).text
     assert "Of the mana above: R 2; expires at end of combat." in text
+    assert "Of the mana above: R 3, G 3; expires at end of turn." in text
     assert (
         "Of the mana above: C 1; for anything but spells from hand; expires at step end."
         in text
@@ -2785,3 +2792,95 @@ def test_biogenic_shares_are_announced_in_text_and_visible_on_both_tables() -> N
         [spell] = decision_surface_view(branch, viewer)["stack_objects"]
         assert "2 assigned to Gray Ogre" in spell["label"]
         assert "1 assigned to Hill Giant" in spell["label"]
+
+
+def test_retarget_and_keep_permanents_surface_in_text_and_academy() -> None:
+    env = priority_root(
+        ("Deadly Brew",),
+        ("Swamp", "Forest", "Gray Ogre", "Hill Giant"),
+        opponent=("Gray Ogre",),
+    )
+    _choose(env, "Cast ")
+    while decision_surface_view(env, 0)["decision_context"]["stage"] != "keep_permanents":
+        _choose(env, "Pass")
+    decision = capture_text_decision(env)
+    assert "Stage: keep permanents." in decision.text
+    _assert_policy_input_holds_the_decision(env, decision)
+    assert decision_surface_view(env, 0)["decision_context"]["stage"] == "keep_permanents"
+
+    copy_env = priority_root(
+        ("Teach by Example", "Biogenic Upgrade"),
+        ("Island", "Mountain") + ("Forest",) * 6 + ("Gray Ogre", "Hill Giant"),
+        opponent=("Wind Drake", "Llanowar Elves"),
+    )
+    _choose(copy_env, "(Teach by Example)")
+    while not copy_env.is_game_over():
+        actions = capture_text_decision(copy_env).actions
+        if any("(Biogenic Upgrade)" in a.description for a in actions):
+            break
+        _choose(copy_env, "Pass")
+    _choose(copy_env, "(Biogenic Upgrade)")
+    _choose(copy_env, "(Gray Ogre)")
+    _choose(copy_env, "(Hill Giant)")
+    _choose(copy_env, "Decline")
+    _choose(copy_env, "Assign 2 to Gray Ogre")
+    _choose(copy_env, "Assign 1 to Hill Giant")
+    while decision_surface_view(copy_env, 0)["decision_context"]["stage"] != "retarget":
+        _choose(copy_env, "Pass")
+    fork_a = copy_env.clone_env()
+    fork_b = copy_env.clone_env()
+    _choose(fork_a, "(Wind Drake)")
+    _choose(fork_b, "(Llanowar Elves)")
+    text_a = capture_text_decision(fork_a)
+    text_b = capture_text_decision(fork_b)
+    assert "New targets chosen so far: Wind Drake." in text_a.text
+    assert "New targets chosen so far: Llanowar Elves." in text_b.text
+    assert "new target:" in text_a.text
+    assert text_a.text != text_b.text
+    _assert_policy_input_holds_the_decision(fork_a, text_a)
+    _assert_policy_input_holds_the_decision(fork_b, text_b)
+
+
+def test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy() -> None:
+    env = priority_root(
+        (),
+        ("Savage Ventmaw",),
+        opponent=(),
+    )
+    while not env.is_game_over():
+        obs = env.observation_for_player(0)
+        if obs.agent.pooled_mana_classes:
+            break
+        actions = env.observation_for_player(
+            env.current_agent_index()
+        ).action_space.actions
+        attack = next(
+            (
+                i
+                for i, a in enumerate(actions)
+                if "Attack with Savage Ventmaw" in (a.description or "")
+            ),
+            None,
+        )
+        if attack is not None:
+            env.step(attack)
+            continue
+        step_index = next(
+            (
+                i
+                for i, a in enumerate(actions)
+                if "Pass" in (a.description or "") or "Decline" in (a.description or "")
+            ),
+            0,
+        )
+        env.step(step_index)
+    decision = capture_text_decision(env)
+    assert "Of the mana above: R 3, G 3; expires at end of turn." in decision.text
+    view = decision_surface_view(env, 0)
+    assert view["agent"]["pooled_mana_classes"] == [
+        {
+            "mana": [0, 0, 0, 3, 3, 0],
+            "combat": False,
+            "expiry": "end_of_turn",
+        }
+    ]

@@ -258,6 +258,14 @@ impl ManaExpiry {
     pub fn is_step(&self) -> bool {
         *self == Self::Step
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Step => "step",
+            Self::EndOfCombat => "end_of_combat",
+            Self::EndOfTurn => "end_of_turn",
+        }
+    }
 }
 
 /// Every rule-visible property that tells pooled mana apart from ordinary
@@ -1156,6 +1164,21 @@ impl Mana {
         let mut out = Self::default();
         out.add_with_expiry(&self, expiry);
         out
+    }
+
+    /// Total mana in this pool whose expiry matches `expiry`.
+    pub fn expiry_total(&self, expiry: ManaExpiry) -> u16 {
+        let mut total: u16 = if expiry == ManaExpiry::Step {
+            self.mana.iter().map(|&n| u16::from(n)).sum()
+        } else {
+            0
+        };
+        for (class, amounts) in self.classes() {
+            if class.expiry == expiry {
+                total += amounts.iter().map(|&n| u16::from(n)).sum::<u16>();
+            }
+        }
+        total
     }
 
     /// Combine combat mana without losing which units survive a step end.

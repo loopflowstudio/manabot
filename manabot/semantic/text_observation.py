@@ -136,6 +136,7 @@ _STAGES = frozenset(
         "linked_exile",
         "distribute_counters",
         "keep_creatures",
+        "keep_permanents",
         "retarget",
         "resolution_cast",
         "surveil",
@@ -899,6 +900,12 @@ class _Renderer:
                     + "."
                 )
             for pooled in player.pooled_mana_classes:
+                if pooled.expiry == "end_of_turn":
+                    expiry_text = "; expires at end of turn."
+                elif pooled.expiry == "end_of_combat" or pooled.combat:
+                    expiry_text = "; expires at end of combat."
+                else:
+                    expiry_text = "; expires at step end."
                 lines.append(
                     "Of the mana above: "
                     + ", ".join(
@@ -912,11 +919,7 @@ class _Renderer:
                         else ""
                     )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
-                    + (
-                        "; expires at end of combat."
-                        if pooled.combat
-                        else "; expires at step end."
-                    )
+                    + expiry_text
                 )
             for source, kind in player.spent_graveyard_types:
                 grantor = self.names.get(source, f"departed permanent {source}")
@@ -1394,7 +1397,12 @@ class _Renderer:
                 f"Announcing this {context.announcing.replace('_', ' ')}: "
                 "it is on the stack until its costs are paid."
             )
-        if context.stage in {"partition_piles", "choose_pile", "target_shares"}:
+        if context.stage in {
+            "partition_piles",
+            "choose_pile",
+            "target_shares",
+            "retarget",
+        }:
             lines.extend(context.pending)
         if context.chosen_mode is not None:
             lines.append(f"Chosen mode: {context.chosen_mode + 1}.")

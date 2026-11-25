@@ -184,6 +184,95 @@ fn biogenic_upgrade_copy_keeps_the_division_when_retargeted() {
 }
 
 #[test]
+fn retarget_projects_earlier_chosen_targets_before_final_commit() {
+    use crate::support::{
+        inspect::top_spell,
+        play::{cast, choose_mode, settle},
+    };
+    use managym::{
+        agent::{
+            action::ActionType,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+        },
+        state::{
+            game_object::{PlayerId, Target},
+            player::ManaPayment,
+        },
+    };
+    let mut s = five_color_setup(&[
+        "Gray Ogre",
+        "Hill Giant",
+        "Wind Drake",
+        "Biogenic Upgrade",
+        "Teach by Example",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let b = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let c = s.force_permanent_on_battlefield(1, "Wind Drake");
+    let d = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Biogenic Upgrade");
+    for id in [a, b] {
+        assert!(s.choose_target(Target::Permanent(id)));
+    }
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    choose_mode(&mut s, 2);
+    choose_mode(&mut s, 1);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+
+    let mut fork_c = s.clone();
+    let mut fork_d = s.clone();
+    assert!(fork_c.choose_target(Target::Permanent(c)));
+    assert!(fork_d.choose_target(Target::Permanent(d)));
+
+    // Whole-assignment retargeting keeps the stack object's original targets until slot 1 commits.
+    let expected_original = vec![Target::Permanent(a), Target::Permanent(b)];
+    assert_eq!(top_spell(&fork_c).targets, expected_original);
+    assert_eq!(top_spell(&fork_d).targets, expected_original);
+
+    let obs_c = Observation::for_player(fork_c.game(), PlayerId(0));
+    let obs_d = Observation::for_player(fork_d.game(), PlayerId(0));
+    let enc_c = encode(&obs_c, &ObservationEncoderConfig::default()).unwrap();
+    let enc_d = encode(&obs_d, &ObservationEncoderConfig::default()).unwrap();
+    assert_ne!(
+        (enc_c.facts, enc_c.relations),
+        (enc_d.facts, enc_d.relations),
+        "slot 1 encoded observations must distinguish earlier retarget choices"
+    );
+
+    let ctx_c = fork_c.game().decision_context(PlayerId(0)).unwrap();
+    let ctx_d = fork_d.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        ctx_c.pending.iter().any(|line| line.contains("Wind Drake")),
+        "expected slot-0 new target in pending summary: {:?}",
+        ctx_c.pending
+    );
+    assert!(
+        ctx_d.pending.iter().any(|line| line.contains("Gray Ogre")),
+        "expected slot-0 new target in pending summary: {:?}",
+        ctx_d.pending
+    );
+    assert_ne!(ctx_c.pending, ctx_d.pending);
+
+    let capture_c = fork_c.game().capture_decision(PlayerId(0), 0).unwrap();
+    assert!(
+        capture_c.frames.iter().any(|frame| frame
+            .effect_execution_description
+            .as_deref()
+            .is_some_and(|desc| desc.contains("new target:"))),
+        "expected 'new target:' in effect_execution_description: {:?}",
+        capture_c
+            .frames
+            .iter()
+            .filter_map(|frame| frame.effect_execution_description.as_deref())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn gate_colossus_affinity_evasion_and_graveyard_gate_trigger() {
     use crate::support::{
         game::{force_lands, plant_in_graveyard},

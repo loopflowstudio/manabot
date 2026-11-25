@@ -1335,14 +1335,16 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class with a spend effect or combat expiry: its qualifiers,
-/// amounts by W/U/B/R/G/C and learning-token program.
+/// Pooled mana of one class with a spend effect or non-step expiry: its
+/// qualifiers, amounts by W/U/B/R/G/C and learning-token program.
 #[cfg(feature = "python")]
 #[pyclass(name = "PooledManaClass")]
 #[derive(Clone)]
 pub struct PyPooledManaClass {
     #[pyo3(get)]
     pub combat: bool,
+    #[pyo3(get)]
+    pub expiry: String,
     #[pyo3(get)]
     pub restriction: Option<String>,
     #[pyo3(get)]
@@ -1358,6 +1360,7 @@ impl From<PooledManaClassData> for PyPooledManaClass {
     fn from(value: PooledManaClassData) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1371,6 +1374,7 @@ impl From<PyPooledManaClass> for PooledManaClassData {
     fn from(value: PyPooledManaClass) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,

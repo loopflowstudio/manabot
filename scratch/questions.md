@@ -39,9 +39,10 @@
   offered only if each later required clause naming it keeps a candidate.
   Every authored relation names one earlier clause, so this is exact for
   them; a chain of three related clauses would need a deeper search.
-- `Decision::Retarget` records its progress for the policy as the slot
-  index only (`retarget` field), not the earlier slots' new targets. The
-  stack object keeps its original targets until every slot is decided.
+- `Decision::Retarget` projects each earlier slot's new target via `"new target"`
+  in `effect_execution` and `"New targets chosen so far: ..."` in
+  `effect_execution_summary`, while the stack object keeps its original targets
+  until every slot is decided (CR 115.7e).
 - At resolution `DifferentControllerFrom` makes every target of the named
   clause illegal along with the relating one. Run Away Together's named
   clause has one target; a multi-target host would need per-pair marking.
@@ -53,9 +54,11 @@
 - `Keyword::Changeling` is the first non-evergreen `Keyword` variant, so it
   has no dedicated card/permanent column; it is observed through its definition
   tokens (`Keyword::changeling`) and `all_creature_types` / subtype rules.
-- `Player.combat_mana_pool` and `PooledManaClassData.combat` are retained for
-  patch-clean observation compatibility while `ManaClass.expiry` replaces
-  `ManaClass.combat` inside the engine and payment search.
+- `Player.combat_mana_pool` is unified into `Player.mana_pool` via `ManaExpiry`;
+  `PooledManaClassData.combat` and `PooledManaView.combat` remain derived from
+  `expiry == EndOfCombat` alongside the additive `expiry` field for patch-clean
+  0.2.x observation compatibility. `Effect::AddMana.until_end_of_combat` keeps
+  its serialized card-definition shape so TLA pinned-pilot tokens stay intact.
 - `put_into_graveyard_this_turn` is appended as column 56 on `agent_cards` /
   `opponent_cards` for `InputLayout::OneToken` (v11), keeping `card_turn_state`
   and `InputLayout::Legacy` (`CARD_DIM = 56`) untouched for saved checkpoints.

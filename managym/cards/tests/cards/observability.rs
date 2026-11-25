@@ -206,7 +206,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
     let Player {
         id: _,
         index: _,
@@ -220,7 +220,6 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
         drew_when_empty: _,
         counters: _,
         mana_pool: _,
-        combat_mana_pool: _,
     } = player;
     [
         ("id", Seen::Identity),
@@ -249,10 +248,6 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
         (
             "mana_pool",
             Seen::Player(player::MANA_WHITE, player::RESTRICTED_LESSON_WHITE),
-        ),
-        (
-            "combat_mana_pool",
-            Seen::Player(player::COMBAT_MANA, player::MANA_WHITE),
         ),
     ]
 }
@@ -2960,7 +2955,6 @@ fn player_life_and_mana_move_their_named_columns() {
         match field {
             "life" => player.life = 7,
             "mana_pool" => player.mana_pool = Mana::parse("R").into(),
-            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R").into(),
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -3691,6 +3685,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     }));
     fields.extend(encoding!(PooledManaClassData {
         combat => [FactOccurrence(FactKind::EffectProgram)],
+        expiry => [FactOccurrence(FactKind::EffectProgram)],
         restriction => [FactOccurrence(FactKind::EffectProgram)],
         effect => [FactOccurrence(FactKind::EffectProgram)],
         mana => [
@@ -6504,7 +6499,11 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
 fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
     let mut s = five_color_setup(&["Animal Attendant"]);
     s.set_player_mana_pool(0, "255");
-    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1").into();
+    s.game_mut().state.players[0].mana_pool.add(
+        &managym::state::mana::Mana::parse("1")
+            .with_expiry(managym::state::mana::ManaExpiry::EndOfCombat),
+        None,
+    );
     for viewer in [0, 1] {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         let player = if viewer == 0 {
@@ -6513,8 +6512,10 @@ fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
             &observation.opponent
         };
         assert_eq!(player.mana[5], 256);
+        assert_eq!(player.combat_mana, 1);
         assert_eq!(player.pooled_mana_classes.len(), 1);
         assert!(player.pooled_mana_classes[0].combat);
+        assert_eq!(player.pooled_mana_classes[0].expiry, "end_of_combat");
         assert_eq!(player.pooled_mana_classes[0].mana[5], 1);
         let class = &player.pooled_mana_classes[0];
         assert_eq!(class.effect, None);

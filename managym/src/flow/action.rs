@@ -480,6 +480,8 @@ impl Game {
             Some(Decision::ManaSpend { player, cost, .. }) => {
                 let choices = self.mana_spend_choices(*player, cost);
                 let unit = &choices.get(mode)?.unit;
+                // Non-step expiry (`EndOfCombat`, `EndOfTurn`) is already written by
+                // `mana_description`; add the explicit step-end label only for step mana.
                 let expiry = if unit
                     .classes()
                     .iter()

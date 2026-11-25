@@ -2300,7 +2300,7 @@ impl Game {
                 };
                 ActionSpace {
                     player: Some(*player),
-                    kind: ActionSpaceKind::LookAndSelect,
+                    kind: ActionSpaceKind::Modal,
                     actions: (0..2)
                         .map(|mode| Action::ChooseMode {
                             player: *player,

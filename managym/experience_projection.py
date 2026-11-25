@@ -386,6 +386,7 @@ def _serialize_player(
                         else {}
                     ),
                     "combat": p.combat,
+                    **({"expiry": p.expiry} if p.expiry != "step" else {}),
                 }
                 for p in player.pooled_mana_classes
             ],

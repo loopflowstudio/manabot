@@ -754,18 +754,6 @@ impl TrackedState {
         &mut self.state.players[player.0].mana_pool
     }
 
-    /// The ordinary and until-end-of-combat pools together.
-    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
-        self.revisions.mana_pools += 1;
-        let player = &mut self.state.players[player.0];
-        (&mut player.mana_pool, &mut player.combat_mana_pool)
-    }
-
-    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
-        self.revisions.mana_pools += 1;
-        &mut self.state.players[player.0].combat_mana_pool
-    }
-
     /// Name the stack appearance of the cast `player` recorded last. The
     /// cast was recorded (through `DerefMut`) before its spell moved, so
     /// derivations already saw it; only the entry's generation changes here,

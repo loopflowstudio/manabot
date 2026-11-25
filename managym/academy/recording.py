@@ -61,6 +61,7 @@ RESOLVING_STAGES = frozenset(
         "retarget",
         "choose_to_exile",
         "keep_creatures",
+        "keep_permanents",
         "linked_exile",
         "split_revealed",
         "partition_piles",

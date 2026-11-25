@@ -8784,7 +8784,7 @@ fn curator_of_destinies_keeps_the_split_private_and_resolves_either_pile() {
     assert!(root.choose_target(Target::StackSpell(spell)));
     let names = ["Island", "Swamp", "Forest", "Mountain", "Plains"];
     let cards = pin_top(&mut root, &names);
-    pass_until(&mut root, ActionSpaceKind::LookAndSelect);
+    pass_until(&mut root, ActionSpaceKind::Modal);
     assert!(root
         .game()
         .characteristics(permanent_named(&root, "Curator of Destinies"))
@@ -8814,6 +8814,7 @@ fn curator_of_destinies_keeps_the_split_private_and_resolves_either_pile() {
         }
         let public = names[..up].iter().map(|name| name.to_string()).collect();
         assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
         assert_eq!(visible(&s, 0).len(), 5);
         assert_eq!(visible(&s, 1), public);
         let offers = offer_labels(&s);
@@ -9682,4 +9683,19 @@ fn abyssal_harvester_exiles_this_turns_graveyard_creature_copies_as_nightmare_an
     assert_eq!(copy_view.pt(), (3, 3));
     assert_eq!(zone_of(&s, dead_aang), Some(ZoneType::Exile));
     let _ = permanent_of(&s, dead_aang);
+}
+
+#[test]
+fn keep_permanents_emits_keep_permanents_stage() {
+    use crate::support::play::pass_until;
+    use managym::{agent::action::ActionSpaceKind, state::player::ManaPayment};
+    let mut s = five_color_setup(&["Deadly Brew", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Deadly Brew");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let ctx = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(ctx.stage, "keep_permanents");
 }

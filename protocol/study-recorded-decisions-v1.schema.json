@@ -2088,6 +2088,9 @@
             "null"
           ]
         },
+        "expiry": {
+          "type": "string"
+        },
         "mana": {
           "type": "array",
           "items": {

@@ -145,14 +145,27 @@ pub struct RestrictedManaData {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class with a spend effect or combat expiry. `program` is the
-/// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
-/// same serialization the producing card's definition uses.
+fn default_mana_expiry() -> String {
+    crate::state::mana::ManaExpiry::Step.as_str().into()
+}
+
+fn is_step_mana_expiry(expiry: &str) -> bool {
+    expiry.is_empty() || expiry == crate::state::mana::ManaExpiry::Step.as_str()
+}
+
+/// Pooled mana of one class with a spend effect or non-step expiry. `program`
+/// is the class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary,
+/// the same serialization the producing card's definition uses.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PooledManaClassData {
     #[serde(default)]
     pub combat: bool,
+    #[serde(
+        default = "default_mana_expiry",
+        skip_serializing_if = "is_step_mana_expiry"
+    )]
+    pub expiry: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction: Option<String>,
     /// "a +1/+1 counter on a non-Human creature spell it casts".
@@ -1360,11 +1373,9 @@ impl Observation {
                 (None, None, None, None)
             };
 
-        // Regular and combat mana together, as the player may spend it.
-        let mut pool = p.mana_pool.mana().clone();
-        pool.add_combat(&p.combat_mana_pool);
+        let pool = p.mana_pool.mana();
         // Individual class counts are u8; public totals may exceed one class's
-        // capacity when regular and combat mana have the same color.
+        // capacity when classes share a color.
         let mut mana = pool.mana.map(i32::from);
         let mut lesson_mana = [0_i32; 6];
         for (class, amounts) in pool.classes() {
@@ -1397,7 +1408,7 @@ impl Observation {
                 player,
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
-            combat_mana: p.combat_mana_pool.total() as i32,
+            combat_mana: pool.expiry_total(crate::state::mana::ManaExpiry::EndOfCombat) as i32,
             mana,
             lesson_mana,
             restricted_mana: pool
@@ -1427,6 +1438,7 @@ impl Observation {
                     }
                     Some(PooledManaClassData {
                         combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
+                        expiry: class.expiry.as_str().into(),
                         restriction: class.restriction.as_ref().map(|r| r.describe()),
                         effect: class
                             .effect

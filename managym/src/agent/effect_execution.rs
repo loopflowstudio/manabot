@@ -156,6 +156,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "moved",
     "moving object",
     "named search",
+    "new target",
     "normal combat damage",
     "once each turn ability",
     "once each turn source",
@@ -1798,6 +1799,18 @@ pub(crate) fn project_decision(
         } => {
             out.target("retargeted stack object", *object);
             out.field("retarget", &(chosen.len(), may_keep));
+            for target in chosen {
+                out.target("new target", *target);
+            }
+            if !chosen.is_empty() {
+                out.summary(|| {
+                    let labels: Vec<_> = chosen
+                        .iter()
+                        .map(|target| Projection::label(game.target_reference(*target, viewer)))
+                        .collect();
+                    format!("New targets chosen so far: {}.", labels.join(", "))
+                });
+            }
         }
         Decision::ExileLinked {
             owner,

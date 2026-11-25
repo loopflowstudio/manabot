@@ -503,6 +503,9 @@ class PooledManaView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     combat: bool
+    expiry: Literal["step", "end_of_combat", "end_of_turn"] = Field(
+        default="step", exclude_if=lambda value: value == "step"
+    )
 
 
 class LegacyPlayerView(ProtocolModel):

@@ -3965,6 +3965,16 @@
           "default": null,
           "title": "Effect"
         },
+        "expiry": {
+          "default": "step",
+          "enum": [
+            "step",
+            "end_of_combat",
+            "end_of_turn"
+          ],
+          "title": "Expiry",
+          "type": "string"
+        },
         "mana": {
           "maxItems": 6,
           "minItems": 6,
