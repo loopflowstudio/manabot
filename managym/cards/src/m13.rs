@@ -1,8 +1,6 @@
 //! Magic 2013.
 use managym_state::{
-    ability::{
-        Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
-    },
+    ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PowerCda, PrintedCharacteristics, StaticAbility,

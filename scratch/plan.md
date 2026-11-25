@@ -58,30 +58,20 @@ Done:
   Lesson: a declined up-to clause made the next clause's target count as
   clause 0, so Warlord re-asked for its player. Positions never name clauses.
 - Slice 7 (`580ff7d36e`, cards/tests/stress `a256b00666`): divided damage
-  (`TargetRequirement.division`, sequential `PendingChoice::DivideAmount`
-  offers >= 1 per target, CR 601.2d/602.2b/608.2b, `target_divisions` on stack
-  objects), keep-one-of-each-type (`CardType::PERMANENT_TYPES`,
-  `Effect::Remember`, `Except::Remembered`), controller-scoped exception
-  (`Except::Matching`), until-your-next-turn delayed attack triggers
-  (`DelayedEvent::Attacks`, `DelayedTriggerEvent::Attacks`,
-  `DelayedExpiry::UntilYourNextTurn`), choose-from-exiled-top
-  (`ExileTopCardsToPlay.choose`, `Effect::GrantPlay`), opponent death-exile
-  replacement (`ReplacementEffect::ExileIfWouldDie`, `EventBinding::SacrificedBy`),
-  and `ObjectSelector::LibraryExceptBottom`. Appended v11 relation columns
-  `until_next_turn` and `division` (`tests/public_api.json` recorded).
-  Cards: `Ajani, Caller of the Pride` (`m13`, + `token.cat_2_2_w`), `Chandra,
-  Flameshaper` (`fdn`), `Liliana, Dreadhorde General` (`war`), `Ajani
-  Unrelenting`, `Garruk, Curse Breaker`, `Garruk, Veiled Butcher`, and `Jace,
-  Reality Sculptor` (`fra`). Verified: all 7 directed loyalty tests + 3
-  observability/subtype guards (`cards` debug), `conformance_tests` (2/2),
-  `scripts/public_api.py check`, `cargo fmt --check`, and `bench_states` stress
-  states (`way-grants`: 25 actions / 1 board; `divided-damage`: 10 target
-  offers -> 7 division offers; `keep-one-each-type`: 15 linear artifact picks
-  on 30 mixed/multi-type permanents).
-  Lesson: sequential `DivideAmount` auto-assigns 0/1 targets and `total <= N`
-  targets, keeping offers strictly linear (at most `remaining - tail_targets`
-  per step); keep-one-of-each-type composes via per-type `Remember` +
-  `Except::Remembered` with linear `N` offers and matches CR multi-type rulings.
+  (`TargetRequirement.division`, sequential `PendingChoice::DivideAmount`),
+  keep-one-of-each-type (`Effect::Remember` + `Except::Remembered`),
+  `Except::Matching`, until-your-next-turn delayed attack triggers,
+  `ExileTopCardsToPlay.choose` + `Effect::GrantPlay`,
+  `ReplacementEffect::ExileIfWouldDie`, `ObjectSelector::LibraryExceptBottom`;
+  appended v11 relation columns `until_next_turn`, `division`. Cards: Ajani,
+  Caller of the Pride (`m13`, `token.cat_2_2_w`), Chandra, Flameshaper
+  (`fdn`), Liliana, Dreadhorde General (`war`), Ajani Unrelenting, Garruk,
+  Curse Breaker, Garruk, Veiled Butcher, Jace, Reality Sculptor (`fra`);
+  `bench_states` stress states `way-grants`, `divided-damage`,
+  `keep-one-each-type` (offers stay linear). Directed tests passed in debug.
+  Realign moved the Ajani/Liliana tests into `tests/cards/m13.rs`/`war.rs`
+  (their set files) and ran `cargo fmt` (the slice's fmt check had not
+  passed); the three tests pass from their new files.
 
 Already red on CI at `d1ef91d814` (run 45568225341), before slices 5–6, and
 left for gate: `observability::` legacy card-row parity (four tests,
@@ -94,9 +84,14 @@ semantic-conformance cases.
 ## Passes remaining
 
 1. Slice 8's remaining ~30 adjacent cards plus the integrated interaction
-   checks, then close the ledger. At gate run debug nextest, Engine Budget and
-   the pinned pilot, recording a reason if its output moves. Keep main’s
-   MTG-420 receipts at their original revision.
+   checks, then close the ledger. First, rebuild the cp313 extension and
+   refresh Academy fixtures (`scripts/refresh_academy_fixtures.py`): slice 7
+   added eight definitions and no fixture refresh, and slices 5–7 recorded no
+   Python/wheel runs. `protocol/*.schema.json` was not patched for slice 7's
+   `target_divisions`/delayed-attack types; run the Rust schema tests and
+   patch if they differ. At gate run debug nextest, Engine Budget and the
+   pinned pilot, recording a reason if its output moves. Keep main's MTG-420
+   receipts at their original revision.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text

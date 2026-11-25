@@ -8783,62 +8783,6 @@ fn celestial_armor_entry_protection_stays_when_the_armor_moves() {
 }
 
 #[test]
-fn ajani_caller_of_the_pride_loyalty_abilities() {
-    use crate::support::{
-        game::{enter_battlefield, five_color_setup, set_counters},
-        inspect::{counters, counters_of, keywords},
-        play::{activate, choose, settle},
-    };
-    use managym::{
-        agent::action::Action,
-        flow::turn::StepKind,
-        state::{card::Keyword, permanent::CounterKind, target::Target},
-    };
-
-    // +1 puts a +1/+1 counter on up to one target creature (and may choose zero).
-    let mut s = five_color_setup(&["Ajani, Caller of the Pride", "Gray Ogre"]);
-    let ajani = enter_battlefield(&mut s, "Ajani, Caller of the Pride");
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 4);
-    activate(&mut s, ajani, 0);
-    assert!(s.choose_target(Target::Permanent(ogre)));
-    settle(&mut s);
-    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 5);
-    assert_eq!(counters(&s, ogre), 1);
-
-    // Next turn, +1 may decline target and still add loyalty.
-    s.advance_to_active_step(1, StepKind::Main);
-    s.advance_to_active_step(0, StepKind::Main);
-    activate(&mut s, ajani, 0);
-    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
-    settle(&mut s);
-    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 6);
-
-    // -3 grants flying and double strike until end of turn.
-    s.advance_to_active_step(1, StepKind::Main);
-    s.advance_to_active_step(0, StepKind::Main);
-    activate(&mut s, ajani, 1);
-    assert!(s.choose_target(Target::Permanent(ogre)));
-    settle(&mut s);
-    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 3);
-    assert!(keywords(&s, ogre).has(Keyword::Flying));
-    assert!(keywords(&s, ogre).has(Keyword::DoubleStrike));
-    s.advance_to_active_step(1, StepKind::Upkeep);
-    assert!(!keywords(&s, ogre).has(Keyword::Flying));
-    assert!(!keywords(&s, ogre).has(Keyword::DoubleStrike));
-
-    // -8 creates X 2/2 white Cat creature tokens where X is your life total.
-    s.advance_to_active_step(0, StepKind::Main);
-    set_counters(&mut s, ajani, CounterKind::Loyalty, 9);
-    s.game_mut().state.players[0].life = 7;
-    activate(&mut s, ajani, 2);
-    settle(&mut s);
-    let cats = s.battlefield_permanents_named(0, "Cat");
-    assert_eq!(cats.len(), 7);
-    assert_eq!(s.game().characteristics(cats[0]).pt(), (2, 2));
-}
-
-#[test]
 fn chandra_flameshaper_loyalty_abilities() {
     use crate::support::{
         game::{enter_battlefield, five_color_setup, pin_top, set_counters},
@@ -8852,7 +8796,12 @@ fn chandra_flameshaper_loyalty_abilities() {
     };
 
     // +2 adds {R}{R}{R}, exiles top 3, chooses one playable this turn; others stay unplayable.
-    let mut s = five_color_setup(&["Chandra, Flameshaper", "Gray Ogre", "Lightning Bolt", "Plains"]);
+    let mut s = five_color_setup(&[
+        "Chandra, Flameshaper",
+        "Gray Ogre",
+        "Lightning Bolt",
+        "Plains",
+    ]);
     let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
     assert_eq!(counters_of(&s, chandra, CounterKind::Loyalty), 6);
     let bolt = pin_top(&mut s, &["Lightning Bolt", "Gray Ogre", "Plains"])[0];
@@ -8860,20 +8809,33 @@ fn chandra_flameshaper_loyalty_abilities() {
     activate(&mut s, chandra, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 3);
-    assert_eq!(s.action_space().actions.len(), 3, "choose 1 of 3 exiled cards");
+    assert_eq!(
+        s.action_space().actions.len(),
+        3,
+        "choose 1 of 3 exiled cards"
+    );
     // Choose Lightning Bolt from among the three exiled cards.
     select_card(&mut s, bolt);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert!(
-        has_action(&s, |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Lightning Bolt")),
+        has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Lightning Bolt")
+        ),
         "chosen exiled card is playable this turn"
     );
     assert!(
-        !has_action(&s, |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Gray Ogre")),
+        !has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } if s.game().state[*object].name == "Gray Ogre")
+        ),
         "unchosen exiled creature is not playable"
     );
     assert!(
-        !has_action(&s, |a| matches!(a, Action::PlayLand { object, .. } if s.game().state[*object].name == "Plains")),
+        !has_action(
+            &s,
+            |a| matches!(a, Action::PlayLand { object, .. } if s.game().state[*object].name == "Plains")
+        ),
         "unchosen exiled land is not playable"
     );
 
@@ -8945,126 +8907,4 @@ fn chandra_flameshaper_loyalty_abilities() {
     for &beast in &beasts {
         assert_eq!(s.game().state.permanents[beast].as_ref().unwrap().damage, 1);
     }
-}
-
-#[test]
-fn liliana_dreadhorde_general_loyalty_abilities() {
-    use crate::support::{
-        game::{enter_battlefield, five_color_setup, set_counters},
-        inspect::{card_of, counters_of},
-        play::{activate, choose, select_card, settle},
-    };
-    use managym::{
-        agent::action::{Action, ActionSpaceKind},
-        flow::turn::StepKind,
-        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
-    };
-
-    // +1 creates a 2/2 black Zombie; -4 makes each player sacrifice 2 creatures and triggers Liliana's draw.
-    let mut s = five_color_setup(&["Liliana, Dreadhorde General", "Gray Ogre"]);
-    let liliana = enter_battlefield(&mut s, "Liliana, Dreadhorde General");
-    assert_eq!(counters_of(&s, liliana, CounterKind::Loyalty), 6);
-    activate(&mut s, liliana, 0);
-    settle(&mut s);
-    assert_eq!(counters_of(&s, liliana, CounterKind::Loyalty), 7);
-    let zombies = s.battlefield_permanents_named(0, "Zombie");
-    assert_eq!(zombies.len(), 1);
-    assert_eq!(s.game().characteristics(zombies[0]).pt(), (2, 2));
-
-    let own_ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let _opp_a = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let _opp_b = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    s.advance_to_active_step(1, StepKind::Main);
-    s.advance_to_active_step(0, StepKind::Main);
-    let hand_before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
-    activate(&mut s, liliana, 1);
-    settle(&mut s);
-    // Both players had exactly 2 creatures, so all 4 were sacrificed; Liliana triggers twice for own 2 creatures.
-    assert!(s.game().state.permanents[own_ogre].is_none());
-    assert!(s.battlefield_permanents_named(0, "Zombie").is_empty());
-    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
-    assert_eq!(
-        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
-        hand_before + 2,
-        "drew one card for each own creature that died"
-    );
-
-    // -9 keep one of each permanent type, with multi-type permanents (Artifact Creature) and 30-permanent stress board.
-    let mut s = five_color_setup(&[
-        "Liliana, Dreadhorde General",
-        "Gray Ogre",
-        "Hill Giant",
-        "Prophetic Prism",
-        "Sol Ring",
-        "Way of the Mentor",
-        "Way of the Warlord",
-        "Ajani, Caller of the Pride",
-        "Chandra, Flameshaper",
-    ]);
-    let liliana = enter_battlefield(&mut s, "Liliana, Dreadhorde General");
-    set_counters(&mut s, liliana, CounterKind::Loyalty, 10);
-    // Opponent controls 30 permanents: 10 Artifact Creature tokens, 6 Creatures (4 Ogres + 2 Giants),
-    // 5 Artifacts (4 Prisms + 1 Sol Ring), 5 Lands, 2 Enchantments, 2 distinct Planeswalkers.
-    let boulders: Vec<_> = (0..10)
-        .map(|_| {
-            s.game_mut()
-                .create_token("token.ballistic_boulder", PlayerId(1), false)
-                .unwrap()
-        })
-        .collect();
-    let mut creatures = Vec::new();
-    for _ in 0..4 {
-        creatures.push(s.force_permanent_on_battlefield(1, "Gray Ogre"));
-    }
-    for _ in 0..2 {
-        creatures.push(s.force_permanent_on_battlefield(1, "Hill Giant"));
-    }
-    for _ in 0..4 {
-        s.force_permanent_on_battlefield(1, "Prophetic Prism");
-    }
-    s.force_permanent_on_battlefield(1, "Sol Ring");
-    for _ in 0..5 {
-        s.force_permanent_on_battlefield(1, "Plains");
-    }
-    s.force_permanent_on_battlefield(1, "Way of the Mentor");
-    s.force_permanent_on_battlefield(1, "Way of the Warlord");
-    let pw1 = s.force_permanent_on_battlefield(1, "Ajani, Caller of the Pride");
-    set_counters(&mut s, pw1, CounterKind::Loyalty, 4);
-    let pw2 = s.force_permanent_on_battlefield(1, "Chandra, Flameshaper");
-    set_counters(&mut s, pw2, CounterKind::Loyalty, 6);
-    assert_eq!(s.game().state.zones.size(ZoneType::Battlefield, PlayerId(1)), 30);
-    activate(&mut s, liliana, 2);
-    // Pass priority to resolve -9.
-    while s.action_space().kind == ActionSpaceKind::Priority {
-        choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
-    }
-    // 1. Artifact choice: 10 Artifact Creatures + 5 Artifacts = 15 choices (linear!).
-    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
-    assert_eq!(s.action_space().actions.len(), 15);
-    let kept_boulder = boulders[0];
-    let kept_boulder_card = card_of(&s, kept_boulder);
-    select_card(&mut s, kept_boulder_card);
-    // 2. Battle: none (skipped automatically).
-    // 3. Creature choice: 10 Artifact Creatures + 6 Creatures = 16 choices; choose an Ogre so both boulder & ogre are kept!
-    assert_eq!(s.action_space().actions.len(), 16);
-    let kept_ogre = creatures[0];
-    let kept_ogre_card = card_of(&s, kept_ogre);
-    select_card(&mut s, kept_ogre_card);
-    // 4. Enchantment: 2 choices.
-    assert_eq!(s.action_space().actions.len(), 2);
-    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
-    // 5. Land: 5 choices.
-    assert_eq!(s.action_space().actions.len(), 5);
-    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
-    // 6. Planeswalker: 2 choices.
-    assert_eq!(s.action_space().actions.len(), 2);
-    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
-    settle(&mut s);
-    assert!(s.game().state.permanents[kept_boulder].is_some());
-    assert!(s.game().state.permanents[kept_ogre].is_some());
-    assert_eq!(
-        s.game().state.zones.size(ZoneType::Battlefield, PlayerId(1)),
-        5,
-        "kept one of each of the 5 present permanent types and sacrificed the other 25"
-    );
 }

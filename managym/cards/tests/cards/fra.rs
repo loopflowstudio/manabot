@@ -1655,12 +1655,18 @@ fn ajani_unrelenting_loyalty_abilities() {
     let own_cadets_before = s.battlefield_permanents_named(0, "Cadet").len();
     activate(&mut s, ajani, 2);
     settle(&mut s);
-    assert!(s.game().state.permanents[ogre].is_none(), "own nontoken takes 4");
+    assert!(
+        s.game().state.permanents[ogre].is_none(),
+        "own nontoken takes 4"
+    );
     assert!(
         s.game().state.permanents[opp_nontoken].is_none(),
         "opponent nontoken takes 4"
     );
-    assert!(s.game().state.permanents[opp_token].is_none(), "opponent token takes 4");
+    assert!(
+        s.game().state.permanents[opp_token].is_none(),
+        "opponent token takes 4"
+    );
     assert_eq!(
         s.battlefield_permanents_named(0, "Cadet").len(),
         own_cadets_before + 1,
@@ -1679,10 +1685,7 @@ fn garruk_curse_breaker_loyalty_abilities() {
         agent::action::Action,
         flow::{combat::AttackTarget, turn::StepKind},
         state::{
-            card::Keyword,
-            game_object::PlayerId,
-            permanent::CounterKind,
-            target::Target,
+            card::Keyword, game_object::PlayerId, permanent::CounterKind, target::Target,
             zone::ZoneType,
         },
     };
@@ -1720,8 +1723,14 @@ fn garruk_curse_breaker_loyalty_abilities() {
     s.advance_to_active_step(0, StepKind::Main);
     let land1 = s.force_permanent_on_battlefield(0, "Plains");
     let land2 = s.force_permanent_on_battlefield(0, "Plains");
-    s.game_mut().state.permanents[land1].as_mut().unwrap().tapped = true;
-    s.game_mut().state.permanents[land2].as_mut().unwrap().tapped = true;
+    s.game_mut().state.permanents[land1]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.game_mut().state.permanents[land2]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
     activate(&mut s, garruk, 0);
     assert!(s.choose_target(Target::Permanent(land1)));
     assert!(s.choose_target(Target::Permanent(land2)));
@@ -1749,13 +1758,15 @@ fn garruk_curse_breaker_loyalty_abilities() {
             _ => unreachable!(),
         };
         if offered == ogre {
-            choose(&mut s, |a| {
-                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == ogre && *p == PlayerId(1))
-            });
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == ogre && *p == PlayerId(1)),
+            );
         } else if offered == other_ogre {
-            choose(&mut s, |a| {
-                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == other_ogre && *obj == opp_pw_obj)
-            });
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == other_ogre && *obj == opp_pw_obj),
+            );
         } else {
             choose(&mut s, |a| {
                 matches!(a, Action::DeclareAttacker { attack: None, .. })
@@ -1763,7 +1774,11 @@ fn garruk_curse_breaker_loyalty_abilities() {
         }
     }
     settle(&mut s);
-    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4), "attacker at opponent gets +2/+2");
+    assert_eq!(
+        s.game().characteristics(ogre).pt(),
+        (4, 4),
+        "attacker at opponent gets +2/+2"
+    );
     assert!(keywords(&s, ogre).has(Keyword::Trample));
     assert_eq!(
         s.game().characteristics(other_ogre).pt(),
@@ -1777,13 +1792,19 @@ fn garruk_curse_breaker_loyalty_abilities() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, ogre);
     settle(&mut s);
-    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2), "-4 expired at your next turn");
+    assert_eq!(
+        s.game().characteristics(ogre).pt(),
+        (2, 2),
+        "-4 expired at your next turn"
+    );
 }
 
 #[test]
 fn garruk_veiled_butcher_loyalty_abilities() {
     use crate::support::{
-        game::{clear_hand, enter_battlefield, five_color_setup, force_new_card_in_hand, set_counters},
+        game::{
+            clear_hand, enter_battlefield, five_color_setup, force_new_card_in_hand, set_counters,
+        },
         inspect::{card_of, now, zone_of},
         play::{activate, choose, settle},
     };
@@ -1795,7 +1816,12 @@ fn garruk_veiled_butcher_loyalty_abilities() {
 
     // Static replacement: if an opponent's creature would die, exile it instead.
     // +2: up to one target creature gets -4/-1 until your next turn.
-    let mut s = five_color_setup(&["Garruk, Veiled Butcher", "Hill Giant", "Gray Ogre", "Plains"]);
+    let mut s = five_color_setup(&[
+        "Garruk, Veiled Butcher",
+        "Hill Giant",
+        "Gray Ogre",
+        "Plains",
+    ]);
     let garruk = enter_battlefield(&mut s, "Garruk, Veiled Butcher");
     let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
     activate(&mut s, garruk, 0); // +2
@@ -1939,13 +1965,15 @@ fn jace_reality_sculptor_loyalty_abilities() {
             _ => unreachable!(),
         };
         if offered == opp_a {
-            choose(&mut s, |a| {
-                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == opp_a && *p == PlayerId(0))
-            });
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == opp_a && *p == PlayerId(0)),
+            );
         } else if offered == opp_b {
-            choose(&mut s, |a| {
-                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == opp_b && *obj == jace_obj)
-            });
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == opp_b && *obj == jace_obj),
+            );
         } else {
             choose(&mut s, |a| {
                 matches!(a, Action::DeclareAttacker { attack: None, .. })
@@ -1953,7 +1981,11 @@ fn jace_reality_sculptor_loyalty_abilities() {
         }
     }
     settle(&mut s);
-    assert_eq!(s.game().characteristics(opp_a).pt(), (-2, 3), "attacking you gets -5/-0");
+    assert_eq!(
+        s.game().characteristics(opp_a).pt(),
+        (-2, 3),
+        "attacking you gets -5/-0"
+    );
     assert_eq!(
         s.game().characteristics(opp_b).pt(),
         (-2, 3),
@@ -1966,13 +1998,19 @@ fn jace_reality_sculptor_loyalty_abilities() {
     set_counters(&mut s, jace_tokens[0], CounterKind::Loyalty, 12);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
-        !has_action(&s, |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)),
+        !has_action(
+            &s,
+            |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)
+        ),
         "24 total Jace loyalty is not enough for 0 ability"
     );
     set_counters(&mut s, jace_tokens[0], CounterKind::Loyalty, 13);
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(
-        has_action(&s, |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)),
+        has_action(
+            &s,
+            |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)
+        ),
         "25 total Jace loyalty unlocks 0 ability"
     );
     let opp_lib_before = s.game().state.zones.size(ZoneType::Library, PlayerId(1));

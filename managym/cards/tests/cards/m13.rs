@@ -53,3 +53,59 @@ fn crusader_of_odric_counts_creatures_on_and_off_the_battlefield() {
         (3, 3)
     );
 }
+
+#[test]
+fn ajani_caller_of_the_pride_loyalty_abilities() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, set_counters},
+        inspect::{counters, counters_of, keywords},
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{card::Keyword, permanent::CounterKind, target::Target},
+    };
+
+    // +1 puts a +1/+1 counter on up to one target creature (and may choose zero).
+    let mut s = five_color_setup(&["Ajani, Caller of the Pride", "Gray Ogre"]);
+    let ajani = enter_battlefield(&mut s, "Ajani, Caller of the Pride");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 4);
+    activate(&mut s, ajani, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 5);
+    assert_eq!(counters(&s, ogre), 1);
+
+    // Next turn, +1 may decline target and still add loyalty.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    activate(&mut s, ajani, 0);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 6);
+
+    // -3 grants flying and double strike until end of turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    activate(&mut s, ajani, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 3);
+    assert!(keywords(&s, ogre).has(Keyword::Flying));
+    assert!(keywords(&s, ogre).has(Keyword::DoubleStrike));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!keywords(&s, ogre).has(Keyword::Flying));
+    assert!(!keywords(&s, ogre).has(Keyword::DoubleStrike));
+
+    // -8 creates X 2/2 white Cat creature tokens where X is your life total.
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, ajani, CounterKind::Loyalty, 9);
+    s.game_mut().state.players[0].life = 7;
+    activate(&mut s, ajani, 2);
+    settle(&mut s);
+    let cats = s.battlefield_permanents_named(0, "Cat");
+    assert_eq!(cats.len(), 7);
+    assert_eq!(s.game().characteristics(cats[0]).pt(), (2, 2));
+}
