@@ -32,6 +32,7 @@ impl Game {
         cost: &ManaCost,
         needed: usize,
         taps: Vec<UsefulTap<'a>>,
+        need_taps: bool,
     ) -> Option<Vec<UsefulTap<'a>>> {
         if self.state.cast_caller.is_some() {
             return None;
@@ -126,6 +127,9 @@ impl Game {
         let _scan = self.board_scan();
         if !self.same_layered_mana_permanents(&opt_sources) {
             return None;
+        }
+        if !need_taps {
+            return Some(Vec::new());
         }
 
         // `opt_indices.len() >= spare + 1`, so `1 <= count < opt_indices.len()`.

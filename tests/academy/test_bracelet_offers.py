@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-import managym
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
+import managym
 from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame
 

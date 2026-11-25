@@ -161,7 +161,9 @@ def test_priority_dual_land_float_logs_resolved_color_not_raw_offer(
 ) -> None:
     session, frame = _setup(tmp_path, ["Kyoshi Village"], mana_floats="all")
     tap = next(
-        offer for offer in frame.offers if offer.label == "Tap Kyoshi Village for {G}/{W}"
+        offer
+        for offer in frame.offers
+        if offer.label == "Tap Kyoshi Village for {G}/{W}"
     )
     modal, open_log = _submit(session, frame, tap)
     assert open_log == []
