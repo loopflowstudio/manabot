@@ -190,9 +190,10 @@ class AnchorSession:
         pass
 
     def choose(self, view: PolicyView) -> PolicyDecision:
-        # The scripted players read only the raw observation from their Env.
+        # The scripted players read only the viewer observation.
         action = self.anchor.act(
-            cast("Env", SimpleNamespace(last_raw_obs=view.observation)), {}
+            cast("Env", SimpleNamespace(last_raw_obs=view.observation)),
+            view.observation,
         )
         return PolicyDecision(view.choices[action], view.binding)
 
