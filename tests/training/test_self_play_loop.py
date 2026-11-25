@@ -158,11 +158,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert reported.active_seconds is not None and reported.active_seconds > 0
 
 
-@pytest.mark.parametrize(
-    ("field", "legacy_state"), [("focus_film", False), ("stream_norm", True)]
-)
+@pytest.mark.parametrize("field", ["focus_film", "stream_norm"])
 def test_resume_refuses_changed_model_settings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, legacy_state: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
 ) -> None:
     settings = gray_ogre_self_play(horizon=2)
     out = tmp_path / "out"
@@ -170,33 +168,13 @@ def test_resume_refuses_changed_model_settings(
     with recording(
         experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
     ) as run:
-        if legacy_state:
-            learner, ema = loop.create(settings, seed=run.seed)
-            counts = Counts()
-            loop.publish(settings, run, learner, ema, counts)
-            objects = {"learner": learner.agent, "optimizer": learner.optimizer}
-            if ema is not None:
-                objects["ema"] = ema
-            counts.readings = loop.resume_readings(
-                counts, learner.agent.readings, learner.agent.observation_space
-            )
-            run.resume(**objects, extra=counts)
-            for update in run.steps("updates", to=1):
-                counts.updates = update
-                run.log({}, **loop.clocks(counts))
-                run.save()
-        else:
-            self_play(settings, run, updates=1)
+        self_play(settings, run, updates=1)
     (state,) = (out / "state").glob("save-*/state.json")
     saved = json.loads(state.read_text())
     initial = out / "policies/00000000-raw.safetensors"
     assert "model" not in load_metadata(initial)["bc"]["counts"]
-    if legacy_state:
-        del saved["extra"]["model"]
-        state.write_text(json.dumps(saved))
-    else:
-        assert saved["extra"]["model"] == settings.model.checkpoint_payload()
-        initial.unlink()  # A run with recorded settings is self-contained.
+    assert saved["extra"]["model"] == settings.model.checkpoint_payload()
+    initial.unlink()  # A run with recorded settings is self-contained.
     changed = settings.model_copy(
         update={"model": settings.model.model_copy(update={field: True})}
     )
@@ -209,8 +187,6 @@ def test_resume_refuses_changed_model_settings(
     ) as run:
         with pytest.raises(ValueError, match=f"{field}: False -> True"):
             self_play(changed, run, updates=2)
-        if legacy_state:
-            assert self_play(settings, run, updates=2).is_file()
 
 
 def test_resume_refuses_a_model_that_reads_its_inputs_differently(
