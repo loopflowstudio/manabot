@@ -26,10 +26,11 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.verify.action_cases import encode, initial, reach, reorder_objects
+from manabot.verify.action_cases import initial, reach
+from manabot.verify.choice_inputs import reorder_objects
 from manabot.verify.trigger_order import ordering_root
 import managym
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import device_input, fixture_tensors
 
 ChoiceName = Literal[
     "land_pass",
@@ -386,7 +387,7 @@ def one_thread() -> Iterator[None]:
 @pytest.mark.parametrize("name", CHOICES)
 def test_native_choice_preserves_focus_and_changes_state(name: ChoiceName) -> None:
     case = _choice(name)
-    obs = encode(case.raw)
+    obs = fixture_tensors(case.raw)
     assert int(obs["actions_valid"].sum()) == len(case.raw.action_space.actions)
     # A nonempty native focus must not silently become padding in either encoder.
     for i, action in enumerate(case.raw.action_space.actions):
@@ -412,7 +413,7 @@ def test_shared_policy_can_learn_either_choice(
     # Fixed protocol before scoring: two shared fits total, 180 updates each;
     # no early stopping, per-family fitting, or strategically "correct" labels.
     torch.manual_seed(17)
-    observations = [encode(case.raw) for case in choices]
+    observations = [fixture_tensors(case.raw) for case in choices]
     batch = {
         key: torch.cat([obs[key] for obs in observations]) for key in observations[0]
     }
@@ -459,18 +460,15 @@ def test_shared_policy_can_learn_either_choice(
             space.actions = original[::-1]
             case.raw.action_space = space
             try:
-                reordered = encode(case.raw)
+                reordered = fixture_tensors(case.raw)
             finally:
                 space.actions = original
                 case.raw.action_space = space
             permuted, _ = restored(device_input(restored, reordered))
             count = len(original)
             torch.testing.assert_close(permuted[0, :count].flip(0), logits[0, :count])
-            permuted, _ = restored(
-                device_input(
-                    restored, reorder_objects(obs, restored.observation_space.layout)
-                )
-            )
+            with reorder_objects(case.raw):
+                permuted, _ = restored(device_input(restored, case.raw))
             torch.testing.assert_close(permuted, logits, atol=1e-5, rtol=1e-5)
             assert not logits.softmax(-1)[obs["actions_valid"] == 0].any()
             # A specific dropped channel must recreate the forced tie. These

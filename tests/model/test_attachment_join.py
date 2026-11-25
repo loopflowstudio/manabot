@@ -13,12 +13,12 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ModelConfig
-from manabot.verify.action_cases import reorder_objects
+from manabot.verify.choice_inputs import encode, reorder_objects
 import managym
 from tests.model.prepared_routes import device_input
 
 
-def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], int]:
+def _attached_observation() -> tuple[ObservationSpace, managym.Observation, int]:
     env = managym.Env(seed=3, skip_trivial=False)
     env.reset(
         [
@@ -36,7 +36,7 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
     obs.agent_permanents = [first, second]
     space = ObservationSpace(ObservationConfig())
     host = 2 + 2 * space.config.max_cards_per_player
-    return space, encode_observation(space, obs), host
+    return space, obs, host
 
 
 def _batch(encoded: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
@@ -44,7 +44,8 @@ def _batch(encoded: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
 
 
 def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
-    space, encoded, host = _attached_observation()
+    space, raw, host = _attached_observation()
+    encoded = encode_observation(space, raw)
     assert encoded["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] == host + 1
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
@@ -73,9 +74,14 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
 
 @pytest.mark.parametrize("column", PERMANENT_LINK_INDEXES)
 def test_object_permutation_preserves_learned_permanent_links(column: int) -> None:
-    space, encoded, host = _attached_observation()
-    encoded["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] = 0
-    encoded["agent_permanents"][1, column] = host + 1
+    space, raw, host = _attached_observation()
+    first, second = raw.agent_permanents
+    second.attached_to = None
+    if column == PERMANENT_ATTACHED_INDEX:
+        second.attached_to = first.id
+    else:
+        second.blocking = first.id
+    raw.agent_permanents = [first, second]
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
     agent.eval()
@@ -83,15 +89,12 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
         # Initialization zeros these joins, so an untrained model hides bad remaps.
         for layer in (*agent.link_to_target, *agent.link_from_target):
             layer.weight.normal_()
-        obs = _batch(encoded)
-        permuted = reorder_objects(obs, space.layout)
-        count = obs["agent_permanents"].shape[1]
-        assert permuted["agent_permanents"][0, count - 2, column] == host + count
-        expected_logits, expected_value = agent(device_input(agent, obs))
-        logits, value = agent(device_input(agent, permuted))
+        original = encode(raw, space).batch.to_bytes()
+        expected_logits, expected_value = agent(device_input(agent, raw))
+        with reorder_objects(raw):
+            permuted = encode(raw, space)
+            assert permuted.project("agent_permanents")[0, 0, column] == host + 2
+            logits, value = agent(device_input(agent, permuted.batch))
         torch.testing.assert_close(logits.softmax(-1), expected_logits.softmax(-1))
         torch.testing.assert_close(value, expected_value)
-        for key, original in obs.items():
-            torch.testing.assert_close(
-                reorder_objects(permuted, space.layout)[key], original
-            )
+        assert encode(raw, space).batch.to_bytes() == original

@@ -18,7 +18,7 @@ from manabot.recipes.local import LocalConfig
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
-from manabot.verify.action_cases import reorder_objects
+from manabot.verify.choice_inputs import reorder_objects
 from manabot.verify.representation import shared_effect_root
 import managym
 from tests.fixtures.training_records import recording
@@ -95,9 +95,8 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     values = _batch(encode_observation(space, obs))
     logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
-    reordered_logits, reordered_value = model(
-        device_input(model, reorder_objects(values, space.layout))
-    )
+    with reorder_objects(obs):
+        reordered_logits, reordered_value = model(device_input(model, obs))
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)
     (

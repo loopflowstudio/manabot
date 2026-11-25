@@ -498,7 +498,7 @@ def read_numeric(
 
 def write_numeric_column(
     features: Array,
-    selected: Array,
+    selected: Array | slice,
     readings: tuple[ColumnReading, ...],
     column: int,
     stored: float,

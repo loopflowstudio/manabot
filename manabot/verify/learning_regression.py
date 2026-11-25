@@ -18,7 +18,7 @@ from etude.train.read import read_all
 import numpy as np
 from pydantic import Field
 
-from manabot.env.observation import ActionEnum, ObservationBuffers
+from manabot.env.observation import ActionEnum, PolicyObservation, encode_policy_batch
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
 from manabot.eval.results import EvaluationRow
@@ -169,7 +169,7 @@ def score_choices(
     """Score a bounded batch and check reload, batching and permutation invariance."""
 
     def evaluate(
-        policy: BackendPolicy, observation: ObservationBuffers
+        policy: BackendPolicy, observation: PolicyObservation
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         logits, values = policy.evaluate(policy.prepare(observation, inference=True))
         probabilities = _softmax(logits)
@@ -177,10 +177,8 @@ def score_choices(
             raise ValueError("nonfinite frozen checkpoint output")
         return logits, probabilities, values
 
-    stacked = {
-        key: np.concatenate([case.obs[key] for case in cases], axis=0)
-        for key in cases[0].obs
-    }
+    space = agent.observation_space
+    stacked = encode_policy_batch(space, [case.raw for case in cases])
     _, probabilities, values = evaluate(agent, stacked)
     _, loaded_probabilities, loaded_values = evaluate(restored, stacked)
     errors = [
@@ -189,17 +187,18 @@ def score_choices(
     ]
     scores: list[ChoiceScore] = []
     for row, case in enumerate(cases):
-        obs = case.obs
+        obs = encode_policy_batch(space, [case.raw])
         single, p, value = evaluate(agent, obs)
-        valid = obs["actions_valid"]
-        count = int(valid.sum())
+        count = len(case.raw.action_space.actions)
         order = np.arange(count - 1, -1, -1)
-        _, offers, offer_value = evaluate(
-            agent, reorder_offers(obs, order, agent.observation_space.layout)
-        )
-        _, objects, object_value = evaluate(
-            agent, reorder_objects(obs, agent.observation_space.layout)
-        )
+        with reorder_offers(case.raw, order):
+            _, offers, offer_value = evaluate(
+                agent, encode_policy_batch(space, [case.raw])
+            )
+        with reorder_objects(case.raw):
+            _, objects, object_value = evaluate(
+                agent, encode_policy_batch(space, [case.raw])
+            )
         errors.extend(
             [
                 float(np.abs(p[0] - probabilities[row]).max()),
@@ -208,7 +207,7 @@ def score_choices(
                 float(np.abs(objects - p).max()),
                 float(np.abs(offer_value - value).max()),
                 float(np.abs(object_value - value).max()),
-                float(p[valid == 0].sum()),
+                float(p[0, count:].sum()),
             ]
         )
         # Log-sum-exp avoids underflow and gives identical public copies shared

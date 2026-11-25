@@ -24,6 +24,8 @@ from manabot.policy.prepare import (
     catalog_programs,
 )
 from manabot.policy.readings import Readings, legacy_readings, read_numeric
+from manabot.verify.choice_inputs import encode
+import managym
 
 
 def dense_action_features(agent: ActorCritic, rows: torch.Tensor) -> torch.Tensor:
@@ -115,12 +117,27 @@ def host_inputs(obs: Mapping[str, torch.Tensor | np.ndarray]) -> dict[str, np.nd
     }
 
 
+def fixture_tensors(raw: managym.Observation) -> dict[str, torch.Tensor]:
+    """Editable logical fields for tests that construct synthetic model inputs."""
+    space = ObservationSpace()
+    selection = encode(raw, space)
+    return {key: torch.from_numpy(selection.project(key)) for key in space.shapes}
+
+
 def device_input(
-    agent: "ActorCritic", obs: Mapping[str, torch.Tensor | np.ndarray]
+    agent: ActorCritic,
+    obs: Mapping[str, torch.Tensor | np.ndarray]
+    | managym.Observation
+    | managym.ObservationBatch
+    | Prepared[np.ndarray],
 ) -> Prepared[torch.Tensor]:
+    if isinstance(obs, Prepared):
+        return on_device(obs, device_of(agent))
+    if isinstance(obs, managym.Observation):
+        obs = managym.encode_observation_batch([obs], agent.observation_space.layout)
+    host = obs if isinstance(obs, managym.ObservationBatch) else host_inputs(obs)
     return on_device(
-        agent.prepare(host_inputs(obs), inference=not torch.is_grad_enabled()),
-        device_of(agent),
+        agent.prepare(host, inference=not torch.is_grad_enabled()), device_of(agent)
     )
 
 

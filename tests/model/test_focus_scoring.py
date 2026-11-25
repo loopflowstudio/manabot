@@ -14,7 +14,7 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.readings import published_columns
 from manabot.verify.action_cases import decision_case
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import device_input, fixture_tensors
 
 SPACE = ObservationSpace()
 COLUMNS = [column.name for column in published_columns(SPACE)["agent_permanents"]]
@@ -62,7 +62,8 @@ def test_field_is_omitted_when_off_and_keeps_every_other_draw() -> None:
 
 def test_an_unfocused_offer_is_scaled_by_exactly_one() -> None:
     obs = {
-        key: value.clone() for key, value in decision_case("mode").observation.items()
+        key: value.clone()
+        for key, value in fixture_tensors(decision_case("mode").observation).items()
     }
     obs["action_focus"].fill_(-1)
     with torch.no_grad():
@@ -99,7 +100,8 @@ def test_only_a_focused_offer_trains_the_focus_weight() -> None:
     focus removed, its logit sends no gradient to `focus_film.weight` and the
     first's does."""
     obs = {
-        key: value.clone() for key, value in decision_case("attack").observation.items()
+        key: value.clone()
+        for key, value in fixture_tensors(decision_case("attack").observation).items()
     }
     obs["action_focus"][0, 1] = -1
     agent = _agent(3, focus_film=True)
@@ -123,7 +125,7 @@ def _steps_to_fit(seed: int, **fields: bool) -> int:
     """Full-batch Adam updates on "attack iff power >= 3" over 100 attackers
     until every board's label has probability at least 0.9 (at most 300)."""
     power, toughness = torch.cartesian_prod(torch.arange(10), torch.arange(10)).T
-    case = decision_case("attack").observation
+    case = fixture_tensors(decision_case("attack").observation)
     batch = {key: torch.cat([value] * len(power)) for key, value in case.items()}
     _attacker(batch, power, toughness)
     labels = (power < 3).long()

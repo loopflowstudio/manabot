@@ -20,7 +20,7 @@ from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Prepared
 from manabot.policy.readings import published_columns
 from manabot.verify.action_cases import decision_case
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import device_input, fixture_tensors
 from tests.model.test_input_scales import WORLD, sampled_batches
 
 SPACE = ObservationSpace()
@@ -144,7 +144,7 @@ def test_combat_stats_move_the_whole_token(
     0.16-0.25. Without names the historical layout moves it 0.48-0.60: the
     stat flags (`steps:8`) already carry the stats there."""
     agent = _agent(stream_norm, definition_names=definition_names)
-    case = decision_case("attack").observation
+    case = fixture_tensors(decision_case("attack").observation)
     big = {key: value.clone() for key, value in case.items()}
     big["agent_permanents"][
         0, 0, [COLUMNS.index("power"), COLUMNS.index("toughness")]
@@ -268,7 +268,7 @@ def test_no_context_is_exactly_zero() -> None:
         norm = agent.stream_norms["context"] if agent.stream_norms else None
         assert norm is not None
         norm.bias.fill_(1.0)
-        case = decision_case("attack").observation
+        case = fixture_tensors(decision_case("attack").observation)
         prepared = device_input(agent, case)
         assert not prepared.relation_valid.any()
         assert not agent._gather_object_embeddings(prepared).shared_context.any()

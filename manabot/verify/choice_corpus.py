@@ -23,6 +23,7 @@ from manabot.env.observation import (
     STACK_DEFINITION_INDEX,
     ObservationSpace,
 )
+from manabot.policy.spans import ObservationSelection
 from manabot.verify.choice_inputs import encode, reorder_offers
 import managym
 
@@ -54,15 +55,18 @@ class Case:
     family: int
     groups: tuple[list[int], list[int]]
     signatures: list[str]
-    raw_json: str
-    obs: dict[str, np.ndarray]
+    raw: managym.Observation
+    obs: ObservationSelection
     successors: tuple[str, str]
 
     def receipt(self) -> dict[str, object]:
         return {
-            field.name: getattr(self, field.name)
-            for field in fields(self)
-            if field.name != "obs"
+            "raw_json": self.raw.toJSON(),
+            **{
+                field.name: getattr(self, field.name)
+                for field in fields(self)
+                if field.name not in {"obs", "raw"}
+            },
         }
 
 
@@ -220,30 +224,32 @@ def collect_choices(
                         groups[signature].append(index)
                     if len(groups) > 1:
                         obs = encode(raw, observation_space)
-                        assert int(obs["actions_valid"].sum()) == len(actions), (
+                        assert obs.action_counts.tolist() == [len(actions)], (
                             "legal mask count"
                         )
-                        for index, action in enumerate(actions):
-                            assert (
-                                obs["action_focus"][0, index, : len(action.focus)] >= 0
-                            ).all(), "unresolved focus"
-                        # Check native encoding against a permutation of its output.
-                        space = raw.action_space
-                        space.actions = actions[::-1]
-                        raw.action_space = space
-                        try:
+                        focus = obs.spans.tables["action_focus"].records
+                        for row, action in zip(focus, actions, strict=True):
+                            assert (row[: len(action.focus)] >= 0).all(), (
+                                "unresolved focus"
+                            )
+                        order = np.arange(len(actions) - 1, -1, -1)
+                        with reorder_offers(raw, order):
                             reversed_obs = encode(raw, observation_space)
-                        finally:
-                            space.actions = actions
-                            raw.action_space = space
-                        expected = reorder_offers(
-                            obs,
-                            np.arange(len(actions) - 1, -1, -1),
-                            observation_space.layout,
-                        )
-                        for key in obs:
+                        # Compare each packed table independently of the encoder's
+                        # join resolution. Only offer-aligned rows may move.
+                        aligned = {
+                            key for key, _ in observation_space.axis_buffers["actions"]
+                        }
+                        for key, table in obs.spans.tables.items():
+                            expected = (
+                                table.records[order]
+                                if key in aligned
+                                else table.records
+                            )
                             np.testing.assert_array_equal(
-                                reversed_obs[key], expected[key], strict=True
+                                reversed_obs.spans.tables[key].records,
+                                expected,
+                                strict=True,
                             )
                         counts[f"audited_family_{family}"] += 1
                         # Reservoir sampling within each family avoids priority dominance.
@@ -265,7 +271,7 @@ def collect_choices(
                                 family,
                                 selected,
                                 signatures,
-                                raw.toJSON(),
+                                raw,
                                 obs,
                                 (left.state_digest(), right.state_digest()),
                             )
@@ -323,9 +329,8 @@ def collect_choices(
     np.savez(
         out / "observations.npz",
         **{
-            f"{case.name}/{key}": value
+            case.name: np.frombuffer(case.obs.batch.to_bytes(), np.uint8)
             for case in cases
-            for key, value in case.obs.items()
         },
     )
     return cases, counts, findings
@@ -348,9 +353,10 @@ class ActionInput:
 
 
 def action_inputs(
-    obs: dict[str, np.ndarray], count: int, mutation: Mutation
+    obs: ObservationSelection, count: int, mutation: Mutation
 ) -> list[ActionInput]:
     rows: list[ObjectInput] = []
+    definitions = obs.project("semantic_cards")[0]
     for key in (
         "agent_player",
         "opponent_player",
@@ -360,33 +366,28 @@ def action_inputs(
         "opponent_permanents",
     ):
         role, kind = key.split("_")
-        for slot, tensor in enumerate(obs[key][0]):
+        for slot, tensor in enumerate(obs.project(key)[0]):
             row: list[float] = tensor.tolist()
             if kind == "cards":
-                definition = float(
-                    obs["semantic_cards"][0, int(role == "opponent"), slot]
-                )
+                definition = float(definitions[int(role == "opponent"), slot])
                 row.append(0.0 if mutation == "without_definition" else definition)
             elif kind == "permanents" and mutation == "without_definition":
                 row[PERMANENT_DEFINITION_INDEX] = 0.0
             rows.append(ObjectInput(kind, role, tuple(row)))
-    for tensor in obs["stack"][0]:
+    for tensor in obs.project("stack")[0]:
         stack_row: list[float] = tensor.tolist()
         if mutation == "without_definition":
             stack_row[STACK_DEFINITION_INDEX] = 0.0
         rows.append(ObjectInput("stack", "shared", tuple(stack_row)))
     result: list[ActionInput] = []
+    actions = obs.spans.tables["actions"].features()
+    focuses = obs.spans.tables["action_focus"].records
     for index in range(count):
         # Every action column except validity, which is 1 for every offer.
-        action: list[float] = np.delete(
-            obs["actions"][0, index], ACTION_VALID_INDEX
-        ).tolist()
+        action: list[float] = np.delete(actions[index], ACTION_VALID_INDEX).tolist()
         if mutation == "without_declaration":
             action[ACTION_DECLARED_INDEX] = 0.0
-        focus = tuple(
-            rows[int(i)] if i >= 0 else None
-            for i in obs["action_focus"][0, index].tolist()
-        )
+        focus = tuple(rows[int(i)] if i >= 0 else None for i in focuses[index].tolist())
         result.append(ActionInput(tuple(action), focus))
     return result
 

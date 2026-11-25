@@ -399,7 +399,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/reports/belief.py",
         *_TORCH_LOOPS,
         "manabot/training/mps.py",
-        "manabot/verify/action_cases.py",
     )
 )
 
@@ -777,11 +776,10 @@ def exercise_choice_inspection(out: Path) -> None:
     assert len(cases) >= 2 and not findings
     with np.load(out / "observations.npz", allow_pickle=False) as stored:
         for case in cases:
-            for key, value in case.obs.items():
-                assert isinstance(value, np.ndarray)
-                np.testing.assert_array_equal(
-                    stored[f"{case.name}/{key}"], value, strict=True
-                )
+            restored_batch = managym.ObservationBatch.from_bytes(
+                stored[case.name].tobytes()
+            )
+            assert restored_batch.tables() == case.obs.batch.tables()
 
     backend = resolve("mlx", precision="float32")
     space = ObservationSpace()

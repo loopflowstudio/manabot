@@ -13,18 +13,16 @@ from manabot.env.observation import (
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.action_cases import (
     Family,
     decision_case,
-    encode,
     identity_removed,
     initial,
-    reorder_offers,
 )
-from tests.model.prepared_routes import device_input
+from manabot.verify.choice_inputs import encode, reorder_offers
+from tests.model.prepared_routes import device_input, fixture_tensors
 
 
 @pytest.fixture(autouse=True)
@@ -65,12 +63,21 @@ def test_policy_can_score_either_choice_first(
     ).eval()
     # Erasing precisely the repaired information reproduces the forced tie.
     # Packed inference can round identical scores differently by row.
-    logits, _ = agent(device_input(agent, identity_removed(case)))
+    logits, _ = agent(
+        device_input(
+            agent,
+            identity_removed(
+                kind,
+                agent.prepare(encode(obs, agent.observation_space)),
+                agent.readings,
+            ),
+        )
+    )
     torch.testing.assert_close(
         logits[0, candidates[0]], logits[0, candidates[1]], rtol=1e-6, atol=1e-9
     )
     admitted = device_input(agent, obs)
-    count = int(obs["actions_valid"].sum())
+    count = len(obs.action_space.actions)
     preferred = candidates[preference]
     head = agent.policy_head[-1]
     features: list[torch.Tensor] = []
@@ -94,9 +101,8 @@ def test_policy_can_score_either_choice_first(
     logits, _ = agent(admitted)
     assert float(logits.softmax(-1)[0, preferred]) > 0.95
     order = torch.arange(count - 1, -1, -1)
-    actual, _ = agent(
-        device_input(agent, reorder_offers(obs, order, agent.observation_space.layout))
-    )
+    with reorder_offers(obs, order.tolist()):
+        actual, _ = agent(device_input(agent, obs))
     torch.testing.assert_close(
         actual[:, :count], logits[:, order], atol=2e-5, rtol=1e-5
     )
@@ -105,7 +111,7 @@ def test_policy_can_score_either_choice_first(
 @pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), float("inf"), 1000000.0])
 @pytest.mark.parametrize("key", ["semantic_cards", "agent_permanents"])
 def test_generic_definition_rejects_unadmitted_ids(bad: float, key: str) -> None:
-    obs = decision_case("land").observation
+    obs = fixture_tensors(decision_case("land").observation)
     if key == "semantic_cards":
         obs[key][0, 0, 0] = bad
     else:
@@ -145,10 +151,10 @@ def test_selector_boundary_encodes_the_maximum_and_rejects_beyond(
     setattr(actions[0], field, MAX_ACTION_SELECTOR)
     space.actions = actions
     raw.action_space = space
-    obs = encode(raw)
-    assert obs["actions"][0, 0, column] == 16777216
+    obs = encode(raw, ObservationSpace())
+    assert obs.project("actions")[0, 0, column] == 16777216
     setattr(actions[0], field, MAX_ACTION_SELECTOR + 1)
     space.actions = actions
     raw.action_space = space
     with pytest.raises(ValueError, match="action selector"):
-        encode_observation(ObservationSpace(), raw)
+        encode(raw, ObservationSpace())
