@@ -753,37 +753,40 @@ fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
 #[test]
 fn partial_multi_tap_resolution_payments_skip_redundant_color_modals() {
     let player = PlayerId(0);
+    let begin_turn_face_up = |lands: &[&str]| {
+        let mut game = payment_position("Cat Collector", lands);
+        let card = game
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .next()
+            .unwrap();
+        let face_down = game.manifest(card, player);
+        game.scenario_refresh_priority().unwrap();
+        let index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+            .unwrap();
+        game.step(index).unwrap();
+        tap(&mut game, "Plains");
+        let dual = payment_labels(&game)
+            .iter()
+            .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+            .unwrap();
+        game.step(dual).unwrap();
+        (game, face_down)
+    };
+
     // TurnFaceUp {2}{W} with Plains + Kyoshi Village + Mountain + Forest:
     // tapping Plains ({W} in pool) then Kyoshi Village leaves {1} under either
     // {G} or {W}, so the {G}/{W} modal skips and Mountain vs Forest stays open.
-    let mut turn_up = payment_position(
-        "Cat Collector",
-        &["Plains", "Kyoshi Village", "Mountain", "Forest"],
-    );
-    let card = turn_up
-        .state
-        .zones
-        .zone_objects(managym::state::zone::ZoneType::Hand, player)
-        .iter()
-        .copied()
-        .next()
-        .unwrap();
-    let face_down = turn_up.manifest(card, player);
-    turn_up.scenario_refresh_priority().unwrap();
-    let index = turn_up
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
-        .unwrap();
-    turn_up.step(index).unwrap();
-    tap(&mut turn_up, "Plains");
-    let dual = payment_labels(&turn_up)
-        .iter()
-        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
-        .unwrap();
-    turn_up.step(dual).unwrap();
+    let (mut turn_up, face_down) =
+        begin_turn_face_up(&["Plains", "Kyoshi Village", "Mountain", "Forest"]);
     // Skipped the color modal; Mountain and Forest remain offered beside PayCost.
     let offers = taps(&turn_up);
     assert_eq!(offers.len(), 2, "{offers:?}");
@@ -800,32 +803,7 @@ fn partial_multi_tap_resolution_payments_skip_redundant_color_modals() {
 
     // Multi-unit remaining source (Sol Ring) can overshoot into floating mana,
     // so tapping Kyoshi Village beside Plains + Sol Ring keeps the color modal.
-    let mut with_sol_ring =
-        payment_position("Cat Collector", &["Plains", "Kyoshi Village", "Sol Ring"]);
-    let card = with_sol_ring
-        .state
-        .zones
-        .zone_objects(managym::state::zone::ZoneType::Hand, player)
-        .iter()
-        .copied()
-        .next()
-        .unwrap();
-    let face_down = with_sol_ring.manifest(card, player);
-    with_sol_ring.scenario_refresh_priority().unwrap();
-    let index = with_sol_ring
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
-        .unwrap();
-    with_sol_ring.step(index).unwrap();
-    tap(&mut with_sol_ring, "Plains");
-    let dual = payment_labels(&with_sol_ring)
-        .iter()
-        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
-        .unwrap();
-    with_sol_ring.step(dual).unwrap();
+    let (with_sol_ring, _) = begin_turn_face_up(&["Plains", "Kyoshi Village", "Sol Ring"]);
     assert_eq!(payment_labels(&with_sol_ring), ["Add {G}", "Add {W}"]);
 
     // Optional resolution payment {4} (Mystic Remora trigger) with Plains +

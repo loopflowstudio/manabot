@@ -2,7 +2,7 @@
 //! which source stayed untapped. The affordability search has a weaker
 //! equivalence: it only needs to know whether the mana can be produced.
 
-use super::{Game, Mana, ManaSource, Obligation, PaymentModel, UsefulTap};
+use super::{Game, Mana, ManaCost, ManaSource, Obligation, PaymentModel, UsefulTap};
 use crate::{
     flow::{statics::Characteristics, trigger::DelayedTriggerEvent},
     state::{
@@ -29,7 +29,7 @@ impl Game {
         &self,
         model: &PaymentModel,
         pool: &Mana,
-        obligations: &[Obligation],
+        cost: &ManaCost,
         needed: usize,
         taps: Vec<UsefulTap<'a>>,
     ) -> Option<Vec<UsefulTap<'a>>> {
@@ -61,17 +61,14 @@ impl Game {
         }
 
         // Fast arithmetic affordability check when every source is fixed-only.
-        let fixed_direct = match obligations {
-            [Obligation::Pay {
-                cost,
-                taps: super::Taps::None,
-            }] if model.sources.iter().all(|s| s.abilities.is_empty()) => {
-                Some((cost, model.fixed_total(pool)))
-            }
-            _ => None,
-        };
+        let fixed_total = model
+            .sources
+            .iter()
+            .all(|s| s.abilities.is_empty())
+            .then(|| model.fixed_total(pool));
         let payable_without = |source: &ManaSource| -> bool {
-            if let Some((cost, total)) = &fixed_direct {
+            let obligations = || vec![Obligation::mana(cost.clone())];
+            if let Some(total) = &fixed_total {
                 let mut without = total.clone();
                 if let Some(output) = &source.fixed {
                     without.spend(output);
@@ -79,12 +76,12 @@ impl Game {
                 let fast = without.can_pay(cost);
                 debug_assert_eq!(
                     fast,
-                    model.payable_after_tap(source.permanent, pool.clone(), obligations.to_vec()),
+                    model.payable_after_tap(source.permanent, pool.clone(), obligations()),
                     "direct determined_source_counts differs from model"
                 );
                 fast
             } else {
-                model.payable_after_tap(source.permanent, pool.clone(), obligations.to_vec())
+                model.payable_after_tap(source.permanent, pool.clone(), obligations())
             }
         };
 
@@ -282,83 +279,72 @@ impl Game {
         {
             return false;
         }
-        if !state.effects.is_empty()
-            && state.effects.iter().any(|e| {
-                e.source_object.is_some_and(&has_object)
-                    || sources.iter().any(|s| e.affects_object(s.object))
-            })
+        if state.effects.iter().any(|e| {
+            e.source_object.is_some_and(&has_object)
+                || sources.iter().any(|s| e.affects_object(s.object))
+        }) {
+            return false;
+        }
+        if state
+            .cast_permissions
+            .grants
+            .iter()
+            .any(|g| g.source.is_some_and(&has_object) || has_object(g.object))
         {
             return false;
         }
-        if !state.cast_permissions.grants.is_empty()
-            && state
-                .cast_permissions
-                .grants
-                .iter()
-                .any(|g| g.source.is_some_and(&has_object) || has_object(g.object))
-        {
+        if state.exile_links.iter().any(|link| has_object(link.source)) {
             return false;
         }
-        if !state.exile_links.is_empty()
-            && state.exile_links.iter().any(|link| has_object(link.source))
-        {
-            return false;
-        }
-        if !state.stack_objects.is_empty()
-            && state.stack_objects.iter().any(|s| {
-                s.targets().iter().copied().any(&has_target)
-                    || has_object(s.source_object())
-                    || s.source_ref().is_some_and(&has_object)
-                    || match s {
-                        StackObject::Spell(spell) => sources
-                            .iter()
-                            .any(|src| spell.spent.names_object(src.object)),
-                        StackObject::ActivatedAbility(a) => {
-                            a.attached.is_some_and(&has_object)
-                                || a.granted_by.as_ref().is_some_and(|g| has_object(g.grantor))
-                                || sources.iter().any(|src| a.paid.names_object(src.object))
-                        }
-                        StackObject::TriggeredAbility(t) => {
-                            t.context.is_some_and(&has_target)
-                                || t.remembered.iter().any(|b| has_object(b.object))
-                                || t.source_lki
-                                    .as_ref()
-                                    .is_some_and(|lki| lki.attached_to.is_some_and(&has_object))
-                                || sources.iter().any(|src| t.spent.names_object(src.object))
-                        }
+        if state.stack_objects.iter().any(|s| {
+            s.targets().iter().copied().any(&has_target)
+                || has_object(s.source_object())
+                || s.source_ref().is_some_and(&has_object)
+                || match s {
+                    StackObject::Spell(spell) => sources
+                        .iter()
+                        .any(|src| spell.spent.names_object(src.object)),
+                    StackObject::ActivatedAbility(a) => {
+                        a.attached.is_some_and(&has_object)
+                            || a.granted_by.as_ref().is_some_and(|g| has_object(g.grantor))
+                            || sources.iter().any(|src| a.paid.names_object(src.object))
                     }
-            })
-        {
+                    StackObject::TriggeredAbility(t) => {
+                        t.context.is_some_and(&has_target)
+                            || t.remembered.iter().any(|b| has_object(b.object))
+                            || t.source_lki
+                                .as_ref()
+                                .is_some_and(|lki| lki.attached_to.is_some_and(&has_object))
+                            || sources.iter().any(|src| t.spent.names_object(src.object))
+                    }
+                }
+        }) {
             return false;
         }
-        if !state.pending_triggers.is_empty() || state.trigger_placement.is_some() {
-            let placement = state
-                .trigger_placement
-                .iter()
-                .flat_map(|p| p.remaining.iter().chain(&p.placing));
-            if state.pending_triggers.iter().chain(placement).any(|t| {
-                has_object(t.source_object())
-                    || t.source_ref().is_some_and(&has_object)
-                    || t.attacker.is_some_and(&has_permanent)
-                    || t.context.is_some_and(&has_target)
-                    || t.targets.iter().copied().any(&has_target)
-                    || t.remembered.iter().any(|b| has_object(b.object))
-                    || t.source_lki
-                        .as_ref()
-                        .is_some_and(|lki| lki.attached_to.is_some_and(&has_object))
-                    || sources.iter().any(|src| t.spent.names_object(src.object))
-            }) {
-                return false;
-            }
+        let placement = state
+            .trigger_placement
+            .iter()
+            .flat_map(|p| p.remaining.iter().chain(&p.placing));
+        if state.pending_triggers.iter().chain(placement).any(|t| {
+            has_object(t.source_object())
+                || t.source_ref().is_some_and(&has_object)
+                || t.attacker.is_some_and(&has_permanent)
+                || t.context.is_some_and(&has_target)
+                || t.targets.iter().copied().any(&has_target)
+                || t.remembered.iter().any(|b| has_object(b.object))
+                || t.source_lki
+                    .as_ref()
+                    .is_some_and(|lki| lki.attached_to.is_some_and(&has_object))
+                || sources.iter().any(|src| t.spent.names_object(src.object))
+        }) {
+            return false;
         }
-        if !state.delayed_triggers.is_empty()
-            && state.delayed_triggers.iter().any(|t| {
-                has_object(t.source_object())
-                    || t.source_ref().is_some_and(&has_object)
-                    || t.remembered.iter().any(|b| has_object(b.object))
-                    || matches!(t.event, DelayedTriggerEvent::Leaves { watched, .. } if has_object(watched))
-            })
-        {
+        if state.delayed_triggers.iter().any(|t| {
+            has_object(t.source_object())
+                || t.source_ref().is_some_and(&has_object)
+                || t.remembered.iter().any(|b| has_object(b.object))
+                || matches!(t.event, DelayedTriggerEvent::Leaves { watched, .. } if has_object(watched))
+        }) {
             return false;
         }
         true
