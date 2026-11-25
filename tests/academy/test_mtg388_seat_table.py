@@ -168,8 +168,14 @@ def test_policies_check_returns_informational_fit_and_partial_deck_import_resolv
 
 
 def test_top_level_managym_opponents_cli_and_serve_discover_false(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
     rc = cli.main(["opponents", "--json"])
     assert rc == 0
     out = capsys.readouterr().out
