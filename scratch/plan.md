@@ -214,9 +214,11 @@ and feeds `BoardCard.svelte`, `Inspect.svelte`, `BoardCard.svelte`'s
    `StaticScope::This` grants stay `Own`. `wholeChips` awaits `document.fonts.ready`
    and measures in one `page.evaluate` (webfont refit raced `evaluateAll`).
    Implement recorded no test-run results for this pass; the gate runs them.
-4. **Next — Gate.** Full targeted Rust, Python, protocol conformance,
-   `scripts/public_api.py check`, Vitest, Svelte check, and Playwright e2e in
-   both themes.
+4. **Done (291bb7aa9f).** Gate before publish: full debug nextest 2105/2105;
+   Vitest 509/509; Svelte check clean; card-badges e2e 5/5; public API check;
+   pinned pilot and package boundaries pass. `tests/academy` has 28 failures
+   that main (3be5a0cfb2) shares; the branch's 4 extra were stale fixtures
+   (`keyword_grants: {}` in retained frames), refreshed with their writers.
 
 ## Acceptance check at gate
 
