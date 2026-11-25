@@ -1,9 +1,7 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
-Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`).
-Slice 3 can use its persistent ability-source representation. The retained
-combat snapshot was recorded at `aa35e1a2b6` before this sync, with that
-revision's catalog digest.
+Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`), so
+slice 3 is unblocked and uses its persistent ability-source representation.
 
 Done:
 - Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
@@ -21,26 +19,21 @@ Done:
 
 1. Next: combat defenders (slice 2).
 
-   - **Replay compatibility changes the combat design.** A native v1 snapshot
-     replays a sequence of indices or Commands. An issued object precondition
-     binds the fingerprint of the complete action-aligned offer projection.
-     The seed-0 snapshot in `scratch/combat-snapshot-v1.json` declares a
-     Gray Ogre at the defending player while that player controls The
-     Theorist. The attack Command names an object candidate in a two-offer
-     frame. Adding a third offer necessarily changes the address, even when
-     the two older offers keep their indices. The snapshot ends at the next
-     Ogre’s declaration. Its final state digest includes that action space, so
-     even a bare index replay would have to reproduce the historical options.
-   - Keep the old attack-player and decline indices (0 and 1) and projection
-     bytes on unchanged positions. For an old position with newly legal
-     defenders, exact cold replay needs the historical offer authority.
-     Standalone v1 snapshots record the package version and catalog digest but
-     omit the source revision. Choose how to resolve the historical engine
-     before changing the native action. Exercise the saved Command with its
-     original precondition and verify the final digest. The Academy combat
-     draft and the compound declaration currently carry only a set of
-     attackers. Both need attacker-to-defender assignments in this position.
-
+   - **Replay compatibility.** An issued object precondition binds the
+     fingerprint of the whole action-aligned offer projection, so a new
+     defender offer changes a recorded Command's address. No released catalog
+     defines a planeswalker (main has only type predicates), so no retained
+     snapshot, fixture or receipt can reach a declaration with a newly legal
+     defender. The one that does, `scratch/combat-snapshot-v1.json`, was
+     recorded on this branch at `aa35e1a2b6` and is not frozen evidence: it
+     is expected to go stale and is deleted with the change. Requirement:
+     where no planeswalker or battle can be attacked, the declaration keeps
+     indices 0 (attack the player) and 1 (decline) and byte-identical
+     projections; prove it by cold-replaying the five Academy opening
+     fixtures and a recorded object-bound attack Command from a
+     pre-planeswalker position. No historical-engine resolution is needed.
+   - The Academy combat draft and the compound declaration carry only a set
+     of attackers; both gain attacker-to-defender assignments.
    - Combat needs the defending player or permanent for **every attacking
      creature**. Fire Navy Trebuchet's Ballistic Boulder enters attacking
      during trigger resolution, and Doubling Season makes two. Each can attack
@@ -52,7 +45,7 @@ Done:
      Boulders. Exercise this position alongside the declaration, trample,
      removal, attack-history and Academy checks below.
 
-2. Slices 3 + 4 (after #593 sync): emblems and empower/Jace token cards.
+2. Slices 3 + 4: emblems and empower/Jace token cards.
 3. Slices 5 + 6: granted loyalty abilities, zero-loyalty exception, loyalty
    activation events and their cards.
 4. Slice 7 planeswalkers and the rest of slice 8; ledger, fixtures, debug
@@ -198,7 +191,6 @@ Consumers: action rows gain an attack-target reference (one-based object join,
 0 = player); LLM text "attack Vivien Reid"; Academy declare-attackers UI picks
 a target per attacker through the shared offers (no browser-only semantics);
 preserve the serialized `attack` key and the old player/decline indices.
-Exact replay of a changed offer set also needs the historical frame described above.
 Combat history (`AttackedThisTurn`, attack-batch triggers) records the target.
 
 Checks: `cargo test combat` + new `managym/tests/rules/attack_targets.rs`:

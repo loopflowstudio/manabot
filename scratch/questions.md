@@ -37,3 +37,9 @@
   `cast_from_graveyard` columns at their existing indices and append the
   loyalty columns. Regenerate the five Academy opening fixtures from the
   combined catalog using their recorded Command prefixes.
+
+- Assumed (realign, pass 3): no historical offer authority for combat replay.
+  Main defines no planeswalker card, so only this branch's own snapshots can
+  hold a newly legal defender; positions without one keep identical offers.
+  Simpler than resolving a historical engine from a v1 snapshot that omits
+  its source revision.
