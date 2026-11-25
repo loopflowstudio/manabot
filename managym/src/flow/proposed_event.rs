@@ -1915,19 +1915,12 @@ impl Game {
         };
         let timestamp =
             (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
-        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+        let Some(total) = self
+            .state
+            .change_counters(permanent_id, kind, delta, timestamp)
+        else {
             return false;
         };
-        if !permanent.change_counters(kind, delta) {
-            return false;
-        }
-        if let Some(timestamp) = timestamp {
-            permanent.keyword_counter_timestamps.insert(kind, timestamp);
-        }
-        let total = permanent.counter_count(kind);
-        if total == 0 {
-            permanent.keyword_counter_timestamps.remove(&kind);
-        }
         if let Some(by) = by.filter(|_| delta > 0) {
             self.emit(GameEvent::CountersPut {
                 permanent: permanent_id,

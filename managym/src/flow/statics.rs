@@ -234,6 +234,7 @@ pub(super) struct LayerBoard {
     reads_mana: bool,
     reads_tapped: bool,
     reads_life: bool,
+    reads_counters: bool,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across pool/tap writes.
     dynamic_activations: bool,
@@ -256,6 +257,7 @@ impl DerivedCache {
         let mana_changed = self.revisions.mana_pools != revisions.mana_pools;
         let tapped_changed = self.revisions.tapped != revisions.tapped;
         let life_changed = self.revisions.life != revisions.life;
+        let counters_changed = self.revisions.counters != revisions.counters;
         #[cfg(feature = "benchmark")]
         if mana_changed {
             crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
@@ -264,9 +266,14 @@ impl DerivedCache {
         let board_changed = characteristics_changed
             || (mana_changed && self.board.as_ref().is_some_and(|board| board.reads_mana))
             || (tapped_changed && self.board.as_ref().is_some_and(|board| board.reads_tapped))
-            || (life_changed && self.board.as_ref().is_some_and(|board| board.reads_life));
+            || (life_changed && self.board.as_ref().is_some_and(|board| board.reads_life))
+            || (counters_changed
+                && self
+                    .board
+                    .as_ref()
+                    .is_some_and(|board| board.reads_counters));
         if board_changed
-            || ((mana_changed || tapped_changed)
+            || ((mana_changed || tapped_changed || counters_changed || life_changed)
                 && self
                     .board
                     .as_ref()
@@ -330,6 +337,9 @@ impl Game {
                         StaticAbility::CastSpellsAsThoughFlash(predicate) => {
                             permissions.flash_spells.push(predicate.clone())
                         }
+                        StaticAbility::ActivatedAbilitiesCostLess { .. } => {
+                            dynamic_activations = true;
+                        }
                         _ => {}
                     }
                 }
@@ -343,6 +353,7 @@ impl Game {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             reads_life: context.reads_life,
+            reads_counters: context.reads_counters,
             dynamic_activations,
             restrictions,
             objects,
@@ -1404,6 +1415,7 @@ mod cache_tests {
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,
             reads_life: board.reads_life,
+            reads_counters: board.reads_counters,
             dynamic_activations: board.dynamic_activations,
         }));
     }
@@ -1742,8 +1754,8 @@ mod cache_tests {
             assert_eq!(branch.characteristics(id).pt(), (2, 2));
         }
 
-        // Untapping through a stun counter keeps the tap state, but changes
-        // counter-dependent characteristics and must still evict the board.
+        // Untapping through a stun counter keeps the tap state and reuses an
+        // unrelated board, while evicting a board with a counter-reading static.
         let permanent = game.state.permanents[id].as_mut().unwrap();
         permanent.tapped = true;
         permanent.change_counters(CounterKind::Stun, 1);
@@ -1757,6 +1769,205 @@ mod cache_tests {
                 .counter_count(CounterKind::Stun),
             0
         );
+        assert!(Arc::ptr_eq(&board, &game.layer_board()));
+
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::YouControl(CardPredicate {
+                    no_counters: true,
+                    ..Default::default()
+                }),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(2),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        let permanent = game.state.permanents[id].as_mut().unwrap();
+        permanent.tapped = true;
+        permanent.change_counters(CounterKind::Stun, 1);
+        assert_eq!(game.characteristics(id).pt(), (2, 2));
+        let board = game.layer_board();
+        game.state.untap(id);
         assert!(!Arc::ptr_eq(&board, &game.layer_board()));
+        assert_eq!(game.characteristics(id).pt(), (4, 4));
+    }
+
+    #[test]
+    fn counter_revision_reuses_unrelated_board_and_evicts_counter_readers() {
+        use crate::flow::proposed_event::ProposedDamageTarget;
+        use crate::state::ability::{Aggregate, CompareOp, ObjectProperty, ObjectSelector, Scope};
+
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", [("Gray Ogre".into(), 40)].into()),
+                PlayerConfig::new(
+                    "b",
+                    [
+                        ("Mountain".into(), 36),
+                        ("Liliana, Dreadhorde General".into(), 4),
+                    ]
+                    .into(),
+                ),
+            ],
+            430,
+            true,
+        );
+        game.play();
+        let attacker = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let walker = game
+            .scenario_force_battlefield(PlayerId(1), "Liliana, Dreadhorde General", true)
+            .unwrap();
+        let attacker_obj = game.permanent_object(attacker).unwrap();
+        let walker_obj = game.permanent_object(walker).unwrap();
+        assert!(game.commit_counter_change(walker_obj, CounterKind::Loyalty, 4, None));
+        let starting_loyalty = 4;
+
+        // Damaging a player records life_lost in turn history without evicting
+        // an unrelated layer board, while evicting a board that reads life loss.
+        let board = game.layer_board();
+        assert!(
+            game.commit_damage(
+                Some(attacker_obj),
+                ProposedDamageTarget::Player(PlayerId(1)),
+                2,
+                true,
+            )
+            .committed
+        );
+        assert_eq!(game.state.turn.history[1].life_lost, 2);
+        assert!(Arc::ptr_eq(&board, &game.layer_board()));
+
+        let mut life_loss_branch = game.clone();
+        let affected = life_loss_branch.affected_permanent(attacker).unwrap();
+        life_loss_branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 4 }),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(2),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(life_loss_branch.characteristics(attacker).pt(), (2, 2));
+        assert!(
+            life_loss_branch
+                .commit_damage(
+                    Some(attacker_obj),
+                    ProposedDamageTarget::Player(PlayerId(1)),
+                    2,
+                    true,
+                )
+                .committed
+        );
+        assert_eq!(life_loss_branch.characteristics(attacker).pt(), (4, 4));
+
+        // Damaging a planeswalker sets dealt_damage_this_turn and removes
+        // loyalty counters; neither evicts an unrelated layer board.
+        let board = game.layer_board();
+        assert!(
+            game.commit_damage(
+                Some(attacker_obj),
+                ProposedDamageTarget::Object(walker_obj),
+                1,
+                true,
+            )
+            .committed
+        );
+        assert!(
+            game.state.permanents[walker]
+                .as_ref()
+                .unwrap()
+                .dealt_damage_this_turn
+        );
+        assert_eq!(
+            game.state.permanents[walker]
+                .as_ref()
+                .unwrap()
+                .counter_count(CounterKind::Loyalty),
+            starting_loyalty - 1
+        );
+        assert!(Arc::ptr_eq(&board, &game.layer_board()));
+
+        // +1/+1, -1/-1, and keyword counters always evict characteristics.
+        assert!(game.commit_counter_change(attacker_obj, CounterKind::PlusOnePlusOne, 1, None));
+        assert!(!Arc::ptr_eq(&board, &game.layer_board()));
+        assert_eq!(game.characteristics(attacker).pt(), (3, 3));
+        let board = game.layer_board();
+        assert!(game.commit_counter_change(attacker_obj, CounterKind::Trample, 1, None));
+        assert!(!Arc::ptr_eq(&board, &game.layer_board()));
+        assert!(game
+            .characteristics(attacker)
+            .keywords
+            .has(Keyword::Trample));
+
+        // Counter-reading statics (SourceCountersAtLeast, ObjectProperty::Counters,
+        // and no_counters) set reads_counters and evict on non-P/T counter writes.
+        let mut quest_branch = game.clone();
+        let affected = quest_branch.affected_permanent(attacker).unwrap();
+        quest_branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Quest,
+                    count: 1,
+                }),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(2),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(quest_branch.characteristics(attacker).pt(), (3, 3));
+        assert!(quest_branch.commit_counter_change(attacker_obj, CounterKind::Quest, 1, None));
+        assert_eq!(quest_branch.characteristics(attacker).pt(), (5, 5));
+
+        let mut loyalty_branch = game.clone();
+        let affected = loyalty_branch.affected_permanent(attacker).unwrap();
+        loyalty_branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::compare(
+                    ObjectSelector::each(Scope::Battlefield, CardPredicate::default()).property(
+                        ObjectProperty::Counters(CounterKind::Loyalty),
+                        Aggregate::Sum,
+                    ),
+                    CompareOp::Ge,
+                    starting_loyalty - 1,
+                )),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(loyalty_branch.characteristics(attacker).pt(), (4, 4));
+        assert!(loyalty_branch.commit_counter_change(walker_obj, CounterKind::Loyalty, -1, None));
+        assert_eq!(loyalty_branch.characteristics(attacker).pt(), (3, 3));
     }
 }

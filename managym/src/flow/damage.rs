@@ -172,8 +172,8 @@ impl Game {
                 if view.is_creature() {
                     self.state
                         .mark_damage(permanent_id, amount, source_has_deathtouch);
-                } else if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.dealt_damage_this_turn = true;
+                } else {
+                    self.state.mark_dealt_damage(permanent_id);
                 }
                 if view.types.is_planeswalker() {
                     self.commit_counter_change(object_ref, CounterKind::Loyalty, -amount, None);

@@ -82,6 +82,33 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   once per node, boxed `permanent_defenders` keeps `GameEvent` at 56 bytes,
   flat `attacks_this_turn` + sparse `attacked_permanents`. Focused debug
   nextest 149/149.
+- Performance slices P5–P6 (this pass):
+  - P5: `TrackedState::mark_dealt_damage`, `TrackedState::record_life_change`
+    (discovered during measurement: `zones.rs` `emit` mutated `turn.history[player].life_lost`
+    through `DerefMut` on every unblocked player-damage hit), and fine-grained
+    `revisions.counters` / `TrackedState::change_counters` / `LayerBoard::reads_counters`
+    (with six `u32` revision counters keeping `DerivedCache` / `TrackedState`
+    within ceilings and shrinking each by 16 bytes; `ReadSet` tracks `no_counters`,
+    `with_counter`, `ObjectProperty::Counters`, `SourceCountersAtLeast`,
+    `AttachedCountersAtLeast`, `CountersOnLandsYouControl`, `CreaturesWithCounters`,
+    `Except::Matching`, `AtMostHalfStartingLife`, and `OpponentLostLifeThisTurnAtLeast`).
+  - P6: cached `source_permanent: Option<PermanentId>` directly on layer `Node`
+    at creation (`Context::node`, `Node::resolved`), removing every `permanent_of`
+    lookup from `exists`, `targets`, `instructions`, `buff`, `condition`,
+    `comparison_value`, `select_permanents`, `matches`, and `apply`.
+  - Verified: focused debug nextest 88/88 (`managym` `statics::`, `sba::`, `layer`,
+    `emblem`, `counter`, `planeswalker`, `life`) and 266/266 (`managym-cards`
+    `fdn`, `fra`, `zen`, `eoe`, `heartless_act`); `bench_states attack-planeswalkers`
+    (N=4/8/16/32, identical digest `e6751d56...`): `damage | step:damage` dropped
+    from `3 / 7 / 15 / 31` (`O(N)`) to **`1 / 1 / 1 / 1`** (`O(1)`), `block | search`
+    dropped from `185 / 462 / 1,299 / 4,620` (`35.0` boards/sim at N=32) to
+    **`137 / 248 / 366 / 714`** (constant `5.4` boards/sim at N=32; 6.47× fewer boards,
+    2.49× fewer allocs), `damage | search` dropped from `119 / 148 / 144 / 272` to
+    **`103 / 100 / 32 / 32`** (8.5× fewer at N=32); uninstrumented release
+    benchmarks (identical digests & BLAKE3): `bench_steps` `46.49B` (`46.54B`, `46.43B`,
+    **-0.65%** vs `main` `46.79B`), `bench_search --layers` `16.37B` (**-5.40%** vs
+    `main` `17.30B`), `bench_search` `1,001.24B` (**-2.59%** / `-26.67B` vs `main`
+    `1,027.91B`, `-13.10B` vs `09b0f89882`).
 - Synced main `6203fff202` (#601, Academy deck pools/trophies; Python and UI
   only, no engine or protocol files) at `7941de98ae`. No checks run after the
   merge; they fall to gate.
@@ -173,49 +200,7 @@ P1–P4 compress commit (`6841e0df92`).
 
 ## Remaining
 
-Two targeted performance slices before gate/CI (preserving all rules semantics,
-choice completeness, and debug `DerivedCache` invariants):
-
-### Slice P5 — Eliminate `O(N)` `LayerBoard` rebuilds on planeswalker combat damage & loyalty counter changes
-- **Evidence**: `attack-planeswalkers | damage | step:damage` rebuilds `N - 1`
-  boards (`3 / 7 / 15 / 31` for N = 4 / 8 / 16 / 32), driving `attack-planeswalkers | block | search`
-  to `O(N^2)` boards (`185 / 462 / 1,299 / 4,620`) and `O(N^3)` time (`5.26x` from 16→32).
-- **Change**:
-  1. Add `TrackedState::mark_dealt_damage(permanent_id)` (using `permanent_untracked`,
-     matching `mark_damage` for creatures) in `managym/src/flow/game.rs` and use it in
-     `managym/src/flow/damage.rs:175` so setting `dealt_damage_this_turn` on a
-     non-creature permanent never invalidates layers/triggers/mana.
-  2. Add fine-grained counter revision tracking (`revisions.counters`,
-     `TrackedState::change_counters`, `LayerBoard::reads_counters`, mirroring
-     `reads_tapped`/`reads_life`/`reads_mana`) across `managym/src/flow/game.rs`,
-     `managym/src/flow/statics.rs`, `managym/src/flow/layers.rs`, and
-     `managym/src/flow/proposed_event.rs:1918`: mutating `+1/+1`, `-1/-1`, or keyword
-     counters continues to bump `revisions.characteristics`, while other counters
-     (including `CounterKind::Loyalty` and `CounterKind::Stun`) bump only
-     `revisions.counters`, evicting `LayerBoard` only when `reads_counters` is set
-     (any static/condition/predicate inspecting counters, such as `no_counters`,
-     `with_counter`, `CounterCount`, `HasCounters`, `CounterAtLeast`, or stun/counter
-     effects — verified by debug `debug_assert_eq!` in `layer_board()` and the
-     existing `tap_revision_tracks_nested_granted_predicates_and_stun_counters` test).
-- **Verify**: debug nextest (`statics::tests`, `layers`, `rules_tests`, `fdn`/`fra`
-  cards), `bench_states attack-planeswalkers --sizes 4,8,16,32 --layers step:damage,search --allocations`
-  (`step:damage` boards drop from `3 / 7 / 15 / 31` to `O(1)`; `block | search`
-  boards/sim becomes constant like `duplicate-creatures`).
-
-### Slice P6 — Cache `source_permanent: Option<PermanentId>` on layer `Node`
-- **Evidence**: `1 ms /usr/bin/sample` on `bench_search` shows `Context::exists`
-  rose `0.00% → 0.36%` inclusive (`0.32%` self) plus `+0.60pp` in `Context::evaluate`'s
-  filter collector from repeated `self.game.state.permanent_of(node.source)` calls.
-- **Change**: Store `source_permanent: Option<PermanentId>` directly on `Node` in
-  `managym/src/flow/layers.rs` when creating nodes in `Context::new` / `add_node`
-  (immutable for the duration of one `Context`), and read `node.source_permanent` in
-  `exists()`, `targets()`, `instructions()`, `buff()`, and `apply()` without re-calling
-  `permanent_of`.
-- **Verify**: debug nextest (`layers`, emblem & SBA tests), paired uninstrumented
-  release `bench_steps` + `bench_search` with `/usr/bin/time -l` and `/usr/bin/sample`
-  against `main` `6203fff202` (identical digests, `Context::exists` overhead removed).
-
-- **Gate / CI verification** (after P5–P6) on PR #607:
+- **Gate / CI verification** on PR #607:
   full workspace debug nextest, Python extension rebuild +
   contract/Academy/model/pinned-pilot suites (including #601's new
   `tests/academy/test_deck_pools.py`), and clean Ubuntu runner Engine Budget

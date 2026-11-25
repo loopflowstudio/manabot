@@ -601,12 +601,15 @@ pub enum PendingChoice {
 /// - `tapped`: tap/untap state. Layers follow it only when a scope,
 ///   condition or value predicate reads it. Dynamic activation finalization
 ///   refreshes independently; trigger kinds follow the raw board. Removing a
-///   stun counter also advances
-///   `characteristics`.
+///   stun counter advances `counters`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
 /// - `life`: both life totals, which a static condition may read ("as long
 ///   as you have 25 or more life"); compared like `mana_pools`.
+/// - `counters`: non-P/T, non-keyword counters (loyalty, stun, quest, charge,
+///   soul, etc.). Layers follow it only when a scope, condition, or value
+///   inspects counters; `+1/+1`, `-1/-1`, and keyword counters advance
+///   `characteristics` directly.
 ///
 /// `DerefMut` on `TrackedState` advances every counter. Its typed accessors
 /// write fields no derivation reads, or advance only the counters their
@@ -615,11 +618,12 @@ pub enum PendingChoice {
 /// rather than serving stale data.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Revisions {
-    pub characteristics: u64,
-    pub mana_pools: u64,
-    pub tapped: u64,
-    pub triggers: u64,
-    pub life: u64,
+    pub characteristics: u32,
+    pub mana_pools: u32,
+    pub tapped: u32,
+    pub triggers: u32,
+    pub life: u32,
+    pub counters: u32,
 }
 
 /// `GameState` with the `Revisions` its derived caches key on. State can
@@ -755,6 +759,29 @@ impl TrackedState {
             .map(|player| &mut player.life)
     }
 
+    /// Record a committed life change in turn history, advancing `life` only.
+    /// Returns the turn's 1-based gain ordinal when life increased.
+    pub(crate) fn record_life_change(
+        &mut self,
+        player: PlayerId,
+        old: i32,
+        new: i32,
+    ) -> Option<u32> {
+        if new == old {
+            return None;
+        }
+        self.revisions.life += 1;
+        let history = &mut self.state.turn.history[player.0];
+        if new > old {
+            history.life_gained += old.abs_diff(new);
+            history.life_gains += 1;
+            Some(history.life_gains)
+        } else {
+            history.life_lost += old.abs_diff(new);
+            None
+        }
+    }
+
     /// Step progress flags, which only the game loop reads.
     pub(crate) fn set_step_initialized(&mut self, value: bool) {
         self.state.turn.step_initialized = value;
@@ -779,9 +806,9 @@ impl TrackedState {
         }
     }
 
-    // Permanent fields no cached derivation reads: damage,
-    // summoning sickness and activation limits. Counters, control,
-    // attachment, animation and combat status go through `DerefMut`.
+    // Permanent fields with narrow or no cached readers: damage,
+    // summoning sickness, activation limits, tap state, and counters.
+    // Control, attachment, animation and combat status go through `DerefMut`.
 
     fn permanent_untracked(&mut self, permanent_id: PermanentId) -> Option<&mut Permanent> {
         self.state
@@ -802,7 +829,7 @@ impl TrackedState {
         }
     }
 
-    /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
+    /// Untap (CR 122.1d): a removed stun counter advances `counters`.
     /// Returns whether the permanent went from tapped to untapped.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) -> bool {
         self.revisions.tapped += 1;
@@ -812,7 +839,7 @@ impl TrackedState {
         let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
         let untapped = permanent.untap();
         if removes_stun {
-            self.revisions.characteristics += 1;
+            self.revisions.counters += 1;
         }
         untapped
     }
@@ -830,6 +857,45 @@ impl TrackedState {
                 permanent.deathtouch_damage = true;
             }
         }
+    }
+
+    pub(crate) fn mark_dealt_damage(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.permanent_untracked(permanent_id) {
+            permanent.dealt_damage_this_turn = true;
+        }
+    }
+
+    /// Change `kind` counters on `permanent_id` by `delta`. Returns the new
+    /// total when the count changed. `+1/+1`, `-1/-1`, and keyword counters
+    /// feed characteristics directly; every other kind feeds `counters` only.
+    pub(crate) fn change_counters(
+        &mut self,
+        permanent_id: PermanentId,
+        kind: CounterKind,
+        delta: i32,
+        keyword_timestamp: Option<crate::state::game_object::PublicId>,
+    ) -> Option<i32> {
+        let permanent = self.permanent_untracked(permanent_id)?;
+        if !permanent.change_counters(kind, delta) {
+            return None;
+        }
+        if let Some(timestamp) = keyword_timestamp {
+            permanent.keyword_counter_timestamps.insert(kind, timestamp);
+        }
+        let total = permanent.counter_count(kind);
+        if total == 0 {
+            permanent.keyword_counter_timestamps.remove(&kind);
+        }
+        if matches!(
+            kind,
+            CounterKind::PlusOnePlusOne | CounterKind::MinusOneMinusOne
+        ) || kind.keyword().is_some()
+        {
+            self.revisions.characteristics += 1;
+        } else {
+            self.revisions.counters += 1;
+        }
+        Some(total)
     }
 
     pub(crate) fn clear_damage(&mut self, permanent_id: PermanentId) {
@@ -1013,8 +1079,8 @@ pub struct Game {
 
 // Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
 // with bench_footprint before raising a ceiling. Object and Permanent repeat
-// for each occupied row. TrackedState allows 40 bytes for its five
-// revision counters in addition to the GameState ceiling.
+// for each occupied row. TrackedState holds six u32 revision counters (24 bytes)
+// beside GameState.
 #[cfg(target_pointer_width = "64")]
 const _: () = {
     use crate::state::game_object::Object;

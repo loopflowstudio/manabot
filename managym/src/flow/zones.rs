@@ -607,13 +607,8 @@ impl Game {
             gain_ordinal,
         } = &mut event
         {
-            if new > old {
-                let history = &mut self.state.turn.history[player.0];
-                history.life_gained += old.abs_diff(*new);
-                history.life_gains += 1;
-                *gain_ordinal = history.life_gains;
-            } else if new < old {
-                self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
+            if let Some(ordinal) = self.state.record_life_change(*player, *old, *new) {
+                *gain_ordinal = ordinal;
             }
         }
         if let GameEvent::LoyaltyAbilityActivated { player, .. } = &event {
