@@ -21,6 +21,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'pass_turn',
   'retry_mirror',
   'set_stops',
+  'show_analysis',
   'transfer_pilot',
   'author_belief',
   'share_belief',
@@ -133,6 +134,7 @@ export type SharedTableRequest =
       stop_on_stack?: boolean | null;
       auto_pass?: boolean | null;
     })
+  | ({ type: 'show_analysis'; grant_revision?: number | null; shown: boolean; policy?: string | null })
   | (GrantedRequest & { type: 'transfer_pilot'; target_viewer_id: string })
   | (GrantedRequest & { type: 'author_belief'; scenario_id: string })
   | (GrantedRequest & { type: 'share_belief'; belief_id: string })

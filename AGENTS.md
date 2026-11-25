@@ -102,11 +102,15 @@ Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
 `GameConfig.human_seat` orders them at the native boundary. Record and project
 actual native seats; Watch keeps its two-seat acting-view contract.
 Scope Academy resume credentials and the started-launch marker together in
-`sessionStorage` so a launch cannot resume another tab's or launch's game.
-Game-file imports send original JSON source spans so JS parsing cannot round u64
-identities or invalidate digests. Watch history is the acting viewer's recorded
-track strictly before `presentation_cursor` (never spectator reveal); keep event
-emphasis separate from choice focus and lane navigation.
+`sessionStorage` so a launch never resumes another tab's or launch's game.
+Game-file imports send original JSON source spans: JS numeric re-encoding can
+round u64 identities and invalidate digests. Watch history is the selected
+acting viewer's recorded track strictly before that decision's
+`presentation_cursor`; spectator reveal never supplies history labels. Event
+emphasis stays separate from choice focus and lane navigation. Frame policy
+comparisons neutrally to explain the agent—never grade disagreements as
+mistakes. Default trained policies to `PolicyDescriptor.recommended` before the
+first eligible one. Reserve preview space so hover never shifts layout.
 
 ## Style
 
