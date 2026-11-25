@@ -30,29 +30,15 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   onto `Characteristics.exempt_from_zero_loyalty` in `flow/layers.rs` (`Layer::Ability`,
   covering battlefield and command-zone sources) and restored the zero-allocation
   streaming `layer_views` loop in `flow/sba.rs` with unit tests in `sba::tests`.
-- Pass 3 (this commit): folded `attackers_without_defender` into
-  `CombatState.attack_targets: Vec<(PermanentId, Option<AttackTarget>)>` and
-  updated `CanonicalCombat` (`non_player_defenders`), `combat_actions.rs`,
-  `combat_preview.rs`, and `tick.rs`; removed the `Action::DeclareAttacker`
-  bypass in `decision.rs::bind_frame_candidates` and bound permanent attack
-  defenders in `structured_offer.rs::object_candidate_bindings` (updating
-  `tests/academy/test_loyalty.py` accordingly); moved `attack_target` from
-  `PendingEvent` onto `ZoneEntry` (applied directly in `zones.rs::commit_zone_move`),
-  deleted `finish_created_token`, and replaced the player-hardcoded
-  `tapped_and_attacking: bool` shortcut on `zones.rs::create_token` with
-  explicit `create_token_attacking(key, controller, target)`; moved
-  `Modification::ExileIfWouldDie` and finality-counter exile rewriting from
-  `normalize_proposal()` into `collect_replacements()`; updated
-  `combat_preview.rs` to report defender-specific refusals (`"<creature> can't
-  attack <defender>."`) and updated `academy/ui/src/lib/board/Board.svelte` +
-  `combat.ts` to default drafted attackers to the defending player with compact
-  inline and board-click planeswalker retargeting (`academy/ui/node_modules` is
-  absent in this worktree, so `npm run check` / `vitest` run in Pass 4).
-  Verified: `managym --lib` (18 passed: `proposed_event::tests`, `decision::tests`,
-  `sba::tests`), `rules_tests` (22 passed: `attack_targets`, `combat_preview`,
-  `structured_attacker_offers`, `engine_events`), `match_state_hash_tests`
-  (11 passed), `managym-cards --test cards` (104 passed: `gtc`, `fdn`, `kld`,
-  `fin`, `fra`).
+- Pass 3 (`c8fff2997e`): one `CombatState.attack_targets` (player or
+  permanent defender, `Option` for none); attack defenders bound only in
+  `structured_offer.rs`; `ZoneEntry.attack_target` replaces the `PendingEvent`
+  field and `create_token` shortcut (`create_token_attacking`); death-to-exile
+  and finality rewrites live in `collect_replacements()`; per-defender refusals
+  in `combat_preview.rs`; Academy drafts attackers at the defending player with
+  inline planeswalker retargeting. Ran `managym --lib`, `rules_tests`,
+  `match_state_hash_tests`, `managym-cards --test cards` (gtc/fdn/kld/fin/fra)
+  green; Academy `npm run check`/`vitest` not run (no `node_modules`).
 
 ## Target model (updated by concept review)
 
@@ -62,7 +48,7 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; Passes 1–3 repaired all six. Pass 4 (the gate) is next.
+code; Passes 1–3 repaired all six. Pass 4 (the gate) is next and last.
 
 ### Pass 4 — Gate & contract fixes
 
@@ -75,6 +61,8 @@ code; Passes 1–3 repaired all six. Pass 4 (the gate) is next.
   - `content_pack_contract_covers_env_roots_siblings_and_rollout_slots`,
     `definitions::every_authored_subtype_has_a_category`, and frozen
     semantic-conformance cases.
+- Install Academy UI deps and run `npm run check` + `vitest` (Pass 3's
+  `Board.svelte`/`combat.ts` edits are unchecked).
 - Run debug nextest (`CARGO_BUILD_JOBS=2 cargo nextest run --profile ci
   --test-threads 2`), rebuild the Python extension, run Academy / Python
   tests, check Engine Budget (within 10%), and check
