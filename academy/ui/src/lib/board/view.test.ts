@@ -200,6 +200,18 @@ describe('where decisions land', () => {
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
+  it('draws an opponent\'s Aura with the creature of yours it enchants', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const host = frame.projection.agent.battlefield[0];
+    const aura = { ...host, id: 9001, name: 'Watery Grasp', attached_to: host.id };
+    frame.projection.opponent.battlefield.push(aura);
+    const view = boardView(frame, PLAYERS);
+    const held = permanents(view).find(item => item.permanent.id === host.id)!;
+    expect(held.attached.map(item => item.permanent.id)).toEqual([9001]);
+    const theirs = [...view.opponent.support, ...view.opponent.creatures].flatMap(pile => pile.items);
+    expect(theirs.some(item => item.permanent.id === 9001)).toBe(false);
+  });
+
   it('fans identical lands into one pile, keeping each copy', () => {
     const view = boardView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const piles = [...view.you.support, ...view.you.creatures];

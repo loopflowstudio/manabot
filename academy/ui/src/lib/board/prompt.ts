@@ -110,6 +110,15 @@ export interface PrimaryLabel {
 }
 
 /**
+ * An offer's words on the board. The payment offer hands the choice of lands
+ * to the automatic payer, so it reads "Auto pay"; the recorded label stays
+ * "Pay the cost".
+ */
+export function offerText(offer: { verb?: string; label: string }): string {
+  return offer.verb === 'pay' ? offer.label.replace(/^Pay the cost/, 'Auto pay') : offer.label;
+}
+
+/**
  * The primary button's words: what pressing it does next rather than the
  * offer's verb. Passing with a spell on the stack lets it resolve (if the
  * other player passes too); on an empty stack it moves to the next step. The
@@ -124,7 +133,8 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
     const full = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
     // The button says the price on one line; the lands it taps are drawn on
     // the board and named in its accessible name.
-    return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
+    if (full) return { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Auto pay '.length)}` };
+    return { text: offerText(primary.offer), description: offerText(primary.offer) };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   // A card name is never cut: when it does not fit beside the verb, the

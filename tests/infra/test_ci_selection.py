@@ -69,8 +69,6 @@ def selected(
         ),
         ("managym/academy/study_runtime.py", {"academy_integration", "protocol_v1"}),
         ("scripts/play.py", {"python_unit", "protocol_v1", "clean_machine_play"}),
-        ("scripts/play-elemental", {"academy_integration", "clean_machine_play"}),
-        ("scripts/play_elemental.py", {"academy_integration", "clean_machine_play"}),
         ("managym/src/flow/decision.rs", JOBS),
         ("managym/state/Cargo.toml", JOBS),
         ("managym/cards/Cargo.toml", JOBS),

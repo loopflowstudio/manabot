@@ -1,8 +1,19 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { GameStore } from '$lib/game.svelte';
+  import { saveKeptDeck, type KeptDeck } from '$lib/kept-decks';
 
-  let {setup, heroLabel = 'Your deck', villainLabel = 'Opponent deck'}: {setup:GameStore;heroLabel?:string;villainLabel?:string} = $props();
+  let {
+    setup,
+    heroLabel = 'Your deck',
+    villainLabel = 'Opponent deck',
+    onKeptChange,
+  }: {
+    setup: GameStore;
+    heroLabel?: string;
+    villainLabel?: string;
+    onKeptChange?: (decks: KeptDeck[]) => void;
+  } = $props();
   const seats = $derived([
     { key: 'hero', label: heroLabel },
     { key: 'villain', label: villainLabel },
@@ -17,6 +28,21 @@
   let messages = $state<string[]>([]);
   let checking = $state(false);
   let revision = 0;
+
+  function keepSeat(seat: 'hero' | 'villain'): void {
+    const item = draft[seat];
+    if (!item.source.trim()) {
+      messages = ['Paste or load a decklist before keeping it.'];
+      return;
+    }
+    const next = saveKeptDeck({
+      name: item.name || item.filename.replace(/\.(txt|dek)$/i, '') || `${seat} deck`,
+      filename: item.filename,
+      source: item.source,
+    });
+    onKeptChange?.(next);
+    messages = [`Kept "${next[0].name}" in this browser's deck picker.`];
+  }
 
   function update(): void {
     revision += 1;
@@ -33,7 +59,9 @@
     }
     try {
       const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
-      draft[seat] = { source, filename: file.name };
+      const stem = file.name.replace(/\.(txt|dek)$/i, '').trim();
+      const generic = ['deck', 'hero', 'villain'].includes(stem.toLowerCase());
+      draft[seat] = { source, filename: file.name, ...(stem && !generic ? { name: stem } : {}) };
       update();
     } catch {
       messages = ['Could not read this file as UTF-8 text.'];
@@ -83,6 +111,7 @@
           <input id={`${key}-deck-file`} type="file" accept=".txt,.dek,text/plain" onchange={event => loadFile(event, key)} />
           <label class="mt-2 block text-sm" for={`${key}-deck-source`}>{label} source</label>
           <textarea id={`${key}-deck-source`} class="w-full rounded border border-line bg-panel p-2 font-mono text-sm" rows="9" bind:value={draft[key].source} oninput={update}></textarea>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" onclick={() => keepSeat(key)}>Keep in deck picker</button>
         </div>
       {/each}
     </div>

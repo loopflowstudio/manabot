@@ -12,8 +12,8 @@
  * more than `GROUP_ABOVE` facts reads as sentences instead: one player's
  * consecutive moves become one ("Heuristic played Plains and attacked with
  * Ally"), as do consecutive consequences of one kind. The board plays them one
- * pace apart (`BeatPace`, a per-browser setting) and drops them all at the
- * first input or a new frame. Reduced motion, or the pace "off", plays none:
+ * pace apart (`BEAT_MS`) and drops them all at the first input or a new
+ * frame. Reduced motion plays none:
  * the recap already lists every fact.
  *
  * A beat is presentation only: it never reorders, hides or chooses a decision.
@@ -85,20 +85,5 @@ export function turnAt(events: readonly PresentationEvent[], seq: number): numbe
 
 // ———————————————————————————————————————— Pace
 
-export type BeatPace = 'off' | 'quick' | 'slow';
-
-export const BEAT_PACES: readonly BeatPace[] = ['off', 'quick', 'slow'];
-
 /** How long each beat stays, in milliseconds: one short sentence, read once. */
-export const BEAT_MS: Record<Exclude<BeatPace, 'off'>, number> = { quick: 700, slow: 1400 };
-
-const PACE_KEY = 'academy.table.beat-pace';
-
-export function loadBeatPace(): BeatPace {
-  const stored = typeof localStorage === 'undefined' ? null : localStorage.getItem(PACE_KEY);
-  return BEAT_PACES.find(pace => pace === stored) ?? 'quick';
-}
-
-export function saveBeatPace(pace: BeatPace): void {
-  localStorage.setItem(PACE_KEY, pace);
-}
+export const BEAT_MS = 700;
