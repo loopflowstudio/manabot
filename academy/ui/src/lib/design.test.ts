@@ -276,7 +276,7 @@ function contrast(a: string, b: string): number {
 describe('the text tokens', () => {
   const css = readFileSync(join(ui, 'src', 'app.css'), 'utf8');
   const light = tokens(css, ':root');
-  const themes = { light, dark: tokens(css, '@media (prefers-color-scheme: dark)') };
+  const themes = { light, dark: tokens(css, ":root[data-theme='dark']") };
   const pairs: [string, string][] = [['--on-accent', '--accent']];
   for (const ink of ['--text', '--text-secondary', '--text-tertiary', '--success-text', '--warning-text', '--error-text', '--info-text', '--neutral-text', '--planned-text']) {
     for (const ground of ['--bg', '--bg-surface', '--bg-muted']) pairs.push([ink, ground]);

@@ -15,11 +15,12 @@ import gzip
 import json
 import os
 from pathlib import Path
+import random
 import secrets
 import socket
 import threading
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlencode
 import warnings
 import webbrowser
@@ -34,11 +35,19 @@ from managym.academy.deck_pools import (
     set_deck_pools,
 )
 from managym.disclosure import DecklistDisclosure
-from managym.policy import PolicyFactory, PolicySource, PolicySpec
+from managym.policy import (
+    Policy,
+    PolicyCallable,
+    PolicySource,
+    PolicySpec,
+    is_python_policy_ref,
+    load_python_policy,
+)
 from managym.search import SearchConfig, SearchError, search_descriptor
 
 DeckInput = str | Path | managym.Deck | NamedDeck | tuple[str, managym.Deck]
-PlayerInput = str | Path | PolicyFactory | PolicySpec
+PlayerInput = str | Path | Policy | PolicyCallable | PolicySpec
+TurnOrder = Literal["play", "random", "draw"]
 _GENERIC_DECK_STEMS = frozenset({"deck", "hero", "villain"})
 
 if TYPE_CHECKING:
@@ -373,6 +382,13 @@ class Academy:
             }
         }
 
+    def opponents(self) -> list[dict[str, Any]]:
+        """Return the server's unified opponent catalog."""
+        self._require_open()
+        from managym.academy.opponent import opponent_catalog
+
+        return list(opponent_catalog()["opponents"])
+
     def new_game(
         self,
         *,
@@ -383,10 +399,32 @@ class Academy:
         seed: int | None = None,
         decklists: DecklistDisclosure = "open",
         search: SearchConfig | None = None,
+        order: TurnOrder | None = None,
+        human_seat: int | None = None,
     ) -> Launched:
         self._require_open()
         from managym.academy import server
         from managym.academy.villain import player_fields
+
+        if order is not None and human_seat is not None:
+            raise AcademyLaunchError(
+                "setup.invalid", "Pass either order or human_seat, not both."
+            )
+        if human_seat is not None and human_seat not in (0, 1):
+            raise AcademyLaunchError("setup.invalid", "human_seat must be 0 or 1.")
+        if order is not None:
+            if order == "play":
+                resolved_seat = 0
+            elif order == "draw":
+                resolved_seat = 1
+            elif order == "random":
+                resolved_seat = random.SystemRandom().randrange(2)
+            else:
+                raise AcademyLaunchError(
+                    "setup.invalid", "order must be 'play', 'random', or 'draw'."
+                )
+        else:
+            resolved_seat = human_seat
 
         deck_fields = self._deck_config(deck, opponent_deck)
         opponent = self._player(opponent, "opponent.unavailable")
@@ -399,6 +437,8 @@ class Academy:
             **player_fields(opponent),
             **deck_fields,
         }
+        if resolved_seat is not None:
+            config["human_seat"] = resolved_seat
         try:
             server._parse_game_config(config)
         except managym.DeckImportError as exc:
@@ -420,9 +460,13 @@ class Academy:
         try:
             registry = policy_registry()
             if isinstance(value, Path):
+                if value.suffix == ".py":
+                    return f"policy:{registry.register(load_python_policy(str(value)))}"
                 return f"policy:{registry.register(PolicySpec.read(value))}"
             if isinstance(value, PolicySpec) or not isinstance(value, str):
                 return f"policy:{registry.register(value)}"
+            if is_python_policy_ref(value):
+                return f"policy:{registry.register(load_python_policy(value))}"
             key = value.removeprefix("policy:")
             if (
                 key in registry.aliases
@@ -435,7 +479,7 @@ class Academy:
                     raise ValueError("Search playout count must be between 1 and 4096.")
             elif value not in ("random", "search", "passive"):
                 raise ValueError(
-                    f"Player {value!r} is unavailable. Register a policy object or specification first."
+                    f"Player {value!r} is unavailable. Register a policy object, pass path/to/bot.py:func, or choose a catalog id."
                 )
             return value
         except (OSError, ValueError, ImportError) as error:
@@ -596,9 +640,10 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8000,
     traces_dir: Path | None = None,
-    policies: Mapping[str, PolicyFactory | PolicySpec] | None = None,
+    policies: Mapping[str, Policy | PolicyCallable | PolicySpec] | None = None,
     sources: Sequence[PolicySource] = (),
     deck_pools: Sequence[DeckPool] | None = None,
+    discover: bool = True,
 ) -> Academy:
     """Start the site without opening a browser; the caller must close the server."""
     if not 0 <= port <= 65535:
@@ -641,16 +686,22 @@ def serve(
         )
         from managym.academy import server, trace
         from managym.academy.opponent import policy_registry, set_policy_registry
+        from managym.policy import PolicyRegistry
 
         trace.TRACES_DIR = traces
-        set_policy_registry(None)
+        if discover:
+            set_policy_registry(None)
+            registry = policy_registry()
+        else:
+            registry = PolicyRegistry(providers={})
+            set_policy_registry(registry)
         try:
             set_deck_pools(deck_pools)
         except ValueError as exc:
             raise AcademyLaunchError("setup.invalid", str(exc)) from exc
-        registry = policy_registry()
         try:
-            registry.discover(sources)
+            if discover or sources:
+                registry.discover(sources)
             for name, policy in (policies or {}).items():
                 registry.register(policy, name=name)
         except (ImportError, OSError, ValueError) as exc:
@@ -711,3 +762,137 @@ def serve(
                 ) from exc
             raise AcademyLaunchError("server.startup", str(exc)) from exc
         raise
+
+
+def play(
+    *,
+    opponent: PlayerInput | None = None,
+    deck: DeckInput | None = None,
+    opponent_deck: DeckInput | None = None,
+    order: TurnOrder = "random",
+    decklists: DecklistDisclosure | None = None,
+    seed: int | None = None,
+    sims: int = 64,
+    search: SearchConfig | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    traces_dir: Path | None = None,
+    policies: Mapping[str, Policy | PolicyCallable | PolicySpec] | None = None,
+    deck_pools: Sequence[DeckPool] | None = None,
+    discover: bool = True,
+    open_browser: bool = True,
+) -> None:
+    """Serve Academy, launch a game (blocking until Ctrl-C), and open the browser.
+
+    Accepts a plain ``(obs) -> int | probs`` function, a ``Policy`` object, a
+    ``./bot.py:func`` string, or a catalog id as ``opponent``.
+    """
+    from managym.academy.deck_pools import ensure_default_deck_pools
+    from managym.academy.opponent import default_opponent_id
+
+    pools = list(deck_pools) if deck_pools is not None else ensure_default_deck_pools()
+    with serve(
+        host=host,
+        port=port,
+        traces_dir=traces_dir,
+        policies=policies,
+        deck_pools=pools or None,
+        discover=discover,
+    ) as running:
+        has_trophies = resolve_deck_pool("pool:held-out") is not None
+        chosen_opponent = opponent if opponent is not None else default_opponent_id()
+        chosen_deck = (
+            deck
+            if deck is not None
+            else ("pool:held-out" if has_trophies else "ur_lessons")
+        )
+        chosen_opp_deck = (
+            opponent_deck
+            if opponent_deck is not None
+            else ("pool:held-out" if has_trophies else "gw_allies")
+        )
+        chosen_decklists: DecklistDisclosure = (
+            decklists
+            if decklists is not None
+            else (
+                "closed"
+                if (is_pool_key(chosen_deck) or is_pool_key(chosen_opp_deck))
+                and not (
+                    isinstance(chosen_opponent, str)
+                    and (
+                        chosen_opponent == "search"
+                        or chosen_opponent.startswith("search-")
+                    )
+                )
+                else "open"
+            )
+        )
+        target = running.new_game(
+            deck=chosen_deck,
+            opponent_deck=chosen_opp_deck,
+            opponent=chosen_opponent,
+            sims=sims,
+            seed=seed,
+            decklists=chosen_decklists,
+            search=search,
+            order=order,
+        ).url
+        if open_browser:
+            running.open(target)
+        running.wait()
+
+
+def watch(
+    player1: PlayerInput,
+    player2: PlayerInput,
+    *,
+    decks: tuple[DeckInput, DeckInput] | None = None,
+    decklists: DecklistDisclosure | None = None,
+    seed: int | None = None,
+    search: tuple[SearchConfig | None, SearchConfig | None] = (None, None),
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    traces_dir: Path | None = None,
+    policies: Mapping[str, Policy | PolicyCallable | PolicySpec] | None = None,
+    deck_pools: Sequence[DeckPool] | None = None,
+    discover: bool = True,
+    open_browser: bool = True,
+) -> None:
+    """Serve Academy and open a Bot-vs-Bot Watch setup (blocking until Ctrl-C)."""
+    from managym.academy.deck_pools import ensure_default_deck_pools
+
+    pools = list(deck_pools) if deck_pools is not None else ensure_default_deck_pools()
+    with serve(
+        host=host,
+        port=port,
+        traces_dir=traces_dir,
+        policies=policies,
+        deck_pools=pools or None,
+        discover=discover,
+    ) as running:
+        has_trophies = resolve_deck_pool("pool:held-out") is not None
+        chosen_decks = (
+            decks
+            if decks is not None
+            else (("pool:held-out", "pool:held-out") if has_trophies else None)
+        )
+        chosen_decklists: DecklistDisclosure = (
+            decklists
+            if decklists is not None
+            else (
+                "closed"
+                if chosen_decks is not None
+                and (is_pool_key(chosen_decks[0]) or is_pool_key(chosen_decks[1]))
+                else "open"
+            )
+        )
+        target = running.watch(
+            players=(player1, player2),
+            search=search,
+            decks=chosen_decks,
+            seed=seed,
+            decklists=chosen_decklists,
+        ).url
+        if open_browser:
+            running.open(target)
+        running.wait()
