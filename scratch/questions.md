@@ -24,3 +24,12 @@
 - For pass 2, use tap counts only when every participating source produces
   one unit per useful tap. A broader skip for mandatory multi-unit sources
   would need to account for mana left floating after each legal tap order.
+
+- QA: in real play the land played this turn `entered_this_turn`, so it is
+  not interchangeable with older basics. Village + 3 Plains (one new) keeps the
+  color modal and a second `Pay {W}` stop; the modal skips only when no land
+  entered this turn. Kept: the flag is in the policy observation and drives
+  power-up costs. Should lands that are not creatures ignore it?
+- QA: the Academy Moves log shows `Tap Kyoshi Village for {G}/{W}` with raw
+  braces and the offer label rather than the color added (pre-existing for
+  basics).

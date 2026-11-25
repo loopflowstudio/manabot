@@ -259,3 +259,15 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Manual mana payments in a real game: `managym academy play --deck <f>
+  --opponent-deck <f> --opponent passive --seed 11` with `14 Kyoshi Village /
+  10 Plains / 16 Youthful Knight` against `40 Plains` reaches Village + Plains
+  (exact {1}{W}, no stop) on turn 5 and Village + 3 Plains on turn 9 when the
+  script plays Village first, then Plains. The rail's turn number (`li.turn`
+  `data-turn`) is the last log entry, not reliably the current turn; to cast
+  "the turn after the last land", drive `GameSession.new_game`/`hero_command`
+  by offer labels in Python and read `projection.turn.turn_number` and each
+  permanent's `entered_this_turn`. A land played this turn is a distinct
+  payment source, so same-turn casts keep stops that older identical lands skip.
+  Mid-payment color choices are MODAL frames with
+  `decision_context.stage == "mana_color"`.
