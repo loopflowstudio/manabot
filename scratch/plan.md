@@ -71,12 +71,8 @@ A Python caller of `managym` gets the same three calls (`group`,
 - `docs/academy.md` is main's again. The "Drafted decisions" section committed
   earlier described the chunked runner and the MTG-431 pile split; the audit
   it carried is kept below and rewritten in pass 3.
-- **MTG-441 (PR #613) must be on main before pass 3.** It has auto-merge on
-  and is `MERGEABLE`, with `Academy UI` failing as of 2026-11-25. It rewrites
-  the combat draft in `Board.svelte`, `Rail.svelte` and `+page.svelte`. Passes
-  1 and 2 touch no file under `academy/ui/`. Pass 3 starts with `lf sync` and
-  checks that `Board.svelte` declares `interaction:`; if it does not, pass 3
-  has not got its input and the build says so and stops there.
+- MTG-441 (PR #613) merged 2026-11-25 and is in this branch (`3460ec64c5`);
+  `academy/ui/src/lib/board/Board.svelte` declares `interaction:`.
 
 ## What was found
 
@@ -746,11 +742,16 @@ change.
    `tests/academy/test_shared_table_protocol.py` (4 tests),
    `tests/academy/test_shared_table.py` (6 tests), and
    `scripts/public_api.py check` pass.
-3. **Browser and docs.** MTG-441 (PR #613) merged 2026-11-25 and is in this
-   branch (`3460ec64c5`), so nothing blocks this pass. `gameStore.liveGroup`,
+   Realign 2026-11-25: the server no longer serves `/combat-preview`, but the
+   browser still calls it (`socket.svelte.ts:1079` `fetchCombatPreview`,
+   `Board.svelte` `combatPreview` prop, `+page.svelte:554`, mocked in
+   `e2e/drag-play.spec.ts:345`). Live combat drafting in the browser is broken
+   until pass 3 replaces it; this branch must not ship without pass 3.
+3. **Browser and docs.** Nothing blocks this pass. `gameStore.liveGroup`,
    `PendingSubmission` reconnect/reload reconciliation in `socket.svelte.ts`,
    `sendGroupCommand` + `fetchGroupPreview`, combat on one-shot Confirm (with
-   1-creature parity), `ArrangePanel.svelte` (Scry, Surveil, OrderLibrary Top &
+   1-creature parity, replacing every `/combat-preview` caller listed above),
+   `ArrangePanel.svelte` (Scry, Surveil, OrderLibrary Top &
    Bottom, committed prefix display), rail disclosure, unified draft storage,
    `e2e/grouped-decisions.spec.ts`, updates to MTG-441's combat specs for the
    removed stop control. Keep `docs/academy.md` and `managym/README.md` (written
