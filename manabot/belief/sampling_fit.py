@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-import hashlib
-import os
-from pathlib import Path
-import tempfile
+import math
+import time
+import tracemalloc
 from typing import Protocol
 
+import numpy as np
+
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
+from manabot.belief.sampling_types import SamplerInput
 from manabot.sim.search.sampling import LearnedDistribution
 
 
@@ -93,13 +95,167 @@ def calibration_error(bins: Sequence[CalibrationBin]) -> float:
     return sum(abs(bin.probability_sum - bin.truth_sum) for bin in bins) / total
 
 
-class SamplerEncoder(Protocol):
-    def encode_sampler(
-        self, result: SamplerFitResult, dataset: SamplerDataset
-    ) -> bytes: ...
+def score_sampler_arm(
+    examples: Sequence[SamplerExample],
+    *,
+    log_prob: Callable[[SamplerExample], float],
+    sample: Callable[[SamplerInput], np.ndarray],
+    check: Callable[[], None] | None = None,
+) -> SamplerArmMetrics:
+    """Score each label once, then draw a batch of hands from its public inputs.
+
+    Pool inclusion errors over card coordinates and conjunction errors over
+    adjacent pairs. Only ten calibration bins survive between decisions.
+    """
+    counts = np.zeros(10, dtype=np.int64)
+    probability_sums = np.zeros(10, dtype=np.float64)
+    truth_sums = np.zeros(10, dtype=np.float64)
+    nll = inclusion_error = conjunction_error = 0.0
+    pair_count = violations = sampled_hands = 0
+    elapsed = 0.0
+    largest_tensor = peak_python = 0
+    owns_trace = not tracemalloc.is_tracing()
+    if owns_trace:
+        tracemalloc.start()
+    try:
+        for example in examples:
+            if check is not None:
+                check()
+            inputs = example.inputs
+            nll -= log_prob(example)
+            started = time.perf_counter()
+            draws = sample(inputs)
+            elapsed += time.perf_counter() - started
+            sampled_hands += len(draws)
+            largest_tensor = max(largest_tensor, draws.nbytes)
+
+            present = draws > 0
+            truth = np.asarray(example.target_hand) > 0
+            probabilities = present.mean(axis=0)
+            inclusion_error += float(np.square(probabilities - truth).sum())
+            joint = (present[:, :-1] & present[:, 1:]).mean(axis=0)
+            conjunction_error += float(
+                np.square(joint - (truth[:-1] & truth[1:])).sum()
+            )
+            pair_count += joint.size
+            # Equal-width bins, with probability one in the final bin.
+            bins = np.minimum((probabilities * 10).astype(np.intp), 9)
+            counts += np.bincount(bins, minlength=10)
+            probability_sums += np.bincount(bins, weights=probabilities, minlength=10)
+            truth_sums += np.bincount(bins, weights=truth, minlength=10)
+            outside_pool = (
+                (draws < inputs.known_minima) | (draws > inputs.pool_counts)
+            ).any(axis=1)
+            violations += int(
+                np.count_nonzero(outside_pool | (draws.sum(axis=1) != inputs.hand_size))
+            )
+            peak_python = max(peak_python, tracemalloc.get_traced_memory()[1])
+    finally:
+        if owns_trace:
+            tracemalloc.stop()
+    calibration = tuple(
+        CalibrationBin(int(count), float(probability), float(truth_sum))
+        for count, probability, truth_sum in zip(
+            counts, probability_sums, truth_sums, strict=True
+        )
+    )
+    ece = calibration_error(calibration)
+    return SamplerArmMetrics(
+        joint_nll=nll / len(examples),
+        inclusion_brier=inclusion_error / int(counts.sum()),
+        inclusion_ece=ece,
+        conjunction_brier=conjunction_error / pair_count if pair_count else None,
+        support_violations=violations,
+        sampled_hands=sampled_hands,
+        sampling_seconds=elapsed,
+        peak_python_bytes=peak_python,
+        largest_sample_tensor_bytes=largest_tensor,
+        calibration_bins=calibration,
+    )
 
 
-class BeliefTrainer(SamplerEncoder, Protocol):
+def fit_splits(
+    dataset: SamplerDataset,
+    steps: int,
+    batch_size: int,
+    evaluation_samples: int,
+    learning_rate: float,
+) -> dict[str, tuple[SamplerExample, ...]]:
+    """Admit a fit before allocating model state or looking at held-out scores."""
+    if (
+        steps < 1
+        or batch_size < 1
+        or evaluation_samples < 1
+        or not math.isfinite(learning_rate)
+        or learning_rate <= 0
+    ):
+        raise ValueError(
+            "fitting requires positive steps, batch size, evaluation samples and learning rate"
+        )
+    return {
+        split: tuple(
+            example
+            for game in dataset.games
+            if game.split == split
+            for example in game.examples
+        )
+        for split in ("train", "validation", "test")
+    }
+
+
+class EvaluateSampler[Model](Protocol):
+    def __call__(
+        self,
+        model: Model,
+        examples: Sequence[SamplerExample],
+        *,
+        samples: int,
+        seed: int,
+        check: Callable[[], None] | None,
+    ) -> SamplerEvaluation: ...
+
+
+def score_fit[Model: LearnedDistribution](
+    model: Model,
+    dataset: SamplerDataset,
+    split_rows: dict[str, tuple[SamplerExample, ...]],
+    evaluate: EvaluateSampler[Model],
+    *,
+    steps: int,
+    batch_size: int,
+    seed: int,
+    evaluation_samples: int,
+    check: Callable[[], None] | None,
+    fit_seconds: float,
+    parameter_bytes: int,
+) -> SamplerFitResult:
+    evaluations = {
+        split: evaluate(
+            model, rows, samples=evaluation_samples, seed=seed + index, check=check
+        )
+        for index, (split, rows) in enumerate(split_rows.items())
+    }
+    metrics = SamplerFitMetrics(
+        train=evaluations["train"],
+        validation=evaluations["validation"],
+        test=evaluations["test"],
+        optimizer_exposures=steps * batch_size,
+        optimizer_steps=steps,
+        history_dropout=model.history_dropout,
+        seed=seed,
+        fit_seconds=fit_seconds,
+        parameter_bytes=parameter_bytes,
+    )
+    return SamplerFitResult(
+        model,
+        metrics,
+        dataset.identity,
+        dataset.policy_identity,
+        dataset.world_identity,
+    )
+
+
+class BeliefTrainer(Protocol):
     def evaluate_physical_sampler(
         self, examples: Sequence[SamplerExample], *, samples: int = 32, seed: int = 0
     ) -> SamplerArmMetrics: ...
@@ -178,37 +334,3 @@ def fit_belief_sampler(
         seed=seed,
         check=check,
     )
-
-
-def save_belief_sampler(
-    path: Path,
-    result: SamplerFitResult,
-    dataset: SamplerDataset,
-    *,
-    codec: SamplerEncoder,
-) -> str:
-    """Create one immutable checkpoint; return SHA-256 of its exact bytes."""
-    if (result.dataset_identity, result.policy_identity, result.world_identity) != (
-        dataset.identity,
-        dataset.policy_identity,
-        dataset.world_identity,
-    ):
-        raise ValueError(
-            "sampler fit is bound to a different dataset or policy/world identity"
-        )
-    if result.model.schema != dataset.schema:
-        raise ValueError("sampler and dataset schemas differ")
-    data = codec.encode_sampler(result, dataset)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        dir=path.parent, prefix=".sampler-", delete=False
-    ) as output:
-        temporary = Path(output.name)
-        try:
-            output.write(data)
-            output.flush()
-            os.fsync(output.fileno())
-            os.link(temporary, path)  # Atomic publication, refusing an existing target.
-        finally:
-            temporary.unlink()
-    return hashlib.sha256(data).hexdigest()

@@ -6,11 +6,11 @@ from typing import Literal
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -218,7 +218,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
     path = tmp_path / "policy.pt"
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     loaded, loaded_space = load_checkpoint(str(path))
-    assert loaded_space.encoder.config.model_dump(mode="json") == serialized
+    assert loaded_space.config.model_dump(mode="json") == serialized
     assert loaded.architecture_receipt() == agent.architecture_receipt()
     different = ActorCritic(
         ObservationSpace(ObservationConfig(max_facts=256)), agent.config
@@ -236,7 +236,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
 @pytest.mark.parametrize("capacity", [256, 512])
 def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) -> None:
     torch.manual_seed(213)
-    old, larger = FactEncoder(4), FactEncoder(4)
+    old, larger = FactEncoder(4, numeric=5), FactEncoder(4, numeric=5)
     # Nonzero learned weights make numerical drift and dropped facts observable.
     with torch.no_grad():
         old.output.weight.fill_(0.25)

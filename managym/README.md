@@ -240,8 +240,9 @@ before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source appearance, timestamps, fixed affected sets and duplicate edges survive.
 Public object IDs are joins; private object storage slots do not enter this view.
-Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
-4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
+The native encoder writes bounded arrays of 128 × 18, 4096 × 3 and 2048 × 2
+for every caller; every capacity fails explicitly with
+`managym.ObservationCapacity`. Local facts exclude
 active effects.
 Projection never mutates or semantically coalesces the engine’s records.
 
@@ -263,7 +264,12 @@ Repeated specs in separate clauses may choose the same object. A resolving
 frame retains its active clause and each chosen slot's resolution-start eligibility
 across suspended decisions (CR 608.2b). Effects use those retained results; live
 presence checks separately prevent following departed objects (CR 400.7).
-Illegal slots remain positional, and zero optional targets still resolve.
+A trigger's mode and target choices, changes of target, and resolution all
+check source-relative restrictions. A power bound reads the live source's
+effective power or its last battlefield power after departure. “Another”
+excludes both graveyard arrivals of a departed melded source until each
+changes zones again. Illegal slots remain positional, and zero optional
+targets still resolve.
 `ObjectSelector::Targets` applies one verb to all eligible slots of that clause
 in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
@@ -272,6 +278,30 @@ Graveyard targets
 carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
+
+For a per-creature combat damage trigger or a life-loss trigger,
+`EffectValue::TriggeringAmount` reads the amount of the event that fired it:
+the damage dealt by that hit, or the life actually lost. The player ordering
+simultaneous triggers sees each amount in its offer, and both players see it
+on the stack. Quilled Greatwurm counts all combat damage each creature dealt
+in that step, including trample damage split across recipients. Drake Hatcher
+puts that many incubation counters on its source even if its power has since
+changed. Its activation
+spends three incubation counters during payment. Countering the ability
+leaves them spent, and resolving it creates the flying Drake.
+
+A trigger that asks about a spell after it leaves the stack reads the spell
+as cast. After Charring Bite is countered, the waiting trigger still sees a
+red sorcery with mana value two. Its pending description names Charring Bite
+even though Twinmaw Stormbrood is a creature card again.
+
+Death triggers check whether each permanent was a creature as it left the
+battlefield. High-Society Hunter draws for each other nontoken creature that
+dies alongside it, including a land that was copying a creature. Sacrificing
+a creature token to its attack trigger puts a counter on Hunter without a draw.
+That sacrifice also satisfies Cackling Prowler's end-step condition. Both
+viewers can see whether a creature died this turn, including a token or a
+land copying a creature. Exile does not count. The fact resets each turn.
 
 Delayed abilities compose event matching, frequency, expiry, captured subjects
 and effects. `CreateDelayedTrigger.event` only matches the event;
@@ -349,6 +379,26 @@ payment rules. See the audit's
 [ownership review](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/unification.md)
 before using its historical Task attribution.
 
+### Native allocator
+
+Native builds use `mimalloc` by default (`default = ["mimalloc"]`). Pass
+`--no-default-features` to Cargo to select the system allocator instead. For a
+Python build, run the following commands from the repository root to build and
+measure four-worker collection.
+
+```bash
+uv run --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+uv run --no-sync python scripts/bench_sharded_collection.py --expect-allocator mimalloc
+```
+
+For the system comparison, pass `--no-default-features --features python` and
+`--expect-allocator system`. `--no-sync` preserves the local build. The
+benchmark checks the loaded extension's `managym.NATIVE_ALLOCATOR` before
+timing. The separate Cargo feature `benchmark` counts Rust allocation requests
+on either allocator and sets `managym.ALLOCATION_COUNTING` to true. Use it for
+footprint diagnostics. Collection timings require counting to be disabled.
+
 ## Style
 
 ```rust
@@ -390,8 +440,82 @@ Any other `world` value is rejected: authored content packs are retired.
 
 Mana feasibility and production share typed costs and pools. `ManaClass`
 retains each class's spending restriction and spend effect; `SpendingContext`
-distinguishes casting, activation and resolving costs. A spell's payment records
-`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+distinguishes casting, activation and resolving costs. A player's `ManaPool`
+keeps, unit for unit, the object that produced its mana (`ManaOrigin`); units
+of one class and color are interchangeable, so the oldest is spent first.
+Among pooled units of different classes that can pay the same pip, the
+automatic payer spends the most specific first (`ManaClass::spend_order`):
+mana only some costs can use, narrowest restriction first, or mana whose rider
+applies to this cost; then ordinary mana; last, mana whose rider this cost
+would waste. Manual payment offers every class in its usual order.
+
+A cast or activation is paid as one `Payment` (`flow/payment.rs`): the announced
+`Operation`, the `CostComponent`s still owed in the order they are paid, and
+the `PaymentReceipt` of what has been paid. `Game::cost_components` fixes the
+total cost once announcement ends; `PendingChoice::Pay` offers the component
+at the front of `owed`, and each choice shrinks or removes it and appends to
+the receipt. The receipt has one entry per unit of mana spent, with its origin
+and applied rider, and one `Contribution` per object tapped, sacrificed,
+discarded or exiled for the cost, naming what was done (`How`) and the part of
+the cost it paid (`Toward`), and the life paid. A chosen sacrifice is recorded
+at once and leaves as the whole cost completes. The components after `Mana`
+have no choice (`Life`, and `Source(How)`: the source's own tap, sacrifice, exile
+or discard): they are paid from `owed` as the payment completes and
+recorded on the same receipt, so a pending payment never reads the definition
+again. A spell's receipt is shared by the stack object,
+its resolution and the entering permanent's own triggers; an activated
+ability keeps its own as `paid`.
+Waterbend, convoke, improvise and delve pay part of a mana cost with something
+other than mana, so they are the `Help` of the `Mana` component and no step of
+their own: while it is owed the payer may tap a creature or artifact, or exile
+a card from their graveyard, each paying {1} and adding a contribution, or pay
+the rest with mana. One rule (`Game::help_taps`) says what a direct tap may
+pay: by convoke an owed pip of the creature's color or {1}, by improvise {1},
+and {1} of the announced waterbend part by any artifact or creature. Each
+payment that leaves the rest payable is offered, and the payer chooses
+(`CostComponent::TapPays`) when a tap has more than one: a white creature may
+convoke {W} or {1}, and under Hama's waterbend a creature may convoke or
+waterbend {1}; the receipt's `Toward` keeps which. That choice's mode names
+the payment, the same in every decision (`TapPayment::mode`): 0-4 one
+{W}/{U}/{B}/{R}/{G} pip by convoke, 5 {1} by convoke, 6 {1} by improvise and 7
+{1} of the waterbend part. Only payable modes are offered, so they are sparse,
+and the choice focuses the permanent just tapped. The payment model splits
+a cost's generic mana into what those taps may pay (`help_obligations`), so
+castability, offers and execution agree. `AdditionalCost::{Convoke, Improvise, Delve}` give a
+spell the keyword and `StaticAbility::SpellsHave` gives it to other spells.
+Offers and affordability ask the payment model with the help included
+(`payable_with_help`, `while_paying`), so a spell castable only with help is
+offered and a tap that would strand the cost is not; the automatic payer never
+takes help, so when mana alone cannot pay the taps and exiles are the player's
+picks.
+Costs chosen while casting use the kicker choice: bargain
+(`AdditionalCost::Bargain`) adds a `Sacrifice` component toward `Bargain` and
+marks the spell kicked, and a conditional alternative
+(`AdditionalCost::AlternativeMana`) replaces the mana cost while its condition
+holds. `PrintedCharacteristics::cast_option` says which of these a card's
+choice is, so the instruction, the offer label and the text observation say
+"bargained" or "cast for its alternative cost" where the flag says `kicked`. "Forage or pay" (`AdditionalCost::ForageOr`) is one `Forage` component
+whose step offers a Food to sacrifice, the graveyard cards to exile (the first
+commits to three) and the mana instead. "Discard a card" as a spell's
+additional cost (`AdditionalCost::Discard`) is the `Discard` component an
+ability's discard cost uses, offering every card in hand but the spell being
+cast. Crew and saddle are the same
+`TapPower` component, toward `Crew` or `Saddle`; a saddled Mount carries a
+`Modification::Saddled` record until end of turn. Station
+(`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
+toward `Station` that never offers the source; an activated ability's
+resolving frame carries its receipt, and the station effect reads the tapped
+creature's power from it (`EffectValue::PowerTappedToPay`). While the ability
+is on the stack, both viewers see the amount used by the counter instruction
+before replacements. It follows the tapped creature's power, down to zero,
+and uses its last known power if it leaves the battlefield. A Spacecraft's
+"N+" lines are static abilities conditioned on its charge counters.
+The automatic payer pays only the mana component, and pays it with mana:
+which creatures crew, saddle or station, every other object a cost takes, and
+each convoke or improvise tap or delve exile when mana alone cannot pay, is
+the player's choice under either `mana_payment` setting. With lands for the
+whole cost it asks nothing. Waterbend taps are the exception and are still
+made for the player.
 Spending is a native unit/class decision whenever receipts or remaining pools
 differ, including generic colors, restrictions, riders and combat expiry. Each
 offer can complete every saved payment. Partial spending, nested activation
@@ -416,7 +540,13 @@ instrumentation attributes board, clone and dependency work without adding
 counters to ordinary wheels.
 
 A resolving spell remains on the stack until the zone-move authority commits
-its departure. That authority applies flashback exile replacement and captures
+its departure. A spell cast with flashback carries that choice onto the stack.
+A Zombie cast from the graveyard with Zul Ashur pays its normal cost, enters
+the battlefield on resolution and returns to the graveyard if countered.
+With Muldrotha in play, you can choose which permission casts the Zombie.
+Casting through Muldrotha spends its creature allowance for the turn, even
+if the spell is countered. Using Zul Ashur leaves that allowance available.
+The zone-move authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
@@ -533,14 +663,15 @@ payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
-source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
-Every cost carries a `SpendingContext`: `Cast` with the spell's announced
-subtypes and types, `Activate` with the source's zone and subtypes, or
+source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
+`ExceptSpellsFromHand` is Heartwood Crafter's. Every cost carries a
+`SpendingContext`: `Cast` with the spell's announced subtypes and types and
+the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
 Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every encoder refuses other restricted mana (`unrepresentable_state`)
-rather than drop it.
+mana); every other restriction is a `pooled_mana_classes` class and a
+`PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v6: the schema-8 semantic Observation, shared native continuation frames, bound public card
@@ -570,10 +701,81 @@ widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
 layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
+
+For a v11 batch, call
+`encode_observation_batch(items, layout, action_overflow="error")` with `Env`
+or `Observation` items.
+`RolloutPool.set_observation_layout(layout, action_overflow="error")` pairs with
+`encode_active_batch()` and `step_active_batch(actions)` to return
+`(active_slots, ObservationBatch)`.
+`VectorEnv.step_observation_batch(actions, layout, action_overflow="error")`
+returns the batch from the step together with per-stream rewards, terminated
+flags and truncated flags. Each stream emits its observation and step events
+as it advances. A strict stepping error can leave streams advanced.
+
+For repeated collection, call `VectorEnv.set_observation_layout(state, layout,
+action_overflow)` with one writable outcome array per stream for each of
+`rewards` (float64), `terminated` and `truncated` (uint8). Use the ordinary
+buffered reset, replacement and step methods. After reset, `observation_rows()`
+returns one `(batch, index)` per stream in slot order. Masked steps preserve
+parked slots. Isolated stepping reports the failed slot and keeps every
+successful sibling's observation. A failed snapshot load leaves the prior
+roots and observations available.
+
+`observations_for_players(players)` freezes the requested viewers at their
+current decisions. Pass one seat or `None` per stream. The result contains the
+selected slot identities and a batch in that order. Any batch's
+`gather(coordinates)` copies just the selected live spans from compatible
+batches, preserving the requested order and repeated rows.
+
+Each `ObservationBatch` owns its snapshot across later steps. Its `tables()` maps
+each value buffer to `(seat_axis, offsets, values)`, with immutable byte
+strings for native-endian int32 row offsets and packed, native-endian records.
+One span belongs to each batch item, or to each (item, seat) if `seat_axis`
+is true. Subtract consecutive offsets for live counts, including all-zero
+live rows. Companion validity masks derive from those counts. Object joins
+retain the layout's coordinates. The default overflow policy rejects excess
+actions. With `"first-legal"`, `action_counts` gives the retained prefix.
+
+`layout.csr_fields[key]` lists each record field's name, dtype and logical
+column index in byte order. IDs, joins, enums, unscaled counts and full signed
+words use int32. Flags use uint8 and scaled scalars use float32. In a dense
+input a word occupies two 16-bit columns. The packed field takes their common
+name and the first column's index. Both fact payloads use raw integer units.
+Divide by `layout.csr_fact_divisors[kind]` for their logical numeric values.
+Decision memory includes separate presence flags for optional selectors.
+
+```python
+fields = batch.layout.csr_fields["actions"]
+dtype = np.dtype([(name, dtype) for name, dtype, _ in fields])
+_, offsets, values = batch.tables()["actions"]
+starts = np.frombuffer(offsets, dtype=np.int32)
+actions = np.frombuffer(values, dtype=dtype)
+first_game_modes = actions["mode"][starts[0]:starts[1]]
+```
+
+For element arrays, the single field describes each element. An action-focus
+row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
+with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
+
+For dense batched buffers, `VectorEnv.set_buffers`, `RolloutPool.set_buffers`,
+`encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents` and `ObservationLayout.object_references` all
+emit a `DeprecationWarning` targeting removal in `0.3.0` (retained alongside
+the deprecated v9/v10 fork; v11 callers should use `set_observation_layout` and
+`encode_observation_batch`). `layout.axis_extents(buffers)` returns one int64
+vector per variable axis. Each item includes its occupied rows and rows needed
+by joins. Keep the buffers stable until the scan returns. A key or shape
+mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
+the buffer names and their unbatched row dimensions. For a pair `(key, dim)`,
+`layout.shapes[key][dim]` is the configured capacity of that axis.
+`layout.object_references` lists each buffer's object-reference columns and
+their index bases. A `None` column means every element is a reference.
+
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
-`Game::object_power` reads contextual power in every zone: the layered view on
+`Game::object_pt` reads contextual power and toughness in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
 filters use `object_matches_predicate`; printed-only matching belongs to
@@ -613,12 +815,34 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+A permanent's `damaged_permanents` lists the live permanents it dealt damage
+to this turn. Multiple hits on one recipient give one entry. Either permanent
+leaving and returning breaks the relation. Both viewers get the public
+permanent IDs in the observation and Academy frame. Policy input v11 joins
+their permanent rows in relation kind 11, including with policy history off.
+For combat damage to a player, `combat_damage_to_players` lists the seats hit
+by that exact source this turn. An activated ability on the stack retains
+this information when its source leaves. V11 encodes each seat relative to
+the viewer on the permanent and stack rows. Steel Hellkite checks those
+players’ current nonlands and their mana values when its ability resolves.
+Each Hellkite can activate once per turn, including for X=0 before any hit.
+Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
+that activated its ability. A zone change ends that identity. Avatar Destiny
+uses `ObjectSelector::This` to return the Aura from the graveyard after the
+enchanted creature dies.
+An effect on the enchanted or equipped permanent uses `ObjectSelector::Attached`.
+It reads the attachment at resolution. If the source left in response, its last
+known attachment identifies the exact permanent it last enchanted or equipped.
+
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
 `ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
 result independently of a later `Move`; the caller keeps those results while
 selection effects run. Mill, optional discard/draw and basic/tutor searches use
 ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+An unrestricted `Effect::search_for_card` requires a choice while the library
+contains cards. Rune-Scarred Demon uses an unrevealed move into hand. Micromancer
+reveals the chosen card, which gives both viewers knowledge of it in hand.
 `ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
 materializers refresh unknown selected subsets throughout saved callers and child
 scopes, preserving cardinality and exact viewer-known choices. Restricted partial
@@ -635,6 +859,12 @@ never follow a later object. Capturing `Moved` uses its new zone. This binding
 provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
 never draw order. Prospective battlefield entrants are public during replacement
 choices and remain pinned in both samplers.
+
+At opponent priority, hidden-world sampling deals uninspectable manifested
+printings from the same pool as hidden hand and library cards. A pending spell
+keeps its battlefield target and that target’s exact appearance across deals.
+The controller can still inspect the printing in the sampled world. Restoring
+the original snapshot restores the actual printing.
 
 `Effect::Move.library_end` states top/bottom placement without a shuffle; its
 placement commits before linked returns can pause. `put_in_library` authors that
@@ -678,8 +908,10 @@ A pending cast or activation payment offers useful fixed-source taps beside
 A tap must make progress and preserve the announced costs and every saved
 payment; funded payments and payments needing every available source retain
 native trivial-decision skipping. These ordinary choices are on by default
-for every consumer. Source taps use the existing `TapForCost` policy action
-with the source as focus; the native Command verb is `tap_for_mana`, distinct
+for every consumer. Source taps and direct taps (convoke, improvise, waterbend)
+share the `TapForCost` policy action with the permanent as focus; its
+`pays_directly` flag tells a tap that pays a pip itself from one that makes
+mana. The native Command verb for a source tap is `tap_for_mana`, distinct
 from waterbend. They do not expose undo, or production at priority unless a
 seat [asks for it](#mana-taps-at-priority-and-during-payment).
 
@@ -724,7 +956,16 @@ or phase, as any floating mana does. There is no undo.
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
-  leave reserved resources available and the committed cost payable.
+  leave reserved resources available and the committed cost payable. Mana
+  made while a cast or activation is being paid pays toward it at once: the
+  cost owed shrinks and the receipt names the unit's source, as a convoke tap
+  does. Mana that was floating before, a source's surplus and mana that can
+  pay nothing still owed stay in the pool for the spend choice, and so does
+  new mana when pooled mana of another class (a rider, a restriction) or
+  another color could pay the same pip. A payment ends as soon as no mana
+  is owed, whatever is still untapped: surplus waits for the priority that
+  follows, and a cost whose mana is {0} from the start never opens its mana
+  step.
 - **Automatic payments.** Once the player accepts a cost, the engine selects
   the sources, their outputs, any waterbend contributions and the units to
   spend. The player still chooses X, optional costs and spell targets.
@@ -734,7 +975,8 @@ or phase, as any floating mana does. There is no undo.
   without a listed spend. `Env.skip_trivial_count()` includes forced passes,
   other skipped single choices and internal automatic payment actions.
 - **Seat order and replay.** Both settings follow the chooser. Fixed-source
-  taps use the existing `TapForCost` policy action with source focus.
+  taps and direct taps use the `TapForCost` policy action with the
+  permanent as focus, told apart by `pays_directly`.
   Choice-output abilities use their activation action. Omitting both fields
   produces the same native setup, game digest and recording bytes as explicit
   manual/off for both seats. Invalid values raise `ValueError`.
@@ -773,9 +1015,24 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `state` | Meaning |
 | --- | --- |
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
-| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost. `explanation` names the choice; there are no sources. |
+| `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
 | `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+
+The preview reads the cost as the payment owes it (`Payment.owed`). While a
+sacrifice, discard, exile or forage is still the payer's to choose, the state
+is `needs_choice`; once those are paid and only mana is owed, the plan is
+exact. The preview is a forecast only: what is committed to the cost is a fact
+of the pending decision, `decision_context.paid`, one phrase per object in the
+order committed ("tapped Gray Ogre to crew") with the object as it is now, and
+it is there at every step of the payment, including one with no Pay offer. A
+chosen sacrifice leaves as the payment completes, so until then its phrase is
+"Gray Ogre, sacrificed when the payment completes". A waterbend paid as an
+effect resolves lists its taps the same way. A cost with convoke, improvise or delve previews its
+mana route like any other: automatic payment pays mana with mana and never
+picks a creature, artifact or card. When mana alone cannot pay, the state is
+`needs_choice` ("Mana alone cannot pay this cost. Choose what to tap or
+exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
@@ -819,5 +1076,45 @@ never asked, a planned answer is not offered (a required block) or the
 finished declaration differs from the plan (a lone block of a creature with
 menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. The same address rules as payment previews apply, and the
+would finish it. During attacker selection both viewers can see the attackers
+chosen so far. Raid becomes true for the attacking player when a nonempty
+declaration finishes and lasts through the turn, even if those creatures leave.
+Linden triggers for each white attacker her controller declares. With two white attackers
+and an ability that doubles her triggers, each attacker accounts for two
+occurrences. A creature that enters attacking can deal combat damage. Its
+first declaration in a later combat still counts as its first attack for
+Aurelia. Leaving and returning starts a new attack history for that creature.
+Extra combats preserve raid and each creature’s history until the turn ends.
+The same address rules as payment previews apply, and the
 call is read-only in the same way.
+
+At the combat damage step, the attacking player assigns damage among the
+remaining blockers. Each choice names the attacker, the current blocker and
+the amount. A trampler can assign damage to the defending player once every
+blocker has been assigned lethal damage. For example, a 5-power trampler
+blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
+the rest. Without trample, that sole blocker takes all 5. The engine deals
+the assignments together after the final choice.
+
+When a combatant has first strike or double strike (CR 510.4), the first damage
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
+followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
+permanent's `first_strike_participant` remembers whether it had first strike or
+double strike when the first step began, including after its abilities change.
+### Reading power during combat
+
+Courageous Goblin and Ruby, Daring Tracker check for a creature with power
+four or greater as attackers are declared. Once either ability triggers, removing that
+creature leaves the bonus intact. Nessian Hornbeetle and Surrak, the Hunt
+Caller also check their conditions as their beginning-of-combat abilities
+resolve. Hornbeetle needs another creature with power four or greater.
+Surrak needs total power eight or greater, counting negative power as well.
+
+When Ashroot Animist or Halana and Alena, Partners has a trigger on the
+stack, both viewers can inspect the source power in the stack label. The
+amount follows changes to the source until resolution or departure. If the
+source leaves, the trigger retains its last battlefield power even if the
+card returns. Bulk Up similarly reads the target's power at resolution. A
+creature at −2 power goes to −4, and flashback uses the same calculation.
+Bite Down uses the power of the creature dealing damage at resolution.
+If either target leaves and returns first, it deals no damage.

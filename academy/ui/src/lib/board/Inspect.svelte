@@ -8,7 +8,7 @@
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace } from '$lib/card-faces.svelte';
   import type { CardState, PermanentState } from '$lib/types';
-  import { keywordsOf, labelText, ptProvenance, signed } from './inspect';
+  import { counterTerms, keywordsOf, labelText, ptProvenance, signed, statusesOf } from './inspect';
   import Pips from './Pips.svelte';
 
   interface Props {
@@ -16,25 +16,29 @@
     text: string | null;
     permanent?: PermanentState | null;
     card?: CardState | null;
+    castTerms?: string[];
     /** The name of the attacker this permanent blocks. */
     blocks?: string | null;
     /** Art height in px; the docked pane uses a shorter strip. */
     art?: number;
   }
 
-  let { name, text, permanent = null, card = null, blocks = null, art = 128 }: Props = $props();
+  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, art = 128 }: Props = $props();
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
+  const statuses = $derived(permanent ? statusesOf(permanent) : []);
   const pt = $derived(permanent ? ptProvenance(permanent, face) : null);
   const plain = $derived(!permanent && card?.types.is_creature ? `${card.power}/${card.toughness}` : face?.power != null && !permanent ? `${face.power}/${face.toughness}` : null);
   const facts = $derived(permanent ? [
     permanent.tapped ? 'Tapped' : 'Untapped',
     permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
+    permanent.first_strike_participant ? 'first-strike participant' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
+    ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
     permanent.damage ? `${permanent.damage} damage marked` : '',
-    ...Object.entries(permanent.counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${kind.replace(/_/g, ' ')} counter${n === 1 ? '' : 's'}`),
+    ...counterTerms(permanent.counters),
     permanent.abilities_lost ? 'has lost all abilities' : '',
     permanent.is_token ? 'token' : '',
   ].filter(Boolean).join(' · ') : null);
@@ -53,12 +57,15 @@
   <div class="art" style:height={`${art}px`} style:background-image={loaded === url ? `url('${url}')` : undefined}></div>
   <p class="name"><span>{name}</span>{#if face?.cost}<Pips cost={face.cost} size={14} />{/if}</p>
   {#if face}<p class="type">{face.type_line}</p>{/if}
-  {#if keywords.length}
+  {#if keywords.length || statuses.length}
     <p class="keywords">
+      {#each statuses as status (status)}<span class="granted">{status}</span>{/each}
       {#each keywords as fact (fact.keyword)}<span class:granted={fact.source !== null} title={fact.source ?? 'Printed'}>{labelText(fact.keyword)}{#if fact.source}<small> · {fact.source}</small>{/if}</span>{/each}
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
+  {#if !permanent}{#each counterTerms(card?.counters) as term (term)}<p class="state">{term}</p>{/each}{/if}
+  {#each castTerms as term}<p class="state">{term}</p>{/each}
   {#if pt}
     <div class="pt" data-testid="pt-provenance">
       <p class="total"><b>{pt.power}/{pt.toughness}</b>{#if permanent?.damage}<span> · {permanent.toughness! - permanent.damage} toughness left after damage</span>{/if}</p>

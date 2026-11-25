@@ -32,7 +32,14 @@ use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
 /// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
-const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
+const NOT_REAL_CARDS: &[&str] = &[
+    "Crossroads of Destiny",
+    "Kelp Hollow",
+    "Kelp Warden",
+    "Tidal Errand",
+    "Tidal Haven",
+    "Thornwood Arbor",
+];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall
 /// cost. Suki: hybrid {G/W} pips are registered as {G}{W} (no hybrid-mana
@@ -257,14 +264,15 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Printed power/toughness ("*" = CDA).
-        let power = engine_pt(def.power, def.power_cda().is_some());
+        let cda = def.pt_cda();
+        let power = engine_pt(def.power, cda.is_some());
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
                 fx.power
             ));
         }
-        let toughness = engine_pt(def.toughness, false);
+        let toughness = engine_pt(def.toughness, cda.is_some_and(|(_, toughness)| toughness));
         if toughness != scryfall_pt(fx.toughness.as_ref()) {
             failures.push(format!(
                 "{name}: toughness {toughness:?} != Scryfall {:?}",

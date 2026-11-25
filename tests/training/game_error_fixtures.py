@@ -19,6 +19,7 @@ import time
 from typing import Any
 
 from manabot.infra.config import MatchConfig
+from manabot.policy.protocol import BackendName
 from manabot.sim import native_game
 from manabot.sim.registration import PlayerRegistration
 import managym
@@ -91,6 +92,7 @@ def _payment_game_worker(
     checkpoint_paths: dict[str, str],
     max_commands: int,
     deadline_unix: float,
+    backend_name: BackendName,
 ) -> None:
     managym.Env = PaymentMismatchEnv
     native_game.game_worker(
@@ -100,6 +102,7 @@ def _payment_game_worker(
         checkpoint_paths,
         max_commands,
         deadline_unix,
+        backend_name,
     )
 
 
@@ -110,6 +113,7 @@ def _lost_payment_worker(
     checkpoint_paths: dict[str, str],
     max_commands: int,
     deadline_unix: float,
+    backend_name: BackendName,
 ) -> None:
     """Die or block inside a call whose canonical pending inputs are durable."""
 
@@ -135,6 +139,7 @@ def _lost_payment_worker(
         checkpoint_paths,
         max_commands,
         deadline_unix,
+        backend_name,
     )
 
 

@@ -93,7 +93,7 @@ def runtime_fingerprints(
     }
     action_abi = {
         "enum": {member.name: int(member.value) for member in ActionEnum},
-        "max_actions": obs_space.encoder.max_actions,
+        "max_actions": obs_space.config.max_actions,
         "actions_shape": list(obs_space.shapes["actions"]),
         "action_focus_shape": list(obs_space.shapes["action_focus"]),
         "actions_valid_shape": list(obs_space.shapes["actions_valid"]),

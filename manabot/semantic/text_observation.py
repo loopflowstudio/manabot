@@ -19,6 +19,7 @@ import managym
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
     CardReference,
+    CastOption,
     DecisionInput,
     DecisionObject,
     HistoryReference,
@@ -50,6 +51,8 @@ _STEPS = (
     "second main",
     "end",
     "cleanup",
+    # Appended at index 12 to match StepEnum; reorder before "combat damage" in 0.3.0.
+    "first-strike combat damage",
 )
 _SPACES = (
     "game over",
@@ -88,8 +91,12 @@ _VERBS = (
 )
 _STAGES = frozenset(
     (
+        "opening_hand",
+        "opening_bottom",
+        "opening_entry",
         "priority",
         "targets",
+        "announcement",
         "additional_cost",
         "payment",
         "mode",
@@ -111,6 +118,9 @@ _STAGES = frozenset(
         "select_milled",
         "select_cards",
         "order_replacement",
+        "order_melded_cards",
+        "manifest_dread",
+        "assign_combat_damage",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -215,6 +225,9 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
+    "order melded cards",
+    "manifest dread",
+    "assign combat damage",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -280,8 +293,19 @@ def _type_flags(types: managym.CardTypes) -> str:
     return f"; type flags {flags}" if flags else ""
 
 
+def _ward_life(characteristics: managym.ObservationCharacteristics) -> str:
+    """A ward paid in life, which the ward mana value cannot state."""
+    if characteristics.ward_life <= 0:
+        return ""
+    return f"; ward: pay {characteristics.ward_life} life"
+
+
 def _yes(value: bool) -> str:
     return "yes" if value else "no"
+
+
+# Native `spell_profile_code`: the printed spell an offer or announcement casts.
+_SPELL_PROFILES = {1: "Adventure", 2: "Omen", 3: "back face"}
 
 
 def _selectors(mode: int | None, ability: int | None) -> list[str]:
@@ -310,8 +334,25 @@ def _turn_history(player: managym.Player) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if count := history.life_gains:
+        parts.append(f"gained life {count} time{'s' if count != 1 else ''}")
+    if amount := history.life_gained:
+        parts.append(f"gained {amount} life")
+    if count := history.creatures_died:
+        parts.append(
+            f"had {count} creature{'' if count == 1 else 's'} they controlled die"
+        )
+    if count := history.permanents_left:
+        parts.append(
+            f"had {count} permanent{'' if count == 1 else 's'} they controlled leave "
+            f"the battlefield ({history.nonland_permanents_left} nonland)"
+        )
+    if history.warped_this_turn:
+        parts.append("cast a spell for warp")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
+    if amount := history.mana_spent_casting:
+        parts.append(f"spent {amount} mana casting spells")
     if count := player.spells_cast:
         parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)
@@ -327,6 +368,13 @@ def _spending(restricted: managym.RestrictedMana) -> str:
     if restricted.abilities:
         parts.append("abilities of " + " or ".join(restricted.abilities) + " sources")
     return " or ".join(parts)
+
+
+def spend_phrase(spending: str) -> str:
+    """ "only for Lesson spells", but "for anything but spells from hand"."""
+    if spending.startswith("anything but "):
+        return f"for {spending}"
+    return f"only for {spending}"
 
 
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
@@ -404,15 +452,18 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
         "BecomeCreature": "is also a creature",
+        "AllCreatureTypes": "has all creature types",
         "Nonlegendary": "isn't legendary",
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
+        "Saddled": "saddled",
         "CantActivateAbilities": "its activated abilities can't be activated",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "PreventCombatDamage": "combat damage dealt to it is prevented",
         "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
@@ -464,26 +515,21 @@ class _Renderer:
             self.seats[player.player_index] = label
         # One alias per game thing: a listed card, a permanent (its object
         # and permanent ids) or a stack object (a spell's object id too).
-        for index, card in enumerate(
-            self.state.agent_cards + self.state.opponent_cards
-        ):
+        cards = self.state.agent_cards + self.state.opponent_cards
+        for index, card in enumerate(cards):
             self._alias(f"C{index + 1} ({card.characteristics.name})", card.id)
-        historical_cards = [
-            card
-            for card in self.state.agent_cards + self.state.opponent_cards
-            if int(card.zone) == 2
-        ]
-        historical_index = 0
+        # Older captures list battlefield cards in permanent order.
+        historical_ids = (card.id for card in cards if int(card.zone) == 2)
         for index, permanent in enumerate(
             self.state.agent_permanents + self.state.opponent_permanents
         ):
-            card = permanent.characteristics
             object_id = permanent.object_id
             if object_id is None:
-                object_id = historical_cards[historical_index].id
-                historical_index += 1
-            label = f"P{index + 1} ({card.name})"
-            self.names[permanent.id] = label
+                object_id = next(historical_ids)
+            name = permanent.characteristics.name or (
+                "face-down permanent" if permanent.face_down else "nameless permanent"
+            )
+            label = f"P{index + 1} ({name})"
             self._alias(label, object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
             label = f"S{index + 1}" + (
@@ -497,11 +543,10 @@ class _Renderer:
 
     def _alias(self, label: str, object_id: int, *others: int) -> None:
         """Name `object_id`, and its current incarnation, plus any `others`."""
-        self.names[object_id] = label
         link = self.capture.objects[str(object_id)]
-        self.objects[object_id, link.incarnation] = label
-        for other in others:
-            self.objects[other, link.incarnation] = label
+        for identity in (object_id, *others):
+            self.names[identity] = label
+            self.objects[identity, link.incarnation] = label
 
     def name(self, identity: int) -> str:
         try:
@@ -514,6 +559,15 @@ class _Renderer:
             return self.definitions[identity]
         except KeyError as error:
             raise TextEncodingError("unbound definition") from error
+
+    def taken_cost(self, definition: int | None) -> CastOption:
+        """The words for a set `kicked` flag on a spell of `definition`.
+
+        The flag records every optional cast cost; the bound definition names
+        the ones that are not kicker.
+        """
+        bound = self.capture.definitions.get(str(definition))
+        return (bound and bound.cast_option) or _KICKER
 
     def decision_object(self, value: DecisionObject) -> str:
         if value.subject.kind == "player" and isinstance(value.subject.id, int):
@@ -534,7 +588,11 @@ class _Renderer:
         if isinstance(value, PlayerReference):
             return self.seats[value.seat]
         assert isinstance(value, CardReference)
-        definition = self.definition(value.definition)
+        definition = (
+            self.definition(value.definition)
+            if value.definition is not None
+            else "nameless permanent"
+        )
         zone = "unavailable zone" if value.zone is None else _enum(_ZONES, value.zone)
         link = (
             "no current object link (expired or unavailable)"
@@ -549,20 +607,15 @@ class _Renderer:
                 raise TextEncodingError("player reference carries object fields")
             return self.seats[reference.player]
         if reference.object is not None:
-            if reference.definition is None:
-                raise TextEncodingError("current object reference lacks its definition")
             return self.name(reference.object)
         if reference.definition is not None:
             return self.definition(reference.definition) + " (no current object link)"
         return "unavailable or expired object"
 
     def action_verb(self, action: managym.Action) -> str:
-        if (
-            action.action_type == managym.ActionEnum.TAP_FOR_COST
-            and self.state.action_space.action_space_type
-            in (managym.ActionSpaceEnum.PRIORITY, managym.ActionSpaceEnum.PAY_OR_NOT)
-        ):
-            return "tap_for_mana"
+        # One action type covers both taps; the native flag says which.
+        if action.action_type == managym.ActionEnum.TAP_FOR_COST:
+            return "waterbend_tap" if action.pays_directly else "tap_for_mana"
         return _enum(_VERBS, int(action.action_type))
 
     def action(self, action: managym.Action) -> str:
@@ -601,12 +654,15 @@ class _Renderer:
                 if len(focus) == 2
                 else f"Do not block with {first}"
             )
+        elif kind == "activate_ability":
+            label = f"Activate ability of {first}"
+            if len(focus) == 2:
+                label += f"; exile {focus[1]} as the cost"
         else:
             verb = {
                 "play_land": "Play land",
                 "cast": "Cast",
                 "pass_priority": "Pass priority",
-                "activate_ability": "Activate ability of",
                 "choose_target": "Target",
                 "scry_keep": "Keep on top",
                 "scry_bottom": "Put on bottom",
@@ -640,7 +696,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision', 'opening hand'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -657,6 +713,23 @@ class _Renderer:
             details.append(f"may select up to {relation.mode or 0} more cards")
         elif relation.kind == 6 and relation.decision == 29:
             details.append("choose the next event replacement")
+        elif relation.kind == 15:
+            stage = _enum(
+                (
+                    "unused",
+                    "choosing keep or mulligan",
+                    "kept",
+                    "waiting",
+                    "bottoming",
+                    "taking opening actions",
+                ),
+                relation.decision,
+            )
+            details.append(f"{stage}, {relation.mode or 0} mulligans")
+            if relation.active_clause is not None:
+                remaining = relation.active_clause
+                noun = "card" if remaining == 1 else "cards"
+                details.append(f"{remaining} {noun} left to bottom")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -679,13 +752,17 @@ class _Renderer:
             )
         else:
             details += _selectors(relation.mode, relation.ability)
+        if relation.spell_profile:
+            details.append(f"casting its {_SPELL_PROFILES[relation.spell_profile]}")
         if relation.x:
             details.append(f"X = {relation.x}")
         if relation.kicked:
-            details.append("kicker included")
-        if relation.active_clause is not None:
+            details.append(
+                f"{self.taken_cost(relation.source.definition).cost} included"
+            )
+        if relation.kind != 15 and relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision and relation.kind != 13:
+        if relation.decision and relation.kind not in (13, 15):
             details.append(_frame_decision(relation.kind, relation.decision))
         if relation.kind == 10:
             if relation.delayed_frequency is not None:
@@ -742,10 +819,14 @@ class _Renderer:
             details.append(f"E{slot}: {self.fact_reference(reference)}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")
+        if relation.trigger_damage:
+            details.append(f"triggering event dealt {relation.trigger_damage} damage")
         if relation.source_transforms:
             details.append(
                 f"source transform count at activation/trigger {relation.source_transforms}"
             )
+        if relation.triggering_amount and not relation.trigger_damage:
+            details.append(f"triggering amount {relation.triggering_amount}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
@@ -778,8 +859,12 @@ class _Renderer:
                 f"{zone} {count}"
                 for zone, count in zip(_ZONES, player.zone_counts, strict=True)
             )
+            counter_text = ", ".join(
+                f"{n} {kind}" for kind, n in player.counters.items()
+            )
+            counters = f"counters {counter_text}; " if counter_text else ""
             lines += [
-                f"{self.name(player.id)}: life {player.life}; active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
+                f"{self.name(player.id)}: life {player.life}; {counters}active {_yes(player.is_active)}; viewer {_yes(player.is_agent)}; {counts}.",
                 "Mana pool: "
                 + ", ".join(
                     f"{symbol} {count}"
@@ -812,7 +897,11 @@ class _Renderer:
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
                         if count
                     )
-                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (
+                        f"; {spend_phrase(pooled.restriction)}"
+                        if pooled.restriction
+                        else ""
+                    )
                     + (f"; puts {pooled.effect}" if pooled.effect else "")
                     + (
                         "; expires at end of combat."
@@ -820,6 +909,9 @@ class _Renderer:
                         else "; expires at step end."
                     )
                 )
+            for source, kind in player.spent_graveyard_types:
+                grantor = self.names.get(source, f"departed permanent {source}")
+                lines.append(f"Used {grantor}'s {kind} graveyard play this turn.")
             if player.hand_only_until is not None:
                 lines.append(
                     "Can cast spells only from hand, overriding permissions to cast "
@@ -886,26 +978,38 @@ class _Renderer:
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
             if card.face_down:
-                optional += "; foretold, face down (hidden from other players)"
+                optional += (
+                    "; foretold, face down (hidden from other players)"
+                    if any(permission.foretold for permission in card.cast_permissions)
+                    else "; face down in exile (hidden from players who cannot look at it)"
+                )
             if card.x is not None:
                 optional += f"; announced X {card.x}"
             if card.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
-            if card.cast_permission is not None:
-                optional += "; " + self._cast_permission(card.cast_permission)
+            for kind, count in sorted(card.counters.items()):
+                optional += f"; {kind.replace('_', ' ')} counters {count}"
+            for permission in card.cast_permissions:
+                optional += "; " + self._cast_permission(permission, int(card.zone))
             lines.append(
-                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
+                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {characteristics.power}/{characteristics.toughness}; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}; kicker mana value {characteristics.kicker_cost}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_cards and not state.opponent_cards:
             lines.append("Empty.")
         return lines
 
-    def _cast_permission(self, permission: managym.CastPermission) -> str:
-        terms = [
-            "as a land play"
-            if permission.cost is None
-            else f"cast for {_mana(permission.cost)}"
-        ]
+    def _cast_permission(self, permission: managym.CastPermission, zone: int) -> str:
+        # A cast-only grant never plays a land face (CR 305.9), so it has no
+        # land-play term; a land under it shows no cost.
+        terms = []
+        if permission.cost is not None:
+            terms.append(f"cast for {_mana(permission.cost)}")
+        elif permission.play_lands:
+            terms.append("as a land play")
+        if permission.flashback:
+            terms.append("with flashback, exiling the spell when it leaves the stack")
+        if permission.on_adventure:
+            terms.append("permanent spell only")
         if permission.this_turn:
             terms.append("this turn only")
         if permission.through_next_turn:
@@ -916,7 +1020,9 @@ class _Renderer:
             terms.append(f"only after turn {permission.after_turn}")
         if permission.source_permanent_id is not None:
             terms.append(
-                f"while they control {self.name(permission.source_permanent_id)}"
+                f"permission follows the controller of {self.name(permission.source_permanent_id)}"
+                if permission.follows_source_controller
+                else f"while they control {self.name(permission.source_permanent_id)}"
             )
         if permission.flash:
             terms.append("as though it had flash")
@@ -924,9 +1030,14 @@ class _Renderer:
             terms.append("spending mana of any type")
         if permission.waterbend:
             terms.append("generic may be paid by waterbending")
+        if permission.prepared:
+            terms.append("prepared copy, kept while linked to its source")
+        if permission.condition is not None:
+            terms.append(f"only if {permission.condition}")
+        verb = "played" if permission.play_lands else "cast"
         return (
-            f"may be played from exile by {self.name(permission.player_id)}: "
-            + ", ".join(terms)
+            f"may be {verb} from {_enum(_ZONES, zone)} by {self.name(permission.player_id)}"
+            + (": " + ", ".join(terms) if terms else "")
         )
 
     def _permanents_lines(self) -> list[str]:
@@ -935,6 +1046,8 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.first_strike_participant:
+                optional += "; participated in the first-strike damage step"
             if permanent.attacking:
                 optional += "; attacking"
             if permanent.colors is not None:
@@ -959,8 +1072,13 @@ class _Renderer:
             optional += self._characteristics(permanent)
             if state.shared_effects is not None:
                 optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
+            printing = (
+                f" [{self.definition(permanent.registry_key)}]"
+                if permanent.registry_key >= 0
+                else ""
+            )
             lines.append(
-                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {characteristics.mana_cost.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}. Rules: {characteristics.text_box or '(empty)'}"
+                f"{self.name(permanent.id)}{printing}: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {permanent.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
@@ -973,6 +1091,8 @@ class _Renderer:
             for kind, count in sorted(permanent.counters.items())
             if count
         ]
+        if permanent.face_down:
+            parts.append("face down")
         if permanent.attached_to is not None:
             parts.append(f"attached to {self.name(permanent.attached_to)}")
         if permanent.name is not None:
@@ -988,9 +1108,21 @@ class _Renderer:
             parts.append("has lost all abilities")
         if permanent.transforms:
             parts.append(f"transformed {permanent.transforms} times")
+        for index, count in permanent.ability_resolutions:
+            parts.append(
+                f"ability {index + 1} resolved {count} time{'s' if count != 1 else ''} this turn"
+            )
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.attacked_this_turn:
+            parts.append("attacked this turn")
+        if permanent.entered_this_turn:
+            parts.append("entered this turn")
+        for seat in permanent.combat_damage_to_players:
+            parts.append(f"dealt combat damage to seat {seat} this turn")
+        for target in permanent.damaged_permanents:
+            parts.append(f"dealt damage to {self.name(target)} this turn")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
         if permanent.copy is not None:
@@ -1004,9 +1136,12 @@ class _Renderer:
     def _copy(self, copy: managym.CopyEffect) -> str:
         """A copy effect: what it copies, and the exceptions in its copiable values."""
         exceptions = " and ".join(effect_phrase(effect) for effect in copy.exceptions)
-        return f"copy of {self.definition(copy.registry_key)}" + (
-            f", except {exceptions}" if exceptions else ""
+        source = (
+            self.definition(copy.registry_key)
+            if copy.registry_key >= 0
+            else "a nameless permanent"
         )
+        return f"copy of {source}" + (f", except {exceptions}" if exceptions else "")
 
     def _effect_object(self, reference: managym.EffectObject) -> str:
         if reference.object_id is None:
@@ -1074,6 +1209,8 @@ class _Renderer:
                 optional += f"; kicker {_mana(definition.kicker)}"
             if definition.ward is not None:
                 optional += f"; ward {_mana(definition.ward)}"
+            if definition.ward_life is not None:
+                optional += f"; ward: pay {definition.ward_life} life"
             lines.append(
                 f"{self.definition(int(key))} — {definition.name}. {types}; cost {_mana(definition.mana_cost)}{optional}; unlisted keywords false; token {_yes(definition.is_token)}. Rules: {definition.text_box or '(empty)'}"
             )
@@ -1140,6 +1277,11 @@ class _Renderer:
             "All legal alternatives are listed. Further choices occur only when offered.",
             "Optional details are shown when provided; unavailable facts are marked explicitly.",
             "",
+            *(
+                ["A creature died this turn."]
+                if state.turn.creature_died_this_turn
+                else []
+            ),
             f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
@@ -1181,6 +1323,12 @@ class _Renderer:
                 f"controller {self.name(item.controller_id)}",
                 f"source {source}",
             ]
+            if item.ability_resolutions:
+                details.append(
+                    f"prior resolutions this turn: {item.ability_resolutions}"
+                )
+            for seat in item.combat_damage_to_players:
+                details.append(f"source dealt combat damage to seat {seat} this turn")
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
@@ -1190,8 +1338,16 @@ class _Renderer:
                 granted := _keywords(item.granted_keywords)
             ):
                 details.append(f"granted keywords {granted}")
+            if item.cast_from_graveyard:
+                details.append("cast from graveyard")
+            if item.mana_spent:
+                details.append(f"spent {item.mana_spent} mana to cast")
             if item.kicked:
-                details.append("kicked")
+                details.append(self.taken_cost(item.source_card_registry_key).taken)
+            if item.from_prepared:
+                details.append("cast from a prepared copy")
+            if item.flashback:
+                details.append("cast with flashback (exiled as it leaves the stack)")
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""
@@ -1200,12 +1356,17 @@ class _Renderer:
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "
-                    f"mana value {card.mana_cost.mana_value}{_type_flags(card.card_types)}"
+                    f"mana value {item.effective_mana_value}{_type_flags(card.card_types)}"
                     f"{f'; keywords {keywords}' if keywords else ''}; unlisted type and keyword flags false; "
                     f"legendary {_yes(card.is_legendary)}. Rules: {card.text_box or '(empty)'}"
                 )
+            source = (
+                f" [{self.definition(item.source_card_registry_key)}]"
+                if item.source_card_registry_key >= 0
+                else ""
+            )
             lines.append(
-                f"{self.name(item.stack_object_id)}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_card_registry_key)}]; {'; '.join(details)}.{spell}"
+                f"{self.name(item.stack_object_id)}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)}{source}; {'; '.join(details)}.{spell}"
             )
         if not state.stack_objects:
             lines.append("Empty.")
@@ -1233,7 +1394,14 @@ class _Renderer:
                 )
                 + "."
             )
-        if context.reserved_sacrifice is not None:
+        if context.paid:
+            lines.append(
+                "Committed to this cost: "
+                + "; ".join(paid.phrase for paid in context.paid)
+                + "."
+            )
+        elif context.reserved_sacrifice is not None:
+            # Frames recorded before `paid` name the chosen sacrifice only here.
             lines.append(
                 f"Reserved sacrifice: {self.decision_object(context.reserved_sacrifice)}."
             )
@@ -1282,6 +1450,7 @@ class _Renderer:
 
 
 _MEMORY_ROLES = ("none", "You", "Opponent")
+_KICKER = CastOption(taken="kicked", cost="kicker")
 
 
 def _production(alternative: tuple[int, int, int, int, int, int]) -> str:

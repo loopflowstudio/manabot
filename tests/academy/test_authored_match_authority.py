@@ -4,15 +4,15 @@ import json
 from pathlib import Path
 
 from conformance.authored_match_receipt import (
-    DEFAULT_RECEIPT_PATH,
+    AUTHORITY_RECEIPT_PATH,
     DeterministicServerOfferPolicy,
     _program_index,
     generate_authored_match_receipt,
 )
 
 
-def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
-    checked = json.loads(DEFAULT_RECEIPT_PATH.read_text(encoding="utf-8"))
+def test_release_stack_authored_match_receipt_is_terminal_and_authoritative() -> None:
+    checked = json.loads(AUTHORITY_RECEIPT_PATH.read_text(encoding="utf-8"))
     generated = generate_authored_match_receipt()
     assert generated == checked
 

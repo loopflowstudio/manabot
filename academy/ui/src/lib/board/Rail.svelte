@@ -9,11 +9,11 @@
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { MoveTurn } from './moves';
-  import type { PrimaryLabel } from './prompt';
+  import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import Thumb from './Thumb.svelte';
-  import { stackName, type PlacedOffer, type StackItem, type BoardView } from './view';
+  import { stackName, stackProvenance, type PlacedOffer, type StackItem, type BoardView } from './view';
 
   interface Props {
     view: BoardView;
@@ -21,6 +21,8 @@
     live: boolean;
     /** What to do now, in plain words. */
     line: string;
+    /** How to answer, apart from what is asked; its space is kept while it changes. */
+    hint: string | null;
     /** What the primary button does next. */
     primaryText: PrimaryLabel | null;
     status: string;
@@ -63,7 +65,7 @@
   }
 
   let {
-    view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    view, frame, live, line, hint, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
@@ -72,6 +74,7 @@
   const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
 
   const context = $derived(frame.projection.decision_context);
+  const paid = $derived(committed(frame));
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
@@ -137,17 +140,24 @@
     {:else}
       <ol>
         {#each view.stack as item, index (item.entry.id)}
+          {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
+          {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
+          {@const provenance = stackProvenance(item.entry)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
-                <span class="truncate entry-name">{stackName(item.entry)}</span>
+                <span class="entry-title">
+                  <span class="truncate entry-name">{stackName(item.entry)}</span>
+                  {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
+                </span>
+                {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>
@@ -187,6 +197,13 @@
         <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}
         <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
+        {#if paid.length}
+          <div class="committed" data-testid="decision-committed">
+            <h3 class="type-caption text-ink-3">Committed to this cost</h3>
+            <ol>{#each paid as phrase, at (at)}<li class="type-body text-ink">{phrase}</li>{/each}</ol>
+          </div>
+        {/if}
+        {#if hint}<p class="type-caption text-ink-3 hint" data-testid="decision-hint">{hint}</p>{/if}
       {/if}
       {#if evidence}
         <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
@@ -330,6 +347,8 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; }
   .entry-name { font-family: var(--font-serif); font-weight: 600; }
+  .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+  .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
@@ -347,6 +366,11 @@
   .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .primary kbd { flex: none; opacity: 1; }
   .payment-note { margin-top: -4px; }
+  /* Two caption lines are kept so a hint that rewords on hover moves nothing below it. */
+  .hint { min-height: 32px; }
+  .committed ol { list-style: none; margin: 2px 0 0; padding: 0; }
+  .committed li { padding-left: 10px; border-left: 2px solid var(--planned); line-height: 20px; }
+  .committed li + li { margin-top: 2px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
   .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }

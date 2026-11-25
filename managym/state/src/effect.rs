@@ -15,8 +15,8 @@
 // boundary in `flow/effects.rs`.
 //
 // A copy effect (CR 707, layer 1) is not a record: it is `CopyEffect` on
-// the copy's `Object`, and its exceptions are the same `Modification`
-// vocabulary, applied once into the copy's definition (its copiable values).
+// the copy's `Object`. Each `CopyException` changes its copiable definition
+// and retains the corresponding modification's serialized meaning.
 
 use std::collections::BTreeMap;
 
@@ -31,9 +31,13 @@ use super::{
 };
 
 /// What a continuous effect changes. `N` is the type of its P/T amounts:
-/// `EffectValue` in a card definition, `i32` once resolved into a record.
+/// `LayerValue` for a static ability, `EffectValue` for a resolving instruction,
+/// and `i32` for the resulting record.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Modification<N = i32> {
+    /// Layer 1 name replacement (CR 613.1a, 201.2): "named [name]". The
+    /// permanent loses every other name.
+    SetName(String),
     /// Replace creature subtypes, retaining land/artifact/enchantment types.
     SetCreatureTypes(Vec<String>),
     /// Add card types without replacing existing ones.
@@ -90,6 +94,9 @@ pub enum Modification<N = i32> {
     /// Rules effect: doesn't untap during its controller's untap step
     /// (CR 502.3).
     DoesntUntap,
+    /// The Mount is saddled (CR 702.171b): a designation with no rules
+    /// meaning of its own, read by "while saddled" abilities.
+    Saddled,
     /// Rules effect: its activated abilities, mana abilities included, can't
     /// be activated (CR 602.5).
     CantActivateAbilities,
@@ -99,6 +106,10 @@ pub enum Modification<N = i32> {
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
+    /// Prevention: combat damage that would be dealt to it is prevented
+    /// (CR 615.1a). It is a record, not an ability, so losing all abilities
+    /// leaves it in place; damage the permanent deals is unaffected.
+    PreventCombatDamage,
     /// Replacement: if it would leave the battlefield, exile it instead of
     /// putting it anywhere else (unearth, CR 702.84a).
     ExileIfWouldLeave,
@@ -107,6 +118,8 @@ pub enum Modification<N = i32> {
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// One more land play for the affected player (CR 305.2).
+    AdditionalLandPlay,
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
@@ -143,9 +156,24 @@ pub enum Modification<N = i32> {
     /// "has all activated and triggered abilities of" the record's source
     /// definition (Koh, the Face Stealer's last chosen card), layer 6.
     HasAbilitiesOfSource,
+    /// Layer 4: has all creature types (CR 205.3m), while it is a creature.
+    /// A later type change that replaces its creature types or removes
+    /// Creature ends it; losing abilities does not.
+    AllCreatureTypes,
 }
 
 impl<N> Modification<N> {
+    /// A fixed power/toughness bonus (layer 7c).
+    pub fn pump(power: i32, toughness: i32) -> Self
+    where
+        N: From<i32>,
+    {
+        Self::ModifyPt {
+            power: power.into(),
+            toughness: toughness.into(),
+        }
+    }
+
     /// The record's form, with every amount resolved.
     pub fn resolve(&self, amount: impl FnMut(&N) -> i32) -> Modification<i32> {
         self.map_amount(amount)
@@ -153,6 +181,7 @@ impl<N> Modification<N> {
 
     pub fn map_amount<M>(&self, mut amount: impl FnMut(&N) -> M) -> Modification<M> {
         match self {
+            Self::SetName(name) => Modification::SetName(name.clone()),
             Self::SetCreatureTypes(types) => Modification::SetCreatureTypes(types.clone()),
             Self::AddTypes(types) => Modification::AddTypes(types.clone()),
             Self::SetTypes { types, subtypes } => Modification::SetTypes {
@@ -183,12 +212,15 @@ impl<N> Modification<N> {
             Self::CantBeBlocked => Modification::CantBeBlocked,
             Self::CantBlock => Modification::CantBlock,
             Self::DoesntUntap => Modification::DoesntUntap,
+            Self::Saddled => Modification::Saddled,
             Self::CantActivateAbilities => Modification::CantActivateAbilities,
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
+            Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
@@ -200,26 +232,66 @@ impl<N> Modification<N> {
             },
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
+            Self::AllCreatureTypes => Modification::AllCreatureTypes,
         }
     }
 }
 
-impl Modification {
-    /// Apply this modification to copiable values, as a copy exception
-    /// (CR 707.9b). Only modifications of printed characteristics are
-    /// copiable; a rules effect returns false and leaves `definition` alone
-    /// (no definition authors one as an exception).
-    pub fn apply_copiable(&self, definition: &mut PrintedCharacteristics) -> bool {
+/// Exceptions applied to copiable characteristics (CR 707.9b). Keep the
+/// serialized vocabulary shared with continuous modifications for saved policies.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename = "Modification")]
+pub enum CopyException<N = i32> {
+    AddSubtypes(Vec<String>),
+    BecomeCreature,
+    GrantTriggered(Box<Ability>),
+    GrantStatic(Box<StaticAbility>),
+    Nonlegendary,
+    AddKeywords(Keywords),
+    SetBasePt {
+        power: Option<N>,
+        toughness: Option<N>,
+    },
+}
+
+impl<N> CopyException<N> {
+    pub fn resolve(&self, mut amount: impl FnMut(&N) -> i32) -> CopyException {
         match self {
-            Self::LoseNonManaAbilities
-            | Self::SetCreatureTypes(_)
-            | Self::AddTypes(_)
-            | Self::SetTypes { .. }
-            | Self::SetColors(_)
-            | Self::AddColors(_)
-            | Self::GrantActivated(_)
-            | Self::GrantTriggered(_)
-            | Self::SwitchPt => return false,
+            Self::SetBasePt { power, toughness } => CopyException::SetBasePt {
+                power: power.as_ref().map(&mut amount),
+                toughness: toughness.as_ref().map(amount),
+            },
+            Self::AddSubtypes(types) => CopyException::AddSubtypes(types.clone()),
+            Self::BecomeCreature => CopyException::BecomeCreature,
+            Self::GrantTriggered(ability) => CopyException::GrantTriggered(ability.clone()),
+            Self::GrantStatic(ability) => CopyException::GrantStatic(ability.clone()),
+            Self::Nonlegendary => CopyException::Nonlegendary,
+            Self::AddKeywords(keywords) => CopyException::AddKeywords(*keywords),
+        }
+    }
+}
+
+impl<N: Clone> CopyException<N> {
+    /// Common representation for text and policy projection.
+    pub fn modification(&self) -> Modification<N> {
+        match self {
+            Self::SetBasePt { power, toughness } => Modification::SetBasePt {
+                power: power.clone(),
+                toughness: toughness.clone(),
+            },
+            Self::AddSubtypes(types) => Modification::AddSubtypes(types.clone()),
+            Self::BecomeCreature => Modification::BecomeCreature,
+            Self::GrantTriggered(ability) => Modification::GrantTriggered(ability.clone()),
+            Self::GrantStatic(ability) => Modification::GrantStatic(ability.clone()),
+            Self::Nonlegendary => Modification::Nonlegendary,
+            Self::AddKeywords(keywords) => Modification::AddKeywords(*keywords),
+        }
+    }
+}
+
+impl CopyException {
+    pub fn apply(&self, definition: &mut PrintedCharacteristics) {
+        match self {
             Self::AddSubtypes(subtypes) => {
                 for subtype in subtypes {
                     if !definition.subtypes.contains(subtype) {
@@ -231,6 +303,7 @@ impl Modification {
                 definition.types.types.insert(CardType::Creature);
             }
             // "Except it has [this card's] other abilities" (CR 707.9b).
+            Self::GrantTriggered(ability) => definition.abilities.push((**ability).clone()),
             Self::GrantStatic(ability) => definition.statics.push((**ability).clone()),
             Self::Nonlegendary => definition
                 .supertypes
@@ -242,29 +315,7 @@ impl Modification {
                 definition.power = power.or(definition.power);
                 definition.toughness = toughness.or(definition.toughness);
             }
-            Self::LoseAllAbilities
-            | Self::Firebending(_)
-            | Self::ModifyPt { .. }
-            | Self::CantBeBlocked
-            | Self::CantBlock
-            | Self::DoesntUntap
-            | Self::CantActivateAbilities
-            | Self::MustBeBlockedByAllAble
-            | Self::LoseKeywords(_)
-            | Self::ExileIfWouldDie
-            | Self::ExileIfWouldLeave
-            | Self::KeepUnspentMana(_)
-            | Self::NoMaximumHandSize
-            | Self::NextCreatureCastFlash
-            | Self::SkipsCombatPhasesNextTurn
-            | Self::LifeTotalCantChange
-            | Self::ProtectionFromEverything
-            | Self::PhasedOut
-            | Self::ControlChanged { .. }
-            | Self::ModeChosen { .. }
-            | Self::HasAbilitiesOfSource => return false,
         }
-        true
     }
 }
 
@@ -277,7 +328,7 @@ pub struct CopyEffect {
     pub of: CardDefId,
     /// Exceptions in the order they applied, a copied copy's first: a copy
     /// of a copy inherits them (CR 707.9b).
-    pub exceptions: Vec<Modification>,
+    pub exceptions: Vec<CopyException>,
 }
 
 /// How long a continuous effect lasts.

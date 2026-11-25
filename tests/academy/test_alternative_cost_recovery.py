@@ -14,7 +14,11 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
@@ -124,13 +128,8 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
         hand = len([c for c in game.obs.agent_cards if c.zone == managym.ZoneEnum.HAND])
         space = ObservationSpace(ObservationConfig(policy_input_version=9))
         vector = managym.VectorEnv(num_envs=1, seed=seed)
-        buffers = space.encoder.allocate(1)
-        buffers.update(
-            rewards=np.zeros(1, dtype=np.float64),
-            terminated=np.zeros(1, dtype=np.uint8),
-            truncated=np.zeros(1, dtype=np.uint8),
-        )
-        vector.set_buffers(buffers)
+        buffers = allocate_vector_buffers(space, 1)
+        vector.set_buffers(buffers, layout=space.layout)
         vector.reset_all_into_buffers(game.trace.config.to_rust())
         for event in game.trace.events:
             vector.step_into_buffers([event.action])
@@ -153,7 +152,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 game.env.semantic_decision_frame_json()
             )
-            for key, expected in space.encode(game.obs).items():
+            for key, expected in encode_observation(space, game.obs).items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
 
             command = _command(frame, frame.offers[0], "exile")

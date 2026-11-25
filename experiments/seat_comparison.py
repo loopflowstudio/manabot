@@ -43,6 +43,7 @@ from manabot.recipes.builders import PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.panels import ML, PERF
+from manabot.training.report import behaviour_curves
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -139,6 +140,7 @@ def report() -> Report:
         baseline=BASELINE,
         evals=(
             Curve(title="Score against the heuristic"),
+            *behaviour_curves(),
             Curve(title="By matchup", split="matchup"),
             Matrix(
                 title="Model deck × heuristic deck",

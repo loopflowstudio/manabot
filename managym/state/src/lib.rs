@@ -11,6 +11,7 @@ pub mod card;
 pub mod effect;
 pub mod game_object;
 pub mod mana;
+pub mod payment;
 pub mod permanent;
 pub mod predicate;
 pub mod stack_object;

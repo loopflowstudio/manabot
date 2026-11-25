@@ -13,22 +13,29 @@ use pyo3::{
 };
 
 #[cfg(feature = "python")]
+use super::observation_batch::{self, ObservationBatch};
+use crate::agent::observation_rows::PackedRows;
 use crate::{
     agent::{
         action::AgentError,
         env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
-            encode, encode_into, encode_into_incremental, EncodedObservationMut,
-            ObservationEncoderConfig, ACTION_DIM,
+            encode, encode_into, encode_into_incremental, EncodedObservation,
+            EncodedObservationMut, ObservationEncoderConfig,
         },
         rollout_pool::RolloutPool,
-        vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
+        vector_env::{
+            ObservationRead, ObservationWriteError, SlotLoad, SlotLoadResult, SlotReplacement,
+            VectorEnv,
+        },
     },
     infra::profiler::InfoDict,
     python::{
-        bindings::{map_agent_err, PyEnv, PyObservation, PyPlayerConfig},
-        convert::{info_dict_to_pydict, require_numpy_array},
+        bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation, PyPlayerConfig},
+        convert::{info_dict_to_pydict, require_ndarray, require_numpy_array},
+        layout_bindings::ObservationLayout,
+        snapshot_bindings::{PyGameSnapshot, PyRestoreOptions, PySnapshotMetadata},
     },
     state::player::PlayerConfig,
 };
@@ -38,6 +45,7 @@ type PyResetResult = (PyObservation, PyObject);
 #[cfg(feature = "python")]
 type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 
+/// Deprecated dense transport buffer handles; removed in 0.3.0.
 #[cfg(feature = "python")]
 struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
@@ -81,6 +89,7 @@ struct ObservationBuffers {
 
 #[cfg(feature = "python")]
 struct StepStateBuffers {
+    shape: Vec<usize>,
     rewards: Py<PyAny>,
     terminated: Py<PyAny>,
     truncated: Py<PyAny>,
@@ -93,9 +102,110 @@ pub struct PyVectorEnv {
     config: ObservationEncoderConfig,
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
+    packed: Option<PackedVector>,
     last_info: Vec<InfoDict>,
     timings: BufferedCallTimings,
     memory_encoding: Vec<Mutex<crate::agent::decision_memory::MemoryEncoding>>,
+}
+
+/// Published slot coordinates survive masked calls. Each successful call freezes
+/// its writes together; replaced slots drop their previous batch reference.
+struct PackedVector {
+    layout: Py<ObservationLayout>,
+    state: StepStateBuffers,
+    slots: Vec<Option<(Py<ObservationBatch>, usize)>>,
+}
+
+struct PackedWrites {
+    rows: PackedRows,
+    slots: Vec<usize>,
+}
+
+impl PackedWrites {
+    fn new(layout: &ObservationLayout) -> Self {
+        Self {
+            rows: PackedRows::new(&layout.arrays),
+            slots: Vec::new(),
+        }
+    }
+
+    fn append(
+        &mut self,
+        slot: usize,
+        obs: &Observation,
+        config: &ObservationEncoderConfig,
+    ) -> Result<(), ObservationWriteError> {
+        self.rows.append(obs, config)?;
+        self.slots.push(slot);
+        Ok(())
+    }
+}
+
+#[pyclass(name = "SlotLoad", frozen)]
+#[derive(Clone)]
+struct PySlotLoad(SlotLoad);
+
+#[pymethods]
+impl PySlotLoad {
+    #[getter]
+    fn slot(&self) -> usize {
+        self.0.slot()
+    }
+
+    fn with_slot(&self, slot: usize) -> Self {
+        Self(self.0.with_slot(slot))
+    }
+
+    /// A fresh game using the setup already configured for this slot.
+    #[getter]
+    fn uses_slot_setup(&self) -> bool {
+        matches!(self.0, SlotLoad::Fresh(_, None))
+    }
+
+    /// Detached replay authority for a recording wrapper, including the intervention.
+    #[getter]
+    fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
+        match &self.0 {
+            SlotLoad::Fresh(..) => None,
+            SlotLoad::Snapshot(_, source, options) => {
+                Some((PyGameSnapshot(source.clone()), PyRestoreOptions(*options)))
+            }
+        }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (slot, player_configs=None))]
+    fn fresh(slot: usize, player_configs: Option<Bound<'_, PyAny>>) -> PyResult<Self> {
+        let setup = player_configs
+            .as_ref()
+            .map(super::bindings::game_setup)
+            .transpose()?;
+        Ok(Self(SlotLoad::Fresh(slot, setup)))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (slot, snapshot, options=None))]
+    fn snapshot(
+        slot: usize,
+        snapshot: &PyGameSnapshot,
+        options: Option<&PyRestoreOptions>,
+    ) -> Self {
+        Self(SlotLoad::Snapshot(
+            slot,
+            snapshot.0.clone(),
+            options.map(|o| o.0).unwrap_or_default(),
+        ))
+    }
+}
+
+#[pymethods]
+impl SlotLoadResult {
+    fn with_slot(&self, slot: usize) -> Self {
+        Self {
+            slot,
+            ..self.clone()
+        }
+    }
 }
 
 /// Cumulative wall time inside buffered calls: every step or reset, split into
@@ -118,22 +228,13 @@ thread_local! {
 #[pymethods]
 impl PyVectorEnv {
     #[cfg(feature = "benchmark")]
-    fn _benchmark_load_root(&mut self, root: &crate::python::bindings::PyEnv) -> PyResult<()> {
-        let env = root
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        self.inner.benchmark_load_root(&env).map_err(map_agent_err)
-    }
-
-    #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_start(&self) {
-        crate::benchmark_allocations::start();
+        crate::allocator::start();
     }
 
     #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_stop(&self) -> (u64, u64) {
-        crate::benchmark_allocations::stop()
+        crate::allocator::stop()
     }
 
     #[new]
@@ -162,6 +263,7 @@ impl PyVectorEnv {
             num_envs,
             memory_encoding: (0..num_envs).map(|_| Mutex::default()).collect(),
             buffers: None,
+            packed: None,
             last_info: Vec::new(),
             timings: BufferedCallTimings::default(),
         })
@@ -204,14 +306,129 @@ impl PyVectorEnv {
             .collect())
     }
 
-    #[pyo3(signature = (buffers, action_overflow="error"))]
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
-        let mut config = input_buffer_config(&buffers)?;
+    /// Advance all streams and return the exact emitted observations (including
+    /// step events), rewards, termination and truncation in matching row order.
+    #[pyo3(signature = (actions, layout, action_overflow="error"))]
+    fn step_observation_batch(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<(
+        super::observation_batch::ObservationBatch,
+        Vec<f64>,
+        Vec<bool>,
+        Vec<bool>,
+    )> {
+        let config = super::observation_batch::config(&layout.borrow(py), action_overflow)?;
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let (mut rewards, mut terminated, mut truncated) = (Vec::new(), Vec::new(), Vec::new());
+        self.last_info = py
+            .allow_threads(|| {
+                self.inner
+                    .step_with_writer(&actions, None, |_, obs, reward, done, cut| {
+                        rows.append(obs, &config)?;
+                        rewards.push(reward);
+                        terminated.push(done);
+                        truncated.push(cut);
+                        Ok(())
+                    })
+            })
+            .map_err(map_write_error)?;
+        let batch = observation_batch::freeze(py, layout, rows, rewards.len());
+        Ok((batch, rewards, terminated, truncated))
+    }
+
+    /// Register step outcomes and select owned v11 observations for buffered calls.
+    #[pyo3(signature = (state, layout, action_overflow="error"))]
+    fn set_observation_layout(
+        &mut self,
+        py: Python<'_>,
+        state: Bound<'_, PyDict>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<()> {
+        let config = observation_batch::config(&layout.borrow(py), action_overflow)?;
+        if state.len() != 3 {
+            return Err(PyValueError::new_err("expected three step outcome buffers"));
+        }
+        let state = read_step_state(&state, &[self.num_envs])?;
+        self.packed = Some(PackedVector {
+            layout,
+            state,
+            slots: (0..self.num_envs).map(|_| None).collect(),
+        });
+        self.config = config;
+        self.buffers = None;
+        Ok(())
+    }
+
+    fn observation_rows(&self, py: Python<'_>) -> PyResult<Vec<(Py<ObservationBatch>, usize)>> {
+        self.packed
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .slots
+            .iter()
+            .map(|slot| {
+                slot.as_ref()
+                    .map(|(batch, i)| (batch.clone_ref(py), *i))
+                    .ok_or_else(|| PyValueError::new_err("vector has no encoded observation"))
+            })
+            .collect()
+    }
+
+    fn observations_for_players(
+        &mut self,
+        py: Python<'_>,
+        players: Vec<Option<usize>>,
+    ) -> PyResult<(Vec<ObservationRead>, ObservationBatch)> {
+        let packed = self
+            .packed
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?;
+        let mut rows = PackedRows::new(&packed.layout.borrow(py).arrays);
+        let config = self.config;
+        let reads = self
+            .inner
+            .read_observations_for_players(&players, |_, obs| {
+                rows.append(obs, &config)
+                    .map_err(ObservationWriteError::from)
+            })
+            .map_err(map_write_error)?;
+        let batch = observation_batch::freeze(py, packed.layout.clone_ref(py), rows, reads.len());
+        Ok((reads, batch))
+    }
+
+    #[pyo3(signature = (buffers, action_overflow="error", *, layout=None))]
+    fn set_buffers(
+        &mut self,
+        buffers: Bound<'_, PyDict>,
+        action_overflow: &str,
+        layout: Option<&ObservationLayout>,
+    ) -> PyResult<()> {
+        let inferred = layout.is_none();
+        if !inferred {
+            super::bindings::warn_deprecated(
+                buffers.py(),
+                "VectorEnv.set_buffers is deprecated; use VectorEnv.set_observation_layout for v11 observations; removal in 0.3.0",
+            )?;
+        }
+        let layout = registered_layout(&buffers, layout)?;
+        if inferred
+            && self.inner.decision_memory_enabled() != (layout.config.max_decision_records > 0)
+        {
+            return Err(PyValueError::new_err(
+                "decision memory buffers differ from vector configuration",
+            ));
+        }
+        let mut config = layout.config;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), &layout, true)?;
         self.config = config;
         self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
         self.buffers = Some(buffers);
+        self.packed = None;
         Ok(())
     }
 
@@ -234,60 +451,98 @@ impl PyVectorEnv {
     ) -> PyResult<()> {
         let configs = super::bindings::game_setup(&player_configs)?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
-            })
+            inner.reset_with_writer(
+                vec![configs; inner.len()],
+                None,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
         })
     }
 
+    #[pyo3(signature = (player_configs, *, seeds=None))]
     fn reset_each_into_buffers(
         &mut self,
         py: Python<'_>,
         player_configs: Vec<Bound<'_, PyAny>>,
+        seeds: Option<Vec<u64>>,
     ) -> PyResult<()> {
         let configs = player_configs
             .into_iter()
             .map(|row| super::bindings::game_setup(&row))
             .collect::<PyResult<Vec<_>>>()?;
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
-            })
-        })
-    }
-
-    fn reassign_roots_into_buffers(
-        &mut self,
-        py: Python<'_>,
-        player_configs: Vec<Option<Bound<'_, PyAny>>>,
-    ) -> PyResult<()> {
-        let configs = player_configs
-            .into_iter()
-            .map(|row| {
-                row.map(|players| super::bindings::game_setup(&players))
-                    .transpose()
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        self.memory_encoding = (0..self.num_envs).map(|_| Mutex::default()).collect();
-        self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.reassign_roots_into(
+            inner.reset_with_writer(
                 configs,
-                |_, obs| {
-                    encode(obs, &config)
-                        .map(|_| ())
-                        .map_err(|error| AgentError(error.to_string()))
-                },
-                |index, obs, reward, terminated, truncated| {
-                    buffers
-                        .write_encoded_row(index, obs, reward, terminated, truncated, &config)
-                        .map_err(AgentError::from)
+                seeds,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
                 },
             )
         })
+    }
+
+    fn next_fresh_seeds(&self) -> Vec<u64> {
+        self.inner.next_fresh_seeds().to_vec()
+    }
+
+    fn snapshot_slots(
+        &mut self,
+        py: Python<'_>,
+        mask: Vec<bool>,
+    ) -> PyResult<Vec<Option<PyGameSnapshot>>> {
+        let inner = &mut self.inner;
+        py.allow_threads(move || inner.snapshot_slots(&mask))
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PyGameSnapshot))
+                    .collect()
+            })
+            .map_err(map_agent_err)
+    }
+
+    fn slot_metadata(
+        &mut self,
+        py: Python<'_>,
+        mask: Vec<bool>,
+    ) -> PyResult<Vec<Option<PySnapshotMetadata>>> {
+        let inner = &mut self.inner;
+        py.allow_threads(move || inner.slot_metadata(&mask))
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.map(PySnapshotMetadata))
+                    .collect()
+            })
+            .map_err(map_agent_err)
+    }
+
+    fn load_slots_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        requests: Vec<PySlotLoad>,
+    ) -> PyResult<Vec<SlotLoadResult>> {
+        let prepared = self.prepare_slot_buffers(py, requests)?;
+        self.publish_slot_buffers(py, prepared)
+    }
+
+    /// Keep every vector exclusively borrowed across both phases of a sharded load.
+    #[staticmethod]
+    fn _load_shard_buffers(
+        py: Python<'_>,
+        batches: Vec<(PyRefMut<'_, PyVectorEnv>, Vec<PySlotLoad>)>,
+    ) -> PyResult<Vec<Vec<SlotLoadResult>>> {
+        let mut admitted = Vec::with_capacity(batches.len());
+        for (mut vector, requests) in batches {
+            let replacements = vector.prepare_slot_buffers(py, requests)?;
+            admitted.push((vector, replacements));
+        }
+        admitted
+            .into_iter()
+            .map(|(mut vector, replacements)| vector.publish_slot_buffers(py, replacements))
+            .collect()
     }
 
     #[pyo3(signature = (actions, active=None))]
@@ -300,9 +555,9 @@ impl PyVectorEnv {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             if let Some(mask) = &active {
                 if mask.len() != inner.len() {
-                    return Err(AgentError(
-                        "active mask length must match environments".into(),
-                    ));
+                    return Err(
+                        AgentError("active mask length must match environments".into()).into(),
+                    );
                 }
                 for (index, enabled) in mask.iter().enumerate() {
                     if !enabled {
@@ -310,15 +565,18 @@ impl PyVectorEnv {
                     }
                 }
             }
-            inner.step_into(
+            let infos = inner.step_with_writer(
                 &actions,
                 active.as_deref(),
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                        .map_err(AgentError::from)
                 },
-            )
+            )?;
+            for slot in inner.parked_slots() {
+                write_buffers.clear_memory_cursor(slot);
+            }
+            Ok(infos)
         })
     }
 
@@ -400,17 +658,18 @@ impl PyVectorEnv {
 
     /// Caller-owned observation-only buffers; registered execution buffers and
     /// diagnostics are untouched. Keep the GIL held throughout the read/write.
-    #[pyo3(signature = (players, buffers, action_overflow="error"))]
+    #[pyo3(signature = (players, buffers, action_overflow="error", *, layout))]
     fn write_observations_for_players(
         &self,
         py: Python<'_>,
-        players: Vec<usize>,
+        players: Vec<Option<usize>>,
         buffers: Bound<'_, PyDict>,
         action_overflow: &str,
+        layout: &ObservationLayout,
     ) -> PyResult<Vec<ObservationRead>> {
-        let mut config = input_buffer_config(&buffers)?;
+        let mut config = layout.config;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, false)?;
+        let buffers = read_observation_buffers(&buffers, Some(self.num_envs), layout, false)?;
         with_observation_field_slices(py, &buffers, |out| {
             self.inner
                 .write_observations_for_players(&players, |slot, observation| {
@@ -453,33 +712,25 @@ impl PyVectorEnv {
             for index in 0..inner.len() {
                 buffers.write_step_state(index, 0.0, false, false)?;
             }
-            inner.step_isolated_into(
+            let infos = inner.step_isolated_with_writer(
                 &actions,
                 &active,
                 recover_capacity,
                 |index, obs, reward, done, truncated| {
                     buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
                 },
-            )
-        })
-    }
-
-    fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
-        self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
-                buffers
-                    .write_encoded_row(index, obs, reward, done, truncated, &config)
-                    .map_err(AgentError::from)
-            })
+            )?;
+            for slot in inner.parked_slots() {
+                buffers.clear_memory_cursor(slot);
+            }
+            Ok(infos)
         })
     }
 
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(index, obs, reward, terminated, truncated, &config)
-                    .map_err(AgentError::from)
+            inner.reset_seeds_with_writer(seeds, |index, obs, reward, terminated, truncated| {
+                write_buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
             })
         })
     }
@@ -515,8 +766,11 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn current_exposure(&self) -> PyResult<Vec<String>> {
-        self.inner.current_exposure().map_err(map_agent_err)
+    #[pyo3(signature = (active=None))]
+    fn current_exposure(&self, active: Option<Vec<bool>>) -> PyResult<Vec<String>> {
+        self.inner
+            .selected_exposure(active.as_deref())
+            .map_err(map_agent_err)
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
@@ -535,10 +789,25 @@ impl PyVectorEnv {
     }
 }
 
-/// Every configurable axis follows the supplied ObservationSpace on both paths.
-/// Companion shapes, dtypes and storage are checked before buffers are written.
-/// The buffer set must be policy input v9's: fixed relation, shared-effect and
-/// name-candidate widths, with fact capacity read from the fact axis.
+#[cfg(feature = "python")]
+fn registered_layout<'a>(
+    buffers: &Bound<'_, PyDict>,
+    layout: Option<&'a ObservationLayout>,
+) -> PyResult<std::borrow::Cow<'a, ObservationLayout>> {
+    if let Some(layout) = layout {
+        return Ok(std::borrow::Cow::Borrowed(layout));
+    }
+    super::bindings::warn_deprecated(
+        buffers.py(),
+        "set_buffers without layout is deprecated; pass layout=...; removal in 0.3.0",
+    )?;
+    Ok(std::borrow::Cow::Owned(ObservationLayout::from_config(
+        input_buffer_config(buffers)?,
+    )?))
+}
+
+/// Recover the input configuration of pre-layout receipts and deprecated calls.
+/// Removed in 0.3.0.
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -546,11 +815,11 @@ pub(super) fn input_buffer_config(
     // Strip only the optional batch axis. Full companion and batch shapes are
     // validated by the caller before any writes.
     let shape = |name: &str| -> PyResult<[usize; 2]> {
-        let dimensions: Vec<usize> = buffers
+        let value = buffers
             .get_item(name)?
-            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?
-            .getattr("shape")?
-            .extract()?;
+            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?;
+        require_ndarray(name, &value)?;
+        let dimensions: Vec<usize> = value.getattr("shape")?.extract()?;
         match dimensions.as_slice() {
             &[rows, width] | &[_, rows, width] if !dimensions.contains(&0) => Ok([rows, width]),
             _ => Err(PyValueError::new_err(format!(
@@ -564,459 +833,203 @@ pub(super) fn input_buffer_config(
         crate::agent::policy_history::HISTORY_DIM => true,
         _ => return Err(PyValueError::new_err("unsupported event buffer width")),
     };
-    if policy_history && max_events > crate::agent::policy_history::HISTORY_LIMIT {
-        return Err(PyValueError::new_err(
-            "public history v1 requires 1..32 rows",
-        ));
-    }
-    let mut config = ObservationEncoderConfig {
+    let optional_rows = |name: &str| -> PyResult<usize> {
+        if buffers.contains(name)? {
+            Ok(shape(name)?[0])
+        } else {
+            Ok(0)
+        }
+    };
+    let stack = buffers.contains("stack")?;
+    Ok(ObservationEncoderConfig {
+        layout: if stack {
+            crate::agent::observation_encoder::InputLayout::OneToken
+        } else {
+            crate::agent::observation_encoder::InputLayout::Legacy
+        },
+        turn_state: stack || buffers.contains("player_turn_state")?,
+        max_stack_objects: optional_rows("stack")?,
         max_cards_per_player: shape("agent_cards")?[0],
         max_permanents_per_player: shape("agent_permanents")?[0],
         max_actions: shape("actions")?[0],
         max_focus_objects: shape("action_focus")?[1],
+        max_facts: shape("facts")?[0],
         max_events,
         policy_history,
-        ..ObservationEncoderConfig::default()
-    };
-    let memory_fields = [
-        "decision_records",
-        "decision_references",
-        "decision_reference_details",
-        "decision_members",
-    ];
-    let present = memory_fields
-        .map(|field| buffers.contains(field))
-        .into_iter()
-        .collect::<PyResult<Vec<_>>>()?;
-    if present.iter().any(|&value| value) {
-        if !present.iter().all(|&value| value) {
-            return Err(PyValueError::new_err(
-                "decision memory requires all companion buffers",
-            ));
-        }
-        for (field, width) in memory_fields.into_iter().zip([
-            crate::agent::decision_memory::RECORD_DIM,
-            crate::agent::decision_memory::REFERENCE_DIM,
-            crate::agent::decision_memory::DETAIL_DIM,
-            crate::agent::decision_memory::MEMBER_DIM,
-        ]) {
-            let [capacity, actual] = shape(field)?;
-            if capacity == 0 || actual != width {
-                return Err(PyValueError::new_err(
-                    "invalid decision-memory companion widths",
-                ));
-            }
-            match field {
-                "decision_records" => config.max_decision_records = capacity,
-                "decision_references" => config.max_decision_references = capacity,
-                "decision_reference_details" => config.max_decision_reference_details = capacity,
-                "decision_members" => config.max_decision_members = capacity,
-                _ => unreachable!(),
-            }
-        }
-    }
-    // One layout: every v9 buffer is present at its fixed width.
-    let fixed = [
-        (
-            "relations",
-            Some(crate::agent::continuation::RELATION_ROWS),
-            crate::agent::continuation::RELATION_DIM,
-        ),
-        ("facts", None, crate::agent::observation_encoder::FACT_DIM),
-        (
-            "effects",
-            Some(crate::agent::shared_effects::EFFECT_ROWS),
-            crate::agent::shared_effects::EFFECT_DIM,
-        ),
-        (
-            "effect_details",
-            Some(crate::agent::shared_effects::DETAIL_ROWS),
-            crate::agent::shared_effects::DETAIL_DIM,
-        ),
-        (
-            "effect_members",
-            Some(crate::agent::shared_effects::MEMBER_ROWS),
-            crate::agent::shared_effects::MEMBER_DIM,
-        ),
-        (
-            "name_candidates",
-            Some(config.max_actions),
-            crate::agent::observation_encoder::NAME_DIM,
-        ),
-    ];
-    for (name, rows, width) in fixed {
-        if !buffers.contains(name)? {
-            return Err(PyValueError::new_err(format!(
-                "policy input v9 requires a {name} buffer"
-            )));
-        }
-        let [actual_rows, actual_width] = shape(name)?;
-        if actual_width != width || rows.is_some_and(|rows| rows != actual_rows) {
-            return Err(PyValueError::new_err(format!(
-                "policy input v9 requires {name} of shape [{}, {width}]",
-                rows.map_or("capacity".to_string(), |rows| rows.to_string())
-            )));
-        }
-    }
-    if !buffers.contains("decklists")? {
-        return Err(PyValueError::new_err(
-            "policy input v9 requires a decklists buffer",
-        ));
-    }
-    config.max_facts = shape("facts")?[0];
-    // Input v10 is v9 plus both turn-state buffers.
-    config.turn_state = match (
-        buffers.contains("player_turn_state")?,
-        buffers.contains("card_turn_state")?,
-    ) {
-        (false, false) => false,
-        (true, true) => {
-            let player = shape("player_turn_state")?;
-            let card = shape("card_turn_state")?;
-            if player != [2, crate::agent::observation_encoder::TURN_STATE_DIM]
-                || card != [2, config.max_cards_per_player]
-            {
-                return Err(PyValueError::new_err(format!(
-                    "policy input v10 requires player_turn_state of shape [2, {}] and \
-                     card_turn_state of shape [2, {}]",
-                    crate::agent::observation_encoder::TURN_STATE_DIM,
-                    config.max_cards_per_player
-                )));
-            }
-            true
-        }
-        _ => {
-            return Err(PyValueError::new_err(
-                "policy input v10 requires both player_turn_state and card_turn_state",
-            ))
-        }
-    };
-    // Input v11 is the one-token layout: a stack buffer and the turn state.
-    // Without a stack buffer the buffers are the deprecated v9/v10 rows.
-    if buffers.contains("stack")? {
-        let [rows, width] = shape("stack")?;
-        if width != crate::agent::observation_encoder::STACK_DIM || !config.turn_state {
-            return Err(PyValueError::new_err(format!(
-                "policy input v11 requires stack of shape [capacity, {}] and the turn-state buffers",
-                crate::agent::observation_encoder::STACK_DIM
-            )));
-        }
-        config.max_stack_objects = rows;
-    } else {
-        config.layout = crate::agent::observation_encoder::InputLayout::Legacy;
-    }
-    let permanent_width = shape("agent_permanents")?[1];
-    if permanent_width != config.permanent_dim() {
-        return Err(PyValueError::new_err(format!(
-            "agent_permanents width {permanent_width} does not match the {} layout's {}",
-            if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
-                "v11"
-            } else {
-                "v9/v10"
-            },
-            config.permanent_dim()
-        )));
-    }
-    Ok(config)
+        max_decision_records: optional_rows("decision_records")?,
+        max_decision_references: optional_rows("decision_references")?,
+        max_decision_reference_details: optional_rows("decision_reference_details")?,
+        max_decision_members: optional_rows("decision_members")?,
+        ..Default::default()
+    })
+}
+
+/// Check one observation's caller-owned buffers (no batch axis) against the
+/// whole contract of `config`: every array present, with its shape, dtype,
+/// C-contiguity and writability. Nothing is written; the scalar encoder runs
+/// this before encoding, so a malformed buffer set is never reported as a
+/// game that outgrew its capacity.
+#[cfg(feature = "python")]
+pub(crate) fn check_observation_buffers(
+    buffers: &Bound<'_, PyDict>,
+    layout: &ObservationLayout,
+) -> PyResult<()> {
+    read_observation_buffers(buffers, None, layout, false).map(|_| ())
 }
 
 #[cfg(feature = "python")]
 fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,
-    n: usize,
-    c: &ObservationEncoderConfig,
+    batch: Option<usize>,
+    layout: &ObservationLayout,
     step_state: bool,
 ) -> PyResult<ObservationBuffers> {
-    let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
-        Ok(Some(
-            require_numpy_array(buffers, name, shape, "float32")?.unbind(),
-        ))
+    for key in buffers.keys().iter() {
+        let name = key
+            .extract::<String>()
+            .map_err(|_| PyValueError::new_err("unexpected non-string buffer key"))?;
+        if !(layout.arrays.contains_key(&name)
+            || step_state && matches!(name.as_str(), "rewards" | "terminated" | "truncated"))
+        {
+            return Err(PyValueError::new_err(format!("unexpected buffer '{name}'")));
+        }
+    }
+    let array = |name: &str| {
+        let a = &layout.arrays[name];
+        let shape: Vec<_> = batch
+            .iter()
+            .chain(a.shape.iter().flatten())
+            .copied()
+            .collect();
+        Ok::<_, PyErr>(require_numpy_array(buffers, name, &shape, a.dtype)?.unbind())
+    };
+    let optional = |name: &str| {
+        layout
+            .arrays
+            .contains_key(name)
+            .then(|| array(name))
+            .transpose()
     };
     Ok(ObservationBuffers {
-        name_candidates: required(
-            "name_candidates",
-            &[
-                n,
-                c.max_actions,
-                crate::agent::observation_encoder::NAME_DIM,
-            ],
-        )?,
-        relations: required(
-            "relations",
-            &[
-                n,
-                crate::agent::continuation::RELATION_ROWS,
-                crate::agent::continuation::RELATION_DIM,
-            ],
-        )?,
-        effects: required(
-            "effects",
-            &[
-                n,
-                crate::agent::shared_effects::EFFECT_ROWS,
-                crate::agent::shared_effects::EFFECT_DIM,
-            ],
-        )?,
-        effect_details: required(
-            "effect_details",
-            &[
-                n,
-                crate::agent::shared_effects::DETAIL_ROWS,
-                crate::agent::shared_effects::DETAIL_DIM,
-            ],
-        )?,
-        effect_members: required(
-            "effect_members",
-            &[
-                n,
-                crate::agent::shared_effects::MEMBER_ROWS,
-                crate::agent::shared_effects::MEMBER_DIM,
-            ],
-        )?,
-        facts: required(
-            "facts",
-            &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
-        )?,
-        known_library: if c.known_library_len() > 0 {
-            required(
-                "known_library",
-                &[n, 2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
-            )?
-        } else {
-            None
-        },
-        known_hand: require_numpy_array(
-            buffers,
-            "known_hand",
-            &[n, 2, c.max_cards_per_player, 2],
-            "float32",
-        )?
-        .unbind(),
-        player_turn_state: if c.turn_state {
-            required(
-                "player_turn_state",
-                &[n, 2, crate::agent::observation_encoder::TURN_STATE_DIM],
-            )?
-        } else {
-            None
-        },
-        card_turn_state: if c.turn_state {
-            required("card_turn_state", &[n, 2, c.max_cards_per_player])?
-        } else {
-            None
-        },
-        stack: if c.stack_rows() > 0 {
-            required(
-                "stack",
-                &[
-                    n,
-                    c.max_stack_objects,
-                    crate::agent::observation_encoder::STACK_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        stack_valid: if c.stack_rows() > 0 {
-            required("stack_valid", &[n, c.max_stack_objects])?
-        } else {
-            None
-        },
-        decklists: required(
-            "decklists",
-            &[
-                n,
-                2,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::DECKLIST_DIM,
-            ],
-        )?,
-        semantic_cards: require_numpy_array(
-            buffers,
-            "semantic_cards",
-            &[n, 2, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_player: require_numpy_array(
-            buffers,
-            "agent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
-            "float32",
-        )?
-        .unbind(),
-        opponent_player: require_numpy_array(
-            buffers,
-            "opponent_player",
-            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
-            "float32",
-        )?
-        .unbind(),
-        agent_cards: require_numpy_array(
-            buffers,
-            "agent_cards",
-            &[
-                n,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-            "float32",
-        )?
-        .unbind(),
-        opponent_cards: require_numpy_array(
-            buffers,
-            "opponent_cards",
-            &[
-                n,
-                c.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-            "float32",
-        )?
-        .unbind(),
-        agent_permanents: require_numpy_array(
-            buffers,
-            "agent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
-            "float32",
-        )?
-        .unbind(),
-        opponent_permanents: require_numpy_array(
-            buffers,
-            "opponent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
-            "float32",
-        )?
-        .unbind(),
-        actions: require_numpy_array(
-            buffers,
-            "actions",
-            &[n, c.max_actions, ACTION_DIM],
-            "float32",
-        )?
-        .unbind(),
-        decision_records: if c.max_decision_records > 0 {
-            required(
-                "decision_records",
-                &[
-                    n,
-                    c.max_decision_records,
-                    crate::agent::decision_memory::RECORD_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_reference_details: if c.max_decision_reference_details > 0 {
-            required(
-                "decision_reference_details",
-                &[
-                    n,
-                    c.max_decision_reference_details,
-                    crate::agent::decision_memory::DETAIL_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_references: if c.max_decision_references > 0 {
-            required(
-                "decision_references",
-                &[
-                    n,
-                    c.max_decision_references,
-                    crate::agent::decision_memory::REFERENCE_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        decision_members: if c.max_decision_members > 0 {
-            required(
-                "decision_members",
-                &[
-                    n,
-                    c.max_decision_members,
-                    crate::agent::decision_memory::MEMBER_DIM,
-                ],
-            )?
-        } else {
-            None
-        },
-        events: require_numpy_array(
-            buffers,
-            "events",
-            &[n, c.max_events, c.event_dim()],
-            "float32",
-        )?
-        .unbind(),
-        action_focus: require_numpy_array(
-            buffers,
-            "action_focus",
-            &[n, c.max_actions, c.max_focus_objects],
-            "int32",
-        )?
-        .unbind(),
-        agent_player_valid: require_numpy_array(buffers, "agent_player_valid", &[n, 1], "float32")?
-            .unbind(),
-        opponent_player_valid: require_numpy_array(
-            buffers,
-            "opponent_player_valid",
-            &[n, 1],
-            "float32",
-        )?
-        .unbind(),
-        agent_cards_valid: require_numpy_array(
-            buffers,
-            "agent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        opponent_cards_valid: require_numpy_array(
-            buffers,
-            "opponent_cards_valid",
-            &[n, c.max_cards_per_player],
-            "float32",
-        )?
-        .unbind(),
-        agent_permanents_valid: require_numpy_array(
-            buffers,
-            "agent_permanents_valid",
-            &[n, c.max_permanents_per_player],
-            "float32",
-        )?
-        .unbind(),
-        opponent_permanents_valid: require_numpy_array(
-            buffers,
-            "opponent_permanents_valid",
-            &[n, c.max_permanents_per_player],
-            "float32",
-        )?
-        .unbind(),
-        actions_valid: require_numpy_array(
-            buffers,
-            "actions_valid",
-            &[n, c.max_actions],
-            "float32",
-        )?
-        .unbind(),
-        events_valid: require_numpy_array(buffers, "events_valid", &[n, c.max_events], "float32")?
-            .unbind(),
+        relations: optional("relations")?,
+        effects: optional("effects")?,
+        effect_details: optional("effect_details")?,
+        effect_members: optional("effect_members")?,
+        name_candidates: optional("name_candidates")?,
+        facts: optional("facts")?,
+        semantic_cards: array("semantic_cards")?,
+        known_hand: array("known_hand")?,
+        known_library: optional("known_library")?,
+        decklists: optional("decklists")?,
+        player_turn_state: optional("player_turn_state")?,
+        card_turn_state: optional("card_turn_state")?,
+        stack: optional("stack")?,
+        stack_valid: optional("stack_valid")?,
+        agent_player: array("agent_player")?,
+        opponent_player: array("opponent_player")?,
+        agent_cards: array("agent_cards")?,
+        opponent_cards: array("opponent_cards")?,
+        agent_permanents: array("agent_permanents")?,
+        opponent_permanents: array("opponent_permanents")?,
+        actions: array("actions")?,
+        events: array("events")?,
+        decision_records: optional("decision_records")?,
+        decision_reference_details: optional("decision_reference_details")?,
+        decision_references: optional("decision_references")?,
+        decision_members: optional("decision_members")?,
+        action_focus: array("action_focus")?,
+        agent_player_valid: array("agent_player_valid")?,
+        opponent_player_valid: array("opponent_player_valid")?,
+        agent_cards_valid: array("agent_cards_valid")?,
+        opponent_cards_valid: array("opponent_cards_valid")?,
+        agent_permanents_valid: array("agent_permanents_valid")?,
+        opponent_permanents_valid: array("opponent_permanents_valid")?,
+        actions_valid: array("actions_valid")?,
+        events_valid: array("events_valid")?,
         step_state: if step_state {
-            Some(StepStateBuffers {
-                rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
-                terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
-                truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
-            })
+            Some(read_step_state(buffers, batch.as_slice())?)
         } else {
             None
         },
     })
 }
 
+fn read_step_state(buffers: &Bound<'_, PyDict>, shape: &[usize]) -> PyResult<StepStateBuffers> {
+    Ok(StepStateBuffers {
+        shape: shape.to_vec(),
+        rewards: require_numpy_array(buffers, "rewards", shape, "float64")?.unbind(),
+        terminated: require_numpy_array(buffers, "terminated", shape, "uint8")?.unbind(),
+        truncated: require_numpy_array(buffers, "truncated", shape, "uint8")?.unbind(),
+    })
+}
+
+fn map_write_error(error: ObservationWriteError) -> PyErr {
+    match error {
+        ObservationWriteError::Encoding(error) => map_encode_err(error),
+        ObservationWriteError::Buffer(error) => map_agent_err(error),
+    }
+}
+
 #[cfg(feature = "python")]
 impl PyVectorEnv {
+    fn prepare_slot_buffers(
+        &mut self,
+        py: Python<'_>,
+        requests: Vec<PySlotLoad>,
+    ) -> PyResult<Vec<SlotReplacement>> {
+        let requests: Vec<_> = requests.into_iter().map(|request| request.0).collect();
+        self.with_buffers(py, move |inner, buffers, config| {
+            let mut admission: Option<EncodedObservation> = None;
+            inner
+                .prepare_slots(&requests, |slot, obs| {
+                    // Owners may have resized a registered array between calls.
+                    // Check every selected destination before publishing any of them.
+                    // Packed rows are appended only when published, so a rejected
+                    // load (including a sibling shard's) leaves no frozen batch.
+                    if let Destination::Dense(fields) = &buffers.fields {
+                        fields.encoded_row_mut(slot, &config)?;
+                    }
+                    buffers.rewards.element_ptr(slot)?;
+                    buffers.terminated.element_ptr(slot)?;
+                    buffers.truncated.element_ptr(slot)?;
+                    if let Some(row) = &mut admission {
+                        encode_into(obs, &config, row.buffers_mut())?;
+                    } else {
+                        admission = Some(encode(obs, &config)?);
+                    }
+                    Ok(())
+                })
+                .map_err(map_write_error)
+        })
+    }
+
+    fn publish_slot_buffers(
+        &mut self,
+        py: Python<'_>,
+        replacements: Vec<SlotReplacement>,
+    ) -> PyResult<Vec<SlotLoadResult>> {
+        let loaded = self.with_buffers(py, move |inner, buffers, config| {
+            inner
+                .publish_slots(replacements, |slot, obs, terminal| {
+                    buffers.clear_memory_cursor(slot);
+                    buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
+                    if terminal {
+                        buffers.clear_memory_cursor(slot);
+                    }
+                    Ok(())
+                })
+                .map_err(map_write_error)
+        })?;
+        self.last_info.resize_with(self.num_envs, InfoDict::new);
+        Ok(loaded
+            .into_iter()
+            .map(|(result, info)| {
+                self.last_info[result.slot] = info;
+                result
+            })
+            .collect())
+    }
+
     fn run_into_buffers(
         &mut self,
         py: Python<'_>,
@@ -1024,39 +1037,78 @@ impl PyVectorEnv {
                 &mut VectorEnv,
                 SendWriteBuffers,
                 ObservationEncoderConfig,
-            ) -> Result<Vec<InfoDict>, AgentError>
+            ) -> Result<Vec<InfoDict>, ObservationWriteError>
             + Send,
     ) -> PyResult<()> {
-        let buffers = self
-            .buffers
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+        let packed = self.packed.is_some();
+        self.last_info = self.with_buffers(py, |inner, buffers, config| {
+            run(inner, buffers, config).map_err(|error| {
+                if packed {
+                    map_write_error(error)
+                } else {
+                    map_agent_err(error.into())
+                }
+            })
+        })?;
+        Ok(())
+    }
+
+    fn with_buffers<R: Send>(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(&mut VectorEnv, SendWriteBuffers, ObservationEncoderConfig) -> PyResult<R>
+            + Send,
+    ) -> PyResult<R> {
         let config = self.config;
         let inner = &mut self.inner;
-        let memory_encoding = &self.memory_encoding;
-
         let started = Instant::now();
         ENCODING_NANOS.set(0);
-        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| {
-                run(
-                    inner,
-                    SendWriteBuffers {
-                        memory_encoding: Some(memory_encoding),
-                        ..write_buffers
-                    },
-                    config,
-                )
+        let result = if let Some(packed) = &mut self.packed {
+            let writer = Mutex::new(PackedWrites::new(&packed.layout.borrow(py)));
+            let result =
+                with_step_writer(py, &packed.state, Destination::Packed(&writer), |buffers| {
+                    py.allow_threads(move || run(inner, buffers, config))
+                });
+            let writes = writer.into_inner().unwrap();
+            if result.is_ok() {
+                let batch = Py::new(
+                    py,
+                    observation_batch::freeze(
+                        py,
+                        packed.layout.clone_ref(py),
+                        writes.rows,
+                        writes.slots.len(),
+                    ),
+                )?;
+                for (index, slot) in writes.slots.into_iter().enumerate() {
+                    packed.slots[slot] = Some((batch.clone_ref(py), index));
+                }
+            }
+            result
+        } else {
+            let buffers = self
+                .buffers
+                .as_ref()
+                .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+            let memory_encoding = &self.memory_encoding;
+            with_send_write_buffers(py, buffers, |write_buffers| {
+                py.allow_threads(|| {
+                    run(
+                        inner,
+                        SendWriteBuffers {
+                            memory_encoding: Some(memory_encoding),
+                            ..write_buffers
+                        },
+                        config,
+                    )
+                })
             })
-            .map_err(map_agent_err)
-        });
+        };
         let encoding = ENCODING_NANOS.get();
         self.timings.encoding_nanos += encoding;
         self.timings.stepping_nanos +=
             (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
-        self.buffers = Some(buffers);
-        self.last_info = result?;
-        Ok(())
+        result
     }
 }
 
@@ -1074,6 +1126,7 @@ pub struct PyRolloutPool {
     inner: RolloutPool,
     config: ObservationEncoderConfig,
     buffers: Option<ObservationBuffers>,
+    packed_layout: Option<Py<ObservationLayout>>,
 }
 
 #[cfg(feature = "python")]
@@ -1083,6 +1136,7 @@ impl PyRolloutPool {
             inner,
             config: ObservationEncoderConfig::default(),
             buffers: None,
+            packed_layout: None,
         }
     }
 
@@ -1148,20 +1202,116 @@ impl PyRolloutPool {
         self.inner.root_actions()
     }
 
+    /// Register the v11 observation layout for typed CSR batch rollouts.
+    #[pyo3(signature = (layout, action_overflow="error"))]
+    fn set_observation_layout(
+        &mut self,
+        py: Python<'_>,
+        layout: Py<ObservationLayout>,
+        action_overflow: &str,
+    ) -> PyResult<()> {
+        let config = observation_batch::config(&layout.borrow(py), action_overflow)?;
+        self.config = config;
+        self.packed_layout = Some(layout);
+        self.buffers = None;
+        Ok(())
+    }
+
+    /// Encode observations for every active slot into one immutable v11 batch.
+    fn encode_active_batch(&mut self, py: Python<'_>) -> PyResult<(Vec<usize>, ObservationBatch)> {
+        let layout = self
+            .packed_layout
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .clone_ref(py);
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let config = self.config;
+        let inner = &mut self.inner;
+        let mut encode_err = None;
+        let active = py
+            .allow_threads(|| {
+                inner.encode_active_into(|_, obs| {
+                    rows.append(obs, &config).map_err(|error| {
+                        encode_err = Some(error);
+                        AgentError(String::new())
+                    })
+                })
+            })
+            .map_err(|err| {
+                if let Some(encode_err) = encode_err {
+                    map_encode_err(encode_err)
+                } else {
+                    map_agent_err(err)
+                }
+            })?;
+        let count = active.len();
+        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+    }
+
+    /// Step every active slot and return the still-active indices with one v11 batch.
+    fn step_active_batch(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+    ) -> PyResult<(Vec<usize>, ObservationBatch)> {
+        let layout = self
+            .packed_layout
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .clone_ref(py);
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let config = self.config;
+        let inner = &mut self.inner;
+        let mut encode_err = None;
+        let active = py
+            .allow_threads(|| {
+                inner.step_active_into(&actions, |_, obs| {
+                    rows.append(obs, &config).map_err(|error| {
+                        encode_err = Some(error);
+                        AgentError(String::new())
+                    })
+                })
+            })
+            .map_err(|err| {
+                if let Some(encode_err) = encode_err {
+                    map_encode_err(encode_err)
+                } else {
+                    map_agent_err(err)
+                }
+            })?;
+        let count = active.len();
+        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+    }
+
+    /// Deprecated dense buffer registration; removed in 0.3.0.
     /// Attach caller-owned numpy buffers with leading dimension `capacity`
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
-        let config = input_buffer_config(&buffers)?;
+    #[pyo3(signature=(buffers, capacity, *, layout=None))]
+    fn set_buffers(
+        &mut self,
+        buffers: Bound<'_, PyDict>,
+        capacity: usize,
+        layout: Option<&ObservationLayout>,
+    ) -> PyResult<()> {
+        if layout.is_some() {
+            super::bindings::warn_deprecated(
+                buffers.py(),
+                "RolloutPool.set_buffers is deprecated; use RolloutPool.set_observation_layout with encode_active_batch/step_active_batch; removal in 0.3.0",
+            )?;
+        }
+        let layout = registered_layout(&buffers, layout)?;
+        let config = layout.config;
         if capacity < self.inner.num_slots() {
             return Err(PyValueError::new_err(format!(
                 "buffer capacity {capacity} < num_slots {}",
                 self.inner.num_slots()
             )));
         }
-        let buffers = read_observation_buffers(&buffers, capacity, &config, true)?;
+        let buffers = read_observation_buffers(&buffers, Some(capacity), &layout, true)?;
         self.config = config;
         self.buffers = Some(buffers);
+        self.packed_layout = None;
         Ok(())
     }
 
@@ -1204,12 +1354,15 @@ impl PyRolloutPool {
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encode_observations_into, m)?)?;
+    super::observation_batch::register(m)?;
     m.add_class::<PyVectorEnv>()?;
+    m.add_class::<PySlotLoad>()?;
+    m.add_class::<SlotLoadResult>()?;
     m.add_class::<PyRolloutPool>()
 }
 
 /// Write each env's acting-player observation into row `i` of buffers from
-/// `ObservationEncoder.allocate(capacity)`; returns each row's legal-action count.
+/// `ObservationSpace.allocate(capacity)`; returns each row's legal-action count.
 ///
 /// Every legal action must fit (`action_overflow="error"`). Rows at and past
 /// `len(envs)` are untouched, and no step-state buffers are read. The GIL stays
@@ -1219,17 +1372,22 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn encode_observations_into(
     py: Python<'_>,
     envs: Vec<PyRef<'_, PyEnv>>,
+    layout: &ObservationLayout,
     buffers: Bound<'_, PyDict>,
     capacity: usize,
 ) -> PyResult<Vec<usize>> {
+    super::bindings::warn_deprecated(
+        py,
+        "encode_observations_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.3.0",
+    )?;
     if envs.len() > capacity {
         return Err(PyValueError::new_err(format!(
             "{} envs exceed buffer capacity {capacity}",
             envs.len()
         )));
     }
-    let config = input_buffer_config(&buffers)?;
-    let buffers = read_observation_buffers(&buffers, capacity, &config, false)?;
+    let config = layout.config;
+    let buffers = read_observation_buffers(&buffers, Some(capacity), layout, false)?;
     with_observation_field_slices(py, &buffers, |out| {
         envs.iter()
             .enumerate()
@@ -1244,7 +1402,7 @@ fn encode_observations_into(
                 let observation = env.observation_for_player(actor).map_err(map_agent_err)?;
                 let row = out.encoded_row_mut(index, &config).map_err(map_agent_err)?;
                 encode_into(&observation, &config, row)
-                    .map_err(|err| PyValueError::new_err(err.to_string()))?;
+                    .map_err(crate::python::bindings::map_encode_err)?;
                 Ok(observation.action_space.actions.len())
             })
             .collect()
@@ -1442,12 +1600,10 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self
-            .agent_player
-            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
+        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
         let opponent_player_ptr = self
             .opponent_player
-            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
+            .row_ptr(env_index, config.player_dim())?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -1675,17 +1831,11 @@ impl SendObservationFieldSlices {
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player: unsafe {
-                slice::from_raw_parts_mut(
-                    agent_player_ptr,
-                    crate::agent::observation_encoder::PLAYER_DIM,
-                )
+                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
             },
             // SAFETY: each call uses disjoint per-env rows.
             opponent_player: unsafe {
-                slice::from_raw_parts_mut(
-                    opponent_player_ptr,
-                    crate::agent::observation_encoder::PLAYER_DIM,
-                )
+                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
@@ -1745,9 +1895,14 @@ impl SendObservationFieldSlices {
 
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
+enum Destination<'a> {
+    Dense(SendObservationFieldSlices),
+    Packed(&'a Mutex<PackedWrites>),
+}
+
 struct SendWriteBuffers<'a> {
     memory_encoding: Option<&'a [Mutex<crate::agent::decision_memory::MemoryEncoding>]>,
-    fields: SendObservationFieldSlices,
+    fields: Destination<'a>,
     rewards: SendSlice<f64>,
     terminated: SendSlice<u8>,
     truncated: SendSlice<u8>,
@@ -1755,13 +1910,27 @@ struct SendWriteBuffers<'a> {
 
 #[cfg(feature = "python")]
 impl SendWriteBuffers<'_> {
+    fn clear_memory_cursor(&self, slot: usize) {
+        if let Some(cursors) = self.memory_encoding {
+            *cursors[slot].lock().expect("exclusive buffer row") = Default::default();
+        }
+    }
+
     fn encode_observation(
         &self,
         env_index: usize,
         observation: &Observation,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
-        let out = self.fields.encoded_row_mut(env_index, config)?;
+        let out = match &self.fields {
+            Destination::Packed(writer) => {
+                return writer
+                    .lock()
+                    .unwrap()
+                    .append(env_index, observation, config)
+            }
+            Destination::Dense(fields) => fields.encoded_row_mut(env_index, config)?,
+        };
         match self.memory_encoding {
             Some(cursors) => {
                 let mut cursor = cursors[env_index].lock().expect("exclusive buffer row");
@@ -1820,17 +1989,38 @@ fn with_send_write_buffers<R>(
         .step_state
         .as_ref()
         .ok_or_else(|| PyRuntimeError::new_err("step-state buffers are required"))?;
+    with_observation_field_slices(py, buffers, |fields| {
+        with_step_writer(py, step_state, Destination::Dense(fields), f)
+    })
+}
+
+fn with_step_writer<'a, R>(
+    py: Python<'_>,
+    step_state: &StepStateBuffers,
+    fields: Destination<'a>,
+    run: impl FnOnce(SendWriteBuffers<'a>) -> PyResult<R>,
+) -> PyResult<R> {
     let rewards_buffer = typed_numpy_buffer::<f64>(py, &step_state.rewards, "rewards")?;
     let terminated_buffer = typed_numpy_buffer::<u8>(py, &step_state.terminated, "terminated")?;
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &step_state.truncated, "truncated")?;
-    with_observation_field_slices(py, buffers, |fields| {
-        f(SendWriteBuffers {
-            memory_encoding: None,
-            fields,
-            rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
-            terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
-            truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
-        })
+    for (key, shape) in [
+        ("rewards", rewards_buffer.shape()),
+        ("terminated", terminated_buffer.shape()),
+        ("truncated", truncated_buffer.shape()),
+    ] {
+        if shape != step_state.shape {
+            return Err(PyValueError::new_err(format!(
+                "{key} shape changed after registration: expected {:?}, got {shape:?}",
+                step_state.shape
+            )));
+        }
+    }
+    run(SendWriteBuffers {
+        memory_encoding: None,
+        fields,
+        rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
+        terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
+        truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
     })
 }
 

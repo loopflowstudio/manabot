@@ -11,10 +11,10 @@ use managym::conformance::{
 
 const ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../conformance/semantic-kernel-w17-v5"
+    "/../conformance/semantic-kernel-w17-v6"
 );
 
-// Each frozen game regenerates the reference/optimized lockstep once. Its
+// Each recorded game regenerates the reference/optimized lockstep once. Its
 // digest pins every checkpoint and command. The public-handoff test below
 // checks serialized replay separately, avoiding a duplicate full traversal
 // of the largest boards within one 300-second test.
@@ -47,14 +47,14 @@ frozen_cases! {
 
 fn manifest() -> Manifest {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v5/manifest.json"
+        "../../conformance/semantic-kernel-w17-v6/manifest.json"
     ))
     .expect("pinned manifest")
 }
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v5/evidence.json"
+        "../../conformance/semantic-kernel-w17-v6/evidence-battlefield-history-v1.json"
     ))
     .expect("pinned evidence")
 }
@@ -158,7 +158,7 @@ fn seeded_semantic_tapes_are_deterministic_and_isolated() {
 }
 
 #[test]
-fn compatibility_names_and_content_allocations_are_metamorphic() {
+fn content_allocations_are_metamorphic() {
     verify_metamorphic(Orientation::GwAlliesVsUrLessons, 0x5eee, 0xc0df, 96)
         .expect("metamorphic trace");
 }

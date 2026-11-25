@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
@@ -35,7 +35,7 @@ def test_unsupported_opponent_policy(name: str, api: str) -> None:
         elif api == "native":
             managym.VectorEnv(num_envs=1, player_policies=("agent", name))
         elif api == "captured":
-            CapturedVector(num_envs=1, player_policies=("agent", name))
+            RecordedVectorEnv(num_envs=1, player_policies=("agent", name))
         else:
             VectorEnv(
                 1,

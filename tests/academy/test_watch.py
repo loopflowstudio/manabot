@@ -30,7 +30,7 @@ def watch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[WatchCrea
     server._drop_session(result["id"], "test")
 
 
-def test_watch_starting_at_second_seat_preserves_acting_view(
+def test_watch_opening_choice_for_second_seat_preserves_acting_view(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
@@ -38,13 +38,15 @@ def test_watch_starting_at_second_seat_preserves_acting_view(
     try:
         game = server._live_record_for_trace(result["id"]).game
         assert game.obs is not None
-        assert game.obs.agent.player_index == 1
+        assert game.obs.agent.player_index == 0
+        step_watch(result["id"], result["token"], 0)
+        assert game.obs is not None and game.obs.agent.player_index == 1
         recovery = game.current_recovery("explicit_resync")
         assert recovery["frame"]["projection"]["agent"]["player_index"] == 0
         assert recovery["frame"]["prompt"] is None
         assert recovery["frame"]["offers"] == []
-        step_watch(result["id"], result["token"], 0)
-        row = inspect_watch(result["id"], 0, result["token"])
+        step_watch(result["id"], result["token"], 1)
+        row = inspect_watch(result["id"], 1, result["token"])
         assert row["decision"]["viewer"] == 1
         assert row["observation"]["agent"]["player_index"] == 1
         assert row["observation"]["opponent"]["hand"] == []
@@ -264,7 +266,7 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
-    from manabot.model.world import checkpoint_world
+    from manabot.model.interface import world_fields
     from manabot.sim.table_bots import CheckpointVillain
     from managym.bots import choose_bot
 
@@ -286,11 +288,11 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     torch.save(
         {
             "hypers": {
-                "observation_hypers": space.encoder.config.model_dump(),
+                "observation_hypers": space.config.model_dump(),
                 "agent_hypers": agent_hypers,
             },
             "model_state_dict": agent.state_dict(),
-            "world_binding": checkpoint_world(config.to_rust(), space),
+            **world_fields(space, agent.readings, config.to_rust()),
             "bc": {"value_semantic": "signed_outcome"},
         },
         checkpoint,

@@ -54,7 +54,6 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
         // Green is the only output that leaves the announced GG spell payable.
         assert_eq!(s.action_space().actions.len(), 1);
         choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert!(s.game().state.stack_objects.iter().any(|object| matches!(
             object,
@@ -84,7 +83,6 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
     // Spend the Forest's G on Prism, retaining the pooled U for Counterspell.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     assert_eq!(s.game().state.stack_objects.len(), 2);
 }
@@ -172,7 +170,6 @@ fn prism_upfront_payment_preserves_professors_second_green() {
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(s.action_space().actions.len(), 1);
         choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
         settle(&mut s);
         assert!(!s
@@ -251,7 +248,6 @@ fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
     activate_named(&mut s, "Prophetic Prism", 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, professor), Some(ZoneType::Stack));
 }
 
@@ -265,7 +261,6 @@ fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
     assert_eq!(s.action_space().actions.len(), 1);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
-    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(zone_of(&s, angel), Some(ZoneType::Stack));
 }
 
@@ -450,7 +445,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
         let mut s = five_color_setup(&["Prophetic Prism", "Serra Angel"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, &format!("W{}", "U".repeat(blue)));
-        s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U");
+        s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U").into();
         let angel = library_card(&s, 0, "Serra Angel");
         let angel = move_card(&mut s, angel, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -467,8 +462,28 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
             assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
-            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+            // The nested filter paid once: the Angel's receipt holds its five
+            // units, names the Prism for the one it made, and never counts
+            // the unit the Prism's own fee consumed.
+            let spent = s
+                .game()
+                .state
+                .stack_objects
+                .iter()
+                .find_map(|object| match object {
+                    managym::state::stack_object::StackObject::Spell(spell) => {
+                        Some(spell.spent.clone())
+                    }
+                    _ => None,
+                })
+                .expect("the Angel is on the stack");
+            assert_eq!(spent.total(), 5);
+            let sources = spent.mana_sources();
+            assert_eq!(sources.len(), 1);
+            assert_eq!(s.game().state[sources[0].object].name, "Prophetic Prism");
+            let from_prism = spent.mana().iter().filter(|unit| unit.source.is_some());
+            assert_eq!(from_prism.count(), 1);
         }
     }
 }
@@ -482,7 +497,9 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
         let lesson = ManaRestriction::spell(["Lesson"]);
         let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
-        s.game_mut().state.players[0].mana_pool.add(&restricted);
+        s.game_mut().state.players[0]
+            .mana_pool
+            .add(&restricted, None);
         s.game_mut().scenario_refresh_priority().unwrap();
         let prism = permanent_named(&s, "Prophetic Prism");
         assert_eq!(s.action_space().actions.iter().any(|action|
@@ -587,4 +604,113 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
         matches!(action, Action::ChooseMode { mode: 4, .. })
     });
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
+}
+
+/// Evolving Wilds is sacrificed as the ability is activated and fetches one
+/// basic land, which enters tapped; a nonbasic land is not offered.
+#[test]
+fn evolving_wilds_sacrifices_itself_for_a_tapped_basic_land() {
+    use crate::support::{
+        game::five_color_unfunded_setup,
+        inspect::{card_of, has_action, library_card, tapped, zone_of},
+        play::{activate, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::zone::ZoneType,
+    };
+    let mut s = five_color_unfunded_setup(&["Evolving Wilds", "Rumble Arena"]);
+    let wilds = s.force_permanent_on_battlefield(0, "Evolving Wilds");
+    let wilds_card = card_of(&s, wilds);
+    activate(&mut s, wilds, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(zone_of(&s, wilds_card), Some(ZoneType::Graveyard));
+    let forest = library_card(&s, 0, "Forest");
+    let arena = library_card(&s, 0, "Rumble Arena");
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == arena)
+    ));
+    select_card(&mut s, forest);
+    settle(&mut s);
+    let [entered] = s.battlefield_permanents_named(0, "Forest")[..] else {
+        panic!("one Forest entered")
+    };
+    assert!(tapped(&s, entered));
+}
+
+#[test]
+fn foundations_5d_battle_rattle_shaman() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{choose_mode, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::{PlayerId, Target};
+
+    let mut s = five_color_setup(&["Battle-Rattle Shaman", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Battle-Rattle Shaman");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::ChooseTarget,
+        "beginning of combat trigger".into(),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(crate::support::inspect::mode_labels(&s)[0].contains("+2/+0"));
+    for (mode, power) in [(0, 4), (1, 2)] {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        settle(&mut branch);
+        assert_eq!(branch.game().characteristics(ogre).power, power);
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(branch.game().characteristics(ogre).power, 2);
+    }
+}
+
+#[test]
+fn foundations_5e_fleeting_distraction() {
+    crate::assert_targeted_pump("Fleeting Distraction", "Gray Ogre", 1, (1, 2), &[], 0, 1);
+}
+
+#[test]
+fn foundations_5f_pelakka_wurm() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{enter_and_settle, move_and_settle};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Pelakka Wurm"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let wurm = enter_and_settle(&mut s, "Pelakka Wurm");
+    s.assert_life(0, 27);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+    move_and_settle(&mut s, wurm, ZoneType::Graveyard);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+    s.assert_life(0, 27);
+}
+
+/// "{8}: Target creature gets +5/+5 and gains trample until end of turn."
+#[test]
+fn foundations_5f_wildheart_invoker() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::keywords,
+        play::{activate, settle, spend_colorless},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Wildheart Invoker", "Gray Ogre"]);
+    let invoker = s.force_permanent_on_battlefield(0, "Wildheart Invoker");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, invoker, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (7, 7));
+    assert!(keywords(&s, ogre).has(Keyword::Trample));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert!(!keywords(&s, ogre).has(Keyword::Trample));
 }

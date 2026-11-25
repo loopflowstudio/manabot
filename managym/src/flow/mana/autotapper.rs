@@ -325,7 +325,7 @@ impl Chooser<'_> {
             }
             for choice in pool.spending_choices(&remaining) {
                 let mut next = pool.clone();
-                next.spend(&choice.unit, &remaining.purpose);
+                next.spend(&choice.unit);
                 if next.can_pay(&choice.remaining) {
                     pending.push((next, choice.remaining));
                 }
@@ -386,10 +386,7 @@ impl Chooser<'_> {
             .tapped(taps.iter().copied().chain(reserved))
             .payable(
                 leftover.clone(),
-                vec![Obligation::Pay {
-                    cost: followup.clone(),
-                    waterbend: false,
-                }],
+                vec![Obligation::mana(followup.clone())],
                 SourcePolicy::FixedOnly,
             )
     }
@@ -546,11 +543,7 @@ impl PaymentModel<'_> {
             cache: self.cache,
         };
         for index in taps {
-            after.reserve(SourceReservation {
-                permanent: self.sources[index].permanent,
-                tap: true,
-                sacrifice: false,
-            });
+            after.reserve(SourceReservation::tap(self.sources[index].permanent));
         }
         after
     }
@@ -733,10 +726,7 @@ mod tests {
     }
 
     fn pay(text: &str) -> Obligation {
-        Obligation::Pay {
-            cost: ManaCost::parse(text),
-            waterbend: false,
-        }
+        Obligation::mana(ManaCost::parse(text))
     }
 
     /// Hand cards at these costs, none at instant timing.
@@ -795,10 +785,7 @@ mod tests {
     }
 
     fn pay_cost(cost: &ManaCost) -> Obligation {
-        Obligation::Pay {
-            cost: cost.clone(),
-            waterbend: false,
-        }
+        Obligation::mana(cost.clone())
     }
 
     /// The module's stated ceiling for a payment without saved obligations.

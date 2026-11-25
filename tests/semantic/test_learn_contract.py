@@ -12,6 +12,7 @@ from manabot.belief.population import BeliefTrainingExample, pack_belief_example
 from manabot.belief.range import BeliefState
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
+from manabot.env.observation import allocate_vector_buffers, encode_observation
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.decision import (
@@ -229,6 +230,13 @@ def test_world_reader_rejects_incompatible_source_observation(version):
         PossibleWorldSpace.from_engine(IncompatibleEngine(), 0)
 
 
+def _without_history(observation: managym.Observation) -> dict[str, object]:
+    """`toJSON()` adds public history; semantic viewer state never carries it."""
+    standalone = json.loads(observation.toJSON())
+    assert standalone.pop("policy_history")
+    return standalone
+
+
 def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     from manabot.semantic.learning import BoundSemanticPack
 
@@ -251,7 +259,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     for viewer in (actor, 1 - actor):
         raw = env.observation_for_player(viewer)
         canonical = Observation.from_json(env.semantic_observation_json(viewer))
-        assert json.loads(raw.toJSON()) == canonical.viewer_state
+        assert _without_history(raw) == canonical.viewer_state
         assert raw.validate()
         assert len(raw.agent.zone_counts) == 7
         assert all(not hasattr(card, "zone") for card in raw.agent_sideboard)
@@ -295,30 +303,27 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     assert observer.opponent.known_hand == after.agent.known_hand
     assert all(int(card.zone) != 1 for card in observer.opponent_cards)
     assert (
-        json.loads(observer.toJSON())
+        _without_history(observer)
         == Observation.from_json(env.semantic_observation_json(1 - actor)).viewer_state
     )
     assert learn_root.search_witness_json() == retained
 
 
 def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_root):
-    import numpy as np
-
-    from manabot.env.observation import ObservationEncoder
+    from manabot.env.observation import ACTION_VALID_INDEX, ObservationSpace
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
-    scalar = ObservationEncoder(ObservationConfig()).encode(obs)
-    native = learn_root.encode_observation(obs)
-    for key in scalar:
-        np.testing.assert_array_equal(scalar[key], native[key], err_msg=key)
+    scalar = encode_observation(
+        ObservationSpace(ObservationConfig(max_focus_objects=1)), obs
+    )
     retrievals = 0
     for index, action in enumerate(obs.action_space.actions):
         kind = int(action.action_type)
         if kind not in (14, 15):
             continue
         assert scalar["actions"][index, kind] == 1
-        assert scalar["actions"][index, :-1].sum() == 1
+        assert scalar["actions"][index, :ACTION_VALID_INDEX].sum() == 1
         focus = int(scalar["action_focus"][index, 0])
         assert focus >= 2
         row = scalar["agent_cards"][focus - 2]
@@ -336,37 +341,31 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     for config in (
         ObservationConfig(max_actions=2),
         ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
-        ObservationConfig(max_focus_objects=0),
     ):
-        with pytest.raises(ValueError, match="capacity exceeded"):
-            ObservationEncoder(config).encode(obs)
+        with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
+            encode_observation(ObservationSpace(config), obs)
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     import numpy as np
 
-    from manabot.env.observation import ObservationEncoder
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ObservationConfig
 
-    encoder = ObservationEncoder(ObservationConfig())
-    buffers = encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+    space = ObservationSpace(ObservationConfig())
+    buffers = allocate_vector_buffers(space, 1)
     configs = [
         managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
         for key in ("ur_lessons", "gw_allies")
     ]
     vector = managym.VectorEnv(1, seed=0, skip_trivial=False)
-    vector.set_buffers(buffers)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(configs)
     scalar = managym.Env(seed=0, skip_trivial=False)
     obs, _ = scalar.reset(configs)
     rng = random.Random(0)
     for _ in range(2000):
-        encoded = encoder.encode(obs)
+        encoded = encode_observation(space, obs)
         for key, value in encoded.items():
             np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
         retrievals = [
@@ -378,7 +377,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
             selected = retrievals[-1]
             after, *_ = scalar.step(selected)
             vector.step_into_buffers([selected])
-            for key, value in encoder.encode(after).items():
+            for key, value in encode_observation(space, after).items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
             return
         assert not obs.game_over

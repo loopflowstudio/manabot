@@ -4,14 +4,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.checkpoint import load_belief_sampler, save_belief_sampler
 from manabot.belief.protocol import SamplerCodec
 from manabot.belief.sampling_data import read_dataset
-from manabot.belief.sampling_fit import (
-    BeliefTrainer,
-    fit_belief_sampler,
-    save_belief_sampler,
-)
+from manabot.belief.sampling_fit import BeliefTrainer, fit_belief_sampler
 
 
 class SamplerConfig(BaseModel):
@@ -38,13 +34,13 @@ def train_belief(
 ) -> Path:
     """Fit on `histories` and write the sampler to `out`; the policy is untouched.
 
-    `backend` fits and encodes the sampler; `codec` restores it for admission.
+    `backend` fits the sampler; `codec` exports and restores its parameters.
     """
     dataset = read_dataset(histories)
     result = fit_belief_sampler(
         dataset, **config.model_dump(), seed=seed, backend=backend
     )
-    identity = save_belief_sampler(out, result, dataset, codec=backend)
+    identity = save_belief_sampler(out, result, dataset, codec=codec)
     load_belief_sampler(
         out,
         codec=codec,

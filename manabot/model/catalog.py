@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import CheckpointReader
 import managym
 
 CheckpointSource = Literal["path", "runs", "tournament"]
@@ -76,7 +76,7 @@ class NotAPolicyCheckpoint(ValueError):
 def inspect_checkpoint(
     path: Path,
     *,
-    backend: Backend,
+    backend: CheckpointReader,
     label: str | None = None,
     source: CheckpointSource = "path",
     producer: str | None = None,
@@ -105,7 +105,7 @@ def inspect_checkpoint(
 
 @lru_cache(maxsize=512)
 def _inspect_cached(
-    path: str, size: int, mtime_ns: int, backend: Backend
+    path: str, size: int, mtime_ns: int, backend: CheckpointReader
 ) -> CheckpointSummary | NotAPolicyCheckpoint:
     # Refusals are returned, not raised, so they are cached too: run
     # directories hold large optimizer and dataset files that every listing
@@ -243,7 +243,7 @@ class UnavailableEntry:
 
 
 def discover_checkpoints(
-    sources: Iterable[Path], *, backend: Backend, runs_dir: Path | None = None
+    sources: Iterable[Path], *, backend: CheckpointReader, runs_dir: Path | None = None
 ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
     """Summarize every policy checkpoint reachable from ``sources``.
 
@@ -286,7 +286,7 @@ def discover_checkpoints(
 
 
 def _scan(
-    directory: Path, source: CheckpointSource, backend: Backend
+    directory: Path, source: CheckpointSource, backend: CheckpointReader
 ) -> list[CheckpointSummary]:
     summaries = []
     for path in sorted([*directory.rglob("*.pt"), *directory.rglob("*.safetensors")]):
@@ -389,7 +389,7 @@ def _with_run_facts(summary: CheckpointSummary, root: Path) -> CheckpointSummary
 
 
 def _tournament(
-    path: Path, directories: list[Path], backend: Backend
+    path: Path, directories: list[Path], backend: CheckpointReader
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 

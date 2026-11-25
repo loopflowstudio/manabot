@@ -6,24 +6,23 @@ Scopes retain the established inference preparation and forward modes.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Literal, cast
+from typing import cast
 
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import array_fields, device_of, on_device
+from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
-from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.learning import Precision
-from manabot.training.rollout.numerics import SampledRows
-from manabot.training.rollout.selection_data import SelectionPrediction
+from manabot.training.rollout.numerics import SampledRows, prepared_chunks
+from manabot.training.rollout.selection_data import SelectionDraw
 
 
 class CollectionSession:
@@ -41,8 +40,13 @@ class CollectionSession:
     def device_name(self) -> str:
         return str(self.device)
 
-    def snapshot_rng(self) -> object:
+    def snapshot_rng(self) -> torch.Tensor:
         return self.rng.get_state().clone()
+
+    def restore_rng(self, state: object) -> None:
+        if not isinstance(state, torch.Tensor):
+            raise ValueError("expected Torch generator state")
+        self.rng.set_state(state)
 
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:
@@ -88,24 +92,14 @@ class CollectionScope:
         *,
         execution_rows: int | None = None,
     ) -> SampledRows:
-        if execution_rows is not None and execution_rows < 1:
-            raise ValueError("execution rows must be positive")
-        count = len(observation["actions_valid"])
-        width = execution_rows or count
-        if width < 1:
-            raise ValueError("execution rows must be positive")
         logs_parts: list[torch.Tensor] = []
         value_parts: list[torch.Tensor] = []
         outcome_parts: list[np.ndarray] = []
         needs_parts: list[np.ndarray] = []
         with torch.no_grad():
-            for start in range(0, count, width):
-                with profiler.track("Observation preparation"):
-                    obs = self.inference.prepare(
-                        select_rows(
-                            observation, np.arange(start, min(start + width, count))
-                        )
-                    )
+            for obs in prepared_chunks(
+                observation, execution_rows, self.inference.prepare, profiler
+            ):
                 with profiler.track("Policy inference and action selection"):
                     with forward_precision(self.session.precision, self.session.device):
                         logits, value = self.agent.forward_distribution(obs)
@@ -123,7 +117,7 @@ class CollectionScope:
                     )
                     value_parts.append(value.reshape(-1))
                     if obs.bucket_needs is not None:
-                        needs_parts.append(np.asarray(obs.bucket_needs, dtype=np.int64))
+                        needs_parts.append(obs.bucket_needs)
                 # Only small outputs survive a chunk, never Prepared or activations.
                 del obs, logits, value
             logs = torch.cat(logs_parts)
@@ -151,11 +145,7 @@ class SelectionPredictor:
         self.generator = torch.Generator().manual_seed(seed)
 
     @torch.inference_mode()
-    def predict(
-        self,
-        encoded: dict[str, np.ndarray],
-        reference: Literal["uniform", "action_type_uniform"],
-    ) -> SelectionPrediction:
+    def predict(self, encoded: dict[str, np.ndarray]) -> SelectionDraw:
         agent, generator = self.agent, self.generator
         tensors = on_device(
             agent.prepare(
@@ -167,18 +157,4 @@ class SelectionPredictor:
         logits, value = agent(tensors)
         probabilities = logits.softmax(-1)
         action = int(torch.multinomial(probabilities[0], 1, generator=generator))
-        logs = probabilities.clamp_min(1e-12).log()
-        ref = torch.from_numpy(
-            reference_distribution(
-                {k: encoded[k][None] for k in ("actions_valid", "actions")},
-                reference,
-            )
-        )
-
-        return SelectionPrediction(
-            action,
-            float(value.item()),
-            float(probabilities[0, action]),
-            float(-(probabilities * logs).sum()),
-            float((probabilities * (logs - ref.clamp_min(1e-12).log())).sum()),
-        )
+        return SelectionDraw(action, float(value.item()), to_numpy(probabilities[0]))

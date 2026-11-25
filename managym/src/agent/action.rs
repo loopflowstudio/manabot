@@ -1,3 +1,4 @@
+use crate::state::card::SpellProfile;
 use crate::state::{
     game_object::{ObjectId, PermanentId, PlayerId, PublicId},
     target::Target,
@@ -41,14 +42,24 @@ pub enum Action {
         trigger_id: crate::flow::trigger::TriggerId,
     },
     PlayLand {
+        /// The land face played: a modal card's back face enters back face
+        /// up (CR 712.14). Serialized under `CastSpell`'s profile key.
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     CastSpell {
+        #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+        profile: SpellProfile,
         player: PlayerId,
         #[serde(rename = "card")]
         object: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        route: Option<crate::flow::cast_permission::PlayRoute>,
     },
     ActivateAbility {
         player: PlayerId,
@@ -70,6 +81,11 @@ pub enum Action {
     Foretell {
         player: PlayerId,
         #[serde(rename = "card")]
+        object: ObjectId,
+    },
+    /// CR 701. Manifest permits a creature card to be turned face up for its mana cost.
+    TurnFaceUp {
+        player: PlayerId,
         object: ObjectId,
     },
     PassPriority {
@@ -125,7 +141,8 @@ pub enum Action {
         player: PlayerId,
         mode: usize,
     },
-    /// Tap `permanent` to pay {1} of a pending waterbend cost.
+    /// Tap `permanent` to pay {1} of a pending cost directly: convoke,
+    /// improvise or waterbend.
     WaterbendTap {
         player: PlayerId,
         permanent: PermanentId,
@@ -139,6 +156,13 @@ pub enum Action {
 }
 
 impl Action {
+    pub(crate) fn spell_profile(&self) -> SpellProfile {
+        match self {
+            Self::CastSpell { profile, .. } | Self::PlayLand { profile, .. } => *profile,
+            _ => SpellProfile::Front,
+        }
+    }
+
     /// The player performing this rules action, whose resources and objects
     /// it uses. The published ActionSpace.player separately authorizes its chooser.
     pub fn player(&self) -> PlayerId {
@@ -148,6 +172,7 @@ impl Action {
             | Action::CastSpell { player, .. }
             | Action::ActivateAbility { player, .. }
             | Action::ActivateCardAbility { player, .. }
+            | Action::TurnFaceUp { player, .. }
             | Action::Foretell { player, .. }
             | Action::PassPriority { player, .. }
             | Action::DeclareAttacker { player, .. }
@@ -172,6 +197,7 @@ impl Action {
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
             Action::ActivateAbility { .. }
             | Action::ActivateCardAbility { .. }
+            | Action::TurnFaceUp { .. }
             | Action::Foretell { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,

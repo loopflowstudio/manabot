@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn authority_fingerprint_covers_identity_rng_events_allocation_zones_and_decisions() {
-        let game = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1")
+        let game = crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1")
             .expect("contract fixture");
         let baseline = witness(&game);
 
@@ -234,6 +234,21 @@ mod tests {
         let mut object_lki = game.clone();
         object_lki.state.object_lki.insert(lki);
         assert_authority_change(&baseline, &object_lki, "object LKI");
+
+        let mut spell_lki = game.clone();
+        spell_lki.state.spell_lki.insert(
+            object,
+            crate::state::stack_object::SpellLki {
+                object,
+                definition_id: game.state[object].definition_id,
+                controller: PlayerId(0),
+                profile: Default::default(),
+                mana_value: 3,
+                spent: 3,
+                colors: Default::default(),
+            },
+        );
+        assert_authority_change(&baseline, &spell_lki, "spell LKI");
 
         let mut rng = game.clone();
         rng.reseed(0x197_5eed);

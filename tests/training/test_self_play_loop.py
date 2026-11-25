@@ -1,7 +1,9 @@
 """Self-play uses real Etude saves and preserves published policy evidence."""
 
+import hashlib
 import json
 from pathlib import Path
+from typing import Literal
 
 from etude.train.read import read
 from etude.train.tracking import Stopped
@@ -9,17 +11,25 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch import policy as policy_module
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.infra.run_settings import RunSettings
+from manabot.policy.readings import Reading, fresh_readings, legacy_readings
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.reports.time_sources import load_time_sources
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import CLOCKS, Counts, SelfPlay, self_play
 from manabot.training.rollout.collection import Collector, RolloutBatch
+from manabot.training.state.backend import SelfPlayBackend
 from manabot.training.updates.selection import UpdateDiagnostics
+from manabot.training.updates.targets import BatchTargets
 from tests.fixtures.training_records import recording
 
 SEED = 197
@@ -56,13 +66,19 @@ def test_settings_refuse_what_the_loop_cannot_run(
         SelfPlay.model_validate({**values, **fields})
 
 
-@pytest.mark.parametrize("averaging", [None, 0.9])
+@pytest.mark.parametrize(
+    ("averaging", "weights"), [(None, "ema"), (0.9, "ema"), (0.9, "raw")]
+)
 def test_resume_keeps_adam_ema_counts_and_immutable_policies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, averaging: float | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    averaging: float | None,
+    weights: Literal["raw", "ema"],
 ) -> None:
     settings = gray_ogre_self_play(horizon=2).model_copy(
         update={
             "checkpoint_every": 1,
+            "checkpoint_weights": weights,
             "learning": Learning(horizon=2, epochs=1, minibatches=1, ema=averaging),
         }
     )
@@ -82,9 +98,8 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     ) as run:
         final = self_play(settings, run, updates=2)
     assert earlier.read_bytes() == before
-    assert final.name == (
-        "00000002-raw.safetensors" if averaging is None else "00000002-ema.safetensors"
-    )
+    selected = "raw" if averaging is None else weights
+    assert final.name == f"00000002-{selected}.safetensors"
     (reported,) = load_time_sources([str(tmp_path / "track")]).runs
     with recording(
         experiment="test",
@@ -94,13 +109,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         resume=True,
     ) as run:
         learner, ema = loop.create(settings, seed=run.seed)
-        objects: dict[str, object] = {
-            "learner": learner.agent,
-            "optimizer": learner.optimizer,
-        }
-        if ema is not None:
-            objects["ema"] = ema
-        counts = run.resume(**objects, extra=Counts())
+        counts, _ = loop.resume_training(
+            settings, run, loop.default_backend(), learner, ema
+        )
         assert counts.updates == 2 and counts.optimizer_updates > 0
         assert counts.training_seconds > 0 and learner.optimizer.state
         saved = load_checkpoint(final.with_name("00000002-raw.safetensors"))[
@@ -109,7 +120,9 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
         for name, value in learner.agent.state_dict().items():
             torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
     if ema is not None:
-        averaged = load_checkpoint(final)[0].state_dict()
+        averaged = load_checkpoint(final.with_name("00000002-ema.safetensors"))[
+            0
+        ].state_dict()
         for name, value in ema.state_dict().items():
             torch.testing.assert_close(value, averaged[name], rtol=0, atol=0)
     recorded = read(tmp_path / "track", "test", "policy")
@@ -132,10 +145,178 @@ def test_resume_keeps_adam_ema_counts_and_immutable_policies(
     assert any("observed attempts only" in w for w in after_inspection.warnings)
     assert list(recorded.points("coordinates/updates", "updates").x) == [1, 2]
     assert {cp.at["updates"] for cp in recorded.checkpoints} == {0, 1, 2}
+    for checkpoint in recorded.checkpoints:
+        update = int(checkpoint.at["updates"])
+        export = final.with_name(f"{update:08d}-{selected}.safetensors")
+        assert (
+            checkpoint.artifact.sha256
+            == hashlib.sha256(export.read_bytes()).hexdigest()
+        )
     # The training-time report reads work and active time from the loop's clocks.
     assert reported.updates == 2
     assert reported.learner_transitions == counts.learner_transitions > 0
     assert reported.active_seconds is not None and reported.active_seconds > 0
+
+
+@pytest.mark.parametrize(
+    ("field", "legacy_state"), [("focus_film", False), ("stream_norm", True)]
+)
+def test_resume_refuses_changed_model_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str, legacy_state: bool
+) -> None:
+    settings = gray_ogre_self_play(horizon=2)
+    out = tmp_path / "out"
+    monkeypatch.setenv("ETUDE_OUT", str(out))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        if legacy_state:
+            learner, ema = loop.create(settings, seed=run.seed)
+            counts = Counts()
+            loop.publish(settings, run, learner, ema, counts)
+            objects = {"learner": learner.agent, "optimizer": learner.optimizer}
+            if ema is not None:
+                objects["ema"] = ema
+            counts.readings = loop.resume_readings(
+                counts, learner.agent.readings, learner.agent.observation_space
+            )
+            run.resume(**objects, extra=counts)
+            for update in run.steps("updates", to=1):
+                counts.updates = update
+                run.log({}, **loop.clocks(counts))
+                run.save()
+        else:
+            self_play(settings, run, updates=1)
+    (state,) = (out / "state").glob("save-*/state.json")
+    saved = json.loads(state.read_text())
+    initial = out / "policies/00000000-raw.safetensors"
+    assert "model" not in load_metadata(initial)["bc"]["counts"]
+    if legacy_state:
+        del saved["extra"]["model"]
+        state.write_text(json.dumps(saved))
+    else:
+        assert saved["extra"]["model"] == settings.model.checkpoint_payload()
+        initial.unlink()  # A run with recorded settings is self-contained.
+    changed = settings.model_copy(
+        update={"model": settings.model.model_copy(update={field: True})}
+    )
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(ValueError, match=f"{field}: False -> True"):
+            self_play(changed, run, updates=2)
+        if legacy_state:
+            assert self_play(settings, run, updates=2).is_file()
+
+
+def test_resume_refuses_a_model_that_reads_its_inputs_differently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+
+    # The rule changes between the start and the resume: timestamps read as stored.
+    def changed(space: ObservationSpace) -> dict[str, tuple[Reading, ...]]:
+        readings = fresh_readings(space)
+        return {
+            key: tuple(
+                Reading.AS_IS if value is Reading.RANK else value for value in values
+            )
+            for key, values in readings.items()
+        }
+
+    monkeypatch.setattr(policy_module, "fresh_readings", changed)
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(
+            ValueError, match=r"agent_permanents\.timestamp: rank -> as_is"
+        ):
+            self_play(settings, run, updates=2)
+
+
+def test_resume_refuses_a_state_saved_before_readings_were_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = gray_ogre_self_play(horizon=2).model_copy(
+        update={"learning": Learning(horizon=2, epochs=1, minibatches=1)}
+    )
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(settings, run, updates=1)
+    # As written before readings were recorded: the model read legacy readings.
+    (state,) = (tmp_path / "out" / "state").glob("save-*/state.json")
+    saved = json.loads(state.read_text())
+    del saved["extra"]["readings"]
+    state.write_text(json.dumps(saved))
+
+    with recording(
+        experiment="test",
+        run="policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
+        resume=True,
+    ) as run:
+        with pytest.raises(
+            ValueError,
+            match=r"written before input readings were recorded.*"
+            r"actions\.ability: as_is -> one_hot:15",
+        ):
+            self_play(settings, run, updates=2)
+
+
+def test_resume_readings_records_a_new_run_and_accepts_a_legacy_state() -> None:
+    space = ObservationSpace(gray_ogre_self_play(horizon=2).observation)
+    fresh, legacy = fresh_readings(space), legacy_readings(space)
+    assert loop.resume_readings(Counts(), fresh, space) == {
+        key: [str(value) for value in values] for key, values in fresh.items()
+    }
+    # A run warm-started from a legacy policy was built with legacy readings.
+    resumed = Counts.model_validate({"updates": 3})
+    assert loop.resume_readings(resumed, legacy, space) == {
+        key: [str(value) for value in values] for key, values in legacy.items()
+    }
+
+
+def test_resume_accepts_historical_memory_readings() -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_references=16,
+            max_decision_reference_details=32,
+            max_decision_members=16,
+        )
+    )
+    readings = fresh_readings(space)
+    historical = Counts(
+        updates=3,
+        readings={
+            key: [str(value) for value in values]
+            for key, values in readings.items()
+            if key not in MEMORY_FIELDS
+        },
+    )
+    assert loop.resume_readings(historical, readings, space) == {
+        key: [str(value) for value in values] for key, values in readings.items()
+    }
 
 
 def test_stop_keeps_registered_counts_at_the_completed_boundary(
@@ -156,8 +337,16 @@ def test_stop_keeps_registered_counts_at_the_completed_boundary(
         rng: np.random.Generator,
         *,
         out: Path,
+        backend: SelfPlayBackend | None = None,
     ) -> dict[str, object]:
-        row = original_step(settings, learner, ema, collector, counts, rng, out=out)
+        row = original_step(
+            settings, learner, ema, collector, counts, rng, out=out, backend=backend
+        )
+        coordinates = {k: v for k, v in row.items() if k.startswith("coordinates/")}
+        assert coordinates["coordinates/updates"] == 1
+        assert "coordinates/model" not in coordinates
+        assert "coordinates/readings" not in coordinates
+        assert all(isinstance(v, (int, float)) for v in coordinates.values())
         stop.touch()
         return row
 
@@ -209,6 +398,9 @@ def test_numerical_failure_keeps_previous_policy_and_private_diagnostics(
         counts: Counts,
         batch: RolloutBatch,
         rng: np.random.Generator,
+        *,
+        backend: SelfPlayBackend,
+        targets: BatchTargets | None = None,
     ) -> UpdateDiagnostics:
         raise NumericalError(
             "fixture_nonfinite", {"values": torch.tensor([float("nan")])}
@@ -266,3 +458,101 @@ def test_device_memory_observations(monkeypatch: pytest.MonkeyPatch) -> None:
     mps = loop.resource_metrics("mps")
     assert mps["memory/allocated_mps_bytes"] == 12
     assert mps["memory/driver_allocated_mps_bytes"] == 45
+
+
+def test_damped_forward_floor_records_two_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    default = DampedPolicyLearning(gradient="damped_policy")
+    assert "reference_forward_kl" not in default.model_dump()
+    with pytest.raises(ValueError):
+        DampedPolicyLearning(gradient="damped_policy", reference_forward_kl=-1)
+    learning = DampedPolicyLearning(
+        gradient="damped_policy",
+        reference_forward_kl=0.002,
+        advantage_quantile=0,
+        min_advantage=0,
+    )
+    assert learning.model_dump()["reference_forward_kl"] == 0.002
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_SEED", str(SEED))
+    with recording(
+        experiment="test", run="floor", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        self_play(_settings(learning), run, updates=2)
+    data = read(tmp_path / "track", "test", "floor")
+    assert list(
+        data.points("reference_forward_kl_coefficient", "updates").y
+    ) == pytest.approx([0.002] * 2)
+    measured = data.points("reference_forward_kl", "updates")
+    assert list(measured.x) == [1, 2]
+    assert np.isfinite(measured.y).all() and np.any(np.asarray(measured.y) > 0)
+
+
+def test_combat_probe_cadence_and_training_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(Learning(horizon=4, epochs=1, minibatches=1, ema=0.9))
+    states = []
+    for every in (0, 1, 2):
+        name = f"probe-{every}"
+        config = settings.model_copy(
+            update={
+                "run_settings": RunSettings(
+                    combat_probe_every=every, combat_probe_rows=4
+                )
+            }
+        )
+        monkeypatch.setenv("ETUDE_OUT", str(tmp_path / name))
+        track = tmp_path / "track"
+        with recording(
+            experiment="test", run=name, clocks=CLOCKS, directory=track, seed=SEED
+        ) as run:
+            self_play(config, run, updates=4)
+        recorded = read(track, "test", name)
+        expected = list(range(every, 5, every)) if every else []
+        for key in (
+            "combat/attack/gap",
+            "combat/attack/shift/my_creatures_9_9",
+            "time/combat_probe",
+        ):
+            assert list(recorded.points(key, "updates").x) == expected
+        for sample in recorded.points("combat/attack/decisions", "updates").y:
+            assert 1 <= sample <= 4
+        seconds = sum(
+            recorded.points(key, "updates").y
+            for key in ("time/collection", "time/learning")
+        )
+        np.testing.assert_allclose(
+            recorded.points("coordinates/training_seconds", "updates").y,
+            np.cumsum(seconds),
+        )
+        with recording(
+            experiment="test",
+            run=name,
+            clocks=CLOCKS,
+            directory=track,
+            resume=True,
+            seed=SEED,
+        ) as run:
+            learner, ema = loop.create(config, seed=SEED)
+            assert ema is not None
+            loop.resume_training(config, run, loop.default_backend(), learner, ema)
+            states.append(
+                (
+                    learner.agent.state_dict(),
+                    ema.state_dict(),
+                    learner.optimizer.state_dict(),
+                )
+            )
+    for state in states[1:]:
+        torch.testing.assert_close(state, states[0], rtol=0, atol=0)
+
+
+def test_combat_probe_run_settings_preserve_default_serialization() -> None:
+    assert (
+        not {"combat_probe_rows", "combat_probe_every"}
+        & RunSettings().model_dump().keys()
+    )
+    custom = RunSettings(combat_probe_every=0, combat_probe_rows=2)
+    assert RunSettings.model_validate_json(custom.model_dump_json()) == custom

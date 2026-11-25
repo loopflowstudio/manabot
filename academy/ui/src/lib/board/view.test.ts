@@ -3,8 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
+import { fitRow, footprint, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { shortName } from '$lib/opponent-name';
+import { counterTerms, permissionTerms } from './inspect';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
 
@@ -65,6 +66,29 @@ describe('boardView over every retained frame', () => {
   );
 });
 
+describe('what is committed to the pending cost', () => {
+  const pay = retained.map(({ frame }) => frame)
+    .find(frame => frame.projection.decision_context && frame.projection.agent.battlefield.length >= 2)!;
+  const [ogre, other] = pay.projection.agent.battlefield;
+  const paying: ExperienceFrame = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!, paid: [
+    { phrase: `sacrificed ${ogre.name}`, object: { entity_id: 0, subject: { kind: 'object', id: { entity: ogre.id, incarnation: 0 } }, display_id: ogre.id, label: ogre.name ?? '' } },
+    { phrase: 'exiled Opt to delve' },
+  ] } } };
+
+  it('marks the permanent that paid with the engine\'s phrase, alone in its pile', () => {
+    const view = boardView(paying, PLAYERS);
+    const marked = permanents(view).filter(item => item.paid !== null);
+    expect(marked.map(item => [item.permanent.id, item.paid])).toEqual([[ogre.id, `sacrificed ${ogre.name}`]]);
+    const pile = [...view.you.creatures, ...view.you.support].find(candidate => candidate.items.some(item => item.permanent.id === ogre.id))!;
+    expect(pile.items.map(item => item.permanent.id)).toEqual([ogre.id]);
+    expect(permanents(view).find(item => item.permanent.id === other.id)?.paid).toBeNull();
+  });
+
+  it('marks nothing when nothing has paid', () => {
+    expect(permanents(boardView(pay, PLAYERS)).every(item => item.paid === null)).toBe(true);
+  });
+});
+
 describe('where decisions land', () => {
   it('names players in target choices as the board names them', () => {
     const bolt = (load(new URL('bolt-target.json', PROTOCOL)) as { recovery: { frame: ExperienceFrame } }).recovery.frame;
@@ -90,7 +114,7 @@ describe('where decisions land', () => {
     const view = boardView(navigation.PAY_OR_NOT.frame, PLAYERS);
     const lands = view.you.support.flatMap(pile => pile.items).filter(item => item.offers.length);
     expect(lands.flatMap(item => item.offers.map(placed => placed.offer.label)))
-      .toEqual(expect.arrayContaining(['Tap Mountain to help pay', 'Tap Island to help pay']));
+      .toEqual(expect.arrayContaining(['Tap Mountain for {R}', 'Tap Island for {U}']));
     expect(view.primary?.offer.label).toBe('Pay the cost');
   });
 
@@ -101,6 +125,30 @@ describe('where decisions land', () => {
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Decline Learn']);
     // A click on the Learn spell on the stack never declines.
     expect(view.stack.flatMap(item => item.offers)).toEqual([]);
+  });
+
+  it('inspects tray cards as themselves: stash counters, a condition, a controlled opponent\'s hand', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const { agent, opponent } = frame.projection;
+    const base = { registry_key: 0, power: 0, toughness: 0, mana_value: 1, types: agent.hand[0]?.types ?? ({} as never) };
+    const stashed = { ...base, id: 9001, name: 'Lightning Bolt', zone: 'EXILE', owner_id: opponent.id, text_box: 'Deal 3.',
+      counters: { stash: 1 }, cast_permission: { player_id: agent.id, cost: '{R}', own_turn_only: true, any_mana: true } };
+    const flameshaped = { ...base, id: 9002, name: 'Mountain', zone: 'EXILE', owner_id: agent.id, face_down: true,
+      cast_permission: { player_id: agent.id, face_down: true, condition: 'you control a Wizard' } };
+    const controlled = { ...base, id: 9003, name: 'Island', zone: 'HAND', owner_id: opponent.id };
+    opponent.exile = [...opponent.exile, stashed];
+    agent.exile = [...agent.exile, flameshaped];
+    opponent.inspected = [controlled];
+    const offer = frame.offers.find(candidate => !['pass_priority', 'pay'].includes(candidate.verb))!;
+    frame.offers = [9001, 9002, 9003].map((id, index) => ({ ...offer, id: index + 1, subjects: [], focus: [id], label: `Play ${id}` }));
+    const view = boardView(frame, PLAYERS);
+    expect(view.tray.map(item => [item.name, item.card?.id])).toEqual([
+      ['Lightning Bolt', 9001], ['Mountain', 9002], ['Island', 9003]]);
+    const player = (id: number) => id === agent.id ? 'You' : 'Heuristic';
+    expect(counterTerms(view.tray[0].card?.counters)).toEqual(['1 stash counter']);
+    expect(permissionTerms(view.tray[0].card, () => 'source', player)[0]).toContain('spending mana of any type');
+    expect(permissionTerms(view.tray[1].card, () => 'source', player)[0]).toContain('only if you control a Wizard');
+    expect(view.tray[2].card?.owner_id).toBe(opponent.id);
   });
 
   it('asks about one blocker: blocks on attackers, not blocking as a button', () => {
@@ -126,6 +174,20 @@ describe('where decisions land', () => {
     expect(attacker.offers.map(placed => placed.offer.label)).toEqual([frame.offers[0].label]);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual([frame.offers[1].label]);
     expect(view.asked.has(creature)).toBe(true);
+  });
+
+  it('keeps combat damage amounts as buttons and asks about the attacker and blocker', () => {
+    const frame = structuredClone(navigation.DECLARE_BLOCKER.frame);
+    const [blocker, attacker] = frame.offers[0].subjects!.map(subject => subject.object);
+    frame.action_space = 'MODAL';
+    frame.projection.decision_context = { ...frame.projection.decision_context!, stage: 'assign_combat_damage', source: null };
+    frame.offers = [1, 2].map((amount, id) => ({ ...frame.offers[0], id, verb: 'choose', action_type: 'MODAL_CHOOSE_MODE',
+      label: `Attacker assigns ${amount} to Blocker`, focus: [attacker.display_id, blocker.display_id],
+      subjects: [attacker, blocker].map(object => ({ role: 'choice', object })) }));
+    const view = boardView(frame, PLAYERS);
+    expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Attacker assigns 1 to Blocker', 'Attacker assigns 2 to Blocker']);
+    expect(permanents(view).flatMap(item => item.offers)).toEqual([]);
+    expect(view.asked).toEqual(new Set([attacker.display_id, blocker.display_id]));
   });
 
   it('takes each land the payer would tap out of its pile', () => {
@@ -249,6 +311,17 @@ describe('the spell being cast', () => {
     expect(view.hand.map(item => item.card.id)).not.toContain(source.display_id);
   });
 
+  it('draws a spell announced from outside the hand with its card', () => {
+    const frame = structuredClone(navigation.PAY_OR_NOT.frame);
+    const source = frame.projection.decision_context!.source!;
+    const agent = frame.projection.agent;
+    const card = agent.hand.find(candidate => candidate.id === source.display_id)!;
+    agent.hand = agent.hand.filter(candidate => candidate !== card);
+    agent.graveyard = [...agent.graveyard, { ...card, zone: 'graveyard' }];
+    const view = boardView(frame, PLAYERS);
+    expect(view.stack[0]).toMatchObject({ announcing: 'spell', card: { id: source.display_id } });
+  });
+
   it('names an ability being activated by its source and leaves the source on the battlefield', () => {
     const frame = structuredClone(navigation.PAY_OR_NOT.frame);
     const land = frame.projection.agent.battlefield[0];
@@ -293,5 +366,14 @@ describe('names in sentences', () => {
     expect(possessive(shortName('Heuristic · scripted'))).toBe("Heuristic's");
     expect(possessive('Invasion Reinforcements')).toBe("Invasion Reinforcements'");
     expect(possessive('You')).toBe('your');
+  });
+});
+
+describe('stack provenance', () => {
+  const spell = { id: 1, kind: 'spell', controller: 0, label: 'Soul Tether' };
+  it('tells a prepared spell from its copy and names flashback', () => {
+    expect(stackProvenance({ ...spell, from_prepared: true })).toEqual(['prepared']);
+    expect(stackProvenance(spell)).toEqual([]);
+    expect(stackProvenance({ ...spell, flashback: true })).toEqual(['flashback']);
   });
 });

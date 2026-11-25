@@ -2,11 +2,11 @@
 
 The masked policy distribution (legal mask, normalized logs and the checks on
 collected behavior), returns (GAE, standardized advantages, categorical lambda
-returns), per-row loss terms including the damped policy objective, advantage
+returns), per-row loss terms for the shared damped policy objective, advantage
 selection and the named numerical refusals they raise. The updates in
 `manabot.training.updates` reach these as `backend.rl`.
 They read tensors and small typed records and import nothing else from
-manabot beyond the framework-free host recursions in `manabot.policy.returns`
+manabot beyond framework-free numerical code
 (`tests/test_package_boundaries.py` enforces it), so another role reuses them
 unchanged. Other backends expose matching functions over their own arrays
 for the operations they support; the gradient step and EMA live in
@@ -15,14 +15,52 @@ for the operations they support; the gradient step and EMA live in
 
 from collections.abc import Mapping
 import math
+import sys
 from typing import Literal
 
+import numpy as np
 import torch
 from torch import Tensor
-from torch.nn import functional as F
+from typing_extensions import deprecated
 
 from manabot.backends.torch.arrays import from_numpy, to_numpy
 import manabot.policy.returns as returns
+
+
+@deprecated(
+    "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
+    "The backend-bound function will be removed in 0.3.0."
+)
+def damped_policy_loss(
+    logits: Tensor,
+    actions: Tensor,
+    advantages: Tensor,
+    behavior_logs: Tensor,
+    reference: Tensor,
+    valid: Tensor,
+    *,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+    reference_forward_kl: float = 0.0,
+) -> Tensor:
+    # Policy readers also use this module and can run with training unavailable.
+    from manabot.training.updates.objective import damped_policy_loss as objective
+
+    return objective(
+        sys.modules[__name__],
+        logits,
+        actions,
+        advantages,
+        behavior_logs,
+        reference,
+        valid,
+        clip=clip,
+        collection_kl=collection_kl,
+        tau=tau,
+        reference_forward_kl=reference_forward_kl,
+    )
+
 
 # -- Numerical refusals --------------------------------------------------------
 # Named numerical refusals, and the host boundary for float64 arithmetic.
@@ -80,6 +118,8 @@ def constant(tensor: Tensor) -> Tensor:
 
 
 def legal_mask(mask: Tensor) -> Tensor:
+    if mask.dtype == torch.bool:
+        return mask
     require(
         torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
         "invalid_action_mask",
@@ -214,7 +254,7 @@ def check_behavior(
 # as the longest trajectory has rows. Each row still takes the same float
 # operations in the same order as a row-by-row recursion, and device kernels of
 # that size are launch latency, not work. GAE is that module's NumPy function;
-# the categorical targets walk its waves over host tensors.
+# the categorical targets use the same host recursion in both backends.
 
 
 def transition_gae(
@@ -224,6 +264,7 @@ def transition_gae(
     next_value: torch.Tensor,
     gamma: float,
     lam: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """GAE for transition-end flags [T,E], on the host
     (`manabot.policy.returns.transition_gae`), back on the rewards' device."""
@@ -234,6 +275,7 @@ def transition_gae(
         to_numpy(next_value),
         gamma,
         lam,
+        bootstrap_indexes,
     )
     return (
         from_numpy(advantages, rewards.device),
@@ -264,72 +306,26 @@ def outcome_probabilities(value_logits: Tensor) -> Tensor:
     return value_logits.softmax(-1)
 
 
-@torch.no_grad()
 def categorical_lambda_returns(
     probabilities: Tensor,
     rewards: Tensor,
     ends: Tensor,
     bootstrap: Tensor,
     trace_lambda: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> Tensor:
-    """Undiscounted outcome mixtures [T,E,3], ordered loss/draw/win.
-
-    Each row ends at the next decision of the SAME player or at terminal.
-    Terminal targets are one-hot signed outcomes. A nonterminal tail uses the
-    exact paused next observation; reset observations never cross end markers.
-    For earlier rows mix (1-lambda)*next_prediction + lambda*next_return.
-    No policy receives true hidden-state input from these outcome labels.
-    """
-    if probabilities.ndim != 3 or probabilities.shape[-1] != 3:
-        raise ValueError("outcome probabilities require [T,E,3]")
-    if (
-        rewards.shape != probabilities.shape[:2]
-        or ends.shape != rewards.shape
-        or bootstrap.shape != probabilities.shape[1:]
-        or not len(rewards)
-        or not 0 <= trace_lambda <= 1
-    ):
-        raise ValueError("invalid outcome target shapes or lambda")
-    for name, distribution in (
-        ("probabilities", probabilities),
-        ("bootstrap", bootstrap),
-    ):
-        if (
-            not torch.isfinite(distribution).all()
-            or (distribution < 0).any()
-            or not torch.allclose(
-                distribution.sum(-1),
-                torch.ones_like(distribution.sum(-1)),
-                atol=1e-5,
-                rtol=1e-5,
-            )
-        ):
-            raise ValueError(f"outcome {name} must be distributions over 3 outcomes")
-    if (
-        not torch.isfinite(rewards).all()
-        or not ((rewards == -1) | (rewards == 0) | (rewards == 1)).all()
-    ):
-        raise ValueError("outcome rewards must be signed win/loss/draw")
-    ends = ends.bool()
-    if (rewards[~ends] != 0).any():
-        raise ValueError("nonterminal outcome reward must be zero")
-    # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
-    host_probabilities = probabilities.cpu()
-    host_ends = ends.cpu()
-    last_row = bootstrap.cpu()[None]
-    following = torch.cat([host_probabilities[1:], last_row])
-    terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
-    # The extra row is the trace past each column's last row.
-    targets = torch.cat([torch.empty_like(host_probabilities), last_row])
-    for wave_steps, wave_columns in returns.reverse_waves(host_ends.numpy()):
-        steps, columns = torch.from_numpy(wave_steps), torch.from_numpy(wave_columns)
-        continuation = (1 - trace_lambda) * following[
-            steps, columns
-        ] + trace_lambda * targets[steps + 1, columns]
-        targets[steps, columns] = torch.where(
-            host_ends[steps, columns, None], terminal[steps, columns], continuation
-        )
-    return targets[:-1].to(probabilities.device)
+    """Frozen loss/draw/win lambda targets on the predictions' device."""
+    targets = returns.categorical_lambda_returns(
+        to_numpy(probabilities),
+        to_numpy(rewards),
+        to_numpy(ends),
+        to_numpy(bootstrap),
+        trace_lambda,
+        bootstrap_indexes,
+    )
+    return from_numpy(targets, probabilities.device).to(
+        torch.promote_types(probabilities.dtype, bootstrap.dtype)
+    )
 
 
 # -- Losses --------------------------------------------------------------------
@@ -359,12 +355,20 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
     )
 
 
+def legal_kl(left: Tensor, right: Tensor, valid: Tensor) -> Tensor:
+    """KL(left || right) per row, masking log padding before subtraction."""
+    difference = left.masked_fill(~valid, 0) - right.masked_fill(~valid, 0)
+    return (left.exp() * difference).sum(-1)
+
+
 def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
-    """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
-    difference = logs.masked_fill(~valid, 0) - target_logs.detach().masked_fill(
-        ~valid, 0
-    )
-    return (logs.exp() * difference).sum(-1)
+    """KL(current || frozen target) [B] over legal offers."""
+    return legal_kl(logs, target_logs.detach(), valid)
+
+
+def forward_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
+    """KL(frozen target || current) [B] over legal offers."""
+    return legal_kl(target_logs.detach(), logs, valid)
 
 
 def squared_value_loss(values: Tensor, targets: Tensor) -> Tensor:
@@ -393,57 +397,6 @@ def categorical_value_loss(value_logits: Tensor, targets: Tensor) -> Tensor:
 def entropy(logs: Tensor, valid: Tensor) -> Tensor:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(logs.exp() * logs.masked_fill(~valid.bool(), 0)).sum(-1)
-
-
-def damped_policy_loss(
-    logits: Tensor,
-    actions: Tensor,
-    advantages: Tensor,
-    behavior_logs: Tensor,
-    reference: Tensor,
-    valid: Tensor,
-    *,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-) -> Tensor:
-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
-
-    Sources and departures: docs/learning.md#fidelity-to-the-sources.
-
-    Ratios use the actual action likelihood at collection, even after earlier
-    minibatches change the learner. The reverse KLs sum all legal actions.
-    This is per-action reuse correction, not trajectory importance weighting.
-    MPS combines these terms on the host to retain float64 surrogate range.
-    """
-    valid = valid.bool()
-    if logits.ndim != 2 or logits.shape != valid.shape:
-        raise ValueError("policy logits require [B,A] legal support")
-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
-        raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
-        raise ValueError("invalid damping coefficients")
-    check_logs(behavior_logs, valid)
-    check_probabilities(reference, valid, positive=True)
-    require(
-        torch.isfinite(advantages),
-        "nonfinite_advantages",
-        advantages=advantages,
-        valid=valid,
-    )
-    if ((actions < 0) | (actions >= logits.shape[-1])).any():
-        raise ValueError("action index outside legal support")
-    if not valid.gather(-1, actions[:, None]).all():
-        raise ValueError("sampled action is not legal")
-    logs = policy_logs(logits, valid)
-    ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
-    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
-    return (
-        surrogate
-        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
-        + tau
-        * float64_operand(reverse_kl(logs, reference_logs(reference, valid), valid))
-    )
 
 
 @torch.no_grad()
@@ -476,12 +429,24 @@ def selected_rows(
 
     Top-count sorts by magnitude with stable ties; quantiles retain row order.
     """
+    return selected_magnitudes(advantages, kind, fraction, minimum)[0]
+
+
+def selected_magnitudes(
+    advantages: Tensor,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[Tensor, float | None]:
+    """Retained flat indexes and empirical cutoff before the absolute floor."""
+    magnitude = advantages.detach().abs().flatten()
     if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum).nonzero().flatten()
-    magnitude = advantages.abs()
+        cutoff = float(torch.quantile(magnitude, 1 - fraction))
+        return (magnitude >= max(cutoff, minimum)).nonzero().flatten(), cutoff
     count = max(1, math.ceil(len(magnitude) * fraction))
     indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
-    return indices[magnitude[indices] >= minimum]
+    cutoff = float(magnitude[indices[-1]]) if len(indices) else None
+    return indices[magnitude[indices] >= minimum], cutoff
 
 
 def magnitude_quantile(advantages: Tensor, quantile: float) -> float:
@@ -505,6 +470,11 @@ def selection_mask(
     mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
     mask[selected_rows(advantages.flatten(), fraction, minimum, kind=kind)] = True
     return mask.reshape_as(advantages)
+
+
+def weighted_sum(values: Tensor, weights: Tensor) -> Tensor:
+    """Sum per-row losses with constant logical-minibatch coefficients."""
+    return (float64_operand(values) * float64_operand(weights)).sum()
 
 
 def selected_mean(values: Tensor, selected: Tensor) -> Tensor:

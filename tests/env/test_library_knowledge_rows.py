@@ -7,9 +7,10 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.possible_worlds import PossibleWorldSpace
 from tests.model.prepared_routes import device_input
@@ -18,37 +19,37 @@ from tests.model.prepared_routes import device_input
 def _root(owner: int) -> managym.Env:
     env = managym.Env(seed=19)
     deck = {"Hakoda, Selfless Commander": 4, "Plains": 20, "Gray Ogre": 16}
-    env.reset([managym.PlayerConfig(f"seat {seat}", deck) for seat in range(2)])
+    raw, _ = env.reset(
+        [managym.PlayerConfig(f"seat {seat}", deck) for seat in range(2)]
+    )
+    keep_opening_hands(env, raw)
     env.scenario_force_battlefield(owner, "Hakoda, Selfless Commander", True)
     env.scenario_refresh()
     return env
 
 
 @pytest.mark.parametrize("owner", [0, 1])
-def test_library_facts_match_native_buffers_and_remain_private(owner: int) -> None:
+def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> None:
     env = _root(owner)
     space = ObservationSpace()
     own = env.observation_for_player(owner)
     other = env.observation_for_player(1 - owner)
     assert set(own.agent.known_library) == {0}
     assert not other.opponent.known_library
-    for observation in (own, other):
-        expected = space.encode(observation)
-        actual = env.encode_observation(observation)
-        assert actual.keys() == expected.keys()
-        for key in expected:
-            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+    assert not encode_observation(space, other)["known_library"][1].any()
     definition = own.agent.known_library[0]
-    encoded = space.encode(own)["known_library"]
+    encoded = encode_observation(space, own)["known_library"]
     np.testing.assert_array_equal(encoded[0, 0], [definition + 1, 1])
     assert not encoded[0, 1:].any()
     assert not encoded[1].any()
     assert sum(own.agent.unseen_counts.values()) == own.agent.zone_counts[0] - 1
 
     # The shared native writer infers its layout from these supplied buffers.
-    buffers = space.encoder.allocate(1)
-    managym.encode_observations_into([env], buffers, 1)
-    acting = space.encode(env.observation_for_player(env.current_agent_index()))
+    buffers = space.allocate(1)
+    managym.encode_observations_into([env], space.layout, buffers, 1)
+    acting = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
     for key in acting:
         np.testing.assert_array_equal(buffers[key][0], acting[key], err_msg=key)
 
@@ -58,7 +59,7 @@ def test_library_facts_reach_text_and_the_actual_torch_policy() -> None:
     assert env.current_agent_index() == 0
     assert "Known library position 1 from top:" in capture_text_decision(env).text
     space = ObservationSpace()
-    rows = space.encode(env.observation_for_player(0))
+    rows = encode_observation(space, env.observation_for_player(0))
     inputs = {key: value[None] for key, value in rows.items()}
     torch.manual_seed(71)
     policy = ActorCritic(
@@ -87,20 +88,14 @@ def test_legacy_inputs_omit_library_positions(version: int) -> None:
     source = json.loads(env.observation_for_player(0).toJSON())
     observation = managym.Observation.from_json(json.dumps(source))
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
-    expected = space.encode(observation)
-    native = space.encoder.allocate()
-    env.encode_observation_into(observation, native)
+    expected = encode_observation(space, observation)
     source["agent"].pop("known_library", None)
     source["opponent"].pop("known_library", None)
     observation = managym.Observation.from_json(json.dumps(source))
     assert not observation.agent.known_library
-    without = space.encode(observation)
-    native_without = space.encoder.allocate()
-    env.encode_observation_into(observation, native_without)
+    without = encode_observation(space, observation)
     for key in without:
         np.testing.assert_array_equal(expected[key], without[key], err_msg=key)
-        np.testing.assert_array_equal(native[key], native_without[key], err_msg=key)
-        np.testing.assert_array_equal(native[key], expected[key], err_msg=key)
 
 
 @pytest.mark.parametrize("owner", [0, 1])
@@ -144,7 +139,7 @@ def test_current_policy_refuses_missing_or_malformed_library_facts(
 ) -> None:
     env = _root(0)
     space = ObservationSpace()
-    rows = space.encode(env.observation_for_player(0))
+    rows = encode_observation(space, env.observation_for_player(0))
     inputs = {key: value[None] for key, value in rows.items()}
     policy = ActorCritic(
         space,
@@ -168,7 +163,7 @@ def test_current_policy_refuses_missing_or_malformed_library_facts(
 
 def test_torch_distinguishes_known_hand_from_known_library_top() -> None:
     env = _root(0)
-    rows = ObservationSpace().encode(env.observation_for_player(0))
+    rows = encode_observation(ObservationSpace(), env.observation_for_player(0))
     definition = rows["known_library"][0, 0, 0]
     rows["known_hand"].fill(0)
     rows["known_library"].fill(0)

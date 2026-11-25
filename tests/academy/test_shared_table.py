@@ -12,6 +12,7 @@ import pytest
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
 from managym.academy.work import WorkStatus
+from managym.experience_projection import HERO_PLAYER_INDEX
 from tests.academy.socket_messages import settled_message
 
 CONFIG = {
@@ -97,9 +98,7 @@ def test_live_decision_summaries_match_full_replay_without_reconstruction(
         resume_token="summary-characterization-token",
         game=game,
     )
-    projection = server.project_replay(
-        game.canonical_replay(), server.HERO_PLAYER_INDEX
-    )
+    projection = server.project_replay(game.canonical_replay(), HERO_PLAYER_INDEX)
     addressed = server.projection_with_addresses(projection)
     expected = [
         {
@@ -114,7 +113,7 @@ def test_live_decision_summaries_match_full_replay_without_reconstruction(
     assert game.obs.game_over
     assert {row.viewer for row in game.canonical_decisions} == {0, 1}
     assert len(expected) == sum(
-        row.viewer == server.HERO_PLAYER_INDEX for row in game.canonical_decisions
+        row.viewer == HERO_PLAYER_INDEX for row in game.canonical_decisions
     )
 
     def forbidden(*_args, **_kwargs):

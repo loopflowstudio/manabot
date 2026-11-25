@@ -90,7 +90,7 @@ def bind_catalog(
     catalog = catalog_tables(
         managym.WORLD_SETUP,
         records=True,
-        decision_memory=bool(checkpoint.space.encoder.config.max_decision_records),
+        decision_memory=bool(checkpoint.space.config.max_decision_records),
     )
     buffers = catalog.buffers.copy()
     prefix = "semantic_cards."

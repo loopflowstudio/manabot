@@ -19,11 +19,17 @@ finished, launches the sampler.
 from decimal import Decimal
 
 from etude.jobs import ExperimentState, TrainingJob
+from etude.report import Report
 
 from manabot.recipes import belief_policy, belief_sampler
+from manabot.training.panels import self_play_report
 
 POLICY = "policy"
 SAMPLER = "sampler"
+
+
+def report() -> Report:
+    return self_play_report(other_metrics=True)
 
 
 def training_jobs(state: ExperimentState) -> list[TrainingJob]:

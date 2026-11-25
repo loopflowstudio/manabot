@@ -60,3 +60,96 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
         }
     }
 }
+
+/// Saddle 1 taps other creatures with total power 1 or more, at sorcery
+/// speed, and the ability's receipt names them. The Jaguar gets +2/+2 only
+/// when it attacks while saddled. The automatic payer leaves the choice of
+/// creatures to the player.
+#[test]
+fn alacrian_jaguar_gets_plus_two_only_when_it_attacks_saddled() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_unfunded_setup},
+        inspect::{card_of, has_action, tapped, top_activation},
+        play::{activate, attack_with, fork_selecting},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{
+            payment::{How, Toward},
+            player::ManaPayment,
+        },
+    };
+    for (saddled, auto) in [(false, false), (true, false), (true, true)] {
+        let mut s = five_color_unfunded_setup(&["Alacrian Jaguar", "Llanowar Elves", "Gray Ogre"]);
+        if auto {
+            s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        }
+        let jaguar = s.force_permanent_on_battlefield(0, "Alacrian Jaguar");
+        let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        clear_summoning_sickness(&mut s, jaguar);
+        let saddles = |a: &Action| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == jaguar);
+        if saddled {
+            activate(&mut s, jaguar, 0);
+            let mut offered = offered_cards(&s);
+            offered.sort();
+            let mut expected = vec![card_of(&s, elves), card_of(&s, ogre)];
+            expected.sort();
+            assert_eq!(
+                offered, expected,
+                "the Jaguar cannot saddle itself, auto={auto}"
+            );
+            let frame = s.game().semantic_decision_frame().unwrap();
+            assert!(
+                frame
+                    .offers
+                    .iter()
+                    .any(|offer| offer.label == "Tap Llanowar Elves to saddle"),
+                "{:?}",
+                frame.offers
+            );
+            let context = s.game().decision_context(PlayerId(0)).unwrap();
+            assert!(
+                context.instruction.contains("to saddle"),
+                "{}",
+                context.instruction
+            );
+            let rider = card_of(&s, elves);
+            // Either creature saddles, each in its own line of play.
+            for chosen in [rider, card_of(&s, ogre)] {
+                let fork = fork_selecting(&s, chosen);
+                let ability = top_activation(&fork);
+                assert_eq!(
+                    ability
+                        .paid
+                        .contributed(How::Tapped, Toward::Saddle)
+                        .collect::<Vec<_>>(),
+                    [chosen]
+                );
+            }
+            select_card(&mut s, rider);
+            let ability = top_activation(&s);
+            assert_eq!(
+                ability
+                    .paid
+                    .contributed(How::Tapped, Toward::Saddle)
+                    .collect::<Vec<_>>(),
+                [rider]
+            );
+            settle(&mut s);
+            assert!(tapped(&s, elves) && !tapped(&s, ogre) && !tapped(&s, jaguar));
+        }
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, jaguar);
+        s.advance_until(
+            |sc| sc.game().state.stack_objects.is_empty(),
+            "the attack trigger resolves".into(),
+        );
+        // Saddle only as a sorcery: not during combat.
+        assert!(!has_action(&s, saddles));
+        let view = s.game().characteristics(jaguar);
+        let expected = if saddled { (6, 6) } else { (4, 4) };
+        assert_eq!((view.power, view.toughness), expected, "saddled={saddled}");
+    }
+}

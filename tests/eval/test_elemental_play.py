@@ -102,13 +102,13 @@ def test_match_retry_preserves_failure_journal(
     match = Match[Conditions](
         players=(checkpoint_player(ref), elemental_play.heuristic_code()),
         config=Conditions(
-            kind="full",
+            kind="full" if launched else "subset",
             deck="elemental_ur",
             groups=(
                 Group(
                     model_deck="elemental_ur",
                     heuristic_deck="elemental_bg",
-                    model_seat=0,
+                    model_seat=1,
                     deals=(7,),
                 ),
             ),
@@ -141,6 +141,9 @@ def test_match_retry_preserves_failure_journal(
         assert list(root.rglob("rows.json"))
 
     result = elemental_play.play(match, [forward, opponent])
+    [behaviour] = result.tables["behaviour"]
+    assert (behaviour["seat"], behaviour["game_seat"], behaviour["deal"]) == (0, 1, 7)
+    assert behaviour["unit"] == match.config.kind and behaviour["games"] == 1
     assert len(result.tables["games"]) == 2
     assert all(row["valid"] and row["terminated"] for row in result.tables["games"])
     assert all(row["score"] is not None for row in result.tables["games"])

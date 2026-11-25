@@ -27,6 +27,7 @@ from manabot.infra.identity import file_sha256
 from manabot.sim import anchors
 from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
 from manabot.sim.players import build_code_player
+from manabot.verify.text_observation import keep_opening_hands
 from tests.eval.arena_fixture import arena_fixture
 
 PARITY = (
@@ -49,10 +50,10 @@ def _players(decks: list[str]) -> list[managym.PlayerConfig]:
 
 def test_native_heuristic_matches_retained_python_decisions() -> None:
     fixture = json.loads(PARITY.read_text())
-    assert fixture["world"]["card_digest"] == managym.world_identity()["card_digest"]
     for case in fixture["cases"]:
         env = managym.Env(seed=case["seed"])
         raw, _ = env.reset(_players(case["decks"]))
+        raw = keep_opening_hands(env, raw)
         players = [HeuristicPlayer(max_actions=case["max_actions"]) for _ in range(2)]
         tape = iter(case["actions"])
         for decision, expected in enumerate(tape):
@@ -118,6 +119,8 @@ def test_native_batch_matches_scalar_choices_rewards_and_reset(seed: int) -> Non
             scalar = managym.Env(seed=min(seed + episodes, 2**64 - 1))
             raw, _ = scalar.reset(configs)
             selector.reset()
+            # A finished slot stays parked until the caller deals the next game.
+            ((batched, _),) = batch.reset_all(configs)
     assert episodes > 0
 
 

@@ -6,6 +6,7 @@ fixed pass continuation resolves the selected target; it never chooses a target
 or invents a reward. These injected roots are not complete-game strength evidence.
 """
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -84,9 +85,8 @@ def resolve_target(env: Env, action: int) -> int:
 class TargetPracticeVector:
     """Serial native roots with the collector's existing in-place buffer contract.
 
-    Every row is one genuine terminal transition. The next root replaces only
-    the next observation; terminal flags and the previous winner remain available
-    to Collector. Paused rows neither advance seeds nor consume actions.
+    Each action resolves a terminal transition and parks its row until the
+    collector requests another root. Only loaded rows spend a seed.
     """
 
     # Every root is an `Env`, which always skips forced decisions.
@@ -97,41 +97,86 @@ class TargetPracticeVector:
     ) -> None:
         self.space, self.match, self.count = space, match, count
         self.seeds = [seed + row for row in range(count)]
-        self.envs: list[Env] = []
+        self.envs: list[Env | None] = [None] * count
         self.buffers: dict[str, np.ndarray] = {}
         self.infos: list[dict[str, Any]] = [{} for _ in range(count)]
 
     def set_buffers(
-        self, buffers: dict[str, np.ndarray], action_overflow: str = "error"
+        self,
+        buffers: dict[str, np.ndarray],
+        action_overflow: str = "error",
+        *,
+        layout: managym.ObservationLayout,
     ) -> None:
-        if action_overflow != self.space.encoder.config.action_overflow:
+        if action_overflow != self.space.config.action_overflow:
             raise ValueError("target practice action policy differs from its encoder")
         self.buffers = buffers
-
-    def _reset(self, row: int) -> Env:
-        env = target_root(self.match, self.space, self.seeds[row], row % 2)
-        self.seeds[row] += self.count
-        encoded = self.space.encode(env.last_raw_obs)
-        for key, value in encoded.items():
-            self.buffers[key][row] = value
-        return env
+        self.layout = layout
 
     def reset_all_into_buffers(self, configs: object) -> None:
-        self.envs = [self._reset(row) for row in range(self.count)]
+        self.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(row) for row in range(self.count)]
+        )
+
+    def load_slots_into_buffers(self, requests: Sequence[managym.SlotLoad]) -> None:
+        """Prepare every requested target before publishing any root or spending a seed."""
+        rows = [request.slot for request in requests]
+        if len(set(rows)) != len(rows) or any(row >= self.count for row in rows):
+            raise ValueError("target practice requires distinct slots in range")
+        if not all(request.uses_slot_setup for request in requests):
+            raise ValueError(
+                "target practice requires fresh loads with its configured match"
+            )
+
+        roots = [
+            target_root(self.match, self.space, self.seeds[row], row % 2)
+            for row in rows
+        ]
+        opening = self.space.allocate(len(rows))
+        for index, env in enumerate(roots):
+            managym.encode_observation_into(
+                env.last_raw_obs,
+                self.layout,
+                {key: value[index] for key, value in opening.items()},
+                self.space.config.action_overflow,
+            )
+        for key, values in opening.items():
+            self.buffers[key][rows] = values
+        for row, env in zip(rows, roots, strict=True):
+            self.envs[row] = env
+            self.seeds[row] += self.count
+            self.infos[row] = {}
+            for key in ("terminated", "truncated", "rewards"):
+                self.buffers[key][row] = 0
 
     def current_agent_indices(self) -> list[int]:
-        return [int(env.last_raw_obs.agent.player_index) for env in self.envs]
+        return [
+            int(env.last_raw_obs.agent.player_index) if env is not None else -1
+            for env in self.envs
+        ]
 
     def get_last_info(self) -> list[dict[str, Any]]:
         return self.infos
 
     def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
-        self.buffers["terminated"].fill(0)
-        self.buffers["truncated"].fill(0)
-        self.buffers["rewards"].fill(0)
+        playing: list[tuple[int, Env]] = []
         for row, enabled in enumerate(active):
             if enabled:
-                winner = resolve_target(self.envs[row], actions[row])
-                self.infos[row] = {"winner_index": winner}
-                self.envs[row] = self._reset(row)
-                self.buffers["terminated"][row] = 1
+                env = self.envs[row]
+                if env is None:
+                    raise RuntimeError(f"cannot step parked target practice slot {row}")
+                playing.append((row, env))
+        for key in ("terminated", "truncated", "rewards"):
+            self.buffers[key].fill(0)
+        for row, env in playing:
+            winner = resolve_target(env, actions[row])
+            managym.encode_observation_into(
+                env.last_raw_obs,
+                self.layout,
+                {key: self.buffers[key][row] for key in self.space.keys()},
+                self.space.config.action_overflow,
+            )
+            self.buffers["rewards"][row] = 1.0 if winner == row % 2 else -1.0
+            self.infos[row] = {"winner_index": winner}
+            self.envs[row] = None
+            self.buffers["terminated"][row] = 1

@@ -19,7 +19,7 @@ use pyo3::{
     buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyDict, PyList, PyModule},
+    types::{PyDict, PyList, PyModule, PySet},
 };
 #[cfg(feature = "python")]
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,7 @@ use crate::{
             RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
             StackTargetData, StackTargetKindData, TurnData,
         },
-        observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
+        observation_encoder::ObservationEncoderConfig,
         shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
@@ -49,7 +49,7 @@ use crate::{
         Revision,
     },
     flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
-    python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
+    python::convert::info_dict_to_pydict,
     search_state::SearchStateWitness,
     state::{
         deck::Deck,
@@ -79,34 +79,46 @@ pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
 }
 
 #[cfg(feature = "python")]
-fn to_numpy_array_f32(
-    py: Python<'_>,
-    np: &Bound<'_, PyModule>,
-    data: &[f32],
-    shape: &[usize],
-) -> PyResult<PyObject> {
-    let array_fn = np.getattr("empty")?;
-    let kwargs = PyDict::new_bound(py);
-    kwargs.set_item("dtype", np.getattr("float32")?)?;
-    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
-    // Bulk-copy exact f32 bits into Python-owned storage; no scalar boxing.
-    PyBuffer::<f32>::get_bound(&array)?.copy_from_slice(py, data)?;
-    Ok(array.unbind())
+pyo3::create_exception!(_managym, ObservationCapacity, PyValueError);
+
+/// The one Python form of an encoding failure: `ObservationCapacity` when the
+/// observation does not fit its buffers, `ValueError` otherwise. The message
+/// is the native one.
+#[cfg(feature = "python")]
+pub(crate) fn map_encode_err(
+    err: crate::agent::observation_encoder::ObservationEncodeError,
+) -> PyErr {
+    use crate::agent::observation_encoder::ObservationEncodeError;
+    match err {
+        ObservationEncodeError::Capacity { .. } => ObservationCapacity::new_err(err.to_string()),
+        _ => PyValueError::new_err(err.to_string()),
+    }
 }
 
 #[cfg(feature = "python")]
-fn to_numpy_array_i32(
-    py: Python<'_>,
-    np: &Bound<'_, PyModule>,
-    data: &[i32],
+pub(super) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    py.import_bound("warnings")?.call_method1(
+        "warn",
+        (
+            message,
+            py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+    Ok(())
+}
+
+#[cfg(feature = "python")]
+fn numpy_array<'py, T: pyo3::buffer::Element>(
+    py: Python<'py>,
+    empty: &Bound<'py, PyAny>,
+    data: &[T],
     shape: &[usize],
-) -> PyResult<PyObject> {
-    let array_fn = np.getattr("empty")?;
-    let kwargs = PyDict::new_bound(py);
-    kwargs.set_item("dtype", np.getattr("int32")?)?;
-    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
-    PyBuffer::<i32>::get_bound(&array)?.copy_from_slice(py, data)?;
-    Ok(array.unbind())
+    dtype: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let array = empty.call1((shape.to_vec(), dtype))?;
+    PyBuffer::<T>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array)
 }
 
 #[cfg(feature = "python")]
@@ -115,361 +127,186 @@ fn encoded_to_dict<'py>(
     encoded: crate::agent::observation_encoder::EncodedObservation,
     config: &ObservationEncoderConfig,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let np = PyModule::import_bound(py, "numpy")?;
+    use crate::agent::{continuation, decision_memory, observation_encoder as enc};
+    let empty = py.import_bound("numpy")?.getattr("empty")?;
     let dict = PyDict::new_bound(py);
-    dict.set_item(
-        "name_candidates",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.name_candidates,
-            &[
-                config.max_actions,
-                crate::agent::observation_encoder::NAME_DIM,
-            ],
-        )?,
-    )?;
-    for (name, values, shape) in [
-        (
-            "effects",
-            &encoded.effects,
-            [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
-        ),
-        (
-            "effect_details",
-            &encoded.effect_details,
-            [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
-        ),
-        (
-            "effect_members",
-            &encoded.effect_members,
-            [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
-        ),
-    ] {
-        dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
-    }
-    if config.turn_state {
-        dict.set_item(
-            "player_turn_state",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.player_turn_state,
-                &[2, crate::agent::observation_encoder::TURN_STATE_DIM],
-            )?,
-        )?;
-        dict.set_item(
-            "card_turn_state",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.card_turn_state,
-                &[2, config.max_cards_per_player],
-            )?,
-        )?;
-    }
-    dict.set_item(
-        "facts",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.facts,
-            &[
-                config.max_facts,
-                crate::agent::observation_encoder::FACT_DIM,
-            ],
-        )?,
-    )?;
-    dict.set_item(
-        "relations",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.relations,
-            &[
-                crate::agent::continuation::RELATION_ROWS,
-                crate::agent::continuation::RELATION_DIM,
-            ],
-        )?,
-    )?;
+    let put = |name: &str, data: &[f32], shape: &[usize]| {
+        dict.set_item(name, numpy_array(py, &empty, data, shape, "float32")?)
+    };
 
-    dict.set_item(
-        "agent_player",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_player,
-            &[1, crate::agent::observation_encoder::PLAYER_DIM],
-        )?,
+    put(
+        "name_candidates",
+        &encoded.name_candidates,
+        &[config.max_actions, enc::NAME_DIM],
     )?;
-    dict.set_item(
-        "opponent_player",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_player,
-            &[1, crate::agent::observation_encoder::PLAYER_DIM],
-        )?,
+    put(
+        "effects",
+        &encoded.effects,
+        &[shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
     )?;
-    dict.set_item(
-        "agent_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_cards,
-            &[
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-        )?,
+    put(
+        "effect_details",
+        &encoded.effect_details,
+        &[shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
     )?;
-    dict.set_item(
-        "opponent_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_cards,
-            &[
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::CARD_DIM,
-            ],
-        )?,
+    put(
+        "effect_members",
+        &encoded.effect_members,
+        &[shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
     )?;
-    dict.set_item(
-        "agent_permanents",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
-        )?,
-    )?;
-    dict.set_item(
-        "opponent_permanents",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
-        )?,
-    )?;
-    if config.layout == crate::agent::observation_encoder::InputLayout::OneToken {
-        dict.set_item(
-            "stack",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.stack,
-                &[
-                    config.max_stack_objects,
-                    crate::agent::observation_encoder::STACK_DIM,
-                ],
-            )?,
+    if config.turn_state {
+        put(
+            "player_turn_state",
+            &encoded.player_turn_state,
+            &[2, config.turn_state_dim()],
         )?;
-        dict.set_item(
-            "stack_valid",
-            to_numpy_array_f32(py, &np, &encoded.stack_valid, &[config.max_stack_objects])?,
+        put(
+            "card_turn_state",
+            &encoded.card_turn_state,
+            &[2, config.max_cards_per_player],
         )?;
     }
-    dict.set_item(
+    put("facts", &encoded.facts, &[config.max_facts, enc::FACT_DIM])?;
+    put(
+        "relations",
+        &encoded.relations,
+        &[continuation::RELATION_ROWS, config.relation_dim()],
+    )?;
+    put(
+        "agent_player",
+        &encoded.agent_player,
+        &[1, config.player_dim()],
+    )?;
+    put(
+        "opponent_player",
+        &encoded.opponent_player,
+        &[1, config.player_dim()],
+    )?;
+    let cards = [config.max_cards_per_player, enc::CARD_DIM];
+    put("agent_cards", &encoded.agent_cards, &cards)?;
+    put("opponent_cards", &encoded.opponent_cards, &cards)?;
+    let permanents = [config.max_permanents_per_player, config.permanent_dim()];
+    put("agent_permanents", &encoded.agent_permanents, &permanents)?;
+    put(
+        "opponent_permanents",
+        &encoded.opponent_permanents,
+        &permanents,
+    )?;
+    if config.layout == enc::InputLayout::OneToken {
+        put(
+            "stack",
+            &encoded.stack,
+            &[config.max_stack_objects, enc::STACK_DIM],
+        )?;
+        put(
+            "stack_valid",
+            &encoded.stack_valid,
+            &[config.max_stack_objects],
+        )?;
+    }
+    put(
         "actions",
-        to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
+        &encoded.actions,
+        &[config.max_actions, config.action_dim()],
     )?;
     if config.max_decision_records > 0 {
-        dict.set_item(
+        put(
             "decision_records",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_records,
-                &[
-                    config.max_decision_records,
-                    crate::agent::decision_memory::RECORD_DIM,
-                ],
-            )?,
+            &encoded.decision_records,
+            &[config.max_decision_records, decision_memory::RECORD_DIM],
         )?;
-        dict.set_item(
+        put(
             "decision_reference_details",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_reference_details,
-                &[
-                    config.max_decision_reference_details,
-                    crate::agent::decision_memory::DETAIL_DIM,
-                ],
-            )?,
+            &encoded.decision_reference_details,
+            &[
+                config.max_decision_reference_details,
+                decision_memory::DETAIL_DIM,
+            ],
         )?;
-        dict.set_item(
+        put(
             "decision_references",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_references,
-                &[
-                    config.max_decision_references,
-                    crate::agent::decision_memory::REFERENCE_DIM,
-                ],
-            )?,
+            &encoded.decision_references,
+            &[
+                config.max_decision_references,
+                decision_memory::REFERENCE_DIM,
+            ],
         )?;
-        dict.set_item(
+        put(
             "decision_members",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decision_members,
-                &[
-                    config.max_decision_members,
-                    crate::agent::decision_memory::MEMBER_DIM,
-                ],
-            )?,
+            &encoded.decision_members,
+            &[config.max_decision_members, decision_memory::MEMBER_DIM],
         )?;
     }
-    dict.set_item(
+    put(
         "events",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.events,
-            &[config.max_events, config.event_dim()],
-        )?,
+        &encoded.events,
+        &[config.max_events, config.event_dim()],
     )?;
     dict.set_item(
         "action_focus",
-        to_numpy_array_i32(
+        numpy_array(
             py,
-            &np,
+            &empty,
             &encoded.action_focus,
             &[config.max_actions, config.max_focus_objects],
+            "int32",
         )?,
     )?;
-
-    dict.set_item(
-        "agent_player_valid",
-        to_numpy_array_f32(py, &np, &encoded.agent_player_valid, &[1])?,
-    )?;
-    dict.set_item(
+    put("agent_player_valid", &encoded.agent_player_valid, &[1])?;
+    put(
         "opponent_player_valid",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player_valid, &[1])?,
+        &encoded.opponent_player_valid,
+        &[1],
     )?;
-    dict.set_item(
+    put(
         "agent_cards_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_cards_valid,
-            &[config.max_cards_per_player],
-        )?,
+        &encoded.agent_cards_valid,
+        &[config.max_cards_per_player],
     )?;
-    dict.set_item(
+    put(
         "opponent_cards_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_cards_valid,
-            &[config.max_cards_per_player],
-        )?,
+        &encoded.opponent_cards_valid,
+        &[config.max_cards_per_player],
     )?;
-    dict.set_item(
+    put(
         "agent_permanents_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.agent_permanents_valid,
-            &[config.max_permanents_per_player],
-        )?,
+        &encoded.agent_permanents_valid,
+        &[config.max_permanents_per_player],
     )?;
-    dict.set_item(
+    put(
         "opponent_permanents_valid",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.opponent_permanents_valid,
-            &[config.max_permanents_per_player],
-        )?,
+        &encoded.opponent_permanents_valid,
+        &[config.max_permanents_per_player],
     )?;
-    dict.set_item(
+    put(
         "actions_valid",
-        to_numpy_array_f32(py, &np, &encoded.actions_valid, &[config.max_actions])?,
+        &encoded.actions_valid,
+        &[config.max_actions],
     )?;
-    dict.set_item(
-        "events_valid",
-        to_numpy_array_f32(py, &np, &encoded.events_valid, &[config.max_events])?,
-    )?;
-
-    dict.set_item(
+    put("events_valid", &encoded.events_valid, &[config.max_events])?;
+    put(
         "semantic_cards",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.semantic_cards,
-            &[2, config.max_cards_per_player],
-        )?,
+        &encoded.semantic_cards,
+        &[2, config.max_cards_per_player],
     )?;
     if config.known_library_len() > 0 {
-        dict.set_item(
+        put(
             "known_library",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.known_library,
-                &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
-            )?,
+            &encoded.known_library,
+            &[2, crate::state::knowledge::KNOWN_LIBRARY_ROWS, 2],
         )?;
     }
-    dict.set_item(
+    put(
         "known_hand",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.known_hand,
-            &[2, config.max_cards_per_player, 2],
-        )?,
+        &encoded.known_hand,
+        &[2, config.max_cards_per_player, 2],
     )?;
-    dict.set_item(
+    put(
         "decklists",
-        to_numpy_array_f32(
-            py,
-            &np,
-            &encoded.decklists,
-            &[
-                2,
-                config.max_cards_per_player,
-                crate::agent::observation_encoder::DECKLIST_DIM,
-            ],
-        )?,
+        &encoded.decklists,
+        &[2, config.max_cards_per_player, enc::DECKLIST_DIM],
     )?;
-
     Ok(dict)
-}
-
-#[cfg(feature = "python")]
-fn fill_encoded_into_existing_buffers(
-    py: Python<'_>,
-    out: &Bound<'_, PyDict>,
-    encoded: crate::agent::observation_encoder::EncodedObservation,
-    config: &ObservationEncoderConfig,
-) -> PyResult<()> {
-    let np = PyModule::import_bound(py, "numpy")?;
-    let copyto = np.getattr("copyto")?;
-    let expected = encoded_to_dict(py, encoded, config)?;
-    // Validate the complete contract before changing any caller-owned buffer.
-    let mut copies = Vec::new();
-    for (key_obj, source) in expected.iter() {
-        let key = key_obj.extract::<String>()?;
-        let dtype_name = source
-            .getattr("dtype")?
-            .getattr("name")?
-            .extract::<String>()?;
-        let shape = shape_to_vec(&source.getattr("shape")?)?;
-        let target = require_numpy_array(out, &key, &shape, &dtype_name)?;
-        copies.push((target, source));
-    }
-    for (target, source) in copies {
-        copyto.call1((target, source))?;
-    }
-
-    Ok(())
 }
 
 #[cfg(feature = "python")]
@@ -621,6 +458,8 @@ pub enum StepEnum {
     PostcombatMainStep = 9,
     EndingEnd = 10,
     EndingCleanup = 11,
+    // Appended as 12 to preserve Observation JSON discriminants; reorder before CombatDamage in 0.3.0.
+    CombatFirstStrikeDamage = 12,
 }
 
 #[cfg(feature = "python")]
@@ -650,6 +489,8 @@ impl StepEnum {
     const ENDING_END: Self = Self::EndingEnd;
     #[classattr]
     const ENDING_CLEANUP: Self = Self::EndingCleanup;
+    #[classattr]
+    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -676,6 +517,7 @@ impl From<StepKind> for StepEnum {
             StepKind::PostcombatMain => Self::PostcombatMainStep,
             StepKind::End => Self::EndingEnd,
             StepKind::Cleanup => Self::EndingCleanup,
+            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
         }
     }
 }
@@ -696,6 +538,7 @@ impl From<StepEnum> for StepKind {
             StepEnum::PostcombatMainStep => Self::PostcombatMain,
             StepEnum::EndingEnd => Self::End,
             StepEnum::EndingCleanup => Self::Cleanup,
+            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
         }
     }
 }
@@ -1273,6 +1116,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub life: i32,
     #[pyo3(get, set)]
+    pub counters: BTreeMap<String, i32>,
+    #[pyo3(get, set)]
     pub zone_counts: Vec<i32>,
     #[pyo3(get, set)]
     pub graveyard_lessons: i32,
@@ -1294,7 +1139,7 @@ pub struct PyPlayer {
     pub keeps_red_mana: bool,
     /// What this player has done this turn.
     #[pyo3(get, set)]
-    pub turn_history: PyPlayerTurnHistory,
+    pub turn_history: PlayerTurnHistory,
     /// Spells this player cast this turn.
     #[pyo3(get, set)]
     pub spells_cast: u32,
@@ -1315,12 +1160,25 @@ pub struct PyPlayer {
     /// Pooled mana with a spend effect or combat expiry, by class.
     #[pyo3(get)]
     pub pooled_mana_classes: Vec<PyPooledManaClass>,
+    spent_graveyard_types: Vec<(u32, crate::state::card::CardType)>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
     /// Continuous effects on this player, in timestamp order.
     #[pyo3(get, set)]
     pub effects: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayer {
+    #[getter]
+    fn spent_graveyard_types(&self) -> Vec<(u32, String)> {
+        self.spent_graveyard_types
+            .iter()
+            .map(|(source, kind)| (*source, format!("{kind:?}")))
+            .collect()
+    }
 }
 
 /// One continuous-effect record on a player or permanent.
@@ -1407,61 +1265,12 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
     }
 }
 
-/// What a player has done this turn.
-#[cfg(feature = "python")]
-#[pyclass(name = "PlayerTurnHistory")]
-#[derive(Clone, Default)]
-pub struct PyPlayerTurnHistory {
-    #[pyo3(get, set)]
-    pub attacked: bool,
-    #[pyo3(get, set)]
-    pub permanents_sacrificed: u32,
-    #[pyo3(get, set)]
-    pub land_entered: bool,
-    #[pyo3(get, set)]
-    pub cards_drawn: u32,
-    /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
-    #[pyo3(get, set)]
-    pub bent: u8,
-    /// Life lost this turn (CR 119.3).
-    #[pyo3(get, set)]
-    pub life_lost: u32,
-}
-
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyPlayerTurnHistory {
+impl PlayerTurnHistory {
     #[new]
     fn py_new() -> Self {
         Self::default()
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
-    fn from(value: PlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
-    fn from(value: PyPlayerTurnHistory) -> Self {
-        Self {
-            attacked: value.attacked,
-            permanents_sacrificed: value.permanents_sacrificed,
-            land_entered: value.land_entered,
-            cards_drawn: value.cards_drawn,
-            bent: value.bent,
-            life_lost: value.life_lost,
-        }
     }
 }
 
@@ -1603,6 +1412,7 @@ impl From<PlayerData> for PyPlayer {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
@@ -1612,7 +1422,7 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -1626,6 +1436,7 @@ impl From<PlayerData> for PyPlayer {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1646,6 +1457,7 @@ impl From<PyPlayer> for PlayerData {
             is_agent: value.is_agent,
             is_active: value.is_active,
             life: value.life,
+            counters: value.counters,
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
@@ -1655,7 +1467,7 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
-            turn_history: value.turn_history.into(),
+            turn_history: value.turn_history,
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
@@ -1669,6 +1481,7 @@ impl From<PyPlayer> for PlayerData {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+            spent_graveyard_types: value.spent_graveyard_types,
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1679,6 +1492,8 @@ impl From<PyPlayer> for PlayerData {
 #[pyclass(name = "Turn")]
 #[derive(Clone)]
 pub struct PyTurn {
+    #[pyo3(get, set)]
+    pub creature_died_this_turn: bool,
     #[pyo3(get, set)]
     pub turn_number: i32,
     #[pyo3(get, set)]
@@ -1695,6 +1510,7 @@ pub struct PyTurn {
 impl From<TurnData> for PyTurn {
     fn from(value: TurnData) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number as i32,
             phase: value.phase.into(),
             step: value.step.into(),
@@ -1708,6 +1524,7 @@ impl From<TurnData> for PyTurn {
 impl From<PyTurn> for TurnData {
     fn from(value: PyTurn) -> Self {
         Self {
+            creature_died_this_turn: value.creature_died_this_turn,
             turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),
@@ -1950,6 +1767,14 @@ impl PyObservationCharacteristics {
         self.data.ward_cost
     }
     #[getter]
+    fn ward_life(&self) -> i32 {
+        self.data.ward_life
+    }
+    #[getter]
+    fn ward_program(&self) -> Vec<(u16, i32)> {
+        self.data.ward_program.clone()
+    }
+    #[getter]
     fn kicker_cost(&self) -> i32 {
         self.data.kicker_cost
     }
@@ -1972,7 +1797,7 @@ fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> 
     py.import_bound("warnings")?.call_method1(
         "warn",
         (
-            format!("{old} is deprecated; use {new}; removal in 0.4.0"),
+            format!("{old} is deprecated; use {new}; removal in 0.3.0"),
             py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             // A native getter has no Python frame, so level 1 is the caller.
             1,
@@ -2170,13 +1995,23 @@ impl PyCard {
     fn set_face_down(&mut self, value: bool) {
         self.data.face_down = value;
     }
+    /// First listed grant. Use cast_permissions for inspection (singular removed in 0.4.0).
     #[getter]
     fn cast_permission(&self) -> Option<PyCastPermission> {
-        self.data.cast_permission.clone().map(Into::into)
+        self.data.cast_permissions.first().cloned().map(Into::into)
     }
     #[setter]
     fn set_cast_permission(&mut self, value: Option<PyCastPermission>) {
-        self.data.cast_permission = value.map(Into::into);
+        self.data.cast_permissions = value.into_iter().map(Into::into).collect();
+    }
+    #[getter]
+    fn cast_permissions(&self) -> Vec<PyCastPermission> {
+        self.data
+            .cast_permissions
+            .iter()
+            .cloned()
+            .map(Into::into)
+            .collect()
     }
     #[getter]
     fn x(&self) -> Option<i32> {
@@ -2195,6 +2030,15 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
+    /// Counters on the card off the battlefield, by kind name.
+    #[getter]
+    fn counters(&self) -> BTreeMap<String, i32> {
+        self.data.counters.clone()
+    }
+    #[setter]
+    fn set_counters(&mut self, value: BTreeMap<String, i32>) {
+        self.data.counters = value;
+    }
     #[getter]
     fn characteristics(&self) -> PyObservationCharacteristics {
         PyObservationCharacteristics {
@@ -2203,7 +2047,7 @@ impl PyCard {
     }
 }
 
-/// A public permission to play an exiled card; see `CastPermissionData`.
+/// A public permission to play a card in its current zone; see `CastPermissionData`.
 #[cfg(feature = "python")]
 #[pyclass(name = "CastPermission")]
 #[derive(Clone)]
@@ -2230,6 +2074,20 @@ pub struct PyCastPermission {
     pub waterbend: bool,
     #[pyo3(get)]
     pub foretold: bool,
+    #[pyo3(get)]
+    pub follows_source_controller: bool,
+    #[pyo3(get)]
+    pub flashback: bool,
+    #[pyo3(get)]
+    pub on_adventure: bool,
+    #[pyo3(get)]
+    pub prepared: bool,
+    #[pyo3(get)]
+    pub face_down: bool,
+    #[pyo3(get)]
+    pub play_lands: bool,
+    #[pyo3(get)]
+    pub condition: Option<String>,
 }
 
 #[cfg(feature = "python")]
@@ -2247,6 +2105,13 @@ impl From<CastPermissionData> for PyCastPermission {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
+            on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            play_lands: value.play_lands,
+            condition: value.condition,
         }
     }
 }
@@ -2266,6 +2131,13 @@ impl From<PyCastPermission> for CastPermissionData {
             any_mana: value.any_mana,
             waterbend: value.waterbend,
             foretold: value.foretold,
+            follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
+            on_adventure: value.on_adventure,
+            prepared: value.prepared,
+            face_down: value.face_down,
+            play_lands: value.play_lands,
+            condition: value.condition,
         }
     }
 }
@@ -2315,6 +2187,10 @@ pub struct PyPermanent {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPermanent {
+    #[getter]
+    fn mana_value(&self) -> u8 {
+        self.data.mana_value()
+    }
     #[getter]
     fn colors(&self) -> Option<Vec<String>> {
         self.data.colors.clone()
@@ -2450,6 +2326,10 @@ impl PyPermanent {
         self.data.exile_if_dies_this_turn = value;
     }
     #[getter]
+    fn first_strike_participant(&self) -> bool {
+        self.data.first_strike_participant
+    }
+    #[getter]
     fn attacking(&self) -> bool {
         self.data.attacking
     }
@@ -2557,12 +2437,36 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn face_down(&self) -> bool {
+        self.data.face_down
+    }
+    #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
+    fn damaged_permanents(&self) -> Vec<i32> {
+        self.data.damaged_permanents.clone()
+    }
+    #[getter]
+    fn ability_resolutions(&self) -> Vec<(usize, u32)> {
+        self.data.ability_resolutions.clone()
+    }
+    #[getter]
     fn used_abilities(&self) -> Vec<usize> {
         self.data.used_abilities.clone()
     }
     #[setter]
     fn set_used_abilities(&mut self, value: Vec<usize>) {
         self.data.used_abilities = value;
+    }
+    #[getter]
+    fn attacked_this_turn(&self) -> bool {
+        self.data.attacked_this_turn
+    }
+    #[getter]
+    fn entered_this_turn(&self) -> bool {
+        self.data.entered_this_turn
     }
     #[getter]
     fn dealt_damage_this_turn(&self) -> bool {
@@ -2688,6 +2592,22 @@ pub struct PyAction {
     pub ability_index: Option<usize>,
     #[pyo3(get)]
     pub continuation_index: Option<usize>,
+    /// The tap pays part of the cost itself rather than making mana.
+    #[pyo3(get)]
+    pub pays_directly: bool,
+    /// `mode_index` is an announced number (X, a replicate count).
+    #[pyo3(get)]
+    pub announces_x: bool,
+    /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
+    #[pyo3(get)]
+    pub spell_profile: u8,
+    #[pyo3(get)]
+    pub route_mana_value: Option<u8>,
+    #[pyo3(get)]
+    pub quota_type: Option<u8>,
+    /// The permission a play uses (`play_route_code`); None for an ordinary hand play.
+    #[pyo3(get)]
+    pub play_route: Option<u8>,
 }
 
 #[cfg(feature = "python")]
@@ -2801,6 +2721,12 @@ impl From<ActionOption> for PyAction {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
+            announces_x: value.announces_x,
+            spell_profile: value.spell_profile,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }
@@ -2819,6 +2745,12 @@ impl From<PyAction> for ActionOption {
             name_group: value.name_group,
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
+            pays_directly: value.pays_directly,
+            announces_x: value.announces_x,
+            spell_profile: value.spell_profile,
+            route_mana_value: value.route_mana_value,
+            quota_type: value.quota_type,
+            play_route: value.play_route,
         }
     }
 }
@@ -2917,6 +2849,26 @@ impl PyStackObject {
         self.data.description = value;
     }
     #[getter]
+    fn combat_damage_to_players(&self) -> Vec<usize> {
+        self.data.combat_damage_to_players.clone()
+    }
+    #[getter]
+    fn mana_spent(&self) -> u16 {
+        self.data.mana_spent
+    }
+    #[getter]
+    fn source_power(&self) -> Option<i32> {
+        self.data.source_power
+    }
+    #[getter]
+    fn paid_amount(&self) -> Option<i32> {
+        self.data.paid_amount
+    }
+    #[getter]
+    fn ability_resolutions(&self) -> u32 {
+        self.data.ability_resolutions
+    }
+    #[getter]
     fn stack_object_id(&self) -> i32 {
         self.data.stack_object_id
     }
@@ -3002,12 +2954,27 @@ impl PyStackObject {
         self.data.granted_keywords = value.map(Into::into);
     }
     #[getter]
+    fn cast_from_graveyard(&self) -> bool {
+        self.data
+            .spell
+            .as_ref()
+            .is_some_and(|spell| spell.cast_from_graveyard)
+    }
+    #[getter]
     fn kicked(&self) -> bool {
         self.data.kicked
     }
     #[setter]
     fn set_kicked(&mut self, value: bool) {
         self.data.kicked = value;
+    }
+    #[getter(from_prepared)]
+    fn prepared_origin(&self) -> bool {
+        self.data.from_prepared
+    }
+    #[getter]
+    fn flashback(&self) -> bool {
+        self.data.flashback
     }
     #[getter]
     fn characteristics(&self) -> Option<PyObservationCharacteristics> {
@@ -3029,6 +2996,10 @@ impl PyStackObject {
     #[getter]
     fn is_copy(&self) -> Option<bool> {
         self.data.spell.as_ref().map(|s| s.is_copy)
+    }
+    #[getter]
+    fn effective_mana_value(&self) -> Option<u8> {
+        self.data.effective_mana_value()
     }
     #[getter]
     fn announced_x(&self) -> Option<i32> {
@@ -3302,8 +3273,8 @@ impl PyObservation {
     #[staticmethod]
     #[pyo3(signature = (text, *, continuation_json=None))]
     fn from_json(text: &str, continuation_json: Option<&str>) -> PyResult<Self> {
-        let mut observation =
-            crate::agent::observation_json::parse(text).map_err(PyValueError::new_err)?;
+        let mut observation = crate::agent::observation_json::parse_with_history(text)
+            .map_err(PyValueError::new_err)?;
         if let Some(frames) = continuation_json {
             observation.continuation = parse_continuation_frames_json(frames)?;
         }
@@ -3318,27 +3289,8 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    /// Public history v1 rows, whose contexts are the zero-based object-table
-    /// indexes `object_indexes` gives object ids (input v11's one row each).
-    fn encode_policy_history(
-        &self,
-        capacity: usize,
-        object_indexes: std::collections::HashMap<i32, i32>,
-    ) -> Vec<Vec<f32>> {
-        crate::agent::policy_history::encode(
-            &Observation::from(self.clone()),
-            capacity,
-            &object_indexes,
-        )
-        .into_iter()
-        .map(|row| row.to_vec())
-        .collect()
-    }
-
-    /// Deprecated input v9/v10 rows (removed in 0.4.0): the observation with
-    /// battlefield objects and stack spells listed as cards again, and its
-    /// public history v1 rows over those card rows. Only the v9/v10 encoders
-    /// read them.
+    /// Deprecated input v9/v10 card rows (removed in 0.3.0): the observation's
+    /// cards with battlefield objects and stack spells listed as cards again.
     fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
         let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
         (
@@ -3351,24 +3303,13 @@ impl PyObservation {
         )
     }
 
-    fn encode_legacy_policy_history(
-        &self,
-        capacity: usize,
-        cards_per_player: usize,
-    ) -> Vec<Vec<f32>> {
-        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
-        crate::agent::legacy_input::history(&legacy, capacity, cards_per_player)
-            .into_iter()
-            .map(|row| row.to_vec())
-            .collect()
-    }
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
     }
 
     #[allow(non_snake_case)]
     fn toJSON(&self) -> String {
-        Observation::from(self.clone()).to_json()
+        Observation::from(self.clone()).to_json_with_history()
     }
 }
 
@@ -3687,6 +3628,14 @@ fn compact_search_witness(witness: &SearchStateWitness) -> Value {
 
 #[cfg(feature = "python")]
 impl PyEnv {
+    pub(super) fn from_live(env: Env) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(env)),
+            selected_guard: false,
+            prepared_lease: None,
+        }
+    }
+
     fn reject_guarded_mutation(&self, operation: &str) -> PyResult<()> {
         if self.selected_guard {
             return Err(PyAgentError::new_err(format!(
@@ -4061,27 +4010,23 @@ impl PyEnv {
     ) -> PyResult<Self> {
         if enable_behavior_tracking {
             py.import_bound("warnings")?.call_method1("warn", (
-                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.4.0",
+                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.3.0",
                 py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             ))?;
         }
         let policies =
             crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(
-                Env::new(
-                    seed,
-                    skip_trivial,
-                    enable_profiler,
-                    enable_behavior_tracking,
-                )
-                .with_player_policies(policies)
-                .with_decision_memory(decision_memory)
-                .with_decision_memory_include_own(decision_memory_include_own),
-            )),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(Self::from_live(
+            Env::new(
+                seed,
+                skip_trivial,
+                enable_profiler,
+                enable_behavior_tracking,
+            )
+            .with_player_policies(policies)
+            .with_decision_memory(decision_memory)
+            .with_decision_memory_include_own(decision_memory_include_own),
+        ))
     }
 
     fn reset(
@@ -4407,6 +4352,42 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(env.compare_profile(&baseline))
+    }
+
+    /// Apply one recorded operation at the current live boundary.
+    fn _apply_intervention_json(&self, raw: &str) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._apply_intervention_json")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .apply_intervention_json(raw)
+            .map_err(map_agent_err)
+    }
+
+    /// Remove and bind the current fingerprint if the recording issued it.
+    fn _restore_frame_candidates(&self, remaining: &Bound<'_, PySet>) -> PyResult<()> {
+        self.reject_guarded_mutation("Env._restore_frame_candidates")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .restore_frame_candidates(|key| {
+                remaining
+                    .discard(key)
+                    .map_err(|e| AgentError(e.to_string()))
+            })
+            .map_err(map_agent_err)
+    }
+
+    /// Save this live boundary for independent continuations.
+    fn snapshot(&self, py: Python<'_>) -> PyResult<super::snapshot_bindings::PyGameSnapshot> {
+        py.allow_threads(|| {
+            self.inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+                .snapshot()
+                .map(|s| super::snapshot_bindings::PyGameSnapshot(s.into()))
+                .map_err(map_agent_err)
+        })
     }
 
     /// Independent copy of this env (current game state cloned; stepping the
@@ -4756,11 +4737,7 @@ impl PyEnv {
         let branch = env
             .materialize_sampled_hand(viewer, constraints_json, &hand, seed)
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Materialize one identity-bound canonical world into an isolated Env.
@@ -4786,11 +4763,7 @@ impl PyEnv {
                 refresh_opponent_commitment,
             )
             .map_err(map_agent_err)?;
-        Ok(PyEnv {
-            inner: Arc::new(Mutex::new(branch)),
-            selected_guard: false,
-            prepared_lease: None,
-        })
+        Ok(PyEnv::from_live(branch))
     }
 
     /// Validate and atomically apply one revision-bound semantic Command
@@ -5107,6 +5080,7 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
+    /// Deprecated: encode with native default capacities. Removal in 0.3.0.
     #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
@@ -5114,6 +5088,12 @@ impl PyEnv {
         obs: PyObservation,
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
+        warn_deprecated(
+            py,
+            "Env.encode_observation is deprecated; allocate buffers from \
+             managym.observation_layout() or ObservationSpace and call \
+             managym.encode_observation_into; removal in 0.3.0",
+        )?;
         let rust_obs = Observation::from(obs);
         if max_facts == Some(0) {
             return Err(PyValueError::new_err(
@@ -5125,11 +5105,12 @@ impl PyEnv {
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            .map_err(map_encode_err)?;
         let out = encoded_to_dict(py, encoded, &config)?;
         Ok(out.into_any().unbind())
     }
 
+    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.3.0.
     #[pyo3(signature = (obs, out, action_overflow="error"))]
     fn encode_observation_into(
         &self,
@@ -5138,24 +5119,69 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
         action_overflow: &str,
     ) -> PyResult<()> {
-        #[cfg(feature = "benchmark")]
-        let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
-        let rust_obs = Observation::from(obs);
-        #[cfg(feature = "benchmark")]
-        drop(conversion_timer);
-        #[cfg(feature = "benchmark")]
-        let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
-        let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
-        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        #[cfg(feature = "benchmark")]
-        drop(config_timer);
-        let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
-
-        #[cfg(feature = "benchmark")]
-        let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
-        fill_encoded_into_existing_buffers(py, &out, encoded, &config)
+        warn_deprecated(
+            py,
+            "Env.encode_observation_into is deprecated; use \
+             managym.encode_observation_into; removal in 0.3.0",
+        )?;
+        let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
+        let layout = super::layout_bindings::ObservationLayout::from_config(config)?;
+        encode_observation_into_impl(py, obs, &layout, out, action_overflow)
     }
+}
+
+/// Deprecated dense scalar encoder; removed in 0.3.0.
+/// Write any observation (live, restored or a viewer projection) into
+/// caller-owned buffers at the supplied layout;
+/// companion shapes are checked before any write.
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (obs, layout, out, action_overflow="error"))]
+fn encode_observation_into(
+    py: Python<'_>,
+    obs: PyObservation,
+    layout: &super::layout_bindings::ObservationLayout,
+    out: Bound<'_, PyDict>,
+    action_overflow: &str,
+) -> PyResult<()> {
+    warn_deprecated(
+        py,
+        "encode_observation_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.3.0",
+    )?;
+    encode_observation_into_impl(py, obs, layout, out, action_overflow)
+}
+
+#[cfg(feature = "python")]
+fn encode_observation_into_impl(
+    py: Python<'_>,
+    obs: PyObservation,
+    layout: &super::layout_bindings::ObservationLayout,
+    out: Bound<'_, PyDict>,
+    action_overflow: &str,
+) -> PyResult<()> {
+    #[cfg(feature = "benchmark")]
+    let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
+    let rust_obs = Observation::from(obs);
+    #[cfg(feature = "benchmark")]
+    drop(conversion_timer);
+    #[cfg(feature = "benchmark")]
+    let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
+    let mut config = layout.config;
+    config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+    crate::python::vector_env_bindings::check_observation_buffers(&out, layout)?;
+    #[cfg(feature = "benchmark")]
+    drop(config_timer);
+    let encoded =
+        crate::agent::observation_encoder::encode(&rust_obs, &config).map_err(map_encode_err)?;
+
+    #[cfg(feature = "benchmark")]
+    let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
+    // Stage the complete encoding before touching the validated caller buffers.
+    let copyto = py.import_bound("numpy")?.getattr("copyto")?;
+    for (key, source) in encoded_to_dict(py, encoded, &config)?.iter() {
+        copyto.call1((out.as_any().get_item(key)?, source))?;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "python")]
@@ -5164,7 +5190,7 @@ impl PyEnv {
 fn policy_action_count(count: usize, capacity: usize, action_overflow: &str) -> PyResult<usize> {
     let overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
     crate::agent::observation_encoder::policy_action_count(count, capacity, overflow)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(map_encode_err)
 }
 
 /// The state only policy input v10 holds that `obs` needs, if any (see
@@ -5422,7 +5448,15 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=14).contains(&frame.kind)
+        !(1..=15).contains(&frame.kind)
+            || (frame.kind == 15
+                && (!(1..=5).contains(&frame.decision)
+                    || frame.parent.is_some()
+                    || !frame.mode.is_some_and(|mulligans| mulligans <= 7)
+                    || (frame.decision == 4) != frame.active_clause.is_some()
+                    || frame.active_clause.is_some_and(|remaining| {
+                        remaining == 0 || remaining > frame.mode.unwrap()
+                    })))
             || (frame.kind == 10
                 && (!(1..=crate::agent::continuation::MAX_DELAYED_EVENT_CODE)
                     .contains(&frame.decision)
@@ -5514,6 +5548,8 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
+    m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(
         "MAX_DECISION_CODE",
         crate::agent::continuation::MAX_DECISION_CODE,
@@ -5524,6 +5560,10 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     m.add("NAME_BRANCHING", crate::cards::names::NAME_BRANCHING)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
+    m.add(
+        "ObservationCapacity",
+        py.get_type_bound::<ObservationCapacity>(),
+    )?;
 
     m.add_class::<ZoneEnum>()?;
     m.add_class::<PhaseEnum>()?;
@@ -5555,6 +5595,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_observation_into, m)?)?;
     m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
     m.add_function(wrap_pyfunction!(unrepresentable_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
@@ -5570,7 +5611,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PyPooledManaClass>()?;
-    m.add_class::<PyPlayerTurnHistory>()?;
+    m.add_class::<PlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;
@@ -5592,6 +5633,9 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<super::snapshot_bindings::PyGameSnapshot>()?;
+    m.add_class::<super::snapshot_bindings::PyRestoreOptions>()?;
+    m.add_class::<super::snapshot_bindings::PySnapshotMetadata>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;
     m.add_class::<ObservationRead>()?;
@@ -5612,7 +5656,7 @@ fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
     pyo3::PyErr::warn_bound(
         py,
         &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.4.0.",
+        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.3.0.",
         2,
     )
 }

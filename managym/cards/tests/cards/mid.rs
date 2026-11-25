@@ -35,3 +35,108 @@ fn join_the_dance_makes_two_humans_and_flashes_back_for_two_more() {
     assert_eq!(s.battlefield_permanents_named(0, "Human").len(), 4);
     assert_eq!(zone_of(&s, dance), Some(ZoneType::Exile));
 }
+
+/// Cathar Commando pays {1} and itself to destroy an artifact or enchantment,
+/// never a creature, and has flash.
+#[test]
+fn cathar_commando_sacrifices_itself_to_destroy_an_artifact_and_has_flash() {
+    use crate::support::play::{casts_at_instant_speed, sacrifices_itself_to_destroy_an_artifact};
+    sacrifices_itself_to_destroy_an_artifact("Cathar Commando", "Plains");
+    casts_at_instant_speed("Cathar Commando");
+}
+
+/// Eaten Alive is cast by sacrificing a creature or by paying {3}{B} more; it
+/// exiles its target either way.
+#[test]
+fn eaten_alive_takes_a_sacrificed_creature_or_three_and_a_black_more() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands, force_new_card_in_hand},
+        inspect::{card_of, has_action, top_spell, zone_of},
+        play::{cast_card, choose, select_card, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{game_object::Target, player::ManaPayment, zone::ZoneType},
+    };
+    for sacrifice in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Eaten Alive", "Gray Ogre", "Hill Giant"]);
+        force_lands(&mut s, 0, "Swamp", if sacrifice { 1 } else { 5 });
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let ogre_card = card_of(&s, ogre);
+        let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+        let giant_card = card_of(&s, giant);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        let eaten = force_new_card_in_hand(&mut s, 0, "Eaten Alive");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        cast_card(&mut s, eaten);
+        assert!(s.choose_target(Target::Permanent(giant)));
+        // One Swamp cannot pay {3}{B}{B}: only the sacrifice is offered.
+        assert_eq!(
+            has_action(&s, |a| matches!(a, Action::PayCost { .. })),
+            !sacrifice
+        );
+        if sacrifice {
+            select_card(&mut s, ogre_card);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        }
+        assert_eq!(top_spell(&s).spent.total(), if sacrifice { 1 } else { 5 });
+        settle(&mut s);
+        assert_eq!(zone_of(&s, giant_card), Some(ZoneType::Exile));
+        assert_eq!(
+            zone_of(&s, ogre_card),
+            Some(if sacrifice {
+                ZoneType::Graveyard
+            } else {
+                ZoneType::Battlefield
+            })
+        );
+    }
+}
+
+/// Bolt the opponent, then let the given setup run on player 0's turn.
+fn opponent_loses_life(s: &mut crate::support::game::Scenario) {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, target_opponent},
+    };
+    let bolt = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    cast_card(s, bolt);
+    target_opponent(s);
+    settle(s);
+}
+
+#[test]
+fn stromkirk_bloodthief_counts_only_after_an_opponent_lost_life() {
+    use crate::support::inspect::counters;
+    use managym::flow::turn::StepKind;
+    for lost in [false, true] {
+        let mut s = five_color_setup(&["Stromkirk Bloodthief", "Lightning Bolt"]);
+        let thief = s.force_permanent_on_battlefield(0, "Stromkirk Bloodthief");
+        if lost {
+            opponent_loses_life(&mut s);
+        }
+        s.advance_to_active_step(0, StepKind::End);
+        settle(&mut s);
+        assert_eq!(counters(&s, thief), i32::from(lost), "lost life: {lost}");
+        // The opponent's end step never triggers it.
+        s.advance_to_active_step(1, StepKind::End);
+        settle(&mut s);
+        assert_eq!(counters(&s, thief), i32::from(lost));
+    }
+}
+
+#[test]
+fn bloodtithe_collector_makes_each_opponent_discard_after_a_loss() {
+    use crate::support::play::enter_and_settle;
+    for lost in [false, true] {
+        let mut s = five_color_setup(&["Bloodtithe Collector", "Lightning Bolt"]);
+        s.force_card_in_hand(1, "Lightning Bolt");
+        if lost {
+            opponent_loses_life(&mut s);
+        }
+        let hand = s.zone_size(1, ZoneType::Hand);
+        enter_and_settle(&mut s, "Bloodtithe Collector");
+        s.assert_zone_size(1, ZoneType::Hand, hand - usize::from(lost));
+    }
+}

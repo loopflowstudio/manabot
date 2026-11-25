@@ -589,48 +589,65 @@ def test_format_action_uses_magic_terms():
         assert experience_projection.format_action(action, names) == expected
 
 
-def test_hero_view_swaps_terminal_villain_perspective_and_redacts(
+def test_viewer_view_swaps_terminal_villain_perspective_and_redacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """At game over the engine observation may be villain-perspective; the
     wire payload must still present the hero as `agent` with villain hand
-    hidden."""
+    hidden, and read the hero's result from the winner: a draw leaves the
+    villain's `won: false` and the hero's alike."""
 
-    villain_side = {
-        "player_index": 1,
-        "hand": [{"id": 50, "name": "Counterspell"}],
-        "zone_counts": {"HAND": 1},
-    }
-    hero_side = {
-        "player_index": 0,
-        "hand": [{"id": 51, "name": "Lightning Bolt"}],
-        "zone_counts": {"HAND": 1},
-    }
-    serialized: dict[str, object] = {
-        "game_over": True,
-        "won": True,  # villain-perspective: villain won
-        "agent": villain_side,
-        "opponent": hero_side,
-    }
+    def serialized(won: bool) -> dict[str, object]:
+        return {
+            "game_over": True,
+            "won": won,
+            "agent": {
+                "player_index": 1,
+                "hand": [{"id": 50, "name": "Counterspell"}],
+                "zone_counts": {"HAND": 1},
+            },
+            "opponent": {
+                "player_index": 0,
+                "hand": [{"id": 51, "name": "Lightning Bolt"}],
+                "zone_counts": {"HAND": 1},
+            },
+        }
 
-    def serialize_fixture(
-        _obs: object, *, include_details: bool = False
-    ) -> dict[str, object]:
-        assert not include_details
-        return serialized
+    for villain_won, winner, hero_won in [
+        (True, 1, False),
+        (False, 0, True),
+        (False, None, False),
+    ]:
+        monkeypatch.setattr(
+            server,
+            "serialize_observation",
+            lambda _obs, *, include_details=False: serialized(villain_won),
+        )
+        obs = SimpleNamespace(game_over=True, won=villain_won)
+        data = server.viewer_view(obs, 0, winner=winner)
 
-    monkeypatch.setattr(server, "serialize_observation", serialize_fixture)
+        assert data["agent"]["player_index"] == 0
+        assert data["opponent"]["player_index"] == 1
+        assert data["won"] is hero_won
+        assert data["opponent"]["hand"] == []
+        assert data["opponent"]["hand_hidden_count"] == 1
+        # The hero still sees their own hand.
+        assert data["agent"]["hand"][0]["name"] == "Lightning Bolt"
 
-    obs = SimpleNamespace(game_over=True, won=True)
-    data = server.hero_view(obs)
 
-    assert data["agent"]["player_index"] == 0
-    assert data["opponent"]["player_index"] == 1
-    assert data["won"] is False  # hero lost
-    assert data["opponent"]["hand"] == []
-    assert data["opponent"]["hand_hidden_count"] == 1
-    # The hero still sees their own hand.
-    assert data["agent"]["hand"][0]["name"] == "Lightning Bolt"
+def test_trace_replay_keeps_a_draw_unwon_for_the_hero() -> None:
+    """A drawn game whose final observation is the villain's (`won: false`)
+    is no win for the hero after the sides swap back."""
+    for winner, hero_won in [(None, False), (0, True), (1, False)]:
+        observation: dict[str, object] = {
+            "game_over": True,
+            "won": winner == 1,
+            "agent": {"player_index": 1},
+            "opponent": {"player_index": 0},
+        }
+        trace_store.normalize_observation_to_hero(observation, 0, winner=winner)
+        assert observation["agent"] == {"player_index": 0}
+        assert observation["won"] is hero_won
 
 
 def test_redaction_hides_only_the_opponents_face_down_exile() -> None:

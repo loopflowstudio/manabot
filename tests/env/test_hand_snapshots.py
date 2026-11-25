@@ -10,9 +10,13 @@ import torch
 
 from manabot import managym
 from manabot.env.env import Env
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import (
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
@@ -29,16 +33,6 @@ def _players(
         ],
         decklists=disclosure,
     )
-
-
-def _buffers(space: ObservationSpace, size: int) -> dict[str, np.ndarray]:
-    buffers = space.encoder.allocate(size)
-    buffers.update(
-        rewards=np.zeros(size, dtype=np.float64),
-        terminated=np.zeros(size, dtype=np.uint8),
-        truncated=np.zeros(size, dtype=np.uint8),
-    )
-    return buffers
 
 
 def _hand(env: managym.Env, player: int) -> dict[str, int]:
@@ -93,8 +87,10 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
             int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_cards
         )
         assert obs.opponent.known_hand == {}
-        expected = space.encode(scalar.observation_for_player(obs.agent.player_index))
-        for key, actual in space.encode(obs).items():
+        expected = encode_observation(
+            space, scalar.observation_for_player(obs.agent.player_index)
+        )
+        for key, actual in encode_observation(space, obs).items():
             np.testing.assert_array_equal(actual, expected[key], err_msg=key)
         if disclosure == "closed":
             assert obs.opponent.main_counts is None
@@ -133,12 +129,13 @@ def test_hand_snapshots_reject_invalid_requests_without_advancing() -> None:
 @pytest.mark.parametrize("captured", [False, True])
 def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> None:
     vector = (
-        CapturedVector(num_envs=2, seed=42)
+        RecordedVectorEnv(num_envs=2, seed=42)
         if captured
         else managym.VectorEnv(2, seed=42)
     )
-    buffers = _buffers(ObservationSpace(), 2)
-    vector.set_buffers(buffers)
+    space = ObservationSpace()
+    buffers = allocate_vector_buffers(space, 2)
+    vector.set_buffers(buffers, layout=space.layout)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])
         before = vector.hand_snapshots([1, 0])
@@ -158,24 +155,24 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         reset = vector.hand_snapshots([1, 0])
         assert [t.cards for t in reset] == [t.cards for t in before]
         assert all(a.game_id != b.game_id for a, b in zip(before, reset, strict=True))
-        vector.reassign_roots_into_buffers([_players()[::-1], None])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0, _players()[::-1])])
         reassigned = vector.hand_snapshots([1, 0])
         assert reassigned[0].game_id != reset[0].game_id
-        assert reassigned[0].seed == reset[0].seed
+        assert reassigned[0].seed == 44
         assert _identity(reassigned[1]) == _identity(reset[1])
         vector.step_isolated_into_buffers([-1, 0], [True, False])
         assert "game_error" in vector.get_last_info()[0]
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         replaced = vector.hand_snapshots([1, 0])
         assert replaced[0].game_id != reassigned[0].game_id
-        assert replaced[0].seed == 44
+        assert replaced[0].seed == 46
         assert _identity(replaced[1]) == _identity(reassigned[1])
     finally:
-        if isinstance(vector, CapturedVector):
+        if isinstance(vector, RecordedVectorEnv):
             vector.close()
 
 
-def test_hand_snapshots_after_done_describe_the_returned_replacement() -> None:
+def test_hand_snapshots_after_done_describe_the_terminal_game() -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     vector = managym.VectorEnv(1, seed=42)
     vector.reset_all(players)
@@ -187,13 +184,14 @@ def test_hand_snapshots_after_done_describe_the_returned_replacement() -> None:
     else:
         pytest.fail("bounded tiny-deck fixture did not terminate")
     after = vector.hand_snapshots([1])[0]
-    assert after.game_id != before.game_id
-    assert after.seed == 43
-    assert after.cards == {"Mountain": 7}
-    assert before.seed == 42
-    assert not obs.game_over
-    scalar = managym.Env(seed=after.seed)
+    assert obs.game_over
+    assert after.game_id == before.game_id
+    assert after.seed == before.seed == 42
+    assert after.revision > before.revision
+    scalar = managym.Env(seed=42)
     scalar.reset(players)
+    while not scalar.is_game_over():
+        scalar.step(0)
     assert after.cards == scalar.hand_snapshot(1).cards == _hand(scalar, 1)
 
 
@@ -236,6 +234,9 @@ def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> 
     [(obs, _)] = vector.reset_all(players)
     scalar = managym.Env(seed=42)
     scalar.reset(players)
+    for _ in range(2):
+        scalar.step(0)
+        [(obs, *_)] = vector.step([0])
     action = next(
         index
         for index, choice in enumerate(obs.action_space.actions)

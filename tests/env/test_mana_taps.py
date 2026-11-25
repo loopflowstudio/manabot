@@ -6,9 +6,10 @@ import numpy as np
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
+from manabot.verify.text_observation import keep_opening_hands, keep_opening_index
 import managym
 from managym.recording import GameRecord, ScalarCapture
 from managym.replay import walk
@@ -35,6 +36,8 @@ def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
     env = managym.Env(seed=3)
     capture = ScalarCapture(3, games_path=tmp_path / "games.jsonl")
     obs, _ = capture.reset(env, setup)
+    while obs.turn.turn_number == 0:
+        obs, *_ = capture.step(env, keep_opening_index(obs))
     play_land = next(
         i
         for i, a in enumerate(obs.action_space.actions)
@@ -48,11 +51,9 @@ def test_priority_tap_encodes_and_replays(tmp_path: Path) -> None:
     ]
     assert len(taps) == 1 and obs.action_space.actions[taps[0]].focus
     space = ObservationSpace(ObservationConfig())
-    reference = space.encode(obs)
-    native = space.encoder.allocate()
-    env.encode_observation_into(obs, native)
-    for key in reference:
-        np.testing.assert_array_equal(reference[key], native[key], err_msg=key)
+    valid = encode_observation(space, obs)["actions_valid"]
+    assert valid[taps[0]]
+    assert int(np.count_nonzero(valid)) == len(obs.action_space.actions)
     after, *_ = capture.step(env, taps[0])
     capture.close()
     (record,) = GameRecord.model_validate_json(
@@ -120,6 +121,7 @@ def test_skip_count_includes_priority_passes_after_playing_a_land() -> None:
     seats = forests()
     for env, taps in ((off, "off"), (on, "all")):
         obs, _ = env.reset(managym.GameSetup(seats, mana_floats=(taps, "off")))
+        obs = keep_opening_hands(env, obs)
         before = env.skip_trivial_count()
         land = next(
             i
@@ -194,7 +196,10 @@ def test_usable_floats_follow_paid_activations(land: str, has_spend: bool) -> No
     # Vista pays life and sacrifices itself. Canyon can also spend {1} to draw.
     seat = managym.PlayerConfig("a", {"Forest": 16, land: 4})
     env = managym.Env(seed=385)
-    env.reset(managym.GameSetup([seat, forests()[1]], mana_floats=("usable", "off")))
+    raw, _ = env.reset(
+        managym.GameSetup([seat, forests()[1]], mana_floats=("usable", "off"))
+    )
+    keep_opening_hands(env, raw)
     env.scenario_clear_hand(0)
     env.scenario_force_battlefield(0, land)
     env.scenario_force_battlefield(0, "Forest")

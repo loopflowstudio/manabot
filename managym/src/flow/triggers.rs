@@ -5,24 +5,26 @@ use std::sync::Arc;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
+    cards::content_pack::default_content_pack,
     flow::{
-        event::{EventKind, GameEvent},
+        event::{CombatPlayerHit, DamageTarget, EventKind, GameEvent},
         game::Game,
         trigger::{
-            DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
-            TriggerPlacement,
+            DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerPlacement,
         },
         turn::{Bending, StepKind},
     },
     state::{
         ability::{
-            Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
-            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            Ability, Actor, DamageRecipientFilter, DelayedFrequency, Effect, EffectiveTrigger,
+            KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
+            TriggerSubject, TurnStep,
         },
-        card::CardType,
+        card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, Target},
-        mana::{Color, Mana},
+        game_object::{
+            AbilitySource, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target,
+        },
         permanent::CounterKind,
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
@@ -31,12 +33,29 @@ use crate::{
 
 /// One occurrence of a matched triggered ability, before it waits to be
 /// placed: a printed ability by index, or a granted one's effects.
-#[derive(Clone)]
-struct FiredTrigger {
-    source: TriggerSourceSnapshot,
-    ability_index: usize,
-    granted: Option<Vec<Effect>>,
-    program: bool,
+#[derive(Clone, Copy)]
+struct FiredTrigger<'a> {
+    context: Option<Target>,
+    player: Option<PlayerId>,
+    amount: i32,
+    once: bool,
+    source: &'a TriggerSourceSnapshot,
+    ability: TriggerAbility<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum TriggerAbility<'a> {
+    Printed(usize),
+    Granted(&'a EffectiveTrigger),
+}
+
+/// The event member bound by a per-object ability. Batch abilities observe the whole event.
+#[derive(Clone, Copy)]
+enum TriggerMember {
+    Event,
+    Attacker(PermanentId),
+    CombatHit(CombatPlayerHit),
+    CombatTotal(ObjectId, u32),
 }
 
 /// Exact battlefield source facts used while matching one or more committed
@@ -44,7 +63,6 @@ struct FiredTrigger {
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TriggerSourceSnapshot {
-    pub(crate) controller: PlayerId,
     pub(crate) lki: ObjectLki,
 }
 
@@ -54,18 +72,21 @@ impl serde::Serialize for TriggerSourceSnapshot {
         // V16 records the source slot under `card`; LKI owns the exact id.
         let mut snapshot = serializer.serialize_struct("TriggerSourceSnapshot", 3)?;
         snapshot.serialize_field("card", &self.lki.object)?;
-        snapshot.serialize_field("controller", &self.controller)?;
+        snapshot.serialize_field("controller", &self.lki.controller)?;
         snapshot.serialize_field("lki", &self.lki)?;
         snapshot.end()
     }
 }
 
-/// A set of `EventKind`s, one bit per variant.
+/// A set of `EventKind`s, one bit per variant, and a bit of its own for
+/// state triggers (CR 603.8), which are asked of their source, never an
+/// event.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct EventKinds(u32);
 
 impl EventKinds {
     const NONE: Self = Self(0);
+    const STATE_TRIGGER: Self = Self(1 << 31);
 
     fn of(kind: EventKind) -> Self {
         Self(1 << kind as u32)
@@ -93,18 +114,14 @@ impl std::ops::BitOr for EventKinds {
 /// fires, that its event's kind is listed here, so the index below never
 /// leaves out a source that would have fired.
 fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
-    match condition {
-        TriggerCondition::WasCast { condition }
-        | TriggerCondition::OnceEachTurn { condition }
-        | TriggerCondition::FromZone { condition, .. }
-        | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::WhileSourceAttacking { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
+    match condition.leaf() {
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
-        // Indexed with counter changes; `check_state_triggers` asks it, never
-        // an event.
-        TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
+        // `check_state_triggers` asks these, never an event.
+        TriggerCondition::NoCounters { .. } | TriggerCondition::State(_) => {
+            EventKinds::STATE_TRIGGER
+        }
         TriggerCondition::Casts { .. }
+        | TriggerCondition::Expend(_)
         | TriggerCondition::YouCastThis
         | TriggerCondition::SpellTargetsOnlyThis { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
@@ -117,21 +134,49 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             })
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
-        TriggerCondition::DealsCombatDamage { .. } => {
+        TriggerCondition::CardsLeaveYourGraveyard => EventKinds::of(EventKind::CardsLeftGraveyard),
+        TriggerCondition::SourceDealsDamage | TriggerCondition::SourceDealsCombatDamage => {
+            EventKinds::of(EventKind::SourceDealtDamage)
+        }
+        TriggerCondition::DealsCombatDamage { to: Some(_), .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
+        }
+        TriggerCondition::DealsDamage { .. } => EventKinds::of(EventKind::DamageDealt),
+        TriggerCondition::DealsCombatDamage { to: None, .. } => {
+            EventKinds::of(EventKind::CombatDamageTotals)
         }
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
+        TriggerCondition::BecomesUntapped { .. } => EventKinds::of(EventKind::PermanentUntapped),
         TriggerCondition::BecomesTargeted { .. } => EventKinds::of(EventKind::PermanentTargeted),
         TriggerCondition::BeginningOf { .. } => EventKinds::of(EventKind::StepStarted),
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
-        TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
-        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
-            EventKinds::of(EventKind::CountersPut)
+        TriggerCondition::GainsLife { .. } | TriggerCondition::LosesLife { .. } => {
+            EventKinds::of(EventKind::LifeChanged)
         }
+        TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
+        TriggerCondition::NthCounter { .. }
+        | TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::PutsCountersOn { .. }
+        | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
+        wrapper => unreachable!("TriggerCondition::leaf left wrapper {wrapper:?}"),
+    }
+}
+
+/// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
+/// the damage of its own combat hit, combat total, or damage event, or the life
+/// a player actually lost.
+fn event_amount(event: &GameEvent, member: TriggerMember) -> i32 {
+    match (event, member) {
+        (_, TriggerMember::CombatHit(hit)) => hit.amount,
+        (_, TriggerMember::CombatTotal(_, total)) => total as i32,
+        (GameEvent::LifeChanged { old, new, .. }, _) if new < old => old - new,
+        (GameEvent::DamageDealt { amount, .. }, _) => *amount as i32,
+        (GameEvent::SourceDealtDamage { amount, .. }, _) => *amount,
+        _ => 0,
     }
 }
 
@@ -145,6 +190,7 @@ fn keyword_action_event(action: KeywordAction) -> EventKind {
         | KeywordAction::Earthbend
         | KeywordAction::Firebend
         | KeywordAction::Airbend => EventKind::Bent,
+        KeywordAction::Discard => EventKind::CardMoved,
     }
 }
 
@@ -163,6 +209,14 @@ fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
                 Bending::Air => KeywordAction::Airbend,
             },
         )),
+        // The engine discards by moving a card from hand to its owner's
+        // graveyard, the event's controller.
+        GameEvent::CardMoved {
+            from: Some(ZoneType::Hand),
+            to: ZoneType::Graveyard,
+            controller,
+            ..
+        } => Some((*controller, KeywordAction::Discard)),
         _ => None,
     }
 }
@@ -179,16 +233,10 @@ fn turn_step(step: StepKind) -> Option<TurnStep> {
     }
 }
 
-fn ability_event_kinds(ability: &Ability) -> EventKinds {
-    let Ability::Triggered { condition, .. } = ability;
-    condition_event_kinds(condition)
-}
-
 /// A battlefield permanent and the event kinds its printed triggered
 /// abilities can fire on.
 #[derive(Debug, PartialEq, Eq)]
 struct TriggerSourceEntry {
-    permanent: PermanentId,
     object: ObjectId,
     kinds: EventKinds,
 }
@@ -206,82 +254,120 @@ pub(crate) struct TriggerIndex {
 }
 
 impl Game {
-    /// Whether `target` is the exact permanent whose ability triggered.
-    fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
-        matches!(target, Target::Permanent(id)
-            if trigger.source_ref().is_some() && self.permanent_object(id) == trigger.source_ref())
-    }
-
-    fn trigger_requirements(
-        &self,
-        trigger: &PendingTrigger,
-    ) -> Option<Vec<crate::state::ability::TargetRequirement>> {
-        let effects = match &trigger.inline_effects {
-            Some(effects) => effects.as_slice(),
-            None => self
-                .source_face(
-                    trigger.source_object(),
-                    trigger
-                        .source_lki
-                        .as_ref()
-                        .map_or(self.state.source_base(trigger.source_object()).0, |lki| {
-                            lki.definition_id
-                        }),
-                )?
-                .abilities
-                .get(trigger.ability_index)?
-                .effects(),
-        };
-        Some(crate::state::ability::effect_target_requirements(effects))
-    }
-
-    /// "Another target" excludes the exact source object.
-    fn excluded_source(
-        &self,
-        trigger: &PendingTrigger,
-        requirement: &crate::state::ability::TargetRequirement,
-    ) -> Option<PermanentId> {
-        if !requirement.another {
-            return None;
-        }
-        let source = trigger.source_ref()?;
-        self.lookup_current_permanent(source).ok()
-    }
-
-    /// Clause-wide mana-value budget; paid X belongs to this occurrence,
-    /// independent of its source's current state or later mana production.
-    fn within_trigger_mana_budget(
-        &self,
-        trigger: &PendingTrigger,
-        requirement: &crate::state::ability::TargetRequirement,
-        target: Target,
-    ) -> bool {
-        self.within_target_mana_budget(
-            requirement,
-            trigger.x,
-            trigger
-                .targets
-                .iter()
-                .zip(&trigger.target_req_indices)
-                .filter(|(_, index)| **index == trigger.requirement_index)
-                .map(|(target, _)| *target),
-            target,
+    /// A waiting trigger keeps the definition of the appearance that fired it.
+    pub(crate) fn pending_trigger_definition(&self, trigger: &PendingTrigger) -> CardDefId {
+        trigger.source_lki.as_ref().map_or_else(
+            || {
+                self.observed_source_definition(trigger.source_object())
+                    .unwrap_or(CardDefId::ANONYMOUS)
+            },
+            |lki| lki.definition_id,
         )
     }
 
-    pub(crate) fn within_target_mana_budget(
+    pub(crate) fn pending_trigger_face(
         &self,
-        requirement: &crate::state::ability::TargetRequirement,
+        trigger: &PendingTrigger,
+    ) -> Option<&PrintedCharacteristics> {
+        self.source_face(
+            trigger.source_object(),
+            self.pending_trigger_definition(trigger),
+        )
+        .map(Arc::as_ref)
+    }
+
+    /// The effects a pending trigger will run: its inline program, or its
+    /// printed ability narrowed to the chosen modes once they are chosen.
+    pub(crate) fn pending_trigger_effects<'a>(
+        &'a self,
+        trigger: &'a PendingTrigger,
+    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
+        if let Some(effects) = &trigger.inline_effects {
+            return Some(effects.as_slice().into());
+        }
+        let printed = self
+            .pending_trigger_face(trigger)?
+            .abilities
+            .get(trigger.ability_index)?
+            .effects();
+        Some(if trigger.modes_chosen {
+            crate::state::ability::chosen_trigger_effects(printed, &trigger.chosen_modes)
+        } else {
+            printed.into()
+        })
+    }
+
+    /// The program a pending frame projects, by the stacked rule
+    /// (`stacked_trigger_program`).
+    pub(crate) fn pending_trigger_program<'a>(
+        &'a self,
+        trigger: &'a PendingTrigger,
+    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
+        if let Some(effects) = &trigger.inline_effects {
+            return trigger.program.then(|| effects.as_slice().into());
+        }
+        crate::flow::resolution::catalog_join_misses(
+            self.pending_trigger_face(trigger)?,
+            self.pending_trigger_definition(trigger),
+            trigger.ability_index,
+            trigger
+                .modes_chosen
+                .then_some(trigger.chosen_modes.as_slice()),
+        )
+        .then(|| self.pending_trigger_effects(trigger))
+        .flatten()
+    }
+
+    fn placing_trigger(&self) -> Option<&PendingTrigger> {
+        self.state.trigger_placement.as_ref()?.placing.as_ref()
+    }
+
+    fn placing_trigger_mut(&mut self) -> Option<&mut PendingTrigger> {
+        self.state
+            .trigger_placement_mut()
+            .as_mut()?
+            .placing
+            .as_mut()
+    }
+
+    fn trigger_requirements(&self, trigger: &PendingTrigger) -> Option<Vec<TargetRequirement>> {
+        Some(crate::state::ability::effect_target_requirements(
+            &self.pending_trigger_effects(trigger)?,
+        ))
+    }
+
+    /// Distinctness, the announced X budget and "that share a creature
+    /// type" apply within one clause while choosing targets, including when
+    /// replacing one chosen slot.
+    pub(super) fn can_add_clause_target(
+        &self,
+        requirement: &TargetRequirement,
         x: u8,
-        chosen: impl Iterator<Item = Target>,
+        chosen: impl Iterator<Item = Target> + Clone,
         target: Target,
     ) -> bool {
-        !requirement.total_mana_value_x
-            || self.target_mana_value(target)
-                + chosen
-                    .map(|target| self.target_mana_value(target))
-                    .sum::<u32>()
-                <= u32::from(x)
+        // A graveyard card's owner fixes which graveyard it was targeted in,
+        // even if that appearance has left before a copied spell is retargeted.
+        let graveyard = |target| match target {
+            Target::GraveyardCard(id) => {
+                self.state.objects.get(id.slot()).map(|object| object.owner)
+            }
+            _ => None,
+        };
+        let same_graveyard = !requirement.same_graveyard
+            || graveyard(target)
+                .is_some_and(|owner| chosen.clone().all(|other| graveyard(other) == Some(owner)));
+        same_graveyard
+            && !chosen.clone().any(|previous| previous == target)
+            && (!requirement.total_mana_value_x
+                || self.target_mana_value(target)
+                    + chosen
+                        .clone()
+                        .map(|target| self.target_mana_value(target))
+                        .sum::<u32>()
+                    <= u32::from(x))
+            && (!requirement.shares_creature_type
+                || self.targets_share_creature_type(chosen.chain([target])))
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -301,10 +387,7 @@ impl Game {
         target: Target,
     ) -> Result<(), AgentError> {
         let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
+            .placing_trigger()
             .ok_or_else(|| AgentError("no pending target choice".into()))?;
         let requirements = self
             .trigger_requirements(trigger)
@@ -312,43 +395,16 @@ impl Game {
         let requirement = requirements
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
-        let duplicate = trigger
-            .targets
-            .iter()
-            .zip(&trigger.target_req_indices)
-            .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
-            || duplicate
-            || !self.within_trigger_mana_budget(trigger, requirement, target)
-            || (requirement.another && self.is_trigger_source(trigger, target))
-            || !self.target_is_legal(target, &requirement.spec, player)
-            || !self.within_source_bound(
-                target,
-                &requirement.spec,
-                trigger.source_object(),
-                trigger.source_ref(),
-            )
-            || self
-                .excluded_source(trigger, requirement)
-                .is_some_and(|id| target == Target::Permanent(id))
+            || !self.target_fits_clause(target, requirement, player, trigger.source_identity)
+            || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
-        let trigger = self
-            .state
-            .trigger_placement
-            .as_mut()
-            .and_then(|p| p.placing.as_mut())
-            .expect("validated trigger");
+        let trigger = self.placing_trigger_mut().expect("validated trigger");
         trigger.targets.push(target);
         trigger.target_req_indices.push(trigger.requirement_index);
-        if trigger
-            .target_req_indices
-            .iter()
-            .filter(|index| **index == trigger.requirement_index)
-            .count()
-            >= requirement.max
-        {
+        if trigger.clause_targets().count() >= requirement.max {
             trigger.requirement_index += 1;
         }
         Ok(())
@@ -359,14 +415,14 @@ impl Game {
             if self.state.pending_triggers.is_empty() {
                 return None;
             }
-            *self.state.trigger_placement_mut() = Some(TriggerPlacement {
+            *self.state.trigger_placement_mut() = Some(Box::new(TriggerPlacement {
                 remaining: std::mem::take(self.state.pending_triggers_mut()),
                 active: self.active_player(),
                 group: 0,
                 placing: None,
-            });
+            }));
         }
-        loop {
+        'placement: loop {
             let placement = self.state.trigger_placement_mut().as_mut().unwrap();
             if placement.placing.is_none() {
                 while placement.group < 4 {
@@ -406,15 +462,20 @@ impl Game {
             };
             // CR 700.2b: a modal trigger's mode is chosen first; with no
             // mode that has legal targets it is removed (CR 700.2a).
-            if let Some(modes) = self.unchosen_trigger_modes(&trigger) {
-                let legal = self.legal_trigger_modes(&trigger, &modes);
-                let up_to = matches!(
-                    self.trigger_mode_rule(&trigger),
-                    Some(Effect::TriggerModes { up_to: Some(_), .. })
-                );
-                if up_to && (legal.is_empty() || self.trigger_modes_left(&trigger) == 0) {
-                    // "Choose up to": the chosen modes, in printed order.
-                    trigger.inline_effects = Some(self.chosen_mode_effects(&trigger, &modes));
+            if let Some(Effect::TriggerModes {
+                modes,
+                up_to,
+                unchosen,
+            }) = self.pending_mode_rule(&trigger)
+            {
+                let legal = self.legal_trigger_modes(&trigger, modes, *unchosen);
+                let optional = up_to.is_some();
+                if up_to.as_ref().is_some_and(|limit| {
+                    let limit = usize::try_from(self.controller_value(limit, trigger.controller))
+                        .unwrap_or(0);
+                    legal.is_empty() || trigger.chosen_modes.len() >= limit
+                }) {
+                    trigger.modes_chosen = true;
                 } else if legal.is_empty() {
                     continue;
                 } else {
@@ -429,7 +490,7 @@ impl Game {
                                 player: controller,
                                 mode,
                             })
-                            .chain(up_to.then_some(Action::Decline { player: controller }))
+                            .chain(optional.then_some(Action::Decline { player: controller }))
                             .collect(),
                         focus: Vec::new(),
                     });
@@ -438,56 +499,31 @@ impl Game {
             let Some(requirements) = self.trigger_requirements(&trigger) else {
                 continue;
             };
-            let mut impossible = false;
             while let Some(requirement) = requirements.get(trigger.requirement_index) {
-                let count = trigger
-                    .target_req_indices
-                    .iter()
-                    .filter(|index| **index == trigger.requirement_index)
-                    .count();
-                let source = self.excluded_source(&trigger, requirement);
-                let legal: Vec<_> = self
-                    .legal_targets_for_spec(&requirement.spec, trigger.controller)
-                    .into_iter()
-                    .filter(|target| {
-                        self.within_trigger_mana_budget(&trigger, requirement, *target)
-                    })
-                    .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
-                    .filter(|target| {
-                        self.within_source_bound(
-                            *target,
-                            &requirement.spec,
-                            trigger.source_object(),
-                            trigger.source_ref(),
-                        )
-                    })
-                    .filter(|target| {
-                        !(requirement.another && self.is_trigger_source(&trigger, *target))
-                    })
-                    .filter(|target| {
-                        !trigger.targets.iter().zip(&trigger.target_req_indices).any(
-                            |(chosen, index)| {
-                                *index == trigger.requirement_index && chosen == target
-                            },
-                        )
-                    })
-                    .collect();
-                if legal.is_empty() {
-                    if count < requirement.min {
-                        impossible = true;
-                        break;
-                    }
-                    trigger.requirement_index += 1;
-                    continue;
-                }
+                let count = trigger.clause_targets().count();
                 let controller = trigger.controller;
-                let mut actions: Vec<_> = legal
-                    .into_iter()
+                let mut actions: Vec<_> = self
+                    .legal_clause_targets(requirement, controller, trigger.source_identity)
+                    .filter(|target| {
+                        self.can_add_clause_target(
+                            requirement,
+                            trigger.x,
+                            trigger.clause_targets(),
+                            *target,
+                        )
+                    })
                     .map(|target| Action::ChooseTarget {
                         player: controller,
                         target,
                     })
                     .collect();
+                if actions.is_empty() {
+                    if count < requirement.min {
+                        continue 'placement;
+                    }
+                    trigger.requirement_index += 1;
+                    continue;
+                }
                 if count >= requirement.min && requirement.max > requirement.min {
                     actions.push(Action::Decline { player: controller });
                 }
@@ -499,36 +535,17 @@ impl Game {
                     focus: Vec::new(),
                 });
             }
-            if !impossible {
-                self.place_triggered_ability_on_stack(trigger);
-            }
+            self.place_triggered_ability_on_stack(trigger);
         }
     }
 
-    /// The modes of a placing trigger whose modes are not yet chosen.
-    pub(crate) fn unchosen_trigger_modes(
-        &self,
-        trigger: &PendingTrigger,
-    ) -> Option<Vec<Vec<Effect>>> {
-        if trigger.inline_effects.is_some() {
+    /// The printed modal rule applies until the chosen effects have been bound.
+    pub(crate) fn pending_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
+        if trigger.modes_chosen || trigger.inline_effects.is_some() {
             return None;
         }
-        match self.trigger_mode_rule(trigger)? {
-            Effect::TriggerModes { modes, .. } => Some(modes.clone()),
-            _ => None,
-        }
-    }
-
-    /// The placing trigger's `Effect::TriggerModes`, its only effect.
-    fn trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         match self
-            .source_face(
-                trigger.source_object(),
-                trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                ),
-            )?
+            .pending_trigger_face(trigger)?
             .abilities
             .get(trigger.ability_index)?
             .effects()
@@ -538,61 +555,37 @@ impl Game {
         }
     }
 
-    /// How many modes the placing trigger may still choose: one, or "up to"
-    /// its value less those chosen.
-    fn trigger_modes_left(&self, trigger: &PendingTrigger) -> usize {
-        match self.trigger_mode_rule(trigger) {
-            Some(Effect::TriggerModes {
-                up_to: Some(value), ..
-            }) => usize::try_from(self.controller_value(value, trigger.controller))
-                .unwrap_or(0)
-                .saturating_sub(trigger.chosen_modes.len()),
-            _ => 1,
-        }
-    }
-
     /// Modes the placing trigger may choose next: every required target has
     /// a legal candidate, it is not chosen already, and an "unchosen" rule's
     /// source has not chosen it before.
-    fn legal_trigger_modes(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<usize> {
-        let unchosen = matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { unchosen: true, .. })
-        );
-        let chosen_before = match trigger
-            .source_ref()
-            .map(|source| self.lookup_current_permanent(source))
-        {
-            Some(Ok(id)) if unchosen => self.chosen_modes(id),
-            _ => Vec::new(),
-        };
-        self.targetable_trigger_modes(trigger, modes)
-            .into_iter()
-            .filter(|mode| !trigger.chosen_modes.contains(mode) && !chosen_before.contains(mode))
-            .collect()
-    }
-
-    /// Modes whose every required target has a legal candidate.
-    fn targetable_trigger_modes(
+    fn legal_trigger_modes(
         &self,
         trigger: &PendingTrigger,
         modes: &[Vec<Effect>],
+        unchosen: bool,
     ) -> Vec<usize> {
         let source = trigger
             .source_ref()
-            .and_then(|source| self.lookup_current_permanent(source).ok());
+            .and_then(|object| self.lookup_current_permanent(object).ok());
+        let chosen_before = source
+            .filter(|_| unchosen)
+            .map(|id| self.chosen_modes(id))
+            .unwrap_or_default();
         (0..modes.len())
+            .filter(|mode| !trigger.chosen_modes.contains(mode) && !chosen_before.contains(mode))
             .filter(|mode| {
                 crate::state::ability::effect_target_requirements(&modes[*mode])
                     .iter()
                     .filter(|requirement| requirement.min > 0)
                     .all(|requirement| {
-                        self.legal_targets_for_spec(&requirement.spec, trigger.controller)
-                            .into_iter()
-                            .any(|target| {
-                                !(requirement.another
-                                    && source.is_some_and(|id| target == Target::Permanent(id)))
-                            })
+                        self.legal_clause_targets(
+                            requirement,
+                            trigger.controller,
+                            trigger.source_identity,
+                        )
+                        .take(requirement.min)
+                        .count()
+                            >= requirement.min
                     })
             })
             .collect()
@@ -605,100 +598,66 @@ impl Game {
         mode: usize,
     ) -> Result<(), AgentError> {
         let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
+            .placing_trigger()
             .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        let Some(Effect::TriggerModes {
+            modes,
+            up_to,
+            unchosen,
+        }) = self.pending_mode_rule(trigger)
+        else {
+            return Err(AgentError("no pending trigger mode".into()));
+        };
         if trigger.controller != player
-            || !self.legal_trigger_modes(trigger, &modes).contains(&mode)
+            || !self
+                .legal_trigger_modes(trigger, modes, *unchosen)
+                .contains(&mode)
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
-        let rule = self.trigger_mode_rule(trigger).cloned();
-        let source = trigger
-            .source_ref()
-            .and_then(|source| self.lookup_current_permanent(source).ok());
-        let trigger = self
+        let single = up_to.is_none();
+        let source = trigger.source_ref().filter(|_| *unchosen);
+        let placing = self
             .state
             .trigger_placement
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger");
-        match rule {
-            Some(Effect::TriggerModes { up_to: Some(_), .. }) => trigger.chosen_modes.push(mode),
-            Some(Effect::TriggerModes { unchosen, .. }) => {
-                trigger.inline_effects = Some(modes[mode].clone());
-                if let (true, Some(source)) = (unchosen, source) {
-                    let affected = self.affected_permanent(source);
-                    let controller = player;
-                    let object = self.state.permanents[source].as_ref().map(|p| p.object);
-                    self.apply_continuous(
-                        object,
-                        controller,
-                        affected,
-                        Modification::ModeChosen {
-                            mode: u8::try_from(mode).unwrap_or(u8::MAX),
-                        },
-                        EffectDuration::Indefinite,
-                    );
-                }
+        placing.chosen_modes.push(mode);
+        if single {
+            placing.modes_chosen = true;
+            if let Some(permanent) =
+                source.and_then(|object| self.lookup_current_permanent(object).ok())
+            {
+                self.apply_continuous(
+                    source,
+                    player,
+                    self.affected_permanent(permanent),
+                    Modification::ModeChosen {
+                        mode: u8::try_from(mode).unwrap_or(u8::MAX),
+                    },
+                    EffectDuration::Indefinite,
+                );
             }
-            _ => {}
         }
-        Ok(())
-    }
-
-    /// The effects of the placing trigger's chosen modes, in printed order.
-    fn chosen_mode_effects(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
-        let mut chosen = trigger.chosen_modes.clone();
-        chosen.sort_unstable();
-        chosen
-            .into_iter()
-            .flat_map(|mode| modes[mode].iter().cloned())
-            .collect()
-    }
-
-    /// Stop choosing an "up to" trigger's modes.
-    fn stop_choosing_trigger_modes(&mut self, player: PlayerId) -> Result<(), AgentError> {
-        let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
-            .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        let modes = self
-            .unchosen_trigger_modes(trigger)
-            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
-        if trigger.controller != player {
-            return Err(AgentError("not the trigger's controller".into()));
-        }
-        let effects = self.chosen_mode_effects(trigger, &modes);
-        self.state
-            .trigger_placement
-            .as_mut()
-            .and_then(|p| p.placing.as_mut())
-            .expect("validated trigger")
-            .inline_effects = Some(effects);
         Ok(())
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let trigger = self
-            .state
-            .trigger_placement
-            .as_ref()
-            .and_then(|p| p.placing.as_ref())
+            .placing_trigger()
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        if matches!(
-            self.trigger_mode_rule(trigger),
-            Some(Effect::TriggerModes { up_to: Some(_), .. })
-        ) && trigger.inline_effects.is_none()
-        {
-            return self.stop_choosing_trigger_modes(player);
+        if let Some(Effect::TriggerModes { up_to: Some(_), .. }) = self.pending_mode_rule(trigger) {
+            if trigger.controller != player {
+                return Err(AgentError("not the trigger's controller".into()));
+            }
+            self.state
+                .trigger_placement
+                .as_mut()
+                .and_then(|p| p.placing.as_mut())
+                .expect("validated trigger")
+                .modes_chosen = true;
+            return Ok(());
         }
         let requirements = self
             .trigger_requirements(trigger)
@@ -706,21 +665,14 @@ impl Game {
         let requirement = requirements
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
-        let count = trigger
-            .target_req_indices
-            .iter()
-            .filter(|index| **index == trigger.requirement_index)
-            .count();
+        let count = trigger.clause_targets().count();
         if trigger.controller != player
             || count < requirement.min
             || requirement.max == requirement.min
         {
             return Err(AgentError("trigger cannot decline target".into()));
         }
-        self.state
-            .trigger_placement
-            .as_mut()
-            .and_then(|p| p.placing.as_mut())
+        self.placing_trigger_mut()
             .expect("validated trigger")
             .requirement_index += 1;
         Ok(())
@@ -749,15 +701,20 @@ impl Game {
     }
 
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
-        let source_definition_id = trigger
-            .source_lki
-            .as_ref()
-            .map(|lki| lki.definition_id)
-            .unwrap_or(self.state.source_base(trigger.source_object()).0);
+        let source_definition_id = self.pending_trigger_definition(&trigger);
+        let source_face = self
+            .source_face(trigger.source_object(), source_definition_id)
+            .expect("placing trigger has a source face");
+        let source_face = (!default_content_pack()
+            .definition(source_definition_id)
+            .is_some_and(|row| Arc::ptr_eq(source_face, &row.printed)))
+        .then(|| source_face.clone());
         let id = self.state.id_gen_mut().next_id();
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            source_face,
+            triggering_amount: trigger.triggering_amount,
             program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
@@ -771,8 +728,10 @@ impl Game {
             target_req_indices: trigger.target_req_indices,
             context: trigger.context,
             player: trigger.player,
+            kicked: trigger.kicked,
             x: trigger.x,
             spent: trigger.spent,
+            chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -784,30 +743,53 @@ impl Game {
         self.restart_priority_round();
     }
 
-    /// All currently legal targets for a spec, from `controller`'s
-    /// perspective ("you").
+    #[cfg(test)]
     pub(crate) fn legal_targets_for_spec(
         &self,
-        target_spec: &TargetSpec,
+        spec: &TargetSpec,
         controller: PlayerId,
     ) -> Vec<Target> {
+        let mut candidates = self.target_candidates(spec, controller);
+        candidates.retain(|target| self.target_is_legal(*target, spec, controller));
+        candidates
+    }
+
+    pub(crate) fn legal_clause_targets<'a>(
+        &'a self,
+        requirement: &'a TargetRequirement,
+        controller: PlayerId,
+        source: AbilitySource,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.target_candidates(&requirement.spec, controller)
+            .into_iter()
+            .filter(move |target| self.target_fits_clause(*target, requirement, controller, source))
+    }
+
+    fn target_candidates(&self, target_spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {
+        let graveyard = |owner| {
+            self.state
+                .zones
+                .zone_objects(ZoneType::Graveyard, owner)
+                .iter()
+                .copied()
+                .map(Target::GraveyardCard)
+        };
         let mut candidates: Vec<Target> = match target_spec {
             TargetSpec::GraveyardCardYouOwn { .. }
-            | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
-                .state
-                .zone_cards(ZoneType::Graveyard, controller)
-                .filter_map(|card| self.state.live(self.state.object_of(card)))
-                .map(Target::GraveyardCard)
-                .collect(),
-            TargetSpec::GraveyardCard { .. } | TargetSpec::GraveyardCardOpponentOwns { .. } => {
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
-                    .filter_map(|card| self.state.live(self.state.object_of(card)))
-                    .map(Target::GraveyardCard)
-                    .collect()
+            | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => {
+                graveyard(controller).collect()
             }
-            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
+            TargetSpec::GraveyardCardOpponentOwns { .. } => {
+                graveyard(PlayerId(1 - controller.0)).collect()
+            }
+            TargetSpec::GraveyardCard { .. } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(graveyard)
+                .collect(),
+            TargetSpec::Player
+            | TargetSpec::Opponent
+            | TargetSpec::AnyTarget
+            | TargetSpec::PlayerOrPlaneswalker => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
@@ -849,6 +831,7 @@ impl Game {
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget
+                | TargetSpec::PlayerOrPlaneswalker
                 | TargetSpec::CreatureYouControl
                 | TargetSpec::CreatureOpponentControls
                 | TargetSpec::LandYouControl
@@ -869,35 +852,79 @@ impl Game {
                 }
             }
         }
-        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
         candidates
+    }
+
+    /// Collect occurrences in order without placing them on the stack.
+    pub(crate) fn collect_waiting_triggers(&mut self) {
+        self.process_game_events();
+        self.check_state_triggers();
     }
 
     /// Match pending committed events against the applicable exact sources.
     pub(crate) fn process_game_events(&mut self) {
-        while !self.state.pending_events.is_empty() {
-            let events = std::mem::take(self.state.pending_events_mut());
-            for event in events {
-                let sources = self.trigger_ability_sources(&event);
-                self.check_triggers_for_event(&event, &sources);
-            }
-        }
+        self.drain_pending_events(None, &[]);
+    }
+
+    pub(super) fn graveyard_departure_sources(&self) -> Vec<TriggerSourceSnapshot> {
+        self.indexed_sources(EventKinds::of(EventKind::CardsLeftGraveyard))
     }
 
     /// Departures look back to the whole pre-batch battlefield. Entry and
     /// counter events see the completed battlefield, including every entrant.
-    pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
+    pub(crate) fn process_event_batch(
+        &mut self,
+        before: &[TriggerSourceSnapshot],
+        graveyard_sources: &[TriggerSourceSnapshot],
+    ) {
+        self.drain_pending_events(Some(before), graveyard_sources);
+    }
+
+    fn drain_pending_events(
+        &mut self,
+        before: Option<&[TriggerSourceSnapshot]>,
+        graveyard_sources: &[TriggerSourceSnapshot],
+    ) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
-            for event in events {
-                if matches!(
-                    event,
-                    GameEvent::CardMoved {
-                        from: Some(ZoneType::Battlefield),
+            self.check_source_damage_triggers(&events);
+            if !graveyard_sources.is_empty() {
+                let mut departed = [false; 2];
+                for event in &events {
+                    if let GameEvent::CardMoved {
+                        object_id,
+                        from: Some(ZoneType::Graveyard),
                         ..
-                    } | GameEvent::PermanentSacrificed { .. }
-                ) {
-                    self.check_triggers_for_event(&event, before);
+                    } = event
+                    {
+                        if let Some((_, owner, ObjectKind::Card)) =
+                            self.state.objects.provenance(*object_id)
+                        {
+                            departed[owner.0] = true;
+                        }
+                    }
+                }
+                for (seat, _) in departed.into_iter().enumerate().filter(|(_, left)| *left) {
+                    self.check_triggers_for_event(
+                        &GameEvent::CardsLeftGraveyard {
+                            owner: PlayerId(seat),
+                        },
+                        graveyard_sources,
+                    );
+                }
+            }
+            for event in events {
+                let use_before = before.filter(|_| {
+                    matches!(
+                        event,
+                        GameEvent::CardMoved {
+                            from: Some(ZoneType::Battlefield),
+                            ..
+                        } | GameEvent::PermanentSacrificed { .. }
+                    )
+                });
+                if let Some(sources) = use_before {
+                    self.check_triggers_for_event(&event, sources);
                 } else {
                     let sources = self.trigger_ability_sources(&event);
                     self.check_triggers_for_event(&event, &sources);
@@ -906,107 +933,129 @@ impl Game {
         }
     }
 
-    /// The object from an event that a fired ability's effects may
-    /// reference (e.g. ward counters the spell that targeted its permanent).
-    fn trigger_context_for_event(&self, event: &GameEvent) -> Option<Target> {
-        match event {
-            GameEvent::PermanentTargeted { by, .. } => Some(*by),
-            GameEvent::AbilityTriggered {
-                ability,
-                attacker: Some(_),
+    /// “Whenever this deals damage” counts one hit across simultaneous recipients.
+    /// Per-recipient events remain available to history and recipient-specific rules.
+    fn check_source_damage_triggers(&mut self, events: &[GameEvent]) {
+        if !events
+            .iter()
+            .any(|event| matches!(event, GameEvent::DamageDealt { .. }))
+        {
+            return;
+        }
+        let sources = self.indexed_sources(EventKinds::of(EventKind::SourceDealtDamage));
+        if sources.is_empty() {
+            return;
+        }
+        // Each source's total, and whether every part of it was combat damage.
+        let mut totals = std::collections::BTreeMap::<ObjectId, (i32, bool)>::new();
+        for event in events {
+            if let GameEvent::DamageDealt {
+                source: Some(source),
+                amount,
+                combat,
                 ..
-            } => Some(Target::StackAbility(*ability)),
-            _ => None,
+            } = event
+            {
+                let (total, all_combat) = totals.entry(*source).or_insert((0, true));
+                *total = total.saturating_add(*amount as i32);
+                *all_combat &= *combat;
+            }
+        }
+        for source in sources {
+            if let Some(&(amount, combat)) = totals.get(&source.lki.object) {
+                let event = GameEvent::SourceDealtDamage {
+                    source: source.lki.object,
+                    amount,
+                    combat,
+                };
+                self.check_triggers_for_event(&event, std::slice::from_ref(&source));
+            }
         }
     }
 
     /// Resolve printed and granted trigger matches before committing the event.
-    fn firing_battlefield_triggers(
+    fn firing_battlefield_triggers<'a>(
         &self,
         event: &GameEvent,
-        sources: &[TriggerSourceSnapshot],
-    ) -> Vec<FiredTrigger> {
-        let mut fired: Vec<FiredTrigger> = Vec::new();
+        sources: &'a [TriggerSourceSnapshot],
+    ) -> Vec<FiredTrigger<'a>> {
+        let mut fired = Vec::new();
         for source in sources {
-            for (ability_index, ability) in self
-                .source_face(source.lki.object, source.lki.definition_id)
-                .expect("source face")
+            let lki = &source.lki;
+            let face = self
+                .source_face(lki.object, lki.definition_id)
+                .expect("source face");
+            let printed = face
                 .abilities
                 .iter()
                 .enumerate()
-                .filter(|_| !source.lki.abilities_lost)
-            {
+                .filter(|_| !lki.abilities_lost)
+                .map(|(index, ability)| (TriggerAbility::Printed(index), ability));
+            let granted = lki
+                .granted_abilities
+                .iter()
+                .map(|grant| (TriggerAbility::Granted(grant), &grant.ability));
+            for (origin, ability) in printed.chain(granted) {
                 let Ability::Triggered {
                     condition,
                     intervening_if,
                     ..
                 } = ability;
-                // CR 603.4: an intervening "if" is checked as the trigger
-                // event occurs, and again on resolution.
-                if intervening_if.as_ref().is_none_or(|condition| {
-                    self.check_intervening_if(
-                        condition,
-                        source.controller,
-                        Some(source.lki.object),
-                        self.triggering_permanent(event),
-                    )
-                }) && (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
-                    || !self
-                        .state
-                        .turn
-                        .ability_triggers_this_turn
-                        .contains_key(&(source.lki.object, ability_index)))
-                {
-                    let times = self.trigger_occurrences(condition, source, event);
+                let Some((leaf, once)) =
+                    self.match_trigger_wrappers(condition, event, lki.object, lki.controller)
+                else {
+                    continue;
+                };
+                if once {
+                    let used = match origin {
+                        TriggerAbility::Printed(index) => self
+                            .state
+                            .turn
+                            .ability_triggers_this_turn
+                            .contains_key(&(lki.object, lki.definition_id, index)),
+                        TriggerAbility::Granted(grant) => self
+                            .state
+                            .turn
+                            .used_trigger_grants
+                            .contains(lki.object, grant.clock.expect("limited grant clock")),
+                    };
+                    if used {
+                        continue;
+                    }
+                }
+                let mut copies = once.then_some(1);
+                let mut emitted = false;
+                self.collect_occurrences(leaf, event, source, |member| {
+                    if once && emitted {
+                        return;
+                    }
+                    let context = self.trigger_context(ability, member, event);
+                    if intervening_if.as_ref().is_some_and(|condition| {
+                        !self.check_intervening_if(
+                            condition,
+                            lki.controller,
+                            Some(lki.object),
+                            context,
+                        )
+                    }) {
+                        return;
+                    }
+                    // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
+                    let count =
+                        *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
                     fired.extend(std::iter::repeat_n(
                         FiredTrigger {
-                            source: source.clone(),
-                            ability_index,
-                            granted: None,
-                            program: false,
+                            source,
+                            ability: origin,
+                            context,
+                            player: self.event_player(leaf, event, member),
+                            amount: event_amount(event, member),
+                            once,
                         },
-                        times,
+                        count,
                     ));
-                }
-            }
-            // Departure triggers use the grants captured at the event boundary.
-            for effective in &source.lki.granted_abilities {
-                let Ability::Triggered {
-                    condition,
-                    effects,
-                    intervening_if,
-                } = &effective.ability;
-                if intervening_if.as_ref().is_some_and(|condition| {
-                    !self.check_intervening_if(
-                        condition,
-                        source.controller,
-                        Some(source.lki.object),
-                        self.triggering_permanent(event),
-                    )
-                }) {
-                    continue;
-                }
-                // Keep CR 603.4's second check in the captured program when
-                // there is no printed ability to recover at resolution.
-                let effects = if let Some(condition) = intervening_if {
-                    vec![Effect::If {
-                        condition: condition.clone(),
-                        then: effects.clone(),
-                        otherwise: Vec::new(),
-                    }]
-                } else {
-                    effects.clone()
-                };
-                let times = self.trigger_occurrences(condition, source, event);
-                fired.extend(std::iter::repeat_n(
-                    FiredTrigger {
-                        source: source.clone(),
-                        ability_index: 0,
-                        granted: Some(effects),
-                        program: effective.program,
-                    },
-                    times,
-                ));
+                    emitted = true;
+                });
             }
         }
 
@@ -1016,7 +1065,6 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
-        self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
         self.cast_triggers(event);
         self.delayed_triggers_for_event(event);
@@ -1025,89 +1073,36 @@ impl Game {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
+            context,
+            player,
+            amount,
+            once,
             source,
-            ability_index,
-            granted,
-            program,
+            ability,
         } in fired
         {
-            let TriggerSourceSnapshot {
-                controller,
-                lki: source_lki,
-            } = source;
+            let source_lki = &source.lki;
+            let controller = source_lki.controller;
             let source_object = source_lki.object;
-            if granted.is_none()
-                && matches!(
-                    &self
-                        .source_face(source_object, source_lki.definition_id)
-                        .expect("source face")
-                        .abilities[ability_index],
-                    Ability::Triggered {
-                        condition: TriggerCondition::OnceEachTurn { .. },
+            let (ability_index, granted, program) = match ability {
+                TriggerAbility::Printed(index) => (index, None, false),
+                TriggerAbility::Granted(grant) => {
+                    let Ability::Triggered {
+                        intervening_if,
+                        effects,
                         ..
-                    }
-                )
-            {
-                self.spend_once_each_turn((source_lki.object, ability_index));
-            }
-            let effects = match &granted {
-                Some(effects) => effects.as_slice(),
-                None => self
-                    .source_face(source_object, source_lki.definition_id)
-                    .expect("source face")
-                    .abilities[ability_index]
-                    .effects(),
-            };
-            let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
-            let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
-            let context = if reads_triggering_permanent {
-                self.triggering_permanent(event)
-            } else if let (
-                true,
-                GameEvent::SpellCast {
-                    object_id: object, ..
-                },
-            ) = (asks_triggering_spell, event)
-            {
-                Some(Target::StackSpell(*object))
-            } else {
-                self.trigger_context_for_event(event)
-            };
-            let player = match event {
-                GameEvent::SpellCast {
-                    object_id: object, ..
-                } => Some(self.spell_caster(*object)),
-                GameEvent::CardDrawn { player, .. } => Some(*player),
-                // "that player": whose graveyard the card was put into.
-                GameEvent::CardMoved {
-                    object_id: object,
-                    to: ZoneType::Graveyard,
-                    ..
-                } => Some(self.state[*object].owner),
-                // "that player": whose step it is.
-                GameEvent::StepStarted { .. } => Some(self.active_player()),
-                // "that player": who searched, scried, surveilled or bent.
-                _ => performed_action(event).map(|(player, _)| player),
-            };
-            // CR 107.3m: an entering permanent's own trigger sees its spell's
-            // X and the mana spent to cast it; a counters trigger's X is how
-            // many were put ("that much").
-            let (x, spent) = match event {
-                GameEvent::CountersPut { count, .. } => {
-                    (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
+                    } = &grant.ability;
+                    // A granted trigger retains its CR 603.4 resolution check with its program.
+                    let inline = match intervening_if {
+                        Some(condition) => vec![Effect::If {
+                            condition: condition.clone(),
+                            then: effects.clone(),
+                            otherwise: Vec::new(),
+                        }],
+                        None => effects.clone(),
+                    };
+                    (0, Some(inline), grant.program)
                 }
-                GameEvent::CardMoved {
-                    object_id: object,
-                    to: ZoneType::Battlefield,
-                    ..
-                } if *object == source_object => self
-                    .state
-                    .permanent_of(*object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(Default::default(), |permanent| {
-                        (permanent.cast_x, permanent.cast_spent)
-                    }),
-                _ => Default::default(),
             };
             let attacker = match event {
                 GameEvent::AttackersDeclared { attackers, .. } => attackers
@@ -1116,64 +1111,178 @@ impl Game {
                     .find(|id| self.permanent_object(*id) == Some(source_lki.object)),
                 _ => None,
             };
+            if once {
+                match ability {
+                    TriggerAbility::Printed(_) => self.spend_once_each_turn((
+                        source_object,
+                        source_lki.definition_id,
+                        ability_index,
+                    )),
+                    TriggerAbility::Granted(grant) => self
+                        .state
+                        .turn
+                        .used_trigger_grants
+                        .record(source_object, grant.clock.expect("limited grant clock")),
+                }
+            }
             let id = self.next_trigger_id();
-            self.state.pending_triggers_mut().push(PendingTrigger {
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(
-                    source_object,
-                    Some(source_lki.object),
-                ),
-                source_lki: Some(source_lki),
-                ability_index,
-                controller,
-                id,
-                ordering_class: TriggerOrderingClass::Ordinary,
+            let mut trigger = PendingTrigger {
+                triggering_amount: amount,
+                source_lki: Some(source_lki.clone()),
                 context,
                 player,
-                x,
-                spent,
-                chosen_modes: Vec::new(),
                 attacker,
                 inline_effects: granted,
                 program,
-            });
+                ..PendingTrigger::new(
+                    id,
+                    controller,
+                    AbilitySource::new(source_object, Some(source_object)),
+                    ability_index,
+                )
+            };
+            match event {
+                // A counters trigger's "that much" is the number just put.
+                GameEvent::CountersPut { count, .. } => {
+                    trigger.x = u8::try_from(*count).unwrap_or(u8::MAX);
+                }
+                // CR 107.3m, 400.7d: an entering permanent's own trigger
+                // remembers the choices and payment from its spell.
+                GameEvent::CardMoved {
+                    object_id,
+                    to: ZoneType::Battlefield,
+                    ..
+                } if *object_id == source_object => {
+                    if let Some(spell) = self.state.spell_entry(source_object) {
+                        trigger.kicked = spell.kicked;
+                        trigger.x = spell.x;
+                        trigger.spent = spell.payment.clone().unwrap_or_default();
+                    }
+                }
+                _ => {}
+            }
+            self.state.pending_triggers_mut().push(trigger);
         }
     }
 
-    /// How many times one of `source`'s triggered abilities triggers on
-    /// `event`: zero unless its condition fires, else its own multiplicity
-    /// plus the "triggers an additional time" statics that cover it.
-    fn trigger_occurrences(
+    fn collect_occurrences(
         &self,
         condition: &TriggerCondition,
-        source: &TriggerSourceSnapshot,
         event: &GameEvent,
-    ) -> usize {
-        if !self.trigger_condition_fires(
-            condition,
-            source.lki.object,
-            source.controller,
-            true,
-            event,
-        ) {
-            return 0;
+        source: &TriggerSourceSnapshot,
+        mut emit: impl FnMut(TriggerMember),
+    ) {
+        let lki = &source.lki;
+        match (condition, event) {
+            (
+                TriggerCondition::Attacks {
+                    subject,
+                    per: Per::Object,
+                    attackers: size,
+                    nth,
+                },
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                if size.matches(attackers.len()) {
+                    for &id in attackers {
+                        if self.attack_matches(subject, *nth, lki.object, lki.controller, id) {
+                            emit(TriggerMember::Attacker(id));
+                        }
+                    }
+                }
+            }
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: Some(to),
+                    per: Per::Object,
+                },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => {
+                for hit in hits {
+                    if self.hit_matches(hit, subject, *to, lki.object, lki.controller) {
+                        emit(TriggerMember::CombatHit(*hit));
+                    }
+                }
+            }
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: None,
+                    per: Per::Object,
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) => {
+                for &(dealer, amount) in dealt {
+                    if self.subject_matches_damage_source(
+                        subject,
+                        lki.object,
+                        lki.controller,
+                        dealer,
+                    ) {
+                        emit(TriggerMember::CombatTotal(dealer, amount));
+                    }
+                }
+            }
+            _ if self.trigger_condition_fires(
+                condition,
+                lki.object,
+                lki.controller,
+                true,
+                event,
+            ) =>
+            {
+                debug_assert!(condition_event_kinds(condition).contains(event.kind()));
+                emit(TriggerMember::Event);
+            }
+            _ => {}
         }
-        debug_assert!(
-            condition_event_kinds(condition).contains(event.kind()),
-            "{condition:?} fired on an event kind it is not indexed by: {event:?}"
-        );
-        self.trigger_multiplicity(condition, source.lki.object, source.controller, event)
-            + self.additional_trigger_times(source)
     }
 
-    /// The permanent whose event fired a trigger: an entering one, a
-    /// departed one (by the slot it occupied, read from its last known
-    /// information) or a lone attacker.
-    fn triggering_permanent(&self, event: &GameEvent) -> Option<Target> {
+    fn permanent_or_lki(&self, object: ObjectId) -> Option<PermanentId> {
+        self.state
+            .permanent_of(object)
+            .or_else(|| self.object_lki(object).map(|lki| lki.permanent))
+    }
+
+    /// Bind the event object once so the intervening condition and the
+    /// resulting stack ability read the same occurrence (CR 603.4).
+    fn trigger_context(
+        &self,
+        ability: &Ability,
+        member: TriggerMember,
+        event: &GameEvent,
+    ) -> Option<Target> {
+        match member {
+            TriggerMember::Attacker(id) => return Some(Target::Permanent(id)),
+            TriggerMember::CombatHit(hit) if ability.reads_triggering_object() => {
+                return self.permanent_or_lki(hit.source).map(Target::Permanent);
+            }
+            TriggerMember::CombatHit(_) => return None,
+            TriggerMember::CombatTotal(source, _) => {
+                return self.permanent_or_lki(source).map(Target::Permanent)
+            }
+            TriggerMember::Event => {}
+        }
         match event {
+            GameEvent::PermanentTargeted { by, .. } => Some(*by),
+            GameEvent::AbilityTriggered {
+                ability,
+                attacker: Some(_),
+                ..
+            } => Some(Target::StackAbility(*ability)),
+            _ if !ability.reads_triggering_object() => None,
+            GameEvent::SpellCast { object_id, .. } => Some(Target::StackSpell(*object_id)),
+            // "That creature" / "that source" of a damage trigger: the dealing
+            // permanent live or as it last existed, else the dealing spell,
+            // as `subject_matches_damage_source` matched it.
+            GameEvent::DamageDealt {
+                source: Some(source),
+                ..
+            } => Some(
+                self.permanent_or_lki(*source)
+                    .map_or(Target::StackSpell(*source), Target::Permanent),
+            ),
             GameEvent::CardMoved {
                 object_id,
                 to: ZoneType::Battlefield,
@@ -1189,6 +1298,11 @@ impl Game {
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
                 .map(|lki| Target::Permanent(lki.permanent)),
+            GameEvent::CardMoved {
+                object_id,
+                to: ZoneType::Graveyard,
+                ..
+            } => Some(Target::GraveyardCard(*object_id)),
             GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
                 Some(Target::Permanent(attackers[0]))
             }
@@ -1196,14 +1310,57 @@ impl Game {
         }
     }
 
+    /// "That player" for a trigger whose event `leaf` matched `event`: the
+    /// recipient of a combat hit, the caster, drawer or performer, whose
+    /// graveyard a card was put into, or whose step it is. A permanent that
+    /// dies, leaves, enters or is sacrificed binds its controller as it
+    /// last existed, which an owner's graveyard need not share (Massacre
+    /// Wurm and a stolen creature).
+    fn event_player(
+        &self,
+        leaf: &TriggerCondition,
+        event: &GameEvent,
+        member: TriggerMember,
+    ) -> Option<PlayerId> {
+        match event {
+            GameEvent::CombatDamageToPlayers { .. } => match member {
+                TriggerMember::CombatHit(hit) => Some(hit.recipient),
+                _ => None,
+            },
+            GameEvent::SpellCast { caster, .. } => Some(*caster),
+            GameEvent::CardDrawn { player, .. } => Some(*player),
+            GameEvent::LifeChanged { player, .. } => Some(*player),
+            GameEvent::DamageDealt {
+                target: DamageTarget::Player(player),
+                ..
+            } => Some(*player),
+            GameEvent::PermanentSacrificed { controller, .. } => Some(*controller),
+            GameEvent::CardMoved { controller, .. }
+                if matches!(
+                    leaf,
+                    TriggerCondition::Dies { .. }
+                        | TriggerCondition::LeavesTheBattlefield { .. }
+                        | TriggerCondition::EntersTheBattlefield { .. }
+                ) =>
+            {
+                Some(*controller)
+            }
+            GameEvent::CardMoved {
+                object_id: object,
+                to: ZoneType::Graveyard,
+                ..
+            } => Some(self.state[*object].owner),
+            GameEvent::StepStarted { .. } => Some(self.active_player()),
+            _ => performed_action(event).map(|(player, _)| player),
+        }
+    }
+
     /// Extra occurrences of one of `source`'s triggered abilities: one for
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
-        let current = self.lookup_current_permanent(source.lki.object).ok();
-        let (_, object) = self.state.source_base(source.lki.object);
         self.static_sources()
-            .filter(|(_, controller, _)| *controller == source.controller)
+            .filter(|(_, controller, _)| *controller == source.lki.controller)
             .map(|(_, _, grantor)| {
                 grantor
                     .static_abilities
@@ -1214,54 +1371,10 @@ impl Game {
                         }
                         _ => None,
                     })
-                    .filter(|predicate| match current {
-                        Some(id) => self.permanent_matches_predicate(id, predicate),
-                        None => predicate.matches_printing(
-                            object,
-                            self.state
-                                .objects
-                                .provenance(source.lki.object)
-                                .expect("source provenance")
-                                .2,
-                            object.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-                            source.lki.power,
-                            &[],
-                        ),
-                    })
+                    .filter(|predicate| super::layers::matches_departure(&source.lki, predicate))
                     .count()
             })
             .sum()
-    }
-
-    /// Granted firebending (CR 702.189): each attacking creature with
-    /// firebending until end of turn triggers "add that much {R} until end
-    /// of combat".
-    fn granted_firebending_triggers(&mut self, event: &GameEvent) {
-        let GameEvent::AttackersDeclared { attackers, .. } = event else {
-            return;
-        };
-        for attacker in attackers.clone() {
-            let amount = self.characteristics(attacker).firebending;
-            let Some(permanent) = self.state.permanents[attacker].as_ref() else {
-                continue;
-            };
-            let (controller, object) = (permanent.controller, permanent.object);
-            if amount == 0 {
-                continue;
-            }
-            let Some(source) = self.permanent_object(attacker) else {
-                continue;
-            };
-            let mut mana = Mana::default();
-            mana.mana[Color::Red as usize] = amount;
-            let effect = Effect::AddMana {
-                mana,
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
-            };
-            self.enqueue_inline_trigger(object, Some(source), controller, vec![effect], None)
-                .attacker = Some(attacker);
-        }
     }
 
     /// Wait for a delayed triggered ability's event (CR 603.7).
@@ -1273,33 +1386,23 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
-        let creature_died = match event {
+        let dead_creature = match event {
             GameEvent::CardMoved {
-                object_id: object,
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
-            } => {
-                self.state[*object].types.is_creature()
-                    || event
-                        .departed_object()
-                        .and_then(|object| self.object_lki(object))
-                        .is_some_and(|lki| lki.animated_creature)
-            }
-            _ => false,
+            } => event
+                .departed_object()
+                .and_then(|object| self.object_lki(object))
+                .filter(|lki| lki.battlefield.types.is_creature())
+                .map(|lki| Target::Permanent(lki.permanent)),
+            _ => None,
         };
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
             let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, GameEvent::CardMoved { .. })
-                    if creature_died =>
-                {
-                    event
-                        .departed_object()
-                        .and_then(|object| self.object_lki(object))
-                        .map(|lki| Target::Permanent(lki.permanent))
-                }
+                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => dead_creature,
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
@@ -1315,9 +1418,11 @@ impl Game {
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast {
-                        object_id: object, ..
+                        object_id: object,
+                        caster,
+                        ..
                     },
-                ) if self.spell_caster(*object) == trigger.controller
+                ) if *caster == trigger.controller
                     && self.object_matches_predicate(*object, predicate) =>
                 {
                     Some(Target::StackSpell(*object))
@@ -1343,14 +1448,14 @@ impl Game {
         trigger: &DelayedTrigger,
         context: Option<Target>,
     ) {
-        self.enqueue_inline_trigger(
-            trigger.source_object(),
-            trigger.source_ref(),
+        let pending = self.enqueue_inline_trigger(
+            trigger.source_identity,
             trigger.controller,
-            trigger.effects.clone(),
+            trigger.effects.effects().to_vec(),
             context,
-        )
-        .remembered = trigger.remembered.clone();
+        );
+        pending.remembered = trigger.remembered.clone();
+        pending.program = true;
     }
 
     /// A fresh identity for the trigger occurrence about to be enqueued.
@@ -1363,47 +1468,27 @@ impl Game {
     }
 
     /// Put an occurrence with inline effects (no `Object::abilities` entry to
-    /// reference: a delayed, reflexive or granted-firebending ability) in the
+    /// reference: a delayed, reflexive or granted ability) in the
     /// waiting list, with its source's last known information when that was
     /// a battlefield object.
     pub(crate) fn enqueue_inline_trigger(
         &mut self,
-        source_object: ObjectId,
-        source_ref: Option<ObjectId>,
+        source: AbilitySource,
         controller: PlayerId,
         effects: Vec<Effect>,
         context: Option<Target>,
     ) -> &mut PendingTrigger {
-        let source_lki = source_ref.and_then(|source| {
-            self.object_lki(source).cloned().or_else(|| {
-                (source == source_object && self.state.live(source).is_some())
-                    .then(|| self.snapshot_current_permanent(source))
-                    .flatten()
-            })
+        let source_lki = source.reference().and_then(|object| {
+            self.object_lki(object)
+                .cloned()
+                .or_else(|| self.snapshot_current_permanent(object))
         });
         let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: crate::state::game_object::AbilitySource::new(
-                source_object,
-                source_ref,
-            ),
             source_lki,
-            ability_index: 0,
-            controller,
-            id,
-            ordering_class: TriggerOrderingClass::Ordinary,
             context,
-            player: None,
-            x: 0,
-            spent: Default::default(),
-            chosen_modes: Vec::new(),
-            attacker: None,
             inline_effects: Some(effects),
+            ..PendingTrigger::new(id, controller, source, 0)
         });
         self.state
             .pending_triggers_mut()
@@ -1413,9 +1498,9 @@ impl Game {
 
     /// State triggers (CR 603.8) of battlefield sources whose state holds,
     /// unless that exact source's occurrence is still waiting or on the stack.
-    pub(crate) fn check_state_triggers(&mut self) {
+    fn check_state_triggers(&mut self) {
         let mut fired = Vec::new();
-        for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
+        for source in self.indexed_sources(EventKinds::STATE_TRIGGER) {
             let Some(permanent) = self
                 .state
                 .permanent_of(source.lki.object)
@@ -1423,68 +1508,81 @@ impl Game {
             else {
                 continue;
             };
+            if source.lki.abilities_lost {
+                continue;
+            }
             let face = self
                 .source_face(source.lki.object, source.lki.definition_id)
                 .expect("source face");
+            let object = Some(source.lki.object);
             for (ability_index, ability) in face.abilities.iter().enumerate() {
-                let Ability::Triggered {
-                    condition: TriggerCondition::NoCounters { kind },
-                    ..
-                } = ability
-                else {
-                    continue;
+                let Ability::Triggered { condition, .. } = ability;
+                let holds = match condition {
+                    TriggerCondition::NoCounters { kind } => permanent.counter_count(*kind) == 0,
+                    TriggerCondition::State(condition) => {
+                        self.condition_holds(condition, source.lki.controller, None, object, None)
+                    }
+                    _ => continue,
                 };
-                let object = Some(source.lki.object);
-                let waiting = self.state.pending_triggers.iter().any(|trigger| {
-                    trigger.source_ref() == object && trigger.ability_index == ability_index
-                }) || self.state.stack_objects.iter().any(|item| {
-                    matches!(item, StackObject::TriggeredAbility(trigger)
-                        if trigger.source_ref() == object && trigger.ability_index == ability_index)
-                });
-                if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
+                if holds && !self.state_trigger_waiting(object, ability_index) {
                     fired.push((source.clone(), ability_index));
                 }
             }
         }
         for (source, ability_index) in fired {
             let id = self.next_trigger_id();
+            let object = source.lki.object;
+            let controller = source.lki.controller;
             self.state.pending_triggers_mut().push(PendingTrigger {
-                program: false,
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(
-                    source.lki.object,
-                    Some(source.lki.object),
-                ),
                 source_lki: Some(source.lki),
-                ability_index,
-                controller: source.controller,
-                id,
-                ordering_class: TriggerOrderingClass::Ordinary,
-                context: None,
-                player: None,
-                x: 0,
-                spent: Default::default(),
-                chosen_modes: Vec::new(),
-                attacker: None,
-                inline_effects: None,
+                ..PendingTrigger::new(
+                    id,
+                    controller,
+                    AbilitySource::new(object, Some(object)),
+                    ability_index,
+                )
             });
         }
+    }
+
+    /// CR 603.8: a state trigger doesn't trigger again while that exact
+    /// source's occurrence waits to be put on the stack or is on it.
+    fn state_trigger_waiting(&self, source: Option<ObjectId>, ability_index: usize) -> bool {
+        // A granted or delayed trigger carries its own effects and may share
+        // the printed ability's index; it is never the state trigger.
+        let same = |trigger: &PendingTrigger| {
+            trigger.source_ref() == source
+                && trigger.ability_index == ability_index
+                && trigger.inline_effects.is_none()
+        };
+        let placing = self
+            .state
+            .trigger_placement
+            .as_deref()
+            .into_iter()
+            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
+        self.state.pending_triggers.iter().chain(placing).any(same)
+            || self.state.stack_objects.iter().any(|item| {
+                matches!(item, StackObject::TriggeredAbility(trigger)
+                    if trigger.source_ref() == source
+                        && trigger.ability_index == ability_index
+                        && trigger.inline_effects.is_none())
+            })
     }
 
     /// "When you cast this spell" abilities of the spell just cast; the spell
     /// is the source and its caster controls the trigger.
     fn cast_triggers(&mut self, event: &GameEvent) {
         let GameEvent::SpellCast {
-            object_id: object, ..
+            object_id: object,
+            caster,
+            ..
         } = event
         else {
             return;
         };
         let object = *object;
-        let caster = self.spell_caster(object);
+        let caster = *caster;
         let fired: Vec<Vec<Effect>> = self.state[object]
             .abilities
             .iter()
@@ -1494,30 +1592,34 @@ impl Game {
             })
             .map(|ability| ability.effects().to_vec())
             .collect();
-        let source_ref = self.state.live(object);
+        let source = AbilitySource::new(object, self.state.live(object));
         for effects in fired {
-            self.enqueue_inline_trigger(object, source_ref, caster, effects, None);
+            self.enqueue_inline_trigger(source, caster, effects, None);
+        }
+        let Some(spell) = self.spell_on_stack(object) else {
+            return;
+        };
+        let replicated = if self.state[object].replicate().is_some() {
+            usize::from(spell.x)
+        } else {
+            0
+        };
+        // "When that mana is spent to cast [a spell], copy that spell": one
+        // trigger of the object that made each such unit.
+        let copy_sources: Vec<_> = spell.spent.copy_triggers().flatten().collect();
+        for origin in copy_sources {
+            self.enqueue_inline_trigger(
+                AbilitySource::new(origin.object, Some(origin.object)),
+                caster,
+                vec![Effect::CopyTriggeringObject],
+                Some(Target::StackSpell(object)),
+            );
         }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
-        let replicated = match self
-            .find_spell_on_stack_index(object)
-            .map(|index| &self.state.stack_objects[index])
-        {
-            Some(StackObject::Spell(spell)) if self.state[object].replicate().is_some() => {
-                usize::from(spell.x)
-            }
-            _ => 0,
-        };
         if replicated > 0 {
             let copies = vec![Effect::CopyTriggeringObject; replicated];
-            self.enqueue_inline_trigger(
-                object,
-                source_ref,
-                caster,
-                copies,
-                Some(Target::StackSpell(object)),
-            );
+            self.enqueue_inline_trigger(source, caster, copies, Some(Target::StackSpell(object)));
         }
     }
 
@@ -1540,35 +1642,37 @@ impl Game {
                     else {
                         continue;
                     };
-                    if self.trigger_condition_fires(condition, object, owner, false, event) {
-                        fired.push((object, ability_index, owner));
+                    let Some((leaf, once)) =
+                        self.match_trigger_wrappers(condition, event, object, owner)
+                    else {
+                        continue;
+                    };
+                    let key = (object, self.state[object].definition_id, ability_index);
+                    if !(once
+                        && self
+                            .state
+                            .turn
+                            .ability_triggers_this_turn
+                            .contains_key(&key))
+                        && self.trigger_condition_fires(leaf, object, owner, false, event)
+                    {
+                        fired.push((object, ability_index, owner, once.then_some(key)));
                     }
                 }
             }
         }
-        for (object, ability_index, owner) in fired {
+        for (object, ability_index, owner, key) in fired {
+            if let Some(key) = key {
+                self.spend_once_each_turn(key);
+            }
             let source_ref = self.state.live(object);
             let id = self.next_trigger_id();
-            self.state.pending_triggers_mut().push(PendingTrigger {
-                program: false,
-                remembered: Vec::new(),
-                targets: Vec::new(),
-                target_req_indices: Vec::new(),
-                requirement_index: 0,
-                source_identity: crate::state::game_object::AbilitySource::new(object, source_ref),
-                source_lki: None,
-                ability_index,
-                controller: owner,
+            self.state.pending_triggers_mut().push(PendingTrigger::new(
                 id,
-                ordering_class: TriggerOrderingClass::Ordinary,
-                context: None,
-                player: None,
-                x: 0,
-                spent: Default::default(),
-                chosen_modes: Vec::new(),
-                attacker: None,
-                inline_effects: None,
-            });
+                owner,
+                AbilitySource::new(object, source_ref),
+                ability_index,
+            ));
         }
     }
 
@@ -1628,21 +1732,13 @@ impl Game {
     /// `kinds`, in object order.
     fn indexed_sources(&self, kinds: EventKinds) -> Vec<TriggerSourceSnapshot> {
         let index = self.trigger_index();
-        let mut sources: Vec<_> = index
+        index
             .sources
             .iter()
             .filter(|entry| entry.kinds.intersects(kinds))
-            .filter_map(|entry| {
-                let permanent = self.state.permanents[entry.permanent].as_ref()?;
-                self.snapshot_current_permanent(entry.object)
-                    .map(|lki| TriggerSourceSnapshot {
-                        controller: permanent.controller,
-                        lki,
-                    })
-            })
-            .collect();
-        sources.sort_by_key(|source| source.lki.object);
-        sources
+            .filter_map(|entry| self.snapshot_current_permanent(entry.object))
+            .map(|lki| TriggerSourceSnapshot { lki })
+            .collect()
     }
 
     /// Trigger candidates at the current source and characteristic revisions.
@@ -1676,14 +1772,14 @@ impl Game {
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 TriggerSourceEntry {
-                    permanent: id,
                     object: permanent.object,
-                    kinds: view
-                        .triggered_abilities
-                        .iter()
-                        .fold(EventKinds::NONE, |kinds, ability| {
-                            kinds | ability_event_kinds(&ability.ability)
-                        }),
+                    kinds: view.triggered_abilities.iter().fold(
+                        EventKinds::NONE,
+                        |kinds, grant| {
+                            let Ability::Triggered { condition, .. } = &grant.ability;
+                            kinds | condition_event_kinds(condition)
+                        },
+                    ),
                 }
             })
             .collect();
@@ -1702,7 +1798,6 @@ impl Game {
 
         if let GameEvent::CardMoved {
             from: Some(ZoneType::Battlefield),
-            controller,
             ..
         } = event
         {
@@ -1710,16 +1805,75 @@ impl Game {
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
             {
-                sources.push(TriggerSourceSnapshot {
-                    controller: *controller,
-                    lki: lki.clone(),
-                });
+                if let Err(index) =
+                    sources.binary_search_by_key(&lki.object, |source| source.lki.object)
+                {
+                    sources.insert(index, TriggerSourceSnapshot { lki: lki.clone() });
+                }
             }
         }
 
-        sources.sort_by_key(|source| source.lki.object);
-        sources.dedup_by_key(|source| source.lki.object);
         sources
+    }
+
+    /// Peel and test wrappers at event time, retaining the leaf's cardinality and bindings.
+    fn match_trigger_wrappers<'a>(
+        &self,
+        mut condition: &'a TriggerCondition,
+        event: &GameEvent,
+        object: ObjectId,
+        controller: PlayerId,
+    ) -> Option<(&'a TriggerCondition, bool)> {
+        let mut once = false;
+        let permanent = || {
+            self.state
+                .permanent_of(object)
+                .and_then(|id| self.state.permanents[id].as_ref())
+        };
+        loop {
+            let (inner, enabled) = match condition {
+                TriggerCondition::WasCast { condition } => (
+                    condition,
+                    self.state
+                        .spell_entry(object)
+                        .is_some_and(|entry| entry.payment.is_some()),
+                ),
+                TriggerCondition::FromZone { zone, condition } => {
+                    (condition, self.event_origin(event) == Some(*zone))
+                }
+                TriggerCondition::Prepared { condition } => (
+                    condition,
+                    matches!(event, GameEvent::SpellCast { object_id, .. }
+                        if self.spell_on_stack(*object_id).is_some_and(|spell| spell.from_prepared)),
+                ),
+                TriggerCondition::WhileSourceAttacking { condition } => {
+                    (condition, permanent().is_some_and(|p| p.attacking))
+                }
+                TriggerCondition::ActiveIf {
+                    active_if,
+                    condition,
+                } => (
+                    condition,
+                    self.check_intervening_if(active_if, controller, Some(object), None),
+                ),
+                TriggerCondition::OnceEachTurn { condition } => {
+                    once = true;
+                    (condition, true)
+                }
+                TriggerCondition::InGraveyard { .. } => return None,
+                leaf => {
+                    debug_assert!(
+                        leaf.inner().is_none(),
+                        "unhandled trigger wrapper: {leaf:?}"
+                    );
+                    return Some((leaf, once));
+                }
+            };
+            if !enabled {
+                return None;
+            }
+            condition = inner;
+        }
     }
 
     fn trigger_condition_fires(
@@ -1731,36 +1885,6 @@ impl Game {
         event: &GameEvent,
     ) -> bool {
         match (condition, event) {
-            (TriggerCondition::WasCast { condition }, _) => {
-                self.state
-                    .permanent_of(source_object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|source| source.was_cast)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            (TriggerCondition::FromZone { zone, condition }, _) => {
-                self.event_origin(event) == Some(*zone)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            (TriggerCondition::OnceEachTurn { condition }, _) => self.trigger_condition_fires(
-                condition,
-                source_object,
-                source_controller,
-                source_was_on_battlefield,
-                event,
-            ),
             (TriggerCondition::Sacrificed { subject }, GameEvent::PermanentSacrificed { .. }) => {
                 self.subject_matches_moved_object(
                     subject,
@@ -1770,67 +1894,25 @@ impl Game {
                     event,
                 )
             }
-            (TriggerCondition::WhileSourceAttacking { condition }, _) => {
-                self.state
-                    .permanent_of(source_object)
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|source| source.attacking)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            // `check_state_triggers` and `cast_triggers` own these; a
-            // battlefield source never fires them from an event.
-            (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
             (
-                TriggerCondition::SpellTargetsOnlyThis { predicate },
-                GameEvent::SpellCast {
-                    object_id: object, ..
-                },
-            ) => {
-                let this = self
-                    .state
-                    .permanent_of(source_object)
-                    .map(Target::Permanent);
-                self.object_matches_predicate(*object, predicate)
-                    && this.is_some()
-                    && self
-                        .find_spell_on_stack_index(*object)
-                        .is_some_and(|index| {
-                            let targets = self.state.stack_objects[index].targets();
-                            !targets.is_empty()
-                                && targets.iter().all(|target| Some(*target) == this)
-                        })
-            }
-            // Conditionally-granted abilities: the ability only exists (and
-            // so only triggers) while the condition holds for its
-            // controller (CR 603.4 fire-time check).
-            (
-                TriggerCondition::ActiveIf {
-                    active_if,
-                    condition,
-                },
-                _,
-            ) => {
-                self.check_static_condition(active_if, source_controller)
-                    && self.trigger_condition_fires(
-                        condition,
-                        source_object,
-                        source_controller,
-                        source_was_on_battlefield,
-                        event,
-                    )
-            }
-            (
-                TriggerCondition::EntersTheBattlefield { subject },
+                TriggerCondition::EntersTheBattlefield { subject }
+                | TriggerCondition::Dies { subject }
+                | TriggerCondition::LeavesTheBattlefield { subject },
                 GameEvent::CardMoved { from, to, .. },
             ) => {
-                let entered = *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield);
-                entered
+                let matches_move = match condition {
+                    TriggerCondition::EntersTheBattlefield { .. } => {
+                        *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield)
+                    }
+                    TriggerCondition::Dies { .. } => {
+                        *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard
+                    }
+                    TriggerCondition::LeavesTheBattlefield { .. } => {
+                        *from == Some(ZoneType::Battlefield) && *to != ZoneType::Battlefield
+                    }
+                    _ => unreachable!(),
+                };
+                matches_move
                     && self.subject_matches_moved_object(
                         subject,
                         source_object,
@@ -1839,45 +1921,95 @@ impl Game {
                         event,
                     )
             }
-            (TriggerCondition::Dies { subject }, GameEvent::CardMoved { from, to, .. }) => {
-                let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;
-                died && self.subject_matches_moved_object(
+            (
+                TriggerCondition::CardsLeaveYourGraveyard,
+                GameEvent::CardsLeftGraveyard { owner },
+            ) => source_controller == *owner,
+            (TriggerCondition::SourceDealsDamage, GameEvent::SourceDealtDamage { source, .. }) => {
+                *source == source_object
+            }
+            (
+                TriggerCondition::SourceDealsCombatDamage,
+                GameEvent::SourceDealtDamage { source, combat, .. },
+            ) => *combat && *source == source_object,
+            (
+                TriggerCondition::Expend(threshold),
+                GameEvent::SpellCast {
+                    caster,
+                    spend_before,
+                    spend_after,
+                    ..
+                },
+            ) => {
+                *caster == source_controller && spend_before < threshold && threshold <= spend_after
+            }
+            // `check_state_triggers` and `cast_triggers` own these; a
+            // battlefield source never fires them from an event.
+            (
+                TriggerCondition::NoCounters { .. }
+                | TriggerCondition::State(_)
+                | TriggerCondition::YouCastThis,
+                _,
+            ) => false,
+            (
+                TriggerCondition::SpellTargetsOnlyThis { predicate },
+                GameEvent::SpellCast {
+                    object_id: object,
+                    targets,
+                    ..
+                },
+            ) => {
+                self.object_matches_predicate(*object, predicate)
+                    && self.state.permanent_of(source_object).is_some_and(|id| {
+                        !targets.is_empty() && targets.iter().all(|t| *t == Target::Permanent(id))
+                    })
+            }
+            (
+                TriggerCondition::Attacks {
+                    subject,
+                    attackers: size,
+                    nth,
+                    ..
+                },
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                size.matches(attackers.len())
+                    && attackers.iter().any(|&id| {
+                        self.attack_matches(subject, *nth, source_object, source_controller, id)
+                    })
+            }
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: Some(to),
+                    ..
+                },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => hits
+                .iter()
+                .any(|hit| self.hit_matches(hit, subject, *to, source_object, source_controller)),
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject, to: None, ..
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) => dealt.iter().any(|(dealer, _)| {
+                self.subject_matches_damage_source(
                     subject,
                     source_object,
                     source_controller,
-                    source_was_on_battlefield,
-                    event,
+                    *dealer,
                 )
-            }
-            (
-                TriggerCondition::LeavesTheBattlefield { subject },
-                GameEvent::CardMoved {
-                    from: Some(ZoneType::Battlefield),
-                    to,
-                    ..
-                },
-            ) if *to != ZoneType::Battlefield => self.subject_matches_moved_object(
-                subject,
-                source_object,
-                source_controller,
-                source_was_on_battlefield,
-                event,
-            ),
-            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
-            | (
-                TriggerCondition::DealsCombatDamage { .. },
-                GameEvent::CombatDamageToPlayers { .. },
-            ) => self.trigger_multiplicity(condition, source_object, source_controller, event) > 0,
+            }),
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },
-            ) => self.subject_matches_permanent(
-                subject,
-                source_object,
-                source_controller,
-                *permanent,
-            ),
-            (
+            )
+            | (
+                TriggerCondition::BecomesUntapped { subject },
+                GameEvent::PermanentUntapped { permanent },
+            )
+            | (
                 TriggerCondition::TappedForMana { subject },
                 GameEvent::PermanentTapped {
                     permanent,
@@ -1921,6 +2053,21 @@ impl Game {
                         .is_some_and(|permanent| permanent.controller == source_controller)
             }
             (
+                TriggerCondition::NthCounter { kind, nth },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    count,
+                    total,
+                    ..
+                },
+            ) if kind == put => {
+                let threshold = i32::from(*nth);
+                self.state.permanent_of(source_object) == Some(*permanent)
+                    && total - count < threshold
+                    && threshold <= *total
+            }
+            (
                 TriggerCondition::Chapter { chapter },
                 GameEvent::CountersPut {
                     permanent,
@@ -1930,10 +2077,10 @@ impl Game {
                     ..
                 },
             ) => {
-                let chapter = i32::from(*chapter);
+                let threshold = i32::from(*chapter);
                 self.state.permanent_of(source_object) == Some(*permanent)
-                    && total - count < chapter
-                    && chapter <= *total
+                    && total - count < threshold
+                    && threshold <= *total
             }
             (
                 TriggerCondition::PutsCounters { who, kind, on },
@@ -1950,25 +2097,97 @@ impl Game {
                     && self.permanent_matches_predicate(*permanent, on)
             }
             (
+                TriggerCondition::PutsCountersOn { who, kind, subject },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    by,
+                    ..
+                },
+            ) => {
+                put == kind
+                    && who.includes(source_controller, *by)
+                    && self.state.permanents[*permanent].is_some()
+                    && self.subject_matches_permanent(
+                        subject,
+                        source_object,
+                        source_controller,
+                        *permanent,
+                    )
+            }
+            (
                 TriggerCondition::Casts {
                     who,
                     predicate,
                     nth,
+                    targets: filter,
                 },
                 GameEvent::SpellCast {
-                    object_id: object, ..
+                    object_id: object,
+                    caster,
+                    targets,
+                    ..
                 },
             ) => {
-                let caster = self.spell_caster(*object);
+                let caster = *caster;
                 who.includes(source_controller, caster)
                     && self.object_matches_predicate(*object, predicate)
+                    && match filter {
+                        SpellTargetFilter::Any => true,
+                        SpellTargetFilter::TargetsThis => {
+                            let this = self.state.permanent_of(source_object);
+                            this.is_some_and(|id| targets.contains(&Target::Permanent(id)))
+                        }
+                    }
                     && nth.is_none_or(|n| {
                         self.state.turn.spells_cast[caster.0]
                             .iter()
-                            .position(|cast| cast == object)
+                            .position(|cast| cast.object == *object)
                             == Some(n as usize - 1)
                     })
             }
+            (
+                TriggerCondition::GainsLife { who, nth },
+                GameEvent::LifeChanged {
+                    player,
+                    gain_ordinal,
+                    ..
+                },
+            ) => {
+                *gain_ordinal > 0
+                    && who.includes(source_controller, *player)
+                    && nth.is_none_or(|n| n == *gain_ordinal)
+            }
+            (
+                TriggerCondition::DealsDamage { kind, source, to },
+                GameEvent::DamageDealt {
+                    source: Some(damage_source),
+                    target,
+                    combat,
+                    ..
+                },
+            ) => {
+                kind.includes(*combat)
+                    && match (to, target) {
+                        (DamageRecipientFilter::Any, _) => true,
+                        (DamageRecipientFilter::Player(actor), DamageTarget::Player(player)) => {
+                            actor.includes(source_controller, *player)
+                        }
+                        (DamageRecipientFilter::Player(_), _) => false,
+                    }
+                    && self.subject_matches_damage_source(
+                        source,
+                        source_object,
+                        source_controller,
+                        *damage_source,
+                    )
+            }
+            (
+                TriggerCondition::LosesLife { who },
+                GameEvent::LifeChanged {
+                    player, old, new, ..
+                },
+            ) => new < old && who.includes(source_controller, *player),
             (
                 TriggerCondition::Draws { who, nth },
                 GameEvent::CardDrawn {
@@ -2011,79 +2230,40 @@ impl Game {
     fn event_origin(&self, event: &GameEvent) -> Option<ZoneType> {
         match event {
             GameEvent::SpellCast { object_id, .. } => {
-                self.state
-                    .stack_objects
-                    .iter()
-                    .find_map(|object| match object {
-                        StackObject::Spell(spell) if spell.object == *object_id => {
-                            Some(spell.cast_from)
-                        }
-                        _ => None,
-                    })
+                self.spell_on_stack(*object_id).map(|spell| spell.cast_from)
             }
             GameEvent::CardMoved { from, .. } => *from,
             _ => None,
         }
     }
 
-    /// How many times one event triggers a matching ability: once, except
-    /// attacks and combat damage `per` object, which trigger for each
-    /// matching creature (CR 603.2c).
-    fn trigger_multiplicity(
+    fn attack_matches(
         &self,
-        condition: &TriggerCondition,
-        source_object: ObjectId,
-        source_controller: PlayerId,
-        event: &GameEvent,
-    ) -> usize {
-        let (subject, per, creatures) = match (condition, event) {
-            (
-                TriggerCondition::DealsCombatDamage { subject, to, per },
-                GameEvent::CombatDamageToPlayers { creatures },
-            ) => {
-                // In the two-seat combat model only the defending player, the
-                // active player's opponent, receives combat damage.
-                let defender = PlayerId(1 - self.active_player().0);
-                if !to.includes(source_controller, defender) {
-                    return 0;
-                }
-                (subject, per, creatures)
-            }
-            (
-                TriggerCondition::Attacks {
-                    subject,
-                    per,
-                    attackers: size,
-                },
-                GameEvent::AttackersDeclared { attackers, .. },
-            ) => {
-                let size_holds = match size {
-                    AttackSize::Any => true,
-                    AttackSize::Alone => attackers.len() == 1,
-                    AttackSize::WithAnother => attackers.len() >= 2,
-                };
-                if !size_holds {
-                    return 0;
-                }
-                (subject, per, attackers)
-            }
-            _ => return 1,
-        };
-        let matching = creatures
-            .iter()
-            .filter(|creature| {
-                self.subject_matches_permanent(
-                    subject,
-                    source_object,
-                    source_controller,
-                    **creature,
-                )
-            })
-            .count();
-        match per {
-            Per::Object => matching,
-            Per::Batch => usize::from(matching > 0),
-        }
+        subject: &TriggerSubject,
+        nth: Option<u32>,
+        source: ObjectId,
+        controller: PlayerId,
+        attacker: PermanentId,
+    ) -> bool {
+        nth.is_none_or(|ordinal| {
+            self.permanent_object(attacker)
+                .is_some_and(|object| self.state.turn.attack_count(object) == ordinal)
+        }) && self.subject_matches_permanent(subject, source, controller, attacker)
+    }
+
+    fn hit_matches(
+        &self,
+        hit: &CombatPlayerHit,
+        subject: &TriggerSubject,
+        to: Actor,
+        source: ObjectId,
+        controller: PlayerId,
+    ) -> bool {
+        to.includes(controller, hit.recipient)
+            && self
+                .state
+                .permanent_of(hit.source)
+                .is_some_and(|id| self.subject_matches_permanent(subject, source, controller, id))
     }
 
     fn subject_matches_moved_object(
@@ -2107,26 +2287,33 @@ impl Game {
             _ => return false,
         };
         let departed = event.departed_object();
-        let animated = departed
-            .and_then(|object| self.object_lki(object))
-            .map(|lki| lki.animated_creature)
-            .unwrap_or_else(|| {
-                self.state
-                    .permanent_of(moved_object)
-                    .filter(|id| self.state.permanents[*id].is_some())
-                    .is_some_and(|id| self.characteristics(id).is_animated)
-            });
-        let matches = |predicate: &crate::state::predicate::CardPredicate| {
-            predicate.matches(
-                &self.state[moved_object],
-                self.object_power(moved_object),
-                if animated { &[CardType::Creature] } else { &[] },
-            )
-        };
+        let lki = departed.and_then(|object| self.object_lki(object));
         // The source is the moved object as it entered, or as it was before
         // it left (CR 603.10a looks back to the departed object).
         let is_source = moved_object == source_object || departed == Some(source_object);
         match subject {
+            TriggerSubject::CreatureDamagedByThis => {
+                let object = departed.unwrap_or(moved_object);
+                source_was_on_battlefield
+                    && self.state.turn.damage_pairs.contains(source_object, object)
+                    && lki.map_or_else(
+                        || {
+                            self.lookup_current_permanent(object)
+                                .is_ok_and(|id| self.characteristics(id).is_creature())
+                        },
+                        |lki| lki.was_creature(),
+                    )
+            }
+            TriggerSubject::ThisOr(other) => {
+                is_source
+                    || self.subject_matches_moved_object(
+                        other,
+                        source_object,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2136,17 +2323,77 @@ impl Game {
                 source_was_on_battlefield
                     && controlled_by.includes(source_controller, moved_controller)
                     && !(*another && is_source)
-                    && matches(predicate)
+                    && lki.map_or_else(
+                        || self.object_matches_predicate(moved_object, predicate),
+                        |lki| super::layers::matches_departure(lki, predicate),
+                    )
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature => self
+            TriggerSubject::Attached => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
                 .and_then(|aura| aura.attached_to)
+                .or_else(|| self.object_lki(source_object)?.attached_to)
                 .is_some_and(|attached| {
                     Some(attached) == departed && self.state.object_lki.contains(attached)
+                }),
+        }
+    }
+
+    /// Whether the object that dealt damage is `subject`, as it is or last
+    /// was: a live permanent, a departed one's last known information, or a
+    /// spell on or off the stack. Its controller is
+    /// [`Game::source_controller`]'s, so a stolen spell's damage is its
+    /// controller's.
+    fn subject_matches_damage_source(
+        &self,
+        subject: &TriggerSubject,
+        source_object: ObjectId,
+        source_controller: PlayerId,
+        damage_source: ObjectId,
+    ) -> bool {
+        match subject {
+            TriggerSubject::ThisOr(other) => {
+                damage_source == source_object
+                    || self.subject_matches_damage_source(
+                        other,
+                        source_object,
+                        source_controller,
+                        damage_source,
+                    )
+            }
+            TriggerSubject::This => damage_source == source_object,
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                !(*another && damage_source == source_object)
+                    && self
+                        .source_controller(damage_source)
+                        .is_some_and(|controller| {
+                            controlled_by.includes(source_controller, controller)
+                        })
+                    && if let Some(permanent) = self.state.permanent_of(damage_source) {
+                        self.permanent_matches_predicate(permanent, predicate)
+                    } else if let Some(lki) = self.object_lki(damage_source) {
+                        self.lki_matches_predicate(lki, predicate)
+                    } else {
+                        self.spell_matches_predicate(damage_source, predicate)
+                    }
+            }
+            TriggerSubject::Attached | TriggerSubject::CreatureDamagedByThis => self
+                .state
+                .permanent_of(damage_source)
+                .is_some_and(|permanent| {
+                    self.subject_matches_permanent(
+                        subject,
+                        source_object,
+                        source_controller,
+                        permanent,
+                    )
                 }),
         }
     }
@@ -2162,8 +2409,29 @@ impl Game {
             return false;
         };
         match subject {
+            TriggerSubject::CreatureDamagedByThis => {
+                self.state
+                    .turn
+                    .damage_pairs
+                    .contains(source_object, permanent.object)
+                    && self.characteristics(permanent_id).is_creature()
+            }
+            TriggerSubject::ThisOr(other) => {
+                permanent.object == source_object
+                    || self.subject_matches_permanent(
+                        other,
+                        source_object,
+                        source_controller,
+                        permanent_id,
+                    )
+            }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
+            TriggerSubject::Attached => {
+                self.state
+                    .permanent_of(source_object)
+                    .and_then(|source| self.attached_permanent(source))
+                    == Some(permanent_id)
+            }
             TriggerSubject::Matching {
                 controlled_by,
                 predicate,
@@ -2175,14 +2443,13 @@ impl Game {
             }
         }
     }
+}
 
-    /// Whether the Aura card `aura` is on the battlefield attached to the
-    /// permanent.
-    fn is_enchanted_by(&self, permanent_id: PermanentId, aura: ObjectId) -> bool {
-        self.state
-            .permanent_of(aura)
-            .and_then(|aura| self.attached_permanent(aura))
-            == Some(permanent_id)
+/// The single chosen mode of a pending trigger once its modes are chosen.
+pub(crate) fn pending_trigger_mode(trigger: &PendingTrigger) -> Option<usize> {
+    match (trigger.chosen_modes.as_slice(), trigger.modes_chosen) {
+        ([mode], true) => Some(*mode),
+        _ => None,
     }
 }
 

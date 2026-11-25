@@ -7,11 +7,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DIM,
@@ -22,6 +22,7 @@ from manabot.env.observation import (
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
@@ -76,7 +77,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, numeric=6, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))
@@ -143,7 +144,7 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     headers[0, 0, 13:18] = torch.tensor([0, 1, 0, 1, 1])
     details[0, 0] = torch.tensor([1, *_halves(_value("flying"))])
     members[0, 0] = torch.tensor([2, 1])
-    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, numeric=8, vocabulary="catalog")
     definitions = cards.definitions(program_input(cards))
     effects(
         effect_rows(headers, details, members, torch.zeros(1, 2, WIDTH), cards),
@@ -220,7 +221,9 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     torch.set_num_threads(1)
     env = kellan_upgrade_root()
     space = ObservationSpace()
-    observation = space.encode(env.observation_for_player(env.current_agent_index()))
+    observation = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
     headers = torch.from_numpy(observation["effects"]).repeat(3, 1, 1)
     details = torch.from_numpy(observation["effect_details"]).repeat(3, 1, 1)
     members = torch.from_numpy(observation["effect_members"]).repeat(3, 1, 1)
@@ -230,7 +233,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         torch.cat((members[..., 0].flatten(), headers[..., 10:13:2].flatten())).max()
     )
     objects = torch.randn(3, count, WIDTH)
-    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, numeric=8, vocabulary="catalog")
     parameters = [*effects.parameters(), *cards.parameters()]
 
     def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:
@@ -296,7 +299,10 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     space = ObservationSpace()
-    values = {key: torch.from_numpy(v)[None] for key, v in space.encode(obs).items()}
+    values = {
+        key: torch.from_numpy(v)[None]
+        for key, v in encode_observation(space, obs).items()
+    }
     assert (values["effect_details"][..., 0] >= 11).any()
     fresh = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
     assert fresh.record_vocabulary == "catalog"
@@ -361,3 +367,15 @@ def test_checkpoints_without_the_field_read_hashed_only_with_a_world() -> None:
     assert ModelConfig.from_checkpoint({}) == ModelConfig()
     explicit = ModelConfig(**world).checkpoint_payload()
     assert ModelConfig.from_checkpoint(explicit).record_vocabulary == "catalog"
+
+
+def test_checkpoints_without_definition_names_add_them_only_with_a_world() -> None:
+    world = {"world": managym.WORLD_SETUP}
+    assert ModelConfig.from_checkpoint(world).definition_names
+    assert ModelConfig.from_checkpoint({}) == ModelConfig()
+    fresh = ModelConfig(**world)
+    assert "definition_names" not in fresh.model_dump()
+    assert not ModelConfig.from_checkpoint(fresh.checkpoint_payload()).definition_names
+    assert architecture_identity(
+        ModelConfig(**world, definition_names=True), ObservationSpace()
+    ) != architecture_identity(fresh, ObservationSpace())

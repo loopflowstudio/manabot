@@ -34,6 +34,7 @@ fn bribery() -> CardDefinition {
                 max: EffectValue::Fixed(1),
                 effects: vec![
                     Effect::Move {
+                        unrevealed: false,
                         library_end: None,
                         what: ObjectSelector::Selected,
                         to: ZoneType::Battlefield,

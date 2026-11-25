@@ -323,7 +323,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
         "source_paths": source_paths,
         "source_sha256": source_sha256,
         "match_hypers": match.model_dump(),
-        "observation": space.encoder.config.model_dump(),
+        "observation": space.config.model_dump(),
         "deal_seeds": list(args.deal_seeds),
         "legs_per_block": 4,
         "game_seconds": args.game_seconds,

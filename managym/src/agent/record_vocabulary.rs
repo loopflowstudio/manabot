@@ -16,10 +16,14 @@
 //!
 //! Entry point: [`record_names`].
 
+#[cfg(test)]
+use crate::state::card::SpellProfile;
 use crate::{
     agent::{
-        ability_description::predicate_description, effect_execution::EXECUTION_TEXT,
-        observation::MODIFICATION_NAMES, observation_encoder::POOLED_MANA,
+        ability_description::{condition_text, predicate_description},
+        effect_execution::EXECUTION_TEXT,
+        observation::MODIFICATION_NAMES,
+        observation_encoder::{PLAY_GRANT, PLAY_GRANT_SOURCE, POOLED_MANA, SPENT_TYPE, WARD},
     },
     cards::{
         content_pack::default_content_pack,
@@ -117,6 +121,10 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(record(Token, WARD, None));
+    out.push(record(Token, PLAY_GRANT, None));
+    out.push(record(Token, PLAY_GRANT_SOURCE, None));
+    out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
@@ -154,14 +162,31 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
+    add(TokenKind::Variant, "CostComponent::Discard");
+    // A departed permanent's last known name (a token's, or one an effect
+    // set) and a play grant's condition reach fact programs as rules text.
+    for (_, definition) in default_content_pack().definition_entries() {
+        add(TokenKind::Text, &definition.name);
+        let json = serde_json::to_value(definition).expect("serializable definition");
+        for name in set_names(&json) {
+            add(TokenKind::Text, &name);
+        }
+        for condition in play_grant_conditions(&json) {
+            add(TokenKind::Text, &condition_text("permanent", &condition));
+        }
+    }
+    add(TokenKind::Structure, "PlayGrantExtension");
+    add(TokenKind::Structure, "/PlayGrantExtension");
     for name in [
         "PlayerId",
         "CardDefId",
         "ZoneSelection",
         "CounterProvenance",
         "CastChoices",
+        "CopyEffect",
         "EffectiveTrigger",
         "ManaSpent",
+        "Help",
     ] {
         add(TokenKind::Structure, name);
         add(TokenKind::Structure, &format!("/{name}"));
@@ -171,15 +196,22 @@ fn execution_names(out: &mut Vec<RecordName>) {
             "GameEvent",
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
+        ("SpellProfile", &["Omen", "BackFace"][..]),
         ("LibraryEnd", &["Top", "Bottom"][..]),
         // Supported stack-ability targeting has no printed card program yet.
         ("TargetSpec", &["Ability"][..]),
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
+        ("DamageTransform", &["Prevent"][..]),
+        // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",
-            &["PreventDamageToController", "DoubleDamageToController"][..],
+            &[
+                "PreventCombatDamage",
+                "AdventureExile",
+                "ExileInsteadOfGraveyard",
+            ][..],
         ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
@@ -187,6 +219,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Destroyed",
+                "LifeLost",
                 "Damage",
                 "Deaths",
                 "Combat",
@@ -194,9 +228,33 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Shuffle",
                 "Bending",
                 "Created",
+                "ExileLinked",
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
+        // What a payment made during resolution still owes.
+        ("CostComponent", &["Mana", "Life"][..]),
+        // What a payment's contributing objects did and paid for.
+        (
+            "How",
+            &["Tapped", "Sacrificed", "Exiled", "Discarded", "Returned"][..],
+        ),
+        (
+            "Toward",
+            &[
+                "Printed",
+                "Waterbend",
+                "Crew",
+                "Alternative",
+                "Convoke",
+                "Improvise",
+                "Delve",
+                "Bargain",
+                "Forage",
+                "Saddle",
+                "Station",
+            ][..],
+        ),
         (
             "Effect",
             &[
@@ -228,6 +286,10 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "kind",
         "attacking",
         "kicked",
+        "flash_surcharge",
+        "flashback",
+        "from_prepared",
+        "exile_instead_of_graveyard",
         "x",
         "free",
         "resolving",
@@ -235,12 +297,35 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "program",
         "amounts",
         "entry_counters",
+        "gains",
+        "copies",
         "combat",
         "definition",
         "name",
+        "cost",
+        "help",
+        "waterbend",
+        "actor",
+        "grantee",
+        "source",
+        "prepared",
+        "face_down",
+        "play_lands",
+        "condition",
     ] {
         add(TokenKind::Field, field);
     }
+}
+
+/// Every condition a serialized definition puts on the cards it lets you
+/// play (Flameshape's "you control a Wizard"), wherever the effect sits:
+/// a spell, an inset, a trigger, an activation or an `If` branch.
+fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
+    objects(value)
+        .into_iter()
+        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
+        .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
+        .collect()
 }
 
 /// Every JSON object nested in a serialized definition.
@@ -260,12 +345,18 @@ fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json
     out
 }
 
-/// The names a definition's `SetCharacteristics` give other permanents (a
-/// copy takes a definition's own name).
+/// The names a definition's `SetCharacteristics` or `Modification::SetName`
+/// give other permanents (a copy takes a definition's own name).
 fn set_names(value: &serde_json::Value) -> Vec<String> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("named")?.as_str().map(str::to_owned))
+        // `SetCharacteristics::named` (Honest Work) and `Modification::SetName`.
+        .filter_map(|map| {
+            map.get("named")
+                .or_else(|| map.get("SetName"))?
+                .as_str()
+                .map(str::to_owned)
+        })
         .collect()
 }
 
@@ -286,12 +377,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn play_grant_conditions_are_found_at_any_depth() {
+        use crate::state::ability::{Condition, Effect, PlayWindow};
+        let wizard = Condition::ControlsAtLeast {
+            distinct_names: false,
+            count: 1,
+            predicate: CardPredicate::default(),
+        };
+        let nested = Effect::If {
+            condition: Condition::YourTurn,
+            then: vec![Effect::ExileTopCardsToPlay {
+                count: 2,
+                until: PlayWindow::WhileExiled,
+                face_down: true,
+                condition: Some(wizard.clone()),
+            }],
+            otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+        };
+        let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
+        assert_eq!(play_grant_conditions(&json), [wizard]);
+    }
+
+    #[test]
     fn runtime_only_programs_have_catalog_tokens() {
         use crate::{
             cards::tokens::{catalog_tokens, rules_tokens},
             flow::{
                 event::GameEvent,
                 game::CastChoices,
+                payment::CostComponent,
                 proposed_event::{CounterProvenance, EventBinding, EventCause},
                 turn::Bending,
             },
@@ -326,6 +440,8 @@ mod tests {
                 &[
                     EventBinding::None,
                     EventBinding::ThisWay,
+                    EventBinding::Destroyed,
+                    EventBinding::LifeLost,
                     EventBinding::Deaths,
                     EventBinding::Combat,
                     EventBinding::Damage { result: Some(1) },
@@ -340,6 +456,12 @@ mod tests {
                         kind: Bending::Earth,
                     },
                     EventBinding::Created { attacking: true },
+                    EventBinding::ExileLinked {
+                        actor: PlayerId(0),
+                        grantee: PlayerId(1),
+                        source: None,
+                        grant: crate::state::ability::LinkedGrant::FlashAnyMana,
+                    },
                 ],
                 pack,
             )
@@ -348,7 +470,13 @@ mod tests {
         tokens.extend(
             rules_tokens(
                 &CastChoices {
+                    profile: SpellProfile::Adventure,
+                    exile_instead_of_graveyard: true,
+                    route: None,
                     kicked: true,
+                    flash_surcharge: true,
+                    flashback: true,
+                    from_prepared: true,
                     x: 1,
                     free: true,
                     resolving: true,
@@ -357,10 +485,23 @@ mod tests {
             )
             .unwrap(),
         );
+        for profile in [SpellProfile::Omen, SpellProfile::BackFace] {
+            tokens.extend(
+                rules_tokens(
+                    &CastChoices {
+                        profile,
+                        ..Default::default()
+                    },
+                    pack,
+                )
+                .unwrap(),
+            );
+        }
         for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
             tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
         }
         tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
+        tokens.extend(rules_tokens(&CostComponent::Discard, pack).unwrap());
         for (kind, value) in tokens {
             assert!(
                 matches!(kind, 4 | 5) || known.contains(&(kind, value)),

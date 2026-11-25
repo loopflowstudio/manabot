@@ -18,6 +18,7 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.protocol import BackendName
 from manabot.sim.agent import GamePlayer
 from manabot.sim.evaluation_records import finalize_game
 from manabot.sim.match import play_game
@@ -71,6 +72,7 @@ def play_cell(
     deal_seeds: tuple[int, ...],
     out_dir: Path,
     checkpoint_paths: dict[str, str] | None = None,
+    backend_name: BackendName = "torch",
     comparison_seed_aliases: dict[str, str] | None = None,
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
@@ -278,6 +280,7 @@ def play_cell(
             allowance,
             evidence,
             keep_completed=keep_game_logs,
+            backend_name=backend_name,
         )
 
     def replay_block(block: int) -> None:

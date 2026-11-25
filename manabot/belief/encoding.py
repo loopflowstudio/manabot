@@ -5,13 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
 
 from manabot.belief.range import BeliefError, BeliefState
 from managym.possible_worlds import PossibleWorldSpace
+
+if TYPE_CHECKING:
+    from manabot.infra.config import ModelConfig
 
 OPPONENT_OWNER_ROLE_ID = 1
 LIBRARY_ZONE_ID = 0
@@ -94,6 +97,32 @@ class BeliefEncodingSchema:
             "ascii"
         )
         return hashlib.sha256(encoded).hexdigest()
+
+    def admit_model(self, model: ModelConfig) -> None:
+        """Check that the policy can represent every count and semantic row."""
+        if model.belief_count_buckets != self.count_buckets:
+            raise BeliefError("ActorCritic and belief encoding count buckets differ")
+        for label, size, maximum in (
+            (
+                "card",
+                model.belief_card_vocab_size,
+                max(row.card_def_id for row in self.rows),
+            ),
+            (
+                "owner-role",
+                model.belief_owner_role_vocab_size,
+                max(row.owner_role_id for row in self.rows),
+            ),
+            (
+                "hidden-zone",
+                model.belief_hidden_zone_vocab_size,
+                max(row.hidden_zone_id for row in self.rows),
+            ),
+        ):
+            if maximum >= size:
+                raise BeliefError(
+                    f"belief schema exceeds the ActorCritic {label} vocabulary"
+                )
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,27 +4,38 @@
 // Casting is a staged pipeline driven by `PendingChoice`:
 //   X (if any) -> kicker choice (optional) -> spell mode (if any) -> targets
 //   per clause -> payment.
-// Activations announce X (if any), choose targets, pay crew, then pay; a
-// waterbend cost runs its own payment sub-decision before the ability
-// reaches the stack. Activations name an `ActivationSource`: a
-// permanent, or a card whose ability functions from its owner's hand or
-// graveyard (cycling, "return this card from your graveyard").
+// Activations announce X (if any) and choose targets, then pay. Both
+// pipelines end in `PendingChoice::Pay`; every cost, crew and waterbend
+// included, is a component of that payment (`flow/payment.rs`).
+// Activations name an `ActivationSource`: a permanent, or a card whose
+// ability functions from its owner's hand or graveyard (cycling, "return
+// this card from your graveyard").
+
+use std::{borrow::Cow, sync::Arc};
 
 use crate::{
-    agent::action::AgentError,
+    agent::action::{Action, AgentError},
     flow::{
-        decision::{EffectFrame, FrameCompletion, SpendCompletion},
+        cast_permission::PlayRoute,
+        decision::{Decision, EffectFrame, FrameCompletion, ResolutionCastOffer},
         event::GameEvent,
-        game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
-        proposed_event::ProposedEvent,
+        game::{ActivationSource, CastChoices, Game, PendingChoice},
+        payment::{bargain_cost, Help, Operation, Payment},
+        proposed_event::{EntryFace, EventBinding, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
     state::{
         ability::{EffectValue, TargetRequirement},
-        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, ManaSpent, SpellSnapshot, SpendingContext, SpendingObject},
+        card::{
+            ActivatedAbilityDefinition, ActivationZone, AdditionalCost, PrintedCharacteristics,
+            SpellProfile, StaticAbility,
+        },
+        game_object::{AbilitySource, CardId, Object, ObjectId, PermanentId, PlayerId, Target},
+        mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
+        payment::PaymentReceipt,
+        predicate::CardPredicate,
         stack_object::ActivatedAbilityOnStack,
+        subtype::CreatureTypes,
         zone::ZoneType,
     },
 };
@@ -52,7 +63,121 @@ struct TargetSelection {
     chosen_req_indices: Vec<usize>,
 }
 
+impl CastChoices {
+    pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
+        crate::cards::content_pack::default_content_pack()
+            .spell_definition(object, self.profile)
+            .expect("offered spell profile")
+    }
+
+    pub(super) fn matches_spell(
+        self,
+        game: &Game,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if self.profile.is_front() {
+            return game.object_matches_predicate(object, predicate);
+        }
+        let card = &game.state[object];
+        predicate.matches_printed_spell(self.spell(card), card.kind())
+    }
+
+    pub(super) fn grant(
+        self,
+        game: &Game,
+        object: ObjectId,
+    ) -> Option<&crate::flow::cast_permission::PlayGrant> {
+        match self.route {
+            Some(PlayRoute::Grant(key)) => game.grant_by_key(object, key),
+            _ => None,
+        }
+    }
+}
+
+/// What permits a cast: a priority play over one route (CR 601.2a), or the
+/// resolving instruction that offers it (CR 608.2g).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CastAuthority<'a> {
+    Priority(PlayRoute),
+    Resolution {
+        offer: &'a ResolutionCastOffer,
+        paid: bool,
+    },
+}
+
+impl Decision {
+    /// The authority a `CastDuringResolution` decision grants its casts;
+    /// None for every other decision.
+    pub(crate) fn cast_authority(&self) -> Option<CastAuthority<'_>> {
+        match self {
+            Decision::CastDuringResolution { offer, paid, .. } => {
+                Some(CastAuthority::Resolution { offer, paid: *paid })
+            }
+            _ => None,
+        }
+    }
+}
+
 impl Game {
+    /// The one construction of a cast's choices for every way of casting.
+    /// None when `profile` has no definition for `object`.
+    pub(crate) fn cast_choices(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        profile: SpellProfile,
+        authority: CastAuthority<'_>,
+    ) -> Option<CastChoices> {
+        let spell = crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], profile)?;
+        let route = match authority {
+            CastAuthority::Resolution { offer, paid } => {
+                // The instruction supplies timing and zone permission for
+                // every resolution cast, paid or free, so no permission
+                // surcharge (flash) is ever bought here.
+                return Some(CastChoices {
+                    profile,
+                    free: !paid,
+                    resolving: true,
+                    exile_instead_of_graveyard: matches!(
+                        offer,
+                        ResolutionCastOffer::Graveyard {
+                            exile_instants_and_sorceries: true,
+                            ..
+                        }
+                    ) && spell.types.is_instant_or_sorcery(),
+                    ..Default::default()
+                });
+            }
+            CastAuthority::Priority(route) => route,
+        };
+        let grant = match route {
+            PlayRoute::Grant(key) => self.grant_by_key(object, key),
+            _ => None,
+        };
+        let mut cast = CastChoices {
+            profile,
+            free: route == PlayRoute::FreeFromHand,
+            route: (route != PlayRoute::Hand).then_some(route),
+            flashback: matches!(
+                route,
+                PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback
+            ) || grant.is_some_and(|grant| grant.flashback),
+            from_prepared: grant.is_some_and(|grant| grant.prepared),
+            ..Default::default()
+        };
+        // A surcharge is mandatory only when this is the permission that
+        // makes casting timely. Other flash grants still allow normal payment.
+        if spell.flash_surcharge().is_some()
+            && !self.can_cast_sorceries(player)
+            && !self.has_instant_timing(player, object, cast)
+        {
+            cast.flash_surcharge = true;
+        }
+        Some(cast)
+    }
+
     pub fn can_cast_sorceries(&self, player: PlayerId) -> bool {
         // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
         // during a main phase with an empty stack.
@@ -70,125 +195,323 @@ impl Game {
         // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to
         // one per turn, plus each additional land play granted.
         self.can_cast_sorceries(player)
-            && self.state.turn.lands_played < 1 + self.additional_land_plays()
+            && self.state.turn.lands_played < 1 + self.additional_land_plays(player)
     }
 
-    /// Additional land plays every player has on their turns (CR 305.2).
-    fn additional_land_plays(&self) -> u32 {
-        let permanents = [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.iter_battlefield_permanents(player));
-        self.layer_views(permanents)
-            .map(|(_, view)| {
-                view.static_abilities
-                    .iter()
-                    .filter(|ability| {
-                        matches!(ability, StaticAbility::AdditionalLandPlayEachPlayer)
-                    })
-                    .count() as u32
+    fn additional_land_plays(&self, player: PlayerId) -> u32 {
+        let granted = self
+            .player_effects(player)
+            .filter(|effect| {
+                effect.modification == crate::state::effect::Modification::AdditionalLandPlay
             })
-            .sum()
+            .count() as u32;
+        self.layer_board().play_permissions[player.0].extra_land_plays + granted
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
         self.can_pay_automatic_mana(player, cost)
     }
 
-    /// The graveyard casting cost of `card` for its owner, if any (CR 702.34).
-    /// Iroh's continuous grant applies only on its controller's turn; printed
-    /// flashback applies whenever the card's timing permits. When both apply,
-    /// the grant is used: in TLA it never costs more than a printed flashback
-    /// (a Lesson's {1}, or a spell's own mana cost).
-    pub(crate) fn flashback_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
-        let card = self.state.card_of(object)?;
-        let definition = &self.state[self.state.object_of(card)];
-        if !definition.types.is_spell()
-            || !self
-                .state
-                .zones
-                .contains(object, ZoneType::Graveyard, player)
-        {
-            return None;
-        }
-        let granted = self.active_player() == player
-            && self.active_permanent_has(player, |ability| {
-                *ability == StaticAbility::GraveyardSpellsHaveFlashback
-            });
-        if !granted {
-            definition.flashback().cloned()
-        } else if definition.has_subtype("Lesson") {
+    /// Iroh grants Lessons {1} and other instants and sorceries their mana cost.
+    fn granted_flashback_cost(&self, object: ObjectId) -> Option<ManaCost> {
+        let card = &self.state[object];
+        if card.has_subtype("Lesson") {
             Some(ManaCost::parse("{1}"))
+        } else if card.types.is_instant_or_sorcery() {
+            card.mana_cost.clone()
         } else {
-            definition.mana_cost.clone()
+            None
         }
-    }
-
-    /// Whether a layered static ability on the player's battlefield matches.
-    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&StaticAbility) -> bool) -> bool {
-        self.layer_views(self.iter_battlefield_permanents(player))
-            .any(|(_, view)| view.static_abilities.iter().any(&has))
     }
 
     /// Whether `player` may cast spells only from their hand: an "until your
     /// next turn" restriction, or an opponent's permanent that says so.
     pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
         self.hand_only_until(player).is_some()
-            || self.active_permanent_has(PlayerId(1 - player.0), |ability| {
-                *ability == StaticAbility::OpponentsCastOnlyFromHand
+            || self.layer_board().play_permissions[1 - player.0].opponents_hand_only
+    }
+
+    /// The routes `object`'s zone opens to `player`, before any face is
+    /// selected. Which face a route permits, and the cast-only-from-hand
+    /// prohibition, belong to `permits_spell` alone; timing and payment
+    /// eliminate routes later.
+    pub(super) fn play_routes(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Cow<'static, [PlayRoute]> {
+        let card = &self.state[object];
+        let board = self.layer_board();
+        let permissions = &board.play_permissions[player.0];
+        let own = card.owner == player;
+        let active = self.active_player() == player;
+        match self.state.zones.zone_of(object) {
+            Some(ZoneType::Hand) if own => {
+                if permissions.free_from_hand {
+                    Cow::Borrowed(&[PlayRoute::Hand, PlayRoute::FreeFromHand])
+                } else {
+                    Cow::Borrowed(&[PlayRoute::Hand])
+                }
+            }
+            Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
+                let mut routes: Vec<_> = self
+                    .live_grants(player, object)
+                    .map(|grant| PlayRoute::Grant(grant.key))
+                    .collect();
+                if zone == ZoneType::Exile && active && !own {
+                    if let Some(counters) = self.state.object_counters.get(&object) {
+                        routes.extend(
+                            permissions
+                                .exile_counter_plays
+                                .iter()
+                                .filter(|kind| counters.get(**kind) > 0)
+                                .map(|kind| PlayRoute::ExileCounter(*kind)),
+                        );
+                    }
+                }
+                if zone != ZoneType::Graveyard || !own {
+                    return routes.into();
+                }
+                let printed = card.flashback();
+                if printed.is_some() {
+                    routes.push(PlayRoute::PrintedFlashback);
+                }
+                if active
+                    && permissions.graveyard_flashback
+                    && self
+                        .granted_flashback_cost(object)
+                        .as_ref()
+                        .is_some_and(|cost| Some(cost) != printed)
+                {
+                    routes.push(PlayRoute::GrantedFlashback);
+                }
+                if card.graveyard_counter_cast().is_some() {
+                    routes.push(PlayRoute::PrintedGraveyard);
+                }
+                let sources = &permissions.graveyard_type_sources;
+                if !active || sources.is_empty() || (!card.types.is_permanent() && !card.modal_back)
+                {
+                    return routes.into();
+                }
+                // CR 305.9: a land face (even an artifact land) uses only the
+                // Land permission; other permanent types come from spell faces.
+                let back = crate::cards::content_pack::default_content_pack()
+                    .spell_definition(card, SpellProfile::BackFace);
+                let mut kinds = Vec::new();
+                for types in std::iter::once(&card.types).chain(back.map(|spell| &spell.types)) {
+                    use crate::state::card::CardType::*;
+                    let face: Vec<_> = if types.is_land() {
+                        vec![Land]
+                    } else {
+                        types.types.iter().copied().collect()
+                    };
+                    for kind in face {
+                        if !matches!(kind, Instant | Sorcery | Kindred) && !kinds.contains(&kind) {
+                            kinds.push(kind);
+                        }
+                    }
+                }
+                for &(source, permanent_id) in sources {
+                    for &kind in &kinds {
+                        let route = PlayRoute::GraveyardType {
+                            source,
+                            kind,
+                            permanent_id,
+                        };
+                        if !self
+                            .state
+                            .cast_permissions
+                            .spent_types
+                            .contains(&(player, route))
+                        {
+                            routes.push(route);
+                        }
+                    }
+                }
+                routes.into()
+            }
+            Some(ZoneType::Library)
+                if self.state.zones.top(ZoneType::Library, player) == Some(object) =>
+            {
+                Cow::Borrowed(&[PlayRoute::LibraryTop])
+            }
+            _ => Cow::Borrowed(&[]),
+        }
+    }
+
+    /// Whether the cast's route permits its selected face: a library or
+    /// graveyard permission tests the characteristics of that face.
+    pub(super) fn permits_spell(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> bool {
+        let Some(face) = crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], cast.profile)
+        else {
+            return false;
+        };
+        let route = cast.route.unwrap_or(PlayRoute::Hand);
+        let land = face.types.is_land();
+        if !matches!(route, PlayRoute::Hand | PlayRoute::FreeFromHand)
+            && self.casts_only_from_hand(player)
+            && !land
+        {
+            return false;
+        }
+        // The one land-play rule: a land face is played only through a
+        // permission to play lands ("you may play"), never one to cast
+        // spells (CR 305.9: a land can't be cast).
+        match route {
+            // Every printed face of the card: its Adventure, Omen or back face too.
+            PlayRoute::Hand | PlayRoute::ExileCounter(_) => true,
+            // "Cast spells without paying" and "cast from the top of your library".
+            PlayRoute::FreeFromHand => !land,
+            PlayRoute::LibraryTop => {
+                !land
+                    && self.layer_board().play_permissions[player.0]
+                        .library_spells
+                        .iter()
+                        .any(|predicate| cast.matches_spell(self, object, predicate))
+            }
+            PlayRoute::GraveyardType { kind, .. } => {
+                (kind == crate::state::card::CardType::Land) == land
+                    && face.types.types.contains(&kind)
+            }
+            PlayRoute::Grant(key) => self.grant_by_key(object, key).is_some_and(|grant| {
+                (!land || grant.play_lands)
+                    && (cast.profile.is_front()
+                        || (!grant.on_adventure && !grant.foretold && !grant.flashback))
+            }),
+            PlayRoute::PrintedFlashback => {
+                !land && cast.profile.is_front() && face.flashback().is_some()
+            }
+            PlayRoute::GrantedFlashback => {
+                !land && cast.profile.is_front() && self.granted_flashback_cost(object).is_some()
+            }
+            PlayRoute::PrintedGraveyard => {
+                !land && cast.profile.is_front() && face.graveyard_counter_cast().is_some()
+            }
+        }
+    }
+
+    /// The routes that permit `profile` of `object`, before timing and
+    /// payment. A face with one route leaves its Command unnamed even when
+    /// another face of the card overlaps.
+    pub(crate) fn permitted_play_routes(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        profile: SpellProfile,
+    ) -> Vec<PlayRoute> {
+        self.play_routes(player, object)
+            .iter()
+            .copied()
+            .filter(|&route| {
+                self.cast_choices(player, object, profile, CastAuthority::Priority(route))
+                    .is_some_and(|cast| self.permits_spell(player, object, cast))
             })
+            .collect()
     }
 
-    /// The top card of `player`'s library, when a permanent they control
-    /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
-    /// cast, so they are never offered.
-    pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
-        let card = self.library_top_card(player)?;
-        let definition = &self.state[self.state.object_of(card)];
-        (!definition.types.is_land()
-            && self.active_permanent_has(player, |source| {
-                matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.object_matches_predicate(self.state.object_of(card), predicate))
-            }))
-        .then_some(card)
+    pub(crate) fn selected_play_route(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        profile: SpellProfile,
+        selected: Option<PlayRoute>,
+    ) -> Result<PlayRoute, AgentError> {
+        let routes = self.permitted_play_routes(player, object, profile);
+        match (selected, routes.as_slice()) {
+            (Some(route), _) if routes.contains(&route) => Ok(route),
+            (None, [only]) => Ok(*only),
+            _ => Err(AgentError("missing or ambiguous play permission".into())),
+        }
     }
 
-    /// The cost `player` may pay to cast `card` from outside their hand:
-    /// graveyard flashback, an exact-object exile grant, or the top of their
-    /// library while a permanent permits it. A hand-only restriction overrides
-    /// all three.
-    pub(crate) fn zone_cast_cost(&self, player: PlayerId, object: ObjectId) -> Option<ManaCost> {
-        if self.casts_only_from_hand(player) {
+    /// The route a priority play uses, including the lone permission a
+    /// single-route Command leaves unnamed. None for an ordinary hand play
+    /// and for every other action.
+    pub(crate) fn resolved_play_route(&self, action: &Action) -> Option<PlayRoute> {
+        let (Action::CastSpell {
+            player,
+            object,
+            route,
+            profile,
+        }
+        | Action::PlayLand {
+            player,
+            object,
+            route,
+            profile,
+        }) = action
+        else {
+            return None;
+        };
+        // A resolution cast (CR 608.2g) is authorized by the resolving
+        // instruction, never by a priority route the object also holds or
+        // an action names.
+        if self.state.suspended_decision.is_some() {
             return None;
         }
-        match self.state.zones.zone_of(object)? {
-            ZoneType::Graveyard => self.flashback_cost(player, object),
-            ZoneType::Exile => self.grant_cast_cost(self.exile_grant(player, object)?, object),
-            ZoneType::Library
-                if self
-                    .library_top_castable(player)
-                    .map(|card| self.state.object_of(card))
-                    == Some(object) =>
-            {
-                self.state[object].mana_cost.clone()
-            }
-            _ => None,
+        if route.is_some() {
+            return *route;
+        }
+        // A lone hand route is the ordinary play; overlap always names a route.
+        if self.state.zones.zone_of(*object) == Some(ZoneType::Hand)
+            && self.state[*object].owner == *player
+        {
+            return None;
+        }
+        self.selected_play_route(*player, *object, *profile, None)
+            .ok()
+            .filter(|route| *route != PlayRoute::Hand)
+    }
+
+    pub(super) fn spend_play_route(&mut self, player: PlayerId, route: Option<PlayRoute>) {
+        if let Some(route @ PlayRoute::GraveyardType { .. }) = route {
+            self.state
+                .cast_permissions
+                .spent_types
+                .push((player, route));
         }
     }
 
     /// The selected mana or alternative cost, before announcing X or applying
     /// additional costs and reductions. Announcement and payment share this
     /// choice so a fixed alternative cost cannot grant a free value of X.
-    fn casting_mana_cost(
+    pub(crate) fn casting_mana_cost(
         &self,
-        player: PlayerId,
         object: ObjectId,
         cast: CastChoices,
     ) -> Option<ManaCost> {
+        let spell = cast.spell(&self.state[object]);
         if cast.free || self.uses_exile_alternative(object, cast) {
             Some(ManaCost::default())
+        } else if let (true, Some((cost, _))) = (cast.kicked, spell.alternative_mana()) {
+            Some(cost.clone())
         } else if cast.resolving || self.state.zones.zone_of(object) == Some(ZoneType::Hand) {
-            self.state[object].mana_cost.clone()
+            spell.mana_cost.clone()
         } else {
-            self.zone_cast_cost(player, object)
+            match cast.route? {
+                PlayRoute::PrintedFlashback => spell.flashback().cloned(),
+                PlayRoute::GrantedFlashback => self.granted_flashback_cost(object),
+                PlayRoute::Grant(_) => self.grant_base_cost(cast.grant(self, object)?, spell),
+                _ => spell.mana_cost.clone(),
+            }
+        }
+    }
+
+    /// The zone `object` is cast from: where it is while its costs are
+    /// paid (CR 601.2h precedes the move of CR 601.2i), or the zone a spell
+    /// already on the stack left.
+    fn casting_zone(&self, object: ObjectId) -> ZoneType {
+        match self.state.zones.zone_of(object) {
+            Some(ZoneType::Stack) | None => self
+                .spell_on_stack(object)
+                .map_or(ZoneType::Stack, |spell| spell.cast_from),
+            Some(zone) => zone,
         }
     }
 
@@ -204,9 +527,15 @@ impl Game {
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
-        let card_ref = &self.state[object];
-        let mut cost = self.casting_mana_cost(player, object, cast)?.with_x(cast.x);
-        cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
+        let card_ref = cast.spell(&self.state[object]);
+        let mut cost = self.casting_mana_cost(object, cast)?.with_x(cast.x);
+        cost.purpose = SpendingContext::Cast {
+            spell: SpellSnapshot(Arc::clone(card_ref)),
+            from: self.casting_zone(object),
+        };
+        if cast.flash_surcharge {
+            cost = cost.plus(card_ref.flash_surcharge()?);
+        }
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -233,6 +562,15 @@ impl Game {
                 }
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
+                }
+                StaticAbility::CostsLess { amount, condition } => {
+                    if condition
+                        .as_ref()
+                        .is_some_and(|condition| !self.check_condition(condition, player, None))
+                    {
+                        continue;
+                    }
+                    self.controller_value(amount, player).max(0) as usize
                 }
                 StaticAbility::CostsLessByGreatestPower(predicate) => {
                     self.controller_value(
@@ -264,8 +602,23 @@ impl Game {
                 cost = cost.reduced_generic(reduction.generic);
             }
         }
-        for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+        // CR 601.2h: any-type spending applies to the total cost, once
+        // additional costs and reductions are settled (CR 601.2f): Tinybones's
+        // stash, an exact grant's permission, or a static ability.
+        let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)))
+            || cast.grant(self, object).is_some_and(|grant| grant.any_mana);
+        for (source, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             for ability in &view.static_abilities {
+                if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
+                    any_mana |= cast.matches_spell(self, object, predicate);
+                    continue;
+                }
+                if let StaticAbility::SpellsFromOutsideHandCostLess(amount) = ability {
+                    if self.casting_zone(object) != ZoneType::Hand {
+                        cost = cost.reduced_generic(*amount);
+                    }
+                    continue;
+                }
                 if let StaticAbility::SpellsCostLessMana(reduction) = ability {
                     cost = cost.reduced_by(reduction);
                     continue;
@@ -276,44 +629,92 @@ impl Game {
                 if reduction.first_on_own_turn
                     && (self.active_player() != player
                         || self.state.turn.spells_cast[player.0].iter().any(|cast| {
-                            self.recorded_object_matches_predicate(*cast, &reduction.predicate)
+                            self.recorded_cast_matches_predicate(*cast, &reduction.predicate)
                         }))
                 {
                     continue;
                 }
-                if self.object_matches_predicate(object, &reduction.predicate)
+                if cast.matches_spell(self, object, &reduction.predicate)
                     && self.check_static_condition(&reduction.condition, player)
                 {
-                    cost = cost.reduced_generic(reduction.generic);
+                    let generic = self.static_value(&reduction.generic, source, player);
+                    cost = cost.reduced_generic(u8::try_from(generic.max(0)).unwrap_or(u8::MAX));
                 }
             }
         }
-        Some(cost)
+        Some(if any_mana {
+            cost.pay_with_any_mana()
+        } else {
+            cost
+        })
     }
 
-    pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let card_ref = &self.state[self.state.object_of(card)];
-        if !card_ref.types.is_land() {
-            return Err(AgentError("only land cards can be played".to_string()));
+    /// The choices of a land play (`land`) or a cast of `profile` through
+    /// `selected`, before timing: the player holds priority with no choice
+    /// pending, the face is a land exactly when `land` (CR 305.9) and its
+    /// route permits it.
+    fn priority_play(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        selected: Option<PlayRoute>,
+        profile: SpellProfile,
+        land: bool,
+    ) -> Result<CastChoices, AgentError> {
+        if self.pending_choice.is_some() {
+            return Err(AgentError("a choice is already pending".to_string()));
         }
-        if card_ref.owner != player {
-            return Err(AgentError("card does not belong to player".to_string()));
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
         }
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("land is not in a permitted zone".into()));
+        let route = self.selected_play_route(player, object, profile, selected)?;
+        let cast = self
+            .cast_choices(player, object, profile, CastAuthority::Priority(route))
+            .ok_or_else(|| AgentError("the card has no such face".into()))?;
+        if cast.spell(&self.state[object]).types.is_land() != land {
+            return Err(AgentError(if land {
+                "only land faces can be played".into()
+            } else {
+                "land faces cannot be cast".into()
+            }));
         }
+        if !self.permits_spell(player, object, cast) {
+            return Err(AgentError("permission does not allow this play".into()));
+        }
+        Ok(cast)
+    }
+
+    pub(crate) fn play_land(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        selected: Option<PlayRoute>,
+        profile: SpellProfile,
+    ) -> Result<(), AgentError> {
+        let object = self.state.object_of(card);
+        let cast = self.priority_play(player, object, selected, profile, true)?;
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
+        let controller = (self.state[object].owner != player).then_some(player);
+        self.spend_play_route(player, cast.route);
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
-            self.state.object_of(card),
-            ZoneType::Battlefield,
-            Default::default(),
-        )]));
+        frame.batch = Some(self.event_batch(
+            EventBinding::None,
+            [self.zone_move_proposal(
+                object,
+                ZoneType::Battlefield,
+                ZoneEntry {
+                    controller,
+                    face: EntryFace::played_as(profile),
+                    library_top_departure: self.is_library_top(object),
+                    ..Default::default()
+                },
+            )],
+        ));
         frame.completion = FrameCompletion::Continue;
         self.run_frame(frame);
         Ok(())
@@ -322,38 +723,15 @@ impl Game {
     pub(crate) fn cast_spell_action(
         &mut self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
+        selected: Option<PlayRoute>,
+        profile: SpellProfile,
     ) -> Result<(), AgentError> {
-        if self.pending_choice.is_some() {
-            return Err(AgentError("a choice is already pending".to_string()));
-        }
-
-        let (is_land, owner, is_instant_speed) = {
-            let card_ref = &self.state[self.state.object_of(card)];
-            (
-                card_ref.types.is_land(),
-                card_ref.owner,
-                self.has_instant_timing(player, self.state.object_of(card)),
-            )
-        };
-
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return Err(AgentError("card is not in a permitted casting zone".into()));
-        }
-        if is_land {
-            return Err(AgentError("land cards cannot be cast".to_string()));
-        }
-        if owner != player
-            && self
-                .exile_grant(player, self.state.object_of(card))
-                .is_none()
-        {
-            return Err(AgentError("card does not belong to player".to_string()));
-        }
-        if self.state.priority.holder != player {
-            return Err(AgentError("player does not have priority".to_string()));
-        }
-        if is_instant_speed {
+        self.state
+            .object(object)
+            .map_err(|_| AgentError("spell must name a current object".into()))?;
+        let cast = self.priority_play(player, object, selected, profile, false)?;
+        if self.has_instant_timing(player, object, cast) {
             if !self.can_cast_instants(player) {
                 return Err(AgentError("cannot cast instant now".to_string()));
             }
@@ -363,35 +741,19 @@ impl Game {
             ));
         }
 
-        self.begin_cast(player, self.state.object_of(card), CastChoices::default())
-    }
-
-    /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
-    /// or not: its timing and zone permissions don't apply.
-    pub(crate) fn begin_resolution_cast(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        paid: bool,
-    ) -> Result<(), AgentError> {
-        let cast = CastChoices {
-            free: !paid,
-            resolving: paid,
-            ..CastChoices::default()
-        };
         self.begin_cast(player, object, cast)
     }
 
     /// CR 601.2b — announce X (or a replicate count), then any optional additional cost, before
     /// modes and targets. Replacing a printed X cost with a free cast or a
     /// fixed alternative fixes X to zero (CR 107.3b).
-    fn begin_cast(
+    pub(super) fn begin_cast(
         &mut self,
         player: PlayerId,
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if self.cast_needs_x_announcement(player, object, cast) {
+        if self.cast_needs_x_announcement(object, cast) {
             self.pending_choice = Some(PendingChoice::AnnounceX {
                 player,
                 object,
@@ -404,16 +766,11 @@ impl Game {
 
     /// Announcement and read-only explanation use the selected casting cost,
     /// including a fixed zone permission that can replace a printed X.
-    pub(crate) fn cast_needs_x_announcement(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-    ) -> bool {
-        let card = &self.state[object];
+    pub(crate) fn cast_needs_x_announcement(&self, object: ObjectId, cast: CastChoices) -> bool {
+        let card = cast.spell(&self.state[object]);
         let printed_x = card.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
         let selected_x = self
-            .casting_mana_cost(player, object, cast)
+            .casting_mana_cost(object, cast)
             .is_some_and(|cost| cost.x > 0);
         // CR 107.3a/b: additional X applies to a free cast when the printed
         // cost has no X; a replaced printed X is zero. Replicate announces
@@ -442,25 +799,47 @@ impl Game {
         targets: Option<&[Target]>,
     ) -> bool {
         if self.uses_exile_alternative(object, cast)
-            && self.exile_alternative_cards(player, object).is_empty()
+            && self
+                .exile_alternative_objects(player, object, cast)
+                .is_empty()
         {
             return false;
         }
         let Some(cost) = self.effective_spell_cost(player, object, cast, targets) else {
             return false;
         };
+        let card = cast.spell(&self.state[object]);
         if !cast.kicked
-            && self.state[object]
+            && card
                 .life_alternative()
                 .is_some_and(|life| self.payable_life(player) < life as i32)
         {
             return false;
         }
-        let waterbend = self
-            .cast_waterbend_generic(player, object, cast)
-            .min(cost.generic());
-        if waterbend > 0 {
-            self.waterbend_payment_possible(player, &cost, waterbend)
+        if card.discard_cost() && self.discard_candidates(player, Some(object)).is_empty() {
+            return false;
+        }
+        if cast.route == Some(PlayRoute::PrintedGraveyard)
+            && card
+                .graveyard_counter_cast()
+                .is_some_and(|count| self.removable_counters(player) < u32::from(count))
+        {
+            return false;
+        }
+        if cast.kicked && card.bargain() {
+            return self
+                .sacrifice_candidates(player, &bargain_cost().predicate)
+                .into_iter()
+                .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)));
+        }
+        if let Some(or_mana) = card.forage_or() {
+            return self.can_forage(player, object, &cost)
+                || self.can_pay_with_mana_abilities(player, &cost.plus(or_mana), None);
+        }
+        let help = self.spell_help(player, object, cast, &cost);
+        if help != Help::default() {
+            let pool = self.pooled_mana(player);
+            self.payable_with_help(player, &pool, &cost, help, help.waterbend, None)
         } else {
             self.can_pay_with_mana_abilities(player, &cost, None)
         }
@@ -479,7 +858,7 @@ impl Game {
             self.can_pay_cast(player, object, CastChoices { x, ..cast })
         }));
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
-        for requirement in self.state[object].target_requirements() {
+        for requirement in cast.spell(&self.state[object]).target_requirements() {
             if requirement.exact_x() {
                 let legal = self.legal_targets_for_requirement(player, object, &requirement);
                 values.retain(|x| usize::from(*x) <= legal.len());
@@ -539,13 +918,24 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Option<CastChoices> {
+        if cast.spell(&self.state[object]).flash_surcharge().is_some() {
+            let paid = CastChoices {
+                flash_surcharge: true,
+                ..cast
+            };
+            return (cast.flash_surcharge
+                || cast.resolving
+                || !self.can_pay_cast(player, object, paid))
+            .then_some(cast);
+        }
         let kicked = CastChoices {
             kicked: true,
             ..cast
         };
         // CR 118.9a: a free cast cannot also take an alternative cost.
-        let alternative = !cast.free && self.state[object].exile_alternative().is_some();
-        let optional = self.state[object].optional_cost().is_some();
+        let card = cast.spell(&self.state[object]);
+        let alternative = self.alternative_cost_available(player, object, cast);
+        let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
             if self.can_pay_cast(player, object, cast) {
                 None
@@ -555,6 +945,29 @@ impl Game {
         } else {
             Some(cast)
         }
+    }
+
+    /// Whether `object` has an alternative cost `player` may choose now: an
+    /// exile alternative, or alternative mana whose condition holds.
+    pub(crate) fn alternative_cost_available(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> bool {
+        if cast.free
+            || cast.flashback
+            || cast
+                .grant(self, object)
+                .is_some_and(|g| g.cost.is_some() || g.foretold)
+        {
+            return false;
+        }
+        let card = cast.spell(&self.state[object]);
+        card.exile_alternative().is_some()
+            || card
+                .alternative_mana()
+                .is_some_and(|(_, condition)| self.check_static_condition(condition, player))
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -575,9 +988,16 @@ impl Game {
             return Err(AgentError("wrong player for kicker choice".to_string()));
         }
         self.pending_choice = None;
-        let cast = CastChoices {
-            kicked: pay,
-            ..cast
+        let cast = if cast.spell(&self.state[object]).flash_surcharge().is_some() {
+            CastChoices {
+                flash_surcharge: pay,
+                ..cast
+            }
+        } else {
+            CastChoices {
+                kicked: pay,
+                ..cast
+            }
         };
         self.begin_mode_selection(player, object, cast)
     }
@@ -586,13 +1006,8 @@ impl Game {
     /// pay by waterbending: a required waterbend additional cost, an
     /// optional one once chosen, or all of a cost granted as
     /// "waterbending {X}" (Hama).
-    pub(crate) fn cast_waterbend_generic(
-        &self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-    ) -> u8 {
-        let card_ref = &self.state[object];
+    pub(crate) fn cast_waterbend_generic(&self, object: ObjectId, cast: CastChoices) -> u8 {
+        let card_ref = cast.spell(&self.state[object]);
         let waterbend = card_ref
             .additional_costs
             .iter()
@@ -603,8 +1018,8 @@ impl Game {
             })
             .fold(0u8, u8::saturating_add);
         let granted = !cast.free
-            && self
-                .exile_grant(player, object)
+            && cast
+                .grant(self, object)
                 .is_some_and(|grant| grant.waterbend);
         if granted {
             u8::MAX
@@ -613,25 +1028,67 @@ impl Game {
         }
     }
 
-    pub(crate) fn legal_spell_modes(&self, player: PlayerId, object: ObjectId) -> Vec<usize> {
-        self.state[object]
-            .spell_modes()
-            .map_or_else(Vec::new, |modes| {
-                (0..modes.len())
-                    .filter(|mode| {
-                        self.state[object]
-                            .target_requirements_for_mode(Some(*mode))
-                            .iter()
-                            .all(|req| {
-                                req.min == 0
-                                    || self
-                                        .legal_targets_for_requirement(player, object, req)
-                                        .len()
-                                        >= req.min
-                            })
-                    })
-                    .collect()
-            })
+    /// How `player` may pay part of `cost`, the mana of the spell `object`,
+    /// without mana: its own and granted convoke, improvise and delve, and
+    /// the waterbend generic it announced.
+    pub(crate) fn spell_help(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+        cost: &ManaCost,
+    ) -> Help {
+        let mut help = Help {
+            waterbend: self
+                .cast_waterbend_generic(object, cast)
+                .min(cost.generic()),
+            ..Default::default()
+        };
+        let mut grant = |cost: &AdditionalCost| match cost {
+            AdditionalCost::Convoke => help.convoke = true,
+            AdditionalCost::Improvise => help.improvise = true,
+            AdditionalCost::Delve => help.delve = Some(object),
+            _ => {}
+        };
+        cast.spell(&self.state[object])
+            .additional_costs
+            .iter()
+            .for_each(&mut grant);
+        for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
+            for ability in &view.static_abilities {
+                if let StaticAbility::SpellsHave { predicate, cost } = ability {
+                    if cast.matches_spell(self, object, predicate) {
+                        grant(cost);
+                    }
+                }
+            }
+        }
+        help
+    }
+
+    pub(crate) fn legal_spell_modes(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> Vec<usize> {
+        let spell = cast.spell(&self.state[object]);
+        spell.spell_modes().map_or_else(Vec::new, |modes| {
+            (0..modes.len())
+                .filter(|mode| {
+                    spell
+                        .target_requirements_for_mode(Some(*mode))
+                        .iter()
+                        .all(|req| {
+                            req.min == 0
+                                || self
+                                    .legal_targets_for_requirement(player, object, req)
+                                    .len()
+                                    >= req.min
+                        })
+                })
+                .collect()
+        })
     }
 
     fn begin_mode_selection(
@@ -640,8 +1097,8 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        if self.state[object].spell_modes().is_some() {
-            if self.legal_spell_modes(player, object).is_empty() {
+        if cast.spell(&self.state[object]).spell_modes().is_some() {
+            if self.legal_spell_modes(player, object, cast).is_empty() {
                 return Err(AgentError("no legal spell mode".into()));
             }
             self.pending_choice = Some(PendingChoice::SpellMode {
@@ -667,7 +1124,7 @@ impl Game {
         else {
             return Err(AgentError("no spell mode is pending".into()));
         };
-        if chooser != player || !self.legal_spell_modes(player, object).contains(&mode) {
+        if chooser != player || !self.legal_spell_modes(player, object, cast).contains(&mode) {
             return Err(AgentError("illegal spell mode".into()));
         }
         self.advance_target_selection(player, object, cast, Some(mode), TargetSelection::default())
@@ -689,7 +1146,9 @@ impl Game {
             chosen,
             chosen_req_indices,
         } = selection;
-        let requirements = self.state[object].target_requirements_for_mode(mode);
+        let requirements = cast
+            .spell(&self.state[object])
+            .target_requirements_for_mode(mode);
         loop {
             let Some(requirement) = requirements.get(requirement_index) else {
                 return self.finish_casting(player, object, cast, mode, chosen, chosen_req_indices);
@@ -735,7 +1194,7 @@ impl Game {
 
     /// With a target-dependent reduction, a choice that would leave the
     /// spell's total cost unpayable is not offered (CR 601.2f-h).
-    fn target_leaves_cost_payable(
+    pub(crate) fn target_leaves_cost_payable(
         &self,
         player: PlayerId,
         object: ObjectId,
@@ -743,7 +1202,11 @@ impl Game {
         chosen: &[Target],
         target: Target,
     ) -> bool {
-        if self.state[object].cost_reduction_if_targets().is_none() {
+        if cast
+            .spell(&self.state[object])
+            .cost_reduction_if_targets()
+            .is_none()
+        {
             return true;
         }
         let targets: Vec<Target> = chosen.iter().copied().chain([target]).collect();
@@ -761,10 +1224,8 @@ impl Game {
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.within_target_mana_budget(requirement, x, chosen.iter().copied(), *target)
+                self.can_add_clause_target(requirement, x, chosen.iter().copied(), *target)
             })
-            // Distinctness and the budget are local to this clause.
-            .filter(|target| !chosen.contains(target))
             .collect()
     }
 
@@ -820,7 +1281,9 @@ impl Game {
         chosen.push(target);
         chosen_req_indices.push(requirement_index);
 
-        let requirements = self.state[object].target_requirements_for_mode(mode);
+        let requirements = cast
+            .spell(&self.state[object])
+            .target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -909,7 +1372,9 @@ impl Game {
             return Err(AgentError("wrong player for target choice".to_string()));
         }
 
-        let requirements = self.state[object].target_requirements_for_mode(mode);
+        let requirements = cast
+            .spell(&self.state[object])
+            .target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -952,39 +1417,39 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        let cost = self.state[object].sacrifice_cost().cloned();
-        let payment = Payment::Spell {
-            object,
-            cast,
-            mode,
-            targets,
-            target_req_indices,
-        };
-        if self.uses_exile_alternative(object, cast) {
-            self.pending_choice = Some(PendingChoice::ExileFromHandPayment {
-                player,
-                payment: Box::new(payment),
-            });
-            return Ok(());
-        }
-        self.begin_payment(player, payment, cost)
+        self.begin_payment(
+            player,
+            Operation::Spell {
+                object,
+                cast,
+                mode,
+                targets,
+                target_req_indices,
+            },
+        )
     }
 
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
     /// card's kicked flag means the alternative, which costs no mana.
-    fn uses_exile_alternative(&self, object: ObjectId, cast: CastChoices) -> bool {
-        cast.kicked && self.state[object].exile_alternative().is_some()
+    pub(super) fn uses_exile_alternative(&self, object: ObjectId, cast: CastChoices) -> bool {
+        cast.kicked
+            && cast
+                .spell(&self.state[object])
+                .exile_alternative()
+                .is_some()
     }
 
     /// The cards `player` may exile for `card`'s exile-from-hand alternative
     /// cost: other matching cards in hand while `card` is cast from hand,
     /// paying its costs, and, if the cost says so, outside `player`'s turn.
-    pub(crate) fn exile_alternative_cards(
+    pub(crate) fn exile_alternative_objects(
         &self,
         player: PlayerId,
         object: ObjectId,
-    ) -> Vec<CardId> {
-        let Some((predicate, not_your_turn)) = self.state[object].exile_alternative() else {
+        cast: CastChoices,
+    ) -> Vec<ObjectId> {
+        let Some((predicate, not_your_turn)) = cast.spell(&self.state[object]).exile_alternative()
+        else {
             return Vec::new();
         };
         if (not_your_turn && self.active_player() == player)
@@ -994,71 +1459,55 @@ impl Game {
         }
         self.state
             .zone_cards(ZoneType::Hand, player)
-            .filter(|card| {
-                self.state.object_of(*card) != object
-                    && self.object_matches_predicate(self.state.object_of(*card), predicate)
-            })
+            .map(|card| self.state.object_of(card))
+            .filter(|&other| other != object && self.object_matches_predicate(other, predicate))
             .collect()
     }
 
-    /// Exile `exiled` for the pending alternative cost, then pay the rest of
-    /// the spell's cost.
-    pub(crate) fn exile_payment_action(
-        &mut self,
-        player: PlayerId,
-        card: CardId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::ExileFromHandPayment {
-            player: payer,
-            payment,
-        }) = self.pending_choice.clone()
+    pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
+        let Operation::Spell {
+            object,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+        } = payment.operation
         else {
-            return Err(AgentError("no exile payment pending".into()));
+            unreachable!("activation prepared before costs")
         };
-        let Payment::Spell { object, .. } = payment.as_ref() else {
-            unreachable!("an exile alternative pays for a spell");
-        };
-        if payer != player
-            || !self
-                .exile_alternative_cards(player, *object)
-                .contains(&card)
-        {
-            return Err(AgentError(
-                "not a card this alternative cost can exile".into(),
-            ));
-        }
-        self.move_object(self.state.object_of(card), ZoneType::Exile);
-        let cost = self.state[*object].sacrifice_cost().cloned();
-        self.begin_payment(player, *payment, cost)
-    }
-
-    pub(crate) fn cast_spell(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-        cast: CastChoices,
-    ) -> Result<(), AgentError> {
-        if let (false, Some(life)) = (cast.kicked, self.state[object].life_alternative()) {
-            self.change_life(player, -(life as i32));
-        }
         // Recorded before the move, so its invalidation precedes the move's
         // board reads; the move then names the stack appearance.
-        self.state.turn.spells_cast[player.0].push(object);
-        if self.state[object].types.is_creature() {
+        self.state.turn.spells_cast[player.0].push(crate::flow::turn::RecordedCast {
+            object,
+            profile: cast.profile,
+        });
+        if cast.spell(&self.state[object]).types.is_creature() {
             self.end_next_creature_cast_flash(player);
         }
         // CR 601.2i — A cast spell is put onto the stack.
         let object =
             self.push_spell_to_stack(object, player, targets.clone(), target_req_indices, cast);
         self.state.name_last_cast(player, object);
+        let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+            self.state.stack_objects_mut().last_mut()
+        else {
+            unreachable!("just pushed spell")
+        };
+        let paid = u32::from(payment.receipt.total());
+        spell.mode = mode;
+        spell.spent = payment.receipt;
+        let total = &mut self.state.turn.history[player.0].mana_spent_casting;
+        let spend_before = *total;
+        *total = total.saturating_add(paid);
+        let spend_after = *total;
         self.emit(GameEvent::SpellCast {
+            caster: player,
+            spend_before,
+            spend_after,
             object_id: object,
             targets: targets.clone(),
         });
         self.emit_permanents_targeted(&targets, Target::StackSpell(object), player);
-        Ok(())
     }
 
     /// Ward (CR 702.21) — each targeted permanent sees, once, the spell or
@@ -1130,11 +1579,17 @@ impl Game {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
         self.check_activation_terms(player, &ability)?;
+        if !permanent.can_pay_counters(&ability) {
+            return Err(AgentError("cannot pay counter cost".into()));
+        }
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }
         if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
+        }
+        if !self.can_tap_grantor(&ability) {
+            return Err(AgentError("grantor cannot tap".into()));
         }
         if ability.mana_cost.x > 0 {
             if self
@@ -1154,24 +1609,24 @@ impl Game {
         if ability.target_spec().is_some() {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
-        if let Some(power) = ability.crew {
-            if self.crew_power_available(player, permanent_id) < power {
-                return Err(AgentError("not enough power to crew".into()));
-            }
-            self.pending_choice = Some(PendingChoice::Crew {
-                player,
-                permanent: permanent_id,
-                ability_index,
-                remaining_power: power,
-            });
-            return Ok(());
+        if ability
+            .tap_power()
+            .is_some_and(|(power, _)| self.crew_power_available(player, permanent_id) < power)
+        {
+            return Err(AgentError("not enough power to crew or saddle".into()));
         }
-
-        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
+        self.begin_payment(
+            player,
+            Operation::Activation {
+                source,
+                ability_index,
+                targets: Vec::new(),
+                x: 0,
+            },
+        )
     }
 
-    /// Values of X from the ability's least X that its waterbend cost can
-    /// pay (CR 602.2b, 601.2f).
+    /// Payable announcements from the ability's least X (CR 602.2b, 601.2f).
     pub(crate) fn legal_activation_x_values(
         &self,
         player: PlayerId,
@@ -1187,7 +1642,7 @@ impl Game {
             return Vec::new();
         };
         payable_x_values(ability.x_min, |x| {
-            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
+            self.activation_x_payable(player, permanent, ability_index, x)
         })
     }
 
@@ -1214,12 +1669,14 @@ impl Game {
             return Err(AgentError("illegal value of X".into()));
         }
         self.pending_choice = None;
-        self.begin_activation_payment(
+        self.begin_payment(
             player,
-            ActivationSource::Permanent(permanent),
-            ability_index,
-            Vec::new(),
-            x,
+            Operation::Activation {
+                source: ActivationSource::Permanent(permanent),
+                ability_index,
+                targets: Vec::new(),
+                x,
+            },
         )
     }
 
@@ -1246,10 +1703,20 @@ impl Game {
         if ability.target_spec().is_some() {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
-        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
+        self.begin_payment(
+            player,
+            Operation::Activation {
+                source,
+                ability_index,
+                targets: Vec::new(),
+                x: 0,
+            },
+        )
     }
 
-    /// The turn and life terms every activation shares, whatever its source.
+    /// The turn, life and condition terms every activation shares, whatever
+    /// its source, mana abilities included: the one authority for "activate
+    /// only ..." restrictions (CR 602.5).
     pub(crate) fn check_activation_terms(
         &self,
         player: PlayerId,
@@ -1268,6 +1735,11 @@ impl Game {
             return Err(AgentError(
                 "activation requires a time before attackers".into(),
             ));
+        }
+        if let Some(condition) = &ability.condition {
+            if !self.check_static_condition(condition, player) {
+                return Err(AgentError("activation condition does not hold".into()));
+            }
         }
         Ok(())
     }
@@ -1303,24 +1775,10 @@ impl Game {
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str)),
+            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
         };
         self.price_activation(player, &mut ability);
         Some(ability)
-    }
-
-    /// Record an activation against its exhaust or once-each-turn limit.
-    pub(crate) fn record_activation(
-        &mut self,
-        permanent: PermanentId,
-        ability_index: usize,
-        ability: &ActivatedAbilityDefinition,
-    ) {
-        if !ability.exhaust && !ability.once_each_turn {
-            return;
-        }
-        self.state
-            .record_activation(permanent, ability_index, ability);
     }
 
     /// The definition an activation of `source` uses; `None` once the
@@ -1384,9 +1842,10 @@ impl Game {
             .enumerate()
             .all(|(index, requirement)| {
                 requirement.min == 0
-                    || !self
+                    || self
                         .activated_ability_targets(player, source, ability_index, index, &[])
-                        .is_empty()
+                        .len()
+                        >= requirement.min
             })
     }
 
@@ -1438,6 +1897,16 @@ impl Game {
             .collect()
     }
 
+    /// The exact object an activation of `source` comes from, as its stacked
+    /// ability will record it; `None` once a permanent source has left.
+    fn activation_ability_source(&self, source: ActivationSource) -> Option<AbilitySource> {
+        let object = match source {
+            ActivationSource::Permanent(permanent) => self.permanent_object(permanent)?,
+            ActivationSource::Card(card) => self.state.object_of(card),
+        };
+        Some(AbilitySource::new(object, Some(object)))
+    }
+
     /// Targets clause `requirement` of `player`'s activation can choose
     /// next, given those already `chosen` (all clauses). Legality is from
     /// `player`'s side whoever chooses. Under "that share a creature type",
@@ -1455,19 +1924,13 @@ impl Game {
         else {
             return Vec::new();
         };
+        let Some(ability_source) = self.activation_ability_source(source) else {
+            return Vec::new();
+        };
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&clause.spec, player)
-            .into_iter()
-            .filter(|target| {
-                let is_source = match source {
-                    ActivationSource::Permanent(permanent) => {
-                        *target == Target::Permanent(permanent)
-                    }
-                    ActivationSource::Card(_) => false,
-                };
-                !is_source && !chosen.contains(target)
-            })
+            .legal_clause_targets(&clause, player, ability_source)
+            .filter(|target| !chosen.contains(target))
             .collect();
         if !clause.shares_creature_type {
             return candidates;
@@ -1478,7 +1941,9 @@ impl Game {
             .copied()
             .filter(|target| {
                 let with = |extra: &[Target]| {
-                    self.targets_share_creature_type(chosen.iter().chain([target]).chain(extra))
+                    self.targets_share_creature_type(
+                        chosen.iter().chain([target]).chain(extra).copied(),
+                    )
                 };
                 with(&[])
                     && (!needs_partner
@@ -1491,16 +1956,19 @@ impl Game {
 
     /// Whether the permanents among `targets` have a creature type in common
     /// ("that share a creature type").
-    fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
-        let mut common: Option<Vec<String>> = None;
+    pub(super) fn targets_share_creature_type(
+        &self,
+        targets: impl Iterator<Item = Target>,
+    ) -> bool {
+        let mut common: Option<CreatureTypes> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.characteristics(*id).creature_types.clone();
+            let types = self.characteristics(id).creature_types.clone();
             common = Some(match common {
                 None => types,
-                Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
+                Some(common) => common.intersection(&types),
             });
         }
         common.is_some_and(|common| !common.is_empty())
@@ -1628,720 +2096,35 @@ impl Game {
             }
             requirement += 1;
         }
-        self.begin_activation_payment(player, source, ability_index, chosen, 0)
-    }
-
-    pub(crate) fn payment_candidates(
-        &self,
-        player: PlayerId,
-        payment: &Payment,
-        cost: &crate::state::card::SacrificeCost,
-    ) -> Vec<PermanentId> {
-        self.sacrifice_candidates(player, &cost.predicate)
-            .into_iter()
-            .filter(|id| {
-                !cost.another
-                    || !matches!(payment, Payment::Activation { source: ActivationSource::Permanent(permanent), .. } if permanent == id)
-            })
-            .collect()
-    }
-
-    fn begin_activation_payment(
-        &mut self,
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        x: u8,
-    ) -> Result<(), AgentError> {
-        let ability = self
-            .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
-        if let Some(cost) = &ability.tap_cost {
-            self.pending_choice = Some(PendingChoice::TapPayment {
-                player,
-                source,
-                ability_index,
-                targets,
-                remaining: cost.count,
-            });
-            return Ok(());
-        }
-        self.continue_activation_payment(player, source, ability_index, targets, x)
-    }
-
-    /// The untapped permanents `player` controls that can pay `ability`'s
-    /// tap cost.
-    pub(crate) fn tap_cost_candidates(
-        &self,
-        player: PlayerId,
-        ability: &ActivatedAbilityDefinition,
-    ) -> Vec<PermanentId> {
-        let Some(cost) = &ability.tap_cost else {
-            return Vec::new();
-        };
-        self.battlefield_permanents(player)
-            .into_iter()
-            .filter(|id| {
-                self.state.permanents[*id]
-                    .as_ref()
-                    .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_matches_predicate(*id, &cost.predicate)
-            })
-            .collect()
-    }
-
-    /// Tap the chosen permanent for the pending tap cost, then pay the rest.
-    pub(crate) fn tap_payment_action(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::TapPayment {
-            player: payer,
-            source,
-            ability_index,
-            targets,
-            remaining,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no tap payment pending".into()));
-        };
-        let ability = self
-            .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
-        let tapped = self
-            .state
-            .permanent_of(object)
-            .filter(|id| self.tap_cost_candidates(player, &ability).contains(id));
-        let (true, Some(tapped)) = (payer == player, tapped) else {
-            return Err(AgentError(
-                "tap cost must be an untapped permanent you control".into(),
-            ));
-        };
-        let payment = Payment::Activation {
-            source,
-            ability_index,
-            targets: targets.clone(),
-            x: 0,
-        };
-        if !self.tap_activation_payment_possible(player, &payment, remaining, Some(tapped)) {
-            return Err(AgentError(
-                "tap cost selection cannot complete the activation".into(),
-            ));
-        }
-        self.pending_choice = None;
-        self.tap_permanent(tapped, false);
-        if remaining > 1 {
-            self.pending_choice = Some(PendingChoice::TapPayment {
-                player,
-                source,
-                ability_index,
-                targets,
-                remaining: remaining - 1,
-            });
-            return Ok(());
-        }
-        self.continue_activation_payment(player, source, ability_index, targets, 0)
-    }
-
-    /// The activation's remaining costs once any tap cost is paid.
-    fn continue_activation_payment(
-        &mut self,
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        x: u8,
-    ) -> Result<(), AgentError> {
-        let ability = self
-            .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?;
-        if ability.discard_card {
-            self.pending_choice = Some(PendingChoice::DiscardPayment {
-                player,
-                source,
-                ability_index,
-                targets,
-            });
-            return Ok(());
-        }
-        let cost = ability.sacrifice;
         self.begin_payment(
             player,
-            Payment::Activation {
+            Operation::Activation {
                 source,
                 ability_index,
-                targets,
-                x,
+                targets: chosen,
+                x: 0,
             },
-            cost,
         )
     }
 
-    fn begin_payment(
-        &mut self,
-        player: PlayerId,
-        payment: Payment,
-        cost: Option<crate::state::card::SacrificeCost>,
-    ) -> Result<(), AgentError> {
-        if let Some(cost) = cost {
-            self.pending_choice = Some(PendingChoice::SacrificePayment {
-                player,
-                cost: Box::new(cost),
-                payment: Box::new(payment),
-            });
-            Ok(())
-        } else {
-            self.begin_mana_payment(player, payment, None, None)
-        }
-    }
-
-    /// Discard `card` for the pending "Discard a card" cost, then pay the
-    /// rest of the activation cost.
-    pub(crate) fn discard_payment_action(
-        &mut self,
-        player: PlayerId,
-        card: CardId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::DiscardPayment {
-            player: payer,
-            source,
-            ability_index,
-            targets,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no discard payment pending".into()));
-        };
-        if payer != player
-            || !self
-                .state
-                .zones
-                .contains(self.state.object_of(card), ZoneType::Hand, player)
-        {
-            return Err(AgentError("discard cost must be a card in hand".into()));
-        }
-        let sacrifice = self
-            .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?
-            .sacrifice;
-        self.move_object(self.state.object_of(card), ZoneType::Graveyard);
-        let payment = Payment::Activation {
-            source,
-            ability_index,
-            targets,
-            x: 0,
-        };
-        self.begin_payment(player, payment, sacrifice)
-    }
-
-    pub(crate) fn sacrifice_payment_action(
-        &mut self,
-        player: PlayerId,
-        object: Option<ObjectId>,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::SacrificePayment {
-            player: chooser,
-            payment,
-            cost,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no sacrifice payment pending".into()));
-        };
-        if player != chooser {
-            return Err(AgentError("wrong payer".into()));
-        }
-        let selected = if let Some(object) = object {
-            Some(
-                self.payment_candidates(player, &payment, &cost)
-                    .into_iter()
-                    .find(|id| {
-                        self.state.permanents[*id]
-                            .as_ref()
-                            .is_some_and(|p| p.object == object)
-                    })
-                    .ok_or_else(|| AgentError("illegal sacrifice cost".into()))?,
-            )
-        } else if cost.or_mana.is_some() {
-            None
-        } else {
-            return Err(AgentError("sacrifice required".into()));
-        };
-        let alternative = if selected.is_none() {
-            cost.or_mana
-        } else {
-            None
-        };
-        self.begin_mana_payment(player, *payment, selected, alternative)
-    }
-
-    pub(crate) fn payment_mana_cost(
-        &self,
-        player: PlayerId,
-        payment: &Payment,
-        alternative: Option<&ManaCost>,
-    ) -> ManaCost {
-        let base = match payment {
-            Payment::Spell {
-                object,
-                cast,
-                targets,
-                ..
-            } => self
-                .effective_spell_cost(player, *object, *cast, Some(targets))
-                .unwrap_or_default(),
-            Payment::Activation {
-                source,
-                ability_index,
-                x,
-                ..
-            } => self
-                .activation_ability(*source, *ability_index)
-                .expect("pending activation source")
-                .mana_cost
-                .with_x(*x),
-        };
-        match alternative {
-            Some(extra) => base.plus(extra),
-            None => base,
-        }
-    }
-
-    /// The part of `payment`'s generic cost its payer may pay by waterbending
-    /// (tapping artifacts and creatures for {1} each): all of a waterbend
-    /// ability's generic cost, or a spell's waterbend additional cost.
-    pub(crate) fn payment_waterbend_generic(&self, player: PlayerId, payment: &Payment) -> u8 {
-        match payment {
-            Payment::Spell { object, cast, .. } => {
-                let total = self.payment_mana_cost(player, payment, None).generic();
-                self.cast_waterbend_generic(player, *object, *cast)
-                    .min(total)
-            }
-            Payment::Activation {
-                source,
-                ability_index,
-                x,
-                ..
-            } => self
-                .activation_ability(*source, *ability_index)
-                .filter(|ability| ability.waterbend)
-                .map_or(0, |ability| ability.mana_cost.with_x(*x).generic()),
-        }
-    }
-
-    fn begin_mana_payment(
-        &mut self,
-        player: PlayerId,
-        payment: Payment,
-        sacrifice: Option<PermanentId>,
-        alternative: Option<ManaCost>,
-    ) -> Result<(), AgentError> {
-        // Waterbend costs open a payment sub-decision: taps pay part of the
-        // generic cost, then mana pays the rest.
-        let waterbend = self.payment_waterbend_generic(player, &payment);
-        if waterbend > 0 && sacrifice.is_none() && alternative.is_none() {
-            self.pending_choice = Some(PendingChoice::Waterbend {
-                player,
-                payment: Box::new(payment),
-                remaining_generic: waterbend,
-                tapped: 0,
-            });
-            return Ok(());
-        }
-        self.pending_choice = Some(PendingChoice::ManaPayment {
-            player,
-            payment: Box::new(payment.clone()),
-            sacrifice,
-            alternative: alternative.clone(),
-        });
-        if self.has_mana_payment_choices(player, sacrifice) {
-            return Ok(());
-        }
-        self.commit_payment(player, payment, sacrifice, alternative, 0)
-    }
-
-    pub(crate) fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
-        let Some(PendingChoice::ManaPayment {
-            player: chooser,
-            payment,
-            sacrifice,
-            alternative,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no mana payment pending".into()));
-        };
-        if chooser != player {
-            return Err(AgentError("wrong payer".into()));
-        }
-        self.commit_payment(player, *payment, sacrifice, alternative, 0)
-    }
-
-    /// Pay `payment`'s announced cost, less `waterbent` generic already paid
-    /// by waterbend taps, then cast the spell or activate the ability.
-    fn commit_payment(
-        &mut self,
-        player: PlayerId,
-        payment: Payment,
-        sacrifice: Option<PermanentId>,
-        alternative: Option<ManaCost>,
-        waterbent: u8,
-    ) -> Result<(), AgentError> {
-        let waterbend = self.payment_waterbend_generic(player, &payment) > 0;
-        let cost = self
-            .payment_mana_cost(player, &payment, alternative.as_ref())
-            .reduced_generic(waterbent);
-        self.produce_mana(player, &cost)?;
-        // Commit the complete announced cost once, before sacrifice triggers
-        // can observe a departing permanent or a spell reaches the stack.
-        self.pending_choice = None;
-        self.begin_mana_spend(
-            player,
-            cost,
-            SpendCompletion::Announced {
-                payment,
-                sacrifice,
-                waterbend,
-            },
-            EffectFrame::new(player, Vec::new()),
-        )
-    }
-
-    pub(crate) fn complete_announced_payment(
-        &mut self,
-        player: PlayerId,
-        payment: Payment,
-        sacrifice: Option<PermanentId>,
-        waterbend: bool,
-        spent: ManaSpent,
-    ) -> Result<(), AgentError> {
-        let mut events = Vec::new();
-        if let Some(target) = sacrifice.and_then(|id| self.permanent_object(id)) {
-            events.push(ProposedEvent::Sacrifice { target });
-        }
-        if waterbend {
-            self.record_bending(player, crate::flow::turn::Bending::Water);
-        }
-        let completion = match payment {
-            Payment::Spell { .. } => FrameCompletion::Paid {
-                player,
-                payment,
-                spent,
-            },
-            Payment::Activation {
-                source,
-                ability_index,
-                targets,
-                x,
-            } => {
-                let life = self
-                    .activation_ability(source, ability_index)
-                    .ok_or_else(|| AgentError("missing activation source".into()))?
-                    .life_cost;
-                self.change_life(player, -(life as i32));
-                let (ability, cost) = match source {
-                    ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
-                        player,
-                        permanent,
-                        ability_index,
-                        targets,
-                        x,
-                    )?,
-                    ActivationSource::Card(card) => {
-                        self.prepare_card_activated_ability(player, card, ability_index, targets)?
-                    }
-                };
-                events.extend(cost);
-                FrameCompletion::Activated {
-                    ability,
-                    source_after_cost: match source {
-                        ActivationSource::Card(card) => Some(self.state.object_of(card)),
-                        ActivationSource::Permanent(_) => None,
-                    },
-                }
-            }
-        };
-        let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(events));
-        frame.completion = completion;
-        self.run_frame(frame);
-        Ok(())
-    }
-
-    /// Other untapped creatures `player` controls that can help crew
-    /// `vehicle`. Summoning sickness doesn't matter (crew is not a {T}
-    /// cost); creatures without positive power add nothing and are omitted.
-    pub(crate) fn crew_candidates(
-        &self,
-        player: PlayerId,
-        vehicle: PermanentId,
-    ) -> Vec<PermanentId> {
-        self.battlefield_permanents(player)
-            .into_iter()
-            .filter(|&id| {
-                id != vehicle
-                    && self.state.permanents[id]
-                        .as_ref()
-                        .is_some_and(|permanent| !permanent.tapped)
-                    && {
-                        let characteristics = self.characteristics(id);
-                        characteristics.is_creature() && characteristics.power > 0
-                    }
-            })
-            .collect()
-    }
-
-    pub(crate) fn crew_power_available(&self, player: PlayerId, vehicle: PermanentId) -> i32 {
-        self.crew_candidates(player, vehicle)
-            .into_iter()
-            .map(|id| self.characteristics(id).power)
-            .sum()
-    }
-
-    /// Tap one creature toward the pending crew cost; once the total power
-    /// reaches the crew number the ability's remaining costs are paid.
-    pub(crate) fn crew_tap_action(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::Crew {
-            player: payer,
-            permanent,
-            ability_index,
-            remaining_power,
-        }) = self.pending_choice
-        else {
-            return Err(AgentError("no crew payment is pending".into()));
-        };
-        if payer != player {
-            return Err(AgentError("wrong player for crew payment".into()));
-        }
-        let crew = self
-            .state
-            .permanent_of(object)
-            .filter(|id| self.crew_candidates(player, permanent).contains(id))
-            .ok_or_else(|| AgentError("creature cannot crew".into()))?;
-        let remaining_power = remaining_power - self.characteristics(crew).power;
-        self.tap_permanent(crew, false);
-        if remaining_power > 0 {
-            self.pending_choice = Some(PendingChoice::Crew {
-                player,
-                permanent,
-                ability_index,
-                remaining_power,
-            });
-            return Ok(());
-        }
-        self.pending_choice = None;
-        self.begin_activation_payment(
-            player,
-            ActivationSource::Permanent(permanent),
-            ability_index,
-            Vec::new(),
-            0,
-        )
-    }
-
-    /// Untapped artifacts/creatures `player` controls — the permanents that
-    /// can each pay {1} of a waterbend cost.
-    pub(crate) fn waterbend_candidates(&self, player: PlayerId) -> Vec<PermanentId> {
-        self.battlefield_permanents(player)
-            .into_iter()
-            .filter(|permanent_id| {
-                let Some(permanent) = self.state.permanents[*permanent_id].as_ref() else {
-                    return false;
-                };
-                if permanent.tapped {
-                    return false;
-                }
-                let object = &self.state[permanent.object];
-                object.types.is_artifact() || object.types.is_creature()
-            })
-            .collect()
-    }
-
-    /// The card whose spell or ability `payment` pays for.
-    pub(crate) fn payment_source_object(&self, payment: &Payment) -> Option<ObjectId> {
-        match payment {
-            Payment::Spell { object, .. } => Some(*object),
-            Payment::Activation {
-                source: ActivationSource::Card(card),
-                ..
-            } => Some(self.state.object_of(*card)),
-            Payment::Activation {
-                source: ActivationSource::Permanent(permanent),
-                ..
-            } => self.state.permanents[*permanent]
-                .as_ref()
-                .map(|permanent| permanent.object),
-        }
-    }
-
-    /// The permanent whose ability `payment` activates when that ability
-    /// also costs {T}: it can't tap for both.
-    pub(crate) fn payment_tapped_source(&self, payment: &Payment) -> Option<PermanentId> {
-        let Payment::Activation {
-            source: ActivationSource::Permanent(source),
-            ability_index,
-            ..
-        } = payment
-        else {
-            return None;
-        };
-        self.characteristics(*source)
-            .activated_abilities
-            .get(*ability_index)
-            .is_some_and(|ability| ability.tap_source)
-            .then_some(*source)
-    }
-
-    /// Waterbend candidates for `payment`, less a source it taps anyway.
-    pub(crate) fn waterbend_payment_candidates(
-        &self,
-        player: PlayerId,
-        payment: &Payment,
-    ) -> Vec<PermanentId> {
-        let mut candidates = self.waterbend_candidates(player);
-        if let Some(source) = self.payment_tapped_source(payment) {
-            candidates.retain(|candidate| *candidate != source);
-        }
-        candidates
-    }
-
-    /// What a pending waterbend payment still owes, and how much of that
-    /// generic further taps may pay instead of mana.
-    pub(crate) fn waterbend_owed(
-        &self,
-        player: PlayerId,
-        payment: &Payment,
-        remaining_generic: u8,
-        tapped: u8,
-    ) -> (ManaCost, u8) {
-        let owed = self
-            .payment_mana_cost(player, payment, None)
-            .reduced_generic(tapped);
-        let generic = remaining_generic.min(owed.generic());
-        (owed, generic)
-    }
-
-    /// Can `source`'s waterbend ability be paid, its own {T} included?
-    pub(crate) fn can_pay_waterbend_activation(
-        &self,
-        player: PlayerId,
-        source: PermanentId,
-        ability: &ActivatedAbilityDefinition,
-    ) -> bool {
-        // An X cost is payable when its least X is.
-        let cost = ability.mana_cost.with_x(ability.x_min);
-        if !ability.tap_source {
-            return self.can_pay_with_waterbend(player, &cost);
-        }
-        !self
-            .waterbend_taps_keeping_payable(player, &cost, cost.generic(), vec![source], None)
-            .is_empty()
-    }
-
-    /// Can `player` cover `cost` with untapped waterbend candidates
-    /// ({1} each, generic only) plus available mana?
-    pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.waterbend_payment_possible(player, cost, cost.generic())
-    }
-
-    /// Tap `permanent` to pay {1} of the pending waterbend cost.
-    pub(crate) fn waterbend_tap_action(
-        &mut self,
-        player: PlayerId,
-        tap_permanent: PermanentId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::Waterbend {
-            player: payer,
-            payment,
-            remaining_generic,
-            tapped,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no waterbend payment is pending".to_string()));
-        };
-        if payer != player {
-            return Err(AgentError("wrong player for waterbend payment".to_string()));
-        }
-        if remaining_generic == 0 {
-            return Err(AgentError("waterbend cost is already paid".to_string()));
-        }
-        if !self
-            .waterbend_payment_candidates(player, &payment)
-            .contains(&tap_permanent)
-        {
-            return Err(AgentError(
-                "permanent cannot be tapped for waterbend".to_string(),
-            ));
-        }
-
-        // Waterbend pays a cost without activating a mana ability.
-        self.tap_permanent(tap_permanent, false);
-        let remaining_generic = remaining_generic - 1;
-        let tapped = tapped + 1;
-        if remaining_generic == 0 {
-            let owed = self
-                .payment_mana_cost(player, &payment, None)
-                .reduced_generic(tapped);
-            // A remaining colored cost can still need a mana ability such as
-            // sacrificing Treasure. Leave the committed payment open for it.
-            if owed.mana_value == 0
-                || (!self.offers_extra_payment_taps(player)
-                    && self.can_pay_mana_cost(player, &owed))
-            {
-                self.pending_choice = None;
-                return self.commit_payment(player, *payment, None, None, tapped);
-            }
-        }
-        self.pending_choice = Some(PendingChoice::Waterbend {
-            player,
-            payment,
-            remaining_generic,
-            tapped,
-        });
-        Ok(())
-    }
-
-    /// Pay the rest of the pending waterbend cost with mana.
-    pub(crate) fn waterbend_pay_remainder_action(
-        &mut self,
-        player: PlayerId,
-    ) -> Result<(), AgentError> {
-        let Some(PendingChoice::Waterbend {
-            player: payer,
-            payment,
-            tapped,
-            ..
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no waterbend payment is pending".to_string()));
-        };
-        if payer != player {
-            return Err(AgentError("wrong player for waterbend payment".to_string()));
-        }
-        self.pending_choice = None;
-        self.commit_payment(player, *payment, None, None, tapped)
-    }
-
-    /// Capture the ability before its source can leave, commit its tap cost,
-    /// and propose its sacrifice cost. Frame completion puts it on the stack.
-    fn prepare_activated_ability(
+    /// Capture the ability before its source can leave, and tap the source
+    /// when its payment owes that (`tap`). Frame completion puts it on the
+    /// stack.
+    pub(super) fn prepare_activated_ability(
         &mut self,
         player: PlayerId,
         permanent_id: PermanentId,
         ability_index: usize,
         targets: Vec<Target>,
         x: u8,
-    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
+        tap: bool,
+    ) -> Result<ActivatedAbilityOnStack, AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
         };
         let source_object = self
             .permanent_object(permanent_id)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
-        let attached = permanent.attached_to;
         let source_transforms = permanent.transforms;
         let source_definition_id = self.state[source_object].definition_id;
         let inherited_from = self.inherited_definition_id(permanent_id);
@@ -2362,86 +2145,73 @@ impl Game {
             ability.granted_by,
             &ability.effects,
         );
-        if ability.tap_source {
+        if tap {
             if !self.permanent_can_tap(permanent_id) {
                 return Err(AgentError("source cannot pay tap cost".into()));
             }
             self.tap_permanent(permanent_id, false);
         }
-        self.record_activation(permanent_id, ability_index, &ability);
-        let cost = ability
-            .sacrifice_source
-            .then_some(ProposedEvent::Sacrifice {
-                target: source_object,
-            });
+        self.state
+            .record_activation(permanent_id, ability_index, &ability);
 
         let id = self.state.id_gen_mut().next_id();
-        Ok((
-            ActivatedAbilityOnStack {
-                target_req_indices: ability.target_clause_indices(targets.len()),
-                effects: ability.effects,
-                program,
-                source_transforms,
-                inherited_from,
-                id,
-                controller: player,
-                source_definition_id,
-                source_object,
-                ability_index,
-                targets,
-                attached,
-                x,
-                granted_by: ability.granted_by,
-            },
-            cost,
-        ))
+        Ok(ActivatedAbilityOnStack {
+            target_req_indices: ability.target_clause_indices(targets.len()),
+            effects: ability.effects,
+            program,
+            source_transforms,
+            inherited_from,
+            id,
+            controller: player,
+            source_definition_id,
+            source_object,
+            ability_index,
+            targets,
+            attached: self.state.permanents[permanent_id]
+                .as_ref()
+                .and_then(|p| p.attached_to),
+            x,
+            granted_by: ability.granted_by,
+            paid: PaymentReceipt::default(),
+        })
     }
 
-    /// Capture an off-battlefield ability and propose its discard cost.
-    /// Frame completion binds the post-cost source identity (CR 602.2b, 113.7a)
-    /// before putting the ability on the stack.
-    fn prepare_card_activated_ability(
+    /// Capture an off-battlefield ability. Frame completion binds the
+    /// post-cost source identity (CR 602.2b, 113.7a) before putting the
+    /// ability on the stack.
+    pub(super) fn prepare_card_activated_ability(
         &mut self,
         player: PlayerId,
         card: CardId,
         ability_index: usize,
         targets: Vec<Target>,
-    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
+    ) -> Result<ActivatedAbilityOnStack, AgentError> {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("activation source left its zone".into()))?;
-        let cost = ability.discard_source.then(|| {
-            self.zone_move_proposal(
-                self.state.object_of(card),
-                ZoneType::Graveyard,
-                Default::default(),
-            )
-        });
-        // The completion replaces this identity after the proposed cost commits.
+        // The completion replaces this identity after a discard cost commits.
         let source_object = self
             .state
             .live(self.state.object_of(card))
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
-        Ok((
-            ActivatedAbilityOnStack {
-                target_req_indices: ability.target_clause_indices(targets.len()),
-                effects: ability.effects,
-                program: false,
-                source_transforms: 0,
-                inherited_from: None,
-                id,
-                controller: player,
-                source_definition_id: self.state[self.state.object_of(card)].definition_id,
-                source_object,
-                ability_index,
-                targets,
-                attached: None,
-                x: 0,
-                granted_by: None,
-            },
-            cost,
-        ))
+        Ok(ActivatedAbilityOnStack {
+            target_req_indices: ability.target_clause_indices(targets.len()),
+            effects: ability.effects,
+            program: false,
+            source_transforms: 0,
+            inherited_from: None,
+            id,
+            controller: player,
+            source_definition_id: self.state[self.state.object_of(card)].definition_id,
+            source_object,
+            ability_index,
+            targets,
+            attached: None,
+            x: 0,
+            granted_by: None,
+            paid: PaymentReceipt::default(),
+        })
     }
 
     /// Legal targets for one targeting requirement of `card`, cast by
@@ -2453,8 +2223,7 @@ impl Game {
         object: ObjectId,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        self.legal_targets_for_spec(&requirement.spec, player)
-            .into_iter()
+        self.legal_clause_targets(requirement, player, AbilitySource::new(object, None))
             .filter(|target| *target != Target::StackSpell(object))
             .collect()
     }

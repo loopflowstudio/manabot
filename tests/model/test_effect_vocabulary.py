@@ -1,7 +1,7 @@
 """Runtime effect symbols must reach the production policy's admission tables.
 
 The exhaustive effect inventory lives in Rust. These bounded probes check its
-vocabulary sources across the Python encoder, admission and embedding-row join.
+vocabulary sources across the native encoder, admission and embedding-row join.
 """
 
 from dataclasses import replace
@@ -9,9 +9,11 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
+from manabot.env.observation import ObservationSpace
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import Layout, Tables, record_key
+from manabot.policy.readings import legacy_readings
 import managym
 
 # Incident keys from diagnostic run 13bb90d47e30, not a second effect inventory.
@@ -35,7 +37,7 @@ def _tables(encoder: SemanticCardEncoder) -> Tables:
             "_is_agent_template": np.zeros(0, bool),
         }
     )
-    return Tables.from_buffers(buffers, Layout((), ()))
+    return Tables.from_buffers(buffers, Layout(legacy_readings(ObservationSpace())))
 
 
 def _catalog(tables: Tables) -> Catalog:

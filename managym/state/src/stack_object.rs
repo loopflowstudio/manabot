@@ -1,13 +1,21 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
+use super::game_object::{AbilitySource, Exact, ObjectId, ObjectLki, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
-use crate::mana::ManaSpent;
+use crate::card::SpellProfile;
+use crate::payment::PaymentReceipt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
+    /// Cast from a prepared copy (a "prepared spell"). Copies of it are not.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
     pub id: PublicId,
     #[serde(rename = "card")]
     pub object: ObjectId,
@@ -29,8 +37,29 @@ pub struct SpellOnStack {
     pub mode: Option<usize>,
     /// The mana actually spent to cast it (CR 601.2h), for "mana spent to
     /// cast" and converge; empty for a spell cast without paying mana.
-    #[serde(skip_serializing_if = "ManaSpent::is_empty")]
-    pub spent: ManaSpent,
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
+}
+
+/// A spell as it is on the stack or last existed there (CR 608.2h): what
+/// "its controller", "the mana spent to cast that spell" and "its mana value"
+/// read after the spell is countered, resolves or otherwise leaves. Copies of
+/// spells are spells too (CR 707.10); one cast without paying mana spent none.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SpellLki {
+    #[serde(serialize_with = "super::game_object::exact")]
+    pub object: ObjectId,
+    pub definition_id: CardDefId,
+    pub controller: PlayerId,
+    #[serde(default, skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
+    /// Including its announced X (CR 202.3e).
+    pub mana_value: u8,
+    /// Total mana actually spent to cast it (CR 601.2h).
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub spent: u16,
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub colors: crate::mana::Colors,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -59,8 +88,7 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
-    /// The exact object the source Aura or Equipment was attached to when
-    /// the ability was activated, before costs such as sacrificing it.
+    /// Exact object attached to the source when the ability was activated.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
     pub attached: Option<ObjectId>,
@@ -71,6 +99,10 @@ pub struct ActivatedAbilityOnStack {
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
+    /// What activating it paid (CR 602.2b): the mana spent and the objects
+    /// tapped, sacrificed, discarded or exiled for its cost.
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub paid: PaymentReceipt,
 }
 
 fn serialize_activation_source<S: serde::Serializer>(
@@ -86,8 +118,14 @@ fn serialize_activation_source<S: serde::Serializer>(
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
+    /// Captured characteristics if the catalog row alone cannot identify the
+    /// triggering face. Forks and copied abilities share this immutable value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_face: Option<std::sync::Arc<super::card::PrintedCharacteristics>>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,
@@ -96,28 +134,34 @@ pub struct TriggeredAbilityOnStack {
     pub id: PublicId,
     pub controller: PlayerId,
     #[serde(flatten)]
-    pub source_identity: crate::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
-    pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerId>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kicked: bool,
     /// The ability's X (`PendingTrigger::x`).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
     /// The mana spent to cast the permanent whose entering triggered this,
     /// for its own "mana spent to cast" (`PendingTrigger::spent`).
-    #[serde(skip_serializing_if = "ManaSpent::is_empty")]
-    pub spent: ManaSpent,
-    /// Delayed triggers resolve these effects instead of looking up
-    /// `Object::abilities[ability_index]`.
+    #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
+    pub spent: PaymentReceipt,
+    /// The modes chosen for a printed modal trigger (CR 700.2b); empty for
+    /// any other trigger, or when "up to" chose none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chosen_modes: Vec<usize>,
+    /// Non-printed triggers (delayed, reflexive, granted, firebending)
+    /// resolve these effects instead of `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -153,21 +197,27 @@ impl StackObject {
         }
     }
 
-    /// The spell's object, or the object whose ability this is.
-    pub fn source_object(&self) -> ObjectId {
+    /// An effect of a spell uses the spell itself as its exact source.
+    /// Abilities retain the source captured when they were created.
+    pub fn effect_source(&self) -> AbilitySource {
         match self {
-            StackObject::Spell(spell) => spell.object,
-            StackObject::ActivatedAbility(ability) => ability.source_object(),
-            StackObject::TriggeredAbility(triggered) => triggered.source_object(),
+            Self::Spell(spell) => AbilitySource::new(spell.object, Some(spell.object)),
+            Self::ActivatedAbility(ability) => {
+                AbilitySource::new(ability.source_object, Some(ability.source_object))
+            }
+            Self::TriggeredAbility(trigger) => trigger.source_identity,
         }
+    }
+
+    pub fn source_object(&self) -> ObjectId {
+        self.effect_source().object()
     }
 
     /// The exact source object of an ability; spells have none.
     pub fn source_ref(&self) -> Option<ObjectId> {
         match self {
-            StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_object()),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref(),
+            Self::Spell(_) => None,
+            ability => ability.effect_source().reference(),
         }
     }
 
@@ -186,6 +236,15 @@ impl StackObject {
         PublicId(self.source_definition_id().0)
     }
 
+    /// The spell's kicker choice, including the choice carried by its ETB trigger.
+    pub fn kicked(&self) -> bool {
+        match self {
+            Self::Spell(spell) => spell.kicked,
+            Self::TriggeredAbility(trigger) => trigger.kicked,
+            Self::ActivatedAbility(_) => false,
+        }
+    }
+
     pub fn ability_index(&self) -> Option<usize> {
         match self {
             StackObject::Spell(_) => None,
@@ -194,11 +253,35 @@ impl StackObject {
         }
     }
 
+    pub fn x(&self) -> u8 {
+        match self {
+            Self::Spell(spell) => spell.x,
+            Self::ActivatedAbility(ability) => ability.x,
+            Self::TriggeredAbility(trigger) => trigger.x,
+        }
+    }
+
+    pub fn target_req_indices(&self) -> &[usize] {
+        match self {
+            Self::Spell(spell) => &spell.target_req_indices,
+            Self::ActivatedAbility(ability) => &ability.target_req_indices,
+            Self::TriggeredAbility(trigger) => &trigger.target_req_indices,
+        }
+    }
+
     pub fn targets(&self) -> &[Target] {
         match self {
             StackObject::Spell(spell) => &spell.targets,
             StackObject::ActivatedAbility(ability) => &ability.targets,
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
+        }
+    }
+
+    pub fn targets_mut(&mut self) -> &mut [Target] {
+        match self {
+            StackObject::Spell(spell) => &mut spell.targets,
+            StackObject::ActivatedAbility(ability) => &mut ability.targets,
+            StackObject::TriggeredAbility(triggered) => &mut triggered.targets,
         }
     }
 }

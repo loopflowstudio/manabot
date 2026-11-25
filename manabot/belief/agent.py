@@ -11,13 +11,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.belief.encoding import BeliefEncodingSchema, encode_belief
+from manabot.belief.protocol import BeliefPolicy
 from manabot.belief.range import BeliefError, BeliefState
 from manabot.belief.state import (
     BeliefModel,
     BeliefUpdate,
     ViewerHistory,
 )
-from manabot.policy.protocol import BackendPolicy
 from managym.decision import Command
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -95,7 +95,7 @@ class Manabot:
     def __init__(
         self,
         *,
-        policy_value: BackendPolicy,
+        policy_value: BeliefPolicy,
         belief_model: BeliefModel,
         belief_schema: BeliefEncodingSchema,
     ) -> None:

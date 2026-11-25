@@ -12,8 +12,14 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.recipes.builders import elemental_self_play
 from manabot.recipes.local import LocalConfig
-from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
+from manabot.verify.action_cases import (
+    decision_case,
+    identity_removed,
+    reorder_objects,
+    reorder_offers,
+)
 from tests.model.prepared_routes import device_input
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
@@ -38,6 +44,18 @@ def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
     assert not ModelConfig.model_validate({"hidden_dim": 64}).policy_film
 
 
+def test_living_recipes_norm_streams_and_score_on_focus() -> None:
+    for model in (
+        settings(BaselineConfig(updates=1, device="cpu")).model,
+        elemental_self_play().model,
+    ):
+        assert model.stream_norm and model.focus_film
+        assert model.model_dump()["stream_norm"] is True
+        assert model.model_dump()["focus_film"] is True
+    omitted = ModelConfig.model_validate({"hidden_dim": 64})
+    assert not omitted.stream_norm and not omitted.focus_film
+
+
 def test_film_starts_as_the_additive_policy() -> None:
     additive, film = _agent(17, False), _agent(17, True)
     shared = additive.state_dict()
@@ -60,18 +78,24 @@ def test_film_starts_as_the_additive_policy() -> None:
         )
 
 
-def test_film_gradient_couples_offer_and_state() -> None:
+@pytest.mark.parametrize("distinct_modes", [True, False])
+def test_film_gradient_couples_offer_and_state(distinct_modes: bool) -> None:
     """Opposite labels on two states give the state code a nonzero gradient."""
     film = _agent(4, True)
     cases = [decision_case("mode", preference=p) for p in (0, 1)]
-    batch = {
-        k: torch.cat([c.observation[k] for c in cases]) for k in cases[0].observation
-    }
+    observations = [
+        c.observation if distinct_modes else identity_removed(c) for c in cases
+    ]
+    batch = {k: torch.cat([obs[k] for obs in observations]) for k in observations[0]}
     labels = torch.tensor([c.preferred for c in cases])
     logits, _ = film(device_input(film, batch))
     torch.nn.functional.cross_entropy(logits, labels).backward()
     assert film.policy_film is not None and film.policy_film.weight.grad is not None
-    assert film.policy_film.weight.grad.abs().max() > 1e-6
+    gradient = film.policy_film.weight.grad.abs().max()
+    if distinct_modes:
+        assert gradient > 1e-7
+    else:
+        assert gradient == 0
 
 
 def test_film_preserves_offer_and_object_order_invariance() -> None:
@@ -86,7 +110,13 @@ def test_film_preserves_offer_and_object_order_invariance() -> None:
     order = torch.randperm(count, generator=torch.Generator().manual_seed(3))
     with torch.no_grad():
         expected = film(device_input(film, obs))[0].softmax(-1)
-        offers = film(device_input(film, reorder_offers(obs, order)))[0].softmax(-1)
-        objects = film(device_input(film, reorder_objects(obs)))[0].softmax(-1)
+        offers = film(
+            device_input(
+                film, reorder_offers(obs, order, film.observation_space.layout)
+            )
+        )[0].softmax(-1)
+        objects = film(
+            device_input(film, reorder_objects(obs, film.observation_space.layout))
+        )[0].softmax(-1)
     torch.testing.assert_close(offers[:, :count], expected[:, order], atol=1e-6, rtol=0)
     torch.testing.assert_close(objects, expected, atol=1e-6, rtol=0)

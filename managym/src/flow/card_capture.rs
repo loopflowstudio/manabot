@@ -6,15 +6,24 @@ use crate::agent::{
     observation::Observation,
 };
 use crate::flow::decision::EffectFrame;
+#[cfg(test)]
+use crate::state::card::SpellProfile;
 use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        game_object::{ObjectId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 use serde::{Deserialize, Serialize};
+
+/// Both modes retain card movements. Exposure also records decisions and turn facts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CaptureMode {
+    Cards,
+    Exposure,
+}
 
 /// One consumed, nontrivial native choice. Focus is the shared action projection,
 /// not a claim that each focused card caused or benefited from the action.
@@ -49,10 +58,61 @@ pub struct ExposureCapture {
     pub choices: Vec<ExposureChoice>,
     pub resolutions: Vec<ExposureResolution>,
     pub mana: [ManaUse; 2],
+    pub mana_turns: [Vec<TurnMana>; 2],
+    pub attackers_committed: [u64; 2],
+    pub attackers_lost_for_nothing: [u64; 2],
+    pub blockers_committed: [u64; 2],
+    pub blockers_lost_for_nothing: [u64; 2],
+    #[serde(skip)]
+    pub(crate) combat: CombatDeclarations,
 }
 
-/// Priority-floated units lose source identity when pooled. Track the range
-/// that can remain after each spend, without changing the rules' mana classes.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct TurnMana {
+    pub available: u64,
+    pub paid: u64,
+}
+
+/// Permanent ids identify battlefield incarnations even across a blink.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CombatDeclarations {
+    pub attackers: Vec<PermanentId>,
+    pub blocks: Vec<(PermanentId, PermanentId)>,
+    pub deaths: std::collections::BTreeSet<PermanentId>,
+}
+
+impl ExposureCapture {
+    pub(crate) fn paid(&mut self, player: PlayerId, amount: u64) {
+        if let Some(turn) = self.mana_turns[player.0].last_mut() {
+            turn.paid += amount;
+        }
+    }
+
+    pub(crate) fn finish_combat(&mut self, attacking: PlayerId, defending: PlayerId) {
+        let combat = std::mem::take(&mut self.combat);
+        self.attackers_committed[attacking.0] += combat.attackers.len() as u64;
+        self.blockers_committed[defending.0] += combat.blocks.len() as u64;
+        for attacker in combat.attackers {
+            if combat.deaths.contains(&attacker)
+                && !combat
+                    .blocks
+                    .iter()
+                    .any(|(blocker, target)| *target == attacker && combat.deaths.contains(blocker))
+            {
+                self.attackers_lost_for_nothing[attacking.0] += 1;
+            }
+        }
+        for (blocker, attacker) in combat.blocks {
+            if combat.deaths.contains(&blocker) && !combat.deaths.contains(&attacker) {
+                self.blockers_lost_for_nothing[defending.0] += 1;
+            }
+        }
+    }
+}
+
+/// A pooled unit's origin names its source, not whether it was floated at
+/// priority. Track the range of priority-floated units that can remain after
+/// each spend, without changing the rules' mana classes.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct ManaUse {
     pub priority_produced: u64,
@@ -87,7 +147,7 @@ impl ManaUse {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CardSnapshot {
     pub copy: usize,
     pub definition: u32,
@@ -98,7 +158,7 @@ pub struct CardSnapshot {
     pub origin: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
     #[serde(rename = "card")]
@@ -135,7 +195,11 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
         name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
         incarnation: object.generation(),
         owner: owner.0,
-        zone: game.state.zones.zone_of(object),
+        zone: game.state.zones.zone_of(
+            game.state
+                .card_id(object)
+                .map_or(object, |card| game.state.object_of(card)),
+        ),
         origin: match game.state.card_id(object) {
             Some(card) if player.deck.contains(&card) => "deck",
             Some(card) if player.sideboard.contains(&card) => "outside",
@@ -154,11 +218,11 @@ pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
 }
 
 impl CardCapture {
-    pub(crate) fn new(game: &Game) -> Self {
+    pub(crate) fn new(game: &Game, initial: Vec<CardSnapshot>, mode: CaptureMode) -> Self {
         Self {
             version: 1,
             content_digest: default_content_pack().content_digest(),
-            initial: snapshots(game),
+            initial,
             opening: std::array::from_fn(|seat| {
                 game.state
                     .zones
@@ -168,12 +232,26 @@ impl CardCapture {
                     .collect()
             }),
             moves: Vec::new(),
-            exposure: None,
+            exposure: (mode == CaptureMode::Exposure).then(Default::default),
         }
     }
 }
 
 impl Game {
+    pub(crate) fn exposure_mut(&mut self) -> Option<&mut ExposureCapture> {
+        self.card_capture.as_mut()?.exposure.as_mut()
+    }
+
+    pub(crate) fn finish_combat_capture(&mut self) {
+        // Combat attribution is read before turn progression expires any control.
+        // Attribute losses to the same chooser as the declaration denominator.
+        let attacking = self.decision_controller(self.active_player());
+        let defending = self.decision_controller(self.non_active_player());
+        if let Some(exposure) = self.exposure_mut() {
+            exposure.finish_combat(attacking, defending);
+        }
+    }
+
     pub(crate) fn mana_capture(&mut self, player: PlayerId) -> Option<&mut ManaUse> {
         Some(&mut self.card_capture.as_mut()?.exposure.as_mut()?.mana[player.0])
     }
@@ -347,20 +425,260 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::player::PlayerConfig;
+    use crate::state::{ability::Effect, game_object::Target, player::PlayerConfig};
     use std::collections::BTreeMap;
 
-    fn configs() -> Vec<PlayerConfig> {
+    fn configs_with_card(card: &str) -> Vec<PlayerConfig> {
         ["a", "b"]
             .into_iter()
-            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([(card.into(), 20)])))
+            .collect()
+    }
+
+    fn copied_spell(name: &str, targets: Vec<Target>) -> (Game, ObjectId) {
+        let (caster, copier) = (PlayerId(0), PlayerId(1));
+        let mut game = Game::new_capturing(configs_with_card(name), 17, true);
+        let card = game.state.zones.zone_objects(ZoneType::Hand, caster)[0];
+        let indices = (0..targets.len()).collect();
+        let spell = game.push_spell_to_stack(card, caster, targets, indices, Default::default());
+        let Some(Target::StackSpell(copy)) =
+            game.copy_stack_object(Target::StackSpell(spell), copier)
+        else {
+            panic!("expected a spell copy");
+        };
+        assert_ne!(copy.slot(), spell.slot());
+        (game, copy)
+    }
+
+    fn copy_moves(game: &Game, copy: ObjectId) -> impl Iterator<Item = &CardMove> {
+        game.card_capture
+            .as_ref()
+            .unwrap()
+            .moves
+            .iter()
+            .filter(move |m| m.object.copy == copy.slot())
+    }
+
+    fn copy_history(game: &Game, copy: ObjectId) -> Vec<(Option<ZoneType>, Option<ZoneType>, u32)> {
+        copy_moves(game, copy)
+            .map(|m| (m.from, m.object.zone, m.object.incarnation))
             .collect()
     }
 
     #[test]
+    fn capture_tracks_a_copied_spell_from_stack_entry_until_it_ceases() {
+        use ZoneType::{Graveyard, Stack};
+
+        let (mut game, copy) = copied_spell("Lightning Bolt", vec![Target::Player(PlayerId(0))]);
+        game.resolve_top_of_stack();
+        game.perform_state_based_actions();
+
+        assert_eq!(
+            copy_history(&game, copy),
+            [
+                (None, Some(Stack), 0),
+                (Some(Stack), Some(Graveyard), 1),
+                (Some(Graveyard), None, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn capture_tracks_a_copied_permanent_spell_as_the_token_it_becomes() {
+        use crate::state::game_object::ObjectKind;
+        use ZoneType::{Battlefield, Graveyard, Stack};
+
+        let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
+        game.resolve_top_of_stack();
+        let token = game.state.zones.successor(copy).unwrap();
+        assert_eq!(game.state[token].kind(), ObjectKind::Token);
+        game.move_object(token, Graveyard);
+        game.perform_state_based_actions();
+
+        assert_eq!(
+            copy_history(&game, copy),
+            [
+                (None, Some(Stack), 0),
+                (Some(Stack), Some(Battlefield), 1),
+                (Some(Battlefield), Some(Graveyard), 2),
+                (Some(Graveyard), None, 2),
+            ]
+        );
+    }
+
+    #[test]
+    fn capture_matches_the_final_snapshot_of_an_unresolved_spell_copy() {
+        let (mut game, copy) = copied_spell("Gray Ogre", vec![]);
+        game.state.players[0].life = 0;
+        game.perform_state_based_actions();
+        assert!(game.is_game_over());
+
+        let mut moves = copy_moves(&game, copy);
+        let entry = moves.next().expect("spell copy's stack entry");
+        assert!(moves.next().is_none());
+        assert_eq!(
+            (entry.from, entry.object.zone, entry.object.incarnation),
+            (None, Some(ZoneType::Stack), 0)
+        );
+        assert_eq!(entry.object.name, "Gray Ogre");
+        assert_eq!(entry.object.origin, "generated");
+        assert_eq!((entry.object.owner, entry.controller), (1, 1));
+        assert_eq!(entry.cause, "move");
+        assert!(snapshots(&game).contains(&entry.object));
+    }
+
+    #[test]
+    fn copying_triggered_and_activated_abilities_records_no_card_movements() {
+        use crate::state::{mana::Mana, stack_object::StackObject};
+
+        let mut game = Game::new_capturing(configs_with_card("The Fire Nation Drill"), 17, true);
+        let player = game.active_player();
+        let copier = game.non_active_player();
+        let card = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let drill = game.move_object(card, ZoneType::Battlefield);
+        assert!(game.flush_triggers().is_none());
+        let permanent = game.state.permanent_of(drill).unwrap();
+        *game.state.mana_pool_mut(player) = Mana::parse("R").into();
+        game.activate_ability_action(player, permanent, 0).unwrap();
+
+        let [StackObject::TriggeredAbility(trigger), StackObject::ActivatedAbility(activation)] =
+            game.state.stack_objects.as_slice()
+        else {
+            panic!("expected both Drill abilities on the stack");
+        };
+        let moves_before = game.card_capture.as_ref().unwrap().moves.len();
+        for id in [trigger.id, activation.id] {
+            let original = Target::StackAbility(id);
+            let copy = game.copy_stack_object(original, copier).unwrap();
+            assert!(matches!(copy, Target::StackAbility(_)));
+            assert_ne!(copy, original);
+            assert_eq!(game.state.stack_objects.last().unwrap().as_target(), copy);
+        }
+        assert_eq!(
+            game.card_capture.as_ref().unwrap().moves.len(),
+            moves_before
+        );
+    }
+
+    #[test]
+    fn turn_budget_includes_modal_and_pooled_mana_and_counts_only_real_spends() {
+        use crate::{
+            flow::decision::SpendCompletion,
+            state::mana::{Mana, ManaCost},
+        };
+        let payer = PlayerId(0);
+        let mut players = configs_with_card("Mountain");
+        players[0] = PlayerConfig::new(
+            "a",
+            BTreeMap::from([
+                ("Izzet Guildgate".into(), 20),
+                ("Prophetic Prism".into(), 1),
+            ]),
+        );
+        let mut game = Game::construct(
+            &players.into(),
+            17,
+            true,
+            Some(CaptureMode::Exposure),
+            false,
+        );
+        game.keep_opening_hands();
+        game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
+            .unwrap();
+        game.create_token("token.treasure", payer, false).unwrap();
+        let prism = game
+            .scenario_force_battlefield(payer, "Prophetic Prism", true)
+            .unwrap();
+        // This creature can convoke or waterbend but produces no mana.
+        game.create_token("token.ally", payer, false).unwrap();
+        game.state
+            .combat_mana_pool_mut(payer)
+            .add(&Mana::parse("R"), None);
+        game.capture_priority_mana(payer);
+        let hand = game.state.zones.zone_objects(ZoneType::Hand, payer);
+        let card = game.state.card_id(hand[0]).unwrap();
+        // Foretell's special-action payment here consumes the combat pool.
+        game.begin_mana_spend(
+            payer,
+            ManaCost::parse("R"),
+            SpendCompletion::Foretell(card),
+            EffectFrame::new(payer, Vec::new()),
+        )
+        .unwrap();
+        // A second source arriving on the same turn increases the peak.
+        game.create_token("token.treasure", payer, false).unwrap();
+        game.capture_priority_mana(payer);
+        let turn = &game.exposure_mut().unwrap().mana_turns[0][0];
+        assert_eq!((turn.available, turn.paid), (4, 1));
+
+        // The filter turns a pooled unit into another color at no net gain.
+        game.state.mana_pool_mut(payer).add(&Mana::parse("W"), None);
+        game.activate_mana_ability(payer, prism, 0).unwrap();
+        assert_eq!(game.state.players[0].mana_pool.total(), 0);
+        assert_eq!(game.exposure_mut().unwrap().mana_turns[0][0].paid, 1);
+    }
+
+    #[test]
+    fn combat_counts_partners_and_committed_deaths_in_a_terminal_combat() {
+        use crate::flow::turn::PhaseKind;
+        let (active, defender) = (PlayerId(0), PlayerId(1));
+        let mut game = Game::construct(
+            &configs_with_card("Mountain").into(),
+            17,
+            true,
+            Some(CaptureMode::Exposure),
+            false,
+        );
+        game.keep_opening_hands();
+        game.state.turn.current_phase = PhaseKind::Combat as usize;
+        game.state.turn.current_step = 3; // combat damage
+        game.state.turn.step_initialized = false;
+        game.state.combat = Some(Default::default());
+        let attackers: Vec<_> = (0..4)
+            .map(|_| game.create_token("token.ally", active, false).unwrap())
+            .collect();
+        let blockers: Vec<_> = (0..4)
+            .map(|_| game.create_token("token.ally", defender, false).unwrap())
+            .collect();
+        game.mark_permanents_not_summoning_sick(active);
+        for &attacker in &attackers {
+            game.declare_attacker(attacker, true).unwrap();
+        }
+        for (&blocker, attacker) in blockers.iter().zip([0, 0, 1, 2]) {
+            game.declare_blocker(blocker, Some(attackers[attacker]))
+                .unwrap();
+        }
+        // A trade with one of two blockers, a sacrificed blocker, and a removed
+        // attacker. The unblocked fourth attacker deals lethal player damage.
+        for id in [attackers[0], blockers[1], blockers[2], attackers[2]] {
+            game.move_object(game.permanent_object(id).unwrap(), ZoneType::Graveyard);
+        }
+        // Ending the turn during combat also settles the ledger.
+        let mut surviving = game.rollback_snapshot();
+        surviving.run_frame(EffectFrame::new(active, vec![Effect::EndTheTurn]));
+        let facts = surviving.exposure_mut().unwrap();
+        assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
+        assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
+
+        // One more blocker receives lethal damage in the same batch as its
+        // controller. Only earlier, committed deaths count on this branch.
+        let extra = game.create_token("token.ally", active, false).unwrap();
+        game.mark_permanents_not_summoning_sick(active);
+        game.declare_attacker(extra, true).unwrap();
+        let last = game.create_token("token.ally", defender, false).unwrap();
+        game.declare_blocker(last, Some(extra)).unwrap();
+        *game.state.life_mut(defender).unwrap() = 1;
+        assert!(game.tick());
+        assert!(game.state.permanents[last].is_some());
+        let facts = game.exposure_mut().unwrap();
+        assert_eq!(facts.attackers_lost_for_nothing, [1, 0]);
+        assert_eq!(facts.blockers_lost_for_nothing, [0, 1]);
+    }
+
+    #[test]
     fn capture_preserves_rules_and_excludes_forks() {
-        let plain = Game::new(configs(), 17, true);
-        let mut captured = Game::new_capturing(configs(), 17, true);
+        let plain = Game::new(configs_with_card("Mountain"), 17, true);
+        let mut captured = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         assert_eq!(
             plain.state.deterministic_hash(),
             captured.state.deterministic_hash()
@@ -391,7 +709,7 @@ mod tests {
 
     #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
-        let mut game = Game::new_capturing(configs(), 18, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 18, true);
         let object = game
             .state
             .zones
@@ -424,6 +742,7 @@ mod tests {
                 17,
                 false,
             );
+            game.keep_opening_hands();
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
             let object_id = *game
@@ -438,19 +757,18 @@ mod tests {
             game.state[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
-            game.card_capture = Some(CardCapture::new(&game));
-            game.statistics = Some(crate::flow::statistics::Statistics::new(
-                &snapshots(&game),
-                true,
-            ));
-            game.card_capture.as_mut().unwrap().exposure = Some(ExposureCapture::default());
+            let initial = snapshots(&game);
+            game.statistics = Some(crate::flow::statistics::Statistics::new(&initial, true));
+            game.card_capture = Some(CardCapture::new(&game, initial, CaptureMode::Exposure));
             game.publish_action_space(ActionSpace {
                 player: Some(PlayerId(0)),
                 kind: ActionSpaceKind::Priority,
                 actions: vec![
                     Action::CastSpell {
+                        profile: SpellProfile::Front,
                         player: PlayerId(0),
                         object: object_id,
+                        route: None,
                     },
                     Action::PassPriority {
                         player: PlayerId(0),
@@ -513,15 +831,22 @@ mod tests {
     #[test]
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
-        let mut game = Game::new_capturing(configs(), 17, true);
+        let mut game = Game::new_capturing(configs_with_card("Mountain"), 17, true);
         let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
         let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state[object]
-            .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
+        let front = (
+            game.state[object].definition_id,
+            game.state[object].copiable_definition(),
+        );
+        game.state[object].show_transforming_face(crate::state::game_object::TransformingFaces {
+            front,
+            back: (back, Arc::clone(&content.definition(back).unwrap().printed)),
+            back_up: true,
+        });
         let after = snapshot(&game, object);
         assert_eq!(game.state[object].name, "Forest");
         assert_eq!(after.name, before.name);

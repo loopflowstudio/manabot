@@ -4,7 +4,7 @@ use super::{
     card::CardDefId,
     deck::Deck,
     game_object::{CardId, PublicId},
-    mana::Mana,
+    mana::ManaPool,
 };
 
 /// Whether both players know each other's main deck and sideboard.
@@ -27,7 +27,8 @@ impl DecklistDisclosure {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlayerConfig {
     pub name: String,
     #[serde(flatten)]
@@ -40,13 +41,24 @@ pub struct PlayerConfig {
     #[serde(
         rename = "world",
         skip_serializing_if = "std::ops::Not::not",
-        serialize_with = "serialize_submission"
+        default,
+        serialize_with = "serialize_submission",
+        deserialize_with = "deserialize_submission"
     )]
     pub submitted: bool,
 }
 
 fn serialize_submission<S: serde::Serializer>(_: &bool, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(crate::world::WORLD_POOL)
+}
+
+fn deserialize_submission<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    use serde::{de::Error, Deserialize};
+    match Option::<String>::deserialize(d)?.as_deref() {
+        None => Ok(false),
+        Some(crate::world::WORLD_POOL) => Ok(true),
+        Some(_) => Err(D::Error::custom("unknown submitted deck world")),
+    }
 }
 
 impl PlayerConfig {
@@ -79,6 +91,13 @@ impl PlayerConfig {
     }
 }
 
+/// The starting life total of a two-player game (CR 103.4).
+pub const DEFAULT_STARTING_LIFE: i32 = 20;
+
+fn is_default_starting_life(life: &i32) -> bool {
+    *life == DEFAULT_STARTING_LIFE
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Player {
     pub id: PublicId,
@@ -92,15 +111,22 @@ pub struct Player {
     pub known_library: super::knowledge::LibraryKnowledge,
     pub name: String,
     pub life: i32,
+    /// The life total this player began the game with (CR 103.4); omitted
+    /// from the state record at the default 20.
+    #[serde(skip_serializing_if = "is_default_starting_life")]
+    pub starting_life: i32,
+    #[serde(skip_serializing_if = "super::permanent::Counters::is_empty")]
+    pub counters: super::permanent::Counters,
     pub drew_when_empty: bool,
-    pub alive: bool,
-    pub mana_pool: Mana,
+    pub mana_pool: ManaPool,
     /// Mana that lasts until end of combat (firebending) — persists across
     /// combat steps instead of emptying, empties as combat ends.
-    pub combat_mana_pool: Mana,
+    pub combat_mana_pool: ManaPool,
 }
 
 impl Player {
+    pub const STARTING_LIFE: i32 = 20;
+
     pub fn new(id: PublicId, index: usize, name: impl Into<String>) -> Self {
         Self {
             id,
@@ -110,11 +136,12 @@ impl Player {
             known_hand: BTreeMap::new(),
             known_library: Default::default(),
             name: name.into(),
-            life: 20,
+            life: DEFAULT_STARTING_LIFE,
+            starting_life: DEFAULT_STARTING_LIFE,
+            counters: Default::default(),
             drew_when_empty: false,
-            alive: true,
-            mana_pool: Mana::default(),
-            combat_mana_pool: Mana::default(),
+            mana_pool: ManaPool::default(),
+            combat_mana_pool: ManaPool::default(),
         }
     }
 }
@@ -158,7 +185,7 @@ impl DecklistMode {
 }
 
 /// Who chooses sources and colors after a seat commits to a mana payment.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ManaPayment {
     Auto,
@@ -187,7 +214,7 @@ impl ManaPayment {
 }
 
 /// Priority float offers for the chooser.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ManaFloats {
     #[default]

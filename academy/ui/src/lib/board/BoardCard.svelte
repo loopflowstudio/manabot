@@ -61,6 +61,8 @@
     dealt?: number;
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
+    /** What it has committed to the pending cost: "tapped to crew". */
+    paid?: string | null;
     /** Copies in this card's pile, shown after the top copy's name. */
     count?: number | null;
     /** While the person may act, this card steps back: an uncastable hand card (`hand`) or an idle permanent (`idle`). */
@@ -77,7 +79,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, count = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null, count = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
   }: Props = $props();
 
   // At a recorded choice: the policy's mass on this card's offers, and whether one was played.
@@ -118,6 +120,7 @@
    * first chips, so keywords (also in inspect) give way before them.
    */
   const chips = $derived(!field ? [] : [
+    ...(permanent?.first_strike_participant ? [{ key: 'first-strike-participant', text: 'First-strike participant', kind: 'combat', granted: false }] : []),
     ...(permanent?.attacking ? [{ key: 'attacking', text: 'Attacking', kind: 'combat', granted: false }] : []),
     ...(permanent?.blocking !== undefined ? [{ key: 'blocking', text: 'Blocking', kind: 'combat', granted: false }] : []),
     ...(permanent?.damage ? [{ key: 'damage', text: `${permanent.damage} damage`, kind: 'damage', granted: false }] : []),
@@ -157,11 +160,13 @@
     tapped ? 'tapped' : '',
     permanent?.summoning_sick && creature ? 'summoning sick' : '',
     permanent?.attacking ? 'attacking' : '',
+    permanent?.first_strike_participant ? 'first-strike participant' : '',
     permanent?.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
     permanent?.damage ? `${permanent.damage} damage` : '',
     ...counters.map(([kind, amount]) => `${amount} ${kind} counter${amount === 1 ? '' : 's'}`),
     permanent?.is_token ? 'token' : '',
     dealt ? `dealt ${dealt} since your last move` : '',
+    paid ? `committed to this cost: ${paid}` : '',
     planned ? `would tap for ${planned.output || 'mana'} (payment plan, source ${planned.order})` : '',
     recorded?.p != null ? `recorded policy ${formatProbability(recorded.p)}` : '',
     recorded?.chosen ? 'chosen' : '',
@@ -201,6 +206,7 @@
     class:touched
     class:beat
     class:planned={planned !== null}
+    class:paid={paid !== null}
     data-testid="board-card"
     data-travel-id={permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={name}
@@ -209,6 +215,7 @@
     data-offer-count={offers.length}
     data-draft={draft ?? undefined}
     data-payment-source={planned?.order}
+    data-paid={paid ?? undefined}
     data-card-name={name}
     aria-label={label}
     style:width={`${boxWidth}px`}
@@ -244,6 +251,7 @@
       {#if planned}
         <span class="plan"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
       {/if}
+      {#if paid}<span class="paid-mark" title={paid}>committed</span>{/if}
       {#if recorded && (recorded.p !== null || recorded.chosen)}
         <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
       {/if}
@@ -351,6 +359,14 @@
     position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
     display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px 1px 3px; border-radius: var(--radius-full);
     background: var(--bg-surface); border: 1px dashed var(--planned);
+  }
+  /* Committed to the pending cost: solid amber, where a plan is dashed. */
+  .tcard.paid { outline: 2px solid var(--planned); outline-offset: 2px; }
+  .paid-mark {
+    position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
+    padding: 0 5px; border-radius: var(--radius-full);
+    background: var(--bg-surface); border: 1px solid var(--planned);
+    font: 600 12px/16px var(--font-sans); color: var(--planned-text);
   }
   .plan b { font: 600 12px/16px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
   .dealt {

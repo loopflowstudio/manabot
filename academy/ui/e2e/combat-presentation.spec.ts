@@ -153,15 +153,15 @@ async function installCombatAuthority(page: Page, after: Partial<Record<number, 
       ({ revision, fingerprint: `native-${revision}`, creature: id(creature), action_index: actionIndex, attack, blocks: blocks === null ? null : id(blocks) });
     const preview = request.revision === 12
       ? {
-          kind: 'blockers', declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false }],
+          kind: 'blockers', declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false, must_attack: false }],
           steps: [request.plan.blocks.length ? step(12, 83, 201, false, 84) : step(12, 83, 202, false)],
           refused: null, declared_attackers: [], declared_blocks: request.plan.blocks,
         }
       : {
           kind: 'attackers',
-          declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [], must_block: false },
-            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false },
-            ...Array.from({ length: moreTigers }, (_, i) => ({ creature: id(86 + i), label: 'Tiger-Seal', can_block: [], must_block: false }))].filter(creature => request.revision === 10 || creature.creature.entity === 85),
+          declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [], must_block: false, must_attack: false },
+            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false, must_attack: false },
+            ...Array.from({ length: moreTigers }, (_, i) => ({ creature: id(86 + i), label: 'Tiger-Seal', can_block: [], must_block: false, must_attack: false }))].filter(creature => request.revision === 10 || creature.creature.entity === 85),
           steps: [
             ...(request.revision === 10 ? [step(10, 83, attacks.has(83) ? 101 : 102, attacks.has(83))] : []),
             step(11, 85, attacks.has(85) ? 103 : 104, attacks.has(85)),

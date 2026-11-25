@@ -13,7 +13,7 @@ from typing import Any, Iterable, Mapping
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
+from conformance.authored_match_receipt import AUTHORITY_RECEIPT_PATH, FIXED_TIME
 import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.curated_pack import load_curated_pack
@@ -31,12 +31,12 @@ from managym.decision import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
 )
-AUTHORITY_SHA256 = "b2dddeea9f1732b822f3d225da42f8d2dc5ccb84f7ef01e7d5bb1011a2f2cd8e"
-TERMINAL_STATE = "1fd1fedb3ac0f737c83c9097e63f49d17cdea8668fbd8e074b38e92ce7c82421"
+AUTHORITY_SHA256 = "228daa6571c4a9299368bc995ac7994761c505bdb31cabf5c4bf1657d7441385"
+TERMINAL_STATE = "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876"
 
-COMMAND_COUNT = 191
+COMMAND_COUNT = 174
 
 
 def _json_bytes(value: object) -> bytes:
@@ -80,7 +80,7 @@ def _equal(
 
 
 def _load_authority() -> dict[str, Any]:
-    raw = DEFAULT_RECEIPT_PATH.read_bytes()
+    raw = AUTHORITY_RECEIPT_PATH.read_bytes()
     _equal("input", 0, "authority_sha256", AUTHORITY_SHA256, _sha256(raw))
     receipt = json.loads(raw)
     decisions = receipt["decisions"]
@@ -244,7 +244,7 @@ def _capture_object_candidate(
                     candidate_id = int(candidate["id"])
                     offer_id = int(offer["id"])
     if rendered is None:
-        raise ParityDivergence("headless", 15, "object_candidate", "96@3", "absent")
+        raise ParityDivergence("headless", 17, "object_candidate", "96@3", "absent")
     address = next(
         candidate
         for candidate in frame["object_candidates"]
@@ -301,7 +301,7 @@ def _run_engine(
             surface, revision, "offer_count", row["offer_count"], len(frame["offers"])
         )
 
-        if prove_stale and revision == 15:
+        if prove_stale and revision == 17:
             captured_address, rendered_ref = _capture_object_candidate(env, frame)
             stale_revision_command = _semantic_command(row, frame)
             current_clone = env.clone_env()
@@ -320,10 +320,10 @@ def _run_engine(
                 or current_clone.semantic_event_cursor() <= current_cursor
             ):
                 raise ParityDivergence(
-                    surface, 15, "current_object_binding", "committed", "unchanged"
+                    surface, 17, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 31:
+        if prove_stale and revision == 33:
             assert (
                 captured_address is not None
                 and rendered_ref is not None
@@ -391,11 +391,11 @@ def _run_engine(
                 env.semantic_event_cursor(),
             )
             stale_proof = {
-                "captured_revision": 15,
+                "captured_revision": 17,
                 "captured_render_ref": rendered_ref,
                 "candidate_address": captured_address,
-                "departure_transition": "30->31",
-                "current_revision": 31,
+                "departure_transition": "32->33",
+                "current_revision": 33,
                 "current_rejection": {
                     "code": "stale_object",
                     "state_witness_unchanged": True,
@@ -486,7 +486,7 @@ def _run_live(
         session = server.GameSession(
             trace_dir,
             id_factory=lambda kind: f"authored-authority-{kind}",
-            clock=lambda: "2026-07-17T00:00:00+00:00",
+            clock=lambda: FIXED_TIME,
             villain_offer_policy=_FrozenVillainPolicy(decisions),
             capture_authority_evidence=True,
         )
@@ -630,7 +630,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
+        AUTHORITY_RECEIPT_PATH.relative_to(ROOT).as_posix(),
         "content/semantic/current/setups.json",
         "managym/academy/curated_pack.py",
         "conformance/authored_match_parity.py",

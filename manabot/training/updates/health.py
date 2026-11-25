@@ -1,40 +1,32 @@
 """Local numerical health, independent of tracker availability and RNG.
 
-Batch measurements cover every collected row (`batch_health`). An
-`OptimizerHealth` is the player's `StepRecorder` (`manabot.backends.torch.learner`): passed
-to `gradient_step`, it counts steps and samples gradient and parameter detail,
-including the critic readout's share, at iteration 1 and every 25th iteration.
-Safety checks run on every step, observed or not; absent samples remain absent.
+Batch measurements cover every collected row. A learner reports each optimizer
+step through `StepRecorder`. The player's `OptimizerHealth` samples gradient
+norms and parameter displacement on the first step of iteration 1 and every
+25th iteration. Finiteness checks run on every step.
 """
 
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import AbstractContextManager, contextmanager
-from typing import Any, TypedDict
+from contextlib import AbstractContextManager, contextmanager, nullcontext
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
 from manabot.infra.profiler import Profiler
-from manabot.training.rollout.actions import PackedActions
-from manabot.training.updates.backend import UpdateBackend
+
+if TYPE_CHECKING:
+    from manabot.training.rollout.actions import PackedActions
+    from manabot.training.updates.backend import UpdateBackend
 
 HEALTH_INTERVAL = 25
+# Only these policy parameters are exclusive to the critic in every aggregation.
+CRITIC_READOUT_PREFIXES = ("value_head.", "value_readout.")
 
 
-class NumericalHealth(TypedDict, total=False):
-    legal_logit_gap_max: float
-    legal_probability_min: float
-    legal_underflow_count: int
-    nonfinite_count: int
-    forced_rows: int
-    zero_advantage_rows: int
-    actor_rows: int
-    critic_rows: int
-    empty_actor_batch: int
-    optimizer_steps: int
-    skipped_steps: int
-    rejected_steps: int
-    sampled_steps: int
+class StepSample(TypedDict, total=False):
+    """Measurements supplied by a learner as they become available during a step."""
+
     gradient_norm_before: float
     gradient_norm_after: float
     # Pre-clip norm over critic-only parameters (value_head, value_readout).
@@ -50,11 +42,79 @@ class NumericalHealth(TypedDict, total=False):
     frozen_parameter_tensors: int
     parameter_delta_l2: float
     parameter_relative_delta: float
+
+
+class StepRecorder(Protocol):
+    """Observe optimizer steps without changing the loss, step or RNG.
+
+    `track(section)` times "Backward and gradient clipping" and "Optimizer
+    step". Each ends at a finite check that already waits for the device.
+    `rejecting()` wraps the whole step, so it sees every `NumericalError`.
+    On a sampled step the learner reports clipped gradient measurements before
+    Adam, then parameter displacement after its finite check. Every completed
+    step calls `record_step`, including those without a sample.
+    """
+
+    def track(self, section: str) -> AbstractContextManager[object]: ...
+
+    def rejecting(self) -> AbstractContextManager[object]: ...
+
+    def sampling(self) -> bool: ...
+
+    def record_sample(self, sample: StepSample) -> None: ...
+
+    def record_step(self) -> None: ...
+
+
+class UnrecordedStep:
+    """A step without an observer performs no timing or sampling."""
+
+    def track(self, section: str) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def rejecting(self) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def sampling(self) -> bool:
+        return False
+
+    def record_sample(self, sample: StepSample) -> None:
+        pass
+
+    def record_step(self) -> None:
+        pass
+
+
+UNRECORDED_STEP: StepRecorder = UnrecordedStep()
+
+
+def parameter_movement(delta: float, scale: float) -> StepSample:
+    """A step's L2 displacement, relative to the pre-step weights when they are nonzero."""
+    return {
+        "parameter_delta_l2": delta,
+        "parameter_relative_delta": delta / scale if scale > 0 else delta,
+    }
+
+
+class NumericalHealth(StepSample, total=False):
+    legal_logit_gap_max: float
+    legal_probability_min: float
+    legal_underflow_count: int
+    nonfinite_count: int
+    forced_rows: int
+    zero_advantage_rows: int
+    actor_rows: int
+    critic_rows: int
+    empty_actor_batch: int
+    optimizer_steps: int
+    skipped_steps: int
+    rejected_steps: int
+    sampled_steps: int
     clip_fraction: float
 
 
 def batch_health(
-    action_data: PackedActions,
+    action_data: "PackedActions",
     advantages: NDArray[np.floating],
     selected: NDArray[np.bool_],
     *,
@@ -93,14 +153,11 @@ class OptimizerHealth:
     `check` rejects a detached or nonfinite objective; it waits for the loss on
     the device, so a caller timing its forward pass ends that timer there.
     `backend` supplies the objective check and numerical refusal type. Its
-    learner measures gradients and parameter changes; a backend whose step
-    takes no samples leaves that detail absent.
+    learner measures gradients and parameter changes.
     With a profiler, `gradient_step` times backward and the optimizer step
     separately; each ends at a finite check that already waits for the device,
     so timing adds no synchronization.
     """
-
-    _critic_norms: tuple[float, float | None] | None
 
     def __init__(
         self,
@@ -108,15 +165,13 @@ class OptimizerHealth:
         iteration: int,
         profiler: Profiler | None = None,
         *,
-        backend: UpdateBackend,
+        backend: "UpdateBackend",
     ) -> None:
-        self._measurements = backend.learner
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective
         self._refusal: type[Exception] = backend.rl.NumericalError
         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
         self.profiler = profiler or Profiler(enabled=False)
-        self._critic_norms = None
 
     def track(self, section: str) -> AbstractContextManager[object]:
         return self.profiler.track(section)
@@ -139,21 +194,12 @@ class OptimizerHealth:
         """Whether the coming step is this iteration's detailed sample."""
         return self.measure and not self.health["sampled_steps"]
 
-    def before_clip(self, model: Any) -> None:
-        self._critic_norms = self._measurements.critic_gradient_norms(model)
+    def record_sample(self, sample: StepSample) -> None:
+        self.health.update(sample)
+        self.health["sampled_steps"] = 1
 
-    def record_gradients(self, model: Any, norm_before: Any) -> None:
-        if self._critic_norms is None:
-            raise RuntimeError("record_gradients requires before_clip first")
-        self.health.update(
-            self._measurements.gradient_health(model, norm_before, self._critic_norms)
-        )
-        self._critic_norms = None
-
-    def record_step(self, parameters: list[Any], before: list[Any]) -> None:
+    def record_step(self) -> None:
         self.health["optimizer_steps"] += 1
-        if before:
-            self.health.update(self._measurements.parameter_health(parameters, before))
 
 
 @contextmanager

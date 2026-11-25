@@ -1,6 +1,8 @@
 """Native two-seat curriculum credit, post-update reassignment and exact recovery."""
 
+from pathlib import Path
 from typing import Literal
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -12,6 +14,7 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -19,6 +22,7 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
+from manabot.infra.run_settings import RunSettings
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -28,12 +32,22 @@ from manabot.training.rollout.adaptive import (
 )
 from manabot.training.rollout.collection import (
     Collector,
+    close_collector,
     collect,
     commit_adaptive,
     open_collector,
 )
+from manabot.training.state.game_errors import (
+    GameAttempt,
+    GameErrorLimit,
+    GameErrorPolicy,
+    GameErrorState,
+    settle,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
+from managym.recording import read_records
+from managym.statistics import read_statistics
 
 
 def _config(signal: Literal["U", "M", "E", "ME"] = "ME") -> AdaptiveConfig:
@@ -144,3 +158,115 @@ def test_mirror_roles_share_one_supporting_game_and_duplicates_are_rejected() ->
     with pytest.raises(ValueError, match="duplicate completed adaptive role"):
         sampler.commit(results, [])
     assert sampler.snapshot() == state
+
+
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_refill_preserves_game_records_and_statistics(
+    adaptive: bool,
+    tmp_path: Path,
+) -> None:
+    config = _config("U")
+    space = ObservationSpace()
+    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    scope = CaptureScope(
+        tmp_path / "failures", settings=RunSettings(record_games=1, statistics=True)
+    )
+    with (
+        capture_scope(scope),
+        patch.object(
+            torch,
+            "multinomial",
+            side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                (len(probs), 1), dtype=torch.long
+            ),
+        ),
+    ):
+        collector = open_collector(
+            space,
+            Match(config.cells[0]),
+            Reward(RewardConfig()),
+            num_envs=2,
+            seed=197,
+            opponent_mode="self",
+            games_per_stream=2,
+            adaptive=config if adaptive else None,
+            numerics=TorchCollectionSession(device="cpu", seed=197),
+        )
+        try:
+            batch = collect(collector, agent, 1)
+            assert collector.stats.games == 4 and batch.actions.size == 20
+            assert collector._env.current_agent_indices() == [-1, -1]
+            assert collector._env.current_game_seeds() == [199, 200]
+            assert collector._env.next_fresh_seeds() == [201, 202]
+            if adaptive:
+                batch.target_residuals = np.zeros_like(batch.values)
+                diagnostics = commit_adaptive(collector, batch)
+                assert diagnostics is not None and diagnostics["starts"] == 6
+                assert collector._env.current_game_seeds() == [201, 202]
+        finally:
+            close_collector(collector)
+    expected = [(0, 197), (0, 199), (1, 198), (1, 200)]
+    games = [
+        game
+        for record in read_records(tmp_path / "games")
+        for game in record.games
+        if game.actions
+    ]
+    assert sorted((game.stream, game.seed) for game in games) == expected
+    for game in games:
+        assert game.actions == [0] * 5
+        assert game.end is not None and (game.end.status, game.end.winner) == (
+            "complete",
+            0,
+        )
+    stats = [row for row in read_statistics(tmp_path / "statistics") if row.terminal]
+    assert sorted((row.stream, row.seed) for row in stats) == expected
+    for row in stats:
+        assert row.winner == 0
+        # Eight-land decks keep seven, draw one, and play every offered land.
+        assert sorted(
+            (
+                card.seat,
+                card.opening_copies,
+                card.drawn_copies,
+                card.opportunities,
+                card.selections,
+            )
+            for card in row.cards
+        ) == [(0, 7, 1, 2, 2), (1, 7, 1, 1, 1)]
+
+
+def test_adaptive_action_limit_reassigns_live_slot() -> None:
+    config = _config()
+    error_policy = GameErrorPolicy(max_game_actions=1, window=2, warmup=2)
+    attempts: list[GameAttempt] = []
+
+    def record(state: GameErrorState, attempt: GameAttempt) -> GameErrorState:
+        attempts.append(attempt)
+        return settle(state, attempt, error_policy)
+
+    space = ObservationSpace()
+    agent = ActorCritic(space, ModelConfig(attention_on=False, hidden_dim=8))
+    collector = open_collector(
+        space,
+        Match(config.cells[0]),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=197,
+        opponent_mode="self",
+        adaptive=config,
+        game_errors=error_policy,
+        record_attempt=record,
+        numerics=TorchCollectionSession(device="cpu", seed=197),
+    )
+    try:
+        with pytest.raises(GameErrorLimit):
+            collect(collector, agent, 1)
+        assert [(a.seed, a.outcome, a.discarded_samples) for a in attempts] == [
+            (197, "action_limit", 1),
+            (198, "action_limit", 1),
+        ]
+        assert collector.stats.games == collector.stats.learner_transitions == 0
+        assert collector._env.next_fresh_seeds() == [199]
+    finally:
+        close_collector(collector)

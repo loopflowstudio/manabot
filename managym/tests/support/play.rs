@@ -16,14 +16,22 @@ use managym::{
     },
     state::{
         game_object::{ObjectId, PermanentId, PlayerId},
+        payment::{How, Toward},
+        player::ManaPayment,
         target::Target,
         zone::ZoneType,
     },
 };
 
 use crate::support::{
-    game::{move_to_hand, Scenario},
-    inspect::{can_cast, find_owned_card, has_action, library_card, now, permanent_named},
+    game::{
+        clear_hand, five_color_setup, five_color_unfunded_setup, force_lands,
+        force_new_card_in_hand, move_to_hand, Scenario,
+    },
+    inspect::{
+        can_cast, card_of, find_owned_card, has_action, library, library_card, now, offered_cards,
+        permanent_named, tapped, top_spell, zone_of,
+    },
 };
 
 const MAX_SCENARIO_ACTIONS: usize = 20_000;
@@ -268,21 +276,29 @@ impl Scenario {
 
 /// Attack with `attacker` and decline every other offered attacker.
 pub fn attack_with(s: &mut Scenario, attacker: PermanentId) {
-    let mut attacked = false;
+    attack_with_group(s, &[attacker]);
+}
+
+/// Declare every requested attacker and decline the others.
+pub fn attack_with_group(s: &mut Scenario, attackers: &[PermanentId]) {
+    let mut declared = 0;
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let space = s.action_space().clone();
-        let index = space.actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker)
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if attackers.contains(permanent))
         });
         match index {
             Some(index) => {
                 s.step_action(index);
-                attacked = true;
+                declared += 1;
             }
             None => s.decline_attack(),
         }
     }
-    assert!(attacked, "expected to attack");
+    assert_eq!(
+        declared,
+        attackers.len(),
+        "expected every attacker to attack"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +379,67 @@ pub fn select_card(s: &mut Scenario, object: ObjectId) {
     );
 }
 
+/// A copy of the scenario in which the offered action at `index` was taken:
+/// one line of play from a choice, leaving `s` at the choice.
+pub fn fork_stepping(s: &Scenario, index: usize) -> Scenario {
+    let mut fork = s.clone();
+    fork.step_action(index);
+    fork
+}
+
+/// `fork_stepping` the first offered action matching `predicate`.
+pub fn fork_choosing(s: &Scenario, predicate: impl Fn(&Action) -> bool) -> Scenario {
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(predicate)
+        .unwrap_or_else(|| panic!("no such action is offered: {:?}", s.action_space()));
+    fork_stepping(s, index)
+}
+
+/// `fork_stepping` the selection of the offered `object`.
+pub fn fork_selecting(s: &Scenario, object: ObjectId) -> Scenario {
+    fork_choosing(
+        s,
+        |a| matches!(a, Action::SelectCard { object: offered, .. } if *offered == object),
+    )
+}
+
+/// Tap `source` for mana while a cost is being paid or at priority. A source
+/// whose mana carries a rider confirms its one output.
+pub fn tap_for_mana(s: &mut Scenario, source: PermanentId) {
+    choose(s, |a| {
+        matches!(
+            a,
+            Action::ActivateAbility { permanent, .. } | Action::TapForMana { permanent, .. }
+                if *permanent == source
+        )
+    });
+    if s.action_space().kind == ActionSpaceKind::Modal {
+        choose(s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    }
+}
+
+/// Finish a manual payment whose remaining choices do not matter: pay, then
+/// spend the first unit offered until the spell is cast.
+pub fn pay_rest(s: &mut Scenario) {
+    let stack = s.game().state.stack_objects.len();
+    for _ in 0..32 {
+        if s.game().state.stack_objects.len() > stack {
+            return;
+        }
+        let pay = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PayCost { .. }))
+            .unwrap_or(0);
+        s.step_action(pay);
+    }
+    panic!("the payment did not finish: {:?}", s.action_space());
+}
+
 pub fn target_opponent(s: &mut Scenario) {
     choose(s, |a| {
         matches!(
@@ -386,6 +463,15 @@ pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     let id = move_to_hand(s, name);
     cast_card(s, id);
     now(s, id)
+}
+
+pub fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
+    let clone = cast(s, "Clone");
+    spend_colorless(s);
+    resolve_top(s);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+    clone
 }
 
 /// Cast `id` from whichever zone currently permits it, refreshing priority.
@@ -415,6 +501,162 @@ pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
         .state
         .permanent_of(now(s, id))
         .expect("land entered")
+}
+
+/// Play player 0's two-color land `name`, which enters tapped, and check it
+/// pays a one-colored-pip spell of each color in `colors` and of no other.
+/// `entered` settles and checks whatever the land does as it enters.
+pub fn tapped_dual_land_pays_either_color(
+    name: &str,
+    colors: &str,
+    entered: impl Fn(&mut Scenario, PermanentId),
+) {
+    let spells = [
+        ('W', "Healer's Hawk"),
+        ('U', "Wind Drake"),
+        ('B', "Typhoid Rats"),
+        ('R', "Raging Goblin"),
+        ('G', "Llanowar Elves"),
+    ];
+    for (color, spell) in spells {
+        let mut s = five_color_setup(&[name, spell]);
+        let land = play_land(&mut s, name);
+        assert!(tapped(&s, land), "{name} enters tapped");
+        entered(&mut s, land);
+        // Wind Drake is {2}{U}: the pool pays its generic part.
+        s.set_player_mana_pool(0, if color == 'U' { "2" } else { "0" });
+        let id = move_to_hand(&mut s, spell);
+        assert!(!castable(&mut s, id), "{name} is tapped");
+        s.game_mut().state.permanents[land].as_mut().unwrap().tapped = false;
+        assert_eq!(
+            castable(&mut s, id),
+            colors.contains(color),
+            "{name} for {color}"
+        );
+        if colors.contains(color) {
+            cast_card(&mut s, id);
+            settle(&mut s);
+            assert!(tapped(&s, land), "{name} pays {color}");
+            assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        }
+    }
+}
+
+/// A Temple is a `tapped_dual_land_pays_either_color` that scries 1 as it
+/// enters: the top card stays, or goes to the bottom, as chosen.
+pub fn temple_scries_one_and_pays_either_color(name: &str, colors: &str) {
+    for bottom in [false, true] {
+        tapped_dual_land_pays_either_color(name, colors, |s, _| {
+            pass_until(s, ActionSpaceKind::Scry);
+            let before = library(s, 0);
+            assert_eq!(s.action_space().actions.len(), 2);
+            choose(
+                s,
+                |a| matches!(a, Action::ScryCard { to_bottom, .. } if *to_bottom == bottom),
+            );
+            settle(s);
+            let mut expected = before;
+            if bottom {
+                expected.rotate_right(1);
+            }
+            assert_eq!(library(s, 0), expected, "{name}");
+        });
+    }
+}
+
+/// Cast the red spell `name`, whose additional cost is "discard a card", with
+/// `mountains` for its mana, and return it settled. The discard is player 0's
+/// pick under either payment setting, from a Gray Ogre and a Hill Giant and
+/// never the spell itself; the Giant is discarded and the receipt names it.
+pub fn cast_discarding_a_chosen_card(name: &str, mountains: usize, auto: bool) -> Scenario {
+    let mut s = five_color_unfunded_setup(&[name, "Gray Ogre", "Hill Giant"]);
+    force_lands(&mut s, 0, "Mountain", mountains);
+    if auto {
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    }
+    clear_hand(&mut s, 0);
+    let spell = force_new_card_in_hand(&mut s, 0, name);
+    assert!(!castable(&mut s, spell), "no other card to discard");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let giant = force_new_card_in_hand(&mut s, 0, "Hill Giant");
+    assert!(castable(&mut s, spell));
+    cast_card(&mut s, spell);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Discard,
+        "auto={auto}"
+    );
+    let mut offered = offered_cards(&s);
+    offered.sort();
+    let mut expected = vec![ogre, giant];
+    expected.sort();
+    assert_eq!(offered, expected);
+    assert!(!has_action(&s, |a| matches!(a, Action::PayCost { .. })));
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(
+        context.instruction.contains("to cast this spell"),
+        "{}",
+        context.instruction
+    );
+    let fork = fork_selecting(&s, ogre);
+    assert_eq!(zone_of(&fork, ogre), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&fork, giant), Some(ZoneType::Hand));
+    // The Mountains pay the rest without a further choice.
+    select_card(&mut s, giant);
+    assert_eq!(zone_of(&s, giant), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
+    let cast = top_spell(&s);
+    assert_eq!(usize::from(cast.spent.total()), mountains);
+    assert_eq!(
+        cast.spent
+            .contributed(How::Discarded, Toward::Printed)
+            .count(),
+        1
+    );
+    settle(&mut s);
+    s
+}
+
+/// `name` has flash: player 0 may cast it while a spell is on the stack, where
+/// a Gray Ogre may not be cast.
+pub fn casts_at_instant_speed(name: &str) {
+    let mut s = five_color_unfunded_setup(&[name, "Gray Ogre"]);
+    force_lands(&mut s, 0, "Mountain", 8);
+    force_lands(&mut s, 0, "Plains", 8);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let first = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let second = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let flashed = force_new_card_in_hand(&mut s, 0, name);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, first);
+    assert!(!s.game().state.stack_objects.is_empty());
+    assert!(can_cast(&s, flashed));
+    assert!(!can_cast(&s, second));
+}
+
+/// The creature `name` pays {1}, from one `land`, and itself to destroy an
+/// artifact or enchantment: it leaves as the cost is paid, and a creature is
+/// no target.
+pub fn sacrifices_itself_to_destroy_an_artifact(name: &str, land: &str) {
+    let mut s = five_color_unfunded_setup(&[name, "Sol Ring", "Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, name);
+    let source_card = card_of(&s, source);
+    force_lands(&mut s, 0, land, 1);
+    let target = s.force_permanent_on_battlefield(1, "Sol Ring");
+    let target_card = card_of(&s, target);
+    let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    activate(&mut s, source, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(!has_action(&s, |a| {
+        matches!(a, Action::ChooseTarget { target: Target::Permanent(id), .. } if *id == other)
+    }));
+    assert!(s.choose_target(Target::Permanent(target)));
+    assert_eq!(zone_of(&s, source_card), Some(ZoneType::Graveyard));
+    assert_eq!(s.untapped_permanents_named(0, land), 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target_card), Some(ZoneType::Graveyard));
+    assert!(s.game().state.permanents[other].is_some());
 }
 
 /// Like `cast`, but the copy may already be in player 0's hand.
@@ -514,7 +756,23 @@ pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
 /// authority, pass once if it triggered, and `settle`.
 pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_object(id, ZoneType::Battlefield);
+    move_and_settle(s, id, ZoneType::Battlefield)
+}
+
+/// Move player 0's library copy onto the battlefield through the zone-change
+/// authority and stop at its entry trigger's target choice. Returns the
+/// library appearance; `now` follows it to the battlefield.
+pub fn enter_until_target(s: &mut Scenario, name: &str) -> ObjectId {
+    let id = library_card(s, 0, name);
+    crate::support::game::move_card(s, id, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+    id
+}
+
+/// Resolve any triggers from moving the card to its destination.
+pub fn move_and_settle(s: &mut Scenario, id: ObjectId, zone: ZoneType) -> ObjectId {
+    crate::support::game::move_card(s, id, zone);
     s.game_mut().scenario_refresh_priority().unwrap();
     if !s.game().state.pending_triggers.is_empty() {
         s.pass_priority();
@@ -526,6 +784,20 @@ pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
 // ---------------------------------------------------------------------------
 // Passing and resolving
 // ---------------------------------------------------------------------------
+
+/// Player 0 casts a Lightning Bolt at `target` (floating {R} when its pool
+/// is empty) and both players pass, so it resolves; triggers it causes wait
+/// for the caller.
+pub fn bolt(s: &mut Scenario, target: PermanentId) {
+    if s.game().state.players[0].mana_pool.total() == 0 {
+        s.set_player_mana_pool(0, "R");
+    }
+    let card = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    cast_card(s, card);
+    assert!(s.choose_target(Target::Permanent(target)));
+    s.pass_priority();
+    s.pass_priority();
+}
 
 /// Both players pass priority once.
 pub fn resolve_top(s: &mut Scenario) {
@@ -618,8 +890,11 @@ pub fn resolve_until_priority(s: &mut Scenario) {
 
 /// Commit the chosen legal action through the public semantic Command API,
 /// checking that a fork commits identically, the source is untouched until
-/// it commits, and the spent Command is then stale.
-pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
+/// it commits, and the spent Command is then stale. Return the committed fork.
+pub fn command(
+    s: &mut Scenario,
+    predicate: impl Fn(&Action) -> bool,
+) -> (Scenario, managym::decision::Command) {
     use managym::{decision::Command, search_state::witness};
     let index = s
         .action_space()
@@ -644,5 +919,50 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
     assert!(
         s.game_mut().execute_semantic_command(&command).is_err(),
         "stale Command rejected"
+    );
+    assert_eq!(
+        witness(s.game()),
+        witness(&fork),
+        "stale Command changed state"
+    );
+    (Scenario { game: fork }, command)
+}
+
+/// Answer the topmost stacked ability with a scenario permanent's counter
+/// ability.
+pub fn counter_stacked_ability(s: &mut Scenario) {
+    use managym::state::{
+        ability::{Effect, ObjectSelector, TargetSpec},
+        card::ActivatedAbilityDefinition,
+    };
+    let top = Target::StackAbility(s.game().state.stack_objects.last().unwrap().id());
+    let seat = s.action_space().player.unwrap().0;
+    let source = s.force_permanent_on_battlefield(seat, "Gray Ogre");
+    let object = card_of(s, source);
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            effects: vec![Effect::CounterAbility {
+                what: ObjectSelector::Target(TargetSpec::Ability),
+            }],
+            ..Default::default()
+        });
+    activate(s, source, 0);
+    assert!(crate::support::inspect::offered_targets(s).contains(&top));
+    assert!(s.choose_target(top));
+    settle(s);
+}
+
+/// Select a printed spell on the card's current appearance.
+pub fn cast_profile(
+    s: &mut Scenario,
+    object: ObjectId,
+    profile: managym::state::card::SpellProfile,
+) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let object = now(s, object);
+    choose(
+        s,
+        |action| matches!(action, Action::CastSpell { object: legal, profile: offered, .. } if *legal == object && *offered == profile),
     );
 }

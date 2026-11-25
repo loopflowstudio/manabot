@@ -76,7 +76,7 @@ def fixture_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
 
 def fixture_observation() -> dict[str, np.ndarray]:
     # Use the policy's allocation contract, including versioned fact capacity.
-    observation = ObservationSpace().encoder.allocate(1)
+    observation = ObservationSpace().allocate(1)
     observation["action_focus"].fill(-1)
     observation["agent_player_valid"].fill(1)
     observation["opponent_player_valid"].fill(1)

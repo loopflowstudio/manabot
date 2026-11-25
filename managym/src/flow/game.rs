@@ -1,10 +1,11 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use crate::state::card::SpellProfile;
 use crate::state::player::{ManaFloats, ManaPayment};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ops::{Deref, DerefMut},
 };
 
@@ -18,10 +19,11 @@ use crate::{
         combat::CombatState,
         decision::SuspendedResolution,
         event::{EventLedger, GameEvent},
+        payment::Payment,
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        turn::TurnState,
+        turn::{DamageHistory, TurnState},
     },
     state::{
         card::{ActivatedAbilityDefinition, CardDefId},
@@ -30,15 +32,70 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::Mana,
-        permanent::{CounterKind, Permanent},
-        stack_object::StackObject,
+        mana::ManaPool,
+        permanent::{CounterKind, Permanent, SpellEntry},
+        stack_object::{SpellLki, StackObject},
         zone::{ZoneManager, ZoneType},
     },
 };
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum GameProcedure {
+    OpeningHands(crate::flow::opening::OpeningHands),
+    Playing,
+    Finished(GameOutcome),
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+#[serde(untagged)]
+pub enum GameOutcome {
+    Losses {
+        losses: [LossCauses; 2],
+    },
+    Victory {
+        winner: PlayerId,
+    },
+    /// Neither player won. `mandatory_loop`: the game repeated mandatory
+    /// actions with no way to stop (CR 104.4b).
+    Draw {
+        mandatory_loop: bool,
+    },
+}
+
+/// Loss conditions committed for one seat.
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
+pub struct LossCauses {
+    pub life_total: bool,
+    pub deck_empty: bool,
+    pub poison: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub instructed: bool,
+}
+
+impl LossCauses {
+    pub fn any(self) -> bool {
+        self.life_total || self.deck_empty || self.poison || self.instructed
+    }
+
+    /// Single-reason projection for Env clients, preserving empty-draw precedence.
+    pub fn reason(self) -> Option<&'static str> {
+        if self.deck_empty {
+            Some("deck_empty")
+        } else if self.life_total {
+            Some("life_total")
+        } else if self.poison {
+            Some("poison")
+        } else if self.instructed {
+            Some("instructed_loss")
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub procedure: GameProcedure,
     pub disclosure: crate::state::player::DecklistDisclosure,
     /// Immutable physical cards, in deal order, including both sideboards.
     pub cards: CardVec,
@@ -50,41 +107,88 @@ pub struct GameState {
     pub object_to_permanent: ObjectVec<Option<PermanentId>>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
+    /// Each spell that has left the stack, as it last existed there.
+    pub spell_lki: BTreeMap<ObjectId, SpellLki>,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
+    /// Physical appearances whose library rank was observed or chosen since the
+    /// last rules shuffle. Private branch sampling reads these, rules play does not.
+    pub(crate) library_order_pins: Box<[BTreeSet<ObjectId>; 2]>,
     pub turn: TurnState,
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
-    pub combat: Option<CombatState>,
-    pub mana_cache: [Option<Mana>; 2],
+    pub combat: Option<Box<CombatState>>,
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
-    pub trigger_placement: Option<TriggerPlacement>,
+    pub trigger_placement: Option<Box<TriggerPlacement>>,
     /// Delayed triggered abilities (CR 603.7) waiting for their events, in
     /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Counters on objects off the battlefield (CR 122.1: "exile it with a
+    /// stash counter on it"), by exact appearance; a permanent's are on its
+    /// `Permanent`. A zone change ends the appearance and its counters (CR
+    /// 400.7), so only live objects have entries.
+    pub object_counters: BTreeMap<ObjectId, crate::state::permanent::Counters>,
     /// Continuous effects from resolved spells and abilities, in timestamp
     /// order (`state::effect`).
     pub effects: crate::state::effect::EffectRecords,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
-    pub cast_permissions: CastPermissions,
+    pub cast_permissions: Box<CastPermissions>,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
+    /// Effect waiting for its announced spell to commit (CR 608.2g).
+    pub cast_caller: Option<Box<SuspendedResolution>>,
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
 }
 
 impl GameState {
+    pub fn opening(&self) -> Option<&crate::flow::opening::OpeningHands> {
+        match &self.procedure {
+            GameProcedure::OpeningHands(opening) => Some(opening),
+            _ => None,
+        }
+    }
+
+    pub fn loss(&self, seat: usize) -> Option<LossCauses> {
+        match self.procedure {
+            GameProcedure::Finished(GameOutcome::Losses { losses }) if losses[seat].any() => {
+                Some(losses[seat])
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_game_over(&self) -> bool {
+        matches!(self.procedure, GameProcedure::Finished(_))
+    }
+
+    /// The game ended in a draw by a mandatory loop (CR 104.4b).
+    pub fn mandatory_loop_draw(&self) -> bool {
+        matches!(
+            self.procedure,
+            GameProcedure::Finished(GameOutcome::Draw {
+                mandatory_loop: true
+            })
+        )
+    }
+
     /// Put the same appearance in a zone without a zone change. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
     pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+        if self.zones.zone_of(object) == Some(ZoneType::Library) {
+            self.library_order_pins[self.objects[object.slot()].owner.0].remove(&object);
+        }
         self.zones.place(&self.objects, object, holder, zone);
+        if zone == ZoneType::Library {
+            self.library_order_pins[holder.0].insert(object);
+        }
     }
 
     /// Materialize hidden-zone contents, retaining transient occupants and order.
@@ -104,6 +208,17 @@ impl GameState {
         &self,
     ) -> impl Iterator<Item = (ObjectId, &crate::state::game_object::Object)> {
         self.zones.latest().zip(self.objects.iter())
+    }
+
+    /// Cards still in the exile appearances produced by this source's moves.
+    pub(crate) fn exiled_with(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        self.exile_links
+            .iter()
+            .filter(move |link| {
+                link.source == source
+                    && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+            })
+            .map(|link| link.exiled_object)
     }
 
     /// `object` while it still names an object in a zone (CR 400.7).
@@ -180,6 +295,14 @@ impl GameState {
             .flatten()
     }
 
+    /// Casting choices and payment belong to this exact battlefield appearance.
+    pub(crate) fn spell_entry(&self, object: ObjectId) -> Option<&SpellEntry> {
+        self.permanents[self.permanent_of(object)?]
+            .as_ref()?
+            .spell_entry
+            .as_deref()
+    }
+
     /// The object the card behind `object` is now: a test follows one card
     /// across zones with it. A token or copy stays the object it was.
     #[cfg(test)]
@@ -240,59 +363,49 @@ pub enum ActivationSource {
 /// when unset so ordinary casts keep their shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CastChoices {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exile_instead_of_graveyard: bool,
+    #[serde(rename = "adventure", skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route: Option<crate::flow::cast_permission::PlayRoute>,
+    /// Casting via flashback replaces any departure from the stack with exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
+    /// Cast from a prepared copy: a prepared spell (Codie). Read from the
+    /// preparation grant while the copy is still in exile.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    /// The caster chose or needed the printed permission to cast with flash.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flash_surcharge: bool,
     /// The optional additional cost (kicker, or a waterbend additional cost)
     /// is paid (CR 702.33).
     pub kicked: bool,
     /// The announced value of X (CR 107.3, 601.2b).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
-    /// Cast without paying its mana cost (CR 118.9), as an effect directs;
-    /// timing and zone permissions don't apply (CR 608.2g).
+    /// Cast without paying its mana cost (CR 118.9): a resolving effect's
+    /// free offer or a permission such as Omniscience.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
-    /// Cast, paying its costs, as a resolving effect directs ("you may
-    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    /// Cast as a resolving effect directs, paid or free: timing and zone
+    /// permissions don't apply (CR 608.2g), so no flash surcharge is owed.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub resolving: bool,
 }
 
-/// A fully announced spell or activation waiting for selected costs.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum Payment {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    },
-    Activation {
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        /// The announced value of X (CR 602.2b, 601.2b).
-        #[serde(skip_serializing_if = "crate::state::is_zero")]
-        x: u8,
-    },
-}
-
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
-/// waterbend ability walks Waterbend until the cost is paid.
+/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> Pay; activating an
+/// ability walks ActivationX? -> ActivatedTarget? -> Pay.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
-    ManaPayment {
+    /// Paying the announced cost: the step is `payment.owed[0]`
+    /// (`Game::paying`). Choosing a payment for it shrinks or removes that
+    /// component and appends to `payment.receipt`.
+    Pay {
         player: PlayerId,
         payment: Box<Payment>,
-        sacrifice: Option<PermanentId>,
-        alternative: Option<crate::state::mana::ManaCost>,
-    },
-    SacrificePayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-        cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
     /// `chosen` holds those already selected, clause by clause, and
@@ -305,30 +418,6 @@ pub enum PendingChoice {
         chosen: Vec<Target>,
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         requirement: usize,
-    },
-    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
-    /// control" activation cost.
-    TapPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
-        #[serde(skip_serializing_if = "is_single_tap")]
-        remaining: usize,
-    },
-    /// Choosing the card from hand to exile for a spell's alternative cost
-    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
-    /// payment.
-    ExileFromHandPayment {
-        player: PlayerId,
-        payment: Box<Payment>,
-    },
-    /// Choosing the card to discard for a "Discard a card" activation cost.
-    DiscardPayment {
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        targets: Vec<Target>,
     },
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
@@ -375,26 +464,6 @@ pub enum PendingChoice {
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },
-    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
-    /// at a time until their total power reaches the crew number.
-    Crew {
-        player: PlayerId,
-        permanent: PermanentId,
-        ability_index: usize,
-        /// Power still owed; the cost is paid once it reaches zero.
-        remaining_power: i32,
-    },
-    /// Paying a waterbend cost (an ability's, or a spell's additional or
-    /// alternative cost): tap artifacts/creatures for {1} each, then pay the
-    /// remainder with mana.
-    Waterbend {
-        player: PlayerId,
-        payment: Box<Payment>,
-        /// Generic mana further taps may still pay.
-        remaining_generic: u8,
-        /// Generic mana already paid by taps.
-        tapped: u8,
-    },
 }
 
 /// Counters for the data `Game` derives from state and caches in
@@ -415,6 +484,8 @@ pub enum PendingChoice {
 ///   `characteristics`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
+/// - `life`: both life totals, which a static condition may read ("as long
+///   as you have 25 or more life"); compared like `mana_pools`.
 ///
 /// `DerefMut` on `TrackedState` advances every counter. Its typed accessors
 /// write fields no derivation reads, or advance only the counters their
@@ -427,6 +498,7 @@ pub(crate) struct Revisions {
     pub mana_pools: u64,
     pub tapped: u64,
     pub triggers: u64,
+    pub life: u64,
 }
 
 /// `GameState` with the `Revisions` its derived caches key on. State can
@@ -463,6 +535,10 @@ impl TrackedState {
         &mut self.state.players[player.0].known_library
     }
 
+    pub(crate) fn library_order_pins_mut(&mut self, owner: PlayerId) -> &mut BTreeSet<ObjectId> {
+        &mut self.state.library_order_pins[owner.0]
+    }
+
     pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
         &mut self.state.priority
     }
@@ -489,11 +565,6 @@ impl TrackedState {
         &mut self.state.observation_events
     }
 
-    /// The producible-mana cache has its own invalidation (`invalidate_mana_cache`).
-    pub(crate) fn mana_cache_mut(&mut self) -> &mut [Option<Mana>; 2] {
-        &mut self.state.mana_cache
-    }
-
     pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<StackObject> {
         &mut self.state.stack_objects
     }
@@ -502,7 +573,7 @@ impl TrackedState {
         &mut self.state.pending_triggers
     }
 
-    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<TriggerPlacement> {
+    pub(crate) fn trigger_placement_mut(&mut self) -> &mut Option<Box<TriggerPlacement>> {
         &mut self.state.trigger_placement
     }
 
@@ -514,15 +585,49 @@ impl TrackedState {
         &mut self.state.delayed_triggers
     }
 
+    pub(crate) fn cast_caller_mut(&mut self) -> &mut Option<Box<SuspendedResolution>> {
+        &mut self.state.cast_caller
+    }
+
     pub(crate) fn suspended_decision_mut(&mut self) -> &mut Option<SuspendedResolution> {
         &mut self.state.suspended_decision
+    }
+
+    /// At stable priority with an empty stack only delayed instructions can
+    /// still refer to a departed form. Pending decisions never reach this point.
+    pub(crate) fn release_resolved_forms(&mut self) {
+        if self.state.stack_objects.is_empty() {
+            let delayed = &self.state.delayed_triggers;
+            let still_watched = |object| {
+                delayed.iter().any(|trigger| {
+                    trigger.source_identity.object() == object
+                        || trigger
+                            .remembered
+                            .iter()
+                            .any(|binding| binding.object == object)
+                })
+            };
+            self.state.object_lki.retain_forms(still_watched);
+            let zones = &self.state.zones;
+            self.state.exile_links.retain(|link| {
+                zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+                    && (zones.zone_of(link.source) == Some(ZoneType::Battlefield)
+                        || still_watched(link.source))
+            });
+        }
     }
 
     pub(crate) fn object_lki_mut(&mut self) -> &mut ObjectLkiLog {
         &mut self.state.object_lki
     }
 
+    pub(crate) fn spell_lki_mut(&mut self) -> &mut BTreeMap<ObjectId, SpellLki> {
+        &mut self.state.spell_lki
+    }
+
+    /// Life totals feed `life` only.
     pub(crate) fn life_mut(&mut self, player: PlayerId) -> Option<&mut i32> {
+        self.revisions.life += 1;
         self.state
             .players
             .get_mut(player.0)
@@ -577,16 +682,24 @@ impl TrackedState {
     }
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
-    pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+    /// Returns whether the permanent went from tapped to untapped.
+    pub(crate) fn untap(&mut self, permanent_id: PermanentId) -> bool {
         self.revisions.tapped += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
-            return;
+            return false;
         };
         let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
-        permanent.untap();
+        let untapped = permanent.untap();
         if removes_stun {
             self.revisions.characteristics += 1;
         }
+        untapped
+    }
+
+    /// Trigger matching and resolution read hits directly. Neither the layer
+    /// board nor the index of potential trigger sources depends on them.
+    pub(crate) fn damage_history_mut(&mut self) -> &mut DamageHistory {
+        &mut self.state.turn.damage_pairs
     }
 
     pub(crate) fn mark_damage(&mut self, permanent_id: PermanentId, amount: i32, deathtouch: bool) {
@@ -616,6 +729,8 @@ impl TrackedState {
         }
     }
 
+    /// Record an activation against its once-per-object or once-each-turn
+    /// limit; an unlimited ability records nothing.
     pub(crate) fn record_activation(
         &mut self,
         permanent_id: PermanentId,
@@ -629,19 +744,19 @@ impl TrackedState {
 
     // Mana pools feed `mana_pools` only.
 
-    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].mana_pool
     }
 
     /// The ordinary and until-end-of-combat pools together.
-    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut Mana, &mut Mana) {
+    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
         self.revisions.mana_pools += 1;
         let player = &mut self.state.players[player.0];
         (&mut player.mana_pool, &mut player.combat_mana_pool)
     }
 
-    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut Mana {
+    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
         self.revisions.mana_pools += 1;
         &mut self.state.players[player.0].combat_mana_pool
     }
@@ -654,8 +769,8 @@ impl TrackedState {
         let cast = self.state.turn.spells_cast[player.0]
             .last_mut()
             .expect("a recorded cast");
-        debug_assert_eq!(cast.slot(), spell.slot(), "the cast's own spell");
-        *cast = spell;
+        debug_assert_eq!(cast.object.slot(), spell.slot(), "the cast's own spell");
+        cast.object = spell;
     }
 
     // Zone changes feed the derivations that read the zones they touch.
@@ -686,6 +801,7 @@ impl TrackedState {
             self.state.zones.is_latest(object),
             "retired mint appearance"
         );
+        self.state.object_counters.remove(&object);
         self.state.objects[object.slot()].mint_appearance(from_zone, to_zone, entry_copy);
         self.state
             .zones
@@ -718,8 +834,8 @@ impl DerefMut for TrackedState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CombatDamagePass {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CombatDamagePass {
     FirstStrike,
     NormalWithFirstStrike,
     Normal,
@@ -772,6 +888,24 @@ pub struct Game {
     pub(crate) skipped_priority_passes: usize,
 }
 
+// Inline footprint on 64-bit hosts. Remeasure heap traffic and live banks
+// with bench_footprint before raising a ceiling. Object and Permanent repeat
+// for each occupied row. TrackedState allows 40 bytes for its five
+// revision counters in addition to the GameState ceiling.
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    use crate::state::game_object::Object;
+    use std::mem::size_of;
+
+    assert!(size_of::<Object>() <= 40);
+    assert!(size_of::<Permanent>() <= 168);
+    assert!(size_of::<GameState>() <= 4096);
+    assert!(size_of::<TrackedState>() <= 4136);
+    assert!(size_of::<Game>() <= 5248);
+    let cache_limit = if cfg!(debug_assertions) { 112 } else { 104 };
+    assert!(size_of::<DerivedCache>() <= cache_limit);
+};
+
 impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
@@ -805,8 +939,4 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
-}
-
-fn is_single_tap(remaining: &usize) -> bool {
-    *remaining == 1
 }

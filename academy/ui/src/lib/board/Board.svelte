@@ -22,6 +22,7 @@
   import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
+  import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, Travel } from './motion';
   import { region } from './region';
@@ -30,9 +31,9 @@
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
-  import { addressOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
+  import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
-  import { primaryLabel, promptLine } from './prompt';
+  import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
@@ -41,7 +42,7 @@
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
   import { shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, handStrip, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem } from './view';
+  import { CARD_RATIO, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -198,7 +199,7 @@
     if (drafting) saveDraft(frame, draft);
   });
 
-  const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names) : null);
+  const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names, committedOf(frame)) : null);
   const declarable = $derived(new Map((preview?.declarable ?? []).map(creature => [creature.creature.entity, creature])));
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
@@ -206,10 +207,11 @@
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     if (preview.kind === 'attackers') {
-      for (const id of declarable.keys()) {
+      for (const [id, creature] of declarable) {
         const drafted = draft.attackers.includes(id);
         places.set(id, drafted ? 'in' : 'can');
-        notes.set(id, drafted ? 'in the drafted attack; press to leave it out' : 'can attack; press to add it to the attack');
+        notes.set(id, drafted ? 'in the drafted attack; press to leave it out'
+          : creature.must_attack ? 'must attack; press to add it to the attack' : 'can attack; press to add it to the attack');
       }
     } else {
       const blocks = new Map(draft.blocks);
@@ -330,7 +332,9 @@
   const primaryText = $derived(primaryLabel(frame, view, payOffer && previewing === payOffer ? answered : null));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.steps.length}…`
-      : promptLine(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
+      : promptLine(frame, view));
+  const hint = $derived(drafting || running ? null
+    : promptHint(frame, view, payPlanned !== null && previewing === payOffer && payPlanned.sources.size > 0));
   const paymentNote = $derived(payOffer && previewing === payOffer
     ? payment?.error ? 'The payment preview is unavailable; Pay still pays automatically.'
       : answered && answered.state !== 'exact' && answered.state !== 'not_applicable' ? answered.explanation : null
@@ -567,11 +571,14 @@
 
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
-  const cards = $derived(new Map([boardProjection.agent, boardProjection.opponent]
-    .flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).map(card => [card.id, card])));
+  const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
+
+  const castTerms = $derived(permissionTerms(shownCard,
+    id => permanents.get(id)?.name ?? `permanent #${id}`,
+    id => id === boardProjection.agent.id ? you.name : opponent.name));
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
@@ -586,6 +593,12 @@
     point(card ? board.hand.find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
+  /** A tray card inspects as itself: its rules text, counters and permissions. */
+  function previewTray(item: TrayItem, element: HTMLElement | null): void {
+    if (!item.card) { previewName(element ? item.name : null, element); return; }
+    point(element ? [item.placed] : null);
+    show(element ? { name: item.card.name, text: item.card.text_box ?? null, permanent: null, card: item.card.id } : null, element);
+  }
   function previewName(name: string | null, element: HTMLElement | null): void {
     show(name ? { name, text: textOf(name), permanent: null, card: null } : null, element);
   }
@@ -596,7 +609,7 @@
   /** Rules text for a name in the log, from any card of that name this viewer can see. */
   function textOf(name: string): string | null {
     const players = [boardProjection.agent, boardProjection.opponent];
-    const card = players.flatMap(player => [...player.hand, ...player.graveyard, ...player.exile, ...player.stack]).find(candidate => candidate.name === name);
+    const card = inspectableCards(players).find(candidate => candidate.name === name);
     const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
     return card?.text_box ?? permanent?.text_box ?? null;
   }
@@ -733,7 +746,7 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}</p>
+    <p class="turn" data-testid="turn-number">Turn {boardProjection.turn.turn_number} · {yourTurn ? 'yours' : 'theirs'}{#if boardProjection.turn.creature_died_this_turn} · A creature died this turn{/if}</p>
     <div class="right">
       {#if connection}
         <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
@@ -802,7 +815,7 @@
               <div class="tray-card">
                 <BoardCard name={item.name} width={104} offers={[item.placed]} {live}
                   onactivate={() => act(item.placed)}
-                  onpreview={element => previewName(element ? item.name : null, element)} />
+                  onpreview={element => previewTray(item, element)} />
                 <span class="type-caption">{item.placed.offer.label}</span>
               </div>
             {:else}
@@ -817,7 +830,7 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={result !== undefined} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove} reading={beat && !result ? reading : undefined}
@@ -921,7 +934,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrolling region must be reachable by keyboard) -->
   <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
     {#if docked}
-      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard}
+      <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms}
         blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
       <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
@@ -931,7 +944,7 @@
 
 {#if inspectMode === 'float' && hovered}
   <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
-    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard}
+    <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms}
       blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}

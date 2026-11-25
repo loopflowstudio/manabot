@@ -1,15 +1,12 @@
-"""Layer payloads reach the native and Python encoders, the text and the policy."""
+"""Layer payloads reach the native encoder, the text and the policy."""
 
 import json
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -18,7 +15,9 @@ from manabot.backends.torch.checkpoint import (
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,
@@ -30,6 +29,8 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
 )
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
@@ -87,24 +88,12 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
             admitted.registration, path, backend=TORCH_BACKEND
         )
         assert paths["layer-fixture"] == str(path)
-        assert selected is not None and selected.encoder.config == recipe.observation
+        assert selected is not None and selected.config == recipe.observation
     finally:
         close_collector(collector)
 
 
-def _assert_encoder_parity(
-    env: managym.Env, obs: managym.Observation, space: ObservationSpace
-) -> dict[str, NDArray[np.float32]]:
-    config = space.encoder.config
-    reference = space.encode(obs)
-    native = env.encode_observation(obs, config.max_facts)
-    assert reference.keys() == native.keys()
-    for key, value in reference.items():
-        np.testing.assert_array_equal(value, native[key], err_msg=key)
-    return reference
-
-
-def test_layer_input_native_python_text_forward_backward_and_reload(
+def test_layer_input_text_forward_backward_and_reload(
     tmp_path: Path,
 ) -> None:
     torch.set_num_threads(1)
@@ -116,7 +105,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     )
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = _assert_encoder_parity(env, obs, space)
+    reference = encode_observation(space, obs)
     assert reference["effect_details"].shape == (4096, 3)
     assert (reference["effect_details"][:, 0] >= 11).any()
     assert "exile" in capture_text_decision(env).text.lower()
@@ -134,7 +123,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     path = tmp_path / "layer.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
-    assert restored_space.encoder.config == config
+    assert restored_space.config == config
     for expected, actual in zip(
         model(device_input(model, values)),
         restored(device_input(restored, values)),
@@ -143,7 +132,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
         torch.testing.assert_close(expected, actual)
 
 
-def test_layer_colors_counter_order_and_signed_program_payload_parity() -> None:
+def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
     payload = json.loads(obs.toJSON())
@@ -154,46 +143,33 @@ def test_layer_colors_counter_order_and_signed_program_payload_parity() -> None:
     payload["shared_effects"][0]["effect"]["program"] = [[4, -17], [4, 2**31 - 1]]
     observed = managym.Observation.from_json(json.dumps(payload))
     config = ObservationConfig()
-    encoded = _assert_encoder_parity(env, observed, ObservationSpace(config))
+    encoded = encode_observation(ObservationSpace(config), observed)
     assert set(encoded["facts"][:, 1]) >= {12, 13}
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
 
-def test_scalar_and_vector_buffers_match_python_encoding() -> None:
-    config = ObservationConfig()
-    space = ObservationSpace(config)
-    env = kellan_upgrade_root()
-    obs = env.observation_for_player(env.current_agent_index())
-    buffers = space.encoder.allocate()
-    env.encode_observation_into(obs, buffers)
-    expected = space.encode(obs)
-    for key in expected:
-        np.testing.assert_array_equal(buffers[key], expected[key])
-    vector_buffers = space.encoder.allocate(1)
-    vector_buffers.update(
-        rewards=np.zeros(1, dtype=np.float64),
-        terminated=np.zeros(1, dtype=np.uint8),
-        truncated=np.zeros(1, dtype=np.uint8),
-    )
+def test_vector_buffers_match_scalar_encoding() -> None:
+    space = ObservationSpace(ObservationConfig())
+    vector_buffers = allocate_vector_buffers(space, 1)
     players = [
         managym.PlayerConfig(name, {"Mountain": 20, "Gray Ogre": 20})
         for name in ("a", "b")
     ]
     vector = managym.VectorEnv(num_envs=1, seed=23)
-    vector.set_buffers(vector_buffers)
+    vector.set_buffers(vector_buffers, layout=space.layout)
     vector.reset_all(players)
     vector.reset_seeds_into_buffers([23])
     scalar = managym.Env(seed=23)
     scalar.reset(players)
     observed = scalar.observation_for_player(scalar.current_agent_index())
-    expected = space.encode(observed)
+    expected = encode_observation(space, observed)
     for key in expected:
         np.testing.assert_array_equal(
             vector_buffers[key][0], expected[key], err_msg=key
         )
 
 
-def test_captured_continuation_program_reaches_native_python_and_policy() -> None:
+def test_captured_continuation_program_reaches_input_and_policy() -> None:
     torch.set_num_threads(1)
     env = kellan_trigger_root(("Lightning Bolt",))
     for prefix, name in (("Cast ", "Lightning Bolt"), ("Target ", "Kellan")):
@@ -221,7 +197,7 @@ def test_captured_continuation_program_reaches_native_python_and_policy() -> Non
     assert "captured program" in capture_text_decision(env).text.lower()
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = _assert_encoder_parity(env, obs, space)
+    reference = encode_observation(space, obs)
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))
@@ -255,7 +231,7 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
 ) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(268)
-    encoder = FactEncoder(8)
+    encoder = FactEncoder(8, numeric=5)
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))
         encoder.output.bias.fill_(0.2)
@@ -317,7 +293,7 @@ def test_fact_admission_rejects_malformed_rows(column: int, value: float) -> Non
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(244)
-    encoder = FactEncoder(8)
+    encoder = FactEncoder(8, numeric=5)
     # A trained output must expose the representation; fresh fact output is zero.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(8))
@@ -389,7 +365,7 @@ def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients()
 ):
     torch.set_num_threads(1)
     torch.manual_seed(17)
-    encoder = SharedEffectEncoder(16)
+    encoder = SharedEffectEncoder(16, numeric=8)
     objects = torch.randn(2, 4, 16, requires_grad=True)
     headers = torch.zeros(2, 128, 18)
     details = torch.zeros(2, 4096, 3)

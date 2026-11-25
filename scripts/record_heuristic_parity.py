@@ -18,6 +18,7 @@ import tempfile
 from types import SimpleNamespace
 from typing import Any
 
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from tests.sim.test_heuristic import _players
 
@@ -35,6 +36,18 @@ class _ObservationAdapter:
         return getattr(self._raw, name)
 
 
+def _backfill_supertype(value: Any) -> Any:
+    if isinstance(value, dict):
+        if "predicate" in value and isinstance(value["predicate"], dict):
+            value["predicate"].setdefault("supertype", None)
+        for v in value.values():
+            _backfill_supertype(v)
+    elif isinstance(value, list):
+        for v in value:
+            _backfill_supertype(v)
+    return value
+
+
 def main() -> None:
     source = subprocess.check_output(["git", "show", REFERENCE], cwd=ROOT)
     original = json.loads(
@@ -48,6 +61,10 @@ def main() -> None:
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
+        raw_definitions = module._definitions
+        module._definitions = lambda: [
+            _backfill_supertype(d) for d in raw_definitions()
+        ]
         receipt = {
             "reference": REFERENCE,
             "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -63,6 +80,7 @@ def main() -> None:
         for case in original["cases"]:
             env = managym.Env(seed=case["seed"])
             raw, _ = env.reset(_players(case["decks"]))
+            raw = keep_opening_hands(env, raw)
             players = [
                 module.HeuristicPlayer(max_actions=case["max_actions"])
                 for _ in range(2)

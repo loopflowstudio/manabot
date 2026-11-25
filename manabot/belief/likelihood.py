@@ -12,9 +12,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from manabot.belief.range import BeliefState
-from manabot.env.observation import ObservationBuffers
+from manabot.env.observation import ObservationBuffers, encode_observation
 from manabot.infra.identity import file_sha256
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import PolicyLoader
 from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
@@ -86,7 +86,7 @@ class FrozenPolicyLikelihood:
         checkpoint: str | Path,
         *,
         expected_sha256: str,
-        backend: Backend,
+        backend: PolicyLoader,
         batch_size: int = 256,
         device: str = "cpu",
         counterfactual_seed: int = 0,
@@ -185,7 +185,7 @@ class FrozenPolicyLikelihood:
                     hypothesis.semantic_decision_frame_json()
                 )
                 matching, legal_count = _matching_offer_indexes(frame, commitment)
-                encoded_batch.append(self.obs_space.encode(raw))
+                encoded_batch.append(encode_observation(self.obs_space, raw))
                 matching_batch.append(matching)
                 legal_batch.append(legal_count)
             del hypothesis
