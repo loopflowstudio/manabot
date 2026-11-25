@@ -4,6 +4,7 @@ use super::*;
 use crate::agent::ability_description::cost_description;
 use crate::experience::{PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
+use crate::flow::payment::AnnouncedSpell;
 use crate::flow::payment::CostComponent;
 use crate::flow::play::CastAuthority;
 
@@ -118,13 +119,14 @@ impl Game {
     ) -> Vec<CostComponent> {
         self.cost_components(
             player,
-            &Operation::Spell {
+            &Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode: None,
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
-            },
+                target_shares: Vec::new(),
+            }),
         )
     }
 

@@ -4043,6 +4043,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 "iteration" => {
                     frame.iteration = Some(TargetIteration {
                         remaining: vec![ResolutionTarget {
+                            share: 0,
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
@@ -5568,6 +5569,7 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
     let mut frame = EffectFrame::new(player, vec![]);
     frame.source_identity = Some(AbilitySource::new(source, Some(source)));
     frame.targets = vec![ResolutionTarget {
+        share: 0,
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,
@@ -6178,13 +6180,16 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                 for card in casts {
                     let object = fixture_card(&game, player, card);
                     let payment = crate::flow::payment::Payment {
-                        operation: crate::flow::payment::Operation::Spell {
-                            object,
-                            cast: Default::default(),
-                            mode: None,
-                            targets: Vec::new(),
-                            target_req_indices: Vec::new(),
-                        },
+                        operation: crate::flow::payment::Operation::Spell(
+                            crate::flow::payment::AnnouncedSpell {
+                                object,
+                                cast: Default::default(),
+                                mode: None,
+                                targets: Vec::new(),
+                                target_req_indices: Vec::new(),
+                                target_shares: Vec::new(),
+                            },
+                        ),
                         owed: Vec::new(),
                         receipt: Default::default(),
                     };

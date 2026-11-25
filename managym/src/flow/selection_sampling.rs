@@ -459,6 +459,11 @@ impl Game {
                 .map(|binding| binding.object),
         );
         if let Some(suspended) = &self.state.suspended_decision {
+            for decision in suspended.decisions() {
+                if let Decision::ChoosePile { face_up, .. } = decision {
+                    pinned.extend(face_up);
+                }
+            }
             for (owner, object_ids) in suspended
                 .decisions()
                 .filter_map(Decision::inspected_library_objects)
@@ -1042,6 +1047,15 @@ impl Game {
             } => {
                 rebind(looked.iter_mut(), &rebinding.objects);
                 rebind(graveyard.iter_mut(), &rebinding.objects);
+            }
+            Decision::PartitionPiles {
+                looked, face_up, ..
+            }
+            | Decision::ChoosePile {
+                looked, face_up, ..
+            } => {
+                rebind(looked.iter_mut(), &rebinding.objects);
+                rebind(face_up.iter_mut(), &rebinding.objects);
             }
             Decision::ManifestDread { looked, .. } | Decision::LookAndSelect { looked, .. } => {
                 rebind(looked.iter_mut(), &rebinding.objects)

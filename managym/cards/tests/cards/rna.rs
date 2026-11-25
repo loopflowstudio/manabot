@@ -82,3 +82,103 @@ fn archway_angel_gains_two_life_per_gate_in_one_event() {
     s.assert_life(0, 26);
     assert_eq!(s.game().state.turn.history[0].life_gains, 1);
 }
+
+#[test]
+fn biogenic_upgrade_announces_shares_and_loses_only_an_illegal_targets_share() {
+    use crate::support::{
+        game::move_card,
+        inspect::{card_of, counters, mode_labels, top_spell},
+        play::{cast, choose_mode, settle},
+    };
+    use managym::{
+        agent::action::ActionType,
+        state::{game_object::Target, player::ManaPayment, zone::ZoneType},
+    };
+    for (shares, remove) in [
+        (&[3][..], false),
+        (&[2, 1], false),
+        (&[1, 2], true),
+        (&[1, 1, 1], false),
+    ] {
+        let mut s = five_color_setup(&["Gray Ogre", "Hill Giant", "Biogenic Upgrade"]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        let creatures = [
+            s.force_permanent_on_battlefield(0, "Gray Ogre"),
+            s.force_permanent_on_battlefield(1, "Hill Giant"),
+            s.force_permanent_on_battlefield(0, "Hill Giant"),
+        ];
+        cast(&mut s, "Biogenic Upgrade");
+        for id in &creatures[..shares.len()] {
+            assert!(s.choose_target(Target::Permanent(*id)));
+        }
+        if shares.len() < 3 {
+            assert!(s.take_action_by_type(ActionType::DeclineChoice));
+        }
+        for (i, share) in shares.iter().enumerate() {
+            let labels = mode_labels(&s);
+            assert!(labels
+                .iter()
+                .any(|label| label.contains(&format!("Assign {share} to "))
+                    && label.contains(&format!("target {}", i + 1))));
+            assert!(labels.len() <= 2);
+            choose_mode(&mut s, usize::from(*share));
+        }
+        for viewer in [0, 1] {
+            let observation = managym::agent::observation::Observation::for_player(
+                s.game(),
+                managym::state::game_object::PlayerId(viewer),
+            );
+            let label = observation.stack_objects[0].description.as_deref().unwrap();
+            for (i, share) in shares.iter().enumerate() {
+                let name = if i == 0 { "Gray Ogre" } else { "Hill Giant" };
+                assert!(label.contains(&format!("{share} assigned to {name}")));
+            }
+        }
+        assert_eq!(top_spell(&s).target_shares, shares);
+        if remove {
+            let gone = card_of(&s, creatures[0]);
+            move_card(&mut s, gone, ZoneType::Hand);
+        }
+        settle(&mut s);
+        for (i, share) in shares.iter().enumerate().skip(usize::from(remove)) {
+            assert_eq!(counters(&s, creatures[i]), 2 * i32::from(*share));
+        }
+    }
+}
+
+#[test]
+fn biogenic_upgrade_copy_keeps_the_division_when_retargeted() {
+    use crate::support::{
+        inspect::{counters, top_spell},
+        play::{cast, choose_mode, settle},
+    };
+    use managym::{
+        agent::action::ActionType,
+        state::{game_object::Target, player::ManaPayment},
+    };
+    let mut s = five_color_setup(&[
+        "Gray Ogre",
+        "Hill Giant",
+        "Biogenic Upgrade",
+        "Teach by Example",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let b = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let c = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Biogenic Upgrade");
+    for id in [a, b] {
+        assert!(s.choose_target(Target::Permanent(id)));
+    }
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    choose_mode(&mut s, 2);
+    choose_mode(&mut s, 1);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(c)));
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    assert_eq!(top_spell(&s).target_shares, [2, 1]);
+    settle(&mut s);
+    assert_eq!([a, b, c].map(|id| counters(&s, id)), [4, 6, 4]);
+}

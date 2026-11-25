@@ -20,7 +20,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionCastOffer},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{bargain_cost, Help, Operation, Payment},
+        payment::{bargain_cost, AnnouncedSpell, Help, Operation, Payment},
         proposed_event::{EntryFace, EventBinding, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
@@ -1417,16 +1417,54 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        self.begin_payment(
-            player,
-            Operation::Spell {
-                object,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-            },
-        )
+        let division = cast.spell(&self.state[object]).division;
+        let spell = AnnouncedSpell {
+            object,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+            target_shares: Vec::new(),
+        };
+        if division > 0 && !spell.targets.is_empty() {
+            self.pending_choice = Some(PendingChoice::DivideAmongTargets {
+                player,
+                spell: Box::new(spell),
+            });
+            Ok(())
+        } else {
+            self.begin_payment(player, Operation::Spell(spell))
+        }
+    }
+
+    pub(crate) fn divide_target_action(
+        &mut self,
+        player: PlayerId,
+        amount: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::DivideAmongTargets {
+            player: chooser,
+            spell,
+        }) = self.pending_choice.as_mut()
+        else {
+            return Err(AgentError("no target division pending".into()));
+        };
+        if *chooser != player
+            || !spell
+                .shares(spell.cast.spell(&self.state[spell.object]).division)
+                .contains(&amount)
+        {
+            return Err(AgentError("illegal target share".into()));
+        }
+        spell.target_shares.push(amount as u8);
+        if spell.target_shares.len() == spell.targets.len() {
+            let Some(PendingChoice::DivideAmongTargets { spell, .. }) = self.pending_choice.take()
+            else {
+                unreachable!()
+            };
+            self.begin_payment(player, Operation::Spell(*spell))?;
+        }
+        Ok(())
     }
 
     /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
@@ -1465,13 +1503,14 @@ impl Game {
     }
 
     pub(super) fn commit_spell_payment(&mut self, player: PlayerId, payment: Payment) {
-        let Operation::Spell {
+        let Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode,
             targets,
             target_req_indices,
-        } = payment.operation
+            target_shares,
+        }) = payment.operation
         else {
             unreachable!("activation prepared before costs")
         };
@@ -1494,6 +1533,7 @@ impl Game {
             unreachable!("just pushed spell")
         };
         let paid = u32::from(payment.receipt.total());
+        spell.target_shares = target_shares;
         spell.mode = mode;
         spell.spent = payment.receipt;
         let total = &mut self.state.turn.history[player.0].mana_spent_casting;

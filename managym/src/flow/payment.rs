@@ -27,18 +27,40 @@ use crate::{
     },
 };
 
+/// A spell's choices through targeting, division and payment (CR 601.2b–h).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AnnouncedSpell {
+    #[serde(rename = "card")]
+    pub object: ObjectId,
+    #[serde(flatten)]
+    pub cast: CastChoices,
+    pub mode: Option<usize>,
+    pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_shares: Vec<u8>,
+}
+
+impl AnnouncedSpell {
+    /// Each target gets at least one. The last gets the remaining amount.
+    pub fn shares(&self, total: u8) -> std::ops::RangeInclusive<usize> {
+        let remaining = usize::from(total)
+            - self
+                .target_shares
+                .iter()
+                .copied()
+                .map(usize::from)
+                .sum::<usize>();
+        let later = self.targets.len() - self.target_shares.len() - 1;
+        let minimum = if later == 0 { remaining } else { 1 };
+        minimum..=remaining - later
+    }
+}
+
 /// A fully announced spell or activation (CR 601.2a-e, 602.2).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Operation {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    },
+    Spell(AnnouncedSpell),
     Activation {
         source: ActivationSource,
         ability_index: usize,
@@ -53,7 +75,7 @@ impl Operation {
     /// The spell being cast, if this is a cast.
     pub fn spell(&self) -> Option<ObjectId> {
         match self {
-            Self::Spell { object, .. } => Some(*object),
+            Self::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Self::Activation { .. } => None,
         }
     }
@@ -424,7 +446,7 @@ impl Game {
         player: PlayerId,
         payment: &Payment,
     ) -> Vec<ObjectId> {
-        let Operation::Spell { object, cast, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object, cast, .. }) = payment.operation else {
             unreachable!("an exile alternative pays for a spell")
         };
         self.exile_alternative_objects(player, object, cast)
@@ -448,7 +470,7 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id)),
             );
         }
-        let Operation::Spell { object: spell, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object: spell, .. }) = payment.operation else {
             unreachable!("forage pays for a spell")
         };
         let mut graveyard = self.graveyard_payers(player, spell);
@@ -596,12 +618,12 @@ impl Game {
     ) -> Vec<CostComponent> {
         let mut owed = Vec::new();
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 targets,
                 ..
-            } => {
+            }) => {
                 if self.uses_exile_alternative(*object, *cast) {
                     owed.push(CostComponent::ExileFromHand);
                 }
@@ -1193,7 +1215,7 @@ impl Game {
         // The source's own discard or exile; its sacrifice is on the receipt.
         let mut source_costs = Vec::new();
         let activated = match &payment.operation {
-            Operation::Spell { .. } => None,
+            Operation::Spell(_) => None,
             Operation::Activation {
                 source,
                 ability_index,
@@ -1356,7 +1378,7 @@ impl Game {
     /// The card whose spell or ability `payment` pays for.
     pub(crate) fn payment_source_object(&self, operation: &Operation) -> Option<ObjectId> {
         match operation {
-            Operation::Spell { object, .. } => Some(*object),
+            Operation::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Operation::Activation {
                 source: ActivationSource::Card(card),
                 ..

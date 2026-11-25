@@ -821,6 +821,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
         Effect::ManifestDread => "Effect::ManifestDread",
+        Effect::SeparatePiles { .. } => "Effect::SeparatePiles",
         Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
         Effect::RevealLibraryTop => "Effect::RevealLibraryTop",
@@ -877,7 +878,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 99;
+const EFFECT_VARIANTS: usize = 100;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -1002,6 +1003,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::Scry { count: 1 },
         Effect::ManifestDread,
+        Effect::SeparatePiles { look: 5 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             max_mana_value: None,
@@ -6739,4 +6741,16 @@ fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
             expected
         );
     }
+}
+
+#[test]
+fn foundations_piles_and_target_shares_are_in_the_card_programs() {
+    for (name, kind) in [
+        ("Curator of Destinies", "Effect::SeparatePiles"),
+        ("Biogenic Upgrade", "EffectValue::TargetShare"),
+    ] {
+        assert!(tokens_of(&card_definition(name)).contains(&(TokenKind::Variant, name_value(kind))));
+    }
+    assert!(tokens_of(&card_definition("Biogenic Upgrade"))
+        .contains(&(TokenKind::Field, name_value("division"))));
 }

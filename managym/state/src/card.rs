@@ -1384,6 +1384,8 @@ pub struct PrintedCharacteristics {
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
     pub spell_effects: Vec<Effect>,
+    /// Total divided among chosen targets as this spell is cast (CR 601.2d).
+    pub division: u8,
     /// Explicit targeting clauses for multi-target or effect-decoupled
     /// spells. When empty, a single requirement is derived from the first
     /// targeted spell effect.
@@ -1506,6 +1508,8 @@ struct DefinitionWire<'a> {
     triggered_mana_abilities: &'a Vec<TriggeredManaAbility>,
     activated_abilities: &'a Vec<ActivatedAbilityDefinition>,
     spell_effects: &'a Vec<Effect>,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    division: u8,
     targeting: &'a Vec<TargetRequirement>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     additional_costs: &'a Vec<AdditionalCost>,
@@ -1558,6 +1562,7 @@ impl PrintedCharacteristics {
             triggered_mana_abilities: &self.triggered_mana_abilities,
             activated_abilities: &self.activated_abilities,
             spell_effects: &self.spell_effects,
+            division: self.division,
             targeting: &self.targeting,
             additional_costs: &self.additional_costs,
             keywords: &self.keywords,

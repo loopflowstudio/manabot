@@ -12879,5 +12879,33 @@
     "keywords": [],
     "oracle_text": "This land enters tapped. As it enters, choose a color.\n{T}: Add one mana of the chosen color.",
     "colors": []
+  },
+  "Curator of Destinies": {
+    "name": "Curator of Destinies",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Sphinx",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "This spell can't be countered.\nFlying\nWhen this creature enters, look at the top five cards of your library and separate them into a face-down pile and a face-up pile. An opponent chooses one of those piles. Put that pile into your hand and the other into your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Biogenic Upgrade": {
+    "name": "Biogenic Upgrade",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Double"
+    ],
+    "oracle_text": "Distribute three +1/+1 counters among one, two, or three target creatures, then double the number of +1/+1 counters on each of those creatures.",
+    "colors": [
+      "G"
+    ]
   }
 }

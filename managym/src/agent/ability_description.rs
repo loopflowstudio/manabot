@@ -1234,6 +1234,7 @@ fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
+        EffectValue::TargetShare => "the share assigned to that target".into(),
         EffectValue::TriggerDamage => "the damage dealt".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::DeathCountersMinus { kind, subtract } => format!(
@@ -1572,6 +1573,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         ManifestDread => "Manifest dread".into(),
+        SeparatePiles { look } => format!("Separate the top {look} cards into face-up and face-down piles. An opponent chooses one for your hand. Put the other in your graveyard."),
         Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { random_order, reveal, to_battlefield, look, min_select, max_select, predicate, max_mana_value } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {}{} from among them {} and the rest on the bottom in {} order",if *reveal { "Reveal" } else { "Look at" },value_description(triggering, look),predicate_description(predicate,"cards"), max_mana_value.as_ref().map(|value| format!(" with mana value at most {}", value_description(triggering, value))).unwrap_or_default(), if *to_battlefield { "onto the battlefield" } else { "into your hand" }, if *random_order { "a random" } else { "your chosen" }),
         RevealLibraryTop => "Reveal the top card of your library".into(),

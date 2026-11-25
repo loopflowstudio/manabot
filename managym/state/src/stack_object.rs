@@ -25,6 +25,9 @@ pub struct SpellOnStack {
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
     pub targets: Vec<Target>,
+    /// Positional CR 601.2d division. Copies retain it through retargeting.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_shares: Vec<u8>,
     /// Which targeting requirement (index into the card's
     /// `target_requirements()`) each entry of `targets` was chosen for.
     pub target_req_indices: Vec<usize>,

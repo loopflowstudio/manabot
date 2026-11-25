@@ -1260,7 +1260,7 @@ impl Observation {
             decision_memory: game.decision_memory[agent_player.0].clone(),
             recent_events: recent_events
                 .into_iter()
-                .flat_map(|event| Self::event_data(game, event))
+                .flat_map(|event| Self::event_data(game, event, agent_player))
                 .collect(),
         };
 
@@ -1556,6 +1556,15 @@ impl Observation {
             let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
+            for decision in suspended.decisions() {
+                if let Decision::ChoosePile { owner, looked, .. } = decision {
+                    if *owner == perspective {
+                        for object in looked {
+                            add_object(*object, ZoneType::Library);
+                        }
+                    }
+                }
+            }
             for decision in suspended.decisions().filter(|d| d.player() == perspective) {
                 let objects = match decision {
                     Decision::SearchNamed { owner, .. } => game
@@ -1993,6 +2002,16 @@ impl Observation {
                 _ => 0,
             },
             description: match stack_object {
+                StackObject::Spell(spell) if !spell.target_shares.is_empty() => Some(format!(
+                    "{} — {}",
+                    game.state[spell.object].name,
+                    super::effect_execution::division_description(
+                        game,
+                        &spell.targets,
+                        &spell.target_shares,
+                        viewer
+                    )
+                )),
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
@@ -2123,7 +2142,7 @@ impl Observation {
     /// battlefield is named by its permanent, never by the storage slot of
     /// the physical card it hides (CR 708.2), and a face-down permanent that
     /// moves to a hidden zone names no object.
-    pub(crate) fn event_data(game: &Game, event: &GameEvent) -> Vec<EventData> {
+    pub(crate) fn event_data(game: &Game, event: &GameEvent, viewer: PlayerId) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         use EventEntity::{Card, Object, Player};
 
@@ -2147,6 +2166,9 @@ impl Observation {
                 ..
             } => {
                 let hidden = *face_down
+                    || (*from == Some(ZoneType::Library)
+                        && *to == ZoneType::Hand
+                        && !game.shares_information(viewer, *controller))
                     || (from.is_none() && *to == ZoneType::Hand)
                     || (matches!(to, ZoneType::Hand | ZoneType::Library)
                         && departed
@@ -2502,6 +2524,10 @@ impl Observation {
                             .into_iter()
                             .collect()
                     }
+                    (
+                        Action::ChooseMode { .. },
+                        Some(Decision::PartitionPiles { looked, next, .. }),
+                    ) => return vec![game.observed_object_id(looked[*next])],
                     // An amount of combat damage is about the attacker
                     // assigning it and the blocker receiving it.
                     (
@@ -2526,6 +2552,10 @@ impl Observation {
                     .as_ref()
                     .and_then(|suspended| suspended.frame.source())
                     .or(match &game.pending_choice {
+                        Some(crate::flow::game::PendingChoice::DivideAmongTargets {
+                            spell,
+                            ..
+                        }) => game.target_object(spell.targets[spell.target_shares.len()]),
                         Some(crate::flow::game::PendingChoice::SpellMode {
                             object: object_id,
                             ..

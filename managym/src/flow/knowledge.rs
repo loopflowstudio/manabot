@@ -135,6 +135,20 @@ impl Game {
                 }
             }
         }
+        if let Some(suspended) = &self.state.suspended_decision {
+            for decision in suspended.decisions() {
+                if let Decision::ChoosePile {
+                    owner: pile_owner,
+                    face_up,
+                    ..
+                } = decision
+                {
+                    if *pile_owner == owner {
+                        facts.extend(self.library_positions_of(owner, face_up));
+                    }
+                }
+            }
+        }
         if facts.is_empty() {
             return Some(Vec::new());
         }

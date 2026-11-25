@@ -13,7 +13,7 @@ use crate::{
     flow::{
         decision::Decision,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        payment::{CostComponent, Operation, Payment, TapPayment},
+        payment::{AnnouncedSpell, CostComponent, Operation, Payment, TapPayment},
         play::CastAuthority,
     },
     state::{
@@ -363,6 +363,17 @@ impl Game {
     }
 
     fn mode_description(&self, mode: usize) -> Option<String> {
+        if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {
+            let target = spell.targets[spell.target_shares.len()];
+            let name = self
+                .target_object(target)
+                .map(|id| self.observed_object_name(id))
+                .unwrap_or_else(|| format!("{target:?}"));
+            return Some(format!(
+                "Assign {mode} to {name} (target {})",
+                spell.target_shares.len() + 1
+            ));
+        }
         match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
             Some(Decision::AssignCombatDamage {
                 attacker,
@@ -384,6 +395,32 @@ impl Game {
                 ))
             }
             _ if self.announces_x() => Some(format!("X = {mode}")),
+            Some(Decision::PartitionPiles { looked, next, .. }) => {
+                let pile = ["face-up", "face-down"].get(mode)?;
+                Some(format!(
+                    "Put {} in the {pile} pile",
+                    self.observed_object_name(looked[*next])
+                ))
+            }
+            Some(Decision::ChoosePile {
+                looked, face_up, ..
+            }) => Some(match mode {
+                0 if face_up.is_empty() => "Choose empty face-up pile".into(),
+                0 => format!(
+                    "Choose face-up pile ({})",
+                    face_up
+                        .iter()
+                        .map(|id| self.observed_object_name(*id))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                1 => {
+                    let count = looked.len() - face_up.len();
+                    let unit = if count == 1 { "card" } else { "cards" };
+                    format!("Choose face-down pile ({count} {unit})")
+                }
+                _ => return None,
+            }),
             Some(Decision::OrderMeldedCards { cards, .. }) => {
                 let card = self.state.cards[*cards.get(mode)?];
                 Some(format!(
@@ -910,13 +947,14 @@ impl Game {
                 ))
             .then_some(0);
         };
-        let operation = Operation::Spell {
+        let operation = Operation::Spell(AnnouncedSpell {
             object,
             cast,
             mode: None,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
-        };
+            target_shares: Vec::new(),
+        });
         (self
             .payment_candidates(player, &operation, additional)
             .into_iter()
@@ -970,6 +1008,25 @@ impl Game {
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
                     focus: Vec::new(),
+                })
+            }
+            PendingChoice::DivideAmongTargets { player, spell } => {
+                let target = spell.targets[spell.target_shares.len()];
+                Some(ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Modal,
+                    actions: spell
+                        .shares(spell.cast.spell(&self.state[spell.object]).division)
+                        .map(|mode| Action::ChooseMode {
+                            player: *player,
+                            mode,
+                        })
+                        .collect(),
+                    focus: self
+                        .target_object(target)
+                        .map(|object| self.observed_object_id(object))
+                        .into_iter()
+                        .collect(),
                 })
             }
             PendingChoice::SpellMode {
@@ -1396,6 +1453,14 @@ impl Game {
                     ) =>
             {
                 self.remove_counter_kind_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::DivideAmongTargets { .. })
+                ) =>
+            {
+                self.divide_target_action(*player, *mode)
             }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>

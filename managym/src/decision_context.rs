@@ -470,6 +470,7 @@ impl Game {
             },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::DivideAmongTargets { .. }) => ("target_shares", "Assign the indicated target its share. Every target must receive at least one."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
@@ -526,6 +527,8 @@ impl Game {
                 Decision::KeepCreatures { sacrifice: Some(_), .. } => ("keep_creatures", "Choose another creature you control to keep; you keep all but the stated number, and every creature not kept is then sacrificed."),
                 Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
+                Decision::PartitionPiles { .. } => ("partition_piles", "Put the indicated card into the face-up or face-down pile. Your opponent sees the face-up cards once the piles are complete."),
+                Decision::ChoosePile { .. } => ("choose_pile", "Choose which pile its owner puts into their hand. The other pile goes to their graveyard."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };
             view.stage = stage.into();

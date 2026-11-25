@@ -16,7 +16,7 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
-        payment::{CostComponent, Operation},
+        payment::{AnnouncedSpell, CostComponent, Operation},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -371,7 +371,8 @@ impl Game {
         };
         let (owner, zone) = (self.state[object].owner, self.state.zones.zone_of(object));
         suspended.decisions().any(|decision| {
-            self.shares_information(viewer, decision.player())
+            matches!(decision, Decision::ChoosePile { owner, looked, .. } if self.shares_information(viewer, *owner) && looked.contains(&object))
+                || self.shares_information(viewer, decision.player())
                 && (decision.revealed_objects().contains(&object)
                     || matches!(decision, Decision::SelectCards { from: Some(source), .. }
                         if source.owner == owner && Some(source.zone) == zone))
@@ -845,6 +846,16 @@ impl Game {
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
+            PendingChoice::DivideAmongTargets { spell, .. } => {
+                frame.source = self.object_reference(spell.object, viewer);
+                frame.kicked = spell.cast.kicked;
+                frame.spell_profile = spell_profile_code(spell.cast.profile);
+                frame.x = spell.cast.x;
+                frame.mode = spell.mode;
+                frame.targets =
+                    self.clause_targets(&spell.targets, &spell.target_req_indices, viewer);
+                super::effect_execution::project_division(self, spell, viewer, &mut frame, false);
+            }
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
@@ -965,6 +976,13 @@ impl Game {
             || self.is_game_over()
         {
             return;
+        }
+        if let Some(PendingChoice::DivideAmongTargets { spell, .. }) = &self.pending_choice {
+            let frame = frames
+                .iter_mut()
+                .find(|frame| frame.kind == 4)
+                .expect("announcing division");
+            super::effect_execution::project_division(self, spell, viewer, frame, true);
         }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
             let frame = frames
@@ -1100,14 +1118,14 @@ impl Game {
         frame: &mut ContinuationFrame,
     ) {
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
                 ..
-            } => {
+            }) => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
@@ -1132,7 +1150,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 36;
+pub const MAX_DECISION_CODE: u8 = 38;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1142,6 +1160,8 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::AssignCombatDamage { .. } => 32,
         Decision::OrderMeldedCards { .. } => 34,
         Decision::OrderEntryChoices { .. } => 35,
+        Decision::PartitionPiles { .. } => 37,
+        Decision::ChoosePile { .. } => 38,
         Decision::ChooseEntryValue { .. } => 36,
         Decision::OrderReplacement { .. } => 29,
         Decision::EnterAsCopy { .. } => 30,
@@ -1616,6 +1636,18 @@ mod tests {
                 player,
                 owner: player,
                 predicate: predicate.clone(),
+            },
+            Decision::PartitionPiles {
+                player,
+                looked: vec![],
+                next: 0,
+                face_up: vec![],
+            },
+            Decision::ChoosePile {
+                player,
+                owner: player,
+                looked: vec![],
+                face_up: vec![],
             },
             Decision::OpponentSplitsRevealed {
                 player,

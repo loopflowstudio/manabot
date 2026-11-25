@@ -274,6 +274,10 @@ targets still resolve.
 in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
 counter placement uses the former.
+A spell with a printed `division` assigns its total among the chosen targets
+before payment. The stack retains the shares in target order. Biogenic
+Upgrade places the announced counters in one batch, then reads the new
+counter counts for its doubling instruction.
 Graveyard targets
 carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;

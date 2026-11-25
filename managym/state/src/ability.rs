@@ -952,6 +952,8 @@ impl Aggregate {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum EffectValue {
+    /// The amount assigned to this target as the spell was cast.
+    TargetShare,
     Property {
         of: Box<ObjectSelector>,
         property: ObjectProperty,
@@ -1913,6 +1915,11 @@ pub enum Effect {
         count: usize,
     },
     ManifestDread,
+    /// Separate inspected cards into face-up and face-down piles. An opponent
+    /// chooses one for the controller's hand; the rest go to the graveyard.
+    SeparatePiles {
+        look: usize,
+    },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
     /// number of them into the graveyard, then order the kept cards on top.
     Surveil {
@@ -2680,6 +2687,7 @@ impl Effect {
             | Effect::FightLastTarget
             | Effect::Scry { .. }
             | Effect::ManifestDread
+            | Effect::SeparatePiles { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
             | Effect::RevealLibraryTop
@@ -3141,6 +3149,7 @@ impl EffectValue {
             | Self::X
             | Self::NegativeX
             | Self::TriggerDamage
+            | Self::TargetShare
             | Self::TriggeringAmount
             | Self::ExcessDamage
             | Self::LifeLostThisWay

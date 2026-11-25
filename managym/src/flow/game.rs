@@ -449,6 +449,11 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
+    /// CR 601.2d follows target selection and precedes determining the cost.
+    DivideAmongTargets {
+        player: PlayerId,
+        spell: Box<crate::flow::payment::AnnouncedSpell>,
+    },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {

@@ -635,6 +635,7 @@ impl Game {
                 exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
+                target_shares: Vec::new(),
                 target_req_indices,
                 kicked: cast.kicked,
                 x: cast.x,

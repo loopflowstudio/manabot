@@ -19,6 +19,7 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        curator_of_destinies(),
         fishing_pole(),
         ravenous_amulet(),
         hare_apparent(),
@@ -4018,6 +4019,31 @@ fn raise_the_past() -> CardDefinition {
                 false,
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn curator_of_destinies() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.curator_of_destinies",
+        scryfall_id: "9ff79da7-c3f7-4541-87a0-503544c699b5",
+        printed: PrintedCharacteristics {
+            name: "Curator of Destinies".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Sphinx".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::CantBeCountered],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
+                intervening_if: None,
+                effects: vec![Effect::SeparatePiles { look: 5 }],
+            }],
+            text_box: "This spell can't be countered.\nFlying\nWhen this creature enters, look at the top five cards of your library and separate them into a face-down pile and a face-up pile. An opponent chooses one of those piles. Put that pile into your hand and the other into your graveyard.".into(),
             ..Default::default()
         },
         ..Default::default()

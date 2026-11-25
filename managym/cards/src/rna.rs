@@ -1,16 +1,18 @@
 //! Ravnica Allegiance.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TriggerCondition, TriggerSubject,
+        Ability, Actor, Aggregate, Effect, EffectValue, ObjectProperty, ObjectSelector, Per,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     effect::Modification,
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![archway_angel(), gateway_sneak()]
+    vec![archway_angel(), gateway_sneak(), biogenic_upgrade()]
 }
 
 fn gateway_sneak() -> CardDefinition {
@@ -82,6 +84,34 @@ fn archway_angel() -> CardDefinition {
                 })],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn biogenic_upgrade() -> CardDefinition {
+    let counters = CounterKind::PlusOnePlusOne;
+    let targets = ObjectSelector::Targets(TargetSpec::Creature);
+    let counters_on_target = ObjectSelector::Target(TargetSpec::Creature)
+        .property(ObjectProperty::Counters(counters), Aggregate::Sum);
+    CardDefinition {
+        key: "rna.biogenic_upgrade",
+        scryfall_id: "0dd73fb2-453f-40b9-8beb-dfa99e6a706e",
+        printed: PrintedCharacteristics {
+            name: "Biogenic Upgrade".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            division: 3,
+            targeting: vec![TargetRequirement {
+                max: 3,
+                ..TargetRequirement::one(TargetSpec::Creature)
+            }],
+            spell_effects: vec![
+                Effect::put_counters(targets.clone(), counters, EffectValue::TargetShare),
+                Effect::put_counters(targets, counters, counters_on_target),
+            ],
+            text_box: "Distribute three +1/+1 counters among one, two, or three target creatures, then double the number of +1/+1 counters on each of those creatures.".into(),
             ..Default::default()
         },
         ..Default::default()

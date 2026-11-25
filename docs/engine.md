@@ -296,6 +296,13 @@ forgets the affected order. Public and private maps independently retain ten
 positions: eight nearest the top and two nearest the bottom among known facts.
 The owner reads their union, so private retention cannot erase a public fact.
 
+Curator of Destinies lets its controller look at the top five cards and
+assign each one to a pile. Either pile can be empty. When the split is
+complete, the opponent sees the face-up cards and the size of the face-down
+pile. The opponent chooses which pile goes into the controller’s hand. Face-up
+cards remain known there and face-down cards stay hidden. The other pile goes into the graveyard, where both players can
+see it.
+
 Facts never claim several possible locations. After a secret hand departure,
 each independent hand minimum decreases by one (to a minimum of zero). Seeing
 A, B and C, then returning two cards privately, therefore preserves no
@@ -1568,6 +1575,12 @@ the procedure there. New triggers wait until cleanup, after the active player
 discards and marked damage clears. If a player gets priority in cleanup,
 another cleanup step follows. Combat-only control ends when combat ends.
 Turn-long control applies to every cleanup discard that turn.
+
+When casting Biogenic Upgrade, choose one, two, or three creatures and announce
+how the three counters divide among them. Each target gets at least one.
+A copy keeps the amount assigned to each slot when its targets change.
+If a target becomes illegal, its share is lost. Each legal target receives its
+share, then doubles all its +1/+1 counters, including any it already had.
 
 The Dominion Bracelet locks its activation price using the equipped creature’s
 power. When several Bracelets grant that ability, each offer identifies the

@@ -108,6 +108,8 @@ impl FrameCompletion {
 /// chosen object as the final target. Presence is checked separately on use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ResolutionTarget {
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub share: u8,
     pub target: Target,
     pub requirement: usize,
     pub legal: bool,
@@ -705,6 +707,20 @@ pub enum Decision {
         owner: PlayerId,
         predicate: CardPredicate,
     },
+    /// During the private split, the next unanswered card is looked[next].
+    PartitionPiles {
+        player: PlayerId,
+        looked: Vec<ObjectId>,
+        next: usize,
+        face_up: Vec<ObjectId>,
+    },
+    /// The owner knows the inspected prefix. The chooser sees only face_up.
+    ChoosePile {
+        player: PlayerId,
+        owner: PlayerId,
+        looked: Vec<ObjectId>,
+        face_up: Vec<ObjectId>,
+    },
     /// An opponent chooses `remaining` more of `owner`'s `revealed` library
     /// cards for the graveyard; the rest enter tapped, then `owner` shuffles.
     OpponentSplitsRevealed {
@@ -823,6 +839,8 @@ impl Decision {
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
+            | Decision::PartitionPiles { player, .. }
+            | Decision::ChoosePile { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::Scry { player, .. }
             | Decision::ManifestDread { player, .. }
@@ -851,7 +869,13 @@ impl Decision {
     /// offers over an entire zone have a different membership authority.
     pub(crate) fn library_inspection(&self) -> Option<(PlayerId, &[ObjectId])> {
         match self {
-            Self::Scry { player, looked, .. }
+            Self::PartitionPiles { player, looked, .. }
+            | Self::ChoosePile {
+                owner: player,
+                looked,
+                ..
+            }
+            | Self::Scry { player, looked, .. }
             | Self::ManifestDread { player, looked }
             | Self::Surveil { player, looked, .. }
             | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
@@ -893,6 +917,8 @@ impl Decision {
             | Decision::ChooseToExile { .. }
             | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
+            Decision::PartitionPiles { looked, .. } => looked,
+            Decision::ChoosePile { face_up, .. } => face_up,
             Decision::Scry { looked, .. } => looked,
             Decision::OrderLibrary {
                 object_ids: objects,
@@ -2206,6 +2232,25 @@ impl Game {
                     })
                     .collect(),
             },
+            Decision::PartitionPiles { player, .. } | Decision::ChoosePile { player, .. } => {
+                let focus = match &suspended.decision {
+                    Decision::PartitionPiles { looked, next, .. } => {
+                        self.object_focus(&looked[*next..=*next])
+                    }
+                    _ => source_focus,
+                };
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    actions: (0..2)
+                        .map(|mode| Action::ChooseMode {
+                            player: *player,
+                            mode,
+                        })
+                        .collect(),
+                    focus,
+                }
+            }
             Decision::Modal { player, modes } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -3200,6 +3245,73 @@ impl Game {
                     }
                     _ => {}
                 }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::PartitionPiles {
+                    player,
+                    looked,
+                    next,
+                    face_up,
+                },
+                Action::ChooseMode { mode, .. },
+            ) if *mode < 2 => {
+                if *mode == 0 {
+                    face_up.push(looked[*next]);
+                }
+                *next += 1;
+                if *next == looked.len() {
+                    let owner = *player;
+                    // The choice reveals membership, never the original library order.
+                    face_up.sort_unstable_by_key(|id| (self.state[*id].definition_id, *id));
+                    for object in face_up.iter() {
+                        self.emit(GameEvent::CardRevealed {
+                            owner,
+                            definition: self.state[*object].definition_id,
+                        });
+                    }
+                    suspended.decision = Decision::ChoosePile {
+                        player: self.next_player(owner),
+                        owner,
+                        looked: std::mem::take(looked),
+                        face_up: std::mem::take(face_up),
+                    };
+                }
+                *self.state.suspended_decision_mut() = Some(suspended);
+                Ok(())
+            }
+            (
+                Decision::ChoosePile {
+                    looked, face_up, ..
+                },
+                Action::ChooseMode { mode, .. },
+            ) if *mode < 2 => {
+                let take_face_up = *mode == 0;
+                let events = looked.iter().map(|object| {
+                    let to = if face_up.contains(object) == take_face_up {
+                        ZoneType::Hand
+                    } else {
+                        ZoneType::Graveyard
+                    };
+                    self.zone_move_proposal(
+                        *object,
+                        to,
+                        ZoneEntry {
+                            inspected_library_departure: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+                suspended.frame.batch = Some(self.event_batch(
+                    EventBinding::Moved {
+                        linked: None,
+                        shuffle: false,
+                        library_end: None,
+                        reveal: take_face_up,
+                    },
+                    events,
+                ));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -4439,7 +4551,7 @@ mod learn_tests {
                 ..
             }
         ));
-        let reveal = Observation::event_data(&game, events[0]);
+        let reveal = Observation::event_data(&game, events[0], PlayerId(1));
         assert_eq!(reveal[0].event_type, EventType::CardRevealed as i32);
         assert_eq!(reveal[0].source_kind, EventEntityKind::Definition as i32);
         assert_eq!(reveal[0].source_id, definition.0 as i32);

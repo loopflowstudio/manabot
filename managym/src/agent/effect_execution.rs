@@ -21,7 +21,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game},
-        payment::{CostComponent, Operation, Payment},
+        payment::{AnnouncedSpell, CostComponent, Operation, Payment},
         proposed_event::{
             EntryFace, EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource,
             ZoneEntry,
@@ -112,6 +112,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "finish state-based actions",
     "grant index",
     "grantor",
+    "face-up pile",
+    "face-down pile size",
     "graveyard choices remaining",
     "if declined",
     "if none selected",
@@ -202,6 +204,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "source transforms",
     "spell",
     "target",
+    "target shares",
     "target clauses",
     "target eligibility",
     "this way",
@@ -359,6 +362,7 @@ impl<'a> Projection<'a> {
             self.field("X", &copy.spell.x);
             self.field("last known kicker", &copy.spell.kicked);
             self.field("mode", &copy.spell.mode);
+            self.division(&copy.spell.targets, &copy.spell.target_shares);
             self.field("target clauses", &copy.spell.target_req_indices);
             for target in &copy.spell.targets {
                 self.target("target", *target);
@@ -558,15 +562,26 @@ impl<'a> Projection<'a> {
         }
     }
 
+    fn division(&mut self, targets: &[Target], shares: &[u8]) {
+        if shares.is_empty() {
+            return;
+        }
+        self.field("target shares", &shares);
+        let game = self.game;
+        let viewer = self.viewer;
+        self.summary(|| division_description(game, targets, shares, viewer));
+    }
+
     fn payment(&mut self, payment: &Payment) {
         match &payment.operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
-            } => {
+                target_shares,
+            }) => {
                 self.object_id("paid spell", *object);
                 // Storage keys identify the chosen permission only within the game.
                 // The payment already gives its cost. Project a quota source as a
@@ -588,6 +603,7 @@ impl<'a> Projection<'a> {
                     self.field("quota type", &kind);
                 }
                 self.field("mode", mode);
+                self.division(targets, target_shares);
                 self.field("target clauses", target_req_indices);
                 for target in targets {
                     self.target("target", *target);
@@ -1256,6 +1272,39 @@ impl Game {
     }
 }
 
+pub(crate) fn division_description(
+    game: &Game,
+    targets: &[Target],
+    shares: &[u8],
+    viewer: PlayerId,
+) -> String {
+    targets
+        .iter()
+        .zip(shares)
+        .map(|(target, amount)| {
+            let reference = game.target_reference(*target, viewer);
+            let name = Projection::label(reference);
+            match reference.object {
+                Some(id) => format!("{amount} assigned to {name} (object {id})"),
+                None => format!("{amount} assigned to {name}"),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+pub(crate) fn project_division(
+    game: &Game,
+    spell: &AnnouncedSpell,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let mut out = Projection::new(game, viewer, text);
+    out.division(&spell.targets, &spell.target_shares);
+    out.finish(frame);
+}
+
 /// Project the payment and any departed object the trigger reads.
 /// Both text and policy read these same public facts.
 pub(crate) fn project_stack_object(
@@ -1267,6 +1316,9 @@ pub(crate) fn project_stack_object(
 ) {
     use crate::state::stack_object::StackObject;
     let mut out = Projection::new(game, viewer, text);
+    if let StackObject::Spell(spell) = object {
+        out.division(&spell.targets, &spell.target_shares);
+    }
     // "The number of soul counters on this artifact" after it was sacrificed
     // to pay the cost: the source's last known information (CR 608.2h).
     if game.stack_object_reads(object, Effect::reads_source_lki, Ability::reads_source_lki) {
@@ -1652,6 +1704,24 @@ pub(crate) fn project_decision(
         } => {
             out.object_ids("selected distinct names", selected);
             out.field("distinct name search", &(predicate, remaining, end));
+        }
+        Decision::PartitionPiles {
+            player,
+            looked,
+            next,
+            face_up,
+        } => {
+            if game.shares_information(viewer, *player) {
+                out.object_ids("inspected", looked);
+                out.object_ids("face-up pile", face_up);
+                out.field("ordered prefix", next);
+            }
+        }
+        Decision::ChoosePile {
+            looked, face_up, ..
+        } => {
+            out.object_ids("face-up pile", face_up);
+            out.field("face-down pile size", &(looked.len() - face_up.len()));
         }
         Decision::OpponentSplitsRevealed {
             owner,

@@ -8762,3 +8762,95 @@ fn celestial_armor_entry_protection_stays_when_the_armor_moves() {
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert!(!has(&s, first, Keyword::Hexproof), "until end of turn");
 }
+
+#[test]
+fn curator_of_destinies_keeps_the_split_private_and_resolves_either_pile() {
+    use crate::support::{
+        game::pin_top,
+        inspect::{offer_labels, zone_of},
+        play::{command, pass_until},
+    };
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        state::player::ManaPayment,
+    };
+    let mut root = five_color_setup(&["Curator of Destinies", "Counterspell"]);
+    root.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let spell = cast(&mut root, "Curator of Destinies");
+    cast(&mut root, "Counterspell");
+    assert!(root.choose_target(Target::StackSpell(spell)));
+    let names = ["Island", "Swamp", "Forest", "Mountain", "Plains"];
+    let cards = pin_top(&mut root, &names);
+    pass_until(&mut root, ActionSpaceKind::LookAndSelect);
+    assert!(root
+        .game()
+        .characteristics(permanent_named(&root, "Curator of Destinies"))
+        .keywords
+        .has(Keyword::Flying));
+
+    let visible = |s: &Scenario, viewer: usize| {
+        let obs = Observation::for_player(s.game(), PlayerId(viewer));
+        let rows = if viewer == 0 {
+            obs.agent_cards
+        } else {
+            obs.opponent_cards
+        };
+        rows.into_iter()
+            .filter(|card| card.zone == ZoneType::Library)
+            .map(|card| card.characteristics.name)
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    for up in 0..=5 {
+        let mut s = root.clone();
+        for (i, name) in names.iter().enumerate() {
+            assert_eq!(visible(&s, 0).len(), 5);
+            assert!(visible(&s, 1).is_empty());
+            assert_eq!(s.action_space().actions.len(), 2);
+            assert!(offer_labels(&s).iter().all(|label| label.contains(name)));
+            s.step_action(usize::from(i >= up));
+        }
+        let public = names[..up].iter().map(|name| name.to_string()).collect();
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        assert_eq!(visible(&s, 0).len(), 5);
+        assert_eq!(visible(&s, 1), public);
+        let offers = offer_labels(&s);
+        assert!(offers[0].contains("face-up"));
+        assert!(offers[1].contains(&format!("face-down pile ({} card", 5 - up)));
+        let mut sampled = s.clone();
+        sampled.game_mut().determinize(PlayerId(1), 431).unwrap();
+        assert_eq!(visible(&sampled, 1), public);
+        assert_eq!(offer_labels(&sampled), offers);
+        let saved = s.snapshot();
+        for mode in [0, 1] {
+            s.restore(&saved);
+            assert_eq!(visible(&s, 1), public);
+            command(
+                &mut s,
+                |action| matches!(action, Action::ChooseMode { mode: choice, .. } if *choice == mode),
+            );
+            let opponent = Observation::for_player(s.game(), PlayerId(1));
+            for (i, object) in cards.iter().enumerate() {
+                let in_hand = (i < up) == (mode == 0);
+                let zone = if in_hand {
+                    ZoneType::Hand
+                } else {
+                    ZoneType::Graveyard
+                };
+                assert_eq!(zone_of(&s, *object), Some(zone));
+                assert_eq!(
+                    opponent
+                        .opponent_cards
+                        .iter()
+                        .any(|card| card.zone == ZoneType::Graveyard
+                            && card.characteristics.name == names[i]),
+                    !in_hand
+                );
+            }
+            let known: u32 = s.game().state.players[0].known_hand.values().sum();
+            assert_eq!(known as usize, if mode == 0 { up } else { 0 });
+        }
+    }
+}

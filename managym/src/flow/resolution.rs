@@ -182,6 +182,18 @@ impl Game {
 
     /// Resolve a quantity against the frame's targets, payments and instruction results.
     pub(crate) fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+        self.effect_value_for_slot(value, frame, None)
+    }
+
+    /// A simultaneous instruction can read a different amount for each recipient.
+    /// Other selectors still see the complete frame and the same pre-event board.
+    fn effect_value_for_slot(
+        &self,
+        value: &EffectValue,
+        frame: &EffectFrame,
+        slot: Option<ResolutionTarget>,
+    ) -> i32 {
+        let primary = || slot.map(|s| s.target).or_else(|| frame.primary_target());
         let controller = frame.controller;
         let paid_properties = |how, property| {
             frame
@@ -200,9 +212,7 @@ impl Game {
                     .and_then(|source| self.object_property_or_lki(source, *property))
                     .unwrap_or(0),
                 ObjectSelector::Triggering => self.target_property(frame.context_target, *property),
-                ObjectSelector::Target(_) => {
-                    self.target_property(frame.primary_target(), *property)
-                }
+                ObjectSelector::Target(_) => self.target_property(primary(), *property),
                 ObjectSelector::Paid(how) => aggregate.evaluate(paid_properties(*how, *property)),
                 _ => aggregate.evaluate(
                     self.selected_permanents(of, frame)
@@ -260,9 +270,8 @@ impl Game {
                     _ => None,
                 };
                 let object = match of.as_ref() {
-                    ObjectSelector::Target(_) => frame
-                        .active_targets()
-                        .next()
+                    ObjectSelector::Target(_) => slot
+                        .or_else(|| frame.active_targets().next())
                         .and_then(|t| stack_spell(t.target)),
                     ObjectSelector::Triggering => frame.context_target.and_then(stack_spell),
                     _ => self.select(of, frame).first().copied(),
@@ -282,9 +291,10 @@ impl Game {
                     lki.counters.get(*kind).saturating_sub(*subtract).max(0)
                 }),
             EffectValue::NegativeX => -i32::from(frame.x),
-            EffectValue::TargetPower => {
-                self.target_property(frame.primary_target(), ObjectProperty::Power)
-            }
+            EffectValue::TargetShare => slot
+                .or_else(|| frame.active_targets().next())
+                .map_or(0, |slot| i32::from(slot.share)),
+            EffectValue::TargetPower => self.target_property(primary(), ObjectProperty::Power),
             EffectValue::TriggeringPower => {
                 self.target_property(frame.context_target, ObjectProperty::Power)
             }
@@ -292,7 +302,7 @@ impl Game {
                 self.target_property(frame.context_target, ObjectProperty::ManaValue)
             }
             EffectValue::TargetToughness => {
-                self.target_property(frame.primary_target(), ObjectProperty::Toughness)
+                self.target_property(primary(), ObjectProperty::Toughness)
             }
             EffectValue::TriggerDamage | EffectValue::TriggeringAmount => frame.triggering_amount,
             EffectValue::ExcessDamage => frame.excess_damage,
@@ -318,9 +328,11 @@ impl Game {
                         && self.permanent_matches_predicate(*id, predicate)
                 })
                 .count() as i32,
-            EffectValue::Half(inner) => self.effect_value(inner, frame).div_euclid(2),
+            EffectValue::Half(inner) => {
+                self.effect_value_for_slot(inner, frame, slot).div_euclid(2)
+            }
             EffectValue::Scaled { factor, value } => {
-                factor.saturating_mul(self.effect_value(value, frame))
+                factor.saturating_mul(self.effect_value_for_slot(value, frame, slot))
             }
             EffectValue::Fixed(value) => *value,
             EffectValue::CreaturesWithCounters => self
@@ -694,6 +706,12 @@ impl Game {
                 let requirement = indices.get(index).copied().unwrap_or(0);
                 ResolutionTarget {
                     target: *target,
+                    share: match stacked {
+                        StackObject::Spell(spell) => {
+                            spell.target_shares.get(index).copied().unwrap_or(0)
+                        }
+                        _ => 0,
+                    },
                     requirement,
                     legal: requirements.get(requirement).is_some_and(|req| {
                         self.target_fits_clause(*target, req, controller, source)
@@ -936,21 +954,38 @@ impl Game {
                 None
             }
             Effect::PutCounters { on, kind, amount } => {
-                let amount = self.effect_value(amount, frame);
-                let events = self
-                    .selected_permanents(on, frame)
-                    .into_iter()
-                    .filter_map(|id| self.permanent_object(id))
-                    .map(|target| ProposedEvent::CounterChange {
-                        provenance: crate::flow::proposed_event::CounterProvenance::new(
-                            crate::flow::proposed_event::EventCause::Effect,
-                        ),
-                        target,
-                        kind: *kind,
-                        delta: amount,
-                        by: Some(frame.controller),
-                    });
-                frame.batch = Some(self.event_batch(EventBinding::None, events));
+                let change = |target, delta| ProposedEvent::CounterChange {
+                    provenance: crate::flow::proposed_event::CounterProvenance::new(
+                        crate::flow::proposed_event::EventCause::Effect,
+                    ),
+                    target,
+                    kind: *kind,
+                    delta,
+                    by: Some(frame.controller),
+                };
+                let batch = if matches!(on, ObjectSelector::Targets(_)) {
+                    self.event_batch(
+                        EventBinding::None,
+                        frame.active_targets().filter_map(|slot| {
+                            let Target::Permanent(id) = slot.target else {
+                                return None;
+                            };
+                            Some(change(
+                                self.permanent_object(id)?,
+                                self.effect_value_for_slot(amount, frame, Some(slot)),
+                            ))
+                        }),
+                    )
+                } else {
+                    let delta = self.effect_value(amount, frame);
+                    self.event_batch(
+                        EventBinding::None,
+                        self.selected_permanents(on, frame)
+                            .into_iter()
+                            .filter_map(|id| Some(change(self.permanent_object(id)?, delta))),
+                    )
+                };
+                frame.batch = Some(batch);
                 None
             }
             Effect::PutCountersFrom { from, on } => {
@@ -2328,6 +2363,26 @@ impl Game {
                     _ => Some(Decision::ManifestDread { player, looked }),
                 }
             }
+            Effect::SeparatePiles { look } => {
+                let player = frame.controller;
+                let looked = self.library_top_objects(player, *look);
+                self.remember_library_objects(player, &looked);
+                Some(if looked.is_empty() {
+                    Decision::ChoosePile {
+                        player: self.next_player(player),
+                        owner: player,
+                        looked,
+                        face_up: Vec::new(),
+                    }
+                } else {
+                    Decision::PartitionPiles {
+                        player,
+                        looked,
+                        next: 0,
+                        face_up: Vec::new(),
+                    }
+                })
+            }
             Effect::Surveil { count } => {
                 if *count > 0 {
                     frame.complete_with_event(GameEvent::Surveilled {
@@ -2891,7 +2946,7 @@ impl Game {
     }
 
     /// The exact object a chosen target is, when it is a card object.
-    fn target_object(&self, target: Target) -> Option<ObjectId> {
+    pub(crate) fn target_object(&self, target: Target) -> Option<ObjectId> {
         match target {
             Target::Permanent(id) => self.permanent_object(id),
             Target::GraveyardCard(object) => Some(object),
