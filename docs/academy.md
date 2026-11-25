@@ -13,6 +13,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Playing on the board](#playing-on-the-board)
+- [Grouped decisions](#grouped-decisions)
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
@@ -746,24 +747,13 @@ Choices with no card on the board, such as Lessons outside the game, appear in
 a tray over the board. Trays, the inspection, menus and the result card are
 opaque and sit above the lines between targets, so a line never crosses them.
 
-Combat is drafted whole. At an attack, every creature that can attack is
-outlined; click one (or focus it and press Enter) to add it to the attack or
-leave it out. Drafted attackers are ringed with a dashed line and lean in, and
-a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
-rail. At a block, click a blocker, then the attacker it blocks; a blocker
-that can block only one attacker takes it at once, and the block's line is
-drawn. The prompt reads the whole plan ("Attack with 3 · not with
-Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
-nothing is declared while drafting. The engine still asks about one creature
-at a time: Academy's read-only combat preview replays the draft on a copy of
-the game and returns the exact answers that declare it, or the first one it
-refuses and why (a lone blocker of a creature with menace, a creature that
-cannot attack). Confirm (Space) sends those answers one by one; if the game
-asks anything the preview did not predict, sending stops and the board shows
-where the game stands. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. Each creature's own
-answers stay in the full list of legal choices. **Pass turn** (F6) passes
-priority until the turn ends.
+Combat is drafted whole on the board and confirmed in one shot: click creatures
+to add or remove attackers, or click a blocker then the attacker it blocks,
+review the engine's live preview on the draft, and press **Confirm** (Space)
+once. Nothing commits while drafting, and each creature's individual legal
+choices remain reachable in the rail; see
+[Grouped decisions](#grouped-decisions). **Pass turn** (F6) passes priority
+until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
 (unless a control with its own action has focus), F6 passes the turn and Escape
@@ -784,6 +774,109 @@ For bot inspection, open **Watch** or a recording in **Replay**. Their decision
 surface shows the acting seat's permitted view and the complete legal choices
 for that decision. Recorded policy outputs appear only when available; missing
 outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
+
+### Grouped decisions
+
+Multi-part decisions that belong to one rules choice — declaring attackers,
+declaring blockers, and arranging looked-at cards for **Scry**, **Surveil** and
+**OrderLibrary** — are drafted whole and committed in one **Confirm**.
+
+**Declaring attackers and blockers.** When you enter Declare Attackers with
+three creatures that can attack, each declarable creature is outlined on the
+board. Click a creature (or focus it and press Enter) to add it to the attack
+or leave it out; drafted attackers get a dashed ring and lean in, and a pile of
+identical creatures shows its drafted count ("2 of 3 Tiger-Seal") in the rail.
+When blocking, click a blocker, then the attacker it blocks; a blocker with
+only one legal attacker assigns it immediately and draws the block line. As you
+edit the draft, Academy asks the rules engine to preview the whole plan on a
+copy of the game without changing the live state. If the engine would refuse
+the plan — for example, a lone blocker on a creature with menace, or leaving
+out a creature that must attack — its exact refusal reason appears on that
+creature and the draft stays open for editing. Press **Confirm** (Space) once
+to commit the entire declaration in a single request: either the whole plan
+lands or none of it does.
+
+**Arranging looked-at cards (Scry, Surveil, OrderLibrary).** Cast a spell with
+Scry 2 and an arrangement panel opens with the two looked-at cards and two
+ordered buckets: **Top of library — drawn first at top** and **Bottom of
+library — top-most at top**. Both cards start unplaced and **Confirm** stays
+disabled until every card is placed. Move and reorder cards with the pointer or
+keyboard, then press **Confirm** once.
+
+- **Scry** (2+ cards): remaining cards start unplaced; **Confirm** enables once
+  every card is placed in **Top of library** or **Bottom of library** and the
+  engine preview marks the plan complete. Top cards are drawn first from top to
+  bottom; bottom cards sit on the bottom of your library in the same
+  top-to-bottom reading order (the bottom-most card in the bucket goes on the
+  very bottom of the library).
+- **Surveil** (2+ cards): two buckets, **Keep on top** and **Graveyard**.
+  Remaining cards start in **Keep on top** (matching the engine's decline
+  offer), and the Confirm button names the exact commitment ("Keep all 2 on
+  top", "Put 1 in graveyard, keep 1 on top", "Put all 2 in graveyard"). When two
+  or more cards stay on top, confirming the Surveil immediately opens
+  **OrderLibrary** as its own grouped confirmation.
+- **OrderLibrary** (2+ cards, top or bottom of library): one ordered list
+  headed **Top of library — drawn first at top** or **Bottom of library — drawn
+  first at top**. Remaining cards start unplaced and **Confirm** enables once
+  every card is ordered. A two-card order (such as after keeping two cards with
+  Surveil 2) stays in the arrangement panel even though native trivial-decision
+  skipping resolves the final card automatically.
+
+Combat grouping activates whenever at least one creature can declare, so
+single-creature combat keeps the same drafting and Confirm controls. Scry,
+Surveil and OrderLibrary activate when two or more cards remain; a single-card
+Scry or Surveil stays a single raw choice.
+
+**Raw per-step choices stay reachable.** The underlying engine still steps one
+action at a time. During any live group, the rail keeps every legal single-step
+offer under its collapsed disclosure. Choosing a raw offer submits that single
+step as an ordinary Command; the next frame shows what has already committed
+(as a read-only summary in the panel or on the board) alongside the remaining
+items in the group.
+
+**Recovery, privacy and recordings.**
+
+- **All-or-nothing submission.** Nothing mutates while drafting. Pressing
+  **Confirm** sends one `group_command` bound to the active match, revision,
+  prompt and frame hash. The server validates the whole plan on a clone before
+  stepping the live game; a refused or incomplete plan leaves the board
+  unchanged and keeps your draft with the engine's reason.
+- **Reload and reconnect.** An unsubmitted draft is stored in this tab's
+  session storage for that exact decision and discarded if the frame moves on.
+  While a grouped Confirm is in flight, the draft stays visible and disabled.
+  If the connection drops or the tab reloads before the reply arrives, recovery
+  checks the pending `group_command` against the server's accepted commands and
+  either settles it or resends the exact submission — never applying it twice
+  and never leaving a half-committed group.
+- **Watchers and pilot transfer.** Live grouped descriptors are sent only to
+  the active pilot; watchers never receive private Scry or Surveil cards. When
+  pilot control transfers to another participant, any active group is delivered
+  with the role change without reloading.
+- **Identical recordings, Replay and Study.** Applying a group executes the
+  exact sequential native actions in order and records one decision per native
+  step, byte-for-byte equivalent to submitting one Command at a time. Replay,
+  Watch and Study never show grouped panels: they show every recorded per-step
+  decision, legal offer, policy probability and Study fork.
+- **Purity boundary.** A group covers consecutive steps of one decision by one
+  player and stops cleanly before any hidden-information reveal, draw, shuffle
+  or opponent choice. Effects that fire after the group finishes — such as a
+  spell that scries and then draws a card — run cleanly once the final Scry
+  step commits.
+
+#### Which multi-step decisions group
+
+| Decision | Plan shape | Where the group ends | Status |
+|---|---|---|---|
+| Declare attackers / blockers (1+ creatures) | attackers list / blocker → attacker pairs | declaration commits | Supported |
+| Scry (2+ cards) | ordered top + ordered bottom | scry finishes | Supported |
+| Surveil (2+ cards) | graveyard subset | graveyard picks commit; OrderLibrary follows as its own group | Supported |
+| OrderLibrary top / bottom (2+ cards) | ordered list | last card placed | Supported |
+| PartitionPiles | two piles | split finishes (opponent chooses pile next) | Planned follow-up |
+| Multi-card subset picks (SelectCards max > 1, SearchDistinctNames, Discard 2+, OpponentSplitsRevealed, KeepCreatures) | subset within engine limits | selection finishes | Planned follow-up |
+| Amount distributions (DistributeCounters, DivideAmongTargets, AssignCombatDamage) | amount per recipient | amounts exhausted | Planned follow-up |
+| OrderTriggers | trigger order | only while no trigger asks a mode or target between picks | Planned follow-up |
+| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | — | — | Stays sequential (later options depend on earlier picks) |
+| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | — | — | Single step |
 
 ### Previewing payments
 

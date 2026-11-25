@@ -730,6 +730,11 @@ A follow-up kind is one `flow/group/` file + `GroupSpec`/`GroupPlan`/`GroupOutco
 variant plus a panel for its shape; it needs no server, protocol or recording
 change.
 
+## User docs written in place
+
+- `docs/academy.md`: added **Grouped decisions** (combat drafting, Scry / Surveil / OrderLibrary arrangement panel, raw per-step disclosure, reload/reconnect/watcher/recording invariants, purity boundary, and reclassified audit table) and updated **Playing on the board** to remove the browser send loop.
+- `managym/README.md`: replaced **Previewing a whole combat declaration** with **Grouped input** (`managym.group` `group`, `preview_group`, `apply_group`, plan/descriptor/outcome types, Scry bottom reading order, purity boundary, and `0.3.0` deprecation note for `combat_preview`) while preserving the combat rules notes under **Combat declaration and damage rules**.
+
 ## Passes
 
 1. **Native layer with combat parity and the library kinds.** The pass that
@@ -758,12 +763,11 @@ change.
    1-creature parity), `ArrangePanel.svelte` (Scry, Surveil, OrderLibrary Top &
    Bottom, committed prefix display), rail disclosure, unified draft storage,
    `e2e/grouped-decisions.spec.ts`, updates to MTG-441's combat specs for the
-   removed stop control. `docs/academy.md` gains "Grouped decisions" (what a
-   person sees, the contract, the audit table above) and its combat paragraphs
-   lose the send loop; `managym/README.md` documents `group`, `preview_group`,
-   `apply_group` and the boundary; `AGENTS.md` "Decision ownership" gains the
-   sentence that grouped input compiles to sequential Actions and never widens
-   an action space. Shows: acceptance step 3 and the demo.
+   removed stop control. Keep `docs/academy.md` and `managym/README.md` (written
+   up front) aligned with the finished implementation; `AGENTS.md` "Decision
+   ownership" gains the sentence that grouped input compiles to sequential
+   Actions and never widens an action space. Shows: acceptance step 3 and the
+   demo.
 
 ## Done when
 

@@ -1054,38 +1054,117 @@ This is an inspection API for Academy and tools. It adds no action,
 observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
 search or training calls it.
 
-### Previewing a whole combat declaration
+### Grouped input
 
-The engine declares attackers and blockers one creature at a time. Ask how a
-whole drafted declaration would be declared, without declaring any of it:
+Multi-part decisions such as combat declarations and library arrangements still
+execute as sequential native `Action`s (`Game::step`). The grouped-input layer
+(`managym/src/flow/group/`, Python module `managym.group`) describes an active
+multi-part decision, previews a whole drafted plan on a clone, and applies a
+valid plan in one call without adding any `Action`, observation column or
+digest input:
 
 ```python
-from managym.combat import CombatPlan, PlannedBlock, preview_combat
+from managym.group import (
+    DeclareAttackersPlan,
+    ScryPlan,
+    apply_group,
+    group,
+    preview_group,
+)
 
-frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
-ask = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                     fingerprint=frame.fingerprint, plan=CombatPlan())
-ask.declarable          # every creature the declaration will ask about, in order
-plan = CombatPlan(attackers=[c.creature for c in ask.declarable[:2]])
-preview = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                         fingerprint=frame.fingerprint, plan=plan)
-preview.refused         # None, or the first creature refused and why
-[(s.action_index, s.revision) for s in preview.steps]
+viewer = env.current_agent_index()
+active = group(env, viewer=viewer)
+if active is not None and active.kind == "declare_attackers":
+    plan = DeclareAttackersPlan(attackers=[c.item for c in active.declarable[:2]])
+    preview = preview_group(
+        env,
+        viewer=viewer,
+        revision=active.revision,
+        fingerprint=active.fingerprint,
+        plan=plan,
+    )
+    # preview.complete is True, preview.refused is None
+    # preview.outcome.attackers lists the declared attackers
+    # [(s.action_index, s.revision) for s in preview.steps] are the sequential steps
+    applied = apply_group(
+        env,
+        viewer=viewer,
+        revision=active.revision,
+        fingerprint=active.fingerprint,
+        plan=plan,
+    )
 ```
 
-`Game::combat_preview` replays the engine's own per-creature answers to the
-plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
-ordinary action at the decision it will be asked at, with that decision's
-revision and fingerprint; stepping them in order declares exactly the plan.
-Creatures with a single legal answer are answered by the engine without a
-step, as in play. A block plan names blocker → attacker pairs
-(`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
-from here. The plan is refused, with a reason, when a planned creature is
-never asked, a planned answer is not offered (a required block) or the
-finished declaration differs from the plan (a lone block of a creature with
-menace, which the engine removes once every blocker is declared).
-`declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. During attacker selection both viewers can see the attackers
+Library arrangements use the same three calls:
+
+```python
+active = group(env, viewer=viewer)
+if active is not None and active.kind == "scry":
+    top = [active.items[0].item]
+    bottom = [c.item for c in active.items[1:]]  # top-most of bottom group first
+    apply_group(
+        env,
+        viewer=viewer,
+        revision=active.revision,
+        fingerprint=active.fingerprint,
+        plan=ScryPlan(top=top, bottom=bottom),
+    )
+```
+
+Supported kinds and activation thresholds:
+
+| `kind` | Active when | Descriptor fields | Plan model and fields | Outcome fields |
+| --- | --- | --- | --- | --- |
+| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `must_attack`), `committed` | `DeclareAttackersPlan(attackers)` | `attackers` |
+| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` | `DeclareBlockersPlan(blocks)` (`PlannedBlock`) | `blocks` |
+| `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top`, `committed_bottom` | `ScryPlan(top, bottom)` | `top`, `bottom` |
+| `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` | `SurveilPlan(graveyard)` | `graveyard`, `kept` |
+| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` | `OrderLibraryPlan(order)` | `end`, `order` |
+
+- **`group(env, *, viewer)`** (`Env.group_json(viewer)`) returns the active
+  `Group` bound to `(revision, fingerprint)`, or `None` when the game is over,
+  `viewer` is not the chooser, or the pending decision is outside the table
+  above. Already-taken raw steps appear in `committed*` alongside the remaining
+  items.
+- **`preview_group(env, *, viewer, revision, fingerprint, plan)`**
+  (`Env.preview_group_json(...)`) is read-only: the live game's state digest,
+  RNG, revision, trace and pending decision do not change. It raises
+  `managym.AgentError` on a stale or non-actor address, no active group, or a
+  plan whose `kind` does not match the active group. A structurally incomplete
+  plan (for example, unplaced cards in `scry` or `order_library`) returns
+  `complete=False, refused=None, steps=[], outcome=None` without cloning.
+  Otherwise it clones the game with its `skip_trivial` setting, compiles each
+  step from the clone's own legal action space, and returns `GroupPreview` with
+  `steps`, `complete`, `outcome` and optional `refused` (a `GroupRefusal`
+  carrying `item`, `label` and the engine's `reason`, such as a lone blocker on
+  a creature with menace or a skipped required attack/block).
+- **`apply_group(env, *, viewer, revision, fingerprint, plan)`**
+  (`Env.apply_group_json(...)`) previews first, raises `managym.AgentError`
+  without mutating the live game if the plan is refused or incomplete, and
+  otherwise steps the live game through each compiled step after verifying its
+  `(revision, fingerprint)`. Stepping `preview.steps` by hand reaches the same
+  state digest.
+- **Scry bottom order:** `ScryPlan.bottom` uses top-to-bottom reading order
+  (`bottom[0]` is drawn first among bottomed cards and `bottom[-1]` sits on the
+  very bottom of the library), matching `OrderLibraryPlan` with `end="bottom"`.
+- **Purity boundary:** A group covers consecutive steps of one decision by one
+  player. Between step `i` and step `i+1` (while the group is still active),
+  the compiler verifies that no `CardDrawn` or `CardRevealed` event occurred,
+  the RNG did not advance (catching any shuffle), and no unseen hidden-zone
+  object became visible to `viewer`. If a boundary trips mid-group, preview
+  stops with `complete=False, outcome=None` and `apply_group` refuses it.
+  Effects that fire after the final step exits the group — such as drawing a
+  card after Scry 2 resolves — complete cleanly. Surveil finishes when its
+  graveyard picks commit; any following `order_library` is its own group.
+- **Separate from `compound_offers`:** This layer sits above `Game::step` for
+  human/tool submission and leaves `compound_offers` / `step_structured`
+  unchanged. `Env.combat_preview_json` and `managym.combat.preview_combat`
+  remain as deprecated wrappers over `preview_group` (scheduled for removal in
+  `0.3.0`).
+
+### Combat declaration and damage rules
+
+During attacker selection both viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
 declaration finishes and lasts through the turn, even if those creatures leave.
 Linden triggers for each white attacker her controller declares. With two white attackers
@@ -1094,8 +1173,6 @@ occurrences. A creature that enters attacking can deal combat damage. Its
 first declaration in a later combat still counts as its first attack for
 Aurelia. Leaving and returning starts a new attack history for that creature.
 Extra combats preserve raid and each creature’s history until the turn ends.
-The same address rules as payment previews apply, and the
-call is read-only in the same way.
 
 At the combat damage step, the attacking player assigns damage among the
 remaining blockers. Each choice names the attacker, the current blocker and
