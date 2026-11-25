@@ -283,3 +283,31 @@ describe('liveAnalysedMarks', () => {
     expect(marks[3]).toMatchObject({ turn: 2, value: 0.4, label: 'Turn 2 · Cast Shock' });
   });
 });
+
+describe('mid-game seat swaps in Review', () => {
+  it('defaults perspective to chooser when swapped, inserts swap dividers, and breaks strip segments', () => {
+    const swaps = [{ event: 2, turn: 2 }];
+    expect(perspectiveOf(null, { players: [{ seat: 1, kind: 'human' }] as never, seat_swaps: swaps })).toBe('chooser');
+    expect(perspectiveOf('0', { players: [{ seat: 1, kind: 'human' }] as never, seat_swaps: swaps })).toBe(0);
+    const positions = [
+      position('choice', { key: 'c0', actor: 0, event: 0, turn: 1, label: 'Play Island' }),
+      position('consequences', { key: 'a0', actor: 0, event: 0, turn: 1, label: 'Play Island' }),
+      position('choice', { key: 'c2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
+      position('consequences', { key: 'a2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
+    ];
+    const log = replayLog(positions, 1, (seat, currentHero) => (seat === currentHero ? 'You' : 'Reader'), swaps, 0);
+    expect(log.map(entry => [entry.actor, entry.text])).toEqual([
+      ['hero', 'Play Island'],
+      ['system', 'Swapped sides · Turn 2'],
+      ['hero', 'Play Mountain'],
+    ]);
+    expect(entryPosition(log[1].id)).toBe('c2');
+    const marks = stripMarks(positions, 1, swaps, 0);
+    expect(marks.map(mark => [mark.side, Boolean(mark.breakBefore)])).toEqual([
+      ['you', false],
+      ['you', false],
+      ['you', true],
+      ['you', false],
+    ]);
+  });
+});

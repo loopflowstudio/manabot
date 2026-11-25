@@ -228,7 +228,7 @@ const LEAST = 0.05;
  * yours, and where its estimate from your seat moved most between one of your
  * decisions and the next. A decision that is both is listed once, as a difference.
  */
-export function keyMoments(analysis: Analysis): KeyMoment[] {
+export function keyMoments(analysis: Analysis, seatSwaps: readonly { event: number }[] = []): KeyMoment[] {
   const differs: (KeyMoment & { size: number })[] = [];
   const moved: (KeyMoment & { size: number })[] = [];
   analysis.decisions.forEach((decision, i) => {
@@ -239,8 +239,9 @@ export function keyMoments(analysis: Analysis): KeyMoment[] {
       if (size >= LEAST) differs.push({ event: decision.event, kind: 'differs', size, reason: `Differs · ${percent(p[first])} on its first choice, ${percent(p[decision.played] ?? 0)} on yours` });
     }
     const next = analysis.decisions[i + 1];
+    const crossedSwap = next !== undefined && seatSwaps.some(swap => decision.event < swap.event && swap.event <= next.event);
     const here = score(decision.annotation.value, decision.semantic);
-    const then = next ? score(next.annotation.value, next.semantic) : null;
+    const then = next && !crossedSwap ? score(next.annotation.value, next.semantic) : null;
     if (here !== null && then !== null && Math.abs(then - here) >= LEAST) {
       const name = scoreName(decision.semantic)?.toLowerCase() ?? 'estimate';
       moved.push({ event: decision.event, kind: 'moved', size: Math.abs(then - here), reason: `Its ${name} moved ${formatScore(here)} → ${formatScore(then)} by your next decision` });

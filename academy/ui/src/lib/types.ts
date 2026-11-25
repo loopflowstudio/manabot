@@ -665,9 +665,9 @@ export interface CommandRejection {
   current_prompt: number | null;
 }
 
-/** One line of the server's narration: either player's move or an automated action, in the turn it was taken. */
+/** One line of the server's narration: either player's move, an automated action, or a system note, in the turn it was taken. */
 export interface LogLine {
-  actor: 'hero' | 'villain' | 'auto';
+  actor: 'hero' | 'villain' | 'auto' | 'system';
   turn: number;
   text: string;
 }

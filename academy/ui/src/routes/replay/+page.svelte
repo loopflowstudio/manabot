@@ -32,7 +32,7 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, type GameNumbers } from '$lib/numbers';
@@ -75,6 +75,8 @@
 
   // "You" in the move list is the person in a Play game, else seat 1.
   const heroSeat = $derived<0 | 1>(index?.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0);
+  const seatSwaps = $derived(index?.seat_swaps ?? []);
+  const startingHeroSeat = $derived<0 | 1>(index?.starting_human_seat === 1 ? 1 : index?.starting_human_seat === 0 ? 0 : heroSeat);
   const bottom = $derived(bottomSeat(perspective, positions, replayStore.selected));
   /**
    * A seat's recorded identity; a record that predates recorded players falls back to
@@ -100,6 +102,10 @@
     if (name === 'You') return name;
     const said = shortName(name);
     return said === shortName(nameOf(1 - seat)) ? `${said} (seat ${seat + 1})` : said;
+  };
+  const saidAt = (seat: 0 | 1, currentHero?: 0 | 1): string => {
+    if (!seatSwaps.length || currentHero === undefined) return saidOf(seat);
+    return seat === currentHero ? saidOf(heroSeat) : saidOf(1 - heroSeat);
   };
   const deckOf = (seat: number): string | null => {
     const player = index?.players.find(candidate => candidate.seat === seat);
@@ -163,17 +169,21 @@
     } catch { /* Review stands without its numbers. */ }
   }
 
-  const entries = $derived(replayLog(positions, heroSeat, saidOf));
+  const entries = $derived(replayLog(positions, heroSeat, saidAt, seatSwaps, startingHeroSeat));
   const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
-  const marks = $derived(analysis ? analysedMarks(stripMarks(positions, heroSeat), positions, analysed) : stripMarks(positions, heroSeat));
+  const marks = $derived(
+    analysis
+      ? analysedMarks(stripMarks(positions, heroSeat, seatSwaps, startingHeroSeat), positions, analysed)
+      : stripMarks(positions, heroSeat, seatSwaps, startingHeroSeat)
+  );
   const marksByMove = $derived(moveMarks(entries, positions, analysed));
   const shownMoves = $derived(analysisShownMoves(entries, positions));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
 
   // ———————————————— Key moments and its line
 
-  const moments = $derived(analysis ? keyMoments(analysis) : []);
+  const moments = $derived(analysis ? keyMoments(analysis, seatSwaps) : []);
   const positionOf = (event: number): number => positions.findIndex(position => position.kind === 'choice' && position.event === event);
   const momentHere = $derived(current?.kind === 'choice' ? moments.find(moment => moment.event === current.event) ?? null : null);
   const nextMoment = $derived(moments.map(moment => positionOf(moment.event)).find(at => at > replayStore.selected) ?? null);
@@ -182,13 +192,15 @@
     const { end, winner } = line.line;
     if (end === 'turn') return 'to the end of the next turn';
     if (end === 'limit') return 'until its length limit';
-    return winner === null ? 'to a draw' : winner === heroSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
+    const lineSeat = humanSeatAt(startingHeroSeat, seatSwaps, line.line.event);
+    return winner === null ? 'to a draw' : winner === lineSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
   });
 
   // Play on from one of your decisions of a finished game you played: a new
   // Play game whose moves before it are this game's (`played_from`).
   const playOnHref = $derived(index?.can_feedback && !index.watch && index.status !== 'waiting'
-    && current?.kind === 'choice' && current.event !== undefined && current.viewer === heroSeat
+    && current?.kind === 'choice' && current.event !== undefined
+    && current.viewer === humanSeatAt(startingHeroSeat, seatSwaps, current.event)
     ? `/?played_from=${encodeURIComponent(index.id)}&event=${current.event}` : null);
 
   async function seeLine(): Promise<void> {
@@ -536,6 +548,9 @@
   {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
   {#if index?.played_from}
     <p class="type-caption text-ink-2" data-testid="played-from">Played on from <a href={`/replay?trace=${encodeURIComponent(index.played_from.trace_id)}&review=1`}>an earlier game</a>{index.played_from.turn === null ? '' : ` at turn ${index.played_from.turn}`}: the moves before it are that game's.</p>
+  {/if}
+  {#if seatSwaps.length}
+    <p class="type-caption text-ink-2" data-testid="seat-swaps">Swapped sides at {seatSwaps.map(swap => swap.turn == null ? 'start' : `turn ${swap.turn}`).join(', ')}.</p>
   {/if}
   {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
   {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}

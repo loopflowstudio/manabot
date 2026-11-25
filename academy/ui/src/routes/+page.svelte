@@ -44,6 +44,7 @@
     sendReturnToLive,
     sendSetStops,
     sendShowAnalysis,
+    sendSwapSides,
     sendTransferPilot,
     fetchPaymentPreview,
     fetchCombatPreview,
@@ -416,6 +417,24 @@
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
   const canShowAnalysis = $derived(!demoName && !gameStore.gameOver && pilotCanAct && gameStore.connection === 'connected' && !liveAnalysis.pending);
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
+  const canSwapSides = $derived(
+    gameActive && !demoName && gameStore.hasCapability('configure_match')
+    && !participantStudying && !gameStore.branchProjection && !gameStore.searchRetry
+    && !gameStore.newGamePending && !gameStore.swapPending && inputReady
+  );
+  // Close the Settings sheet automatically once a mid-game swap commits so the
+  // person immediately sees their new seat; a refusal keeps the sheet open with its error.
+  let lastSeatKey = '';
+  $effect(() => {
+    const matchId = gameStore.protocolFrame?.match_id;
+    const seat = heroSeat;
+    if (!matchId || seat === null) { lastSeatKey = ''; return; }
+    const key = `${matchId}:${seat}`;
+    if (lastSeatKey && lastSeatKey.startsWith(`${matchId}:`) && lastSeatKey !== key) {
+      document.querySelector<HTMLDetailsElement>('details.game-menu')?.removeAttribute('open');
+    }
+    lastSeatKey = key;
+  });
 
 </script>
 
@@ -465,7 +484,7 @@
           <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch', { hero_deck: heroPool ?? gameStore.playSession?.draft.hero_deck, villain_deck: villainPool ?? gameStore.playSession?.draft.villain_deck, seed: null })}>Deal new decks</button>
         {/if}
         <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
-        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap sides</button>
+        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap play/draw</button>
         <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
       {/if}
     </div>
@@ -507,8 +526,23 @@
 {/snippet}
 
 {#snippet gameSettings()}
-  <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-  {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+  {#if !demoName}
+    <section aria-label="This game" class="game-group">
+      <p class="type-label text-ink-2">This game</p>
+      <div class="swap-control">
+        <button class="btn btn-secondary btn-sm" data-testid="swap-sides" disabled={!canSwapSides} onclick={sendSwapSides}>{gameStore.swapPending ? 'Swapping sides…' : 'Swap sides'}</button>
+        <p class="type-caption text-ink-3">Take the opponent's seat and hand; the bot plays yours from here.</p>
+        {#if gameStore.swapError}
+          <p role="alert" class="type-caption swap-error" data-testid="swap-sides-error">{gameStore.swapError}</p>
+        {/if}
+      </div>
+    </section>
+  {/if}
+  <section aria-label="Next game" class="game-group">
+    <p class="type-label text-ink-2">Next game</p>
+    {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+    <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+  </section>
   {#if gameStore.table}
     <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
       <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
@@ -678,4 +712,7 @@
   .home-matchup { line-height: 1.35; }
   .live-analysis { display: grid; gap: 6px; }
   .live-analysis select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 190px; }
+  .game-group { display: grid; gap: 6px; justify-items: start; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .swap-control { display: grid; gap: 4px; justify-items: start; }
+  .swap-error { color: var(--error-text); }
 </style>

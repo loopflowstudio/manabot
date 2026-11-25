@@ -40,8 +40,19 @@
   const span = $derived(Math.max(1, marks.length - 1));
   const x = (at: number): number => (at / span) * 1000;
   const y = (value: number): number => range ? 4 + (1 - (value - range.low) / (range.high - range.low)) * (HEIGHT - 8) : HEIGHT / 2;
-  const line = (side: 'you' | 'opponent'): string => decisions
-    .filter(mark => mark.side === side && mark.value !== null).map(mark => `${x(mark.at)},${y(mark.value!)}`).join(' ');
+  const lineSegments = (side: 'you' | 'opponent'): string[] => {
+    const groups: string[][] = [[]];
+    for (const mark of marks) {
+      if (mark.breakBefore && groups[groups.length - 1].length > 0) groups.push([]);
+      if (mark.decision && mark.side === side && mark.value !== null) {
+        groups[groups.length - 1].push(`${x(mark.at)},${y(mark.value)}`);
+      }
+    }
+    return groups.map(group => group.join(' ')).filter(Boolean);
+  };
+  const yourSegments = $derived(lineSegments('you'));
+  const yourPointCount = $derived(decisions.filter(mark => mark.side === 'you' && mark.value !== null).length);
+  const theirSegments = $derived(lineSegments('opponent'));
 
   const turn = $derived(selected !== null ? marks[selected]?.turn ?? null : null);
 
@@ -80,15 +91,24 @@
     {/if}
     {#each marks as mark (mark.key)}
       {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
+      {#if mark.breakBefore}<line class="swap" data-testid="strip-swap" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
     {/each}
-    <polyline class="value" points={line('you')} data-testid="strip-value" data-points={decisions.filter(mark => mark.side === 'you' && mark.value !== null).length} />
+    {#if yourSegments.length === 0}
+      <polyline class="value" points="" data-testid="strip-value" data-points={yourPointCount} />
+    {:else}
+      {#each yourSegments as seg, idx (idx)}
+        <polyline class="value" points={seg} data-testid={idx === 0 ? 'strip-value' : undefined} data-points={idx === 0 ? yourPointCount : undefined} />
+      {/each}
+    {/if}
     {#if scale !== null}
       {#each valued as mark (mark.key)}<circle class="point" class:theirs={mark.side === 'opponent'} cx={x(mark.at)} cy={y(mark.value!)} r="1.75" />{/each}
     {/if}
     {#each decisions as mark (mark.key)}
       {#if mark.differs && mark.value !== null}<circle class="differs" cx={x(mark.at)} cy={y(mark.value)} r="2.5"><title>{mark.label} · chose otherwise</title></circle>{/if}
     {/each}
-    <polyline class="value theirs" points={line('opponent')} />
+    {#each theirSegments as seg, idx (idx)}
+      <polyline class="value theirs" points={seg} />
+    {/each}
     {#if selected !== null && marks[selected]}<line class="here" x1={x(selected)} x2={x(selected)} y1="0" y2={HEIGHT} />{/if}
     {#if hover}<line class="hover" x1={x(hover.mark.at)} x2={x(hover.mark.at)} y1="0" y2={HEIGHT} />{/if}
   </svg>
@@ -134,6 +154,7 @@
   .seek::-webkit-slider-thumb { appearance: none; width: 1px; height: 80px; }
   .seek::-moz-range-thumb { width: 1px; height: 80px; border: 0; }
   .turn { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .swap { stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 2 2; opacity: .8; vector-effect: non-scaling-stroke; }
   .zero { stroke: var(--border-strong); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
   .value { fill: none; stroke: var(--info-text, var(--accent)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .value.theirs { stroke: var(--text-tertiary); }

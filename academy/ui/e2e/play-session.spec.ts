@@ -89,7 +89,7 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
     await page.keyboard.press('Enter');
     await expectSession(page, 'Game 2');
     await completeShortGame(page);
-    await (await session(page)).getByRole('button', {name:'Swap sides', exact:true}).focus();
+    await (await session(page)).getByRole('button', {name:'Swap play/draw', exact:true}).focus();
     await page.keyboard.press('Enter');
     await expectSession(page, 'Game 3 · Draw first');
     await page.reload();

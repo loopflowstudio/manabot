@@ -350,17 +350,28 @@ Shipping docs updated for this direction:
 
 ## Passes
 
-1. **In-place server swap, record & readers** — the slice that proves the whole
-   model holds: `Trace.seat_swaps` + `human_seat_at`, `record_of` mana-mode
-   fix, active `attempt_players` update in `AttemptStore.save`,
-   `GameSession.swap_sides` (including refusal before mutation, idempotency,
-   recurrent warm-up, LiveAnalysis handoff), `ReplayedViews` / `Recording` /
-   `analysis.py` / `numbers.py` / `_play_recorded_prefix`, and
-   `tests/academy/test_swap_sides.py` green.
-2. **Protocol, Settings UI, Review & docs** — `SwapSidesMessage` + schema &
-   conformance fixtures, `sendSwapSides`, Settings → Game **This game** / **Next
-   game** split (**Swap sides** vs **Swap play/draw**), Review divider &
-   perspective default, Playwright spec, and docs.
+1. **Done** — **In-place server swap, record & readers**: implemented
+   `Trace.seat_swaps` + `human_seat_at`, `record_of` mana-mode forwarding,
+   active `attempt_players` + `session_games.matchup_json` update in
+   `AttemptStore.save`, `GameSession.swap_sides` (pre-mutation policy load &
+   admission refusal, idempotent `request_id`, recurrent `RecordWalker` warm-up
+   using `steps = iter(walker)` before applying each action, `LiveAnalysis`
+   handoff), `ReplayedViews` / `Recording` / `analysis.py` / `numbers.py` /
+   `_play_recorded_prefix`, deleted `scratch/probe/swap_replay.py`, and
+   verified with `tests/academy/test_swap_sides.py` (6 passed).
+2. **Done** — **Protocol, Settings UI, Review & Playwright**: added
+   `SwapSidesMessage` to `shared_table_protocol.py`, regenerated
+   `protocol/testing-house-v1.schema.json`, updated
+   `protocol/fixtures/testing-house-control-v1.json` (also fixing pre-existing
+   round-trip drift on `resume`/`rematch` so Python & TS conformance tests both
+   pass), added `sendSwapSides`, split Settings → Game into **This game**
+   (**Swap sides**) and **Next game** (**Swap play/draw**), updated Review's
+   divider / perspective default / `keyMoments` cross-swap skip / `Strip`
+   polyline breaks, updated `PlaySessionStrip.svelte.test.ts` and
+   `e2e/play-session.spec.ts`, and added `e2e/swap-sides.spec.ts` (green in
+   Playwright).
+
+Remaining: gate / full CI validation.
 
 ## Done when
 

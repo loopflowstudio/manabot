@@ -16,7 +16,7 @@ describe('play session strip', () => {
     expect(render(PlaySessionStrip, {props: {onChangeOpponent: noop, onEditNext: noop}}).body).toContain('Rematch');
     gameStore.resumeFailed = true;
     const { body } = render(PlaySessionStrip, {props: {onChangeOpponent: noop, onEditNext: noop}});
-    for (const control of ['Rematch', 'Swap sides', 'Edit next game', 'Change opponent']) expect(body).not.toContain(control);
+    for (const control of ['Rematch', 'Swap play/draw', 'Edit next game', 'Change opponent']) expect(body).not.toContain(control);
     expect(body).toContain('Session history');
   });
 });

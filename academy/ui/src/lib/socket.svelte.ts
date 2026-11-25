@@ -364,6 +364,32 @@ export class GameSocketController {
     this.send(request);
   }
 
+  sendSwapSides(): void {
+    const table = gameStore.table;
+    const frame = gameStore.protocolFrame;
+    if (
+      !table
+      || !frame
+      || gameStore.swapPending
+      || gameStore.newGamePending
+      || gameStore.gameOver
+      || gameStore.resumeFailed
+      || gameStore.restoredDecision
+      || gameStore.searchRetry
+      || !gameStore.hasCapability('configure_match')
+    ) return;
+    gameStore.swapPending = true;
+    gameStore.swapError = null;
+    gameStore.setError(null);
+    this.send({
+      type: 'swap_sides',
+      grant_revision: table.access.grant_revision,
+      request_id: crypto.randomUUID(),
+      match_id: frame.match_id,
+      expected_revision: frame.revision,
+    });
+  }
+
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
@@ -642,6 +668,10 @@ export class GameSocketController {
     if (message.type === 'control_error') {
       writeTabValue('academy.continuation', null);
       gameStore.newGamePending = false;
+      if (gameStore.swapPending) {
+        gameStore.swapPending = false;
+        gameStore.swapError = message.message;
+      }
       gameStore.endFastForward();
       this.clearPendingCommand();
       gameStore.endCommand();
@@ -741,6 +771,10 @@ export class GameSocketController {
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (gameStore.swapPending) {
+      gameStore.swapPending = false;
+      gameStore.swapError = message.message;
+    }
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
       this.interrupt(message.message);
@@ -1082,3 +1116,5 @@ export async function fetchCombatPreview(request: CombatAddress & { plan: Combat
 }
 
 export function sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void { controller.sendContinuation(intent, config); }
+
+export function sendSwapSides(): void { controller.sendSwapSides(); }

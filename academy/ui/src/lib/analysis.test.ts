@@ -31,6 +31,16 @@ describe('key moments', () => {
   it('finds none in a flat reading', () => {
     expect(keyMoments(analysis([decided(0, 1, [0.51, 0.49], 0), decided(1, 0, [0.5, 0.5], 0.02)]))).toEqual([]);
   });
+
+  it('skips estimate jumps across a mid-game seat swap', () => {
+    expect(keyMoments(analysis([
+      decided(2, 0, [0.5, 0.5], -0.44),
+      decided(5, 0, [0.5, 0.5], 0.44),
+      decided(8, 0, [0.5, 0.5], 0.0),
+    ]), [{ event: 4 }])).toEqual([
+      { event: 5, kind: 'moved', reason: 'Its expected score moved 72 → 50 by your next decision' },
+    ]);
+  });
 });
 
 describe('analysis while you play', () => {

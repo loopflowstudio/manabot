@@ -287,3 +287,7 @@ review:
    swapped mid-game.
 8. **One press, no confirmation** for **Swap sides** (it is immediately
    reversible by swapping back).
+9. **Estimate discontinuity across a swap (2026-11-25, headless)**: took the
+   suggested default — `keyMoments` skips cross-swap `(decision, next)` pairs
+   so the seat flip is never flagged as a huge swing, and `Strip.svelte` breaks
+   the estimate polyline with a subtle dashed swap rule at each swap boundary.

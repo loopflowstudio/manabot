@@ -52,6 +52,8 @@ export interface Position {
 }
 /** A record intervention that branches the position from the game it came from. */
 export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed';
+/** One mid-game seat swap recorded at trace event index `event` on `turn`. */
+export interface SeatSwap { event: number; turn: number | null }
 export interface RecordingIndex {
   id: string;
   positions: Position[];
@@ -68,6 +70,10 @@ export interface RecordingIndex {
   can_study: boolean;
   winner: number | null;
   players: RecordedPlayer[];
+  /** Native seat the human started in (0 or 1); absent in older payloads. */
+  starting_human_seat?: 0 | 1;
+  /** Mid-game seat swaps in order; empty when the human stayed in one seat. */
+  seat_swaps?: SeatSwap[];
   source_kind: string | null;
   record_stop?: {status: 'complete' | 'interrupted' | 'diverged'; index: number; reason: string | null} | null;
   /** A game played on from another: moves before `event` (on `turn`) are that game's. */

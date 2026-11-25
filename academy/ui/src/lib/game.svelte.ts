@@ -192,6 +192,8 @@ export class GameStore {
   interruptedIdentity = $state<Pick<TableSnapshot, 'opponent' | 'opponent_label'> | null>(null);
   submissionAccepted = $state(false);
   newGamePending = $state(false);
+  swapPending = $state(false);
+  swapError = $state<string | null>(null);
   // Monotonic count of applied server updates (observation/game_over).
   // Surfaced in the DOM so tests can serialize on server responses.
   updateSeq = $state(0);
@@ -446,6 +448,8 @@ export class GameStore {
     this.resumeFailed = false;
     this.fastForwarding = false;
     this.commandPending = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
@@ -531,6 +535,8 @@ export class GameStore {
     this.errorMessage = null;
     this.resumeFailed = false;
     this.fastForwarding = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
@@ -553,6 +559,8 @@ export class GameStore {
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;
@@ -632,6 +640,8 @@ export class GameStore {
     this.actionLog = [];
     this.fastForwarding = false;
     this.commandPending = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;
