@@ -309,14 +309,6 @@ impl From<SpendEffect> for ManaClass {
 }
 
 impl ManaClass {
-    pub fn until_end_of_turn() -> Self {
-        Self {
-            expiry: ManaExpiry::EndOfTurn,
-            restriction: None,
-            effect: None,
-        }
-    }
-
     /// Whether mana of this class may pay a cost spent in `context`.
     pub fn allows(&self, context: &SpendingContext) -> bool {
         self.restriction
@@ -1137,45 +1129,38 @@ impl Mana {
             })
     }
 
+    /// Add `other` into `self` with every unit tagged with `expiry`.
+    fn add_with_expiry(&mut self, other: &Mana, expiry: ManaExpiry) {
+        if other.mana != [0; 6] {
+            self.add_class(
+                &ManaClass {
+                    expiry,
+                    restriction: None,
+                    effect: None,
+                },
+                other.mana,
+            );
+        }
+        for (class, amounts) in other.classes() {
+            let mut class = class.clone();
+            class.expiry = expiry;
+            self.add_class(&class, *amounts);
+        }
+    }
+
     /// Tag every unit in `self` with `expiry`.
     pub fn with_expiry(self, expiry: ManaExpiry) -> Self {
         if expiry == ManaExpiry::Step {
             return self;
         }
         let mut out = Self::default();
-        if self.mana != [0; 6] {
-            out.add_class(
-                &ManaClass {
-                    expiry,
-                    restriction: None,
-                    effect: None,
-                },
-                self.mana,
-            );
-        }
-        for (class, amounts) in self.classes() {
-            let mut class = class.clone();
-            class.expiry = expiry;
-            out.add_class(&class, *amounts);
-        }
+        out.add_with_expiry(&self, expiry);
         out
     }
 
     /// Combine combat mana without losing which units survive a step end.
     pub fn add_combat(&mut self, combat: &Mana) {
-        self.add_class(
-            &ManaClass {
-                expiry: ManaExpiry::EndOfCombat,
-                restriction: None,
-                effect: None,
-            },
-            combat.mana,
-        );
-        for (class, amounts) in combat.classes() {
-            let mut class = class.clone();
-            class.expiry = ManaExpiry::EndOfCombat;
-            self.add_class(&class, *amounts);
-        }
+        self.add_with_expiry(combat, ManaExpiry::EndOfCombat);
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions
@@ -1368,36 +1353,35 @@ impl ManaPool {
     pub fn split_expiring(&self, expires: impl Fn(ManaExpiry) -> bool) -> (Self, Self) {
         let mut surviving = Self::default();
         let mut expiring = Self::default();
-        for unit in &self.units {
-            let expiry = unit.class.as_ref().map_or(ManaExpiry::Step, |c| c.expiry);
+        let push = |pool: &mut Self, unit: PooledUnit| {
             let mut amounts = [0u8; 6];
             amounts[unit.color as usize] = 1;
+            match &unit.class {
+                Some(c) => pool.mana.add_class(c, amounts),
+                None => {
+                    pool.mana.mana[unit.color as usize] =
+                        pool.mana.mana[unit.color as usize].saturating_add(1);
+                }
+            }
+            pool.units.push(unit);
+        };
+        for unit in &self.units {
+            let expiry = unit.class.as_ref().map_or(ManaExpiry::Step, |c| c.expiry);
             if expires(expiry) {
                 let class = unit.class.clone().and_then(|mut c| {
                     c.expiry = ManaExpiry::Step;
                     (c.restriction.is_some() || c.effect.is_some()).then_some(c)
                 });
-                match &class {
-                    Some(c) => expiring.mana.add_class(c, amounts),
-                    None => {
-                        expiring.mana.mana[unit.color as usize] =
-                            expiring.mana.mana[unit.color as usize].saturating_add(1)
-                    }
-                }
-                expiring.units.push(PooledUnit {
-                    class,
-                    color: unit.color,
-                    origin: unit.origin,
-                });
+                push(
+                    &mut expiring,
+                    PooledUnit {
+                        class,
+                        color: unit.color,
+                        origin: unit.origin,
+                    },
+                );
             } else {
-                match &unit.class {
-                    Some(c) => surviving.mana.add_class(c, amounts),
-                    None => {
-                        surviving.mana.mana[unit.color as usize] =
-                            surviving.mana.mana[unit.color as usize].saturating_add(1)
-                    }
-                }
-                surviving.units.push(unit.clone());
+                push(&mut surviving, unit.clone());
             }
         }
         surviving.drop_uncounted_units();

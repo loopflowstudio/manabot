@@ -869,8 +869,15 @@ impl Game {
             if questions.iter().any(|q| q.decision.player() == player) {
                 questions.retain(|q| q.decision.player() == player);
             }
-            let decision = if questions.len() == 1 {
-                self.begin_entry_decision(batch, questions.pop().unwrap())
+            // Local replacement ordering neither reveals hidden information nor
+            // changes another simultaneous entrant's options, so skip entrant
+            // selection when every remaining question is `OrderReplacement`.
+            let decision = if questions.len() == 1
+                || questions
+                    .iter()
+                    .all(|q| matches!(q.decision, Decision::OrderReplacement { .. }))
+            {
+                self.begin_entry_decision(batch, questions.remove(0))
             } else {
                 Decision::OrderEntryChoices {
                     player: questions[0].decision.player(),

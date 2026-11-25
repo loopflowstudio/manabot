@@ -1191,11 +1191,9 @@ impl<'a> Context<'a> {
             id,
             predicate,
             &self.objects[&id].view,
-            source.map(|s| {
-                (
-                    self.objects[&s].view.name.as_str(),
-                    self.game.live_permanent(s).chosen.as_deref(),
-                )
+            source.map(|s| PredicateSource {
+                name: self.objects[&s].view.name.as_str(),
+                chosen: self.game.live_permanent(s).chosen.as_deref(),
             }),
         )
     }
@@ -1596,6 +1594,13 @@ pub(super) fn matches_static_scope(
     matches(predicate)
 }
 
+/// Source-permanent facts read by source-relative predicates (`namesake`, `chosen_*`).
+#[derive(Clone, Copy)]
+pub(super) struct PredicateSource<'a> {
+    pub name: &'a str,
+    pub chosen: Option<&'a crate::state::permanent::EntryChoice>,
+}
+
 /// A live permanent under `view` (an intermediate layer context or its
 /// final view).
 pub(super) fn matches_view(
@@ -1603,7 +1608,7 @@ pub(super) fn matches_view(
     id: PermanentId,
     p: &CardPredicate,
     view: &Characteristics,
-    source: Option<(&str, Option<&crate::state::permanent::EntryChoice>)>,
+    source: Option<PredicateSource<'_>>,
 ) -> bool {
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
@@ -1711,18 +1716,14 @@ impl CharacteristicView<'_> {
             || (self.all_creature_types && is_creature_type(subtype))
     }
 
-    fn matches(
-        &self,
-        p: &CardPredicate,
-        source: Option<(&str, Option<&crate::state::permanent::EntryChoice>)>,
-    ) -> bool {
+    fn matches(&self, p: &CardPredicate, source: Option<PredicateSource<'_>>) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
             && !p.put_into_graveyard_this_turn
             && p.accepts_name(self.name)
-            && (!p.namesake || source.map(|s| s.0) == Some(self.name))
+            && (!p.namesake || source.map(|s| s.name) == Some(self.name))
             && p.matches_choice(
-                source.and_then(|s| s.1),
+                source.and_then(|s| s.chosen),
                 self.name,
                 |c| self.colors.contains(&c),
                 |s| self.has_subtype(s),

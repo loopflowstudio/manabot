@@ -125,7 +125,7 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Text, "selected lands", None),
     // Split into `contribution` facts naming how and toward what each paid.
     (Text, "waterbend contributions", None),
-    // Slice 6 & 8: GrantPlay replaces ExileTopCardsToPlay and GrantGraveyardCastThisTurn;
+    // GrantPlay replaces ExileTopCardsToPlay and GrantGraveyardCastThisTurn;
     // CardPredicate.keyword replaces flying/deathtouch; ManaClass.expiry replaces combat.
     (Variant, "Effect::ExileTopCardsToPlay", None),
     (Structure, "/Effect::ExileTopCardsToPlay", None),

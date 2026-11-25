@@ -1580,7 +1580,7 @@ mod tests {
                 player,
                 from: None,
                 pool: vec![],
-                looked: vec![],
+                inspected: false,
                 candidates: vec![],
                 selected: vec![],
                 min: 0,

@@ -1250,7 +1250,7 @@ fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
 /// offers an object another slot holds.
 #[test]
 fn copy_targets_change_as_one_assignment() {
-    use crate::{flow::retarget::RetargetStep, state::ability::TargetRelation};
+    use crate::state::ability::TargetRelation;
     let (mut game, source, _, Target::Permanent(a), _) = fixture() else {
         unreachable!()
     };
@@ -1302,12 +1302,12 @@ fn copy_targets_change_as_one_assignment() {
     assert_eq!(game.retarget_offer(copy, &[], true), (vec![b], true));
     assert_eq!(game.retarget_offer(copy, &[b], true), (vec![a], false));
     assert_eq!(game.retarget_offer(copy, &[a], true), (vec![], true));
-    let Some(RetargetStep::Decide(_)) = game.next_retarget(PlayerId(0), copy, vec![b], true) else {
-        panic!("the swapped slot still decides");
-    };
+    assert!(game
+        .next_retarget(PlayerId(0), copy, vec![b], true)
+        .is_some());
     // Publishing writes both targets at once.
     assert!(game
-        .next_copy_target(PlayerId(0), copy, vec![b, a])
+        .next_retarget(PlayerId(0), copy, vec![b, a], true)
         .is_none());
     let copied = &game.state.stack_objects[game.stack_index_of(copy).unwrap()];
     assert_eq!(copied.targets(), [b, a]);

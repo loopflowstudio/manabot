@@ -1584,7 +1584,11 @@ impl Observation {
                     Decision::SelectCards {
                         from: Some(source), ..
                     } => game.selection_zone_objects(source.owner, source.zone),
-                    Decision::SelectCards { looked, .. } if !looked.is_empty() => looked.clone(),
+                    Decision::SelectCards {
+                        pool,
+                        inspected: true,
+                        ..
+                    } => pool.clone(),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_objects(decision)
                     }

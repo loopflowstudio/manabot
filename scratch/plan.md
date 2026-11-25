@@ -24,12 +24,6 @@ is `implemented`; Abyssal Harvester's `blocked_by` is cleared.
 9. 23 compose-only cards (`token.raccoon_3_3_g`, `token.cat_beast_2_2_w`, `Effect::double_counters`, graveyard trigger `intervening_if` and `source_present` fixes for Flamewake Phoenix and Gate Colossus) — `1eb342e57b`.
 10. Abyssal Harvester (`TurnState::graveyard_arrivals`, `CardPredicate.put_into_graveyard_this_turn`, `Except::CreatedThisWay`, `CardData.put_into_graveyard_this_turn`, v11 `card::PUT_INTO_GRAVEYARD_THIS_TURN` column 56) — `1eb342e57b`; `blocked_by` cleared on its ledger row.
 
-Known defect for the gate:
-`resolution_tests::retained_creation_precedes_allocation_and_preserves_copy_entry_terms`
-fails (`resolution_tests.rs:3866`, a token not on the battlefield) at
-`e0baeed8e8`, before Slice 4, and the same way after it. The full debug run
-must fix or explain it.
-
 ## Integrated validation
 
 - Rust: `CARGO_BUILD_JOBS=2 cargo nextest run --profile ci --test-threads 2 --manifest-path managym/Cargo.toml`

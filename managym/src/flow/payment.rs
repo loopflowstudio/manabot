@@ -420,40 +420,44 @@ impl PaymentProgress {
 
     /// Whether the current cost is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
-        self.waterbend
-            || matches!(self.current(), Some(CostComponent::Mana { help, .. }) if help.waterbend > 0)
+        matches!(self.current(), Some(CostComponent::Mana { help, .. }) if help.waterbend > 0)
     }
 }
 
 impl Game {
-    /// Whether `player` can pay every remaining component after the front one
-    /// (e.g. a composite ward's life component after its mana component).
-    pub(crate) fn can_pay_resolution_tail(&self, player: PlayerId, tail: &[CostComponent]) -> bool {
+    /// Whether `payment.player` can pay every remaining component after the
+    /// front one (e.g. a composite ward's life component after its mana).
+    pub(crate) fn can_pay_remaining_tail(&self, payment: &PaymentProgress) -> bool {
         let mut life = 0u32;
         let mut discards = 0usize;
-        for component in tail {
+        for component in payment.owed.get(1..).unwrap_or(&[]) {
             match component {
                 CostComponent::Life(amount) => life = life.saturating_add(*amount),
                 CostComponent::Discard => discards += 1,
                 CostComponent::Mana { cost, .. } => {
-                    if !self.can_pay_mana_cost(player, cost) {
+                    if !self.can_pay_mana_cost(payment.player, cost) {
                         return false;
                     }
                 }
                 _ => {}
             }
         }
-        (life == 0 || self.can_pay_life(player, life))
-            && (discards == 0 || self.discard_candidates(player, None).len() >= discards)
+        (life == 0 || self.can_pay_life(payment.player, life))
+            && (discards == 0 || self.discard_candidates(payment.player, None).len() >= discards)
     }
 
-    /// Advance a resolution payment after its front component has been paid.
+    /// Record that `payment`'s front component was paid and advance.
     /// Once committed, trailing no-choice life components pay immediately.
     pub(crate) fn advance_resolution_payment(
         &mut self,
         mut payment: PaymentProgress,
         frame: EffectFrame,
     ) {
+        if payment.waterbends() {
+            payment.waterbend = true;
+        }
+        payment.owed.remove(0);
+        payment.committed = true;
         while !payment.can_decline() {
             let Some(&CostComponent::Life(life)) = payment.owed.first() else {
                 break;
@@ -478,13 +482,7 @@ impl Game {
         if let Some(key) = payment.spends {
             self.spend_once_each_turn(key);
         }
-        if payment.waterbends()
-            || payment
-                .receipt
-                .contributed(How::Tapped, Toward::Waterbend)
-                .next()
-                .is_some()
-        {
+        if payment.waterbend || payment.waterbends() {
             self.record_bending(payment.player, crate::flow::turn::Bending::Water);
         }
         frame.prepend_effects(payment.if_paid.into_iter());

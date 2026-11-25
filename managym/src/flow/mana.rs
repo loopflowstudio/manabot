@@ -3413,11 +3413,6 @@ impl Game {
                 }
                 SpendCompletion::Resolution(mut payment) => {
                     payment.receipt.record_mana(spent.mana().iter().cloned());
-                    if payment.waterbends() {
-                        payment.waterbend = true;
-                    }
-                    payment.owed.remove(0);
-                    payment.committed = true;
                     self.advance_resolution_payment(payment, suspended.frame);
                 }
                 SpendCompletion::Foretell(card) => self.complete_foretell(player, card),

@@ -38,12 +38,6 @@ struct TargetChange {
     originally_legal: Vec<bool>,
 }
 
-/// What `Decision::Retarget` publishes once every slot is decided.
-pub(crate) enum RetargetStep {
-    Decide(Decision),
-    Finished(Vec<Target>),
-}
-
 impl Game {
     fn target_change(&self, object: Target) -> Option<TargetChange> {
         let stacked = &self.state.stack_objects[self.stack_index_of(object)?];
@@ -118,20 +112,15 @@ impl Game {
             && self.relation_admits(requirement, clause, target, others())
     }
 
-    /// Whether the last slot of `assignment` is acceptable: a change obeys
-    /// every rule, and an unchanged target that was legal stays legal.
-    fn last_slot_acceptable(&self, change: &TargetChange, assignment: &[Target]) -> bool {
-        let slot = assignment.len() - 1;
+    /// Whether `slot` of `assignment` is acceptable: a change obeys every
+    /// rule, and an unchanged target that was legal stays legal.
+    fn slot_acceptable(&self, change: &TargetChange, assignment: &[Target], slot: usize) -> bool {
         (assignment[slot] == change.original[slot] && !change.originally_legal[slot])
             || self.slot_rules_hold(change, assignment, slot)
     }
 
     fn assignment_acceptable(&self, change: &TargetChange, assignment: &[Target]) -> bool {
-        (1..=assignment.len()).all(|len| {
-            let slot = len - 1;
-            (assignment[slot] == change.original[slot] && !change.originally_legal[slot])
-                || self.slot_rules_hold(change, assignment, slot)
-        })
+        (0..assignment.len()).all(|slot| self.slot_acceptable(change, assignment, slot))
     }
 
     /// Whether some choice for the remaining slots completes `assignment`.
@@ -147,14 +136,32 @@ impl Game {
             std::iter::once(change.original[slot]).chain(change.candidates[slot].iter().copied())
         {
             assignment.push(option);
-            let found =
-                self.last_slot_acceptable(change, assignment) && self.completes(change, assignment);
+            let found = self.slot_acceptable(change, assignment, slot)
+                && self.completes(change, assignment);
             assignment.pop();
             if found {
                 return true;
             }
         }
         false
+    }
+
+    fn candidate_admits_completion(
+        &self,
+        change: &TargetChange,
+        chosen: &[Target],
+        candidate: Target,
+        may_keep: bool,
+    ) -> bool {
+        let slot = chosen.len();
+        let mut assignment: Vec<Target> = chosen.iter().copied().chain([candidate]).collect();
+        if may_keep {
+            self.slot_acceptable(change, &assignment, slot)
+                && self.completes(change, &mut assignment)
+        } else {
+            assignment.extend_from_slice(&change.original[slot + 1..]);
+            self.assignment_acceptable(change, &assignment)
+        }
     }
 
     /// The changes slot `chosen.len()` admits after `chosen`. With
@@ -173,23 +180,14 @@ impl Game {
         candidates
             .iter()
             .copied()
-            .filter(|candidate| {
-                let mut assignment: Vec<Target> =
-                    chosen.iter().copied().chain([*candidate]).collect();
-                if may_keep {
-                    self.completes(change, &mut assignment)
-                } else {
-                    assignment.extend_from_slice(&change.original[slot + 1..]);
-                    self.assignment_acceptable(change, &assignment)
-                }
+            .filter(|&candidate| {
+                self.candidate_admits_completion(change, chosen, candidate, may_keep)
             })
             .collect()
     }
 
     fn keep_admits_completion(&self, change: &TargetChange, chosen: &[Target]) -> bool {
-        let mut assignment: Vec<Target> = chosen.to_vec();
-        assignment.push(change.original[chosen.len()]);
-        self.last_slot_acceptable(change, &assignment) && self.completes(change, &mut assignment)
+        self.candidate_admits_completion(change, chosen, change.original[chosen.len()], true)
     }
 
     /// The targets slot `slot` of the stack object could change to while
@@ -222,48 +220,61 @@ impl Game {
         (self.retarget_changes(&change, chosen, may_keep), keep)
     }
 
-    /// The next `Decision::Retarget` after `chosen`, keeping each slot that
-    /// offers no change; or, with every slot decided, the final targets.
-    /// "Change the target" (`may_keep` false) changes only the first slot
-    /// that can change and keeps the rest.
-    pub(crate) fn next_retarget(
+    /// Whether `target` is a legal change for slot `chosen.len()`.
+    pub(crate) fn retarget_accepts(
         &self,
+        object: Target,
+        chosen: &[Target],
+        target: Target,
+        may_keep: bool,
+    ) -> bool {
+        let Some(change) = self.target_change(object) else {
+            return false;
+        };
+        change
+            .candidates
+            .get(chosen.len())
+            .is_some_and(|candidates| candidates.contains(&target))
+            && self.candidate_admits_completion(&change, chosen, target, may_keep)
+    }
+
+    /// Whether keeping slot `chosen.len()`'s current target admits a legal
+    /// completion for the remaining slots.
+    pub(crate) fn retarget_may_keep(&self, object: Target, chosen: &[Target]) -> bool {
+        let Some(change) = self.target_change(object) else {
+            return false;
+        };
+        chosen.len() < change.original.len() && self.keep_admits_completion(&change, chosen)
+    }
+
+    /// The next `Decision::Retarget` after `chosen`, keeping each slot that
+    /// offers no change. Once every slot of a copy (`may_keep`) is decided,
+    /// publishes them and emits targeting events (CR 707.10c) for every target,
+    /// including kept ones. "Change the target" (`may_keep` false) changes
+    /// only the first slot that can change and leaves the rest untouched.
+    pub(crate) fn next_retarget(
+        &mut self,
         player: PlayerId,
         object: Target,
         mut chosen: Vec<Target>,
         may_keep: bool,
-    ) -> Option<RetargetStep> {
+    ) -> Option<Decision> {
         let change = self.target_change(object)?;
         while chosen.len() < change.original.len() {
             if !self.retarget_changes(&change, &chosen, may_keep).is_empty() {
-                return Some(RetargetStep::Decide(Decision::Retarget {
+                return Some(Decision::Retarget {
                     player,
                     object,
                     chosen,
                     may_keep,
-                }));
+                });
             }
             chosen.push(change.original[chosen.len()]);
         }
-        may_keep.then_some(RetargetStep::Finished(chosen))
-    }
-
-    /// Continue a copy's choice of new targets; once every slot is decided
-    /// it publishes them and the copy becomes a source of targeting events
-    /// (CR 707.10c), including targets the controller kept.
-    pub(crate) fn next_copy_target(
-        &mut self,
-        player: PlayerId,
-        copy: Target,
-        chosen: Vec<Target>,
-    ) -> Option<Decision> {
-        match self.next_retarget(player, copy, chosen, true)? {
-            RetargetStep::Decide(decision) => Some(decision),
-            RetargetStep::Finished(targets) => {
-                self.publish_targets(copy, targets, true);
-                None
-            }
+        if may_keep {
+            self.publish_targets(object, chosen, true);
         }
+        None
     }
 
     /// Continue after a slot is decided: "choose new targets" moves to the
@@ -276,7 +287,7 @@ impl Game {
         may_keep: bool,
     ) -> Option<Decision> {
         if may_keep {
-            return self.next_copy_target(player, object, chosen);
+            return self.next_retarget(player, object, chosen, true);
         }
         let index = self
             .stack_index_of(object)
@@ -302,14 +313,6 @@ impl Game {
             .collect();
         slots.copy_from_slice(&targets);
         self.emit_permanents_targeted(&targeted, object, controller);
-    }
-
-    pub(crate) fn emit_copy_targets(&mut self, copy: Target) {
-        let index = self.stack_index_of(copy).expect("newly created stack copy");
-        let stacked = &self.state.stack_objects[index];
-        let targets = stacked.targets().to_vec();
-        let controller = stacked.controller();
-        self.emit_permanents_targeted(&targets, copy, controller);
     }
 
     /// Copy a spell or ability on the stack under `controller` (CR 707.10);

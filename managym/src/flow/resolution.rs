@@ -1449,11 +1449,7 @@ impl Game {
                                 predicate: predicate.clone(),
                             }
                         }),
-                        looked: if library_top {
-                            pool.clone()
-                        } else {
-                            Vec::new()
-                        },
+                        inspected: library_top,
                         pool,
                         candidates,
                         selected: Vec::new(),
@@ -1488,14 +1484,11 @@ impl Game {
             }
             Effect::CopyTriggeringObject => {
                 let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
-                self.next_copy_target(frame.controller, copy, Vec::new())
+                self.next_retarget(frame.controller, copy, Vec::new(), true)
             }
             Effect::ChangeTarget { .. } => {
                 let object = self.present_primary_target(frame)?;
-                match self.next_retarget(frame.controller, object, Vec::new(), false)? {
-                    super::retarget::RetargetStep::Decide(decision) => Some(decision),
-                    super::retarget::RetargetStep::Finished(_) => None,
-                }
+                self.next_retarget(frame.controller, object, Vec::new(), false)
             }
             Effect::AdditionalCombatPhase { attackers } => {
                 self.state
@@ -1523,13 +1516,14 @@ impl Game {
                     let Some(copy) = self.copy_stack_object(spell, frame.controller) else {
                         break;
                     };
-                    self.state
-                        .stack_objects_mut()
-                        .last_mut()
+                    let count = self
+                        .state
+                        .stack_objects
+                        .last()
                         .expect("new stack copy")
-                        .targets_mut()
-                        .fill(target);
-                    self.emit_copy_targets(copy);
+                        .targets()
+                        .len();
+                    self.publish_targets(copy, vec![target; count], true);
                 }
                 None
             }

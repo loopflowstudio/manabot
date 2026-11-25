@@ -669,10 +669,9 @@ pub enum Decision {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         #[serde(serialize_with = "crate::state::game_object::exact")]
         pool: Vec<ObjectId>,
-        /// Top-of-library cards privately inspected by `ObjectSelector::LibraryTop`.
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        looked: Vec<ObjectId>,
+        /// Whether `pool` is a privately inspected library prefix (`LibraryTop`).
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        inspected: bool,
         #[serde(serialize_with = "crate::state::game_object::exact")]
         candidates: Vec<ObjectId>,
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -917,9 +916,12 @@ impl Decision {
             | Self::ManifestDread { player, looked }
             | Self::Surveil { player, looked, .. }
             | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
-            Self::SelectCards { player, looked, .. } if !looked.is_empty() => {
-                Some((*player, looked))
-            }
+            Self::SelectCards {
+                player,
+                pool,
+                inspected: true,
+                ..
+            } => Some((*player, pool)),
             Self::OrderLibrary {
                 player,
                 object_ids: objects,
@@ -973,7 +975,11 @@ impl Decision {
             Decision::LookAndSelect { looked, .. }
             | Decision::ManifestDread { looked, .. }
             | Decision::Surveil { looked, .. } => looked,
-            Decision::SelectCards { looked, .. } if !looked.is_empty() => looked,
+            Decision::SelectCards {
+                pool,
+                inspected: true,
+                ..
+            } => pool,
             Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
@@ -1868,8 +1874,7 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
-                let tail_payable =
-                    self.can_pay_resolution_tail(player, payment.owed.get(1..).unwrap_or(&[]));
+                let tail_payable = self.can_pay_remaining_tail(payment);
                 let (cost, help) = match payment.owed.first() {
                     Some(CostComponent::Discard) => {
                         let mut actions: Vec<_> = if tail_payable {
@@ -2589,9 +2594,7 @@ impl Game {
             (Decision::Payment(payment), Action::SelectCard { object, .. })
                 if matches!(payment.owed.first(), Some(CostComponent::Discard)) =>
             {
-                if !self
-                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
-                {
+                if !self.can_pay_remaining_tail(payment) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("cannot pay remaining resolution cost".into()));
                 }
@@ -2601,18 +2604,14 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
                 }
-                let Decision::Payment(mut payment) = suspended.decision else {
+                let Decision::Payment(payment) = suspended.decision else {
                     unreachable!()
                 };
-                payment.owed.remove(0);
-                payment.committed = true;
                 self.advance_resolution_payment(payment, suspended.frame);
                 Ok(())
             }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
-                if !self
-                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
-                {
+                if !self.can_pay_remaining_tail(payment) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("cannot pay remaining resolution cost".into()));
                 }
@@ -2630,9 +2629,7 @@ impl Game {
                 tapped
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
-                if !self
-                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
-                {
+                if !self.can_pay_remaining_tail(payment) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("cannot pay remaining resolution cost".into()));
                 }
@@ -2644,11 +2641,9 @@ impl Game {
                             return Err(AgentError("cannot pay life cost".into()));
                         }
                         self.pay_life_cost(player, life, &mut payment.receipt);
-                        let Decision::Payment(mut payment) = suspended.decision else {
+                        let Decision::Payment(payment) = suspended.decision else {
                             unreachable!()
                         };
-                        payment.owed.remove(0);
-                        payment.committed = true;
                         self.advance_resolution_payment(payment, suspended.frame);
                         return Ok(());
                     }
@@ -2877,11 +2872,7 @@ impl Game {
                 Action::ChooseTarget { target, .. },
             ) => {
                 let (player, object, may_keep) = (*player, *object, *may_keep);
-                if !self
-                    .retarget_offer(object, chosen, may_keep)
-                    .0
-                    .contains(target)
-                {
+                if !self.retarget_accepts(object, chosen, *target, may_keep) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }
@@ -2901,7 +2892,7 @@ impl Game {
                 Action::Decline { .. },
             ) => {
                 let (player, object) = (*player, *object);
-                if !self.retarget_offer(object, chosen, true).1 {
+                if !self.retarget_may_keep(object, chosen) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("this target cannot stay".into()));
                 }

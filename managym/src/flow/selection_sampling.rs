@@ -1010,14 +1010,12 @@ impl Game {
             Decision::SelectCards {
                 from,
                 pool,
-                looked,
                 candidates,
                 selected,
                 ..
             } => {
                 rebind(selected.iter_mut(), &rebinding.objects);
                 rebind(pool.iter_mut(), &rebinding.objects);
-                rebind(looked.iter_mut(), &rebinding.objects);
                 if let Some(source) = from
                     .as_ref()
                     .filter(|source| hidden_from(self, source, rebinding.viewer))

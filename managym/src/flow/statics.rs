@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context, SourceSeed},
+        layers::{matches_view, Context, PredicateSource, SourceSeed},
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -607,6 +607,31 @@ impl Game {
         self.off_battlefield_matches_choice(object_id, predicate, power, None)
     }
 
+    /// Check graveyard-arrival flags and return `predicate` with them cleared
+    /// for printing-level matching, or `None` if the object fails them.
+    fn strip_graveyard_arrival<'a>(
+        &self,
+        object: ObjectId,
+        predicate: &'a CardPredicate,
+    ) -> Option<std::borrow::Cow<'a, CardPredicate>> {
+        if !predicate.from_battlefield_this_turn && !predicate.put_into_graveyard_this_turn {
+            return Some(std::borrow::Cow::Borrowed(predicate));
+        }
+        if self.state.zones.zone_of(object) != Some(ZoneType::Graveyard)
+            || (predicate.from_battlefield_this_turn
+                && !self.state.turn.in_graveyard_from_battlefield(object))
+            || (predicate.put_into_graveyard_this_turn
+                && !self.state.turn.in_graveyard_this_turn(object))
+        {
+            return None;
+        }
+        Some(std::borrow::Cow::Owned(CardPredicate {
+            from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
+            ..predicate.clone()
+        }))
+    }
+
     fn off_battlefield_matches_choice(
         &self,
         object_id: ObjectId,
@@ -614,26 +639,9 @@ impl Game {
         power: impl FnOnce() -> i32,
         chosen: Option<&crate::state::permanent::EntryChoice>,
     ) -> bool {
-        let ordinary;
-        let predicate =
-            if predicate.from_battlefield_this_turn || predicate.put_into_graveyard_this_turn {
-                if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard)
-                    || (predicate.from_battlefield_this_turn
-                        && !self.state.turn.in_graveyard_from_battlefield(object_id))
-                    || (predicate.put_into_graveyard_this_turn
-                        && !self.state.turn.in_graveyard_this_turn(object_id))
-                {
-                    return false;
-                }
-                ordinary = CardPredicate {
-                    from_battlefield_this_turn: false,
-                    put_into_graveyard_this_turn: false,
-                    ..predicate.clone()
-                };
-                &ordinary
-            } else {
-                predicate
-            };
+        let Some(predicate) = self.strip_graveyard_arrival(object_id, predicate) else {
+            return false;
+        };
         let object = &self.state[object_id];
         predicate.matches_printing_with_choice(
             object,
@@ -768,22 +776,9 @@ impl Game {
         entry: &ZoneEntry,
         predicate: &CardPredicate,
     ) -> bool {
-        if predicate.from_battlefield_this_turn || predicate.put_into_graveyard_this_turn {
-            return self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
-                && (!predicate.from_battlefield_this_turn
-                    || self.state.turn.in_graveyard_from_battlefield(object))
-                && (!predicate.put_into_graveyard_this_turn
-                    || self.state.turn.in_graveyard_this_turn(object))
-                && self.entry_matches_predicate(
-                    object,
-                    entry,
-                    &CardPredicate {
-                        from_battlefield_this_turn: false,
-                        put_into_graveyard_this_turn: false,
-                        ..predicate.clone()
-                    },
-                );
-        }
+        let Some(predicate) = self.strip_graveyard_arrival(object, predicate) else {
+            return false;
+        };
         let Some(face) = self.battlefield_entry_face(object, entry) else {
             return false;
         };
@@ -1162,18 +1157,13 @@ impl Game {
                 predicate,
                 distinct_names,
             } => {
-                let source_view = source_id()
-                    .filter(|_| predicate.reads_source())
-                    .map(|id| self.layer_view(id));
-                let source_name = source_view.as_ref().zip(source_id()).map(|(view, id)| {
-                    (
-                        view.name.as_str(),
-                        self.live_permanent(id).chosen.as_deref(),
-                    )
-                });
+                let source_view = self.predicate_source_view(source_id(), predicate);
+                let predicate_source = self.predicate_source(source_view.as_ref());
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name));
+                    .filter(|(id, view)| {
+                        matches_view(self, *id, predicate, view, predicate_source)
+                    });
                 controlled_threshold(matching, *count, *distinct_names, |(_, view)| {
                     view.name.clone()
                 })
@@ -1182,21 +1172,14 @@ impl Game {
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
-                let source_view = source_id()
-                    .filter(|_| predicate.reads_source())
-                    .map(|id| self.layer_view(id));
-                let source_name = source_view.as_ref().zip(source_id()).map(|(view, id)| {
-                    (
-                        view.name.as_str(),
-                        self.live_permanent(id).chosen.as_deref(),
-                    )
-                });
+                let source_view = self.predicate_source_view(source_id(), predicate);
+                let predicate_source = self.predicate_source(source_view.as_ref());
                 self.layer_views(
                     [PlayerId(0), PlayerId(1)]
                         .into_iter()
                         .flat_map(|player| self.iter_battlefield_permanents(player)),
                 )
-                .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name))
+                .filter(|(id, view)| matches_view(self, *id, predicate, view, predicate_source))
                 .take(*count)
                 .count()
                     == *count
@@ -1380,6 +1363,26 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
+    fn predicate_source_view(
+        &self,
+        source: Option<PermanentId>,
+        predicate: &CardPredicate,
+    ) -> Option<(PermanentId, Arc<Characteristics>)> {
+        source
+            .filter(|_| predicate.reads_source())
+            .map(|id| (id, self.layer_view(id)))
+    }
+
+    fn predicate_source<'a>(
+        &'a self,
+        source: Option<&'a (PermanentId, Arc<Characteristics>)>,
+    ) -> Option<PredicateSource<'a>> {
+        source.map(|(id, view)| PredicateSource {
+            name: view.name.as_str(),
+            chosen: self.live_permanent(*id).chosen.as_deref(),
+        })
+    }
+
     pub(super) fn permanent_matches_with_source(
         &self,
         id: PermanentId,
@@ -1387,18 +1390,13 @@ impl Game {
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source_view = source
-            .filter(|_| predicate.reads_source())
-            .map(|id| self.layer_view(id));
+        let source_view = self.predicate_source_view(source, predicate);
         matches_view(
             self,
             id,
             predicate,
             &view,
-            source_view
-                .as_ref()
-                .zip(source)
-                .map(|(s, id)| (s.name.as_str(), self.live_permanent(id).chosen.as_deref())),
+            self.predicate_source(source_view.as_ref()),
         )
     }
 
