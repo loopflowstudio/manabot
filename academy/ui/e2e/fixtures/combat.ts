@@ -2,6 +2,14 @@ import { expect, type Page } from '@playwright/test';
 import { tableSnapshot } from './table';
 import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
+  DeclareAttackersGroup,
+  DeclareBlockersGroup,
+  GroupCommand,
+  GroupPlan,
+  GroupRefusal,
+  LiveGroup,
+} from '../../src/lib/group';
+import type {
   Command,
   ExperienceFrame,
   FrameUpdate,
@@ -10,7 +18,6 @@ import type {
   PresentationEvent,
   RecoveryEnvelope,
 } from '../../src/lib/types';
-
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
@@ -101,6 +108,41 @@ function frameAt(stage: Stage, moreTigers = 0): ExperienceFrame {
   };
 }
 
+const id = (entity: number) => ({ entity, incarnation: 0 });
+
+function liveGroupFor(frame: ExperienceFrame, moreTigers = 0): LiveGroup | null {
+  if (!frame.prompt) return null;
+  const address = {
+    match_id: frame.match_id,
+    revision: frame.revision,
+    prompt_id: frame.prompt.id,
+    frame_hash: frame.frame_hash,
+  };
+  if (frame.action_space === 'DECLARE_ATTACKER') {
+    const declarable: DeclareAttackersGroup['declarable'] = [
+      { item: id(83), label: 'Otter-Penguin', must_attack: false },
+      { item: id(85), label: 'Tiger-Seal', must_attack: false },
+      ...Array.from({ length: moreTigers }, (_, i) => ({
+        item: id(86 + i),
+        label: 'Tiger-Seal',
+        must_attack: false,
+      })),
+    ].filter(creature => frame.revision === 10 || creature.item.entity !== 83);
+    const committed = frame.revision === 11 ? [id(83)] : [];
+    return { ...address, kind: 'declare_attackers', declarable, committed };
+  }
+  if (frame.action_space === 'DECLARE_BLOCKER') {
+    const group: DeclareBlockersGroup = {
+      ...address,
+      kind: 'declare_blockers',
+      declarable: [{ item: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false }],
+      committed: [],
+    };
+    return group;
+  }
+  return null;
+}
+
 /** What the authority reports after the block: the block, damage both ways, nobody dies. */
 function combatEvents(from: number): PresentationEvent[] {
   const event = (seq: number, kind: PresentationEvent['kind']): PresentationEvent => ({
@@ -113,7 +155,11 @@ function combatEvents(from: number): PresentationEvent[] {
   ];
 }
 
-function acceptedUpdate(command: Command, frame: ExperienceFrame, presentation: PresentationEvent[] = []): FrameUpdate {
+function acceptedUpdate(
+  command: { command_id: string; expected_revision: number },
+  frame: ExperienceFrame,
+  presentation: PresentationEvent[] = [],
+): FrameUpdate {
   return {
     base_revision: command.expected_revision,
     frame,
@@ -125,94 +171,138 @@ function acceptedUpdate(command: Command, frame: ExperienceFrame, presentation: 
   };
 }
 
-interface Authority {
+export interface CombatAuthority {
   commands: Command[];
-  previews: { revision: number; plan: { attackers: { entity: number }[]; blocks: { blocker: { entity: number }; attacker: { entity: number } }[] } }[];
+  groupCommands: GroupCommand[];
+  previews: { revision: number; plan: GroupPlan }[];
 }
 
-const id = (entity: number) => ({ entity, incarnation: 0 });
-
 interface CombatScenario {
-  after?: Partial<Record<number, Stage>>;
   moreTigers?: number;
-  rejectOnceAt?: number;
+  refuseGroupOnce?: GroupRefusal;
   finishWork?: Promise<void>;
 }
 
 /**
- * A combat authority: each Command answers the frame it was made at, and the
- * combat preview answers a drafted plan with the per-creature offers the
- * engine would ask for. `after` replaces the frame that follows a revision,
- * to stand for a decision the preview did not predict.
+ * A combat authority: sends live `group` descriptors, previews drafts on
+ * `/group-preview` (without steps), and executes whole declarations on one
+ * atomic `group_command`. Raw single-step `command`s still work too.
  */
-export async function startCombat(page: Page, { after = {}, moreTigers = 0, rejectOnceAt, finishWork }: CombatScenario = {}): Promise<Authority> {
-  const authority: Authority = { commands: [], previews: [] };
+export async function startCombat(
+  page: Page,
+  { moreTigers = 0, refuseGroupOnce, finishWork }: CombatScenario = {},
+): Promise<CombatAuthority> {
+  const authority: CombatAuthority = { commands: [], groupCommands: [], previews: [] };
   let current = frameAt('otter', moreTigers);
-  await page.route('**/api/sessions/*/combat-preview', async route => {
-    const request = route.request().postDataJSON() as { match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: Authority['previews'][number]['plan'] };
+  let pendingRefusal = refuseGroupOnce ?? null;
+
+  await page.route('**/api/sessions/*/group-preview', async route => {
+    const request = route.request().postDataJSON() as {
+      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: GroupPlan;
+    };
     authority.previews.push({ revision: request.revision, plan: request.plan });
-    const attacks = new Set(request.plan.attackers.map(attacker => attacker.entity));
-    const step = (revision: number, creature: number, actionIndex: number, attack: boolean, blocks: number | null = null) =>
-      ({ revision, fingerprint: `native-${revision}`, creature: id(creature), action_index: actionIndex, attack, blocks: blocks === null ? null : id(blocks) });
-    const preview = request.revision === 12
-      ? {
-          kind: 'blockers', declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [id(84)], must_block: false, must_attack: false }],
-          steps: [request.plan.blocks.length ? step(12, 83, 201, false, 84) : step(12, 83, 202, false)],
-          refused: null, declared_attackers: [], declared_blocks: request.plan.blocks,
-        }
-      : {
-          kind: 'attackers',
-          declarable: [{ creature: id(83), label: 'Otter-Penguin', can_block: [], must_block: false, must_attack: false },
-            { creature: id(85), label: 'Tiger-Seal', can_block: [], must_block: false, must_attack: false },
-            ...Array.from({ length: moreTigers }, (_, i) => ({ creature: id(86 + i), label: 'Tiger-Seal', can_block: [], must_block: false, must_attack: false }))].filter(creature => request.revision === 10 || creature.creature.entity === 85),
-          steps: [
-            ...(request.revision === 10 ? [step(10, 83, attacks.has(83) ? 101 : 102, attacks.has(83))] : []),
-            step(11, 85, attacks.has(85) ? 103 : 104, attacks.has(85)),
-          ],
-          refused: null, declared_attackers: request.plan.attackers, declared_blocks: [],
-        };
-    await route.fulfill({ json: { ...request, viewer: 0, preview } });
+    const outcome = request.plan.kind === 'declare_blockers'
+      ? { kind: 'declare_blockers', blocks: request.plan.blocks }
+      : request.plan.kind === 'declare_attackers'
+        ? { kind: 'declare_attackers', attackers: request.plan.attackers }
+        : null;
+    await route.fulfill({
+      json: {
+        match_id: request.match_id,
+        revision: request.revision,
+        prompt_id: request.prompt_id,
+        frame_hash: request.frame_hash,
+        viewer: 0,
+        complete: true,
+        refused: null,
+        outcome,
+      },
+    });
   });
+
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage(async raw => {
-      const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
+      const message = JSON.parse(String(raw)) as {
+        type?: string;
+        command?: Command | GroupCommand;
+      };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
           session_id: 'combat-session', resume_token: 'combat-resume-token',
-          recovery: { ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame: current, presentation_tail: [],
-            presentation_cursor: 0, accepted_commands: [], replay_cursor: current.revision },
+          group: liveGroupFor(current, moreTigers),
+          recovery: {
+            ...structuredClone(boltFixture.recovery),
+            reason: 'initial_connect',
+            frame: current,
+            presentation_tail: [],
+            presentation_cursor: 0,
+            accepted_commands: [],
+            replay_cursor: current.revision,
+          },
         }));
         return;
       }
-      if (message.type !== 'command' || !message.command) return;
-      const command = message.command;
-      authority.commands.push(command);
-      const revision = command.expected_revision;
-      if (revision === rejectOnceAt) {
-        rejectOnceAt = undefined;
-        socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
-          rejection: { command_id: command.command_id, code: 'stale_revision', message: 'The declaration was refused.',
-            current_revision: revision, current_prompt: current.prompt!.id },
-          recovery: { ...structuredClone(boltFixture.recovery), reason: 'command_rejected', frame: current, presentation_tail: [],
-            presentation_cursor: 0, accepted_commands: [], replay_cursor: revision } }));
+
+      if (message.type === 'group_command' && message.command) {
+        const command = message.command as GroupCommand;
+        authority.groupCommands.push(command);
+        const revision = command.expected_revision;
+        if (pendingRefusal) {
+          const refused = pendingRefusal;
+          pendingRefusal = null;
+          socket.send(JSON.stringify({
+            type: 'command_outcome',
+            status: 'rejected',
+            group: liveGroupFor(current, moreTigers),
+            rejection: {
+              command_id: command.command_id,
+              code: 'group_refused',
+              message: refused.reason,
+              current_revision: revision,
+              current_prompt: current.prompt!.id,
+              refused,
+            },
+          }));
+          return;
+        }
+        const stage: Stage = command.plan.kind === 'declare_attackers' ? 'block' : 'priority';
+        const next = frameAt(stage, moreTigers);
+        const blocked = command.plan.kind === 'declare_blockers' && command.plan.blocks.length > 0;
+        if (blocked) {
+          next.projection.agent.battlefield[0].damage = 1;
+          next.projection.opponent.battlefield[0].damage = 2;
+        }
+        await (finishWork ?? Promise.resolve());
+        current = next;
+        const update = acceptedUpdate(command, next, blocked ? combatEvents(12) : []);
+        const work = (state: 'running' | 'complete') => ({
+          operation_id: `advance-${revision}`, sequence: revision, kind: 'advance', started_at: 0, state,
+          scope: 'match', setup_id: null, loading_seat: null, match_id: next.match_id, revision: next.revision, chooser: null,
+        });
+        socket.send(JSON.stringify({
+          type: 'command_outcome', status: 'accepted', update, work: work('complete'),
+          group: liveGroupFor(next, moreTigers),
+        }));
         return;
       }
-      const stage: Stage = after[revision] ?? (revision === 10 ? 'tiger' : revision === 11 ? 'block' : 'priority');
-      const next = frameAt(stage);
-      const blocked = revision === 12 && command.offer_id === 201;
-      if (blocked) next.projection.agent.battlefield[0].damage = 1;
-      if (blocked) next.projection.opponent.battlefield[0].damage = 2;
-      current = next;
-      // As the server does: the accepted frame arrives while the table's work still runs, then again once it completes.
-      const update = acceptedUpdate(command, next, blocked ? combatEvents(12) : []);
-      const work = (state: 'running' | 'complete') => ({ operation_id: `advance-${revision}`, sequence: revision, kind: 'advance', started_at: 0, state,
-        scope: 'match', setup_id: null, loading_seat: null, match_id: next.match_id, revision: next.revision, chooser: null });
-      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('running') }));
-      await (finishWork ?? new Promise(resolve => setTimeout(resolve, 50)));
-      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('complete') }));
+
+      if (message.type === 'command' && message.command) {
+        const command = message.command as Command;
+        authority.commands.push(command);
+        const revision = command.expected_revision;
+        const stage: Stage = revision === 10 ? 'tiger' : revision === 11 ? 'block' : 'priority';
+        const next = frameAt(stage, moreTigers);
+        current = next;
+        const update = acceptedUpdate(command, next);
+        socket.send(JSON.stringify({
+          type: 'command_outcome', status: 'accepted', update,
+          group: liveGroupFor(next, moreTigers),
+        }));
+      }
     });
   });
+
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
@@ -224,7 +314,7 @@ export async function startCombat(page: Page, { after = {}, moreTigers = 0, reje
 /**
  * A live combat draft folds each creature's own answer under a closed
  * disclosure. Scripted players that pick those answers open it once the draft
- * is drawn; a declaration without a draft (no preview) lists them already.
+ * is drawn; a declaration without a draft (no live group) lists them already.
  */
 export async function showEachCreaturesChoice(page: Page): Promise<void> {
   const kind = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');

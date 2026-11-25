@@ -94,10 +94,12 @@ actual pending decisions on reconnect, replay/fork identity and accessibility.
 Cancellation or undo requires an explicit shared action and cannot erase
 committed costs or revealed information. Priority-stop automation must stay
 identifiable as automation, separate from deliberate human decisions.
-Live combat is one joint board draft (click or drag) sent via the existing
-sequential per-creature Commands with no engine change: fold raw per-creature
-offers under a collapsed disclosure while drafting (not beside the draft), and
-keep them listed in Replay and Study where recorded policy probabilities attach.
+Live grouped decisions (combat declarations on the board and Scry, Surveil, and
+OrderLibrary in `ArrangePanel`) are drafted whole and committed in one
+`group_command` compiled to sequential native `Action`s with no engine action-space
+change: fold raw single-step offers under a collapsed disclosure while drafting
+(not beside the draft), and keep them listed in Replay and Study where recorded
+policy probabilities attach.
 Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
 `GameConfig.human_seat` orders them at the native boundary. Record and project
 actual native seats; Watch keeps its two-seat acting-view contract.
@@ -479,7 +481,10 @@ never remap it again. Player control grants in-game inspection through native
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
 use action-aligned `structured_search_offers`: these offers have no choices
 and reject nonempty `Command.answers`. Compound submissions belong to the
-separate `compound_offers` / `step_structured` API. Do not infer supported
+separate `compound_offers` / `step_structured` API. Grouped input
+(`flow/group/`, `managym.group`, Academy `group_command`) compiles a typed plan
+to sequential native `Action`s on a clone before stepping the live game and
+never widens an action space, observation, or digest. Do not infer supported
 atomic answers from the `Command` field alone, or pass compound offer ids to
 the semantic executor. Recording preserves the original native Command and
 its object preconditions; Academy's presentation Command has a separate

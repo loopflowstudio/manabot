@@ -528,3 +528,123 @@ it('ignores work from another table, revision or earlier operation', () => {
   expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
   gameStore.work = null;
 });
+
+describe('grouped decisions in GameSocketController', () => {
+  it('tracks liveGroup on observation, role_changed, and frame hash changes', () => {
+    gameStore.prepareForNewGame();
+    const controller = new GameSocketController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const scryGroup = {
+      match_id: frame.match_id,
+      revision: frame.revision,
+      prompt_id: frame.prompt!.id,
+      frame_hash: frame.frame_hash,
+      kind: 'scry' as const,
+      items: [{ item: { entity: 1, incarnation: 0 }, label: 'Island' }, { item: { entity: 2, incarnation: 0 }, label: 'Opt' }],
+      committed_top: [],
+      committed_bottom: [],
+    };
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      group: null,
+    });
+    expect(gameStore.liveGroup).toBeNull();
+
+    // TransferPilot delivers the active group on role_changed without reloading.
+    deliver(controller, {
+      type: 'role_changed',
+      table: {
+        contract: 'testing-house-v1',
+        table_id: 't1',
+        table_revision: 2,
+        mode: 'live',
+        access: {
+          identity: { viewer_id: 'v1', table_id: 't1', rules_viewer: 0 },
+          role: 'pilot',
+          capabilities: ['view_table', 'submit_live_command'],
+          grant_revision: 2,
+        },
+        participants: [],
+        beliefs: [],
+        decisions: [],
+        opponent_label: null,
+        watcher_invite: null,
+      },
+      group: scryGroup,
+    } as ServerMessage | SharedTableControlEvent);
+    expect(gameStore.liveGroup).toEqual(scryGroup);
+
+    // Mismatched frame hash is ignored.
+    deliver(controller, {
+      type: 'role_changed',
+      table: gameStore.table!,
+      group: { ...scryGroup, frame_hash: 'wrong-hash' },
+    } as ServerMessage | SharedTableControlEvent);
+    expect(gameStore.liveGroup).toBeNull();
+  });
+
+  it('reconciles a pending group_command by accepted_commands and frame_hash', () => {
+    const controller = new GameSocketController();
+    const sent: string[] = [];
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const request = {
+      type: 'group_command' as const,
+      command: {
+        command_id: 'grp-pending-1',
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: frame.prompt!.id,
+        frame_hash: frame.frame_hash,
+        plan: { kind: 'declare_attackers' as const, attackers: [] },
+      },
+    };
+    const state = controller as unknown as {
+      pendingCommand: typeof request | null;
+      socket: { send(raw: string): void; close(): void };
+      reconcileCommand(env: RecoveryEnvelope): void;
+    };
+    state.socket = { send: raw => sent.push(raw), close: () => {} };
+    gameStore.prepareForNewGame();
+    gameStore.table = null;
+
+    // Resends exact envelope when address and frame_hash match.
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    recovery.accepted_commands = [];
+    state.reconcileCommand(recovery);
+    expect(sent.map(raw => JSON.parse(raw))).toEqual([request]);
+    expect(gameStore.commandPending).toBe(true);
+
+    // Refuses to resend when frame_hash drifted.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({ ...recovery, frame: { ...frame, frame_hash: 'drifted-hash' } });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+
+    // Retires cleanly when already recorded in accepted_commands.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({
+      ...recovery,
+      accepted_commands: [{
+        command_id: request.command.command_id,
+        actor: 0,
+        accepted_at: frame.revision,
+        resulting_revision: frame.revision + 2,
+        resulting_frame_hash: 'after',
+      }],
+    });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+  });
+});

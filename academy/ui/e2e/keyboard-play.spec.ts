@@ -73,7 +73,8 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const sent: string[] = [];
   page.on('websocket', socket => socket.on('framesent', frame => {
-    if (String(frame.payload).includes('"type":"command"')) sent.push(String(frame.payload));
+    const payload = String(frame.payload);
+    if (payload.includes('"type":"command"') || payload.includes('"type":"group_command"')) sent.push(payload);
   }));
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
@@ -132,7 +133,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     if (target && await reach(page, target[0], target[1])) {
       await page.keyboard.press('Enter');
       byEnter += 1;
-      // An attack is drafted on the board; Space confirms it, one Command per creature asked.
+      // An attack is drafted on the board; Space confirms it in one atomic group_command.
       if (space === 'DECLARE_ATTACKER') {
         await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
         await page.keyboard.press('Space');
@@ -144,8 +145,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
       bySpace += 1;
     }
     await expect.poll(() => revision(page), { timeout: 30_000 }).toBeGreaterThan(before);
-    if (space === 'DECLARE_ATTACKER') expect(sent.length).toBeGreaterThan(commands);
-    else expect(sent.length).toBe(commands + 1);
+    expect(sent.length).toBe(commands + 1);
     // Focus stays on the board after the move.
     await expect.poll(async () => page.evaluate(() => document.activeElement !== document.body)).toBe(true);
   }

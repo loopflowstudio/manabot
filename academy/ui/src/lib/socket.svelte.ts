@@ -1,7 +1,12 @@
 import { currentGame, rememberCurrentGame } from './current-game.svelte';
 import type { PlaySession } from './play-session';
 import type { PreviewAddress, PreviewResponse } from './payment-preview';
-import type { CombatAddress, CombatPlan, CombatResponse } from './board/combat';
+import {
+  validGroupPlan,
+  type GroupPlan,
+  type GroupPreviewRequest,
+  type GroupPreviewResponse,
+} from './group';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -58,7 +63,7 @@ interface InterruptedSnapshot {
   identity: typeof gameStore.interruptedIdentity;
 }
 
-type PendingCommand = Extract<SharedTableRequest, { type: 'command' }>;
+type PendingSubmission = Extract<SharedTableRequest, { type: 'command' | 'group_command' }>;
 const VALID_SERVER_TYPES = new Set([
   'work_status',
   'analysis_state',
@@ -76,14 +81,14 @@ const VALID_SERVER_TYPES = new Set([
   'control_error',
 ]);
 
-type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror'>;
+type TableServerMessage = (ServerMessage | SharedTableControlEvent) & Pick<ServerMessage, 'mirror_retry' | 'mirror' | 'group'>;
 
 interface ResumeCredentials {
   session_id: string;
   resume_token: string;
   play_session_id?: string;
   presentation_cursor?: number;
-  pending_command?: PendingCommand;
+  pending_command?: PendingSubmission;
   last_frame?: ExperienceFrame;
   recording_id?: string;
   identity?: typeof gameStore.interruptedIdentity;
@@ -151,15 +156,27 @@ function loadResumeCredentials(): ResumeCredentials | null {
   }
 }
 
-function validPendingCommand(value: unknown): value is PendingCommand {
+function validPendingCommand(value: unknown): value is PendingSubmission {
   if (!value || typeof value !== 'object') return false;
-  const request = value as Partial<PendingCommand>;
-  const command = request.command;
-  return request.type === 'command' && !!command
-    && typeof command.command_id === 'string' && typeof command.match_id === 'string'
-    && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
-    && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0
-    && (request.grant_revision === undefined || Number.isSafeInteger(request.grant_revision));
+  const request = value as Partial<PendingSubmission>;
+  if (request.grant_revision !== undefined && !Number.isSafeInteger(request.grant_revision)) return false;
+  if (request.type === 'command') {
+    const command = request.command;
+    return !!command
+      && typeof command.command_id === 'string' && typeof command.match_id === 'string'
+      && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+      && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0;
+  }
+  if (request.type === 'group_command') {
+    const command = request.command;
+    return !!command
+      && typeof command.command_id === 'string' && command.command_id.length > 0
+      && typeof command.match_id === 'string'
+      && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+      && typeof command.frame_hash === 'string'
+      && validGroupPlan(command.plan);
+  }
+  return false;
 }
 
 function saveResumeCredentials(credentials: ResumeCredentials): void {
@@ -204,7 +221,7 @@ export class GameSocketController {
   private intentionallyClosed = false;
   private pendingResume = false;
   private outboundQueue: SharedTableRequest[] = [];
-  private pendingCommand: PendingCommand | null = null;
+  private pendingCommand: PendingSubmission | null = null;
   private presentationCursor: number | null = null;
   private loadingHistory = false;
 
@@ -380,7 +397,24 @@ export class GameSocketController {
     });
   }
 
-  private submitCommand(request: PendingCommand): boolean {
+  sendGroupCommand(plan: GroupPlan): boolean {
+    const frame = gameStore.protocolFrame;
+    const prompt = frame?.prompt;
+    if (!frame || !prompt) return false;
+    return this.submitCommand({
+      type: 'group_command',
+      command: {
+        command_id: crypto.randomUUID(),
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: prompt.id,
+        frame_hash: frame.frame_hash,
+        plan,
+      },
+    });
+  }
+
+  private submitCommand(request: PendingSubmission): boolean {
     if (this.pendingCommand || this.pendingResume || gameStore.resumeFailed || gameStore.work?.state === 'running') return false;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.setError('Connection changed. Recovering the latest game state.');
@@ -596,6 +630,7 @@ export class GameSocketController {
       this.pendingResume = false;
       gameStore.endCommand();
       this.persistControlCredentials(message);
+      if ('group' in message) gameStore.applyLiveGroup(message.group);
       if (this.pendingCommand) {
         this.clearPendingCommand();
         gameStore.endCommand();
@@ -612,6 +647,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'role_changed') {
+      if ('group' in message) gameStore.applyLiveGroup(message.group);
       gameStore.tableAnnouncement = `You are now the ${message.table.access.role}.`;
       return;
     }
@@ -703,6 +739,7 @@ export class GameSocketController {
       if (message.session_id && message.resume_token) {
         this.persistResumeState(message.session_id, message.resume_token);
       }
+      gameStore.applyLiveGroup('group' in message ? message.group : null);
       // A first/replacement recovery resets match state. Its runner metadata
       // and live-analysis flag belong to the recovered frame and must survive that reset.
       if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
@@ -721,11 +758,18 @@ export class GameSocketController {
       if (message.status === 'accepted') {
         gameStore.submissionAccepted = true;
         this.applyUpdate(message.update);
+        gameStore.applyLiveGroup('group' in message ? message.group : null);
       } else if (message.status === 'duplicate') {
         this.applyRecovery(message.recovery);
+        gameStore.applyLiveGroup('group' in message ? message.group : null);
       } else {
         if (message.recovery) {
           this.applyRecovery(message.recovery);
+        }
+        if ('group' in message) {
+          gameStore.applyLiveGroup(message.group);
+        } else if (message.recovery) {
+          gameStore.applyLiveGroup(null);
         }
         gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
@@ -810,8 +854,9 @@ export class GameSocketController {
     }
     const frame = recovery.frame;
     const sameGrant = request.grant_revision === gameStore.table?.access.grant_revision;
+    const sameHash = request.type !== 'group_command' || frame.frame_hash === request.command.frame_hash;
     if (frame.match_id === command.match_id && frame.revision === command.expected_revision
-      && frame.prompt?.id === command.prompt_id && sameGrant
+      && frame.prompt?.id === command.prompt_id && sameHash && sameGrant
       && gameStore.hasCapability('submit_live_command')) {
       // No replacement ID or choice: the server deduplicates this exact envelope.
       gameStore.beginCommand();
@@ -1024,6 +1069,10 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
+export function sendGroupCommand(plan: GroupPlan): boolean {
+  return controller.sendGroupCommand(plan);
+}
+
 
 export function sendShowAnalysis(shown: boolean, policy: string | null = null): void {
   controller.sendShowAnalysis(shown, policy);
@@ -1072,15 +1121,20 @@ export async function fetchPaymentPreview(address: PreviewAddress, signal: Abort
   return response.json();
 }
 
-/** The native whole-declaration preview for a drafted attack or block; read-only. */
-export async function fetchCombatPreview(request: CombatAddress & { plan: CombatPlan }, signal: AbortSignal): Promise<CombatResponse> {
+/** Read-only native preview for a drafted grouped plan; never mutates the live game. */
+export async function fetchGroupPreview(
+  request: GroupPreviewRequest,
+  signal: AbortSignal,
+): Promise<GroupPreviewResponse> {
   const credentials = loadResumeCredentials();
   if (!credentials) throw new Error('No live session');
-  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/combat-preview`, {
-    method: 'POST', signal, headers: { 'Content-Type': 'application/json', 'x-etude-participant-token': credentials.resume_token },
+  const response = await fetch(`/api/sessions/${encodeURIComponent(credentials.session_id)}/group-preview`, {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', 'x-etude-participant-token': credentials.resume_token },
     body: JSON.stringify(request),
   });
-  if (!response.ok) throw new Error('Combat preview unavailable');
+  if (!response.ok) throw new Error('Group preview unavailable');
   return response.json();
 }
 

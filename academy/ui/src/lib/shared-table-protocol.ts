@@ -1,4 +1,5 @@
 // Implements the `testing-house-v1` wire schema (frozen identifier).
+import type { GroupCommand } from './group';
 import type { RestoredReplayDecision } from './replay-index';
 import type { Command, Observation, PresentationEvent } from './types';
 
@@ -17,6 +18,7 @@ export const SHARED_TABLE_REQUEST_TYPES = [
   'new_game',
   'rematch',
   'command',
+  'group_command',
   'action',
   'pass_turn',
   'retry_mirror',
@@ -124,6 +126,7 @@ export type SharedTableRequest =
   | ({ type: 'new_game'; grant_revision?: number | null; config?: Record<string, unknown> })
   | (GrantedRequest & { type: 'rematch'; request_id: string; attempt_id: string; setup_revision: number; intent: 'rematch' | 'swap_sides' | 'change_opponent'; config?: Record<string, unknown> })
   | ({ type: 'command'; grant_revision?: number | null; command: Command })
+  | ({ type: 'group_command'; grant_revision?: number | null; command: GroupCommand })
   | ({ type: 'action'; grant_revision?: number | null; index: number })
   | ({ type: 'pass_turn'; grant_revision?: number | null })
   | ({ type: 'retry_mirror'; grant_revision?: number | null; match_id: string; expected_revision: number })

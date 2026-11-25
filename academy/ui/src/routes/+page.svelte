@@ -34,6 +34,7 @@
     connect,
     disconnect,
     sendAction,
+    sendGroupCommand,
     sendNewGame,
     sendContinuation,
     sendPassTurn,
@@ -46,8 +47,9 @@
     sendShowAnalysis,
     sendTransferPilot,
     fetchPaymentPreview,
-    fetchCombatPreview,
+    fetchGroupPreview,
   } from '$lib/socket.svelte';
+  import type { GroupPlan } from '$lib/group';
   import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
   let demoName = $state<string | null>(null);
@@ -369,6 +371,19 @@
     sendAction(action.id);
   }
 
+  function handleGroupSubmit(plan: GroupPlan): void {
+    if (participantStudying || !canSubmitLive) return;
+    sendGroupCommand(plan);
+  }
+
+  const groupRejection = $derived(
+    liveTable
+      && (gameStore.lastCommandRejection?.code === 'group_refused'
+        || gameStore.lastCommandRejection?.code === 'group_incomplete')
+      ? gameStore.lastCommandRejection
+      : null,
+  );
+
   const inGame = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
 
   // Who is deciding while you wait: the opponent's search or policy, or the board itself.
@@ -551,7 +566,10 @@
       interrupted={gameStore.resumeFailed}
       payment={paymentState}
       onpreview={previewPayment}
-      combatPreview={liveTable ? fetchCombatPreview : undefined}
+      group={liveTable ? gameStore.liveGroup : null}
+      groupPreview={liveTable ? fetchGroupPreview : undefined}
+      ongroupact={handleGroupSubmit}
+      {groupRejection}
       onact={handleActionSelect}
       pending={gameStore.commandPending}
       onpassturn={handlePassTurn}

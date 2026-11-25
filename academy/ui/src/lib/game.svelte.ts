@@ -12,6 +12,7 @@ import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 import { deriveObservationNotes } from './log';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 import { stepBoards, type StepBoard } from './board/boards';
+import type { LiveGroup } from './group';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -143,6 +144,8 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** The active live grouped-decision descriptor for `protocolFrame`, or null. */
+  liveGroup = $state.raw<LiveGroup | null>(null);
   /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
   liveAnalysis = $state.raw<LiveAnalysis>(LIVE_ANALYSIS_OFF);
   /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
@@ -475,6 +478,14 @@ export class GameStore {
     this.stepBoards = { frameHash: frame.frame_hash, boards };
   }
 
+  applyLiveGroup(group: LiveGroup | null | undefined): void {
+    const frame = this.protocolFrame;
+    this.liveGroup =
+      group && frame && group.frame_hash === frame.frame_hash && group.match_id === frame.match_id
+        ? group
+        : null;
+  }
+
   applyFrame(
     frame: ExperienceFrame,
     sessionId?: string,
@@ -482,6 +493,9 @@ export class GameStore {
   ): void {
     this.lastCommandRejection = null;
     this.protocolFrame = frame;
+    if (this.liveGroup && (this.liveGroup.frame_hash !== frame.frame_hash || this.liveGroup.match_id !== frame.match_id)) {
+      this.liveGroup = null;
+    }
     const actions = frame.offers.map((offer) => ({
       index: offer.id,
       type: offer.action_type,
@@ -527,6 +541,7 @@ export class GameStore {
     this.actions = [];
     this.actionSpaceKind = '';
     this.gameOver = true;
+    this.liveGroup = null;
     this.winner = winner;
     this.errorMessage = null;
     this.resumeFailed = false;
@@ -557,6 +572,7 @@ export class GameStore {
     this.work = null;
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
+    this.liveGroup = null;
     if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
     this.table = null;
     this.restoredDecision = null;
@@ -623,6 +639,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
+    this.liveGroup = null;
     this.stepBoards = null;
     this.observation = null;
     this.actions = [];

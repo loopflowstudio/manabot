@@ -693,6 +693,7 @@ export interface CommandRejection {
   message: string;
   current_revision: number;
   current_prompt: number | null;
+  refused?: import('./group').GroupRefusal | null;
 }
 
 /** One line of the server's narration: either player's move or an automated action, in the turn it was taken. */
@@ -980,6 +981,7 @@ export type ServerMessage = (
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
   table?: import('./shared-table-protocol').TableSnapshot;
+  group?: import('./group').LiveGroup | null;
   session_id?: string;
   resume_token?: string;
   participant_id?: string;

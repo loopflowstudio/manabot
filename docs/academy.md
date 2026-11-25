@@ -756,8 +756,9 @@ The rail holds:
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
-  nine. During a live combat draft the per-creature answers fold under a closed
-  disclosure (see combat below).
+  nine. During a live grouped decision (combat or card arrangement) the raw
+  single-step offers fold under a closed disclosure (see
+  [Grouped decisions](#grouped-decisions)).
 - **Moves**: the game's moves grouped by turn, each turn headed by whose turn
   it was. Each move names the player who made it; priority-stop automation is
   marked **auto** and never counts as your move. A run of the opponent's and
