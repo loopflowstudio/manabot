@@ -26,7 +26,10 @@ export interface TrackerRow {
   manaValue: number;
   isLand: boolean;
   accentColor: string;
-  oddsPercent: number;
+  /** Chance the next card drawn from this deck's unseen cards is this one; the same reading for both decks. */
+  drawPercent: number;
+  /** Chance at least one copy is in the hidden hand; only an opponent's open list has one. */
+  handPercent: number | null;
 }
 
 export interface DeckTrackerView {
@@ -38,7 +41,6 @@ export interface DeckTrackerView {
   landPercent: number;
   spellsRemaining: number;
   spellPercent: number;
-  handCount: number;
   totalSeen: number;
 }
 
@@ -142,7 +144,8 @@ function buildSideboardRows(
         manaValue: parseManaValue(cost),
         isLand: isLandCard(name, face),
         accentColor: accentFor(name, face),
-        oddsPercent: 0,
+        drawPercent: 0,
+        handPercent: null,
       };
     }),
   );
@@ -177,7 +180,8 @@ export function buildSelfTracker(
       manaValue: land ? 99 : parseManaValue(cost),
       isLand: land,
       accentColor: accentFor(name, face),
-      oddsPercent: totalRemaining > 0 ? Math.round((remaining / totalRemaining) * 100) : 0,
+      drawPercent: totalRemaining > 0 ? Math.round((remaining / totalRemaining) * 100) : 0,
+      handPercent: null,
     });
   }
 
@@ -192,7 +196,6 @@ export function buildSelfTracker(
     landPercent,
     spellsRemaining,
     spellPercent: totalRemaining > 0 ? 100 - landPercent : 0,
-    handCount: player.hand.length,
     totalSeen: Object.values(main).reduce((s, c) => s + c, 0) - totalRemaining,
   };
 }
@@ -227,7 +230,8 @@ export function buildOpponentTracker(
         manaValue: land ? 99 : parseManaValue(cost),
         isLand: land,
         accentColor: accentFor(name, face),
-        oddsPercent: probAtLeastOne(remaining, totalRemaining, handHidden),
+        drawPercent: totalRemaining > 0 ? Math.round((remaining / totalRemaining) * 100) : 0,
+        handPercent: probAtLeastOne(remaining, totalRemaining, handHidden),
       });
     }
     const spellsRemaining = Math.max(0, totalRemaining - landsRemaining);
@@ -241,7 +245,6 @@ export function buildOpponentTracker(
       landPercent,
       spellsRemaining,
       spellPercent: totalRemaining > 0 ? 100 - landPercent : 0,
-      handCount: handHidden,
       totalSeen: Object.values(main).reduce((s, c) => s + c, 0) - totalRemaining,
     };
   }
@@ -276,7 +279,8 @@ export function buildOpponentTracker(
       manaValue: land ? 99 : parseManaValue(cost),
       isLand: land,
       accentColor: accentFor(name, face),
-      oddsPercent: 0,
+      drawPercent: 0,
+      handPercent: null,
     });
   }
   return {
@@ -288,7 +292,6 @@ export function buildOpponentTracker(
     landPercent: 0,
     spellsRemaining: 0,
     spellPercent: 0,
-    handCount: handHidden,
     totalSeen,
   };
 }

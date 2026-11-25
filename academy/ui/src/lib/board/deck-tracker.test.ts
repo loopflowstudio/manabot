@@ -61,13 +61,13 @@ describe('deck-tracker', () => {
     expect(view!.spellPercent).toBe(25);
     // Spells sorted by mana value before lands.
     expect(view!.rows.map(r => r.name)).toEqual(['Firebending Lesson', 'Accumulate Wisdom', 'Island']);
-    expect(view!.rows[0].oddsPercent).toBe(25);
+    expect(view!.rows[0].drawPercent).toBe(25);
     expect(view!.rows[1].remaining).toBe(0);
     expect(view!.sideboard).toHaveLength(1);
     expect(view!.sideboard[0].name).toBe('Airbending Lesson');
   });
 
-  it('builds open opponent tracker with P(in hand) odds and closed opponent tracker with seen cards only', () => {
+  it('builds open opponent tracker with next-draw and in-hand odds and closed opponent tracker with seen cards only', () => {
     const openOpp = basePlayer({
       player_index: 1,
       id: 2,
@@ -78,7 +78,9 @@ describe('deck-tracker', () => {
     });
     const openView = buildOpponentTracker(openOpp, FACES);
     expect(openView.mode).toBe('opponent-open');
-    expect(openView.rows.find(r => r.name === 'Firebending Lesson')?.oddsPercent).toBe(67);
+    const lesson = openView.rows.find(r => r.name === 'Firebending Lesson');
+    expect(lesson?.drawPercent).toBe(20);
+    expect(lesson?.handPercent).toBe(67);
 
     const closedOpp = basePlayer({
       player_index: 1,

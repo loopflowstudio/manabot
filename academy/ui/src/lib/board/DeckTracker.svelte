@@ -17,14 +17,10 @@
   let inspectedName = $state<string | null>(null);
   const inspectedFace = $derived(inspectedName ? faces[inspectedName] ?? null : null);
 
-  function rowCount(row: TrackerRow): string {
-    return view.mode === 'opponent-closed' ? `${row.seen}×` : String(row.remaining);
-  }
-
-  function rowRight(row: TrackerRow): string {
-    if (view.mode === 'opponent-closed') return 'seen';
-    return `${row.oddsPercent}%`;
-  }
+  const open = $derived(view.mode !== 'opponent-closed');
+  const withHand = $derived(view.mode === 'opponent-open');
+  const DRAW_TITLE = 'Chance the next card drawn from this deck is this card';
+  const HAND_TITLE = 'Chance at least one copy is in the hidden hand';
 </script>
 
 <section
@@ -42,16 +38,13 @@
       </span>
       <button type="button" class="close type-caption" aria-label={`Close ${title} deck tracker`} onclick={onclose}>×</button>
     </div>
-    <div class="odds type-caption text-ink-2">
-      {#if view.mode === 'self'}
-        <span>Lands {view.landsRemaining} ({view.landPercent}%)</span>
-        <span>Spells {view.spellsRemaining} ({view.spellPercent}%)</span>
-      {:else if view.mode === 'opponent-open'}
-        <span>Hand {view.handCount} · Lib {Math.max(0, view.totalRemaining - view.handCount)}</span>
-        <span>P(in hand)</span>
+    <div class="odds type-caption text-ink-2" class:with-hand={withHand}>
+      {#if open}
+        <span class="summary">Lands {view.landPercent}% · Spells {view.spellPercent}%</span>
+        <span class="col" title={DRAW_TITLE}>Draw</span>
+        {#if withHand}<span class="col" title={HAND_TITLE}>Hand</span>{/if}
       {:else}
-        <span>Closed list · visible cards</span>
-        <span>×seen</span>
+        <span class="summary">Closed list · visible cards</span>
       {/if}
     </div>
   </header>
@@ -64,16 +57,18 @@
         <button
           type="button"
           class="row"
-          class:zero={view.mode !== 'opponent-closed' && row.remaining === 0}
+          class:zero={open && row.remaining === 0}
+          class:with-hand={withHand}
           class:active={inspectedName === row.name}
           style:--accent-bar={row.accentColor}
           onclick={() => { inspectedName = inspectedName === row.name ? null : row.name; }}
           data-testid="tracker-row"
         >
-          <span class="cnt">{rowCount(row)}</span>
+          <span class="cnt">{open ? row.remaining : `${row.seen}×`}</span>
           <span class="nm">{row.name}</span>
           <span class="cost">{row.cost}</span>
-          <span class="pct">{rowRight(row)}</span>
+          {#if open}<span class="pct" title={DRAW_TITLE} data-testid="tracker-draw">{row.drawPercent}%</span>{:else}<span class="pct">seen</span>{/if}
+          {#if row.handPercent !== null}<span class="pct" title={HAND_TITLE} data-testid="tracker-hand">{row.handPercent}%</span>{/if}
         </button>
       {/each}
     {/if}
@@ -128,6 +123,7 @@
     padding: 8px 10px;
     border-bottom: 1px solid var(--border);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
     flex-shrink: 0;
   }
@@ -152,13 +148,18 @@
     min-height: 22px;
   }
   .close:hover { color: var(--text); }
+  /* The column labels sit over the row columns: same gaps, widths and side inset as a row. */
   .odds {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px;
     gap: 6px;
+    padding-right: 3px;
     font-size: 12px;
     line-height: 16px;
   }
+  .odds.with-hand { grid-template-columns: minmax(0, 1fr) 34px 34px; }
+  .summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .col { text-align: right; }
   .list {
     padding: 6px;
     display: grid;
@@ -171,7 +172,7 @@
   .sec { margin: 8px 4px 2px; font-size: 12px; line-height: 16px; }
   .row {
     display: grid;
-    grid-template-columns: 24px 1fr auto auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto 34px;
     gap: 6px;
     align-items: center;
     padding: 4px 6px;
@@ -184,6 +185,7 @@
     cursor: pointer;
     text-align: left;
   }
+  .row.with-hand { grid-template-columns: 24px minmax(0, 1fr) auto 34px 34px; }
   .row:hover, .row.active { border-color: var(--accent); border-left-color: var(--accent-bar, var(--accent)); }
   .row.zero { opacity: 0.44; }
   .cnt {
@@ -216,7 +218,6 @@
     font-size: 12px;
     line-height: 16px;
     color: var(--text-secondary);
-    min-width: 32px;
     text-align: right;
   }
   .inspect {
