@@ -317,60 +317,25 @@ Docs were drafted ahead of the build (`0bb2c15c12`) and already describe
 `ObservationBatch.to_bytes()`/`from_bytes()`, `admit`, v11-only; each claim must
 be backed by code before gate.
 
-Done: **1. Native batch bytes and capture/parity.** Rust validates the packed
-schema, offset/capacity bounds, companion lengths and native joins before
-publishing a restored batch. Collection, learner parity and the MLX profiler
-reload batch bytes and retained memory chunks. On 64 opening decisions (eight
-seeds, eight choices per seed, default capacities with policy history), the
-archive occupied 130,397 bytes against 15,808,000 dense array bytes. Median
-of ten warm in-memory calls on this checkout was 0.29 ms to write and 0.39 ms
-to load. MLX profiling replayed two captured learner batches. The float32
-MLX parity CLI passed two learner batches and two collection calls, with a
-maximum post-Adam weight difference of 3.0e-08. Pass 4 must
-preserve the object-join descriptions used by the archive when deleting the
-dense extent scanner. Keep reading the Pass 1 v11 archive header when removing
-the legacy encoder configuration in Pass 3.
+Done: **1. Native batch bytes and capture/parity** (`565258570e`,
+`0cb9a72532`). 64 decisions: archive 130,397 bytes vs 15,808,000 dense; MLX
+float32 parity max weight diff 3.0e-08. Pass 4 must keep the object-join
+descriptions the archive uses when deleting the dense extent scanner, and Pass 3
+must keep reading the Pass 1 v11 archive header.
 
-Done: **2a. Scalar games, evaluation, collection and retained memory.** Scalar
-reset, both step APIs and scenario refresh return the viewer projection. Etude,
-checkpoint simulation, guidance, PUCT, verification and selection datasets encode
-at the policy boundary. Local search uses the batched frontier and refuses a
-recorded row-encoder request with its release. Target practice supplies native
-rows to the v11 collector and preserves sparse loads, terminal slots and seeds.
-PPO, damped-policy updates and the selection-data probe compute references from
-packed offers. On 64 seeded decisions (190 legal offers, 512 slots) the packed
-action-type reference matched the padded reference exactly. Forty warm calls
-had medians of 0.020 ms and 0.173 ms respectively, with 3,932,160 bytes in the
-padded actions array alone. This measures reference construction, not training
-throughput. Native selections, parity capture and the hand probe retain
-`RetainedMemory`; probe rows round-trip through the shared policy archive.
-Dense callers still use the dictionary wrappers.
-
-Fresh TLA frontier and batched baseline training use v11. Frontier evaluation
-admits the executed v9 layout and the fresh v11 layout with exact capacities.
-One w64 CPU run (seed 197, two streams, one worker) wrote its update-1 policy
-after 352 learner transitions. The sharded benchmark ran 2,048 decisions using
-packed action records. Its mimalloc digest was
-`bdb10e19161cdba6d00be833452ab1fa23ee1c00f49d398a3f365fde63a070ae`.
-The optional vector statistics cost report points to its dense harness at the
-frozen source revision.
-
-The v9 and v11 pinned games replayed successfully. The optional u1952
-checkpoint was absent locally. The six requested Python suites ran with the
-evaluation, artifacts, Academy and MLX extras: 2,107 passed, 16 skipped and 27
-failed in the broad run. Of those failures, 24 reproduced on the starting
-revision: conditional-search fixtures (14), automatic game capture (3),
-belief fixtures (4), PUCT compatibility, recording export and the MLX
-256-wide evaluation timeout. The MLX predictor's remaining test now passes a
-native batch and passed on rerun. Card tournament resume passed with source
-held fixed. The separate memory checks passed all 242 cases.
-
-The paired-deal report exceeded its integration-test allowance of 180 seconds.
-On identical deals its initial eight games used 1,683 decisions with the
-starting sources and 2,644 with the new ones. Code and checkpoint identities
-seed each player separately from the deal. The fixture now allows 240 seconds
-for the same two deals, both checkpoints, all four legs and replay. The full
-test passed in 235.22 seconds including training and policy inspection.
+Done: **2a. Scalar games, evaluation, collection and retained memory**
+(`0369f18b7a`..`fab0d064aa`). Scalar `Env` returns the viewer projection;
+Etude, simulation, guidance, PUCT, verify and selection data encode at the
+policy boundary; target practice supplies native rows; PPO/damped/selection
+references come from packed offers (exactly equal to padded on 64 decisions);
+selections, parity capture and the hand probe carry `RetainedMemory`. Fresh TLA
+frontier and batched baseline train on v11; frontier evaluation still admits
+the executed v9 layout. Broad run of the six suites: 2,107 passed, 16 skipped,
+27 failed, 24 of which reproduce on the starting revision (conditional-search
+fixtures 14, automatic game capture 3, belief fixtures 4, PUCT compatibility,
+recording export, MLX 256-wide eval timeout). Paired-deal fixture allowance
+raised to 240 s (new sources play 2,644 vs 1,683 decisions on the same deals;
+passed in 235.22 s).
 
 Remaining:
 
