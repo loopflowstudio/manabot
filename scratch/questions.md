@@ -19,3 +19,10 @@ Choices made with nobody present during concept review (see `scratch/concept-rev
 
 - QA: a keyword counter (Mai's double strike counter) gives its keyword with no record timestamp. The keyword chip now names the counter as its source, and the counter chip moves to Inspect only, so the board does not show the same fact twice.
 - QA: in the 1280×800 real game, upright cards about 80 px wide often collapse to `+N` (Fire Nation Cadets `+1`, Ty Lee `+2`). Left as designed; whether to shorten labels or grow cards is a design question.
+
+## Post-build concept review choices (HEAD 63583fc3ff)
+
+- **Compact board labels + bottom-row beside P/T + overflow-aware packing**:
+  In real 1280×800 play with lands and a 4-card hand (`scratch/qa-shots/platypus-light.png`), upright creatures are ~80 px wide and turned cards are 112×80 px, causing Fire Nation Cadets (`+1`), turned Ty Lee (`+2`), and Unagi (`+1`) to hide their headline abilities. Chosen: keep full labels whenever they fit, fall back to concise whole-word `shortLabel`s (`Firebend N`, `Ward`, `No untap`, `Unblockable`, `No combat`) only when the full label exceeds card width, use the free space beside the corner P/T plate on the bottom row (yielding whenever Watch's bottom-center `.policy` pill is shown), make `fitBadges` try shorter chips alongside `+N`, and add a `title` tooltip on `+N`. Passed over: shrinking the hand strip or changing `Board.svelte` table sizing (wider blast radius and still breaks once opponent has permanents).
+- **Unified `AbilitySource` provenance on the wire**:
+  `layers.rs` already has `node.source` and counter identity, and `layer_board().restrictions` already has `(source, controller, rule)`. Carrying `{ effect_timestamp?, source?, counter? }` on grants and `{ kind, source? }` on restrictions fixes three built bugs (`StaticScope::This` self-conditional keywords falsely turning green as `"Another ability"`, printed keyword + matching counter falsely turning green in `badges.ts:49`, and `i >= own` positional trigger indexing) while letting Inspect name Sokka, Equipment, and freeze/Pacifism Auras instead of `"Another ability"` / `"Static ability"`.
