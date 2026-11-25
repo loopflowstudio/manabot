@@ -1,4 +1,4 @@
-at: 737ed04a809e3d7d5ce493941d2377044dbc2c50
+at: ce988daf82d067c908ba97830722a4613c4521cb
 first:
   - path: docs/training.md
     why: Supported formats and recovery options for older runs
@@ -6,6 +6,8 @@ first:
     why: How earlier training games still open
   - path: manabot/training/state/continuation.py
     why: Save admission precedes model and tensor restoration
+  - path: manabot/policy/checkpoint.py
+    why: Shared safetensors decoder validates headers for all readers
   - path: manabot/belief/checkpoint.py
     why: Both backends admit the same sampler bytes
   - path: managym/replay.py
@@ -17,7 +19,7 @@ first:
   - path: tests/training/test_cross_backend_continuation.py
     why: Old save refusal preserves weights and disk state
   - path: tests/belief/test_sampling_report.py
-    why: Real archives exercise both readers
+    why: Real archives and corrupt bytes exercise both readers
   - path: tests/sim/test_replay.py
     why: Round trip verifies Commands and rejects unoffered actions
 hide: []
