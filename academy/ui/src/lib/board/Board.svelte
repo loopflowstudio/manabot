@@ -921,7 +921,7 @@
       <span class="text-ink-3">{' vs '}</span>
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
-    <p class="turn" data-testid="turn-number">Turn {turnNumber} · {yourTurn ? 'yours' : 'theirs'}{#if turnStep !== null && boardProjection.turn.creature_died_this_turn} · A creature died this turn{/if}</p>
+    <p class="turn">{#if turnStep !== null && boardProjection.turn.creature_died_this_turn}A creature died this turn{/if}</p>
     <div class="right">
       {#if connection}
         <!-- Connected says nothing: only a problem shows; the status stays for assistive technology. -->
@@ -1106,7 +1106,7 @@
     </div>
   {/if}
   <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
-    <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
+    <StopBar {track} turn={turnNumber} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
   <Lines {lines} {root} revision={frame.revision} />
 </div>

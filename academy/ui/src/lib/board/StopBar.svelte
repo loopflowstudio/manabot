@@ -19,9 +19,11 @@
     oncycle?: (side: StopSide, step: string) => void;
     /** Under the legend, in the rail's column: the decision strip's toggle. */
     aside?: Snippet;
+    /** The turn shown, named at the head of the bar and coloured by whose it is. */
+    turn?: number;
   }
 
-  let { track, oncycle, aside }: Props = $props();
+  let { track, oncycle, aside, turn }: Props = $props();
 
   const sides: StopSide[] = ['my', 'opponent'];
   const SIDE_WORDS: Record<StopSide, string> = { my: 'your turn', opponent: "the opponent's turn" };
@@ -49,14 +51,16 @@
   }
 </script>
 
-<div class="stopbar" data-testid="stop-bar">
+<div class="stopbar" data-testid="stop-bar" data-turn-side={track.active}>
   <!-- svelte-ignore a11y_interactive_supports_focus (focus is roving: one stop is tabbable) -->
   <div class="steps" role={editable ? 'toolbar' : 'list'} aria-label={editable ? 'Stops: arrow keys move, Space changes' : 'Steps of the turn'}
     bind:this={toolbar} onkeydown={editable ? onkeydown : undefined}>
-    <span class="key" aria-hidden="true">
-      <span class:active={track.active === 'my'}>▲ Your turn</span>
-      <span class:active={track.active === 'opponent'}>▼ Their turn</span>
-    </span>
+    <!-- Whose turn it is, in that side's colour; the current step's cell carries the same colour on that side's edge. -->
+    <div class="key">
+      {#if turn !== undefined}<p class="turn" data-testid="turn-number">Turn {turn} · {track.active === 'my' ? 'yours' : 'theirs'}</p>{/if}
+      <span aria-hidden="true" class:active={track.active === 'my'}>▲ Your turn</span>
+      <span aria-hidden="true" class:active={track.active === 'opponent'}>▼ Their turn</span>
+    </div>
     {#each track.marks as mark, step (mark.key)}
       <div class="cell" class:rule={mark.phaseStart} class:current={mark.current} role={editable ? 'group' : 'listitem'}
         aria-label={mark.label} aria-current={mark.current ? 'step' : undefined}>
@@ -102,12 +106,20 @@
   .stopbar { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; height: 64px; background: var(--bg-surface); border-top: 1px solid var(--border); }
   .steps { display: grid; grid-template-columns: var(--plate) repeat(9, minmax(0, 1fr)); min-width: 0; }
   .key { display: grid; align-content: center; gap: 4px; padding-left: 14px; font: 14px/20px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
-  .key .active { color: var(--text); }
+  .key .active { color: var(--side-text); font-weight: 600; }
+  .key .turn { margin: 0; font-weight: 600; color: var(--text); }
+  .key:has(.turn) { gap: 0; font-size: 12px; line-height: 16px; }
+  .key:has(.turn) .turn { font-size: 14px; line-height: 20px; }
+  /* Your turn is the info blue and reads from the top row of stops; theirs is the warning amber and reads from the bottom. */
+  .stopbar[data-turn-side='my'] { --side: var(--info); --side-text: var(--info-text); }
+  .stopbar[data-turn-side='opponent'] { --side: var(--warning); --side-text: var(--warning-text); }
   .cell { display: grid; grid-template-rows: minmax(0, 1fr) 20px minmax(0, 1fr); row-gap: 1px; min-width: 0; border-left: 1px solid transparent; }
   .cell.rule { border-left-color: var(--border); }
-  .cell.current { background: var(--bg-muted); }
+  .cell.current { background: color-mix(in srgb, var(--side) 16%, var(--bg-surface)); }
+  .stopbar[data-turn-side='my'] .cell.current { box-shadow: inset 0 3px 0 var(--side); }
+  .stopbar[data-turn-side='opponent'] .cell.current { box-shadow: inset 0 -3px 0 var(--side); }
   .name { font: 14px/20px var(--font-sans); color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .current .name { color: var(--text); font-weight: 600; }
+  .current .name { color: var(--side-text); font-weight: 600; }
 
   /* A stop is a small square: hollow when off, filled every time, a dot inside once. */
   .stop { display: grid; justify-items: center; align-items: end; min-height: 0; padding: 0; border: 0; background: none; border-radius: var(--radius-sm); }
