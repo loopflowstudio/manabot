@@ -18,7 +18,7 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -29,6 +29,7 @@ from manabot.policy.spans import observation_spans
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields, trajectory_field
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
@@ -283,7 +284,7 @@ def test_history_off_preserves_model_identity_and_outputs() -> None:
     raw, _ = env.reset()
     tensors = {
         key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in encode_observation(env.obs_space, raw).items()
+        for key, value in observation_arrays(env.obs_space, raw).items()
     }
     expected = baseline(device_input(baseline, tensors))
     tensors.pop("events")

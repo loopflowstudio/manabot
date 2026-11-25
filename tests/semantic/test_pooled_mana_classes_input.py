@@ -13,7 +13,6 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     POOLED_MANA,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.managym.enums import ActionEnum
@@ -22,6 +21,7 @@ from manabot.verify.text_observation import priority_root
 import managym
 from managym.experience import LegacyPlayerView
 from managym.experience_projection import serialize_observation
+from tests.fixtures.observation_rows import observation_arrays
 
 # Integer tokens: a program of literals needs no vocabulary.
 _PROGRAM = [[4, 0], [4, 1], [4, 2]]
@@ -51,7 +51,7 @@ def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
     for seat, object_row in (("agent", 1), ("opponent", 2)):
         env, obs = _observation(seat)
         assert managym.unrepresentable_state(obs) is None
-        expected = encode_observation(ObservationSpace(ObservationConfig()), obs)
+        expected = observation_arrays(ObservationSpace(ObservationConfig()), obs)
         token = managym.catalog_token_value(POOLED_MANA)
         facts = expected["facts"].reshape(-1, FACT_DIM)
         rows = facts[
@@ -216,7 +216,7 @@ def test_combat_mana_without_qualifiers_round_trips_and_projects_absence() -> No
     assert native_class.restriction is None
     serialized = json.loads(obs.toJSON())["agent"]["pooled_mana_classes"][0]
     assert "effect" not in serialized and "restriction" not in serialized
-    encode_observation(ObservationSpace(ObservationConfig()), obs)
+    observation_arrays(ObservationSpace(ObservationConfig()), obs)
     view = serialize_observation(obs, include_details=True)["agent"]
     expected = {"mana": [0, 0, 0, 0, 1, 0], "combat": True}
     assert view["pooled_mana_classes"] == [expected]

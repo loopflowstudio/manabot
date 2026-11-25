@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.policy.readings import write_numeric_column
@@ -88,7 +88,7 @@ def combat_rows(
 
 def gap_shifts(
     policy: BackendPolicy,
-    chunks: Iterable[ObservationBuffers | ObservationSelection],
+    chunks: Iterable[ObservationSelection],
     columns: CombatColumns,
 ) -> dict[str, float | int]:
     """Pool per-decision readings across chunks, including partial final chunks."""
@@ -107,16 +107,13 @@ def gap_shifts(
 
 def combat_samples(
     policy: BackendPolicy,
-    rows: ObservationBuffers | ObservationSelection,
+    rows: ObservationSelection,
     columns: CombatColumns,
 ) -> Iterator[tuple[str, str, np.ndarray]]:
     """Per-decision gaps and paired shifts for one execution chunk."""
     prepared = policy.prepare(rows)
     batch, slots = prepared.legal_batches, prepared.legal_slots
-    if isinstance(rows, ObservationSelection):
-        declared = rows.spans.tables["actions"].records["declared"] > 0
-    else:
-        declared = rows["actions"][batch, slots, columns.declared] > 0
+    declared = rows.spans.tables["actions"].records["declared"] > 0
     if not all(
         np.all(np.bincount(batch[mask], minlength=prepared.batch) == 1)
         for mask in (declared, ~declared)

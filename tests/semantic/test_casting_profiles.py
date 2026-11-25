@@ -3,11 +3,12 @@
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, column, encode_observation
+from manabot.env.observation import ObservationSpace, column
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
 import managym
 from managym.experience_projection import decision_surface_view, describe_actions
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def choose(env: managym.Env, wording: str) -> None:
@@ -20,7 +21,7 @@ def assert_packed_columns(
     observation: managym.Observation, table: str, *columns: str
 ) -> None:
     space = ObservationSpace()
-    dense = encode_observation(space, observation)[table]
+    dense = observation_arrays(space, observation)[table]
     batch = managym.encode_observation_batch([observation], space.layout)
     _, offsets, data = batch.tables()[table]
     fields = batch.layout.csr_fields[table]
@@ -53,7 +54,7 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     [inset] = [action for action in casts if adventure in action.description]
     assert any(creature in action.description for action in casts if action != inset)
     observation = env.observation_for_player(actor)
-    rows = encode_observation(ObservationSpace(), observation)["actions"]
+    rows = observation_arrays(ObservationSpace(), observation)["actions"]
     projected = [
         a for a in describe_actions(observation) if a["type"] == "PRIORITY_CAST_SPELL"
     ]
@@ -156,7 +157,7 @@ def test_printed_profiles_have_distinct_commands_and_policy_rows(
         for action in describe_actions(observation)
         if action["type"] == "PRIORITY_CAST_SPELL"
     ]
-    rows = encode_observation(ObservationSpace(), observation)["actions"]
+    rows = observation_arrays(ObservationSpace(), observation)["actions"]
     assert {
         (
             action["description"],

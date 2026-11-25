@@ -19,7 +19,6 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.observation import (
-    ObservationBuffers,
     ObservationSpace,
 )
 from manabot.model.world import validate_agent_setup
@@ -49,27 +48,16 @@ class ValueScorer:
 
     def score(
         self,
-        buffers: ObservationBuffers | managym.ObservationBatch,
+        buffers: managym.ObservationBatch,
         rows: np.ndarray | None = None,
     ) -> np.ndarray:
-        if isinstance(buffers, managym.ObservationBatch):
-            count = buffers.batch_size if rows is None else len(rows)
-            selected = (
-                buffers
-                if rows is None
-                else buffers.gather([(buffers, int(i)) for i in rows])
-            )
-            obs = self.agent.prepare(selected, inference=True)
-        else:
-            assert rows is not None
-            count = len(rows)
-            obs = self.agent.prepare(
-                {
-                    key: buffers[key][rows]
-                    for key in self.agent.observation_space.shapes
-                },
-                inference=True,
-            )
+        count = buffers.batch_size if rows is None else len(rows)
+        selected = (
+            buffers
+            if rows is None
+            else buffers.gather([(buffers, int(i)) for i in rows])
+        )
+        obs = self.agent.prepare(selected, inference=True)
         probs = self.agent.win_probabilities(obs)
         self.forward_calls += 1
         self.obs_scored += count

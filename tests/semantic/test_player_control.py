@@ -5,13 +5,14 @@ import json
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.managym.decision import SemanticContractError
 from manabot.managym.experience import LegacyHeroObservation
 from manabot.managym.experience_projection import decision_surface_view
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _choose(env: managym.Env, kind: managym.ActionEnum) -> None:
@@ -113,7 +114,7 @@ def test_bloodbending_text_policy_and_academy_share_authority(paid: bool) -> Non
     duration = "turn" if paid else "combat phase"
     assert f"during this {duration}" in decision.text
     assert "Accumulate Wisdom" in decision.text
-    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
+    valid = observation_arrays(ObservationSpace(), raw)["actions_valid"]
     assert int(np.count_nonzero(valid)) == len(raw.action_space.actions) > 0
     projection = LegacyHeroObservation.model_validate(decision_surface_view(env, 0))
     assert projection.decision_context is not None

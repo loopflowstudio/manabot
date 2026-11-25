@@ -18,7 +18,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 import managym
@@ -26,6 +25,7 @@ from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -154,7 +154,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             strength claim. Scalar and vector encodings must agree first.
             """
             assert game.env is not None and game.obs is not None
-            values = encode_observation(space, game.obs)
+            values = observation_arrays(space, game.obs)
             for key, expected in values.items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
@@ -254,7 +254,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 assert json.loads(
                     vector.semantic_decision_frames_json()[0]
                 ) == json.loads(game.env.semantic_decision_frame_json())
-                for key, expected in encode_observation(space, game.obs).items():
+                for key, expected in observation_arrays(space, game.obs).items():
                     np.testing.assert_array_equal(
                         buffers[key][0], expected, err_msg=key
                     )

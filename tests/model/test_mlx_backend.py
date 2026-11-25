@@ -78,7 +78,6 @@ from manabot.env.observation import (
     STACK_SOURCE_INDEX,
     ObservationSpace,
     column,
-    encode_observation,
 )
 from manabot.infra.config import (
     BF16_MIN_HIDDEN_DIM,
@@ -114,6 +113,7 @@ from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
 from manabot.verify.representation import kellan_upgrade_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields
 
 
@@ -668,7 +668,7 @@ def test_hashed_records_match_torch_with_a_live_shared_effect(
     env = kellan_upgrade_root()
     space = ObservationSpace()
     obs = env.observation_for_player(env.current_agent_index())
-    rows = {key: value[None] for key, value in encode_observation(space, obs).items()}
+    rows = {key: value[None] for key, value in observation_arrays(space, obs).items()}
     assert (rows["effect_details"][..., 0] >= 11).any()
     config = ModelConfig(hidden_dim=16, world=world, record_vocabulary="hashed")
     reference = ActorCritic(space, config)
@@ -875,7 +875,7 @@ def test_mlx_learner_encodes_only_referenced_catalog_programs(
     )
     env = managym.Env(seed=7)
     env.reset(lesson_match().to_rust())
-    obs = encode_observation(
+    obs = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     inputs = {key: row[None] for key, row in obs.items()}
@@ -987,7 +987,7 @@ def test_mlx_fresh_recipe_exports_both_live_policies(
 
     env = managym.Env(seed=7)
     env.reset(Match(settings.match).to_rust())
-    encoded = encode_observation(
+    encoded = observation_arrays(
         result.raw.observation_space,
         env.observation_for_player(env.current_agent_index()),
     )
@@ -1155,7 +1155,7 @@ def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
     policy, space = resolve("mlx").load_policy(str(target))
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
-    obs = encode_observation(
+    obs = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     batch = policy.prepare({key: value[None] for key, value in obs.items()})
@@ -1172,7 +1172,7 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
     policy.to("cpu").eval()
     env = managym.Env(seed=7)
     env.reset(Match().to_rust())
-    obs = encode_observation(
+    obs = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     inputs = {key: value[None] for key, value in obs.items()}

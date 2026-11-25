@@ -10,11 +10,11 @@ from manabot.env.observation import (
     PERMANENT_LINK_INDEXES,
     ObservationConfig,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.verify.choice_inputs import encode, reorder_objects
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -45,7 +45,7 @@ def _batch(encoded: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
 
 def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     space, raw, host = _attached_observation()
-    encoded = encode_observation(space, raw)
+    encoded = observation_arrays(space, raw)
     assert encoded["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] == host + 1
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))

@@ -14,12 +14,13 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.interface import world_fields
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 
@@ -234,7 +235,7 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
     space = agent.observation_space
     original = {
         key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in encode_observation(
+        for key, value in observation_arrays(
             space, engine.observation_for_player(actor)
         ).items()
     }
@@ -244,7 +245,7 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         hidden.determinize(seed, perspective=actor)
         observation = {
             key: torch.from_numpy(value).unsqueeze(0)
-            for key, value in encode_observation(
+            for key, value in observation_arrays(
                 space, hidden.observation_for_player(actor)
             ).items()
         }

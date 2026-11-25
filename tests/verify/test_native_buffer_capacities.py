@@ -19,13 +19,13 @@ from manabot.env.observation import (
     RELATION_ROWS,
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
 from managym.recording import GameInputs
 from tests.current_capacity import capacity_position
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _players() -> managym.GameSetup:
@@ -47,7 +47,7 @@ def _encode_everywhere(
     Stale preallocated buffers are overwritten completely, padding included,
     and the first vector stream holds the same arrays.
     """
-    expected = encode_observation(space, obs)
+    expected = observation_arrays(space, obs)
     into = space.allocate()
     for value in into.values():
         value.fill(-7)
@@ -65,8 +65,8 @@ def test_native_encoded_arrays_are_writable_and_independent() -> None:
     space = ObservationSpace()
     scalar = managym.Env(seed=213, skip_trivial=True)
     obs, _ = scalar.reset(_players())
-    first = encode_observation(space, obs)
-    second = encode_observation(space, obs)
+    first = observation_arrays(space, obs)
+    second = observation_arrays(space, obs)
     assert first.keys() == second.keys() == space.shapes.keys()
     for key, value in second.items():
         expected = value.copy()
@@ -112,7 +112,7 @@ def test_land_growth_preserves_every_permanent(capacity: int) -> None:
     if capacity == 40:
         message = "observation capacity exceeded: opponent_permanents 41 > 40"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            encode_observation(space, obs)
+            observation_arrays(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
             managym.encode_observation_into(
                 obs, space.layout, space.allocate(), "first-legal"
@@ -170,7 +170,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         assert "game_error" not in healthy
         assert not buffers["terminated"].any() and not buffers["truncated"].any()
         assert not buffers["rewards"].any()
-        reference = encode_observation(space, obs)
+        reference = observation_arrays(space, obs)
         for key, value in reference.items():
             np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
         vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
@@ -235,7 +235,7 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
     if capacity < 256:
         message = f"observation capacity exceeded: actions 256 > {capacity}"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            encode_observation(space, obs)
+            observation_arrays(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
             managym.encode_observation_into(obs, space.layout, space.allocate())
     else:
@@ -282,7 +282,7 @@ def test_affordable_x_modes_reach_scalar_and_vector_buffers(
         assert max(len(obs.agent_permanents), len(obs.opponent_permanents)) > 1
         message = "observation capacity exceeded: .*permanents .* > 1"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            encode_observation(space, obs)
+            observation_arrays(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
             managym.encode_observation_into(obs, space.layout, space.allocate())
         with pytest.raises(Exception, match="permanents"):
@@ -429,7 +429,7 @@ def test_focus_capacity_preserves_complete_action(capacity: int) -> None:
     if capacity < 3:
         message = f"observation capacity exceeded: action focus 3 > {capacity}"
         with pytest.raises(managym.ObservationCapacity, match=message):
-            encode_observation(space, obs)
+            observation_arrays(space, obs)
         with pytest.raises(managym.ObservationCapacity, match=message):
             managym.encode_observation_into(obs, space.layout, space.allocate())
     else:
@@ -447,7 +447,7 @@ def test_card_capacity_overflow_rejected_by_all_paths() -> None:
     vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
     message = "observation capacity exceeded: agent_cards.* > 1"
     with pytest.raises(managym.ObservationCapacity, match=message):
-        encode_observation(space, obs)
+        observation_arrays(space, obs)
     with pytest.raises(managym.ObservationCapacity, match=message):
         managym.encode_observation_into(obs, space.layout, space.allocate())
     with pytest.raises(Exception, match="cards.* > 1"):
@@ -492,7 +492,7 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     assert len(obs.action_space.actions) == 71  # 70 individually legal lands + pass.
     before = scalar.state_digest()
     frame = json.loads(scalar.semantic_decision_frame_json())
-    full = encode_observation(
+    full = observation_arrays(
         ObservationSpace(ObservationConfig(max_cards_per_player=128, max_actions=128)),
         obs,
     )

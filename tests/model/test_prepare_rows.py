@@ -23,7 +23,6 @@ from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
     column,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import Spec, admit, check
@@ -42,6 +41,7 @@ from manabot.policy.spans import observation_spans
 from manabot.verify.representation import shared_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -53,7 +53,7 @@ def _observations(history: bool) -> tuple[ObservationSpace, dict[str, np.ndarray
     rows: list[dict[str, np.ndarray]] = []
     for _ in range(3):
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(encode_observation(space, obs))
+        rows.append(observation_arrays(space, obs))
         env.step(0)
     return space, {key: np.stack([row[key] for row in rows]) for key in rows[0]}
 
@@ -214,7 +214,7 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
 def test_compact_attention_places_live_objects_and_masks_shorter_boards() -> None:
     space = ObservationSpace()
     rows = [
-        encode_observation(
+        observation_arrays(
             space, priority_root(("Lightning Bolt",), lands).scenario_refresh()
         )
         for lands in (("Mountain",), ("Mountain", "Gray Ogre"))
@@ -354,16 +354,14 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     with pytest.raises(ValueError, match="binary"):
         agent.prepare(obs, belief=replace(belief, validity=belief.validity + 0.5))
     with pytest.raises(ValueError, match="belief-free"):
-        admit(
-            obs, replace(spec, model=ModelConfig()), bucketed=False, belief=belief
-        )
+        admit(obs, replace(spec, model=ModelConfig()), bucketed=False, belief=belief)
 
 
 @pytest.mark.parametrize("legacy", [False, True])
 def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
     space = ObservationSpace(ObservationConfig(policy_history_version=1))
     env = shared_effect_root(1)
-    encoded = encode_observation(
+    encoded = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     obs = {key: np.stack([value, value]) for key, value in encoded.items()}
@@ -440,7 +438,7 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
 def test_effect_routes_preserve_memberships_and_padding(catalog: bool) -> None:
     space = ObservationSpace()
     env = shared_effect_root(1)
-    encoded = encode_observation(
+    encoded = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     obs = {key: np.stack((value, value)) for key, value in encoded.items()}

@@ -26,7 +26,7 @@ from experiments import tla_frontier
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.eval import pairing
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import blank_decision_memory, build
@@ -37,6 +37,7 @@ from manabot.infra.identity import file_sha256
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup, DeckMatchup
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 @pytest.fixture
@@ -175,7 +176,7 @@ def test_pairing_plays_native_disclosure_and_blanked_checkpoint(
     assert request.authored_matchup is not None
     env = managym.Env(seed=123)
     env.reset(EnvMatch(request.authored_matchup.match()).to_rust())
-    decklists = encode_observation(space, env.observation_for_player(0))["decklists"]
+    decklists = observation_arrays(space, env.observation_for_player(0))["decklists"]
     assert decklists[0].any()
     assert bool(decklists[1].any()) == (disclosure == "open")
     assert request.opponent.player_spec.get("blank_decision_memory", False) == blank

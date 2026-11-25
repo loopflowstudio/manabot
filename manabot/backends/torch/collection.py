@@ -16,7 +16,6 @@ from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.backends.torch.rollout import check_packed, packing_mask
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
@@ -68,7 +67,7 @@ class CollectionScope:
 
     def opponent_actions(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         *,
         execution_rows: int | None = None,
     ) -> np.ndarray:
@@ -91,7 +90,7 @@ class CollectionScope:
 
     def sample(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         profiler: Profiler,
         *,
         execution_rows: int | None = None,

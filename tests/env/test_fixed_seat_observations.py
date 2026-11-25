@@ -8,11 +8,11 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 import managym
 from managym.disclosure import DecklistDisclosure
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _players(
@@ -35,7 +35,7 @@ def _assert_rows(
 ) -> None:
     for slot, (scalar, player) in enumerate(zip(scalars, players, strict=True)):
         observation = scalar.observation_for_player(player)
-        expected = encode_observation(space, observation)
+        expected = observation_arrays(space, observation)
         for key in expected:
             np.testing.assert_array_equal(
                 buffers[key][slot], expected[key], err_msg=key

@@ -8,12 +8,13 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.tracker import BeliefTracker
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 PACK = "elemental-combat-v1"
@@ -85,7 +86,7 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
     assert engine.state_digest() != root
     history_space = ObservationSpace(ObservationConfig(policy_history_version=1))
     obs = engine.observation_for_player(0)
-    encoded = encode_observation(history_space, obs)
+    encoded = observation_arrays(history_space, obs)
     assert np.asarray(encoded["events_valid"]).any()
     assert np.asarray(encoded["events"])[..., [2, 7]].max() > 0
     torch.set_num_threads(1)
@@ -107,7 +108,7 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
     # Determinization must not alter the viewer's private search or its public history.
     sibling = engine.clone_env()
     sibling.determinize(16101, perspective=0)
-    sibling_encoded = encode_observation(
+    sibling_encoded = observation_arrays(
         history_space, sibling.observation_for_player(0)
     )
     np.testing.assert_array_equal(sibling_encoded["events"], encoded["events"])

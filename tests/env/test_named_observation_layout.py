@@ -17,13 +17,13 @@ from manabot.env.decision_memory import MEMORY_WIDTHS
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.verify.representation import kellan_upgrade_root
 from manabot.verify.text_observation import priority_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 @pytest.fixture(scope="module")
@@ -131,7 +131,7 @@ def test_encoder_names_warn_and_name_their_removal(
     space = ObservationSpace()
     with pytest.warns(DeprecationWarning, match=r"ObservationSpace\.encode .*0\.3\.0"):
         encoded = space.encode(obs)
-    expected = encode_observation(space, obs)
+    expected = observation_arrays(space, obs)
     assert encoded.keys() == expected.keys()
     for key, value in expected.items():
         np.testing.assert_array_equal(encoded[key], value, err_msg=key)
@@ -179,7 +179,7 @@ def test_space_shapes_are_the_native_layout_at_its_capacities(
         policy_history=history == 1,
         decision_memory=memory,
     )
-    encoded = encode_observation(space, obs)
+    encoded = observation_arrays(space, obs)
     assert layout.keys() == encoded.keys() == space.shapes.keys()
     for key, array in encoded.items():
         metadata = layout[key]
@@ -232,7 +232,7 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
 
 def test_named_layout_reads_effect_programs_by_name() -> None:
     env = kellan_upgrade_root()
-    encoded = encode_observation(
+    encoded = observation_arrays(
         ObservationSpace(), env.observation_for_player(env.current_agent_index())
     )
     details = managym.observation_layout()["effect_details"]

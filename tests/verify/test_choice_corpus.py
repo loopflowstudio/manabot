@@ -77,7 +77,9 @@ def test_stack_aliases_share_a_signature_and_reach_collision_inputs() -> None:
 
 
 def test_permutations_rebind_focus_to_occupied_slots_and_restore_the_viewer() -> None:
-    raw = priority_root(("Mountain",), ("Island", "Mountain", "Gray Ogre")).scenario_refresh()
+    raw = priority_root(
+        ("Mountain",), ("Island", "Mountain", "Gray Ogre")
+    ).scenario_refresh()
     space = ObservationSpace()
     original = choice_inputs.encode(raw, space)
     count = len(raw.action_space.actions)

@@ -27,7 +27,6 @@ from manabot.env.memory_store import MEMORY_FIELDS, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
     step_buffers,
 )
 from manabot.infra.config import (
@@ -103,6 +102,7 @@ import managym
 from managym.recording import GameInputs, PlayerSetup, read_records
 from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
@@ -249,7 +249,7 @@ def three_choices(
 
     expected = []
     for span in spans:
-        encoded = encode_observation(space, scalar.observation_for_player(span.seat))
+        encoded = observation_arrays(space, scalar.observation_for_player(span.seat))
         assert span.bootstrap_index is not None
         frozen = batch.next_obs
         if retained_memory(frozen) is not None:
@@ -1355,7 +1355,7 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                             for action in game.actions:
                                 observation, *_ = scalar.step(action)
                             assert scalar.state_digest() == game.root_digest
-                            expected = encode_observation(space, observation)
+                            expected = observation_arrays(space, observation)
                             actual = batch.observations(
                                 np.array([candidate.row])
                             ).observation

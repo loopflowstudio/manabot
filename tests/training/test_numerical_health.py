@@ -33,7 +33,7 @@ from manabot.backends.torch.rl import (
 )
 import manabot.backends.torch.rollout as torch_rollout
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import PackedActions
@@ -50,6 +50,7 @@ from manabot.training.updates.health import (
 from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.selection import value_scale
 from manabot.verify.text_observation import priority_root
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -338,7 +339,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         ObservationSpace(), ModelConfig(value_aggregation=aggregation)
     ).to(DEVICE)
     env = priority_root(("Lightning Bolt",), ("Mountain",))
-    observation = encode_observation(agent.observation_space, env.scenario_refresh())
+    observation = observation_arrays(agent.observation_space, env.scenario_refresh())
     obs = device_input(
         agent,
         {key: torch.from_numpy(value[None]) for key, value in observation.items()},

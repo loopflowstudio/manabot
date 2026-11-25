@@ -11,11 +11,11 @@ import torch
 from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.env.observation import encode_observation
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 from tests.belief.fresh_env import fresh_env
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -320,7 +320,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
         )
         frame = DecisionFrame.from_json(branch.semantic_decision_frame_json())
         indexes, count = _matching_offer_indexes(frame, commitment)
-        encoded = encode_observation(
+        encoded = observation_arrays(
             likelihood.obs_space, branch.observation_for_player(1 - viewer)
         )
         tensors = {key: torch.from_numpy(value[None]) for key, value in encoded.items()}

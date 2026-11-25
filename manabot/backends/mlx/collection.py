@@ -21,7 +21,6 @@ from manabot.backends.mlx.rl import (
     require,
 )
 from manabot.backends.mlx.rollout import check_packed, observation_arrays, packing_mask
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
@@ -82,7 +81,7 @@ class CollectionScope:
 
     def opponent_actions(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         *,
         execution_rows: int | None = None,
     ) -> np.ndarray:
@@ -105,7 +104,7 @@ class CollectionScope:
 
     def sample(
         self,
-        observation: ObservationBuffers | ObservationSelection,
+        observation: ObservationSelection,
         profiler: Profiler,
         *,
         execution_rows: int | None = None,

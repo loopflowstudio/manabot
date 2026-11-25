@@ -24,9 +24,8 @@ from managym.decision_memory import (
 
 if TYPE_CHECKING:
     from manabot.env.memory_store import RecordNode, RetainedMemory, Tail
-    from manabot.env.observation import ObservationBuffers
     from manabot.policy.prepare import Packed, Tables
-    from manabot.policy.spans import ObservationSpans
+    from manabot.policy.spans import ObservationSpans, PolicyObservation
 
 
 def _span(array: str, first: str, last: str) -> slice:
@@ -170,7 +169,7 @@ class MemoryRows[A](MemoryFeatures[A]):
     fold: MemoryFold[A] | None = None
 
 
-def memory_lengths(obs: "ObservationBuffers", row: int) -> tuple[int, int, int, int]:
+def memory_lengths(obs: Mapping[str, np.ndarray], row: int) -> tuple[int, int, int, int]:
     headers, details, references = (obs[key][row] for key in MEMORY_FIELDS[:3])
     return (
         int(headers[:, _RECORD_VALID].sum()),
@@ -219,8 +218,8 @@ class MemoryCursor:
     details: int = 0
 
 
-def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
-    """Validate arbitrary dense shapes, padding and integers before slicing."""
+def live_memory(obs: Mapping[str, np.ndarray]) -> list[tuple[np.ndarray, ...]]:
+    """Validate padded retained rows (archives, chunks): shapes, padding, integers."""
     present = [key in obs for key in MEMORY_FIELDS]
     if not any(present):
         return []
@@ -297,13 +296,6 @@ def record_chunks(
     ):
         raise ValueError("unowned decision-memory companion rows")
     return result
-
-
-def admit_memory(obs: "ObservationBuffers") -> None:
-    for rows in live_memory(obs):
-        cursor = MemoryCursor()
-        for chunk in record_chunks(rows):
-            cursor = admit_chunk(chunk, cursor)
 
 
 def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCursor:
@@ -589,18 +581,11 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
     return arrays
 
 
-def retained_memory(obs: object) -> "RetainedMemory | None":
-    from manabot.env.memory_store import PrefixObservation
+def retained_memory(obs: "PolicyObservation") -> "RetainedMemory | None":
+    """Interned prefixes selected with these rows; a bare native batch has none."""
     from manabot.policy.spans import ObservationSelection
 
-    if type(obs) is ObservationSelection:
-        return obs.memory
-    return (
-        obs.memory
-        if isinstance(obs, PrefixObservation)
-        and not any(key in obs for key in MEMORY_FIELDS)
-        else None
-    )
+    return obs.memory if type(obs) is ObservationSelection else None
 
 
 def validate_retained_memory(

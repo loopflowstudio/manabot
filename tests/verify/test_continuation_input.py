@@ -15,7 +15,6 @@ from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import (
     ModelConfig,
@@ -28,6 +27,7 @@ from manabot.verify.text_observation import collision_branches, native_fixtures
 from manabot.verify.trigger_order import ordering_root
 import managym
 from managym.decision_capture import DecisionInput
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -40,7 +40,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
     space = ObservationSpace()
-    encoded = [encode_observation(space, obs) for obs in observations]
+    encoded = [observation_arrays(space, obs) for obs in observations]
     differences = [
         key
         for key in encoded[0]
@@ -63,8 +63,8 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     # Enabling history does not conceal the current-state distinction.
     space = ObservationSpace(ObservationConfig(policy_history_version=1))
     assert not np.array_equal(
-        encode_observation(space, observations[0])["relations"],
-        encode_observation(space, observations[1])["relations"],
+        observation_arrays(space, observations[0])["relations"],
+        observation_arrays(space, observations[1])["relations"],
     )
 
 
@@ -75,7 +75,7 @@ def test_native_fixture_mana_outputs_and_other_viewer_safety() -> None:
         assert actor is not None
         for viewer in (actor, 1 - actor):
             observation = env.observation_for_player(viewer)
-            encoded = encode_observation(space, observation)
+            encoded = observation_arrays(space, observation)
             if name == "mana_color" and viewer == actor:
                 outputs = [
                     output
@@ -139,7 +139,7 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
         any(frame.kind == 1 for frame in obs.continuation) for obs in observations
     )
     space = ObservationSpace()
-    left, right = [encode_observation(space, obs) for obs in observations]
+    left, right = [observation_arrays(space, obs) for obs in observations]
     assert not np.array_equal(left["relations"], right["relations"])
 
 
@@ -247,7 +247,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     scalar = managym.Env(seed=608, skip_trivial=False)
     observation, _ = scalar.reset(players)
-    expected = encode_observation(space, observation)
+    expected = observation_arrays(space, observation)
     # Every element is written, padding included.
     out = {key: np.full_like(value, -7) for key, value in expected.items()}
     managym.encode_observation_into(observation, space.layout, out)
@@ -268,7 +268,7 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     torch.manual_seed(195)
     _, raw = ordering_root()
     space = ObservationSpace()
-    encoded = encode_observation(space, raw)
+    encoded = observation_arrays(space, raw)
     batch = {
         key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
     }
@@ -336,8 +336,8 @@ def test_exported_observation_keeps_complete_policy_input_with_continuation() ->
         )
         assert exported.toJSON() == observation.toJSON()
         assert exported.continuation_json() == observation.continuation_json()
-        expected = encode_observation(space, observation)
-        actual = encode_observation(space, exported)
+        expected = observation_arrays(space, observation)
+        actual = observation_arrays(space, exported)
         for key in expected:
             np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
         frames = json.loads(observation.continuation_json())

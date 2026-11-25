@@ -19,7 +19,7 @@ from manabot.backends.torch.checkpoint import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -39,6 +39,7 @@ from managym.academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_
 from managym.academy.server import GameSession, _parse_game_config
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 PACK = "elemental-world-v2"
@@ -230,7 +231,7 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
         obs = engine.step(action["index"])[0]
     else:
         pytest.fail("Avatar grant did not resolve")
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), view)
+    encoded = observation_arrays(ObservationSpace(ObservationConfig()), view)
     assert encoded["agent_permanents"][0, 26] == 1
     payload = serialize_observation(view)
     permanent = next(

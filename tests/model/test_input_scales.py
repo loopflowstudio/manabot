@@ -1,6 +1,6 @@
 """What a fresh model's numeric inputs look like on sampled games.
 
-Rows are encoded natively (`encode_observation`) from random play of Elemental
+Rows are encoded natively (`observation_arrays`) from random play of Elemental
 decks and prepared with the model's readings.
 """
 
@@ -17,7 +17,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ObservationBuffers,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.prepare import Prepared
@@ -30,6 +29,7 @@ from manabot.policy.readings import (
 )
 from manabot.verify.text_observation import keep_opening_hands
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 WORLD = "elemental-world-v2"
 
@@ -49,7 +49,7 @@ def sampled_batches(
             if step % stride == 0:
                 yield {
                     key: value[None]
-                    for key, value in encode_observation(space, raw).items()
+                    for key, value in observation_arrays(space, raw).items()
                 }
             raw, _, terminated, truncated, _ = env.step(
                 rng.randrange(len(raw.action_space.actions))
@@ -250,7 +250,7 @@ def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
         env.scenario_force_battlefield(0, "Plains", ready=True)
     obs = env.scenario_refresh()
 
-    priority = encode_observation(space, obs)
+    priority = observation_arrays(space, obs)
     assert not priority["actions"][:, [has_x, x]].any()
     cast = next(
         index
@@ -259,7 +259,7 @@ def test_an_x_decision_offers_numbers_apart_from_modes() -> None:
     )
     obs, *_ = env.step(cast)
     assert [a.mode_index for a in obs.action_space.actions] == [0, 1, 2, 3]
-    batch = encode_observation(space, obs)
+    batch = observation_arrays(space, obs)
     rows = batch["actions"][batch["actions_valid"].astype(bool)]
     np.testing.assert_array_equal(rows[:, has_x], 1.0)
     np.testing.assert_allclose(rows[:, x], [0.0, 0.1, 0.2, 0.3])

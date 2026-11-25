@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_index, root
@@ -15,6 +15,7 @@ import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.server import GameSession
 from tests.academy.socket_messages import settled_message
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _command(session: GameSession, index: int, identity: str) -> dict[str, object]:
@@ -190,7 +191,7 @@ def test_survival_orders_cross_consumers(
         == managym.ActionSpaceEnum.ORDER_TRIGGERS
     )
     session.auto_pass = False
-    encoded = encode_observation(ObservationSpace(), obs)
+    encoded = observation_arrays(ObservationSpace(), obs)
     np.testing.assert_array_equal(
         encoded["actions_valid"][:3],
         np.array([1, 1, 0], dtype=encoded["actions_valid"].dtype),

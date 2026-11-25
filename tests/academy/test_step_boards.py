@@ -61,7 +61,10 @@ def test_a_patch_turns_one_board_into_the_next() -> None:
     assert apply(before, node) == after
     assert patch(after, after) is None
     # The unchanged parts are named, not sent: Ogre left, Elf is patched in place.
-    assert node["o"]["battlefield"]["a"][0] == {"k": 2, "p": {"o": {"tapped": {"=": True}}}}
+    assert node["o"]["battlefield"]["a"][0] == {
+        "k": 2,
+        "p": {"o": {"tapped": {"=": True}}},
+    }
 
 
 def test_equal_boards_merge_and_a_board_equal_to_the_frame_is_not_sent() -> None:

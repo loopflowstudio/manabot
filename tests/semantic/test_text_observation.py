@@ -20,7 +20,6 @@ from manabot.env.observation import (
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
     column,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.policy.spans import batch_layout
@@ -49,6 +48,7 @@ from managym.experience_projection import (
     describe_actions,
     serialize_observation,
 )
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -296,7 +296,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         owner.text
     )
     space = ObservationSpace(ObservationConfig())
-    owner_rows = encode_observation(space, _viewer_observation(owner))["agent_cards"]
+    owner_rows = observation_arrays(space, _viewer_observation(owner))["agent_cards"]
     assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
 
     pass_priority = next(a for a in owner.actions if "Pass" in a.description)
@@ -311,7 +311,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     observation = _viewer_observation(opponent)
     assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
     assert observation.opponent.zone_counts[5] == 1
-    encoded = encode_observation(space, observation)
+    encoded = observation_arrays(space, observation)
     for key in ("agent_cards", "opponent_cards"):
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
@@ -410,7 +410,7 @@ def test_once_each_turn_use_reaches_text_and_the_policy_input(
 
     observation = _viewer_observation(decision)
     space = ObservationSpace(config)
-    encoded = encode_observation(space, observation)
+    encoded = observation_arrays(space, observation)
     row = next(
         index
         for index, permanent in enumerate(observation.agent_permanents)
@@ -593,7 +593,7 @@ def test_steel_hellkite_announces_x_and_shows_its_combat_hit_on_the_stack() -> N
         assert restored.stack_objects[0].combat_damage_to_players == [1]
         (entry,) = decision_surface_view(env, viewer)["stack_objects"]
         assert entry["combat_damage_to_players"] == [1]
-        row = encode_observation(ObservationSpace(), restored)["stack"][0]
+        row = observation_arrays(ObservationSpace(), restored)["stack"][0]
         assert row[column("stack", "combat_damage_to_me")] == (viewer == 1)
 
 
@@ -805,7 +805,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
     )
     observation = _viewer_observation(decision)
     space = ObservationSpace(ObservationConfig())
-    encoded = encode_observation(space, observation)
+    encoded = observation_arrays(space, observation)
     if with_muldrotha:
         projected = [
             a
@@ -859,7 +859,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
             for grant, permanent in zip(card["cast_permissions"], order, strict=True):
                 grant["source_permanent_id"] = permanent["id"]
             bound = managym.Observation.from_json(json.dumps(state))
-            buffers = encode_observation(space, bound)
+            buffers = observation_arrays(space, bound)
             facts = buffers["facts"]
             owners = facts[:, column("facts", "object")]
             source_terms.append(
@@ -872,7 +872,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         following = managym.Observation.from_json(json.dumps(state))
         following_card = next(c for c in following.agent_cards if c.id == card["id"])
         assert following_card.cast_permissions[0].follows_source_controller
-        assert not np.array_equal(encode_observation(space, following)["facts"], facts)
+        assert not np.array_equal(observation_arrays(space, following)["facts"], facts)
         line = _card_line(render_decision(_redigest(payload)).text, alias)
         assert (
             "permission follows the controller of" in line
@@ -888,7 +888,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
 
         first["flashback"] = True
         flashed = managym.Observation.from_json(json.dumps(state))
-        assert not np.array_equal(encode_observation(space, flashed)["facts"], facts)
+        assert not np.array_equal(observation_arrays(space, flashed)["facts"], facts)
         line = _card_line(render_decision(_redigest(payload)).text, alias)
         assert "with flashback" in line
         board_card = next(
@@ -903,7 +903,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         card["cast_permission"] = card.pop("cast_permissions")[0]
         single = managym.Observation.from_json(json.dumps(state))
         np.testing.assert_array_equal(
-            encode_observation(space, single)["agent_cards"], buffers["agent_cards"]
+            observation_arrays(space, single)["agent_cards"], buffers["agent_cards"]
         )
         original, swapped = source_terms
         assert len(original[0]) and not np.array_equal(original[0], original[1])
@@ -1288,12 +1288,12 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert battlefield[0]["combat_damage_to_players"] == [1]
     assert "dealt combat damage to seat 1 this turn" in decision.text
     assert battlefield[0]["damaged_permanents"] == [ogre["id"]]
-    facts = encode_observation(ObservationSpace(ObservationConfig()), observation)[
+    facts = observation_arrays(ObservationSpace(ObservationConfig()), observation)[
         "facts"
     ]
     assert "A creature died this turn." in decision.text
     assert serialize_observation(observation)["turn"]["creature_died_this_turn"]
-    turn_state = encode_observation(ObservationSpace(), observation)[
+    turn_state = observation_arrays(ObservationSpace(), observation)[
         "player_turn_state"
     ]
     assert turn_state[0, column("player_turn_state", "creatures_died")] == 1
@@ -1872,7 +1872,7 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     assert {card["id"] for card in projection["agent"]["inspected"]} == inspected_ids
     assert not projection["opponent"]["hand"]
     assert not decision_surface_view(env, 1 - viewer)["agent"].get("inspected")
-    valid = encode_observation(ObservationSpace(), raw)["actions_valid"]
+    valid = observation_arrays(ObservationSpace(), raw)["actions_valid"]
     assert int(np.count_nonzero(valid)) == len(raw.action_space.actions)
     stop = next(
         action
@@ -1890,7 +1890,7 @@ def _assert_policy_input_holds_the_decision(
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    encoded = observation_arrays(ObservationSpace(ObservationConfig()), observation)
     valid = int(np.count_nonzero(encoded["actions_valid"]))
     assert valid == len(observation.action_space.actions)
     return observation
@@ -1984,7 +1984,7 @@ def test_lightshell_duo_private_choices_reach_each_viewer(
         assert [c.characteristics.name for c in cards] == list(order)
         inspected = decision_surface_view(env, 0)["agent"]["inspected"]
         assert [c["id"] for c in inspected] == [c.id for c in cards]
-        rows = encode_observation(space, own)
+        rows = observation_arrays(space, own)
         assert len(decision.actions) == np.count_nonzero(rows["actions_valid"]) == count
         focus = rows["action_focus"][:2, 0]
         assert min(focus) >= 0 and focus[0] != focus[1]
@@ -2001,7 +2001,7 @@ def test_lightshell_duo_private_choices_reach_each_viewer(
     with pytest.raises(managym.AgentError, match="no active decision"):
         left.capture_decision(1)
     left_rows, right_rows = [
-        encode_observation(space, env.observation_for_player(1)) for env in roots
+        observation_arrays(space, env.observation_for_player(1)) for env in roots
     ]
     assert not left_rows["actions_valid"].any()
     for key in left_rows:
@@ -2016,7 +2016,7 @@ def _assert_private_library(env: managym.Env, expected: dict[int, str]) -> None:
     space = ObservationSpace()
     own = env.observation_for_player(0)
     assert own.agent.known_library == facts
-    rows = encode_observation(space, own)["known_library"][0]
+    rows = observation_arrays(space, own)["known_library"][0]
     assert [(key, pos) for key, pos in rows if pos] == [
         (key + 1, pos + 1) for pos, key in sorted(facts.items())
     ]
@@ -2029,7 +2029,7 @@ def _assert_private_library(env: managym.Env, expected: dict[int, str]) -> None:
         assert f"Known library position {pos + 1} from top: {label}." in decision.text
     other = env.observation_for_player(1)
     assert not other.opponent.known_library
-    assert not encode_observation(space, other)["known_library"][1].any()
+    assert not observation_arrays(space, other)["known_library"][1].any()
     table = decision_surface_view(env, 1)
     assert not table["agent"].get("inspected")
     for name in set(expected.values()) - {"Mountain"}:  # Seat 1 plays Mountains.
@@ -2564,7 +2564,7 @@ def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
         obs = env.observation_for_player(viewer)
         caster = obs.agent if viewer == payer else obs.opponent
         assert caster.turn_history.mana_spent_casting == 5
-        turn_state = encode_observation(ObservationSpace(), obs)["player_turn_state"]
+        turn_state = observation_arrays(ObservationSpace(), obs)["player_turn_state"]
         assert (
             turn_state[
                 int(viewer != payer), column("player_turn_state", "mana_spent_casting")
@@ -2594,7 +2594,7 @@ def test_second_draw_triggers_share_public_history_in_text_and_policy_input() ->
         player = obs.agent if viewer == drawer else obs.opponent
         assert player.turn_history.cards_drawn == 3
         assert "drew 3 cards" in capture_text_decision(env).text
-        row = encode_observation(space, obs)[side]
+        row = observation_arrays(space, obs)[side]
         assert row[..., column(side, "cards_drawn")].item() == pytest.approx(0.3)
         if viewer == drawer:
             _choose(env, "Pass priority")

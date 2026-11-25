@@ -11,7 +11,7 @@ from unittest.mock import Mock
 from blake3 import blake3
 import pytest
 
-from manabot.env.observation import ObservationSpace, column, encode_observation
+from manabot.env.observation import ObservationSpace, column
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.sim import sim
 from manabot.verify.text_observation import reset_to_first_main
@@ -24,6 +24,7 @@ from managym.recording import (
     records_from_source,
 )
 from managym.replay import replay_failure_inputs, walk
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.recorded_commands import (
     preferred_action,
     record_until_object_candidate,
@@ -853,7 +854,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
         assert "cost {X}{B}{B}; mana value 3" in capture_text_decision(branch).text
         for viewer in (0, 1):
             obs = branch.observation_for_player(viewer)
-            row = encode_observation(space, obs)["stack"][0]
+            row = observation_arrays(space, obs)["stack"][0]
             assert row[column("stack", "mana_value")] == pytest.approx(0.2)
             assert row[column("stack", "effective_mana_value")] == pytest.approx(0.3)
             [item] = obs.stack_objects

@@ -12,7 +12,7 @@ from manabot.belief.population import BeliefTrainingExample, pack_belief_example
 from manabot.belief.range import BeliefState
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
-from manabot.env.observation import allocate_vector_buffers, encode_observation
+from manabot.env.observation import allocate_vector_buffers
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.decision import (
@@ -26,6 +26,7 @@ from managym.possible_worlds import (
     PossibleWorldSpace,
     WorldQuery,
 )
+from tests.fixtures.observation_rows import observation_arrays
 
 
 @pytest.fixture(scope="module")
@@ -314,7 +315,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
-    scalar = encode_observation(
+    scalar = observation_arrays(
         ObservationSpace(ObservationConfig(max_focus_objects=1)), obs
     )
     retrievals = 0
@@ -343,7 +344,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
         ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
     ):
         with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
-            encode_observation(ObservationSpace(config), obs)
+            observation_arrays(ObservationSpace(config), obs)
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
@@ -365,7 +366,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     obs, _ = scalar.reset(configs)
     rng = random.Random(0)
     for _ in range(2000):
-        encoded = encode_observation(space, obs)
+        encoded = observation_arrays(space, obs)
         for key, value in encoded.items():
             np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
         retrievals = [
@@ -377,7 +378,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
             selected = retrievals[-1]
             after, *_ = scalar.step(selected)
             vector.step_into_buffers([selected])
-            for key, value in encode_observation(space, after).items():
+            for key, value in observation_arrays(space, after).items():
                 np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
             return
         assert not obs.game_over

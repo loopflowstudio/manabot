@@ -54,7 +54,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
@@ -374,22 +374,12 @@ def _checked_native_frontiers(teacher: LocalUpdateTeacher) -> Iterator[list[int]
 
     def encode(
         engines: Sequence[managym.Env],
-    ) -> tuple[managym.ObservationBatch | ObservationBuffers, list[int]]:
+    ) -> tuple[managym.ObservationBatch, list[int]]:
         actual, counts = encode_frontier(engines)
-        if not isinstance(actual, managym.ObservationBatch):
-            actual = {key: value.copy() for key, value in actual.items()}
         for index, engine in enumerate(engines):
             expected, single_count = encode_frontier([engine])
             assert single_count == [counts[index]]
-            if isinstance(actual, managym.ObservationBatch):
-                assert isinstance(expected, managym.ObservationBatch)
-                assert actual.gather([(actual, index)]).tables() == expected.tables()
-            else:
-                assert not isinstance(expected, managym.ObservationBatch)
-                for key, value in expected.items():
-                    np.testing.assert_array_equal(
-                        actual[key][index], value[0], err_msg=key
-                    )
+            assert actual.gather([(actual, index)]).tables() == expected.tables()
         checked.append(len(engines))
         return actual, counts
 

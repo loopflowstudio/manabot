@@ -14,7 +14,7 @@ from manabot.backends.torch.checkpoint import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.evaluation_records import audit_view, finalize_game, stored_game
@@ -28,6 +28,7 @@ from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     puct_source_sha256,
 )
+from tests.fixtures.observation_rows import observation_arrays
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
 
@@ -144,7 +145,7 @@ def test_live_player_deadline_yields_no_decision() -> None:
     player.start_game(wrapper, 0)
     player.deadline = 1.0
     with pytest.raises(TimeoutError):
-        player.act(wrapper, encode_observation(space, obs))
+        player.act(wrapper, observation_arrays(space, obs))
     assert player.stats.decisions == 0
 
 

@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import PolicyObservation
 from manabot.training.rollout.actions import ActionRows, ActionValidator
 from manabot.training.updates.objective import Array, LossTerms
 
@@ -173,7 +173,7 @@ class Policy(Protocol):
     def config(self) -> PolicyConfig: ...
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self, obs: PolicyObservation, *, inference: bool = False
     ) -> Prepared[np.ndarray]: ...
 
     def forward_distribution(self, obs: Observations, /) -> tuple[Array, Array]: ...

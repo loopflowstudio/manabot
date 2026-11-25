@@ -10,12 +10,13 @@ from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import Settings, Targets
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -26,7 +27,7 @@ def _batch(space: ObservationSpace, count: int) -> dict[str, np.ndarray]:
     rows = []
     while len(rows) < count:
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(encode_observation(space, obs))
+        rows.append(observation_arrays(space, obs))
         _, _, terminated, truncated, _ = env.step(
             int(rng.integers(len(obs.action_space.actions)))
         )

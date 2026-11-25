@@ -8,9 +8,9 @@ import torch
 
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import encode_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
 from manabot.verify.text_observation import priority_root
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -45,7 +45,7 @@ def _different_boards(case: PolicyFixture) -> dict[str, torch.Tensor]:
     """Construct legal priority decisions on boards of two fixed sizes."""
     space = case.agent.observation_space
     rows = [
-        encode_observation(
+        observation_arrays(
             space, priority_root(("Lightning Bolt",), lands).scenario_refresh()
         )
         for lands in (("Mountain",), ("Mountain", "Gray Ogre"))

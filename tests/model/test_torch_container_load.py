@@ -9,7 +9,7 @@ import torch
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import (
     NotAContainer,
@@ -17,6 +17,7 @@ from manabot.policy.checkpoint import (
     read_metadata,
 )
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -29,7 +30,7 @@ def _observation(space: ObservationSpace) -> dict[str, torch.Tensor]:
             managym.PlayerConfig("Villain", {"Plains": 20, "Gray Ogre": 20}),
         ]
     )
-    encoded = encode_observation(space, env.observation_for_player(0))
+    encoded = observation_arrays(space, env.observation_for_player(0))
     return {key: torch.from_numpy(value)[None] for key, value in encoded.items()}
 
 

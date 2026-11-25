@@ -19,7 +19,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import gather_memory
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.policy.admission import admit
 from manabot.policy.prepare import RecordNamespace, record_key
@@ -37,6 +37,7 @@ from managym.decision_memory import (
     DecisionReference,
     PublicChoice,
 )
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def encode_with_records(
@@ -53,7 +54,7 @@ def encode_with_records(
         records, mode="json"
     )
     encoded = dict(
-        encode_observation(space, managym.Observation.from_json(json.dumps(payload)))
+        observation_arrays(space, managym.Observation.from_json(json.dumps(payload)))
     )
     assert int(encoded["decision_records"].any(axis=1).sum()) == len(records)
     return encoded

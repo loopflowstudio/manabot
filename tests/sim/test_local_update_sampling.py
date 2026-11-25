@@ -12,7 +12,7 @@ from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
@@ -37,6 +37,7 @@ from managym.decision import (
     Observation,
 )
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher
@@ -500,7 +501,7 @@ def test_batch_inputs_match_python_at_selected_capacities(
     engines = [env._engine, branch, env._engine]
     witnesses = [engine.search_witness_json() for engine in engines]
     expected = [
-        encode_observation(
+        observation_arrays(
             teacher.space, engine.observation_for_player(engine.current_agent_index())
         )
         for engine in engines

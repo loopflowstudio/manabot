@@ -30,7 +30,6 @@ from manabot.env.observation import (
     FACT_VALUE_INDEX,
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
@@ -43,6 +42,7 @@ from manabot.training.loops.self_play import SelfPlay
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import trajectory_field
 from tests.model.prepared_routes import (
     device_input,
@@ -106,7 +106,7 @@ def test_layer_input_text_forward_backward_and_reload(
     )
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = encode_observation(space, obs)
+    reference = observation_arrays(space, obs)
     assert reference["effect_details"].shape == (4096, 3)
     assert (reference["effect_details"][:, 0] >= 11).any()
     assert "exile" in capture_text_decision(env).text.lower()
@@ -144,7 +144,7 @@ def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     payload["shared_effects"][0]["effect"]["program"] = [[4, -17], [4, 2**31 - 1]]
     observed = managym.Observation.from_json(json.dumps(payload))
     config = ObservationConfig()
-    encoded = encode_observation(ObservationSpace(config), observed)
+    encoded = observation_arrays(ObservationSpace(config), observed)
     assert set(encoded["facts"][:, 1]) >= {12, 13}
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
@@ -163,7 +163,7 @@ def test_vector_buffers_match_scalar_encoding() -> None:
     scalar = managym.Env(seed=23)
     scalar.reset(players)
     observed = scalar.observation_for_player(scalar.current_agent_index())
-    expected = encode_observation(space, observed)
+    expected = observation_arrays(space, observed)
     for key in expected:
         np.testing.assert_array_equal(
             vector_buffers[key][0], expected[key], err_msg=key
@@ -198,7 +198,7 @@ def test_captured_continuation_program_reaches_input_and_policy() -> None:
     assert "captured program" in capture_text_decision(env).text.lower()
     config = ObservationConfig()
     space = ObservationSpace(config)
-    reference = encode_observation(space, obs)
+    reference = observation_arrays(space, obs)
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))

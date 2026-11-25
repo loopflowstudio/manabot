@@ -14,7 +14,6 @@ from manabot.env.observation import (
     DECKLIST_DIM,
     ObservationSpace,
     column,
-    encode_observation,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
@@ -28,6 +27,7 @@ from manabot.sim.registration import (
 from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.disclosure import DecklistDisclosure, DecklistSampling
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _match(decklists: DecklistDisclosure) -> MatchConfig:
@@ -54,7 +54,7 @@ def _prepared(
     space: ObservationSpace, obs: managym.Observation
 ) -> Prepared[np.ndarray]:
     return _policy().prepare(
-        {k: v[None] for k, v in encode_observation(space, obs).items()}
+        {k: v[None] for k, v in observation_arrays(space, obs).items()}
     )
 
 
@@ -62,7 +62,7 @@ def _assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
     """Viewer JSON, every encoded buffer and the Prepared input all agree."""
     space = ObservationSpace()
     assert a.toJSON() == b.toJSON()
-    left, right = encode_observation(space, a), encode_observation(space, b)
+    left, right = observation_arrays(space, a), observation_arrays(space, b)
     for key, value in left.items():
         np.testing.assert_array_equal(value, right[key], err_msg=key)
     np.testing.assert_equal(asdict(_prepared(space, a)), asdict(_prepared(space, b)))
@@ -97,12 +97,12 @@ def test_opponent_lists_appear_exactly_when_open(decklists: DecklistDisclosure) 
     space = ObservationSpace(ObservationConfig())
     assert obs.decklists_closed == (decklists == "closed")
     for viewer in (0, 1):
-        encoded = encode_observation(space, env.observation_for_player(viewer))
+        encoded = observation_arrays(space, env.observation_for_player(viewer))
         for key in ("agent_player", "opponent_player"):
             assert encoded[key][0, column(key, "decklists_open")] == float(
                 decklists == "open"
             )
-    lists = encode_observation(space, obs)["decklists"]
+    lists = observation_arrays(space, obs)["decklists"]
     assert lists.shape == (2, 60, DECKLIST_DIM)
     assert lists[0, :, 1].sum() == 41
     assert lists[1, :, 1].sum() == (40 if decklists == "open" else 0)
@@ -201,8 +201,8 @@ def test_unseen_opponent_list_does_not_change_observation_or_prepared(
     ]
     assert opened[0].toJSON() != opened[1].toJSON()
     assert not np.array_equal(
-        encode_observation(space, opened[0])["decklists"],
-        encode_observation(space, opened[1])["decklists"],
+        observation_arrays(space, opened[0])["decklists"],
+        observation_arrays(space, opened[1])["decklists"],
     )
     assert not np.array_equal(
         _prepared(space, opened[0]).deck_rows, _prepared(space, opened[1]).deck_rows
@@ -248,7 +248,7 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
     for _ in range(3000):
         if owner is not None:
             view = env.observation_for_player(1 - owner)
-            encoded = encode_observation(space, view)
+            encoded = observation_arrays(space, view)
             assert not encoded["decklists"][1].any()
             prepared = _policy().prepare({k: v[None] for k, v in encoded.items()})
             assert revealed is not None

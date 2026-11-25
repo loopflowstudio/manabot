@@ -13,7 +13,6 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     ObservationSpace,
     column,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.buckets import (
@@ -28,6 +27,7 @@ from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
@@ -360,7 +360,7 @@ def test_reconfigured_fact_capacity_checks_original_buffer_shape() -> None:
 def test_bucketed_admission_keeps_effect_order_bounds_and_batch_strides() -> None:
     case = _policy()
     env = shared_effect_root(1)
-    encoded = encode_observation(
+    encoded = observation_arrays(
         case.agent.observation_space,
         env.observation_for_player(env.current_agent_index()),
     )

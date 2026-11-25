@@ -136,4 +136,7 @@ def test_viewer_checkpoint_provenance_omits_server_path() -> None:
     assert viewer["config"]["opponent_checkpoint"] == {
         key: value for key, value in checkpoint.items() if key != "checkpoint"
     }
-    assert payload["config"]["opponent_checkpoint"]["checkpoint"] == "/private/runs/model.pt"
+    assert (
+        payload["config"]["opponent_checkpoint"]["checkpoint"]
+        == "/private/runs/model.pt"
+    )

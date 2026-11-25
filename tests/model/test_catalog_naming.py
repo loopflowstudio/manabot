@@ -24,12 +24,12 @@ from manabot.env.observation import (
     NAME_DIM,
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input, host_inputs
 
@@ -134,7 +134,7 @@ def _command(frame: dict, offer: int, tag: str) -> str:
 
 
 def _acting_input(env: managym.Env, space: ObservationSpace) -> dict:
-    return encode_observation(
+    return observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
 
@@ -329,7 +329,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 branch.semantic_decision_frame_json()
             )
-            for key, expected in encode_observation(space, pending).items():
+            for key, expected in observation_arrays(space, pending).items():
                 np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
         if searching:
             stop = next(
@@ -375,7 +375,7 @@ def test_catalog_naming_programs_affect_scores(
     leaf = naming_root.clone_env()
     _name_path(leaf, "Fire Lord Sozin")
     raw = leaf.observation_for_player(0)
-    tensors = _tensor(encode_observation(space, raw))
+    tensors = _tensor(observation_arrays(space, raw))
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
     logits, _ = model(device_input(model, tensors))
@@ -404,7 +404,7 @@ def test_naming_checkpoint_binds_names_before_loading_weights(
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
-    tensors = _tensor(encode_observation(space, naming_root.observation_for_player(0)))
+    tensors = _tensor(observation_arrays(space, naming_root.observation_for_player(0)))
     path = tmp_path / "naming.pt"
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
@@ -460,7 +460,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         # The following private search has no naming candidates.
         env.step(_offer_toward(env, "Gray Ogre")[0])
     space = ObservationSpace()
-    tensors = _tensor(encode_observation(space, env.observation_for_player(0)))
+    tensors = _tensor(observation_arrays(space, env.observation_for_player(0)))
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
@@ -518,7 +518,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     assert not buffers["name_candidates"][0, :, :2].any()
     # Group prompt, then leaf prompt, then the private search without names.
     for stage in ("group", "leaf"):
-        for key, expected in encode_observation(space, raw).items():
+        for key, expected in observation_arrays(space, raw).items():
             np.testing.assert_allclose(
                 buffers[key][0], expected, atol=1e-6, err_msg=f"{stage}:{key}"
             )
@@ -536,7 +536,7 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
         raw = scalar.step(index)[0]
         vector.step_into_buffers([index])
     assert not buffers["name_candidates"].any()
-    for key, expected in encode_observation(space, raw).items():
+    for key, expected in observation_arrays(space, raw).items():
         np.testing.assert_allclose(buffers[key][0], expected, atol=1e-6, err_msg=key)
 
 
@@ -557,7 +557,7 @@ def _mixed_naming_batch(
         ]
     )
     arrays = [
-        encode_observation(space, env.observation_for_player(env.current_agent_index()))
+        observation_arrays(space, env.observation_for_player(env.current_agent_index()))
         for env in (naming_root, leaf, search, ordinary)
     ]
     return space, {
@@ -667,7 +667,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
     offers = leaf.observation_for_player(0).action_space.actions
-    batch = _tensor(encode_observation(space, leaf.observation_for_player(0)))
+    batch = _tensor(observation_arrays(space, leaf.observation_for_player(0)))
     model = ActorCritic(
         space,
         ModelConfig(

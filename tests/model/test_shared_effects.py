@@ -10,7 +10,7 @@ import torch
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy import admission
 from manabot.recipes.baseline import settings
@@ -21,6 +21,7 @@ from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.choice_inputs import reorder_objects
 from manabot.verify.representation import shared_effect_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input, effect_rows, record_vocabulary
 
@@ -34,7 +35,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     torch.manual_seed(7)
     env = shared_effect_root(1)
     obs = env.observation_for_player(env.current_agent_index())
-    values = _batch(encode_observation(ObservationSpace(ObservationConfig()), obs))
+    values = _batch(observation_arrays(ObservationSpace(ObservationConfig()), obs))
     encoder = SharedEffectEncoder(8, numeric=8)
     objects = torch.randn(1, 202, 8)
     headers, details, members = (
@@ -92,7 +93,7 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
             world=managym.WORLD_SETUP,
         ),
     )
-    values = _batch(encode_observation(space, obs))
+    values = _batch(observation_arrays(space, obs))
     logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     with reorder_objects(obs):
@@ -149,7 +150,7 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
     env = shared_effect_root(1)
     observation = env.observation_for_player(env.current_agent_index())
     values = _batch(
-        encode_observation(ObservationSpace(ObservationConfig()), observation)
+        observation_arrays(ObservationSpace(ObservationConfig()), observation)
     )
     encoder = SharedEffectEncoder(8, numeric=8)
     objects = torch.randn(1, 202, 8, requires_grad=True)
@@ -194,7 +195,7 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     torch.manual_seed(42)
     env = shared_effect_root(7)
     values = _batch(
-        encode_observation(
+        observation_arrays(
             ObservationSpace(ObservationConfig()),
             env.observation_for_player(env.current_agent_index()),
         )

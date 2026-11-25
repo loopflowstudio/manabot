@@ -8,11 +8,11 @@ from manabot.env.observation import (
     CARD_DIM,
     PLAYER_DIM,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def test_temur_learning_catalog_closes_the_registered_cards() -> None:
@@ -74,5 +74,5 @@ def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
     assert any(card.is_legendary for card in observation.agent_cards)
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
+    encoded = observation_arrays(ObservationSpace(ObservationConfig()), observation)
     assert encoded["agent_player"][0, 37] == np.float32(0.2)

@@ -14,12 +14,12 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import collect, open_collector
 from manabot.verify.text_observation import keep_opening_hands
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.prepared_routes import dense_action_features, device_input
 
@@ -139,7 +139,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     raw = keep_opening_hands(env, raw)
     obs = {
         key: torch.from_numpy(value[None])
-        for key, value in encode_observation(agent.observation_space, raw).items()
+        for key, value in observation_arrays(agent.observation_space, raw).items()
     }
     state = agent._gather_object_embeddings(device_input(agent, obs))
     objects, owners, valid = state.objects, state.is_agent, state.validity

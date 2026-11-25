@@ -27,9 +27,7 @@ import numpy as np
 from manabot.env.env import Env
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match
-from manabot.env.memory_store import select_rows
 from manabot.env.observation import (
-    ObservationBuffers,
     ObservationSpace,
     allocate_vector_buffers,
     step_buffers,
@@ -87,10 +85,10 @@ class BatchedSampler:
 
     def select(
         self,
-        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        buffers: managym.ObservationBatch | ObservationSelection,
         rows: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Actions for the selected rows of dense buffers or an `ObservationBatch`."""
+        """Actions for the selected rows of a native batch or selection."""
 
         logits: list[np.ndarray] = []
         if isinstance(buffers, managym.ObservationBatch):
@@ -109,7 +107,7 @@ class BatchedSampler:
                         selected = buffers.gather([(buffers, int(i)) for i in idx])
                     logits.append(scope.infer(selected).logits)
                     del selected
-        elif isinstance(buffers, ObservationSelection):
+        else:
             count = len(buffers.coordinates) if rows is None else len(rows)
             width = self.execution_rows or max(1, count)
             with self.agent.inference_scope() as scope:
@@ -121,15 +119,6 @@ class BatchedSampler:
                     )
                     logits.append(scope.infer(chunk).logits)
                     del chunk
-        else:
-            assert rows is not None
-            count = len(rows)
-            width = self.execution_rows or max(1, count)
-            with self.agent.inference_scope() as scope:
-                for start in range(0, count, width):
-                    selected = select_rows(buffers, rows[start : start + width])
-                    logits.append(scope.infer(selected).logits)
-                    del selected
         actions = self.agent.sample_logits(
             np.concatenate(logits),
             deterministic=self.deterministic,
@@ -184,7 +173,7 @@ class RandomBatchController:
 
     def select(
         self,
-        buffers: ObservationBuffers | managym.ObservationBatch | ObservationSelection,
+        buffers: managym.ObservationBatch | ObservationSelection,
         rows: np.ndarray | None = None,
     ) -> np.ndarray:
         if isinstance(buffers, managym.ObservationBatch):
@@ -192,20 +181,10 @@ class RandomBatchController:
             if rows is not None:
                 counts = counts[rows]
             return _uniform_from_counts(counts, self._rng)
-        if isinstance(buffers, ObservationSelection):
-            counts = buffers.action_counts.astype(np.int64, copy=False)
-            if rows is not None:
-                counts = counts[rows]
-            return _uniform_from_counts(counts, self._rng)
-        assert rows is not None
-        valid = buffers["actions_valid"][rows] > 0
-        weights = valid.astype(np.float64)
-        totals = weights.sum(axis=1, keepdims=True)
-        totals[totals == 0] = 1.0
-        weights /= totals
-        cdf = np.cumsum(weights, axis=1)
-        u = self._rng.random((len(cdf), 1))
-        return (u < cdf).argmax(axis=1).astype(np.int64)
+        counts = buffers.action_counts.astype(np.int64, copy=False)
+        if rows is not None:
+            counts = counts[rows]
+        return _uniform_from_counts(counts, self._rng)
 
 
 # -----------------------------------------------------------------------------

@@ -5,12 +5,13 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.possible_worlds import PossibleWorldSpace
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -34,9 +35,9 @@ def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> 
     other = env.observation_for_player(1 - owner)
     assert set(own.agent.known_library) == {0}
     assert not other.opponent.known_library
-    assert not encode_observation(space, other)["known_library"][1].any()
+    assert not observation_arrays(space, other)["known_library"][1].any()
     definition = own.agent.known_library[0]
-    encoded = encode_observation(space, own)["known_library"]
+    encoded = observation_arrays(space, own)["known_library"]
     np.testing.assert_array_equal(encoded[0, 0], [definition + 1, 1])
     assert not encoded[0, 1:].any()
     assert not encoded[1].any()
@@ -45,7 +46,7 @@ def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> 
     # The shared native writer infers its layout from these supplied buffers.
     buffers = space.allocate(1)
     managym.encode_observations_into([env], space.layout, buffers, 1)
-    acting = encode_observation(
+    acting = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     for key in acting:
@@ -57,7 +58,7 @@ def test_library_facts_reach_text_and_the_actual_torch_policy() -> None:
     assert env.current_agent_index() == 0
     assert "Known library position 1 from top:" in capture_text_decision(env).text
     space = ObservationSpace()
-    rows = encode_observation(space, env.observation_for_player(0))
+    rows = observation_arrays(space, env.observation_for_player(0))
     inputs = {key: value[None] for key, value in rows.items()}
     torch.manual_seed(71)
     policy = ActorCritic(
@@ -120,7 +121,7 @@ def test_current_policy_refuses_missing_or_malformed_library_facts(
 ) -> None:
     env = _root(0)
     space = ObservationSpace()
-    rows = encode_observation(space, env.observation_for_player(0))
+    rows = observation_arrays(space, env.observation_for_player(0))
     inputs = {key: value[None] for key, value in rows.items()}
     policy = ActorCritic(
         space,
@@ -144,7 +145,7 @@ def test_current_policy_refuses_missing_or_malformed_library_facts(
 
 def test_torch_distinguishes_known_hand_from_known_library_top() -> None:
     env = _root(0)
-    rows = encode_observation(ObservationSpace(), env.observation_for_player(0))
+    rows = observation_arrays(ObservationSpace(), env.observation_for_player(0))
     definition = rows["known_library"][0, 0, 0]
     rows["known_hand"].fill(0)
     rows["known_library"].fill(0)

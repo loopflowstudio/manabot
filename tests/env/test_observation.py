@@ -20,9 +20,9 @@ from manabot.env.observation import (
     PhaseEnum,
     StepEnum,
     ZoneEnum,
-    encode_observation,
 )
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 # ─────────────────────────── Fixtures ───────────────────────────
 
@@ -249,7 +249,7 @@ class TestObservationSpace:
         self, observation_space: ObservationSpace, observation: managym.Observation
     ) -> None:
         """Test that encoding produces arrays with correct shapes and no invalid values."""
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
 
         # Verify all expected keys are present
         expected_keys = self.get_expected_keys()
@@ -266,7 +266,7 @@ class TestObservationSpace:
 
     def test_validity_masks(self, observation_space, observation, config):
         """Test that validity masks correctly reflect the game state."""
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
 
         # Check cards validity
         agent_cards_valid = encoded["agent_cards_valid"]
@@ -296,7 +296,7 @@ class TestObservationSpace:
     def test_player_features_include_turn_and_are_normalized(
         self, observation_space, observation
     ):
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
 
         for key, player in (
             ("agent_player", observation.agent),
@@ -321,7 +321,7 @@ class TestObservationSpace:
     def test_card_and_permanent_features_are_partitioned_and_normalized(
         self, observation_space, observation, config
     ):
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
 
         for i, card in enumerate(observation.agent_cards):
             vec = encoded["agent_cards"][i]
@@ -349,7 +349,7 @@ class TestObservationSpace:
 
     def test_focus_indices(self, observation_space, observation, config):
         """Test that action focus indices are valid."""
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
         focus = encoded["action_focus"]
 
         # Calculate valid range for focus indices
@@ -362,7 +362,7 @@ class TestObservationSpace:
         assert valid.all(), f"Invalid focus indices found: {focus[~valid]}"
 
     def test_event_features_round_trip(self, observation_space, observation, config):
-        encoded = encode_observation(observation_space, observation)
+        encoded = observation_arrays(observation_space, observation)
         learning_events = [
             event
             for event in observation.recent_events
@@ -400,7 +400,7 @@ class TestObservationSpace:
             managym.ObservationCapacity,
             match=rf"capacity exceeded: actions {count} > {count - 1}",
         ):
-            encode_observation(space, observation)
+            observation_arrays(space, observation)
         assert len(observation.action_space.actions) == count
 
 
@@ -458,7 +458,7 @@ def test_vector_step_batch_keeps_outcomes_and_emitted_events(
                 terminal,
                 limit,
             )
-            encoded = encode_observation(space, obs)
+            encoded = observation_arrays(space, obs)
             table = batch.tables()["events"]
             offsets = np.frombuffer(table[1], np.int32)
             values = np.frombuffer(table[2], np.int32).reshape(

@@ -10,7 +10,7 @@ import torch
 from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, encode_observation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
@@ -26,6 +26,7 @@ from manabot.policy.readings import (
 )
 from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
@@ -135,7 +136,7 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     )
     batch = {
         key: value[None]
-        for key, value in encode_observation(
+        for key, value in observation_arrays(
             space, env.observation_for_player(0)
         ).items()
     }
@@ -216,7 +217,7 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
     )
     batch = {
         key: value[None]
-        for key, value in encode_observation(space, observation).items()
+        for key, value in observation_arrays(space, observation).items()
     }
     expected = policy.evaluate(policy.prepare(batch))
 
@@ -305,7 +306,7 @@ def test_setup_policy_keeps_its_pre_x_action_scores(
     env = managym.Env(seed=17)
     obs, _ = env.reset(players)
     batch = {
-        key: value[None] for key, value in encode_observation(runtime, obs).items()
+        key: value[None] for key, value in observation_arrays(runtime, obs).items()
     }
     expected = writer.evaluate(writer.prepare(batch))
     batch["actions"][..., 23:] = 1

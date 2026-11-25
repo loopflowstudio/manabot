@@ -22,7 +22,6 @@ from manabot.env.observation import (
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
@@ -30,6 +29,7 @@ from manabot.policy import admission
 from manabot.policy.prepare import RecordNamespace
 from manabot.verify.representation import kellan_upgrade_root
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import (
     device_input,
@@ -221,7 +221,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     torch.set_num_threads(1)
     env = kellan_upgrade_root()
     space = ObservationSpace()
-    observation = encode_observation(
+    observation = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     headers = torch.from_numpy(observation["effects"]).repeat(3, 1, 1)
@@ -301,7 +301,7 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     space = ObservationSpace()
     values = {
         key: torch.from_numpy(v)[None]
-        for key, v in encode_observation(space, obs).items()
+        for key, v in observation_arrays(space, obs).items()
     }
     assert (values["effect_details"][..., 0] >= 11).any()
     fresh = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)

@@ -14,11 +14,11 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
-    encode_observation,
 )
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _players(
@@ -85,10 +85,10 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
             int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_cards
         )
         assert obs.opponent.known_hand == {}
-        expected = encode_observation(
+        expected = observation_arrays(
             space, scalar.observation_for_player(obs.agent.player_index)
         )
-        for key, actual in encode_observation(space, obs).items():
+        for key, actual in observation_arrays(space, obs).items():
             np.testing.assert_array_equal(actual, expected[key], err_msg=key)
         if disclosure == "closed":
             assert obs.opponent.main_counts is None

@@ -8,10 +8,10 @@ import pytest
 from manabot.env.observation import (
     PLAYER_RESTRICTED_INDEX,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ObservationConfig
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 
 
 def _observation_with(
@@ -64,7 +64,7 @@ def test_policy_input_refuses_restrictions_the_columns_cannot_state(
     message = f"cannot represent mana restricted to {described}"
     assert managym.unrepresentable_state(obs) == f"mana restricted to {described}"
     with pytest.raises(ValueError, match=message):
-        encode_observation(ObservationSpace(ObservationConfig()), obs)
+        observation_arrays(ObservationSpace(ObservationConfig()), obs)
 
 
 def test_column_restrictions_encode_in_each_subtype_column() -> None:
@@ -77,7 +77,7 @@ def test_column_restrictions_encode_in_each_subtype_column() -> None:
         ],
     )
     assert managym.unrepresentable_state(obs) is None
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), obs)
+    encoded = observation_arrays(ObservationSpace(ObservationConfig()), obs)
     columns = encoded["agent_player"][0, PLAYER_RESTRICTED_INDEX:][:18].reshape(3, 6)
     # Lesson, Shrine and Ally columns, each W U B R G C scaled by 1/10: the
     # Lesson-or-Shrine red counts for both subtypes, the Ally green for Ally.

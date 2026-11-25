@@ -15,7 +15,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation, step_buffers
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -30,6 +30,7 @@ from manabot.training.rollout.collection import (
 )
 import managym
 from managym.decision import Command, DecisionFrame
+from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import trajectory_rows
 
 
@@ -61,7 +62,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             for _ in range(6):
                 engine.scenario_force_battlefield(actor, "Mountain")
             raw = env._last_obs = engine.scenario_refresh()
-            obs = encode_observation(space, raw)
+            obs = observation_arrays(space, raw)
             assert len(raw.action_space.actions) == 67
             assert obs["actions_valid"].sum() == 64
             frame = json.loads(engine.semantic_decision_frame_json())

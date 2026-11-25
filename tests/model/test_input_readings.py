@@ -19,7 +19,6 @@ from manabot.env.observation import (
     FACT_TRANSFORMS,
     FACT_VALID_INDEX,
     ObservationSpace,
-    encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.admission import binding
@@ -37,6 +36,7 @@ from manabot.policy.readings import (
     signed_log,
 )
 import managym
+from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import fact_rows
 
@@ -51,7 +51,7 @@ def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
     )
     for _ in range(12):
         raw, *_ = env.step(0)
-    return {key: value[None] for key, value in encode_observation(space, raw).items()}
+    return {key: value[None] for key, value in observation_arrays(space, raw).items()}
 
 
 def _column(space: ObservationSpace, key: str, name: str) -> int:
