@@ -307,6 +307,21 @@ Python bindings/stubs, protocol schemas, text observation and Academy UI), then
     keep `Condition::CastFromGraveyard` intact and still replace the unreleased
     `EntryCastFrom`.
 
+### Coverage review before Pass 7 implementation (HEAD `3270e5a96d`)
+
+Slices 1–8 and Pass 6's integrated positions stand; no new rules defect found.
+All four Pass 7 items are still unbuilt and reproduce at HEAD:
+
+- 7.1: `control_differs_from_entry` is still on `PermanentData`, JSON, bindings,
+  `__init__.pyi`, `experience*.py`, both schemas, text (`text_observation.py:1057`)
+  and Academy (`Inspect.svelte:44` "the other player's control").
+- 7.2: `observation.rs:1799–1818` puts `quality.token_name()` (Rust paths) into
+  `hexproof_from` / `protection_from`; `SourceQuality` has no `wire_name`.
+- 7.3: `CombatState.blocked_without_blockers` remains; only zone moves
+  (`zones.rs:1199`) call `remove_from_combat`, so a phased-out blocker still
+  reports `blocking` (`observation.rs:1790`) though damage skips it.
+- 7.4: `Condition::EntryCastFrom` remains beside `Condition::CastFromGraveyard`.
+
 ### Verification for Pass 7
 
 - Rebuild release extension, run directed Rust tests (including `usg`, `dom`,
