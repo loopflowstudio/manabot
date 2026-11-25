@@ -179,20 +179,16 @@ prepared = agent.prepare(obs)                    # NumPy: checked, trimmed, inde
 logits, value = agent(on_device(prepared, "cpu"))  # logits [B,A], value [B]
 ```
 
-A v11 `managym.ObservationBatch` supplies immutable live values and row offsets.
-The policy checks its layout, definition lookups and vocabulary against the
-checkpoint. The encoder guarantees native object bounds and effect partitions.
-
-For a dense mapping, admission checks shapes, binary validity, definition
-and vocabulary references, action
-focus and continuation references, permanent links, fact and record programs,
-shared-effect partitions, naming spans, recent events, belief rows, the
-legal-action mask and, when the value aggregation needs one, a valid object in
-every row. Malformed input raises `ValueError` naming the check (a malformed
-action mask is `NumericalError` `invalid_action_mask`); nothing is truncated or
-repaired. The prepared batch records whether every row has a legal action, so
-`get_action_and_value` rejects an empty row with `No valid actions available`
-without reading the batch again. The MLX policy runs the same checks.
+A v11 `managym.ObservationBatch`, or an `ObservationSelection` of its rows,
+is the only policy input. It supplies immutable live values and row offsets,
+and the encoder guarantees native object bounds, joins and effect partitions.
+The policy checks the batch's layout against its own, then its definition
+lookups, catalog vocabulary, naming rows, decision-memory contract and belief
+rows against the checkpoint. Malformed input raises `ValueError` naming the
+check; nothing is truncated or repaired. The prepared batch records whether
+every row has a legal action, so `get_action_and_value` rejects an empty row
+with `No valid actions available` without reading the batch again. The MLX
+policy runs the same checks.
 
 An observation dictionary, or a prepared batch still in NumPy, passed to a
 forward raises `TypeError`. A prepared batch belongs to the `ModelConfig` and
