@@ -92,6 +92,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   for (let at = 0, count = await marked.count(); at < count; at++) {
     await marked.nth(at).getByRole('button').click();
     await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader');
+    await expect(page.getByTestId('see-line')).toBeEnabled();
     if (await page.getByTestId('action-option').count() >= 3) break;
   }
   for (const theme of ['light', 'dark'] as const) {

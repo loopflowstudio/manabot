@@ -236,3 +236,6 @@ Rail pass (2026-11-25, headless):
   heading rows.
 - Who chose an option ("you", "its choice") follows the label on the same
   line instead of its own line.
+- The analysis summary no longer says "Reader would choose X." / "You chose
+  as Reader would."; the list's "its choice" / "you" tags say it. Without
+  this a game whose decision also had a recap showed six moves.

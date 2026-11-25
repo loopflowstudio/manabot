@@ -797,7 +797,8 @@ and no disabled answer buttons above the list; its prompt drops "Space to …"
 and the payment hint (Space plays the transport there). Review's move rows are
 one line with a turn-number gutter (no separate turn heading rows; the
 heading stays for screen readers), full move in the title; Moves take the
-remaining height and the choices list at most 26%. `study-review.spec.ts`
+remaining height and the choices list at most 26%. The analysis summary keeps only the estimate here; "would
+choose" is the list's "its choice" tag. `study-review.spec.ts`
 asserts no stops, no empty Stack, and ≥8 moves and ≥3 options visible at
 1280×800; shots `scratch/shots/study-review-rail-{light,dark}.png` (9 moves,
 3 of 4 options).
