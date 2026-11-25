@@ -27,7 +27,7 @@
   function element(endpoint: Endpoint): HTMLElement | null {
     if (!root) return null;
     const selector = endpoint.kind === 'player' ? `[data-testid=player-plate][data-player-index="${endpoint.index}"] [data-testid=player-target]`
-      : endpoint.kind === 'stack-entry' ? `[data-stack-entry="${endpoint.id}"]`
+      : endpoint.kind === 'entry' ? `[data-stack-entry="${endpoint.id}"]`
       : endpoint.kind === 'stack' ? `[data-stack-card="${endpoint.id}"]`
         : `.board [data-testid=board-card][data-object-id="${endpoint.id}"]`;
     return [...root.querySelectorAll<HTMLElement>(selector)].find(candidate => candidate.getBoundingClientRect().width > 0) ?? null;
@@ -37,7 +37,7 @@
     const from = element(line.from)?.getBoundingClientRect();
     if (!from) return null;
     // Rail lines start at the thumbnail, clear of the entry's name.
-    const rail = line.from.kind === 'stack' || line.from.kind === 'stack-entry';
+    const rail = line.from.kind === 'stack' || line.from.kind === 'entry';
     const a = { x: rail ? from.left + 14 : from.left + from.width / 2, y: from.top + from.height / 2 };
     let b: Point;
     let inset = 0;

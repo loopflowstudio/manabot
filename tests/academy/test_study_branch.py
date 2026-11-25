@@ -68,6 +68,13 @@ def _completed_session(tmp_path: Path) -> tuple[GameSession, CanonicalReplayV1]:
     return session, CanonicalReplayV1.model_validate(session.trace.canonical_replay)
 
 
+@pytest.fixture(scope="module")
+def completed_session(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[GameSession, CanonicalReplayV1]:
+    return _completed_session(tmp_path_factory.mktemp("study-branch"))
+
+
 def _first_cast(
     session: GameSession, replay: CanonicalReplayV1
 ) -> tuple[object, str, dict, dict]:
@@ -110,8 +117,10 @@ def _submission(offer: dict) -> dict:
     }
 
 
-def test_historical_address_forks_executes_structured_command_and_returns(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_historical_address_forks_executes_structured_command_and_returns(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     row, address, _, _ = _first_cast(session, replay)
     recorded_replay = json.dumps(
         session.trace.canonical_replay, sort_keys=True, separators=(",", ":")
@@ -184,8 +193,10 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     )
 
 
-def test_study_fork_fails_closed_for_invalid_missing_and_other_viewer(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_study_fork_fails_closed_for_invalid_missing_and_other_viewer(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     player_zero = next(row for row in replay.decisions if row.viewer == 0)
     player_one = next(row for row in replay.decisions if row.viewer == 1)
 
@@ -203,8 +214,10 @@ def test_study_fork_fails_closed_for_invalid_missing_and_other_viewer(tmp_path):
         session.fork_study(other_viewer)
 
 
-def test_submission_failures_are_typed_one_shot_and_zero_fallback(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_submission_failures_are_typed_one_shot_and_zero_fallback(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     _, address, original_projection, cast = _first_cast(session, replay)
     baseline = session.fork_study(address).return_to_recorded()
     branch = session.fork_study(address)
@@ -229,8 +242,10 @@ def test_submission_failures_are_typed_one_shot_and_zero_fallback(tmp_path):
     assert returned.execution.fallback_commands == 0
 
 
-def test_projected_object_incarnation_cannot_replace_native_binding(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_projected_object_incarnation_cannot_replace_native_binding(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     _, address, _, expected_cast = _first_cast(session, replay)
     branch = session.fork_study(address)
     projected = branch.structured_offers()
@@ -252,8 +267,10 @@ def test_projected_object_incarnation_cannot_replace_native_binding(tmp_path):
     assert returned.execution.fallback_commands == 0
 
 
-def test_unsupported_native_surface_is_typed_and_returnable(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_unsupported_native_surface_is_typed_and_returnable(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     unsupported = next(
         row
         for row in replay.decisions
@@ -274,8 +291,10 @@ def test_unsupported_native_surface_is_typed_and_returnable(tmp_path):
     assert returned.execution.fallback_commands == 0
 
 
-def test_retained_root_drift_consumes_return_and_blocks_later_forks(tmp_path):
-    session, replay = _completed_session(tmp_path)
+def test_retained_root_drift_consumes_return_and_blocks_later_forks(
+    completed_session: tuple[GameSession, CanonicalReplayV1],
+):
+    session, replay = completed_session
     row, address, _, _ = _first_cast(session, replay)
     assert session._study_provider is not None
     retained, _ = session._study_provider._roots[int(row.ordinal)]

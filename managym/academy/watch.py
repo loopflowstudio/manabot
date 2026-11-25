@@ -6,6 +6,7 @@ view. The mixed canonical record and retained roots remain server-private.
 
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field, replace
+import logging
 from threading import Lock
 from time import monotonic
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -88,6 +89,16 @@ def create_watch(
     requested_seed = request.seed is not None
     if request.seed is None:
         request = request.model_copy(update={"seed": server.secrets.randbits(32)})
+    try:
+        expanded = server.resolve_pool_decks(request.model_dump(), seed=request.seed)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    if expanded.get("deck_import") is not None and request.deck_import is None:
+        request = request.model_copy(
+            update={
+                "deck_import": DeckImportInput.model_validate(expanded["deck_import"])
+            }
+        )
     with ExitStack() as candidates:
         seats: list[tuple[BotPolicy, RecordedPlayer]] = []
         try:
@@ -229,7 +240,9 @@ def start_setup(
             attempt.result = created
     except Exception:
         # Providers may include local paths in exceptions. Keep those out of
-        # this progress surface; the native setup cleanup owns candidate close.
+        # this progress surface; log the traceback on the server and let the
+        # native setup cleanup own candidate close.
+        logging.getLogger(__name__).exception("Watch setup failed")
         status = attempt.work.read()
         operation = (
             f"Seat {status.loading_seat + 1} bot loading"

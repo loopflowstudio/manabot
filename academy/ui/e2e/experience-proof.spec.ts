@@ -56,6 +56,8 @@ for (const [seed, width, height, motion] of [
             // Rewrite here: a routed second socket can reach this probe before the app.
             if (message.type === 'new_game') {
               message.config.seed = gameSeed;
+              // The picker lists no standalone Search player; the timed opponent is set on the request.
+              if (gameSeed !== 0) { message.config.villain_type = 'search'; message.config.villain_sims = 64; }
               super.send(JSON.stringify(message));
               return;
             }
@@ -100,7 +102,7 @@ for (const [seed, width, height, motion] of [
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
     await page.goto('/?setup=1');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    await page.getByTestId('opponent-select').selectOption(seed === 0 ? 'random' : 'search-64');
+    await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     for (let input = 0; input < 30; input += 1) {
       // The receipt can render before following bot work finishes. Keep that

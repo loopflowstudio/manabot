@@ -50,19 +50,23 @@ else
         select_jobs frontend clean_machine_play ;;
       academy/ui/*) select_jobs frontend ;;
       academy/*) select_jobs academy_integration protocol_v1 ;;
-      tests/academy/test_play_launcher.py|tests/academy/test_clean_machine_verifier.py)
+      tests/academy/test_play_launcher.py)
+        select_jobs python_unit protocol_v1 clean_machine_play ;;
+      tests/academy/test_clean_machine_verifier.py)
         select_jobs python_unit clean_machine_play ;;
+      tests/academy/test_qwen_policy.py)
+        select_jobs integration ;;
       tests/academy/*) select_jobs academy_integration protocol_v1 ;;
       scripts/play|scripts/play.py|scripts/verify-clean-machine|deploy/play/*)
         select_jobs python_unit protocol_v1 clean_machine_play ;;
-      scripts/play-elemental|scripts/play_elemental.py)
-        select_jobs academy_integration clean_machine_play ;;
       manabot/sim/table_bots.py|manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
       tests/infra/test_external_consumer.py) select_jobs python_unit integration ;;
       tests/infra/*) select_jobs python_unit ;;
       manabot/infra/*) select_jobs python_unit integration ;;
-      manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|tests/test_public_api_contract.py|tests/public_api.json|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
+      tests/model/test_world.py|tests/semantic/test_elemental_world.py|tests/semantic/test_decklist_import.py)
+        select_jobs academy_integration ;;
+      manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/config/*|tests/test_package_boundaries.py|tests/test_public_api_contract.py|tests/public_api.json|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
         select_jobs integration ;;
       website/*) select_jobs python_unit ;;
       paper/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;

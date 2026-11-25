@@ -5,12 +5,19 @@
    * move, the prompt in one plain line with its buttons, every legal choice by
    * number, and the log as a move list. The list is the guarantee that the
    * board hides nothing: it holds every offer of the frame, in order.
+   *
+   * One rule divides the rail's height. What you must read to act (notices,
+   * the stack with its recap, the decision) keeps its whole height; its long
+   * lists scroll inside their own bounds. The two reference lists (every
+   * legal choice, then the moves) share what is left, each above a floor, and
+   * scroll inside. No block is cut by its neighbour; on a window too short
+   * for the floors the rail itself scrolls.
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { MoveTurn } from './moves';
-  import { committed, type PrimaryLabel } from './prompt';
-  import type { RecentView } from './recent';
+  import { committed, offerText, type PrimaryLabel } from './prompt';
+  import { targetNames, type RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
@@ -52,8 +59,6 @@
     notices?: Snippet;
     /** The game has ended; its result card sits over the board. */
     over?: boolean;
-    /** The docked inspect pane, when inspecting docks to the rail. */
-    dock?: Snippet;
     /**
      * The opponent's move being read out. It heads the decision block, and
      * while it is set the decision's controls wait: listed, focusable and
@@ -75,7 +80,7 @@
 
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
+    stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
@@ -109,14 +114,14 @@
     return () => clearInterval(timer);
   });
 
-  let logEnd = $state<HTMLElement | null>(null);
   let logList = $state<HTMLElement | null>(null);
   // The list follows the newest move live, and the shown position's move in a recording.
   $effect(() => {
     void moves.length;
     void moves.at(-1)?.moves.length;
     const current = currentMove;
-    if (current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
+    // Only the list scrolls: scrolling an element into view would also move a rail that is taller than a short window.
+    if (current === null && !onjump) { if (logList) logList.scrollTop = logList.scrollHeight; return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!row || !logList) return;
     const top = row.offsetTop - logList.offsetTop;
@@ -143,8 +148,6 @@
 <aside class="rail" aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
 
-  {#if dock}<div class="block docked">{@render dock()}</div>{/if}
-
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
     <h2><span class="type-heading text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
     {#if view.stack.length === 0}
@@ -155,13 +158,14 @@
           {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
           {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
           {@const provenance = stackProvenance(item.entry)}
+          {@const targets = targetNames(item.entry, frame, { you: 'You', opponent: opponentName })}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
-              data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
-              data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
+              data-testid="stack-entry" data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
+              data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${targets.length ? `, targeting ${targets.join(' and ')}` : ''}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
@@ -170,6 +174,7 @@
                   <span class="truncate entry-name">{stackName(item.entry)}</span>
                   {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
                 </span>
+                {#if targets.length}<span class="type-caption targets" data-testid="stack-targets">→ {targets.join(', ')}</span>{/if}
                 {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
@@ -252,20 +257,20 @@
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
-          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? view.primary.offer.label} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
+          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? offerText(view.primary.offer)} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
           disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={placed.offer.label} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={offerText(placed.offer)} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
       {#if canPassTurn}
         <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
-          title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
+          title="Pass every priority window until the turn ends (Shift+Enter or F6)">Pass turn <kbd>⇧↵</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
       {#if detail && frame.prompt && !interrupted}
@@ -333,7 +338,6 @@
           </ol>
         </li>
       {/each}
-      <li bind:this={logEnd} aria-hidden="true"></li>
     </ol>
   </section>
   {#snippet choiceList()}
@@ -342,12 +346,12 @@
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            aria-label={`${offerText(placed.offer)}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
             disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={offerText(placed.offer)} /></span>
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}
@@ -360,16 +364,14 @@
 </aside>
 
 <style>
-  .rail { display: flex; flex-direction: column; min-height: 0; height: 100%; border-left: 1px solid var(--border); background: var(--bg-surface); }
+  .rail { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow-y: auto; border-left: 1px solid var(--border); background: var(--bg-surface); }
   .block { padding: 10px 14px; border-bottom: 1px solid var(--border); }
   .notices { padding: 8px 14px 0; display: grid; gap: 6px; }
   h2 { margin-bottom: 4px; line-height: 16px; }
-  .stack { max-height: 34vh; overflow-y: auto; }
-  /* A crowded rail never cuts the top two stack entries (a spell and what it answers): the block keeps room for its
-     heading and one entry (88 px) or two (135 px); deeper entries and the recap below scroll. */
-  .stack:has(.stack-entry) { min-height: 88px; }
-  .stack:has(li + li .stack-entry) { min-height: 135px; }
+  .stack { flex: none; }
   .stack ol { display: grid; gap: 3px; }
+  /* Three entries show (a spell, its answer and the answer to that); a deeper stack scrolls. The padding keeps a legal entry's ring inside the scroll box. */
+  .stack > ol { max-height: 150px; overflow-y: auto; margin: -2px; padding: 2px; }
   .stack-entry {
     width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
     border: 1px solid var(--border); background: var(--bg-field); font-size: 14px; line-height: 20px; color: var(--text);
@@ -380,16 +382,19 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; }
   .entry-name { font-family: var(--font-serif); font-weight: 600; }
+  .targets { color: var(--text); overflow-wrap: anywhere; }
   .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
   .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
+  /* Folded, the recap is three lines; opened, it scrolls within a quarter of the window. */
+  .recent ol { max-height: 25vh; overflow-y: auto; }
   .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
   .fact.theirs { color: var(--text); }
   .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
-  .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .prompt { flex: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .whose { color: var(--text-secondary); }
   .whose.yours { color: var(--text); }
   .detail summary, .raw summary { cursor: pointer; width: max-content; }
@@ -443,7 +448,6 @@
   .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-  .docked { flex: none; max-height: 36%; overflow-y: auto; }
   .card-name { font-family: var(--font-serif); font-weight: 600; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: help; }
   .card-name:hover, .card-name:focus-visible { color: var(--accent-text); }
   .times { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }

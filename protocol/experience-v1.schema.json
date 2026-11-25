@@ -17,6 +17,29 @@
     "command"
   ],
   "$defs": {
+    "AbilityGrantView": {
+      "type": "object",
+      "properties": {
+        "counter": {
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "AssetPackReference": {
       "description": "Exact installed presentation pack for an authored matchup.\n\nCustom and legacy games have no pack reference, while curated games bind\nthe human-facing assets to the same manifest digest carried by the frame.",
       "type": "object",
@@ -1020,6 +1043,35 @@
         "focus"
       ]
     },
+    "KeywordAbilityView": {
+      "type": "object",
+      "properties": {
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ]
+    },
     "LegacyCardTypesView": {
       "type": "object",
       "properties": {
@@ -1354,6 +1406,9 @@
           "description": "Attacking in the current combat.",
           "type": "boolean"
         },
+        "attacks_despite_defender": {
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
@@ -1477,6 +1532,21 @@
             "null"
           ]
         },
+        "keyword_abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          }
+        },
+        "keyword_grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/AbilityGrantView"
+          }
+        },
         "keywords": {
           "description": "Keywords it has after continuous effects, in keyword declaration order.",
           "type": "array",
@@ -1500,6 +1570,12 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "restrictions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RestrictionView"
+          }
         },
         "summoning_sick": {
           "type": "boolean"
@@ -1980,6 +2056,16 @@
       "additionalProperties": false,
       "required": [
         "phrase"
+      ]
+    },
+    "PermanentRestriction": {
+      "type": "string",
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
       ]
     },
     "PlayerControlView": {
@@ -2677,6 +2763,24 @@
       "maximum": 255,
       "minimum": 0
     },
+    "RestrictionView": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
+    },
     "ScheduleView": {
       "description": "Public committed scheduling only; absent on historical projections that\ndid not record it. Order is execution order, independently in each domain.",
       "type": "object",
@@ -2823,6 +2927,13 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "targets": {
+          "description": "What the spell or ability targets, in the order chosen. A target the\nviewer cannot name as a public object, stack entry or player is left out.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
         },
         "x": {
           "description": "The announced value of X, when one was announced above zero.",

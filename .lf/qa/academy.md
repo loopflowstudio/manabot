@@ -71,6 +71,22 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Stall checks: `"stall_seconds": 0.3` in the local recipe config and
   `touch <out>/diagnostics.request` exercise the watchdog without load; read
   `escalations.jsonl` for one line per real stall.
+- Source launch (no installed `managym` distribution, as `scripts/play` runs):
+  `UV_PROJECT_ENVIRONMENT=<ignored .runs dir>/play-venv uv run --python 3.13
+  --locked --only-group play-runtime python -c 'import importlib.metadata as m;
+  m.version("managym")'` raises `PackageNotFoundError` there, so that venv
+  reproduces it. Start the API from it with `ACADEMY_CARD_ART_DIR=<empty .runs
+  dir>` and curl `/api/card-art/art/<slug>.jpg`: a cold card must return 200
+  JPEG and write `<scryfall id>-art.jpg` plus its credit JSON. On the table,
+  art is CSS backgrounds, not `<img>`: count `/api/card-art` responses and
+  `requestfailed` events instead of `document.images`. The same venv runs the
+  release Playwright config as `VIRTUAL_ENV` (the dev `.venv` lacks uvicorn);
+  scope it with `ACADEMY_RELEASE_API_PORT`, `ACADEMY_RELEASE_FRONTEND_PORT`
+  and `ACADEMY_RELEASE_PROOF_DIR`. `opponent-beats.spec.ts` took 2.3–3.1 min
+  per run at load ~200.
+- The landing card of a fresh dev-server visit reads "Ready to play" with one
+  **Play** button (no "Start game" there); "Set up a different game" opens the
+  New game page.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Start game, play a land and Pass Turn.
@@ -284,3 +300,26 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   proof's API server needs `VIRTUAL_ENV=<checkout>/.runs/play-venv` (or another
   env with uvicorn) for `uv run --active`; targeted specs reuse running dev
   servers when `ACADEMY_API_PORT`/`ACADEMY_FRONTEND_PORT` name them.
+- Battlefield badges in a real game (`managym academy play` with imported
+  `--deck`/`--opponent-deck` files and `--opponent passive`): drive it with a
+  Node Playwright script copied into `academy/ui` (move it out afterwards).
+  Hand cards also carry `data-testid=board-card`, so scope by aria-label.
+  In Play, clicking a permanent with one offer commits it (Fire Nation
+  Cadets' pump), so open Inspect by hovering and waiting about one second,
+  then read `[data-testid=inspect-card]`. Read the turn from
+  `getByText(/^Turn \d+/)`. Each new context replays the same seeded deal, so
+  use a different `--seed` or deck to reach other cards. After game over,
+  "Review this game" opens the replay at position 1. Press End, then the
+  "Previous" button, to reach the final board. With
+  `UV_PROJECT_ENVIRONMENT` and `--only-group play-runtime`, managym is not
+  installed, so uncached card art returns 500 (`PackageNotFoundError` in
+  `card_art.py`). Use a cached card, or install the wheel, when art matters.
+  Start several launch servers from Python `subprocess.Popen(...,
+  start_new_session=True)`; macOS has no `setsid`. Attacking cards are
+  rotated, so `getBoundingClientRect` overlap checks between chips and `.pt`
+  report false overlaps on them; confirm those in a screenshot. Watch with
+  `--player random` twice shows no `.policy` pill; the pill case is covered by
+  `e2e/card-badges.spec.ts` ("recorded Watch badges") or a trained policy.
+  Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
+  themselves as a restriction source), Tiger-Dillo (own conditional
+  restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).

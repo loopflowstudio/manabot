@@ -629,11 +629,11 @@ symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
-outlined plate. Identical permanents with the same choices share a pile, its
-count after the top copy's name ("Forest ×4"; the copies beneath show no name of
-their own), and each copy remains its own control. Crowded rows shrink their cards
-and wrap onto a further line before anything scrolls, and each half gives the
-crowded row more of its height.
+outlined plate. Identical permanents with the same effective abilities, status
+and choices share a pile, its count after the top copy's name ("Forest ×4"; the
+copies beneath show no name of their own), and each copy remains its own
+control. Crowded rows shrink their cards and wrap onto a further line before
+anything scrolls, and each half gives the crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
 a bar above its art, wrapping to a second line rather than being cut; its mana
@@ -642,22 +642,46 @@ colours: a pale tint in light mode and a solid bar in dark mode, white a
 neutral ivory-grey and colourless a cool grey, a land the colour of its basic
 land types, and a card of several colours blended left to right as printed
 hybrid frames are. Power and toughness sit on a plate at the lower right, and
-on a row above it the permanent's state: attacking, blocking, damage marked on
-it, summoning sickness, counters and the keywords it has now (one it was
-granted is edged in green). Mana symbols carry their letter, and ◇ for
-colourless. A tapped permanent turns a quarter onto its side, in room its row
-keeps for it so it never covers a neighbour; its name bar stays across the
-top. An attacker steps toward the player it attacks and tilts a few degrees:
-one that tapped lies just past the quarter, a vigilant one stays upright.
-Something a spell on the stack targets has a dashed red edge. Cards in hand
-have the type line under the name and the cost on the art; a hand card's name
-stays on one line, shortened with an ellipsis when long, and its full name is
-in the inspection.
+above it sit the permanent's active state chips, in priority order: damage
+marked (`2 damage` in red), a small spiral mark when a creature is summoning
+sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
+`Can't attack or block`, `Doesn't untap`, `Must attack`, `Struck first`, or
+`No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
+the effective battlefield keywords and keyword abilities it has now (evergreen
+keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
+by an effect or another permanent is edged in green). Mana symbols carry their
+letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+in room its row keeps for it so it never covers a neighbour; its name bar stays
+across the top.
+
+Battlefield chips show what applies right now rather than static printed text.
+For example, **Platypus-Bear** displays plain `Defender` when you have no
+Lesson in your graveyard and strikes `Defender` through in muted ink once a
+Lesson is in your graveyard to show it can attack; **Fire Nation Cadets**
+displays `Firebending 2` only while a Lesson is in your graveyard; **Mai,
+Jaded Edge** shows `Prowess`, and an Ally beside **Sokka, Tenacious Tactician**
+shows green-edged `Prowess` alongside granted `Menace`; printed and granted
+Ward show their cost (`Ward {2}`, `Ward—Pay 7 life`, `Ward—Discard a card`);
+and **Ty Lee, Chi Blocker** shows `Prowess` on the board while leaving `Flash`
+to the inspection. Permanents with different effective abilities or status
+never share a pile, so a vanilla 1/1 Soldier token stays separate from a
+Firebending 1 Soldier token. Attacking and blocking do not take chip space: an
+attacker steps toward the player it attacks and tilts a few degrees (one that
+tapped lies just past the quarter, a vigilant one stays upright), and a blocker
+is joined to its attacker by a line. Chips are placed whole and never clipped
+mid-word. A narrow card can show `Firebend 2` or `Ward`. Hover the chip or
+inspect the card for the full ability and Ward cost. Chips use the space beside
+power/toughness when available. Hover a trailing `+N` for the hidden badges.
+The inspection and the card’s accessible name include every badge. On a short
+tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
+Cards in hand have the type line under the name and the cost on the art; a hand
+card's name stays on one line, shortened with an ellipsis when long, and its
+full name is in the inspection.
 
 While you may act, what you can act on is raised and what you cannot steps
 back: a card in hand you cannot play now is dimmed most, a permanent of yours
 nothing acts on is slightly muted, and lands and the opponent's side are never
-dimmed. Summoning sickness is told by its label, not by more dimming. The
+dimmed. Summoning sickness is told by its spiral mark, not by more dimming. The
 selected card, such as the spell whose targets you are choosing, rises higher
 with a thin ink edge. In light mode the grounds are white and grey and what you
 act with is charcoal; in dark mode they are near-black and it is near-white.
@@ -665,11 +689,19 @@ Academy follows the system setting. Card and player names, life, and the
 rail's moves and legal choices are set in Spectral; everything else is in Work
 Sans. The top bar shows the connection only when it has a problem.
 
-Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
-keywords with why it has each (printed, the effect that granted it, or
-"another ability" for a grant from another permanent's static ability), where its power and toughness come
-from (printed or set, counters, each effect by its source and duration, and
-whatever those do not explain as "other effects"), and its state. The
+Rest the pointer on a card for a moment, or focus it with the keyboard, to
+inspect it: its rules text, type line and cost, effective keywords and keyword
+abilities (including `Flash`, and `Defender · can attack anyway` when Defender
+is overridden) with why it has each (printed, the effect that granted it with
+source and duration, the counter for a keyword counter such as a double strike
+counter, or the permanent granting the ability, such as Sokka), where its power and toughness come from (printed or set,
+counters, each effect by its source and duration, and whatever those do not
+explain as "other effects"), and its full battlefield state (summoning sickness
+in words, attacking or blocking, active restrictions from static abilities or
+effects with their provenance, and ability loss). For example, a creature
+enchanted by Watery Grasp reads “Doesn’t untap · Watery Grasp”. Older recordings without
+extended permanent details still render plain `Defender`, effective keywords,
+recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
 until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
@@ -1456,10 +1488,16 @@ explicit `sources=` are additional discovery calls. Multiple providers coexist.
 Academy does not import a training framework or know their artifact layouts.
 
 A session implements `observe(view)`, `choose(view)` and `close()`. The shared
-runner sends each seat its viewer-safe native observations after setup and
-transitions, preserving live decision focus. `PolicyView` carries the observation,
-seat, complete ordered `choices`, one-use `binding` and optional native text
-capture. It contains no live environment. Return
+runner calls `observe(view)` once after every committed state transition (after
+setup, after each committed Command by either seat, and on terminal `game_over`),
+with `view.choices` populated only when this seat is acting and
+`view.observation.recent_events` carrying the last step's public events.
+`choose(view)` proposes an action for the already-observed pending decision and
+may be retried without another `observe()` call if a proposal fails or times out;
+recurrent policies should update state in `observe()` only (native decision
+memory is also populated on `view.observation.decision_memory_json()`).
+`PolicyView` carries the observation, seat, complete ordered `choices`, one-use
+`binding` and optional native text capture. It contains no live environment. Return
 `PolicyDecision(choice=view.choices[index], binding=view.binding)`.
 Optional probabilities must cover that entire ordered set and sum to one;
 optional `ValueEstimate` declares units and viewer seat. Action-only choices
@@ -1658,27 +1696,32 @@ for reading, inspection and recovery behavior.
 
 ## Playing a trained challenger
 
-### Ten-deck Elemental play
+### Top-level CLI and hosted policies
 
 ```sh
-doppler run --project manabot --config prd -- ./scripts/play-elemental
-./scripts/play-elemental --offline     # later runs, no credentials or network
+managym play                                             # Play vs recommended policy (TLA trophies)
+managym play --order draw --deck ur_lessons --opponent search-64
+managym play --opponent ./my_bot.py:choose               # Play against any Python callable
+managym watch --bot1 heuristic --bot2 manabot            # Watch bot vs bot
+managym opponents                                        # List available built-ins & policies
 ```
 
-`scripts/play_elemental.py` reads MTG-183's published checkpoints (default
-segment `f3748bcabac8`; `--run` selects another), picks the highest recorded
-training update, verifies SHA-256 and size, checks world admission and CPU
-placement, and pins those bytes for the server's lifetime. It never trains or
-swaps the opponent mid-match. `--prepare-only`
-downloads and verifies; `--port`/`--frontend-port` override 18479/18480.
-Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
-`.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
+When `manabot` is installed, its `managym.bots` provider discovers the hosted
+default policy from `https://policies.manabot.gg/index.json`, verifies its
+SHA-256 into `~/.cache/manabot/sha256/`, and loads it alongside any local
+checkpoints. Set `ACADEMY_HOSTED_POLICIES=0` to disable hosted catalog fetches
+offline, or pass `--no-discover` to hide discovered policies when testing a
+single custom policy. In a repo checkout, `./scripts/play` runs the same
+packaged launcher with the `play-runtime` dependency group.
 
-The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
-native seat. **Edit next game** prepares the next matchup in the current session;
-starting it replaces the current attempt. **New game** starts a separate session.
-On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
+From Python, pass any `Policy` or plain callable `(obs) -> int | Sequence[float] | PolicyDecision`:
+
+```python
+from managym.academy.launch import play, watch
+
+play(opponent=lambda obs: 0, order="draw")
+watch(bot1="./my_bot.py:choose", bot2="heuristic")
+```
 
 ### Other checkpoints
 

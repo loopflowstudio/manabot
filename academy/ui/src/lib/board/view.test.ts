@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ExperienceFrame } from '$lib/types';
+import type { ExperienceFrame, PermanentState } from '$lib/types';
 import { fitRow, footprint, handFan, handStrip, pileWidth, offerPlacements, possessive, splitHalf, stackProvenance, boardView, unpilePlanned, type PermanentItem, type PileShape, type BoardView } from './view';
 import { decidesBy, shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
@@ -198,6 +198,38 @@ describe('where decisions land', () => {
     expect(split.map(candidate => candidate.items.length)).toEqual([1, pile.items.length - 1]);
     expect(split[0].items[0].permanent.id).toBe(pile.items[0].permanent.id);
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
+  });
+
+  it('piles only copies with the same effective abilities and state', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const copies: Partial<PermanentState>[] = [
+      {}, {}, { keywords: ['defender'] }, { keywords: ['defender'], attacks_despite_defender: true },
+      { keywords: ['defender'], keyword_grants: { defender: { source: 'Shield' } } },
+      { keyword_abilities: [{ label: 'Firebending 1' }] }, { granted_firebending: 1 },
+      { keyword_abilities: [{ label: 'Prowess' }] }, { keyword_abilities: [{ label: 'Prowess', granted: true }] },
+      { restrictions: [{ kind: 'cant_block' }] }, { abilities_lost: true },
+    ];
+    frame.offers = [];
+    frame.projection.agent.battlefield = copies.map((extra, index) => ({
+      id: 1000 + index, name: 'Soldier', controller_id: 0, tapped: false, damage: 0, summoning_sick: false,
+      power: 1, toughness: 1, base_power: 1, base_toughness: 1, plus1_counters: 0, is_token: true, ...extra,
+    }));
+    const piles = boardView(frame, PLAYERS).you.creatures;
+    expect(piles.map(pile => pile.items.map(item => item.permanent.id))).toEqual([
+      [1000, 1001], ...copies.slice(2).map((_, i) => [1002 + i]),
+    ]);
+  });
+
+  it('draws an opponent\'s Aura with the creature of yours it enchants', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const host = frame.projection.agent.battlefield[0];
+    const aura = { ...host, id: 9001, name: 'Watery Grasp', attached_to: host.id };
+    frame.projection.opponent.battlefield.push(aura);
+    const view = boardView(frame, PLAYERS);
+    const held = permanents(view).find(item => item.permanent.id === host.id)!;
+    expect(held.attached.map(item => item.permanent.id)).toEqual([9001]);
+    const theirs = [...view.opponent.support, ...view.opponent.creatures].flatMap(pile => pile.items);
+    expect(theirs.some(item => item.permanent.id === 9001)).toBe(false);
   });
 
   it('fans identical lands into one pile, keeping each copy', () => {
