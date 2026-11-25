@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ExperienceFrame, GameLogEntry } from '$lib/types';
+import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
 import { gameResult } from './result';
 
 function frame(you: number, them: number, turn = 9): ExperienceFrame {
@@ -11,6 +11,20 @@ function frame(you: number, them: number, turn = 9): ExperienceFrame {
       opponent: { player_index: 1, life: them },
     },
   } as unknown as ExperienceFrame;
+}
+
+function ev(seq: number, kind: PresentationEvent['kind']): PresentationEvent {
+  return {
+    seq,
+    from_revision: seq,
+    to_revision: seq + 1,
+    caused_by: null,
+    group: seq,
+    importance: 'normal',
+    suggested_ms: 400,
+    sound: null,
+    kind,
+  };
 }
 
 const entry = (actor: GameLogEntry['actor'], text: string, turn = 1): GameLogEntry => ({ id: `${actor}${text}${turn}`, actor, turn, text });
@@ -31,19 +45,23 @@ describe('gameResult', () => {
     });
   });
 
-  it('summarizes each player\'s casts and attacks from the move list', () => {
-    const log = [
-      entry('hero', 'Cast Pop Quiz', 3), entry('hero', 'Attack with Tiger-Seal', 5), entry('hero', 'Pass priority', 5),
-      entry('villain', 'Cast Allies at Last', 4), entry('villain', 'Attack with Badgermole', 6), entry('villain', 'Attack with Ally', 6),
-      entry('auto', 'Pass priority', 10),
+  it('summarizes each player\'s casts and attacks directly from the presentation track', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 0, turn_number: 3 }),
+      ev(2, { kind: 'cast', object: { entity: 1, incarnation: 1 }, controller: 0, stack: 1 }),
+      ev(3, { kind: 'attack_group', attackers: [{ entity: 2, incarnation: 1 }], defender: { kind: 'player', id: 1 } }),
+      ev(4, { kind: 'cast', object: { entity: 3, incarnation: 1 }, controller: 1, stack: 3 }),
+      ev(5, { kind: 'attack_group', attackers: [{ entity: 4, incarnation: 1 }], defender: { kind: 'player', id: 0 } }),
+      ev(6, { kind: 'attack_group', attackers: [{ entity: 5, incarnation: 1 }], defender: { kind: 'player', id: 0 } }),
+      ev(7, { kind: 'turn_started', player: 0, turn_number: 10 }),
     ];
-    expect(gameResult(frame(14, 0), log, names, 0).summary)
+    expect(gameResult(frame(14, 0), events, names, 0).summary)
       .toBe('10 turns · you cast 1 spell and attacked once; Heuristic · scripted cast 1 and attacked 2 times');
   });
 
-  it('counts every spell a compound move cast', () => {
+  it('falls back to legacy replayLog for old recordings without track events', () => {
     const log = [entry('villain', 'Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Earth Kingdom Jailer', 4)];
-    expect(gameResult(frame(14, 0, 4), log, names, 0).summary)
+    expect(gameResult(frame(14, 0, 4), [], names, 0, log).summary)
       .toBe('4 turns · you cast 0 spells and attacked 0 times; Heuristic · scripted cast 2 and attacked 0 times');
   });
 

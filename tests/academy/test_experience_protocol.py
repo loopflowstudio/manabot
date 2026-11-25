@@ -94,6 +94,7 @@ UNION_VARIANTS = {
         "TriggeredPresentation",
         "AbilityResolvedPresentation",
         "CounteredPresentation",
+        "PassedPresentation",
         "CountersPresentation",
     ),
 }

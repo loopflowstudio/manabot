@@ -78,6 +78,7 @@ enum Note {
         told: GameEvent,
     },
     Stack,
+    Pass,
 }
 
 #[derive(Clone, Debug)]
@@ -264,6 +265,24 @@ impl Game {
             .as_deref_mut()
             .unwrap()
             .push_caused(None, None, Note::Stack, lines);
+    }
+
+    /// Priority passes are told on the track without cutting a board position.
+    pub(crate) fn presentation_passed(&mut self, player: PlayerId) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::pass_line(player));
+        let id = sink.next_id;
+        sink.next_id += 1;
+        sink.facts.push(Fact {
+            id,
+            cause: None,
+            rule: None,
+            note: Note::Pass,
+            lines,
+            position: None,
+        });
     }
 
     pub(crate) fn presentation_resolving(&mut self, stacked: &StackObject) {

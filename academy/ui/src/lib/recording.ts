@@ -64,6 +64,10 @@ export interface RecordingIndex {
   watch: boolean;
   can_feedback: boolean;
   private_setup?: Record<string, unknown> | null;
+  /** True when the recording's presentation track carries move/label/cause events. */
+  track_history?: boolean;
+  /** Full person-seat presentation track for recorded Play review (omitted for Watch). */
+  history?: PresentationEvent[];
 }
 export interface RecordedPosition extends Position {
   description: string | null;

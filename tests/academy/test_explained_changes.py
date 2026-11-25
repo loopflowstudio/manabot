@@ -238,3 +238,155 @@ def test_real_game_tracks_stay_private_per_seat(tmp_path: Path) -> None:
                 assert "labels" not in event
     assert draws_by_player[0] >= 1 and draws_by_player[1] >= 1
     assert seat0 != seat1
+
+
+def test_turn_6_track_passes_activation_counters_and_review_index(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Real game covering cast, target, pass, resolve, damage, lethal death,
+    death trigger, trigger resolution, draw, activation and +1/+1 counter, with
+    no live log and Play Review receiving the full person track."""
+    from fastapi.testclient import TestClient
+
+    from managym.academy import server
+
+    hero_deck = {
+        **{
+            card: count
+            for card, count in INTERACTIVE_DECK.items()
+            if card != "Raging Goblin"
+        },
+        "Fire Sages": 4,
+    }
+    owner_token = "turn6-owner-token-" + "a" * 24
+    session = GameSession(trace_dir=tmp_path)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": hero_deck,
+            "villain_deck": REAPER_DECK,
+            "auto_pass": False,
+            "seed": 7,
+            "player_token": owner_token,
+        }
+    )
+    assert session.env is not None
+    _command(session, "Keep hand", "keep")
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    session.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    for _ in range(4):
+        session.env.scenario_force_battlefield(0, "Mountain", True)
+    session.env.scenario_force_battlefield(0, "Fire Sages", True)
+    session.env.scenario_force_battlefield(1, "Gray Ogre", True)
+    session.env.scenario_force_battlefield(1, "Midnight Reaper", True)
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+
+    start = len(session.presentation_events)
+    r_cast = _command(session, "Cast Lightning Bolt", "cast")
+    assert "log" not in r_cast["update"]
+    r_target = _command(session, "Target Gray Ogre", "target")
+    assert "log" not in r_target["update"]
+    # With 4 untapped Mountains + Fire Sages, hero pays for Bolt, then holds
+    # priority over Bolt and Midnight Reaper's trigger; explicit passes emit `passed`.
+    for index in range(6):
+        told = [e["kind"]["kind"] for e in session.presentation_events[start:]]
+        if "ability_resolved" in told:
+            break
+        prompt = session._publish_current_prompt()
+        assert prompt is not None
+        label = next(
+            (a["description"] for a in prompt.actions if a["description"].startswith("Pay")),
+            "Pass priority",
+        )
+        res = _command(session, label, f"step-{index}")
+        assert "log" not in res["update"]
+
+    prompt = session._publish_current_prompt()
+    assert prompt is not None
+    activate_label = next(
+        action["description"]
+        for action in prompt.actions
+        if "Fire Sages" in action["description"]
+    )
+    r_act = _command(session, activate_label, "activate")
+    assert "log" not in r_act["update"]
+    # Pay mana if prompted, then let the activation resolve.
+    for index in range(6):
+        told = [e["kind"]["kind"] for e in session.presentation_events[start:]]
+        if "counters" in told:
+            break
+        prompt = session._publish_current_prompt()
+        assert prompt is not None
+        pay = next(
+            (a["description"] for a in prompt.actions if a["description"].startswith("Pay")),
+            "Pass priority",
+        )
+        _command(session, pay, f"finish-{index}")
+
+    events = list(session.presentation_events[start:])
+    kinds = [event["kind"]["kind"] for event in events]
+    for required in (
+        "cast",
+        "targeted",
+        "passed",
+        "resolved",
+        "damage",
+        "died",
+        "triggered",
+        "ability_resolved",
+        "drew",
+        "activated",
+        "counters",
+    ):
+        assert required in kinds, kinds
+
+    cast = _first(events, "cast")
+    targeted = _first(events, "targeted")
+    resolved = _first(events, "resolved")
+    died = _first(events, "died")
+    triggered = _first(events, "triggered")
+    passed = _first(events, "passed")
+    activated = _first(events, "activated")
+    counters = _first(events, "counters")
+    ability_resolutions = [
+        e for e in events if e["kind"]["kind"] == "ability_resolved"
+    ]
+    assert len(ability_resolutions) == 2
+    trigger_resolved, activation_resolved = ability_resolutions
+
+    assert targeted["cause"] == cast["seq"]
+    assert passed["kind"] == {"kind": "passed", "player": 0}
+    assert passed["caused_by"] is not None
+    assert died["cause"] == resolved["seq"] and died["rule"] == "lethal_damage"
+    assert triggered["cause"] == died["seq"]
+    assert trigger_resolved["kind"]["stack"] == triggered["kind"]["stack"]
+    assert activation_resolved["kind"]["stack"] == activated["kind"]["stack"]
+    assert counters["cause"] == activation_resolved["seq"]
+    assert counters["kind"]["counter"] == "plus_one_plus_one"
+    assert counters["kind"]["count"] == 1 and counters["kind"]["total"] == 1
+    counter_obj = counters["kind"]["object"]
+    assert (
+        counters["labels"]["objects"][
+            f"{counter_obj['entity']}:{counter_obj['incarnation']}"
+        ]
+        == "Fire Sages"
+    )
+
+    # Play Review's recording index exposes `track_history` and the full person track.
+    from managym.academy import trace as trace_store
+
+    session.close(end_reason="disconnect")
+    assert session.trace_id is not None
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    client = TestClient(server.app)
+    resp = client.get(
+        f"/api/traces/{session.trace_id}/recording",
+        headers={"x-etude-player-token": owner_token},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["track_history"] is True
+    assert body["history"] == session.canonical_presentation[0]
+

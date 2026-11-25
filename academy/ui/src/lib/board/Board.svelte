@@ -19,7 +19,7 @@
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
-  import type { CardState, ConnectionState, ExperienceFrame, GameLogEntry, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
+  import type { CardState, ConnectionState, ExperienceFrame, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
   import { permissionTerms } from './inspect';
@@ -28,13 +28,13 @@
   import { region } from './region';
   import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
-  import { moveList, type MoveTurn } from './moves';
-  import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
+  import { buildHistory, type HistoryNote, type HistoryTurn } from './history';
+  import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
-  import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
+  import { recentView, boardLines, turnOwners, type RecentView } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import BoardCard from './BoardCard.svelte';
@@ -58,7 +58,8 @@
     /** The live connection; a recording has none. */
     connection?: ConnectionState | null;
     connectionLabel?: string;
-    log: GameLogEntry[];
+    /** Client-local automation/yield notes merged into live history. */
+    notes?: readonly HistoryNote[];
     canPassTurn: boolean;
     /** The live presentation track: what happened, as the authority reports it. */
     presentation: PresentationPlayer;
@@ -78,8 +79,8 @@
     onpassturn?: () => void;
     /** Where "since your last move" starts, when the caller knows (a recording); else the person's last commit. */
     since?: number | null;
-    /** The move list, when the caller keeps it (a recording); else read from `log`. */
-    moves?: MoveTurn[];
+    /** The history list, when the caller keeps it (a recording); else read from `presentation`. */
+    history?: HistoryTurn[];
     /** Jump to the position a move names; moves are buttons when set. */
     onjump?: (id: string) => void;
     /** The move the shown position belongs to. */
@@ -106,9 +107,9 @@
   }
 
   let {
-    frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
+    frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
+    since: sinceGiven, history: historyGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
 
@@ -351,10 +352,9 @@
   // ———————————————— What happened since your last move
 
   // The revision your last move was made at; events after it are "since your last move".
-  let since = $state.raw<{ revision: number; frame: ExperienceFrame; logLength: number } | null>(null);
-  const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since?.revision ?? null);
-  const book = $derived(nameBook(since && sinceGiven === undefined ? [since.frame, frame] : [frame], since && sinceGiven === undefined ? log.slice(since.logLength) : []));
-  const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players, book));
+  let since = $state.raw<number | null>(null);
+  const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since);
+  const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players));
 
   // ———————————————— The opponent's moves, one beat at a time
 
@@ -461,10 +461,17 @@
       element.removeEventListener('click', onClick, { capture: true });
     };
   });
-  // Both players' moves are narrated as Review narrates them, players named by seat.
-  const seatName = (seat: 0 | 1): string => (seat === projection.agent.player_index ? 'You' : said);
-  const named = $derived(log.map(entry => (entry.actor === 'villain' || entry.actor === 'hero' ? { ...entry, text: nameSeats(entry.text, seatName, entry.actor === 'hero') } : entry)));
-  const moves = $derived(movesGiven ?? moveList(named, players, owners, visibleNames(frame, presentation.labels)));
+  const tellPlayers = $derived({ youSeat: projection.agent.player_index, you: players.you, opponent: players.opponent });
+  const history = $derived(historyGiven ?? buildHistory(
+    presentation.events,
+    index => presentation.labelsAt(index),
+    tellPlayers,
+    {
+      notes,
+      initialTurn: projection.turn.turn_number,
+      initialOwner: projection.turn.active_player_id === projection.agent.id ? 'you' : 'opponent',
+    },
+  ));
 
   // ———————————————— Motion
 
@@ -549,13 +556,13 @@
     menuAt = null;
     stopNote = null;
     hush();
-    since = { revision: frame.revision, frame, logLength: log.length };
+    since = frame.revision;
     onact(offer);
   }
 
   function passTurn(): void {
     if (!canPassTurn) return;
-    since = { revision: frame.revision, frame, logLength: log.length };
+    since = frame.revision;
     onpassturn();
   }
 
@@ -886,7 +893,7 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
+    <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {history}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}

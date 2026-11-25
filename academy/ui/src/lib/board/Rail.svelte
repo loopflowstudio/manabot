@@ -8,7 +8,7 @@
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
-  import type { MoveTurn } from './moves';
+  import type { HistoryTurn } from './history';
   import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
@@ -37,7 +37,7 @@
     interrupted: boolean;
     canPassTurn: boolean;
     recent: RecentView;
-    moves: MoveTurn[];
+    history: HistoryTurn[];
     opponentName: string;
     onact: (placed: PlacedOffer) => void;
     onpassturn: () => void;
@@ -72,7 +72,7 @@
   }
 
   let {
-    view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, history, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
@@ -109,10 +109,18 @@
 
   let logEnd = $state<HTMLElement | null>(null);
   let logList = $state<HTMLElement | null>(null);
-  // The list follows the newest move live, and the shown position's move in a recording.
+  let expanded = $state<Set<string>>(new Set());
+  function toggleExpanded(id: string): void {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expanded = next;
+  }
+  // The list follows the newest line live, and the shown position's line in a recording.
   $effect(() => {
-    void moves.length;
-    void moves.at(-1)?.moves.length;
+    void history.length;
+    void history.at(-1)?.lines.length;
+    void history.at(-1)?.lines.at(-1)?.children.length;
     const current = currentMove;
     if (current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
@@ -306,34 +314,68 @@
   </section>
   {/if}
 
-  <section use:region={{ across: !onjump }} class="block log" aria-label="Moves">
-    <h2><span class="type-heading text-ink-2">Moves</span></h2>
+  <section use:region={{ across: !onjump }} class="block log" aria-label="History">
+    <h2><span class="type-heading text-ink-2">History</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
-      {#each moves as turn, index (`${turn.turn}:${index}`)}
+      {#each history as turn, index (`${turn.turn}:${index}`)}
         <li class="turn" data-turn={turn.turn}>
           <p class="turn-head type-label"><span class="number">{turn.turn ?? '·'}</span>{#if turn.owner}<span class="owner">{turn.owner}</span>{/if}</p>
           <ol>
-            {#each turn.moves as move, at (move.id)}
-              {#if onjump}
-                <!-- A recording's move jumps to its position. -->
-                <li class="move type-caption jump" class:quiet={move.passes !== null} class:auto={move.actor === 'auto'} class:you={move.actor === 'you'}
-                  data-testid={move.passes ? 'pass-run' : 'log-entry'} data-actor={move.actor}>
-                  <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}>
-                    <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
-                    <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
+            {#each turn.lines as entry, at (entry.id)}
+              {@const jumpId = entry.jumpKey ?? entry.id}
+              {@const prevWho = at > 0 ? turn.lines[at - 1]?.who : ''}
+              {#if onjump && entry.jumpKey}
+                <!-- A recording's line jumps to its position. -->
+                <li class="move type-caption jump" class:quiet={entry.passes !== null} class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'}
+                  data-testid={entry.passes ? 'pass-run' : 'log-entry'} data-actor={entry.actor}>
+                  <button type="button" aria-current={currentMove === jumpId ? 'true' : undefined} data-move={jumpId} onclick={() => onjump(jumpId)}>
+                    <span class="who" class:repeat={!entry.passes && entry.who !== '' && prevWho === entry.who}>{entry.passes ? '' : entry.who}</span>
+                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{entry.segments.map(segment => segment.text).join('')}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
                   </button>
                 </li>
-              {:else if move.passes}
+              {:else if entry.passes}
                 <li class="move type-caption quiet" data-testid="pass-run">
                   <span class="who" aria-hidden="true"></span>
-                  <span class="what">passed{#each move.passes as part, at (part.actor)}{at ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
+                  <span class="what">passed{#each entry.passes as part, idx (part.actor)}{idx ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
                 </li>
               {:else}
-              <li class="move type-caption" class:auto={move.actor === 'auto'} class:you={move.actor === 'you'} data-testid="log-entry" data-actor={move.actor}>
-                <!-- A score names the player once per run of their moves. -->
-                <span class="who" class:repeat={turn.moves[at - 1]?.who === move.who}>{move.who}</span>
-                <span class="what">{#each move.segments as segment, at (at)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}</span>
-              </li>
+                <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
+                  <!-- A score names the player once per run of their moves. -->
+                  <span class="who" class:repeat={entry.who !== '' && prevWho === entry.who}>{entry.who}</span>
+                  <span class="what">{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+                </li>
+              {/if}
+              {#if entry.children.length > 0}
+                {#if turn.busy && !expanded.has(entry.id)}
+                  <li class="consequence-summary type-caption">
+                    <button type="button" class="consequence-toggle" data-testid="consequence-toggle" aria-expanded="false" onclick={() => toggleExpanded(entry.id)}>
+                      {entry.children.length} {entry.children.length === 1 ? 'consequence' : 'consequences'}
+                    </button>
+                  </li>
+                {:else}
+                  <li class="consequences-wrap">
+                    {#if turn.busy}
+                      <button type="button" class="consequence-toggle type-caption" data-testid="consequence-toggle" aria-expanded="true" onclick={() => toggleExpanded(entry.id)}>
+                        Hide {entry.children.length} {entry.children.length === 1 ? 'consequence' : 'consequences'}
+                      </button>
+                    {/if}
+                    <ol class="consequences">
+                      {#each entry.children as child (child.id)}
+                        {#if onjump && child.jumpKey}
+                          <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
+                            <button type="button" aria-current={currentMove === child.jumpKey ? 'true' : undefined} data-move={child.jumpKey} onclick={() => onjump(child.jumpKey!)}>
+                              <span class="what">{child.segments.map(segment => segment.text).join('')}</span>
+                            </button>
+                          </li>
+                        {:else}
+                          <li class="consequence type-caption" data-testid="history-consequence" data-depth="1">
+                            <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
+                          </li>
+                        {/if}
+                      {/each}
+                    </ol>
+                  </li>
+                {/if}
               {/if}
             {/each}
           </ol>
@@ -446,4 +488,13 @@
   .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .consequences-wrap, .consequence-summary { padding-left: 92px; }
+  .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 8px; margin: 1px 0 3px; }
+  .consequence { color: var(--text-secondary); line-height: 16px; }
+  .consequence .what { font: 14px/20px var(--font-serif); }
+  .consequence.jump button { width: 100%; display: block; padding: 0 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .consequence.jump button:hover { background: var(--bg-field); }
+  .consequence.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .consequence-toggle { color: var(--text-tertiary); padding: 0 2px; text-decoration: underline dotted; }
+  .consequence-toggle:hover { color: var(--text); }
 </style>

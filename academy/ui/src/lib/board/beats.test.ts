@@ -6,7 +6,7 @@ import type { FactKind, RecentFact } from './recent';
 
 const NAMES = { you: 'You', opponent: 'Heuristic' };
 const fact = (seq: number, by: RecentFact['by'], text: string, subjects: number[] = [], kind: FactKind = 'cast'): RecentFact =>
-  ({ seq, by, kind, text, spell: null, subjects });
+  ({ seq, by, kind, text, segments: [{ text, card: null }], spell: null, subjects });
 
 describe("the opponent's moves as beats", () => {
   it('reads out what the opponent did, with its consequences, and not the person\'s own moves', () => {

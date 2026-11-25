@@ -952,6 +952,10 @@ pub enum PresentationKind {
     Countered {
         stack: StackRenderId,
     },
+    /// A player passed priority (CR 117.3d).
+    Passed {
+        player: PlayerId,
+    },
     /// Counters put on a permanent (CR 122.6); `total` is its count after.
     Counters {
         object: ObjectRenderId,

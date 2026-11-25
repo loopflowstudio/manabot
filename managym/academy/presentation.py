@@ -43,6 +43,7 @@ CUES: dict[str, tuple[str, int, str | None]] = {
     "activated": ("emphasized", 550, None),
     "triggered": ("normal", 550, None),
     "counters": ("normal", 450, None),
+    "passed": ("ambient", 0, None),
     "attack_group": ("emphasized", 500, "combat.attack"),
     "blocked": ("normal", 450, "combat.block"),
     "died": ("critical", 650, "creature.died"),

@@ -525,6 +525,7 @@ export const PRESENTATION_KIND_NAMES = [
   'triggered',
   'ability_resolved',
   'countered',
+  'passed',
   'counters',
 ] as const;
 
@@ -609,7 +610,13 @@ export type PresentationKind =
       player: number;
     }
   | {
-      kind: 'activated' | 'triggered';
+      kind: 'activated';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      kind: 'triggered';
       source: ObjectRenderId;
       controller: number;
       stack: number;
@@ -624,6 +631,11 @@ export type PresentationKind =
       /** A spell left the stack without resolving. */
       kind: 'countered';
       stack: number;
+    }
+  | {
+      /** A player passed priority. */
+      kind: 'passed';
+      player: number;
     }
   | {
       kind: 'counters';

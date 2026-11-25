@@ -2659,6 +2659,27 @@
           ]
         },
         {
+          "description": "A player passed priority (CR 117.3d).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "passed"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
           "description": "Counters put on a permanent (CR 122.6); `total` is its count after.",
           "type": "object",
           "properties": {

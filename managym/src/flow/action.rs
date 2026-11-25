@@ -1340,6 +1340,7 @@ impl Game {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
                 }
+                self.presentation_passed(*player);
                 let next = self.next_player(*player);
                 self.state.priority_mut().on_pass(next);
                 Ok(())

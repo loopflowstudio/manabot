@@ -232,6 +232,26 @@ class Recording:
         self._boards: dict[int, dict[str, Any]] = {}
         self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
+    def has_track_history(self) -> bool:
+        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
+        modern_kinds = {
+            "passed",
+            "activated",
+            "triggered",
+            "ability_resolved",
+            "countered",
+            "counters",
+            "drew",
+        }
+        return any(
+            event.labels is not None
+            or event.cause is not None
+            or event.rule is not None
+            or event.kind.kind in modern_kinds
+            for events in self.tracks.values()
+            for event in events
+        )
+
     def _board(self, position: Position) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")

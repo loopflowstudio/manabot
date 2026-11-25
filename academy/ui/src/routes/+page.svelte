@@ -26,7 +26,7 @@
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
   import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
-  import { logMarks } from '$lib/board/replay';
+  import { trackMarks } from '$lib/board/history';
   import { spentOnce } from '$lib/board/phases';
   import {
     connect,
@@ -275,7 +275,7 @@
       const yourTurn = turn.active_player_id === frame.projection.agent.id;
       const spent = spentOnce(turn, yourTurn, gameStore.stops, gameStore.onceStops);
       if (!spent) return;
-      gameStore.spendOnce(spent.side, spent.step);
+      gameStore.spendOnce(spent.side, spent.step, presentationPlayer.events.at(-1)?.seq ?? -1);
       syncStopsToServer();
     });
   });
@@ -302,8 +302,13 @@
     if (!sendPassTurn()) {
       return;
     }
-    // The log records game vocabulary, not affordances: no key hints.
-    gameStore.appendHeroAction('Pass turn');
+    // Client-local yield note anchored to the current point on the track.
+    gameStore.addHistoryNote(
+      'you',
+      gameStore.observation?.turn.turn_number ?? null,
+      presentationPlayer.events.at(-1)?.seq ?? -1,
+      'Pass turn',
+    );
   }
 
   function handleActionSelect(action: InteractionOffer): void {
@@ -329,11 +334,15 @@
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working' : null);
 
   const ending = $derived(gameStore.gameOver && boardFrame
-    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
+    ? gameResult(boardFrame, presentationPlayer.events, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
   // The game so far as a strip of decisions, folded unless opened. Live play
   // shows no past position yet: positions open in Review once the game ends.
   let stripOpen = $state(false);
-  const liveMarks = $derived(logMarks(gameStore.actionLog));
+  const liveMarks = $derived(trackMarks(
+    presentationPlayer.events,
+    index => presentationPlayer.labelsAt(index),
+    { youSeat: boardFrame?.projection.agent.player_index ?? 0, you: 'You', opponent: shortName(opponentName) },
+  ));
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 
   // How the opponent's moves are read out, remembered per browser.
@@ -442,7 +451,7 @@
       oncyclestop={handleCycleStop}
       connection={gameStore.connection}
       connectionLabel={gameStore.resumeFailed ? 'Interrupted' : gameStore.connection}
-      log={gameStore.actionLog}
+      notes={gameStore.historyNotes}
       {canPassTurn}
       presentation={presentationPlayer}
       {thinking}

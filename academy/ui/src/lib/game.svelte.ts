@@ -8,8 +8,8 @@ import {
   type DeckChoice,
   type DeckSelection,
 } from './decks';
-import { deriveObservationNotes } from './log';
 import { stepBoards, type StepBoard } from './board/boards';
+import type { HistoryNote } from './board/history';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -27,9 +27,7 @@ import type {
   DeckNames,
   Decklists,
   ExperienceFrame,
-  GameLogEntry,
   StepBoardPatch,
-  LogLine,
   Observation,
   OpponentConfig,
   StopsConfig,
@@ -143,7 +141,8 @@ export class GameStore {
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
   actionSpaceKind = $state<string>('');
-  actionLog = $state<GameLogEntry[]>([]);
+  /** Client-local automation/yield notes anchored to `(turn, afterSeq)` on the track. */
+  historyNotes = $state<HistoryNote[]>([]);
   gameOver = $state(false);
   winner = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
@@ -319,13 +318,27 @@ export class GameStore {
     this.updateStops(next.stops);
   }
 
-  /** The game stopped at a once stop: clear it, and say so as automation. */
-  spendOnce(side: StopSide, step: string): void {
+  /** The game stopped at a once stop: clear it, and anchor a client-local automation note. */
+  spendOnce(side: StopSide, step: string, afterSeq = -1): void {
     const next = withStopState(this.stops, this.onceStops, side, step, 'off');
     this.updateOnce(next.once);
     this.updateStops(next.stops);
     const whose = side === 'my' ? 'your turn' : "the opponent's turn";
-    this.actionLog = [...this.actionLog, this.createEntry('auto', this.observation?.turn.turn_number ?? null, `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`)];
+    this.addHistoryNote(
+      'auto',
+      this.observation?.turn.turn_number ?? null,
+      afterSeq,
+      `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`,
+    );
+  }
+
+  /** Record a client-local history note (a spent once stop or F6 yield). */
+  addHistoryNote(actor: 'you' | 'auto', turn: number | null, afterSeq: number, text: string): void {
+    this.logSequence += 1;
+    this.historyNotes = [
+      ...this.historyNotes,
+      { id: `note-${this.logSequence}`, actor, turn, afterSeq, text },
+    ];
   }
 
   setStopOnStack(value: boolean): void {
@@ -386,14 +399,10 @@ export class GameStore {
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
-    log: LogLine[] = [],
     stops?: StopsConfig,
     deckNames?: DeckNames,
     actionSpaceKind = '',
-    deriveNotes = true,
   ): void {
-    const previous = this.observation;
-
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
@@ -414,11 +423,6 @@ export class GameStore {
     }
     if (resumeToken) {
       this.resumeToken = resumeToken;
-    }
-
-    this.appendServerLog(log);
-    if (deriveNotes) {
-      this.appendNotes(deriveObservationNotes(previous, observation));
     }
   }
 
@@ -450,10 +454,8 @@ export class GameStore {
       this.applyGameOver(
         frame.projection,
         frame.winner,
-        frame.log ?? [],
         frame.stops,
         frame.deck_names,
-        false,
       );
     } else {
       this.applyObservation(
@@ -461,11 +463,9 @@ export class GameStore {
         actions,
         sessionId,
         resumeToken,
-        frame.log ?? [],
         frame.stops,
         frame.deck_names,
         frame.action_space,
-        false,
       );
     }
   }
@@ -473,13 +473,9 @@ export class GameStore {
   applyGameOver(
     observation: Observation,
     winner: number | null,
-    log: LogLine[] = [],
     stops?: StopsConfig,
     deckNames?: DeckNames,
-    deriveNotes = true,
   ): void {
-    const previous = this.observation;
-
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
@@ -493,11 +489,6 @@ export class GameStore {
     this.clearSelectedTarget();
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
-
-    this.appendServerLog(log);
-    if (deriveNotes) {
-      this.appendNotes(deriveObservationNotes(previous, observation));
-    }
   }
 
   prepareForNewGame(): void {
@@ -524,14 +515,6 @@ export class GameStore {
     this.errorMessage = message;
     this.sessionId = null;
     this.resumeToken = null;
-  }
-
-  /** The person's own move, in the turn of the decision it answered. */
-  appendHeroAction(description: string): void {
-    this.actionLog = [
-      ...this.actionLog,
-      this.createEntry('hero', this.observation?.turn.turn_number ?? null, description),
-    ];
   }
 
   selectTarget(objectId: number): void {
@@ -586,7 +569,7 @@ export class GameStore {
     this.actionSpaceKind = '';
     this.gameOver = false;
     this.winner = null;
-    this.actionLog = [];
+    this.historyNotes = [];
     this.fastForwarding = false;
     this.commandPending = false;
     this.clearFocus();
@@ -595,23 +578,6 @@ export class GameStore {
     this.restoredDecision = null;
     this.branchAttemptId = null;
     this.branchProjection = null;
-  }
-
-  /** Opponent and automated moves, each in the turn the server says it was taken. */
-  private appendServerLog(lines: LogLine[]): void {
-    if (lines.length === 0) return;
-    this.actionLog = [...this.actionLog, ...lines.map(line => this.createEntry(line.actor, line.turn, line.text))];
-  }
-
-  private appendNotes(notes: string[]): void {
-    if (notes.length === 0) return;
-    const turn = this.observation?.turn.turn_number ?? null;
-    this.actionLog = [...this.actionLog, ...notes.map(note => this.createEntry('system', turn, note))];
-  }
-
-  private createEntry(actor: GameLogEntry['actor'], turn: number | null, text: string): GameLogEntry {
-    this.logSequence += 1;
-    return { id: `log-${this.logSequence}`, actor, turn, text };
   }
 }
 

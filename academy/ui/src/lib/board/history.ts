@@ -1,0 +1,650 @@
+/**
+ * One history view over the viewer's presentation track (plus client-local
+ * automation notes such as a spent browser-only "once" stop).
+ *
+ * `buildHistory` keeps events strictly in authority order, folds targets into
+ * their cast/activation/trigger, folds an immediate resolution (ignoring
+ * passes) into its cast or activation, indents consequences under the nearest
+ * open block that caused them, folds opponent/automation priority passes into
+ * quiet runs, and marks turns with more than four consequences as busy so
+ * their moves collapse by default.
+ *
+ * `legacyMoveHistory` converts flat `GameLogEntry[]` from recordings written
+ * before moves were recorded as presentation events into the same `HistoryTurn`
+ * shape so the rail renders one structure everywhere.
+ */
+import type {
+  GameLogEntry,
+  PresentationEvent,
+  PresentationLabels,
+  PresentationRule,
+} from '$lib/types';
+import type { StripMark } from './replay';
+import {
+  playerSide,
+  segmentText,
+  segmentsFromText,
+  tell,
+  type FoldedTarget,
+  type Segment,
+  type TellPlayers,
+} from './tell';
+
+export type HistoryActor = 'you' | 'opponent' | 'auto' | 'note';
+
+export interface PassCount {
+  actor: 'opponent' | 'auto';
+  who: string;
+  count: number;
+}
+
+/** A client-local automation or yield note anchored to a point on the track. */
+export interface HistoryNote {
+  id: string;
+  actor: 'you' | 'auto';
+  turn: number | null;
+  /** Emitted after the event with `seq <= afterSeq` (or at turn start when -1). */
+  afterSeq: number;
+  text: string;
+}
+
+export interface HistoryLine {
+  id: string;
+  /** Primary event seq for this line, or null for client-local / legacy lines. */
+  seq: number | null;
+  /** Board seq shown when selecting this line (cast board if folded with consequences, else resolved board). */
+  boardSeq: number | null;
+  /** All event seqs folded into this line. */
+  seqs: number[];
+  /** On a standalone resolution, the seq of the original cast / activation / trigger. */
+  sourceSeq: number | null;
+  /** Revision of the step that produced this line (for Review jumps). */
+  fromRevision: number | null;
+  actor: HistoryActor;
+  who: string;
+  segments: Segment[];
+  /** Indented consequences directly following this move or resolution. */
+  children: HistoryLine[];
+  rule: PresentationRule | null;
+  /** Object entity ids referenced by this line. */
+  subjects: number[];
+  /** Consecutive identical moves collapsed (legacy fallback). */
+  count: number;
+  /** Folded run of opponent and/or automation priority passes. */
+  passes: PassCount[] | null;
+  /** Review position key this line jumps to, when known. */
+  jumpKey: string | null;
+}
+
+export interface HistoryTurn {
+  turn: number | null;
+  owner: string | null;
+  lines: HistoryLine[];
+  /** Count of indented consequence lines in this turn. */
+  consequences: number;
+  /** Turns with more than `BUSY_CONSEQUENCES` consequences collapse moves by default. */
+  busy: boolean;
+}
+
+export interface HistoryOptions {
+  notes?: readonly HistoryNote[];
+  /** Turn number for events preceding the first retained `turn_started`. */
+  initialTurn?: number | null;
+  initialOwner?: 'you' | 'opponent' | null;
+  /** Maps an event to a Review position key for jumping. */
+  jumpKeyFor?: (event: PresentationEvent, isMove: boolean) => string | null;
+}
+
+/** More consequences than this in one turn collapse under their moves by default. */
+export const BUSY_CONSEQUENCES = 4;
+
+const MOVE_KINDS = new Set([
+  'cast',
+  'activated',
+  'land_played',
+  'attack_group',
+  'blocked',
+  'passed',
+]);
+
+const MODERN_KINDS = new Set([
+  'passed',
+  'activated',
+  'triggered',
+  'ability_resolved',
+  'countered',
+  'counters',
+  'drew',
+]);
+
+/** Exact definition of a player move: move kind with no cause and no rule. */
+export function isMoveEvent(event: PresentationEvent): boolean {
+  return (
+    event.cause === undefined
+    && event.rule === undefined
+    && MOVE_KINDS.has(event.kind.kind)
+  );
+}
+
+/** Whether a recording's track carries modern move/label/cause semantics. */
+export function hasTrackHistory(events: readonly PresentationEvent[]): boolean {
+  return events.some(
+    event =>
+      event.labels !== undefined
+      || event.cause !== undefined
+      || event.rule !== undefined
+      || MODERN_KINDS.has(event.kind.kind),
+  );
+}
+
+function objectEntities(event: PresentationEvent): number[] {
+  const kind = event.kind;
+  switch (kind.kind) {
+    case 'cast': return [kind.object.entity];
+    case 'targeted': return kind.target.kind === 'object' ? [kind.target.id.entity] : [];
+    case 'damage':
+      return [kind.source, kind.target].flatMap(s => (s?.kind === 'object' ? [s.id.entity] : []));
+    case 'died':
+    case 'destroyed':
+    case 'discarded':
+      return kind.objects.map(o => o.entity);
+    case 'attack_group':
+      return kind.attackers.map(o => o.entity);
+    case 'blocked':
+      return [kind.attacker.entity, ...kind.blockers.map(o => o.entity)];
+    case 'land_played':
+    case 'counters':
+      return [kind.object.entity];
+    case 'drew':
+      return kind.object ? [kind.object.entity] : [];
+    case 'activated':
+    case 'triggered':
+    case 'ability_resolved':
+      return [kind.source.entity];
+    default:
+      return [];
+  }
+}
+
+function actorForMove(
+  event: PresentationEvent,
+  players: TellPlayers,
+  turnOwner: 'you' | 'opponent' | null,
+): HistoryActor {
+  const kind = event.kind;
+  let seat: number | null = null;
+  switch (kind.kind) {
+    case 'cast':
+    case 'activated':
+      seat = kind.controller;
+      break;
+    case 'land_played':
+    case 'passed':
+      seat = kind.player;
+      break;
+    case 'attack_group':
+      seat = kind.defender.kind === 'player' ? 1 - kind.defender.id : null;
+      break;
+    case 'blocked':
+      if (event.caused_by !== null) return 'you';
+      return turnOwner === 'opponent' ? 'you' : 'opponent';
+    default:
+      return 'note';
+  }
+  if (seat === null) return 'opponent';
+  if (seat === players.youSeat) {
+    return event.caused_by === null ? 'auto' : 'you';
+  }
+  return 'opponent';
+}
+
+function whoForActor(actor: HistoryActor, players: TellPlayers): string {
+  if (actor === 'you') return players.you;
+  if (actor === 'opponent') return players.opponent;
+  if (actor === 'auto') return 'auto';
+  return '';
+}
+
+function sameObjects(a: readonly { entity: number; incarnation: number }[], b: readonly { entity: number; incarnation: number }[]): boolean {
+  return a.length === b.length && a.every((item, i) => item.entity === b[i].entity && item.incarnation === b[i].incarnation);
+}
+
+/** Build the unified turn-grouped history from one viewer's presentation track. */
+export function buildHistory(
+  events: readonly PresentationEvent[],
+  labelsAt: (index: number) => PresentationLabels,
+  players: TellPlayers,
+  options: HistoryOptions = {},
+): HistoryTurn[] {
+  const stackTriggers = new Set<number>();
+  const stackSourceSeq = new Map<number, number>();
+  for (const event of events) {
+    if (event.kind.kind === 'triggered') {
+      stackTriggers.add(event.kind.stack);
+      stackSourceSeq.set(event.kind.stack, event.seq);
+    } else if (event.kind.kind === 'cast' || event.kind.kind === 'activated') {
+      stackSourceSeq.set(event.kind.stack, event.seq);
+    }
+  }
+
+  // Pass 1: fold targets onto their parent event, fold immediate resolutions
+  // (ignoring passes) into their cast/activation, and absorb passes that
+  // immediately precede a stack resolution.
+  const consumed = new Set<number>();
+  const foldedTargets = new Map<number, (FoldedTarget & { seq: number })[]>();
+  const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
+  const absorbedBeforeResolution = new Map<number, number[]>();
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    if (event.kind.kind === 'destroyed') {
+      const next = events[i + 1];
+      if (next?.kind.kind === 'died' && sameObjects(event.kind.objects, next.kind.objects)) {
+        consumed.add(i);
+      }
+      continue;
+    }
+    if (event.kind.kind === 'targeted') {
+      let parentSeq: number | null = event.cause ?? null;
+      if (parentSeq === null && event.kind.source.kind === 'stack') {
+        // Legacy fallback when events carry no `cause`: look back for matching stack cast/activation/trigger.
+        for (let back = i - 1; back >= 0; back -= 1) {
+          const prev = events[back];
+          if (
+            (prev.kind.kind === 'cast' || prev.kind.kind === 'activated' || prev.kind.kind === 'triggered')
+            && prev.kind.stack === event.kind.source.id
+          ) {
+            parentSeq = prev.seq;
+            break;
+          }
+          if (prev.kind.kind !== 'targeted') break;
+        }
+      }
+      if (parentSeq !== null) {
+        const list = foldedTargets.get(parentSeq) ?? [];
+        list.push({ target: event.kind.target, labels: labelsAt(i), event, seq: event.seq });
+        foldedTargets.set(parentSeq, list);
+        consumed.add(i);
+      }
+    }
+  }
+
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue;
+    const event = events[i];
+    if (event.kind.kind === 'cast' || event.kind.kind === 'activated') {
+      const expectedKind = event.kind.kind === 'cast' ? 'resolved' : 'ability_resolved';
+      const stackId = event.kind.stack;
+      const passIndices: number[] = [];
+      let j = i + 1;
+      while (j < events.length) {
+        if (consumed.has(j)) { j += 1; continue; }
+        if (events[j].kind.kind === 'passed') {
+          passIndices.push(j);
+          j += 1;
+          continue;
+        }
+        break;
+      }
+      if (j < events.length) {
+        const next = events[j];
+        if (next.kind.kind === expectedKind && next.kind.stack === stackId) {
+          foldedResolution.set(i, { resolvedIndex: j, passIndices });
+          consumed.add(j);
+          for (const passIdx of passIndices) consumed.add(passIdx);
+        }
+      }
+    }
+  }
+
+  // Absorb passes that immediately precede a standalone resolution so
+  // "Trigger · X" -> "X's trigger resolved" is not split by a pass line.
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue;
+    const kind = events[i].kind.kind;
+    if (kind !== 'resolved' && kind !== 'ability_resolved') continue;
+    const passIndices: number[] = [];
+    for (let back = i - 1; back >= 0; back -= 1) {
+      if (consumed.has(back)) continue;
+      if (events[back].kind.kind === 'passed') {
+        passIndices.push(back);
+        continue;
+      }
+      break;
+    }
+    if (passIndices.length > 0) {
+      passIndices.reverse();
+      absorbedBeforeResolution.set(i, passIndices);
+      for (const passIdx of passIndices) consumed.add(passIdx);
+    }
+  }
+
+  // Pass 2: assemble turns, blocks, indented consequences, pass runs, and notes.
+  const turns: HistoryTurn[] = [];
+  let currentTurn: number | null = options.initialTurn ?? null;
+  let currentOwner: 'you' | 'opponent' | null = options.initialOwner ?? null;
+  let openBlock: { line: HistoryLine; seqs: Set<number>; castSeq: number | null; resolvedSeq: number | null } | null = null;
+
+  const pendingNotes = [...(options.notes ?? [])];
+  let noteCursor = 0;
+
+  const ensureTurn = (turnNum: number | null, owner: 'you' | 'opponent' | null): HistoryTurn => {
+    const existing = turns.at(-1);
+    if (existing && existing.turn === turnNum) {
+      if (existing.owner === null && owner !== null) existing.owner = players[owner];
+      return existing;
+    }
+    const created: HistoryTurn = {
+      turn: turnNum,
+      owner: owner ? players[owner] : null,
+      lines: [],
+      consequences: 0,
+      busy: false,
+    };
+    turns.push(created);
+    return created;
+  };
+
+  const closeBlock = (): void => {
+    if (openBlock && openBlock.castSeq !== null && openBlock.resolvedSeq !== null) {
+      openBlock.line.boardSeq = openBlock.line.children.length > 0
+        ? openBlock.castSeq
+        : openBlock.resolvedSeq;
+    }
+    openBlock = null;
+  };
+
+  const pushNote = (note: HistoryNote): void => {
+    closeBlock();
+    const targetTurn = note.turn ?? currentTurn;
+    const owner = targetTurn === currentTurn ? currentOwner : null;
+    const turn = ensureTurn(targetTurn, owner);
+    turn.lines.push({
+      id: note.id,
+      seq: null,
+      boardSeq: null,
+      seqs: [],
+      sourceSeq: null,
+      fromRevision: null,
+      actor: note.actor,
+      who: whoForActor(note.actor, players),
+      segments: [{ text: note.text, card: null }],
+      children: [],
+      rule: null,
+      subjects: [],
+      count: 1,
+      passes: null,
+      jumpKey: null,
+    });
+  };
+
+  const flushNotesUpTo = (nextSeq: number | null): void => {
+    while (noteCursor < pendingNotes.length) {
+      const note = pendingNotes[noteCursor];
+      if (nextSeq !== null && note.afterSeq >= nextSeq) break;
+      pushNote(note);
+      noteCursor += 1;
+    }
+  };
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    flushNotesUpTo(event.seq);
+    if (consumed.has(i)) continue;
+
+    if (event.kind.kind === 'turn_started') {
+      closeBlock();
+      currentTurn = event.kind.turn_number;
+      currentOwner = playerSide(event.kind.player, players.youSeat);
+      ensureTurn(currentTurn, currentOwner);
+      continue;
+    }
+
+    const turn = ensureTurn(currentTurn, currentOwner);
+    const labels = labelsAt(i);
+    const move = isMoveEvent(event);
+
+    if (event.kind.kind === 'passed') {
+      const actor = actorForMove(event, players, currentOwner);
+      if (actor === 'opponent' || actor === 'auto') {
+        closeBlock();
+        const who = actor === 'opponent' ? players.opponent : 'auto';
+        const last = turn.lines.at(-1);
+        if (last?.passes) {
+          last.seqs.push(event.seq);
+          const part = last.passes.find(candidate => candidate.actor === actor);
+          if (part) part.count += 1;
+          else last.passes.push({ actor, who, count: 1 });
+        } else {
+          turn.lines.push({
+            id: `seq-${event.seq}`,
+            seq: event.seq,
+            boardSeq: null,
+            seqs: [event.seq],
+            sourceSeq: null,
+            fromRevision: event.from_revision,
+            actor: 'note',
+            who: '',
+            segments: [{ text: 'passed', card: null }],
+            children: [],
+            rule: null,
+            subjects: [],
+            count: 1,
+            passes: [{ actor, who, count: 1 }],
+            jumpKey: options.jumpKeyFor?.(event, true) ?? null,
+          });
+        }
+        continue;
+      }
+      // Person's own explicit pass stays a move.
+      closeBlock();
+      turn.lines.push({
+        id: `seq-${event.seq}`,
+        seq: event.seq,
+        boardSeq: null,
+        seqs: [event.seq],
+        sourceSeq: null,
+        fromRevision: event.from_revision,
+        actor: 'you',
+        who: players.you,
+        segments: tell(event, labels, players, { form: 'move' }),
+        children: [],
+        rule: null,
+        subjects: [],
+        count: 1,
+        passes: null,
+        jumpKey: options.jumpKeyFor?.(event, true) ?? null,
+      });
+      continue;
+    }
+
+    const targets = foldedTargets.get(event.seq);
+    const fold = foldedResolution.get(i);
+    const absorbedPasses = absorbedBeforeResolution.get(i) ?? [];
+    const seqs: number[] = [
+      ...absorbedPasses.map(idx => events[idx].seq),
+      event.seq,
+      ...(targets?.map(t => t.seq) ?? []),
+      ...(fold ? fold.passIndices.map(idx => events[idx].seq) : []),
+      ...(fold ? [events[fold.resolvedIndex].seq] : []),
+    ];
+    const subjects = [
+      ...objectEntities(event),
+      ...(targets?.flatMap(t => (t.target.kind === 'object' ? [t.target.id.entity] : [])) ?? []),
+    ];
+
+    const indented = !move && event.cause !== undefined && openBlock !== null && openBlock.seqs.has(event.cause);
+    const isTrigger = event.kind.kind === 'ability_resolved' && stackTriggers.has(event.kind.stack);
+    const segments = tell(event, labels, players, {
+      form: 'move',
+      indented,
+      trigger: isTrigger,
+      targets,
+    });
+
+    const sourceSeq =
+      (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved')
+        ? (stackSourceSeq.get(event.kind.stack) ?? null)
+        : null;
+    const actor: HistoryActor = move ? actorForMove(event, players, currentOwner) : 'note';
+    const line: HistoryLine = {
+      id: `seq-${event.seq}`,
+      seq: event.seq,
+      boardSeq: event.seq,
+      seqs,
+      sourceSeq,
+      fromRevision: event.from_revision,
+      actor,
+      who: whoForActor(actor, players),
+      segments,
+      children: [],
+      rule: event.rule ?? null,
+      subjects,
+      count: 1,
+      passes: null,
+      jumpKey: options.jumpKeyFor?.(event, move) ?? null,
+    };
+
+    if (indented && openBlock) {
+      openBlock.line.children.push(line);
+      for (const s of seqs) openBlock.seqs.add(s);
+      continue;
+    }
+
+    closeBlock();
+    turn.lines.push(line);
+    openBlock = {
+      line,
+      seqs: new Set(seqs),
+      castSeq: fold ? event.seq : null,
+      resolvedSeq: fold ? events[fold.resolvedIndex].seq : null,
+    };
+  }
+
+  flushNotesUpTo(null);
+  closeBlock();
+
+  for (const turn of turns) {
+    turn.consequences = turn.lines.reduce((sum, line) => sum + line.children.length, 0);
+    turn.busy = turn.consequences > BUSY_CONSEQUENCES;
+  }
+  return turns;
+}
+
+/**
+ * Frozen legacy move list for recordings written before moves were emitted as
+ * presentation events. Returns the same `HistoryTurn[]` shape as `buildHistory`.
+ */
+const LEGACY_ACTORS: Record<GameLogEntry['actor'], HistoryActor> = {
+  hero: 'you',
+  villain: 'opponent',
+  auto: 'auto',
+  system: 'note',
+};
+const LEGACY_PASS = 'Pass priority';
+
+export function legacyMoveHistory(
+  entries: readonly GameLogEntry[],
+  players: { you: string; opponent: string },
+  owners: ReadonlyMap<number, 'you' | 'opponent'>,
+  names: readonly string[],
+): HistoryTurn[] {
+  const turns: HistoryTurn[] = [];
+  for (const entry of entries) {
+    let turn = turns.at(-1);
+    if (!turn || turn.turn !== entry.turn) {
+      const owner = entry.turn === null ? undefined : owners.get(entry.turn);
+      turn = { turn: entry.turn, owner: owner ? players[owner] : null, lines: [], consequences: 0, busy: false };
+      turns.push(turn);
+    }
+    const actor = LEGACY_ACTORS[entry.actor];
+    const last = turn.lines.at(-1);
+    if (entry.text === LEGACY_PASS && (actor === 'opponent' || actor === 'auto')) {
+      const who = actor === 'opponent' ? players.opponent : 'auto';
+      if (last?.passes) {
+        const part = last.passes.find(candidate => candidate.actor === actor);
+        if (part) part.count += 1;
+        else last.passes.push({ actor, who, count: 1 });
+      } else {
+        turn.lines.push({
+          id: entry.id,
+          seq: null,
+          boardSeq: null,
+          seqs: [],
+          sourceSeq: null,
+          fromRevision: null,
+          actor: 'note',
+          who: '',
+          segments: [{ text: 'passed', card: null }],
+          children: [],
+          rule: null,
+          subjects: [],
+          count: 1,
+          passes: [{ actor, who, count: 1 }],
+          jumpKey: entry.id,
+        });
+      }
+      continue;
+    }
+    if (last && actor !== 'you' && last.actor === actor && segmentText(last.segments) === entry.text) {
+      last.count += 1;
+      continue;
+    }
+    const who = actor === 'you' ? players.you : actor === 'opponent' ? players.opponent : actor === 'auto' ? 'auto' : '';
+    turn.lines.push({
+      id: entry.id,
+      seq: null,
+      boardSeq: null,
+      seqs: [],
+      sourceSeq: null,
+      fromRevision: null,
+      actor,
+      who,
+      segments: segmentsFromText(entry.text, names),
+      children: [],
+      rule: null,
+      subjects: [],
+      count: 1,
+      passes: null,
+      jumpKey: entry.id,
+    });
+  }
+  return turns;
+}
+
+/**
+ * Live decision strip marks read directly from move events on the track
+ * (replaces `replay.ts:logMarks`).
+ */
+export function trackMarks(
+  events: readonly PresentationEvent[],
+  labelsAt: (index: number) => PresentationLabels,
+  players: TellPlayers,
+): StripMark[] {
+  const marks: StripMark[] = [];
+  let turn: number | null = null;
+  let owner: 'you' | 'opponent' | null = null;
+  events.forEach((event, index) => {
+    if (event.kind.kind === 'turn_started') {
+      turn = event.kind.turn_number;
+      owner = playerSide(event.kind.player, players.youSeat);
+      return;
+    }
+    if (!isMoveEvent(event)) return;
+    const actor = actorForMove(event, players, owner);
+    const label = segmentText(tell(event, labelsAt(index), players, { form: 'move' }));
+    const at = marks.length;
+    const previousTurn = marks.at(-1)?.turn ?? null;
+    marks.push({
+      at,
+      key: `seq-${event.seq}`,
+      turn,
+      turnStart: at === 0 || turn !== previousTurn,
+      decision: actor === 'you' || actor === 'opponent',
+      side: actor === 'you' ? 'you' : actor === 'opponent' ? 'opponent' : null,
+      value: null,
+      label: `Turn ${turn ?? '?'} · ${label}`,
+    });
+  });
+  return marks;
+}

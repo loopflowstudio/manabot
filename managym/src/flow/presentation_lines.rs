@@ -136,6 +136,12 @@ impl Game {
         })
     }
 
+    pub(super) fn pass_line(player: PlayerId) -> Vec<PresentationLine> {
+        vec![PresentationLabels::default().line(Kind::Passed {
+            player: seat(player),
+        })]
+    }
+
     pub(super) fn draw_line(
         &self,
         player: PlayerId,

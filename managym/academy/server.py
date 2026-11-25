@@ -116,7 +116,7 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, narrate_move, own_steps, person_board, read_cache
+from .recording import Recording, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -863,14 +863,6 @@ def close_policies(policies: Iterable[BotPolicy | None]) -> None:
                 resources.callback(policy.close)
 
 
-class LogEntry(TypedDict):
-    """One line of narration: either player's move, or an automated action."""
-
-    actor: Literal["hero", "villain", "auto"]
-    turn: int
-    text: str
-
-
 class PendingBotDecision(TypedDict):
     code: str
     message: str
@@ -938,7 +930,6 @@ class GameSession:
             0: [],
             1: [],
         }
-        self._pending_action_log: list[LogEntry] = []
         # The person's board after each step since the last surfaced message (`step_boards`).
         self._step_boards: list[StepBoard] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
@@ -1148,7 +1139,6 @@ class GameSession:
         )
         self._trace_saved = False
         self.trace_id = None
-        self._pending_action_log = []
         self._step_boards = []
         self.stops = {
             side: list(steps) for side, steps in (config.stops or DEFAULT_STOPS).items()
@@ -1710,13 +1700,6 @@ class GameSession:
                 actions[action_index],
                 semantic_events,
             )
-        # The turn a logged move was made in is the one before the step.
-        turn = int(before_observation.turn.turn_number)
-        if auto:
-            # Priority-stop automation stays identifiable in the hero's log.
-            self._pending_action_log.append(
-                {"actor": "auto", "turn": turn, "text": action_description}
-            )
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
@@ -1739,35 +1722,6 @@ class GameSession:
             actor=actor_index,
             caused_by=caused_by,
         )
-        if not auto:
-            # Either player's move as the person saw it, with Review's
-            # narration: never the opponent's private action.
-            after = decision_surface_view(
-                self.env,
-                self.human_seat
-                if next_obs.game_over
-                else int(next_obs.agent.player_index),
-            )
-            winner = self.env.winner_index() if next_obs.game_over else None
-            text = narrate_move(
-                person_board(observation, self.human_seat, winner=winner),
-                person_board(after, self.human_seat, winner=winner),
-                [event["kind"] for event in presentation_events],
-                own_steps(
-                    [vars(event) for event in self.trace.events],
-                    len(self.trace.events) - 1,
-                )
-                if actor == "hero"
-                else (),
-            )
-            if text is not None:
-                self._pending_action_log.append(
-                    {
-                        "actor": "hero" if actor == "hero" else "villain",
-                        "turn": turn,
-                        "text": text,
-                    }
-                )
         if self._capture_authority_evidence:
             assert state_before is not None and state_after is not None
             self.authority_transitions.append(
@@ -1991,25 +1945,17 @@ class GameSession:
             "auto_pass": self.auto_pass,
         }
 
-    def _drain_pending_action_log(self) -> list[LogEntry]:
-        pending = list(self._pending_action_log)
-        self._pending_action_log = []
-        return pending
-
     def _drain_surface_metadata(self, projection: dict[str, Any]) -> dict[str, Any]:
-        """Drain compatibility narration and step boards outside the canonical frame.
+        """Drain step boards and auto-pass count outside the canonical frame.
 
         `projection` is the frame these travel with; step boards are patches
         back from it (`step_boards.wire_boards`).
         """
         payload: dict[str, Any] = {}
-        log = self._drain_pending_action_log()
         auto_passed = self._auto_passed_since_surface
         self._auto_passed_since_surface = 0
         boards = wire_boards(self._step_boards, projection)
         self._step_boards = []
-        if log:
-            payload["log"] = log
         if auto_passed:
             payload["auto_passed"] = auto_passed
         if boards:
@@ -2072,6 +2018,9 @@ class GameSession:
         transport.
         """
         if self.watch_mode or self.env is None:
+            return
+        events = [event for event in events if event["kind"]["kind"] != "passed"]
+        if not events:
             return
         runs: list[tuple[int | None, list[dict[str, Any]]]] = []
         for event in events:
@@ -4209,6 +4158,17 @@ def get_recording_index(
         "opponent": payload["config"].get("opponent"),
         "opponent_checkpoint": provenance,
         "watch": recording.watch,
+        "track_history": recording.has_track_history(),
+        **(
+            {
+                "history": [
+                    event.model_dump(mode="json")
+                    for event in recording.tracks.get(recording.human_seat, [])
+                ]
+            }
+            if not recording.watch and offset == 0
+            else {}
+        ),
         "private_setup": {
             **setup_draft(GameConfig(**payload["config"])),
             "watch_players": payload["config"].get("watch_players"),

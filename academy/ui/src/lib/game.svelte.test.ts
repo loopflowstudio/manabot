@@ -129,19 +129,15 @@ describe('GameStore', () => {
     expect(store.gameOver).toBe(false);
   });
 
-  it('records each move with its actor and the turn it was made in', () => {
+  it('records client-local history notes anchored to the presentation track', () => {
     const store = createGameStore();
     store.applyObservation(makeObservation(), []);
-    store.appendHeroAction('Pass turn');
-    store.applyObservation(makeObservation(), [], undefined, undefined, [
-      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
-      { actor: 'villain', turn: 2, text: 'Pass priority' },
-    ]);
+    store.addHistoryNote('you', 1, 5, 'Pass turn');
+    store.spendOnce('my', 'main1', 6);
 
-    expect(store.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text }))).toEqual([
-      { actor: 'hero', turn: 1, text: 'Pass turn' },
-      { actor: 'hero', turn: 1, text: 'Cast Divide by Zero, targeting Tiger-Seal' },
-      { actor: 'villain', turn: 2, text: 'Pass priority' },
+    expect(store.historyNotes.map(({ actor, turn, afterSeq, text }) => ({ actor, turn, afterSeq, text }))).toEqual([
+      { actor: 'you', turn: 1, afterSeq: 5, text: 'Pass turn' },
+      { actor: 'auto', turn: 1, afterSeq: 6, text: 'Stopped once at First main on your turn; that stop is now off' },
     ]);
   });
 
@@ -240,7 +236,7 @@ describe('GameStore', () => {
       auto_pass: true,
     };
 
-    store.applyObservation(makeObservation(), [], undefined, undefined, [], echo);
+    store.applyObservation(makeObservation(), [], undefined, undefined, echo);
 
     expect(store.stops).toEqual(echo);
   });
@@ -297,7 +293,6 @@ describe('GameStore', () => {
       [],
       undefined,
       undefined,
-      [],
       undefined,
       { hero: 'UR Lessons', villain: 'GW Allies' },
     );
@@ -308,24 +303,14 @@ describe('GameStore', () => {
     });
   });
 
-  it('logs automated moves as automation and clears the fast-forward flag', () => {
+  it('clears the fast-forward flag on the next observation', () => {
     const store = createGameStore();
     store.beginFastForward();
     expect(store.fastForwarding).toBe(true);
 
-    store.applyObservation(
-      makeObservation(),
-      [],
-      undefined,
-      undefined,
-      [{ actor: 'villain', turn: 3, text: 'Cast Grey Ogre' }, { actor: 'auto', turn: 3, text: 'Choose red' }],
-    );
+    store.applyObservation(makeObservation(), []);
 
     expect(store.fastForwarding).toBe(false);
-    expect(store.actionLog.map(({ actor, text }) => [actor, text])).toEqual([
-      ['villain', 'Cast Grey Ogre'],
-      ['auto', 'Choose red'],
-    ]);
   });
 });
 

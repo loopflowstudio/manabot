@@ -4,7 +4,6 @@ import type {
   Observation,
   PlayerState,
   PresentationEvent,
-  PresentationImportance,
   PresentationLabels,
   SubjectRef,
 } from './types';
@@ -24,17 +23,6 @@ export interface PresentationSequence {
   title: string;
   labels: PresentationLabels;
   events: PresentationEvent[];
-}
-
-export interface PresentationBeat {
-  seq: number;
-  group: number;
-  fromRevision: number;
-  toRevision: number;
-  importance: PresentationImportance;
-  heading: string;
-  detail: string;
-  ariaLabel: string;
 }
 
 export function mergePresentationLabels(
@@ -97,20 +85,6 @@ export function presentationLabelsFromObservation(
 
 export function presentationLabelsFromFrame(frame: ExperienceFrame): PresentationLabels {
   return presentationLabelsFromObservation(frame.projection);
-}
-
-function objectLabel(id: ObjectRenderId, labels: PresentationLabels): string {
-  return labels.objects[objectLabelKey(id)] ?? `object ${objectLabelKey(id)}`;
-}
-
-export function subjectLabel(subject: SubjectRef, labels: PresentationLabels): string {
-  if (subject.kind === 'object') {
-    return objectLabel(subject.id, labels);
-  }
-  if (subject.kind === 'player') {
-    return labels.players[String(subject.id)] ?? `player ${subject.id}`;
-  }
-  return labels.stacks[String(subject.id)] ?? `stack object ${subject.id}`;
 }
 
 function eventCopy(event: PresentationEvent): PresentationEvent {
@@ -242,6 +216,9 @@ function validatePresentationKind(value: unknown, seq: number): void {
     case 'countered':
       requireInteger(value.stack, 'kind.stack', seq);
       return;
+    case 'passed':
+      requireInteger(value.player, 'kind.player', seq);
+      return;
     case 'counters':
       validateObjectRenderId(value.object, 'kind.object', seq);
       if (typeof value.counter !== 'string') {
@@ -359,111 +336,6 @@ export function copyPresentationEvents(
   return events.map(eventCopy);
 }
 
-export function presentationBeat(
-  event: PresentationEvent,
-  labels: PresentationLabels,
-): PresentationBeat {
-  let heading: string;
-  let detail: string;
-
-  switch (event.kind.kind) {
-    case 'cast': {
-      const spell = objectLabel(event.kind.object, labels);
-      const controller = labels.players[String(event.kind.controller)] ?? `Player ${event.kind.controller}`;
-      heading = 'Spell cast';
-      detail = `${controller} casts ${spell}.`;
-      break;
-    }
-    case 'targeted': {
-      heading = 'Target locked';
-      detail = `${subjectLabel(event.kind.source, labels)} targets ${subjectLabel(event.kind.target, labels)}.`;
-      break;
-    }
-    case 'resolved': {
-      heading = 'Resolving';
-      detail = `${labels.stacks[String(event.kind.stack)] ?? `Stack object ${event.kind.stack}`} resolves.`;
-      break;
-    }
-    case 'damage': {
-      const source = event.kind.source
-        ? subjectLabel(event.kind.source, labels)
-        : 'An effect';
-      heading = 'Damage';
-      detail = `${source} deals ${event.kind.amount} damage to ${subjectLabel(event.kind.target, labels)}.`;
-      break;
-    }
-    case 'destroyed':
-    case 'died': {
-      const objects = event.kind.objects.map((object) => objectLabel(object, labels));
-      heading = objects.length === 1 ? 'Creature dies' : 'Creatures die';
-      detail = `${objects.join(', ')} ${objects.length === 1 ? 'dies' : 'die'}.`;
-      break;
-    }
-    case 'attack_group': {
-      const attackers = event.kind.attackers.map((object) => objectLabel(object, labels));
-      heading = 'Attackers declared';
-      detail = `${attackers.join(', ')} ${attackers.length === 1 ? 'attacks' : 'attack'} ${subjectLabel(event.kind.defender, labels)}.`;
-      break;
-    }
-    case 'blocked': {
-      const attacker = objectLabel(event.kind.attacker, labels);
-      const blockers = event.kind.blockers.map((object) => objectLabel(object, labels));
-      heading = 'Blockers declared';
-      detail = `${blockers.join(', ')} ${blockers.length === 1 ? 'blocks' : 'block'} ${attacker}.`;
-      break;
-    }
-    case 'turn_started': {
-      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
-      heading = `Turn ${event.kind.turn_number}`;
-      detail = `${player}'s turn begins.`;
-      break;
-    }
-    case 'land_played': {
-      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
-      heading = 'Land played';
-      detail = `${player} plays ${objectLabel(event.kind.object, labels)}.`;
-      break;
-    }
-    case 'drew': {
-      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
-      heading = 'Draw';
-      detail = `${player} draws ${event.kind.object ? objectLabel(event.kind.object, labels) : 'a card'}.`;
-      break;
-    }
-    case 'discarded': {
-      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
-      heading = 'Discard';
-      detail = `${player} discards ${event.kind.objects.map((object) => objectLabel(object, labels)).join(', ')}.`;
-      break;
-    }
-    case 'revealed': {
-      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
-      heading = 'Reveal';
-      detail = `${player} reveals ${event.kind.cards.join(', ')}.`;
-      break;
-    }
-    case 'activated':
-    case 'triggered':
-    case 'ability_resolved':
-    case 'countered':
-    case 'counters':
-      heading = event.kind.kind;
-      detail = '';
-      break;
-  }
-
-  return {
-    seq: event.seq,
-    group: event.group,
-    fromRevision: event.from_revision,
-    toRevision: event.to_revision,
-    importance: event.importance,
-    heading,
-    detail,
-    ariaLabel: `${heading}. ${detail}`,
-  };
-}
-
 /** Exact subjects mentioned by an authoritative event, never inferred causes. */
 export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
   const object = (id: ObjectRenderId): SubjectRef => ({ kind: 'object', id });
@@ -484,6 +356,7 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'activated': case 'triggered': return [object(kind.source), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
     case 'ability_resolved': return [object(kind.source), { kind: 'stack', id: kind.stack }];
     case 'countered': return [{ kind: 'stack', id: kind.stack }];
+    case 'passed': return [{ kind: 'player', id: kind.player }];
     case 'counters': return [object(kind.object)];
   }
 }

@@ -857,6 +857,11 @@ class CounteredPresentation(ProtocolModel):
     stack: UInt64
 
 
+class PassedPresentation(ProtocolModel):
+    kind: Literal["passed"]
+    player: UInt8
+
+
 class CountersPresentation(ProtocolModel):
     kind: Literal["counters"]
     object: ObjectRenderId
@@ -883,6 +888,7 @@ PresentationKind: TypeAlias = Annotated[
     | TriggeredPresentation
     | AbilityResolvedPresentation
     | CounteredPresentation
+    | PassedPresentation
     | CountersPresentation,
     Field(discriminator="kind"),
 ]

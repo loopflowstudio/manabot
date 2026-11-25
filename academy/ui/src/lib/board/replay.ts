@@ -23,7 +23,7 @@
  * from a spectator reveal.
  */
 import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
-import type { ExperienceFrame, GameLogEntry } from '$lib/types';
+import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
@@ -214,11 +214,37 @@ export function nameSeats(text: string, seatName: (seat: 0 | 1) => string, yours
   });
 }
 
+/** The position key a track event jumps to in Review. */
+export function positionKeyForEvent(
+  positions: readonly Position[],
+  event: Pick<PresentationEvent, 'from_revision'>,
+  isMove: boolean,
+): string | null {
+  let fallback: string | null = null;
+  const preferred = isMove ? 'choice' : 'consequences';
+  for (const position of positions) {
+    if (position.revision !== event.from_revision) continue;
+    if (position.kind === preferred) return position.key;
+    if (fallback === null) fallback = position.key;
+  }
+  return fallback;
+}
+
+/** The history jump key matching the shown Review position, or the latest before it. */
+export function historyKeyAt(
+  jumpKeys: ReadonlySet<string>,
+  positions: readonly Position[],
+  selected: number,
+): string | null {
+  for (let i = Math.min(selected, positions.length - 1); i >= 0; i--) {
+    if (jumpKeys.has(positions[i].key)) return positions[i].key;
+  }
+  return null;
+}
+
 /** The move a position belongs to: the latest move at or before it. */
 export function moveAt(entries: readonly GameLogEntry[], positions: readonly Position[], selected: number): string | null {
-  const keys = new Set(entries.map(entry => entry.id));
-  for (let i = Math.min(selected, positions.length - 1); i >= 0; i--) if (keys.has(positions[i].key)) return positions[i].key;
-  return null;
+  return historyKeyAt(new Set(entries.map(entry => entry.id)), positions, selected);
 }
 
 export interface StripMark {
@@ -273,24 +299,6 @@ export function labelledTurns(marks: readonly StripMark[], minGap: number): Stri
     if (!last || (mark.at - last.at) / span >= minGap) shown.push(mark);
   }
   return shown;
-}
-
-/**
- * A live game's moves as strip marks, from its log: the person's and the
- * opponent's decisions, automation as plain positions. Live marks carry no
- * value and no position to jump to.
- */
-export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
-  return entries.map((entry, at) => ({
-    at,
-    key: entry.id,
-    turn: entry.turn,
-    turnStart: at === 0 || entry.turn !== entries[at - 1].turn,
-    decision: entry.actor === 'hero' || entry.actor === 'villain',
-    side: entry.actor === 'hero' ? 'you' : entry.actor === 'villain' ? 'opponent' : null,
-    value: null,
-    label: `Turn ${entry.turn ?? '?'} · ${entry.text}`,
-  }));
 }
 
 /**

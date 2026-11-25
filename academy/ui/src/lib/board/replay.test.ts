@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
-import { moveList } from './moves';
-import { bottomSeat, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { legacyMoveHistory } from './history';
+import { bottomSeat, historyKeyAt, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, positionKeyForEvent, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -102,8 +102,11 @@ describe('the move list and strip read the index', () => {
     expect(entries.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
       ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Cast Shock, targeting you'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock, targeting Heuristic'],
     ]);
-    const turns = moveList(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
-    expect(turns.flatMap(turn => turn.moves.map(move => move.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+    const turns = legacyMoveHistory(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
+    expect(turns.flatMap(turn => turn.lines.map(line => line.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+    expect(positionKeyForEvent(positions, { from_revision: 3 }, true)).toBe('c1');
+    expect(positionKeyForEvent(positions, { from_revision: 3 }, false)).toBe('a1');
+    expect(historyKeyAt(new Set(['c1', 'a2']), positions, 3)).toBe('a2');
   });
 
   it('names your own multi-step move once, as narrated, at the decision where it began', () => {

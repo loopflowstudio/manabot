@@ -25,11 +25,11 @@
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
-  import { moveList } from '$lib/board/moves';
+  import { buildHistory, hasTrackHistory, legacyMoveHistory, type HistoryTurn } from '$lib/board/history';
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    bottomSeat, historyKeyAt, moveAt, offerEvidence, perspectiveOf, positionHeading, positionKeyForEvent, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
@@ -113,14 +113,57 @@
   const evidence = $derived(!studying && current?.decision && recorded ? offerEvidence(recorded, current.outputs, current.decision.offer_id) : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
+  const EMPTY_LABELS = { objects: {}, players: {}, stacks: {} };
   const entries = $derived(replayLog(positions, heroSeat, saidOf));
-  const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
-  const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
+  const useTrack = $derived(
+    !studying && (
+      (index?.watch
+        ? (index.track_history ?? hasTrackHistory(presentation.events))
+        : hasTrackHistory(index?.history ?? []))
+    ),
+  );
+  const history = $derived.by<HistoryTurn[]>(() => {
+    const players = { youSeat: heroSeat, you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) };
+    if (studying) {
+      return buildHistory(presentation.events, i => presentation.labelsAt(i), {
+        youSeat: viewerSeat,
+        you: saidOf(viewerSeat),
+        opponent: saidOf(1 - viewerSeat),
+      });
+    }
+    if (useTrack) {
+      const trackEvents = index?.watch ? presentation.events : (index?.history ?? []);
+      const labelsFor = index?.watch
+        ? (i: number) => presentation.labelsAt(i)
+        : () => EMPTY_LABELS;
+      return buildHistory(trackEvents, labelsFor, players, {
+        jumpKeyFor: (event, isMove) => positionKeyForEvent(positions, event, isMove),
+      });
+    }
+    return legacyMoveHistory(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []);
+  });
+  const currentMove = $derived.by<string | null>(() => {
+    if (!useTrack) return moveAt(entries, positions, replayStore.selected);
+    const keys = new Set<string>();
+    for (const turn of history) {
+      for (const line of turn.lines) {
+        if (line.jumpKey) keys.add(line.jumpKey);
+        for (const child of line.children) if (child.jumpKey) keys.add(child.jumpKey);
+      }
+    }
+    return historyKeyAt(keys, positions, replayStore.selected);
+  });
   const marks = $derived(stripMarks(positions, heroSeat));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
-    ? gameResult(frame, replayLog(positions, viewerSeat, saidOf), { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
+    ? gameResult(
+        frame,
+        index.watch ? presentation.events : (index.history ?? presentation.events),
+        { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) },
+        index.winner,
+        replayLog(positions, viewerSeat, saidOf),
+      )
     : null);
 
   const status = $derived(!index ? ''
@@ -177,8 +220,7 @@
       if (current.key === lastHistoryKey) return;
       lastHistoryKey = current.key;
       const batches = current.history.map((event, i) => ({ events: [event], labels: current.history_labels[i] }));
-      presentation.loadPrefix(batches, `replay:${index.id}:viewer:${current.viewer}`, false);
-      presentation.playing = false;
+      presentation.loadPrefix(batches, `replay:${index.id}:viewer:${current.viewer}`);
     });
   });
 
@@ -511,7 +553,6 @@
     you={{ name: nameOf(viewerSeat), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(1 - viewerSeat), deck: deckOf(1 - viewerSeat), description: identity(1 - viewerSeat).description }}
     stops={frame.stops}
-    log={[]}
     canPassTurn={false}
     {presentation}
     thinking={null}
@@ -522,7 +563,7 @@
     {since}
     recapTitle={studying ? 'This line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
     heading={studying || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
-    {moves}
+    {history}
     onjump={locked ? undefined : jump}
     {currentMove}
     {evidence}
