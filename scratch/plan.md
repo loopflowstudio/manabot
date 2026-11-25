@@ -8,39 +8,19 @@ Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
 `blocked_by` is cleared. Slice 11's four concept defects and Slice 12's three
 behavior-review defects are built and verified.
 
-**Next: Gate / Integrated validation** (below). Slices 13–14 are complete and verified.
+**Next: Gate / Integrated validation** (below). No unbuilt slices remain.
 
-## Engine measurement after Slices 13–14 at `a17915a437` (Apple M4 Max, 16 cores)
+## Engine measurement at `a17915a437` (Apple M4 Max; detail in `11a5441d7a`)
 
-### Uninstrumented release Engine Budget vs CI reference `7d3ac1eb1c`
-
-Both commits were built uninstrumented (`cargo build --release --locked`, without `--features benchmark`) and measured with `/usr/bin/time -l` for load-invariant retired instructions and cycles alongside wall time:
-
-| Benchmark | Metric | Reference `7d3ac1eb1c` | Pre-opt `5f3d0d81b5` | Post-Slices 13–14 `a17915a437` | Delta vs Ref |
-|---|---|---:|---:|---:|---:|
-| `bench_steps` | Steps / digest | 118,559 / `10601622128491155944` | match | match | match |
-| `bench_steps` | Instructions retired | 46.741B, 46.721B (mean 46.731B) | 47.743B (+2.17%) | 45.931B, 45.910B (mean **45.920B**) | **-1.74%** |
-| `bench_steps` | Cycles elapsed | 10.968B, 10.989B (mean 10.978B) | 11.293B (+2.86%) | 10.847B, 10.825B (mean **10.836B**) | **-1.30%** |
-| `bench_steps` | Wall time | 2.897s, 2.936s (40,651/s) | 3.152s, 3.055s | 2.909s, 2.735s (40,760–43,349/s) | faster |
-| `bench_search` | Seed 1–3 digests | `13638875039089371439`, `5466143068363283977`, `9998925852575961750` | identical (0 cap hits) | identical (0 cap hits) | match |
-| `bench_search` | Instructions retired | 1,027.48B, 1,027.71B (mean 1,027.59B) | 1,063.94B (+3.54%) | 977.58B, 977.90B (mean **977.74B**) | **-4.85%** |
-| `bench_search` | Cycles elapsed | 233.11B, 237.56B (mean 235.33B) | 246.21B (+4.62%) | 226.49B, 233.67B (mean **230.08B**) | **-2.23%** |
-
-### Large-board stress states (`bench_states --release --features benchmark`)
-
-Both `bench_states` self-tests pass (`2 passed`); `bench_states entry-choices changeling-anthems --sizes 4,8,16` preserves the exact combined digest (`ffc4ac840ad0742b34d0a53609c610b799d6660e25102555709373f53893f446`) and identical plan/call/state counts:
-
-- `entry-choices` (`size=16`):
-  - `priority step:activate`: `7.80 ms` → **`0.98 ms`** (**8.0× faster**)
-  - `cast-choice search`: `789.64 ms` → **`230.19 ms`** (**3.43× faster**)
-  - `characteristics`: `0.04 ms` → **`0.03 ms`**
-- `changeling-anthems` (`size=16`):
-  - `cast-choice step:choice`: `6.00 ms` → **`2.73 ms`** (**2.20× faster**)
-  - `cast-choice search`: `2,080.77 ms` → **`1,098.88 ms`** (**1.89× faster**)
-  - `characteristics`: `0.10 ms` → **`0.06 ms`**
-- Flat / linear states unchanged (`storm-copies`, `genesis-wave`, `ventmaw-pools`).
-
-Note on CI runner hardware: Ubuntu `x86_64` CI Engine Budget timing cannot be measured on this macOS ARM64 host; run the CI Engine Budget check (or `gh workflow run ci.yml --ref jack/mtg-431-close-foundations-stack-copies-choices-costs -f measure=$(git rev-parse HEAD)`) in gate/CI with no cross-architecture wall-time claim.
+- Uninstrumented release Engine Budget vs CI reference `7d3ac1eb1c`, digests
+  identical: `bench_steps` -1.74% instructions (45.920B vs 46.731B), -1.30%
+  cycles; `bench_search` -4.85% instructions (977.74B vs 1,027.59B), -2.23% cycles.
+- `bench_states` self-tests pass; `entry-choices changeling-anthems --sizes 4,8,16`
+  keeps combined digest `ffc4ac84…f446`. Size 16: entry-choices `step:activate`
+  7.80→0.98 ms, `search` 789.64→230.19 ms; changeling-anthems `step:choice`
+  6.00→2.73 ms, `search` 2,080.77→1,098.88 ms. Other stress states unchanged.
+- CI Engine Budget (Ubuntu x86_64) cannot be measured here; run it in gate/CI
+  with no cross-architecture wall-time claim.
 
 Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
 at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two
