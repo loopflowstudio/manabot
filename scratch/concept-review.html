@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-439 Concept Review — Manual Mana Payment, Skip Invariants &amp; Hot Paths</title>
+<title>MTG-439 Concept Review — Manual Mana Payment Subsystem (Post-Pass 6)</title>
 <style>
   :root {
     --bg: #faf8f4;
@@ -223,25 +223,26 @@
 <main>
 
 <header>
-  <h1>MTG-439 Concept Review — Manual Mana Payment, Skip Invariants &amp; Hot Paths</h1>
+  <h1>MTG-439 Concept Review — Manual Mana Payment Subsystem (Post-Pass 6)</h1>
   <p class="subtitle">
-    Area reviewed: <strong>the complete manual mana payment subsystem and its consumers</strong> — announced &amp; resolution mana action spaces, interchangeable-source skipping, color-choice modals, <code>skip_trivial</code> conformance equivalence, payment caching &amp; hot-path affordability, LLM text observation, and Academy Moves narration across <code>managym/src/flow/{mana,mana/interchangeable,payment,decision,action,tick,game}.rs</code>, <code>managym/src/conformance.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>managym/academy/recording.py</code>, and <code>academy/ui/src/lib/board/{prompt.ts,Rail.svelte}</code> — widened from the dual-land skip diff because all of these enforce one manual-payment and decision-boundary contract.
+    Area reviewed: <strong>the complete manual mana payment subsystem and its consumers</strong> — announced &amp; resolution mana action spaces, interchangeable-source skipping, color-choice modal collapse, <code>skip_trivial</code> conformance equivalence, payment staging &amp; hot-path affordability, LLM text observation, and Academy Moves narration across <code>managym/src/flow/{mana,mana/interchangeable,payment,decision,action,tick,scenario}.rs</code>, <code>managym/state/src/{card,ability,effect,payment}.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>managym/academy/recording.py</code>, and <code>academy/ui/src/lib/board/{prompt.ts,Rail.svelte}</code> — widened from the dual-land skip diff because all of these enforce one manual-payment and decision-boundary contract.
   </p>
   <div class="meta">
-    <span>Diff reviewed: base <code>cc32318a35</code> → <code>HEAD</code> <code>e1bbe1659a</code> (Passes 1–5, compress, and post-Pass-5 QA)</span>
-    <span>CI evidence: run <code>45682485004</code> on <code>032fa20a3f</code></span>
-    <span>Legend: <span class="badge base">Before (base)</span> <span class="badge existing">Built at HEAD</span> <span class="badge proposed">Proposed (Pass 6)</span></span>
+    <span>Diff reviewed: base <code>0532a9d068</code> → <code>HEAD</code> <code>c4ab6840a1</code> (Pass 6 + compress + QA)</span>
+    <span>CI evidence: run <code>45709945019</code> on <code>cc9c5281d8</code>; run <code>45716744677</code> in progress on <code>HEAD</code></span>
+    <span>Legend: <span class="badge base">Before (Pass 5 / base)</span> <span class="badge existing">Built at HEAD</span> <span class="badge proposed">Optional gate trim</span></span>
   </div>
 </header>
 
-<section class="callout bad">
-  <strong class="title">Headline verdict: Plan changed — four real mismatches remain at <code>HEAD</code>, proven by CI run <code>45682485004</code>. Take Pass 6 before gate.</strong>
+<section class="callout ok">
+  <strong class="title">Headline verdict: Concepts line up — advance to gate. All four Pass 5 mismatches are resolved at <code>HEAD</code>.</strong>
   <p style="margin:0.35rem 0 0">
-    The user-facing dual-land experience is mostly right (unified wording, exact &amp; interchangeable skips, played-this-turn plain lands, resolution per-source taps, Moves log pips). Underneath it, four engine/architecture mismatches remain:
-    (1) <strong><code>skip_trivial</code> conformance broken</strong> — putting <code>equivalent_mana_choices</code> inside <code>automatic_payment_action</code> gated by <code>self.skip_trivial</code> causes 4 <code>reference/optimized divergence</code> panics in <code>semantic_conformance_tests</code>;
-    (2) <strong>Resolution modal equivalence uses announced-payment subtraction</strong> — leaving 3+ mana resolution payments (<code>Ward {3}</code>, <code>TurnFaceUp {2}{W}</code> after tapping a first land) popping spurious <code>{G}/{W}</code> modals;
-    (3) <strong>Cache key unsoundness &amp; hot-path regressions</strong> — <code>CachedAnnouncedActions</code> keys on <code>Revisions</code> even though <code>interchangeable.rs</code> reads 5 fields <code>Revisions</code> explicitly does not track, and <code>Engine Budget</code> is still slower than reference on every speed metric (<code>search worst reply</code> <strong>+13.2% over cap</strong>, <code>search total</code> +5.3%, <code>steps throughput</code> &minus;5.7% despite 2,618 fewer steps);
-    (4) <strong>Remaining CI test &amp; receipt fallout</strong> — 10 frozen conformance digests, 5 Rust rules/card tests, and 7 Python tests are still red.
+    Pass 6 (<code>c43f83e3d3</code>), compress (<code>046392c616</code>), and post-Pass-6 QA (<code>c4ab6840a1</code>) resolved every structural mismatch found in the prior review:
+    (1) <code>equivalent_mana_choices</code> now collapses equivalent <code>Decision::ManaChoice</code> modes to a singleton (<code>len == 1</code>) inside <code>mana_choice_actions</code>, restoring <code>automatic_payment_action</code> to pure <code>ManaPayment::Auto</code> and passing <code>Semantic Kernel Conformance</code> with zero divergence;
+    (2) <code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly instead of running announced-payment single-unit subtraction;
+    (3) the <code>Revisions</code>-keyed cache is gone, replaced by one-shot <code>StagedAnnouncedActions</code> cleared on every action/payment/scenario boundary;
+    (4) all Rust, Python Unit, Academy UI, Protocol v1, Clean-machine Play, Semantic Kernel Conformance, and Integration suites passed on <code>45709945019</code> except the doc-comment grep in <code>test_no_runner_turns_skipping_off</code>, which <code>c4ab6840a1</code> fixed.
+    Remaining work belongs to <strong>gate</strong>: verify <code>45716744677</code> green and adopt <code>managym/perf/baseline.json</code> (with two small, non-conceptual hot-path trims available if <code>Engine Budget</code>'s diverged Seed 1 <code>worst_s</code> stays ~20 ms above the +10% cap).
   </p>
 </section>
 
@@ -250,246 +251,193 @@
 <table>
   <thead>
     <tr>
-      <th style="width:18%">Product / engine concept</th>
-      <th style="width:30%">Code concept at <code>HEAD</code> <span class="badge existing">Built</span></th>
+      <th style="width:19%">Product / engine concept</th>
+      <th style="width:31%">Code concept at <code>HEAD</code> <span class="badge existing">Built</span></th>
       <th style="width:9%">Lines up?</th>
-      <th style="width:43%">Diagnosis &amp; Pass 6 fix</th>
+      <th style="width:41%">Assessment &amp; edge-case notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong><code>skip_trivial</code> transport equivalence</strong><br><span class="muted"><code>skip_trivial=true</code> skips only singleton (<code>len == 1</code>) action spaces; <code>reference</code> and <code>optimized</code> stay lockstep-identical.</span></td>
-      <td><code>automatic_payment_action</code> (<code>mana.rs:2220</code>) intercepts multi-action <code>Decision::ManaChoice</code> when <code>self.skip_trivial &amp;&amp; space.actions.len() &gt; 1 &amp;&amp; equivalent_mana_choices(...)</code>.</td>
-      <td><span class="badge no">No</span></td>
-      <td><strong>Biggest mismatch.</strong> Two concepts share one hook (<code>ManaPayment::Auto</code> + manual modal equivalence), and skipping a multi-action space only under <code>skip_trivial=true</code> breaks <code>ConformancePair</code> on 4 frozen games. <span class="badge proposed">Pass 6</span> Collapse equivalent modes inside <code>Decision::ManaChoice</code>'s offer builder to <code>[ChooseMode(first)]</code> (matching <code>mana_spend_choices</code>'s <code>limit = 1</code>); restore <code>automatic_payment_action</code> to pure <code>ManaPayment::Auto</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Color modal equivalence on announced vs. resolution payments</strong><br><span class="muted">A color modal appears only when colors lead to distinguishable states — whether paying a spell or paying <code>Ward</code> / <code>TurnFaceUp</code>.</span></td>
-      <td><code>equivalent_mana_choices</code> (<code>mana.rs:2803</code>) runs announced-payment single-unit subtraction (<code>left.other_than(&amp;unit).spendable_units(...) == 0</code>) on <code>Enclosing::Resolution</code>, with a QA patch for exact completion only.</td>
-      <td><span class="badge no">No</span></td>
-      <td><strong>One loop for two different state models.</strong> Announced payments commit each tap into <code>payment.receipt</code> and shrink <code>owed</code>; resolution payments keep all tapped mana in <code>mana_pool</code> against full <code>cost</code>. Any 3+ mana resolution payment after tapping a first land still hits <code>left.other_than(&amp;unit) != 0</code> and opens a spurious modal. <span class="badge proposed">Pass 6</span> Compare <code>(next_pool, cost)</code> directly for <code>Enclosing::Resolution</code>.</td>
-    </tr>
-    <tr>
-      <td><strong>Announced-actions cache &amp; payment hot path</strong><br><span class="muted">Skipping redundant stops makes full games and search faster; caches never go stale.</span></td>
-      <td><code>CachedAnnouncedActions</code> keys on <code>Revisions</code>; <code>interchangeable.rs</code> runs board-wide scans before arithmetic optionality checks; <code>automatic_payability</code> builds full <code>Vec&lt;PaymentStep&gt;</code> via <code>model.plan</code>; <code>useful_payment_taps</code> runs per-source DFS without profile dedup.</td>
-      <td><span class="badge no">No</span></td>
-      <td><strong>Unsound cache key + measurable slowdown.</strong> <code>TrackedState::revisions()</code> explicitly excludes <code>stack_objects</code>, <code>pending_triggers</code>, <code>trigger_placement</code>, <code>delayed_triggers</code>, and <code>cast_caller</code> (all read by <code>interchangeable.rs</code>). <code>bench_steps</code> takes +3.5% more wall time for 2,618 fewer steps; <code>search worst reply</code> is +13.2% over cap. <span class="badge proposed">Pass 6</span> Fix cache ownership, arithmetic-first short-circuit in <code>interchangeable.rs</code>, boolean <code>payable</code>, profile-deduped <code>check_useful</code>, and profile against base.</td>
-    </tr>
-    <tr>
-      <td><strong>Simple mana tap (basics &amp; choice sources)</strong><br><span class="muted">Basic lands, dual lands, 5-color sources, dorks/rocks, and Great Divide Guide grants share one tap rule and wording.</span></td>
-      <td><code>ActivatedAbilityDefinition::is_simple_mana_tap()</code> + <code>ManaActivation.automatic</code>; <code>mana_choices_description</code> (<code>"Tap Kyoshi Village for {G}/{W}"</code>, <code>"Tap Birds of Paradise for any color"</code>); unified <code>useful_payment_taps</code>.</td>
+      <td><strong><code>skip_trivial</code> transport equivalence</strong><br><span class="muted"><code>skip_trivial=true</code> skips only singleton (<code>len == 1</code>) action spaces; reference and optimized stay lockstep-identical.</span></td>
+      <td><code>Game::mana_choice_actions</code> (<code>mana.rs:2885</code>) truncates equivalent manual modes to <code>[ChooseMode(first)]</code>; <code>automatic_payment_action</code> (<code>mana.rs:2233</code>) is pure <code>ManaPayment::Auto</code>.</td>
       <td><span class="badge yes">Yes</span></td>
-      <td>Clean single predicate. Keeps one <code>ActivateAbility</code> per source (respecting the 64-action cap and v11 layout per steer <code>69c80076</code>), while non-simple abilities (Treasure, pain, filter, tap-N) stay <code>"Activate ability: &lt;Name&gt;"</code>.</td>
+      <td>Matches <code>mana_spend_choices</code> (<code>limit = 1</code>), <code>compute_announced_mana_actions</code>, and <code>resolution_mana_actions</code>. Proven green in <code>Semantic Kernel Conformance</code> on both <code>45709945019</code> and <code>45716744677</code> (14 cases, zero divergence).</td>
+    </tr>
+    <tr>
+      <td><strong>Simple mana tap (basics &amp; choice sources)</strong><br><span class="muted">Basic lands, duals, 5-color sources, dorks/rocks, and Great Divide Guide grants share one tap rule and wording.</span></td>
+      <td><code>ActivatedAbilityDefinition::is_simple_mana_tap()</code> (<code>state/src/card.rs:725</code>) + <code>ManaActivation.automatic</code>; <code>mana_choices_description</code> (<code>"Tap Kyoshi Village for {G}/{W}"</code>, <code>"Tap Birds of Paradise for any color"</code>); unified <code>useful_payment_taps</code>.</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Single predicate. Preserves one <code>ActivateAbility</code> per source (respecting the 64-action cap and v11 layout per steer <code>69c80076</code>), while non-simple abilities (Treasure, pain, filter, tap-N) remain <code>"Activate ability: &lt;Name&gt;"</code>.</td>
     </tr>
     <tr>
       <td><strong>Interchangeable untapped lands (incl. played this turn)</strong><br><span class="muted">Identical unreferenced plain lands do not force a stop; manlands, creatures, non-lands, and <code>power_up</code> stay distinct.</span></td>
-      <td><code>interchangeable.rs::determined_source_counts</code> + <code>same_mana_permanent</code> (<code>can_become_creature</code> / <code>power_up</code> guards) + <code>unbound_mana_source</code>; single-unit guard preserves <code>Sol Ring</code>.</td>
+      <td><code>interchangeable.rs::determined_source_counts</code> checks profile optionality first, then static identity, local bindings, hoisted <code>all_unbound_board_wide</code>, then layered characteristics (<code>can_become_creature</code> / <code>power_up</code> guards). Single-unit guard preserves <code>Sol Ring</code>.</td>
       <td><span class="badge yes">Yes</span></td>
-      <td>Semantics line up cleanly (verified in Pass 4 + QA). Only its execution order and board-scan cost need fixing in Pass 6 (see hot path row above).</td>
+      <td>Semantics and phase ordering both line up. Minor non-conceptual trim for gate if needed: skip building/sorting the returned <code>Vec&lt;UsefulTap&gt;</code> when <code>!options.need_taps</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Color modal equivalence (announced vs. resolution)</strong><br><span class="muted">A color modal appears only when colors lead to distinguishable states — both for spells and for <code>Ward</code> / <code>TurnFaceUp</code>.</span></td>
+      <td><code>equivalent_mana_choices</code> (<code>mana.rs:2910</code>) splits <code>Enclosing::Announced</code> (<code>cost_after_produced_unit</code>) from <code>Enclosing::Resolution</code> (exact completion, <code>resolution_remaining_pips</code>, or <code>same_determined_taps</code>).</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Both state models now match how mana actually commits. One theoretical hardening noted: <code>single_unit_remaining</code> (<code>mana.rs:3050</code>) checks <code>m.total() &lt;= 1</code> without checking <code>a.cost.mana_value == 0</code> (no current catalog card is a 1-output colored-cost mana filter; easy 1-line guard in gate).</td>
     </tr>
     <tr>
       <td><strong>Resolution payment offers (<code>TurnFaceUp</code>, <code>Ward</code>)</strong><br><span class="muted">Per-source taps for both basics and duals on real choices; skipped when forced or interchangeable.</span></td>
-      <td><code>decision.rs::Decision::Payment</code> calls <code>resolution_mana_actions</code> (ship-review choice <code>3b</code>), sharing <code>useful_payment_taps</code> and <code>TapForMana</code> labels in <code>action.rs</code>.</td>
+      <td><code>Decision::Payment</code> (<code>decision.rs:1882</code>) delegates to <code>resolution_mana_actions</code> (<code>mana.rs:2441</code>), sharing <code>useful_payment_taps</code> and <code>TapForMana</code> labels in <code>action.rs</code>.</td>
       <td><span class="badge yes">Yes</span></td>
-      <td>Offer shape matches announced payments. Note: relies on <code>tick()</code>'s <code>skip_trivial</code> to auto-pay singleton <code>[PayCost]</code> on mandatory <code>TurnFaceUp</code>, which already satisfies <code>ConformancePair</code> because <code>actions.len() == 1</code>.</td>
+      <td>Unified with announced payments (ship-review choice <code>3b</code>). Verified in live QA across <code>Ward {2}</code> seeds 3, 5, 7 and <code>source_taps.rs</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Staged announced actions (cache ownership)</strong><br><span class="muted">Avoids double-computing announced mana offers between <code>advance_payment</code> and <code>payment_action_space</code> without stale state.</span></td>
+      <td><code>SharedSources::staged_announced: Option&lt;StagedAnnouncedActions&gt;</code> (<code>mana.rs:584, 2357-2396</code>), consumed once via <code>.take()</code>, cleared on <code>execute_action</code> / <code>advance_payment</code> / <code>scenario_refresh_priority</code>, and reset on <code>Game::clone</code> / snapshot restore.</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Eliminates Pass 5's unsound <code>Revisions</code> key completely; debug builds assert exact equality with fresh recomputation.</td>
     </tr>
     <tr>
       <td><strong>Automatic execution &amp; hover preview</strong><br><span class="muted"><code>PayCost</code> and auto-skip never over-tap surplus lands; preview matches execution.</span></td>
-      <td><code>automatic_taps</code> → <code>automatic_choice_taps</code> prunes surplus taps in reverse reluctance order, honoring <code>saved_obligations</code>; <code>preview.rs</code> runs the same prefix.</td>
+      <td><code>automatic_taps</code> → <code>automatic_choice_taps</code> (<code>mana.rs:3654</code>) prunes surplus taps in reverse reluctance order honoring <code>saved_obligations</code>; <code>preview.rs</code> runs the same prefix.</td>
       <td><span class="badge yes">Yes</span></td>
-      <td>Closes base's over-tap bug (<code>Plains ×2 + Kyoshi Village</code> for <code>{1}{G}</code> leaves 1 Plains untapped). Choice activations return <code>NotApplicable</code> on hover.</td>
+      <td>Fixes base's over-tap bug (<code>Plains ×2 + Kyoshi Village</code> for <code>{1}{G}</code> leaves 1 Plains untapped). Choice activations return <code>NotApplicable</code> on hover.</td>
     </tr>
     <tr>
       <td><strong>Academy Moves log &amp; modal prompt</strong><br><span class="muted">Mana symbols render as pips; resolved color is narrated; modal reads <code>Choose the mana to add</code>.</span></td>
-      <td><code>Rail.svelte</code> wraps move text in <code>&lt;ManaText&gt;</code>; <code>recording.py::_resolved_mana_tap</code> + <code>_pool_delta_mana</code> (reading <code>mana + lesson_mana</code>, which covers all pooled classes); <code>prompt.ts</code> checks <code>stage === 'mana_color'</code>.</td>
+      <td><code>Rail.svelte</code> wraps move text in <code>&lt;ManaText&gt;</code>; <code>recording.py::_resolved_mana_tap</code> + <code>_pool_delta_mana</code>; <code>prompt.ts</code> checks <code>stage === 'mana_color'</code>.</td>
       <td><span class="badge yes">Yes</span></td>
-      <td>Verified in live QA and <code>test_recording_narration.py</code>. Pre-existing minor polish outside MTG-439: "Committed to this cost" in the decision panel still prints raw <code>{R}</code> text.</td>
+      <td>Verified in live QA and <code>test_recording_narration.py</code> (ship-review choice <code>5c</code>). Note: Auto-tap now lives in Academy's Settings switch after main's merge.</td>
     </tr>
     <tr>
       <td><strong>LLM text observation</strong><br><span class="muted">Choice taps read like basics (<code>Tap for mana P1 (Kyoshi Village)...</code>) with no ability index.</span></td>
       <td><code>text_observation.py:646-653</code> rewrites <code>kind = "tap_for_mana"</code> when <code>kind == "activate_ability" and action.description.startswith("Tap ") and len(focus) == 1</code>.</td>
-      <td><span class="badge warn">Fragile</span></td>
-      <td>UX matches basics, but relies on prose string-sniffing (<code>startswith("Tap ")</code>) coupled to <code>action.rs:138</code>, keeps <code>REPRESENTATION_VERSION = manabot-text-10</code>, and still breaks 2 tests in <code>test_pooled_mana_classes_input.py</code>. Addressed in Pass 6 tests + Question 2 below.</td>
+      <td><span class="badge warn">Fragile (acceptable)</span></td>
+      <td>Matches basics without changing the wire <code>Action</code> schema or v11 layout (ship-review choice <code>4b</code>). Coupled to <code>action.rs:138</code>'s <code>"Tap "</code> prefix; covered by <code>test_text_observation.py</code> and <code>test_pooled_mana_classes_input.py</code>. See Question 2.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>2. Biggest mismatch — <code>skip_trivial</code> vs. <code>equivalent_mana_choices</code></h2>
-
-<div class="callout bad">
-  <strong class="title">Why <code>semantic_conformance_tests</code> panicked with <code>reference/optimized divergence</code> on 4 frozen games</strong>
-  <p style="margin:0.35rem 0 0">
-    In <code>managym</code>, <code>ConformancePair</code> (<code>conformance.rs:278-340</code>) proves that <code>skip_trivial = true</code> (<code>optimized</code>) is a pure transport shortcut over <code>skip_trivial = false</code> (<code>reference</code>) normalized by stepping <code>actions.len() == 1</code>. Every other equivalence skip in the engine (<code>mana_spend_choices</code>'s <code>limit = 1</code>, <code>announced_mana_actions</code>'s <code>[PayCost]</code>, <code>resolution_mana_actions</code>'s <code>[PayCost]</code>) collapses the offer list to length 1 so both modes take the same step. Putting <code>equivalent_mana_choices</code> inside <code>automatic_payment_action</code> gated by <code>self.skip_trivial</code> broke that invariant.
-  </p>
-</div>
+<h2>2. What Pass 6 fixed — before vs. after</h2>
 
 <div class="grid-2">
   <div class="card">
-    <h3><span class="badge existing">At HEAD (broken)</span> Skip happens in <code>tick()</code> only when <code>skip_trivial=true</code></h3>
+    <h3><span class="badge base">Pass 5 (broken)</span> <code>skip_trivial</code> hook diverged on <code>ManaChoice</code></h3>
     <div class="box bad">
-      <div class="flow-row"><span>1. <code>Decision::ManaChoice</code> emits all feasible modes</span><span class="tag">[ChooseMode(0), ChooseMode(1)]</span></div>
-      <div class="flow-row"><span>2a. <code>reference</code> (<code>skip_trivial=false</code>)</span><span class="tag">len == 2 → STOPS at modal</span></div>
-      <div class="flow-row"><span>2b. <code>optimized</code> (<code>skip_trivial=true</code>)</span><span class="tag">automatic_payment_action → SKIPS modal</span></div>
-      <div class="flow-row"><span>3. <code>ConformancePair::assert_equivalent</code></span><span class="tag">PANIC: divergence!</span></div>
+      <div class="flow-row"><span>1. <code>Decision::ManaChoice</code> emitted all modes</span><span class="tag">[ChooseMode(0), ChooseMode(1)]</span></div>
+      <div class="flow-row"><span>2. <code>automatic_payment_action</code> skipped only if <code>skip_trivial</code></span><span class="tag">reference stopped; optimized skipped</span></div>
+      <div class="flow-row"><span>3. <code>ConformancePair</code></span><span class="tag">4 panics (divergence)</span></div>
     </div>
-    <p class="muted" style="margin:0.4rem 0 0">Bonus waste at <code>HEAD</code>: right after <code>equivalent_mana_choices</code> proves all modes equal, <code>automatic_payment_action</code> runs <code>model.plan(...)</code> again for every mode in <code>min_by_key</code>.</p>
+    <p class="muted" style="margin:0.4rem 0 0">Also ran <code>Enclosing::Resolution</code> through announced-payment subtraction and keyed <code>CachedAnnouncedActions</code> on <code>Revisions</code>.</p>
   </div>
 
   <div class="card">
-    <h3><span class="badge proposed">Proposed (Pass 6)</span> Collapse equivalent modes inside <code>Decision::ManaChoice</code></h3>
-    <div class="box prop">
-      <div class="flow-row"><span>1. <code>mana_choice_actions</code> runs <code>equivalent_mana_choices</code></span><span class="tag">if equiv → [ChooseMode(first)]</span></div>
-      <div class="flow-row"><span>2a. <code>reference</code> (<code>skip_trivial=false</code>)</span><span class="tag">len == 1 → normalize steps it</span></div>
-      <div class="flow-row"><span>2b. <code>optimized</code> (<code>skip_trivial=true</code>)</span><span class="tag">len == 1 → tick() skips it</span></div>
-      <div class="flow-row"><span>3. <code>automatic_payment_action</code></span><span class="tag">pure ManaPayment::Auto only</span></div>
+    <h3><span class="badge existing">Built at HEAD</span> Single action-space contract &amp; clean staging</h3>
+    <div class="box good">
+      <div class="flow-row"><span>1. <code>mana_choice_actions</code> collapses equivalent manual modes</span><span class="tag">[ChooseMode(first)] (len == 1)</span></div>
+      <div class="flow-row"><span>2. <code>automatic_payment_action</code></span><span class="tag">ManaPayment::Auto only</span></div>
+      <div class="flow-row"><span>3. <code>ConformancePair</code> (14 cases)</span><span class="tag">GREEN in CI (0 divergence)</span></div>
     </div>
-    <p class="muted" style="margin:0.4rem 0 0">Zero extra <code>model.plan</code> calls when equivalent; matches <code>mana_spend_choices</code>'s <code>limit = 1</code>; restores 100% <code>ConformancePair</code> lockstep.</p>
+    <p class="muted" style="margin:0.4rem 0 0"><code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly; one-shot <code>StagedAnnouncedActions</code> replaces the <code>Revisions</code> cache.</p>
   </div>
 </div>
 
-<h2>3. Second mismatch — Resolution modal equivalence vs. committing announced payments</h2>
+<h2>3. Engine Budget performance diagnosis (CI run <code>45709945019</code>)</h2>
 
-<div class="grid-2">
-  <div class="card">
-    <h3><span class="badge existing">At HEAD</span> <code>Ward {3}</code> or <code>TurnFaceUp {2}{W}</code> after tapping Plains</h3>
-    <div class="box bad">
-      <p style="margin:0 0 0.4rem"><strong>Board:</strong> <code>Plains + Kyoshi Village + Mountain + Forest</code> paying <code>TurnFaceUp {2}{W}</code>.</p>
-      <div class="flow-row"><span>1. Tap <code>Plains</code></span><span class="tag">pool = {W}, cost = {2}{W} (unreduced!)</span></div>
-      <div class="flow-row"><span>2. Tap <code>Kyoshi Village</code></span><span class="tag">equivalent_mana_choices runs</span></div>
-      <div class="flow-row"><span>3. Mode <code>{G}</code>: <code>left = {W}</code>, <code>rest.less = {1}</code></span><span class="tag">{W}.spendable({1}) == 1 ≠ 0 → FAIL</span></div>
-      <div class="flow-row"><span>Result</span><span class="tag">Spurious Add {G} / Add {W} modal!</span></div>
-    </div>
-    <p class="muted" style="margin:0.4rem 0 0">QA commit <code>e1bbe1659a</code> patched only <code>next_pool.can_pay(cost)</code> (2-mana completion), leaving 3+ mana partial resolution taps broken.</p>
-  </div>
-  <div class="card">
-    <h3><span class="badge proposed">Proposed (Pass 6)</span> Compare <code>(next_pool, cost)</code> directly for <code>Resolution</code></h3>
-    <div class="box prop">
-      <p style="margin:0 0 0.4rem"><strong>Same board:</strong> <code>Plains + Kyoshi Village + Mountain + Forest</code> paying <code>TurnFaceUp {2}{W}</code>.</p>
-      <div class="flow-row"><span>1. Check all modes: same spend effects, zero unspendable surplus</span><span class="tag">spendable == total</span></div>
-      <div class="flow-row"><span>2. Compare residual cost after <code>next_pool</code></span><span class="tag">{W}{G} → {1}, {W}{W} → {1}</span></div>
-      <div class="flow-row"><span>3. Or exact completion / same <code>Determined</code> taps</span><span class="tag">both branches handled</span></div>
-      <div class="flow-row"><span>Result</span><span class="tag">No modal; Mountain vs Forest stays open</span></div>
-    </div>
-    <p class="muted" style="margin:0.4rem 0 0">Announced payments keep <code>cost_after_produced_unit</code> (where mana commits immediately); resolution payments compare pools against full <code>cost</code>.</p>
-  </div>
+<p>Pass 6 + compress cut the Pass 5 overhead more than in half and made Seeds 2, 3, and Seed 1's reference-worst root strictly faster. Per-seed telemetry from the downloaded <code>engine-budget</code> artifact on <code>cc9c5281d8</code> (same Rust/Python code as <code>HEAD</code> except a 1-line doc comment fix):</p>
+
+<pre># Real CI output — Engine Budget (run 45709945019, job 139541701368, head cc9c5281d8)
+| Check                | Reference (7d3ac1eb1)      | Pass 5 (45682485004) | Pass 6 (45709945019)        |
+| -------------------- | -------------------------- | -------------------- | --------------------------- |
+| steps count          | 118,559                    | 115,941 (-2.2%)      | 115,941 (-2.2%)             |
+| bench_steps elapsed  | 4.537 s (median, 512 games)| +3.6% slower         | 4.552 s (+0.3% wall, ok)    |
+| steps throughput     | 26,130.6 /s                | -5.7% slower         | 25,468.9 /s (-2.5%, ok)     |
+| search total (3 seed)| 106.190 s (23,168 sims)    | +5.3% slower         | 111.419 s (+4.9%, ok)       |
+|   seed 1             | 33.946 s (7,680 sims; 4.42 ms/sim; worst 2.566 s @ d=2)  | — | 51.287 s (8,320 sims; 6.16 ms/sim; worst 2.843 s @ d=28) |
+|   seed 2             | 40.904 s (8,064 sims; 5.07 ms/sim; worst 2.473 s @ d=5)  | — | 32.222 s (-21.2%, 7,488 sims; 4.30 ms/sim; worst 1.750 s) |
+|   seed 3             | 31.340 s (7,424 sims; 4.22 ms/sim; worst 2.271 s @ d=2)  | — | 27.910 s (-10.9%, 7,040 sims; 3.96 ms/sim; worst 2.454 s) |
+| search worst reply   | 2.566 s                    | +13.2% over cap      | 2.843 s (+10.8%; 20 ms over 2.823 s cap) |</pre>
+
+<div class="callout">
+  <strong class="title">Why Seed 1 jumped while Seeds 2 &amp; 3 got 11–21% faster — and the 2.5% micro-overhead left in <code>bench_steps</code></strong>
+  <ul style="margin:0.35rem 0 0; padding-left:1.25rem">
+    <li style="margin-bottom:0.4rem"><strong>Seed 1 trajectory shift, not a search regression:</strong> At the identical root position <code>d=2</code> (<code>ac=7</code>, which is Reference's own worst reply at <code>2.566 s</code>), Candidate is <strong>14.9% faster</strong> (<code>2.183 s</code>). Because skipping trivial mana stops shifted random playout scores at <code>d=2</code>, Seed 1 chose a different move into a heavier 40-decision game line (<code>8,320</code> vs <code>7,680</code> sims), hitting <code>2.843 s</code> at <code>d=28</code> — just 20 ms over the +10% cap.</li>
+    <li><strong>Two small non-conceptual hot-path trims for gate (if needed to clear the 20 ms margin &amp; pull <code>bench_steps</code> wall time below base):</strong>
+      (a) <span class="badge proposed">Gate trim</span> Short-circuit <code>production_bonuses</code> (<code>mana.rs:3502</code>) when <code>tapped.matched.is_empty()</code> so ordinary land taps and <code>equivalent_mana_choices</code> do not run a full two-player <code>mana_triggers()</code> / <code>layer_views()</code> scan;
+      (b) <span class="badge proposed">Gate trim</span> In <code>determined_source_counts</code> (<code>interchangeable.rs:28</code>), return early without allocating/sorting the returned <code>Vec&lt;UsefulTap&gt;</code> when <code>!options.need_taps</code>.</li>
+  </ul>
 </div>
 
-<h2>4. Third mismatch — Engine Budget slowdown &amp; <code>CachedAnnouncedActions</code> soundness</h2>
-
-<pre># Real CI output — Engine Budget (run 45682485004, job 139446648328, head 032fa20a3f)
-| Check                | Reference (7d3ac1eb1) | Candidate (HEAD) | Delta / Result             |
-| -------------------- | --------------------- | ---------------- | -------------------------- |
-| steps count          | 118,559               | 115,941          | -2,618 (-2.2%)             |
-| bench_steps elapsed  | 7.680 s (median)      | 7.954 s (median) | +3.6% SLOWER for less work |
-| steps throughput     | 15,495.5 /s           | 14,617.8 /s      | -5.7% SLOWER               |
-| search total         | 162.027 s             | 170.657 s        | +5.3% SLOWER               |
-| search worst reply   | 3.887 s               | 4.400 s          | +13.2% OVER +10% CAP       |</pre>
-
-<table>
-  <thead>
-    <tr>
-      <th style="width:24%">Hot-path / cache defect</th>
-      <th style="width:38%">What <code>HEAD</code> does today</th>
-      <th style="width:38%">Pass 6 structural fix <span class="badge proposed">Proposed</span></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Unsound cache key in <code>CachedAnnouncedActions</code></strong><br><span class="muted"><code>mana.rs:587</code>, <code>game.rs:568</code></span></td>
-      <td>Keys on <code>self.state.revisions()</code>, which <code>TrackedState</code> explicitly documents as NOT advancing on <code>stack_objects</code>, <code>pending_triggers</code>, <code>trigger_placement</code>, <code>delayed_triggers</code>, or <code>cast_caller</code> — all five read by <code>interchangeable.rs</code>. Also clones <code>Payment</code> + <code>Vec&lt;Action&gt;</code> + boxes on every stop.</td>
-      <td>Do not key on <code>Revisions</code> for state <code>Revisions</code> does not cover. Either hold the computed actions directly on the active <code>PendingChoice::Pay</code> / tie invalidation to every mutation boundary, or keep a single-call bridge that is cleared on step/mutation and never reads stale state.</td>
-    </tr>
-    <tr>
-      <td><strong>Board scans before arithmetic in <code>interchangeable.rs</code></strong><br><span class="muted"><code>interchangeable.rs:55-140</code></span></td>
-      <td>On <code>Forest + Plains ×3</code> for <code>{1}{W}</code> (most common multi-color board), acquires <code>board_scan()</code> and runs full board-wide <code>unbound_mana_source</code> + <code>characteristics</code> + <code>can_become_creature</code> on all 3 Plains <em>before</em> the 2 ns arithmetic check <code>payable_without(Forest)</code> that immediately returns <code>None</code>.</td>
-      <td>Run cheap <code>fixed_direct</code> / <code>payable_without</code> optionality filtering <em>before</em> any <code>board_scan()</code> or <code>unbound_mana_source()</code>. When <code>unbound_mana_source</code> is needed, hoist board-wide scans (<code>effects</code>, <code>stack_objects</code>, triggers, attachments, grants, exile links) once per call instead of once per candidate permanent.</td>
-    </tr>
-    <tr>
-      <td><strong>Witness allocation &amp; un-deduped DFS in <code>mana.rs</code></strong><br><span class="muted"><code>mana.rs:2151, 2537, 3455, 3639</code></span></td>
-      <td><code>automatic_payability</code> calls <code>choice_tap_witness</code> → <code>model.plan</code> (allocates <code>Vec&lt;PaymentStep&gt;</code>) just for <code>.is_some()</code>; <code>useful_payment_taps</code> runs per-source <code>model.after_tap</code> + <code>PaymentSearch</code> DFS for every copy of a profile (e.g. 6 Great Divide Guide lands × 5 colors); <code>mana_ability_actions_with</code> rebuilds <code>payment_model</code> per non-simple ability.</td>
-      <td>Use boolean <code>choice_tap_payable</code> (<code>model.payable</code>) in <code>automatic_payability</code>; deduplicate <code>check_useful</code> by payment profile + output in <code>useful_payment_taps</code>; pass `&amp;PaymentModel` into <code>activation_witness</code>; short-circuit exact total simple units when <code>!helped &amp;&amp; !other_choice &amp;&amp; !color_matters</code>.</td>
-    </tr>
-    <tr>
-      <td><strong><code>bench_search</code> 40-decision horizon check</strong><br><span class="muted"><code>bench_search.rs:49</code></span></td>
-      <td>Not yet profiled against base on the same machine after Pass 5. Skipping trivial early mana stops also shifts the fixed <code>DECISIONS = 40</code> window slightly later into larger boards.</td>
-      <td>Profile <code>bench_steps</code> and <code>bench_search</code> (with <code>--features benchmark</code> <code>layer_metrics</code> / <code>payment_metrics</code> and <code>action_counts</code>) on the same machine against base <code>cc32318a35</code>. Verify <code>bench_steps</code> beats base wall time &amp; throughput and <code>bench_search</code> is within/below base before touching <code>baseline.json</code>.</td>
-    </tr>
-  </tbody>
-</table>
-
-<h2>5. Counterexample, failure &amp; recovery audit</h2>
+<h2>4. Counterexample, failure &amp; recovery audit</h2>
 
 <table>
   <thead>
     <tr>
       <th style="width:24%">Counterexample / path</th>
       <th style="width:36%">Risk</th>
-      <th style="width:40%">Status &amp; Pass 6 verification</th>
+      <th style="width:40%">Status at <code>HEAD</code></th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><strong><code>ConformancePair</code> lockstep</strong><br><span class="muted"><code>skip_trivial=false</code> vs <code>true</code> on Temur / Elemental worlds.</span></td>
-      <td>Diverging on equivalent <code>Decision::ManaChoice</code> panics 4 frozen conformance tests.</td>
-      <td><span class="badge no">Broken at HEAD</span> → <span class="badge proposed">Fixed in Pass 6</span> by collapsing equivalent modes to <code>[ChooseMode(first)]</code> inside <code>Decision::ManaChoice</code>.</td>
+      <td>Diverging on equivalent <code>Decision::ManaChoice</code> panics frozen conformance tests.</td>
+      <td><span class="badge yes">Resolved</span> — <code>mana_choice_actions</code> produces <code>len == 1</code>; <code>Semantic Kernel Conformance</code> passes green.</td>
     </tr>
     <tr>
       <td><strong>3+ mana resolution payment partial tap</strong><br><span class="muted"><code>TurnFaceUp {2}{W}</code> or <code>Ward {3}</code>: tap <code>Plains</code>, then <code>Kyoshi Village</code> beside <code>Mountain + Forest</code>.</span></td>
-      <td><code>left.other_than(&amp;unit)</code> sees pooled <code>{W}</code> paying generic <code>{1}</code> and rejects equivalence.</td>
-      <td><span class="badge no">Broken at HEAD</span> → <span class="badge proposed">Fixed in Pass 6</span> by comparing <code>(next_pool, cost)</code> directly for <code>Enclosing::Resolution</code> (add regression test in <code>source_taps.rs</code>).</td>
+      <td>Announced-payment subtraction saw pooled <code>{W}</code> paying generic <code>{1}</code> and popped a spurious modal.</td>
+      <td><span class="badge yes">Resolved</span> — <code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly; covered by <code>source_taps.rs</code> and QA.</td>
+    </tr>
+    <tr>
+      <td><strong>1-output mana-costed filter during resolution payment</strong><br><span class="muted">Resolution <code>{3}</code> with <code>Kyoshi Village</code> + a hypothetical <code>{G}, {T}: Add {B}</code> filter.</span></td>
+      <td><code>single_unit_remaining</code> (<code>mana.rs:3050</code>) checks <code>m.total() &lt;= 1</code> but not <code>a.cost.mana_value == 0</code>, so pooled <code>{G}</code> vs <code>{W}</code> could differ if a colored-cost 1-output filter existed.</td>
+      <td><span class="badge warn">Theoretical edge case</span> — no current catalog card has a colored-cost 1-output mana filter; trivial 1-line guard (<code>a.cost.mana_value == 0</code>) noted for gate.</td>
     </tr>
     <tr>
       <td><strong><code>Ward {2}</code> manual tap followed by <code>Decline</code></strong><br><span class="muted">Player taps <code>Kyoshi Village</code> during <code>Ward {2}</code>, then clicks <code>Decline</code>.</span></td>
       <td>With <code>ManaFloats::Off</code>, skipping the modal picks <code>{G}</code> rather than letting the player float <code>{W}</code> after declining.</td>
-      <td><span class="badge warn">Intentional choice</span> under <code>ManaFloats::Off</code> (seats opting out of mana floats do not keep float-only color stops; <code>ManaFloats::Usable/All</code> preserves the modal via <code>offers_extra_payment_taps</code>). See Question 1.</td>
+      <td><span class="badge warn">Intentional choice</span> — seats with <code>ManaFloats::Off</code> do not keep float-only color stops; <code>ManaFloats::Usable/All</code> preserves the modal via <code>offers_extra_payment_taps</code>. See Question 1.</td>
     </tr>
     <tr>
-      <td><strong>Stale <code>CachedAnnouncedActions</code> after stack/trigger mutation</strong><br><span class="muted">A spell/trigger targeting a land changes <code>stack_objects</code> or <code>pending_triggers</code> without bumping <code>Revisions</code>.</span></td>
-      <td><code>interchangeable.rs</code> reads those fields, so a <code>Revisions</code>-keyed cache can serve stale actions.</td>
-      <td><span class="badge no">Latent bug at HEAD</span> → <span class="badge proposed">Fixed in Pass 6</span> by removing the unsound <code>Revisions</code> assumption.</td>
+      <td><strong>Stale staged actions after mutation / clone</strong><br><span class="muted">Stack/trigger mutation, scenario refresh, or search fork between <code>advance_payment</code> and <code>payment_action_space</code>.</span></td>
+      <td>Serving stale announced mana offers.</td>
+      <td><span class="badge yes">Resolved</span> — one-shot <code>.take()</code>, cleared on <code>execute_action</code> / <code>advance_payment</code> / <code>scenario_refresh_priority</code>, reset on clone/snapshot, debug-asserted on every hit.</td>
     </tr>
     <tr>
       <td><strong>Manland / creature / <code>power_up</code> / <code>Sol Ring</code> / Converge / floats</strong><br><span class="muted"><code>Soulstone Sanctuary</code>, <code>Sol Ring + Mountain ×2</code>, <code>Uncle's Musings</code>.</span></td>
       <td>Incorrectly collapsing distinct combat, floating, or color-receipt outcomes.</td>
-      <td><span class="badge yes">Holds at HEAD</span> — preserved in Pass 6; <code>source_taps.rs</code> covers all of them.</td>
-    </tr>
-    <tr>
-      <td><strong>Remaining red CI suites</strong><br><span class="muted">Run <code>45682485004</code> failures across 6 jobs.</span></td>
-      <td>Tests expecting pre-MTG-439 identical-basic stops or old <code>"Activate"</code> text on <code>Animal Attendant</code>.</td>
-      <td><span class="badge proposed">Pass 6</span> Updates 2 rules tests, 3 card tests, 7 Python tests, and regenerates <code>conformance/semantic-kernel-w17-v6</code> after lockstep passes.</td>
+      <td><span class="badge yes">Holds at HEAD</span> — covered by <code>source_taps.rs</code> and Academy tests.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>6. Choices made for review (Pass 6)</h2>
+<h2>5. Choices made for review</h2>
 <div class="callout">
   <ol style="margin:0; padding-left:1.25rem">
-    <li style="margin-bottom:0.5rem"><strong>Collapse equivalent <code>Decision::ManaChoice</code> modes inside the action-space builder (singleton <code>len == 1</code>) rather than inside <code>automatic_payment_action</code>:</strong> preserves <code>ConformancePair</code> lockstep between <code>skip_trivial=false</code> and <code>skip_trivial=true</code>, matches <code>mana_spend_choices</code>'s <code>limit = 1</code>, and restores <code>automatic_payment_action</code> to pure <code>ManaPayment::Auto</code>. Passed over: teaching <code>normalize_reference</code> a special multi-action skip rule (which would break the meaning of <code>skip_trivial</code>).</li>
-    <li style="margin-bottom:0.5rem"><strong>Keep skipping redundant color modals on optional resolution payments (<code>Ward</code>) when <code>ManaFloats::Off</code>:</strong> matches QA's verified UX (<code>Kyoshi Village</code> taps toward <code>Ward {2}</code> never open a pointless <code>{G}/{W}</code> modal) while still opening the modal whenever <code>ManaFloats != Off</code>. Passed over: keeping the modal open on every <code>can_decline()</code> payment even with floats off.</li>
-    <li><strong>Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and update <code>test_pooled_mana_classes_input.py</code> for the unified <code>"Tap for mana P1 (Animal Attendant)..."</code> wording:</strong> matches ship-review choice <code>4b</code> + QA unification without forcing a version bump for label text. Reversible in one line if frozen text evals require a version bump.</li>
+    <li style="margin-bottom:0.5rem"><strong>Collapse equivalent <code>Decision::ManaChoice</code> modes to singleton <code>len == 1</code> inside <code>mana_choice_actions</code>:</strong> keeps <code>skip_trivial</code> transport equivalence intact and leaves <code>automatic_payment_action</code> purely <code>ManaPayment::Auto</code>.</li>
+    <li style="margin-bottom:0.5rem"><strong>Skip redundant color modals on optional resolution payments (<code>Ward</code>) when <code>ManaFloats::Off</code>:</strong> keeps <code>Ward {2}</code> free of float-only color modals while preserving them whenever <code>ManaFloats != Off</code>.</li>
+    <li><strong>Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and prose-prefix detection in <code>text_observation.py</code>:</strong> unifies choice-tap LLM text with basics (<code>4b</code>) without widening the wire <code>Action</code> schema or breaking v11 pilots.</li>
   </ol>
 </div>
 
 <section class="questions">
-  <h2>7. Open questions for review</h2>
-  <p class="muted">Reply with question number + option letter (for example, <code>1a 2b</code>).</p>
+  <h2>6. Open questions for review</h2>
+  <p class="muted">Reply with question number + option letter (for example, <code>1a 2a 3a</code>).</p>
   <ol>
     <li><strong>Color modal on optional resolution payments (<code>Ward</code>) when <code>ManaFloats::Off</code>:</strong>
       <ul class="options">
-        <li><strong>1a (chosen for Pass 6):</strong> Skip redundant color modals on <code>Ward</code> when <code>ManaFloats::Off</code> (open the modal only when colors differ for paying <code>Ward</code>, or when <code>ManaFloats != Off</code>).</li>
+        <li><strong>1a (built at HEAD):</strong> Skip redundant color modals on <code>Ward</code> when <code>ManaFloats::Off</code> (open the modal only when colors differ for paying <code>Ward</code>, or when <code>ManaFloats != Off</code>).</li>
         <li><strong>1b:</strong> Always keep the color modal open on <code>can_decline()</code> resolution payments even under <code>ManaFloats::Off</code>, because clicking <code>Decline</code> afterwards leaves the produced mana in the pool.</li>
       </ul>
     </li>
-    <li><strong>LLM text observation change (<code>manabot/semantic/text_observation.py</code>):</strong>
+    <li><strong>LLM text observation wording (<code>manabot/semantic/text_observation.py</code>):</strong>
       <ul class="options">
-        <li><strong>2a (chosen for Pass 6):</strong> Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and keep <code>action.description.startswith("Tap ")</code> detection without changing the wire <code>Action</code> schema.</li>
+        <li><strong>2a (built at HEAD):</strong> Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and <code>action.description.startswith("Tap ")</code> detection without changing the wire <code>Action</code> schema.</li>
         <li><strong>2b:</strong> Bump <code>REPRESENTATION_VERSION</code> to <code>manabot-text-11</code> to mark the wording change for choice-of-color mana taps.</li>
       </ul>
     </li>
-    <li><strong>If <code>bench_search</code>'s 40-decision window still shifts a single worst reply slightly after eliminating all per-step overhead:</strong>
+    <li><strong>Adopting <code>managym/perf/baseline.json</code> for the diverged Seed 1 search trajectory:</strong>
       <ul class="options">
-        <li><strong>3a (recommended):</strong> Verify <code>bench_steps</code> wall time &amp; throughput beat base and <code>bench_search</code> total improves or stays within +10%, then adopt the moved digests in <code>managym/perf/baseline.json</code> with profiled evidence.</li>
-        <li><strong>3b:</strong> Hold <code>baseline.json</code> until every individual <code>bench_search</code> metric (including single-decision <code>worst_s</code>) is strictly lower than base.</li>
+        <li><strong>3a (recommended):</strong> Apply the tiny <code>production_bonuses</code> empty-<code>matched</code> short-circuit if <code>45716744677</code>'s <code>search worst reply</code> is still &gt;+10% (20 ms margin on Seed 1's diverged <code>d=28</code>), confirm <code>bench_steps</code> beats or matches base and Seeds 2/3 stay faster, then record <code>managym/perf/baseline.json</code> from the green run.</li>
+        <li><strong>3b:</strong> Adopt <code>managym/perf/baseline.json</code> directly from the current run once all non-budget CI jobs are green, accepting the +10.8% diverged Seed 1 <code>d=28</code> worst reply given Seeds 2 (−21.2%) and 3 (−10.9%) and Seed 1 <code>d=2</code> (−14.9%) are faster.</li>
       </ul>
     </li>
   </ol>

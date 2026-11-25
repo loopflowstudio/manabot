@@ -58,12 +58,19 @@ governing:
   - Academy Moves log rendering pips via `<ManaText>` in `Rail.svelte` and narrating resolved mana colors in `managym/academy/recording.py` (`5c`).
   - Initial hot-path pruning and authored match parity / fixture updates.
 
-- **Pass 6 (`c43f83e3d3`):** modal collapse moved into `Game::mana_choice_actions` (singleton `Decision::ManaChoice`; `automatic_payment_action` is `Auto` only; 14 frozen conformance cases record with zero divergence), `Enclosing::Resolution` compares `(next_pool, cost)` directly, one-shot `StagedAnnouncedActions` replaces the `Revisions`-keyed cache, `interchangeable.rs`/`mana.rs` hot paths reordered and short-circuited, receipt `conformance/semantic-kernel-w17-v6/evidence-forced-mana-v1.json`, and the CI-run-45682485004 Rust/Python test fallout updated. Local release benchmarks were not run (host load); speed is judged by CI `Engine Budget`.
+- **Pass 6 + compress + QA (`c43f83e3d3`, `046392c616`, `c4ab6840a1`):**
+  - Modal collapse moved into `Game::mana_choice_actions` (singleton `Decision::ManaChoice`; `automatic_payment_action` is `Auto` only; all 14 frozen conformance cases pass with zero divergence).
+  - `Enclosing::Resolution` compares `(next_pool, cost)` directly; one-shot `StagedAnnouncedActions` replaces the `Revisions`-keyed cache; `interchangeable.rs`/`mana.rs` hot paths reordered and compressed; receipt `conformance/semantic-kernel-w17-v6/evidence-forced-mana-v1.json` recorded; Rust/Python test fallout and `test_no_runner_turns_skipping_off` doc-comment fixed.
+  - Note for live Academy demos after main's merge: Auto-tap is toggled off via **Settings → Auto-tap off**.
 
 ## Gate / CI (Next)
-- CI run `45706327773` on HEAD `1efdaaf754` was pending at realign; no Pass 6 CI result exists yet.
-- Push Pass 6, verify all CI jobs green (including `Engine Budget` speed metrics vs base `cc32318a35`, Rust/Python/Academy UI, and `semantic_conformance_tests`).
-- If `Engine Budget` speed metrics beat or stay within base budget (only expected digest diff), download the `engine-budget` artifact and adopt `managym/perf/baseline.json` via `uv run scripts/engine_budget.py record --reason "..."`. If any speed metric still exceeds base, inspect the `Engine Budget` artifact numbers and tighten before adopting.
+
+- **CI run `45709945019` (`cc9c5281d8`):** `Semantic Kernel Conformance`, `Rust Tests`, `Python Unit Tests`, `Academy UI`, `Protocol v1 Conformance`, `Clean-machine Play`, `Academy Integration (play)`, and all non-`model` `Integration` shards passed. Only `Integration (model)` failed (the `mana.rs:2883` doc-comment grep, already fixed in `c4ab6840a1`), `Academy Integration (contracts)` was cancelled when `c4ab6840a1` pushed, and `Engine Budget` reported expected digest/step-count diffs plus `search worst reply` at `2.843 s` vs `2.823 s` cap (+10.8%, 20 ms over).
+- **Per-seed `Engine Budget` breakdown (`45709945019` artifact):** `bench_steps` improved from Pass 5's −5.7% throughput / +3.6% wall to **−2.5% throughput (`25,468.9/s` vs `26,130.6/s`, ok) / +0.3% wall (`4.552 s` vs `4.537 s`)** across 512 games (`115,941` vs `118,559` steps); `search total` passed at `+4.9%` (`111.419 s` vs `106.190 s`), with **Seed 2 −21.2% faster** (`40.90 s → 32.22 s`, `5.07 → 4.30 ms/sim`), **Seed 3 −10.9% faster** (`31.34 s → 27.91 s`, `4.22 → 3.96 ms/sim`), and **Seed 1 `d=2` (reference's worst reply) −14.9% faster** (`2.566 s → 2.183 s`). Seed 1's `2.843 s` worst reply came from trajectory divergence at `d=2` into a heavier 40-decision line (`8,320` vs `7,680` sims, `d=28`).
+- **Next actions in gate:**
+  1. Check CI run `45716744677` on `HEAD` (`c4ab6840a1`) to confirm `Integration (model)`, `Academy Integration (contracts)`, and all other suites green.
+  2. If `Engine Budget` still exceeds the +10% `search worst reply` cap (~20 ms margin) or to push `bench_steps` wall time strictly below base before adopting `managym/perf/baseline.json`, apply the small non-conceptual hot-path trims identified in `scratch/concept-review.html`: short-circuit `production_bonuses` (`managym/src/flow/mana.rs:3502`) when `tapped.matched.is_empty()`, skip allocating/sorting the returned `Vec<UsefulTap>` in `determined_source_counts` (`managym/src/flow/mana/interchangeable.rs:28`) when `!options.need_taps`, and add the 1-line `a.cost.mana_value == 0` guard in `Enclosing::Resolution`'s `single_unit_remaining` (`managym/src/flow/mana.rs:3050`).
+  3. Download the green `engine-budget` artifact and adopt `managym/perf/baseline.json` via `uv run scripts/engine_budget.py record --reason "..."`.
 
 ## Determinism rule & contracts
 
