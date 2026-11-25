@@ -6,7 +6,8 @@ reversible before merge.
 1. **Strength condition.** AGENTS.md conditions v9/v10 removal on "a v11 pilot
    at least as strong as the best v9 one". No such result is recorded; the best
    player (frontier Small u1952, run `59718fe34945`) is v9. The first implementation slice preserves both versions.
-   Pass 2 needs a qualifying comparison or an explicit change to the condition.
+   Removing dense preparation needs a qualifying comparison or an explicit
+   change to the condition.
 2. **Offline `ObservationBatch` persistence.** Added validated
    `ObservationBatch.to_bytes()` / `from_bytes()` in Rust so `capture.py`,
    `parity.py`, and `decision_memory_probe.py` persist and reload native batches
@@ -14,11 +15,10 @@ reversible before merge.
    admission or breaking the CSR join certificate invariant. Alternative passed
    over: retiring disk parity captures or retaining dense admission for probes.
 3. **Drop dict facades (`Mapping` on `ObservationSelection`, `PrefixObservation`,
-   `CompactObservation`, `select_rows`, `blank_memory`).** Replaced
-   `PrefixObservation` with a plain frozen `RetainedMemory` dataclass and
-   rewrote `reference_distribution` directly on CSR `actions` so no hot loop
-   can silently scatter dense arrays. Alternative passed over: deferring cleanup
-   to a follow-up Task.
+   `CompactObservation`, `select_rows`, `blank_memory`).** Native selections
+   now carry the frozen `RetainedMemory` dataclass and compute
+   `reference_distribution` directly on packed actions. The mapping interface,
+   dense exports and compatibility wrappers still have consumers.
 4. **Counterfactual/invariance interventions.** `combat_probe` and
    `action_cases.identity_removed` perturb `Prepared` via `dataclasses.replace`
    (running `prepare` once instead of 5× for `combat_probe`);
@@ -38,8 +38,10 @@ reversible before merge.
 8. **`LocalUpdateTeacher(native_encoder=False)` is removed**; recorded specs
    that set it false are refused naming `v0.2.5`.
 9. **Old search receipts with dense buffers are refused**, not replayed.
-10. Whether `experiments/vector_statistics_cost.py` is migrated or retired is
-    left to the build, by size of the change.
+10. The optional vector statistics cost trial remains reproducible at
+    `a409c94ff3b77f2eab8d10611e6d97743c07fef6`. Its before arm loads
+    `76510eaf3f`, which predates packed layout registration. Retired the
+    script on main and kept its invocation and both revisions in the report.
 11. **`VectorEnv.observations_for_players` optional layout override.** Writing
     `docs/engine.md#fixed-seat-observations` surfaced that removing
     `write_observations_for_players(..., layout=...)` leaves no way to take a
@@ -61,3 +63,8 @@ reversible before merge.
     the learner's actual reference probabilities with its other targets. Native
     batch bytes bind the packed layout and producer byte order. Historical
     dense captures replay at the revision that wrote them.
+
+14. **Pass 2 compatibility.** Keep the existing dense path for v9/v10 until
+    the strength decision in item 1. Their native layouts reject even an empty
+    batch with “observation batches require policy input v11”. Keep packed
+    v11 migrations independently reviewable in the meantime.

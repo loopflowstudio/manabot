@@ -155,14 +155,13 @@ dense dictionary:
    `legacy_card_lists`, and `card_records` (`observation.rs:2585`) go.
 5. **Engine Budget and wire schemas are unaffected**: `bench_steps` and
    `bench_search` never encode; `protocol/*.schema.json` is unaffected.
-6. **`experiments/tla_frontier.py:254` pins `policy_input_version=9` at module
-   scope**, imported by `mana_taps`, `tla_trophies`, `tla_trophies_colab`,
-   `best_player_on_main`, and 3 test files. `experiments/batched_baseline.py:50`
-   pins 9 inside `train()`.
+6. **The executed frontier and batched baseline used v9.** Their fresh
+   recipes now select v11. Frontier evaluation still checks the saved
+   checkpoint's capacities and admits the historical v9 layout.
 7. **The AGENTS.md removal condition is not on record.** The best recorded player
    (frontier Small u1952, `59718fe34945`) is v9. The planned retirement targets
    0.3.0. The strength comparison or an explicit change to that condition
-   remains outstanding for Pass 2.
+   remains outstanding for the dense preparation and version retirement.
 
 ## Choices made for review
 
@@ -332,20 +331,69 @@ preserve the object-join descriptions used by the archive when deleting the
 dense extent scanner. Keep reading the Pass 1 v11 archive header when removing
 the legacy encoder configuration in Pass 3.
 
+Done: **2a. Scalar games, evaluation, collection and retained memory.** Scalar
+reset, both step APIs and scenario refresh return the viewer projection. Etude,
+checkpoint simulation, guidance, PUCT, verification and selection datasets encode
+at the policy boundary. Local search uses the batched frontier and refuses a
+recorded row-encoder request with its release. Target practice supplies native
+rows to the v11 collector and preserves sparse loads, terminal slots and seeds.
+PPO, damped-policy updates and the selection-data probe compute references from
+packed offers. On 64 seeded decisions (190 legal offers, 512 slots) the packed
+action-type reference matched the padded reference exactly. Forty warm calls
+had medians of 0.020 ms and 0.173 ms respectively, with 3,932,160 bytes in the
+padded actions array alone. This measures reference construction, not training
+throughput. Native selections, parity capture and the hand probe retain
+`RetainedMemory`; probe rows round-trip through the shared policy archive.
+Dense callers still use the dictionary wrappers.
+
+Fresh TLA frontier and batched baseline training use v11. Frontier evaluation
+admits the executed v9 layout and the fresh v11 layout with exact capacities.
+One w64 CPU run (seed 197, two streams, one worker) wrote its update-1 policy
+after 352 learner transitions. The sharded benchmark ran 2,048 decisions using
+packed action records. Its mimalloc digest was
+`bdb10e19161cdba6d00be833452ab1fa23ee1c00f49d398a3f365fde63a070ae`.
+The optional vector statistics cost report points to its dense harness at the
+frozen source revision.
+
+The v9 and v11 pinned games replayed successfully. The optional u1952
+checkpoint was absent locally. The six requested Python suites ran with the
+evaluation, artifacts, Academy and MLX extras: 2,107 passed, 16 skipped and 27
+failed in the broad run. Of those failures, 24 reproduced on the starting
+revision: conditional-search fixtures (14), automatic game capture (3),
+belief fixtures (4), PUCT compatibility, recording export and the MLX
+256-wide evaluation timeout. The MLX predictor's remaining test now passes a
+native batch and passed on rerun. Card tournament resume passed with source
+held fixed. The separate memory checks passed all 242 cases.
+
+The paired-deal report exceeded its integration-test allowance of 180 seconds.
+On identical deals its initial eight games used 1,683 decisions with the
+starting sources and 2,644 with the new ones. Code and checkpoint identities
+seed each player separately from the deal. The fixture now allows 240 seconds
+for the same two deals, both checkpoints, all four legs and replay. The full
+test passed in 235.22 seconds including training and policy inspection.
+
 Remaining:
 
-**2. One Python path (next).** Scalar `Env` returns `managym.Observation`;
-`TargetPracticeVector` on `observation_rows()`; delete `manabot/env/vector_env.py`;
-`RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`
-(including the `PrefixObservation({}, …)` that Pass 1's
-`manabot/backends/captured_observations.py` restores);
-`ObservationSelection` drops `Mapping`; `blank_decision_memory()` native;
-`admit_native` → `admit`; `prepare()` reads spans only; `reference_distribution`
-on CSR; collectors, `combat_probe`, `selection_data`, decision-memory probes,
-`eval/agents.py`, search, verify, experiments (questions 3–10). Shows: pinned
-pilot v11 verify, `pytest tests/model tests/eval tests/sim tests/training
-tests/belief tests/verify -q`, and the Pass-1 grep in the acceptance block empty
-for `manabot scripts experiments`.
+**2b. Finish migrating v11 consumers.** Move the combat and choice
+counterfactuals (including learning regression), the remaining decision-memory
+verification, and legacy vector-wrapper callers and benches. Move rollout
+inspection and diagnostics to explicit selections/projections, then remove the
+v11 mapping facade and the dense-only fixtures. Reuse the actual checkpoint's
+readings when probing Prepared. Keep the v9/v10 pilot, vector collection and
+evaluation executable until the version decision. The acceptance grep over
+`manabot scripts experiments` still finds 49 lines in 16 files. The debug Rust
+nextest run and the docs' v11-only and single-admission claims remain for gate.
+
+**Dependency correction.** The build tested `encode_observation_batch([],
+layout)` on all three accepted layouts. Versions 9 and 10 both raise
+`ValueError: observation batches require policy input v11`; 11 returns an
+empty batch. Removing dense admission or making `prepare` accept spans only
+would disable the v9 player **during Pass 2**, before the previously planned
+Pass 3 gate. Move the final deletion of dense preparation, collector fallback
+and validators, the `admit_native` rename, and the zero-match acceptance grep
+to the version retirement. Porting the deprecated fork to CSR would extend
+the very layout the repository says to freeze. The pinned v9 and v11 games
+test compatibility, not their relative strength.
 
 **3. v9/v10 retired (Python + Rust).** Needs the decision in questions 1 first:
 AGENTS.md says "removed once a v11 pilot is at least as strong as the best v9

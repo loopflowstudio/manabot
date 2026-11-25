@@ -1,25 +1,39 @@
-at: 0cb9a7253292330ab907c9e835d608fce84e33ea
+at: fab0d064aaefaa3a7a89e886fde5727672b363ed
 first:
+  - path: scratch/plan.md
+    why: Completed migrations and the v9 retirement dependency
   - path: docs/engine.md
-    why: Encode, persist and reload a viewer batch
-  - path: manabot/backends/README.md
-    why: Reproduce learner and collection calls across backends
-  - path: managym/__init__.pyi
-    why: Public batch persistence API
+    why: Obtain a viewer observation and encode it
+  - path: docs/training-loop.md
+    why: Follow legal offers and memory through training
+  - path: manabot/env/env.py
+    why: Scalar games return the acting viewer's observation
+  - path: manabot/env/observation.py
+    why: Encode decisions with the checkpoint's layout
   - path: managym/src/python/observation_batch/archive.rs
-    why: Check layout, row boundaries and game-local joins
-  - path: manabot/backends/captured_observations.py
-    why: Reunite packed observations with retained viewer histories
-  - path: manabot/backends/torch/capture.py
-    why: Record the inputs and targets of actual calls
-  - path: manabot/backends/parity.py
-    why: Compare losses, gradients and optimizer steps on reload
+    why: Validate persisted batches and game-local joins
+  - path: manabot/env/memory_store.py
+    why: Retain prefixes and their declared capacities together
+  - path: manabot/policy/spans.py
+    why: Select native rows with aligned memory
+  - path: manabot/policy/captured_observations.py
+    why: Reconstruct selected rows and histories from disk
+  - path: manabot/eval/agents.py
+    why: Prepare the checkpoint's inputs at decision time
+  - path: manabot/env/target_practice.py
+    why: Publish new decisions while preserving parked slots
+  - path: manabot/policy/prepare.py
+    why: Assign reference probabilities over packed legal offers
+  - path: manabot/verify/decision_memory_probe.py
+    why: Capture and fit on recorded viewer histories
+  - path: experiments/tla_frontier.py
+    why: Train fresh v11 policies and evaluate recorded pilots
+  - path: scripts/bench_sharded_collection.py
+    why: Time collection with packed offers and outcome buffers
   - path: tests/env/test_observation_batch_archive.py
     why: Reject invalid joins even under a valid checksum
-  - path: tests/model/test_backend_capture.py
-    why: Reproduce recorded losses with and without memory
-  - path: manabot/belief/encoding.py
-    why: Bind external belief rows alongside native observations
-  - path: manabot/policy/prepare.py
-    why: Keep belief tokens through attention compaction
+  - path: tests/training/test_collection.py
+    why: Exercise sparse target loads on both policy inputs
+  - path: tests/training/test_regimes.py
+    why: Verify offer probabilities after selection and bucketing
 hide: []
