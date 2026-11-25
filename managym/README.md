@@ -984,16 +984,17 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   restriction detail when needed (such as
   `"Tap Hermitic Herbalist for 2 mana (Lesson spells only)"`) — while
   non-simple mana abilities keep `"Activate ability: <Name>"`.
-- **Color modals and resolution payments.** During an announced payment with
-  `skip_trivial` enabled, `Decision::ManaChoice` skips automatically when
-  every legal mode leaves the same remaining state or the same determined
-  completion with no floating surplus; deliberate floats at priority always
-  keep the color choice. With floats off, resolution payments (`TurnFaceUp`,
-  `Ward`, and other `Decision::Payment` prompts) treat simple choice taps
-  identically to fixed sources: when automatic payment can fund the cost
-  without waterbend or floats, turning a creature face up pays immediately and
-  ward offers only pay or decline, while non-simple mana abilities (such as
-  Treasure) remain offered.
+- **Color modals and resolution payments.** During an announced or resolution
+  payment with `skip_trivial` enabled, `Decision::ManaChoice` skips
+  automatically when every legal mode leaves the same remaining state or the
+  same determined completion with no floating surplus; deliberate floats at
+  priority always keep the color choice. Resolution payments (`TurnFaceUp`,
+  `Ward`, and other `Decision::Payment` prompts) share the same per-source tap
+  and forced/interchangeable skip rules for both basics and simple choice
+  sources: when only one outcome exists, turning a creature face up pays
+  immediately and ward offers only pay or decline; when there is a real source
+  choice, both fixed and simple choice taps are offered alongside pay (and
+  non-simple mana abilities such as Treasure remain explicit).
 
 These choices are on by default for every consumer. They do not expose undo,
 or production at priority unless a seat

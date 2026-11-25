@@ -655,9 +655,17 @@ class _Renderer:
                 else f"Do not block with {first}"
             )
         elif kind == "activate_ability":
-            label = f"Activate ability of {first}"
-            if len(focus) == 2:
-                label += f"; exile {focus[1]} as the cost"
+            if (
+                action.description
+                and action.description.startswith("Tap ")
+                and len(focus) == 1
+            ):
+                alias = first.split(" ", 1)[0]
+                label = f"{action.description} ({alias})"
+            else:
+                label = f"Activate ability of {first}"
+                if len(focus) == 2:
+                    label += f"; exile {focus[1]} as the cost"
         else:
             verb = {
                 "play_land": "Play land",
@@ -689,7 +697,11 @@ class _Renderer:
             details.append(f"trigger context R{action.continuation_index + 1}")
         if details:
             label += "; " + "; ".join(details)
-        if action.description:
+        if action.description and not (
+            kind == "activate_ability"
+            and action.description.startswith("Tap ")
+            and len(focus) == 1
+        ):
             label += f". Native description: {action.description}"
         return label
 

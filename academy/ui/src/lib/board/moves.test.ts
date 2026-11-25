@@ -59,4 +59,17 @@ describe('segments', () => {
     ]);
     expect(segments('Pass priority', ['Forest'])).toEqual([{ text: 'Pass priority', card: null }]);
   });
+
+  it('keeps mana symbols outside card-name segments so Moves renders them as pips', () => {
+    expect(segments('Tap Kyoshi Village for {W}', ['Kyoshi Village'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Kyoshi Village', card: 'Kyoshi Village' },
+      { text: ' for {W}', card: null },
+    ]);
+    expect(segments('Tap Plains for {W}', ['Plains'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Plains', card: 'Plains' },
+      { text: ' for {W}', card: null },
+    ]);
+  });
 });

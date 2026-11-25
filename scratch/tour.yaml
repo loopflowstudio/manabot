@@ -23,17 +23,35 @@ first:
   - path: managym/src/agent/ability_description.rs
     why: Unified tap-for-mana wording across choice sources.
   - path: managym/src/flow/action.rs
+  - path: manabot/semantic/text_observation.py
+    why: Simple choice mana taps adopt native Tap-for wording in LLM text.
+  - path: managym/academy/recording.py
+    why: Moves log resolves choice-of-color mana taps to the color actually added.
+  - path: academy/ui/src/lib/board/Rail.svelte
+    why: Moves log renders mana symbols as pips via ManaText.
   - path: academy/ui/src/lib/board/prompt.ts
     why: Mana color modal prompt wording in Academy.
   - path: academy/ui/src/lib/board/prompt.test.ts
+  - path: academy/ui/src/lib/mana.test.ts
+  - path: academy/ui/src/lib/board/moves.test.ts
+  - path: academy/ui/e2e/choice-navigation.spec.ts
+    why: Multi-offer board-card locator for Llanowar Elves convoke + mana tap.
   - path: managym/tests/source_taps.rs
-    why: Engine tests for skips, PlayLand turns, labels, and guards.
+    why: Engine tests for skips, resolution payments, PlayLand turns, labels, and guards.
   - path: tests/academy/test_dual_land_payment.py
-    why: Academy session checks for dual-land skip and labels.
+    why: Academy session checks for dual-land skip, labels, and Moves log resolved color.
+  - path: tests/academy/test_recording_narration.py
+    why: Narration tests for choice-of-color mana taps across priority, payment, and Ward.
   - path: tests/academy/test_payment_preview.py
     why: Payment preview checks with a distinct blue dual.
   - path: tests/academy/test_choice_navigation.py
     why: Updated Accumulate Wisdom prefix after basic payment skip.
+  - path: tests/academy/test_authored_match_parity.py
+    why: Updated parity assertions for 170-command receipt (same terminal state).
 hide:
   - path: managym/academy/fixtures/
     why: Regenerated fixture prefixes after redundant-basic skips.
+  - path: conformance/
+    why: Regenerated authored-match authority and parity receipts (174 -> 170 commands).
+  - path: tests/fixtures/
+    why: Updated heuristic parity and controlled-capacity drill tapes.

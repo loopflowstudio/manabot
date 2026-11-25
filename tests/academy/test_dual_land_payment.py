@@ -144,3 +144,63 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
     assert tapped == ["Kyoshi Village", "Plains"]
     assert len(untapped_plains) == 2
     assert not any(after.projection.agent.mana)
+
+
+def test_priority_dual_land_float_logs_resolved_color_not_raw_offer(
+    tmp_path: Path,
+) -> None:
+    session = GameSession(trace_dir=tmp_path)
+    frame = ExperienceFrame.model_validate(
+        session.new_game(
+            {
+                "hero_deck": {"Kyoshi Village": 20, "Plains": 20},
+                "villain_deck": {"Plains": 40},
+                "villain_type": "passive",
+                "seed": 347,
+                "auto_pass": False,
+                "mana_floats": "all",
+            }
+        )["frame"]
+    )
+    if frame.action_space == "MODAL":
+        keep = next(offer for offer in frame.offers if offer.label == "Keep hand")
+        _choose(session, frame, keep)
+    assert session.env is not None
+    session.env.scenario_force_battlefield(0, "Kyoshi Village", ready=True)
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+    frame = ExperienceFrame.model_validate(session._wire_message()["frame"])
+
+    tap = next(
+        offer for offer in frame.offers if offer.label == "Tap Kyoshi Village for {G}/{W}"
+    )
+    assert frame.prompt is not None
+    open_modal = session.hero_command(
+        {
+            "command_id": f"dual.float.{frame.revision}.{tap.id}",
+            "match_id": frame.match_id,
+            "expected_revision": frame.revision,
+            "prompt_id": frame.prompt.id,
+            "offer_id": tap.id,
+            "answers": [],
+        }
+    )
+    assert open_modal["status"] == "accepted"
+    assert open_modal["update"].get("log", []) == []
+    modal = ExperienceFrame.model_validate(open_modal["update"]["frame"])
+    assert modal.action_space == "MODAL"
+    add_white = next(offer for offer in modal.offers if offer.label == "Add {W}")
+    assert modal.prompt is not None
+    resolved = session.hero_command(
+        {
+            "command_id": f"dual.color.{modal.revision}.{add_white.id}",
+            "match_id": modal.match_id,
+            "expected_revision": modal.revision,
+            "prompt_id": modal.prompt.id,
+            "offer_id": add_white.id,
+            "answers": [],
+        }
+    )
+    assert resolved["status"] == "accepted"
+    log = resolved["update"].get("log", [])
+    assert [entry["text"] for entry in log] == ["Tap Kyoshi Village for {W}"]

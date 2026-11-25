@@ -506,13 +506,9 @@ fn mana_abilities_on_one_permanent_only_fund_one_tap() {
 }
 
 #[test]
-fn turning_a_manifest_face_up_pays_with_a_dual_and_a_basic() {
+fn turning_a_manifest_face_up_skips_when_forced_and_offers_taps_on_real_choice() {
     let player = PlayerId(0);
-    for (sources, expected_untapped_lands) in [
-        (&["Kyoshi Village", "Plains"][..], 0_usize),
-        (&["Kyoshi Village", "Plains", "Forest"][..], 1_usize),
-        (&["Plains", "Plains", "Forest"][..], 1_usize),
-    ] {
+    let turn_face_up = |sources: &[&str]| {
         let mut game = payment_position("Compassionate Healer", sources);
         let card = game
             .state
@@ -532,6 +528,15 @@ fn turning_a_manifest_face_up_pays_with_a_dual_and_a_basic() {
             .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
             .unwrap();
         game.step(index).unwrap();
+        (game, face_down)
+    };
+
+    // Forced exact (dual + basic) and interchangeable basics skip without a prompt.
+    for (sources, expected_untapped_lands) in [
+        (&["Kyoshi Village", "Plains"][..], 0_usize),
+        (&["Plains", "Plains", "Plains"][..], 1_usize),
+    ] {
+        let (game, face_down) = turn_face_up(sources);
         assert!(!game.state[face_down].is_face_down(), "{sources:?}");
         assert_eq!(game.state.players[0].mana_pool.total(), 0, "{sources:?}");
         let untapped_lands = untapped(&game)
@@ -540,16 +545,55 @@ fn turning_a_manifest_face_up_pays_with_a_dual_and_a_basic() {
             .count();
         assert_eq!(untapped_lands, expected_untapped_lands, "{sources:?}");
     }
+
+    // Real choice (dual + spare basics or mixed basics): offers per-source taps
+    // beside PayCost; clicking Kyoshi Village beside 3 Plains skips the color
+    // modal and finishes directly, leaving 2 Plains untapped.
+    let (mut choice_dual, face_down) =
+        turn_face_up(&["Kyoshi Village", "Plains", "Plains", "Plains"]);
+    assert!(choice_dual.state[face_down].is_face_down());
+    let labels = payment_labels(&choice_dual);
+    assert!(
+        labels.contains(&"Tap Kyoshi Village for {G}/{W}".into()),
+        "{labels:?}"
+    );
+    assert_eq!(taps(&choice_dual).len(), 3);
+    let dual = labels
+        .iter()
+        .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    choice_dual.step(dual).unwrap();
+    assert!(!choice_dual.state[face_down].is_face_down());
+    assert_eq!(choice_dual.state.players[0].mana_pool.total(), 0);
+    let remaining: Vec<_> = untapped(&choice_dual)
+        .into_iter()
+        .filter(|name| name != "Compassionate Healer")
+        .collect();
+    assert_eq!(remaining, ["Plains", "Plains"]);
+
+    // Mixed basics offer per-source taps and PayCost finishes.
+    let (mut choice_basics, face_down) = turn_face_up(&["Plains", "Plains", "Forest"]);
+    assert!(choice_basics.state[face_down].is_face_down());
+    assert_eq!(taps(&choice_basics).len(), 3);
+    pay_cost(&mut choice_basics);
+    assert!(!choice_basics.state[face_down].is_face_down());
+    assert_eq!(choice_basics.state.players[0].mana_pool.total(), 0);
+    let remaining_count = untapped(&choice_basics)
+        .into_iter()
+        .filter(|name| name != "Compassionate Healer")
+        .count();
+    assert_eq!(remaining_count, 1);
 }
 
 #[test]
-fn ward_treats_simple_choice_sources_like_fixed_sources_and_keeps_treasure() {
+fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
     let player = PlayerId(0);
     let deck = [
         ("Mountain", 20),
         ("Lightning Bolt", 8),
         ("Kyoshi Village", 4),
         ("Plains", 8),
+        ("Forest", 8),
         ("Waterfall Aerialist", 4),
         ("Sol Ring", 4),
     ];
@@ -585,34 +629,89 @@ fn ward_treats_simple_choice_sources_like_fixed_sources_and_keeps_treasure() {
         (game, treasure)
     };
 
-    // Exact dual + basic: PayCost or Decline.
-    let (mut exact, _) = cast_at_ward(&["Kyoshi Village", "Plains"], false);
-    assert_eq!(
-        exact.action_space().unwrap().actions,
-        [Action::PayCost { player }, Action::Decline { player }]
-    );
-    let mut decline = exact.clone();
-    decline.step(1).unwrap();
-    assert!(untapped(&decline).contains(&"Kyoshi Village".into()));
-    exact.step(0).unwrap();
-    assert!(!untapped(&exact).contains(&"Kyoshi Village".into()));
+    // Exact dual + basic and interchangeable basics: PayCost or Decline only.
+    for sources in [
+        &["Kyoshi Village", "Plains"][..],
+        &["Plains", "Plains", "Plains"][..],
+    ] {
+        let (mut forced, _) = cast_at_ward(sources, false);
+        assert_eq!(
+            forced.action_space().unwrap().actions,
+            [Action::PayCost { player }, Action::Decline { player }],
+            "{sources:?}"
+        );
+        let mut decline = forced.clone();
+        decline.step(1).unwrap();
+        assert_eq!(
+            untapped(&decline)
+                .into_iter()
+                .filter(|name| name != "Waterfall Aerialist")
+                .count(),
+            sources.len(),
+            "{sources:?}"
+        );
+        forced.step(0).unwrap();
+        assert_eq!(
+            untapped(&forced)
+                .into_iter()
+                .filter(|name| name != "Waterfall Aerialist")
+                .count(),
+            sources.len() - 2,
+            "{sources:?}"
+        );
+    }
 
-    // Spare dual beside Sol Ring matches fixed Plains beside Sol Ring:
-    // PayCost or Decline, and paying taps Sol Ring while leaving Village untapped.
+    // Real choice (dual or basic beside Sol Ring): both offer per-source taps
+    // beside PayCost/Decline, and PayCost still taps Sol Ring while leaving the
+    // land untapped.
     for first in ["Kyoshi Village", "Plains"] {
         let (mut game, _) = cast_at_ward(&[first, "Sol Ring"], false);
-        assert_eq!(
-            game.action_space().unwrap().actions,
-            [Action::PayCost { player }, Action::Decline { player }],
-            "{first}"
+        let labels = payment_labels(&game);
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.starts_with(&format!("Tap {first} for "))),
+            "{first}: {labels:?}"
         );
-        game.step(0).unwrap();
+        assert!(
+            labels.iter().any(|l| l.starts_with("Tap Sol Ring for ")),
+            "{first}: {labels:?}"
+        );
+        assert!(game
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::PayCost { player }));
+        assert!(game
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::Decline { player }));
+        pay_cost(&mut game);
         assert!(untapped(&game).contains(&first.to_string()), "{first}");
         assert!(
             !untapped(&game).contains(&"Sol Ring".to_string()),
             "{first}"
         );
     }
+
+    // Real choice on Ward {2} with Kyoshi Village + Mountain + Forest: tapping
+    // Kyoshi Village skips the redundant {G}/{W} modal and returns to the
+    // remaining choice between Mountain and Forest.
+    let (mut dual_choice, _) = cast_at_ward(&["Kyoshi Village", "Mountain", "Forest"], false);
+    let dual = payment_labels(&dual_choice)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    dual_choice.step(dual).unwrap();
+    assert_eq!(taps(&dual_choice).len(), 2);
+    tap(&mut dual_choice, "Mountain");
+    assert_eq!(
+        dual_choice.action_space().unwrap().actions,
+        [Action::PayCost { player }, Action::Decline { player }]
+    );
+    pay_cost(&mut dual_choice);
+    assert!(untapped(&dual_choice).contains(&"Forest".into()));
 
     // Non-simple mana abilities (Treasure) remain offered alongside PayCost/Decline.
     let (with_treasure, treasure) = cast_at_ward(&["Plains", "Plains"], true);

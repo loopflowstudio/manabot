@@ -325,7 +325,7 @@
                   data-testid={move.passes ? 'pass-run' : 'log-entry'} data-actor={move.actor}>
                   <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}>
                     <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
-                    <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
+                    <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}<ManaText text={move.segments.map(segment => segment.text).join('')} size={13} />{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
                   </button>
                 </li>
               {:else if move.passes}
@@ -337,7 +337,7 @@
               <li class="move type-caption" class:auto={move.actor === 'auto'} class:you={move.actor === 'you'} data-testid="log-entry" data-actor={move.actor}>
                 <!-- A score names the player once per run of their moves. -->
                 <span class="who" class:repeat={turn.moves[at - 1]?.who === move.who}>{move.who}</span>
-                <span class="what">{#each move.segments as segment, at (at)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}</span>
+                <span class="what">{#each move.segments as segment, at (at)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}<ManaText text={segment.text} size={13} />{/if}{/each}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}</span>
               </li>
               {/if}
             {/each}

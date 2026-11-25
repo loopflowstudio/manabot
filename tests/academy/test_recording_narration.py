@@ -372,3 +372,155 @@ def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
         "Colossal Dreadmaw assigns 2 to Llanowar Elves, 4 left to assign, "
         "Colossal Dreadmaw assigns 2 to Grizzly Bears, 2 to defending player"
     )
+
+
+def test_choice_of_color_mana_tap_records_resolved_color_not_raw_offer() -> None:
+    events = [
+        {
+            "actor": 0,
+            "action": 0,
+            "action_description": "Tap Kyoshi Village for {G}/{W}",
+            "actions": [
+                {
+                    "type": "PRIORITY_ACTIVATE_ABILITY",
+                    "description": "Tap Kyoshi Village for {G}/{W}",
+                }
+            ],
+            "observation": {"decision_context": {"stage": "priority"}},
+        },
+        {
+            "actor": 0,
+            "action": 1,
+            "action_description": "Add {W}",
+            "actions": [
+                {"type": "CHOOSE_MODE", "description": "Add {G}"},
+                {"type": "CHOOSE_MODE", "description": "Add {W}"},
+            ],
+            "observation": {
+                "decision_context": {
+                    "stage": "mana_color",
+                    "source": {"label": "Kyoshi Village"},
+                }
+            },
+        },
+    ]
+    # Opening the color modal waits for the chosen color instead of logging the offer.
+    assert (
+        narrate_move(
+            board("priority"),
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            [],
+            own_steps(events, 0),
+        )
+        is None
+    )
+    # Completing the color modal logs the resolved mana produced.
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            board("priority"),
+            [],
+            own_steps(events, 1),
+        )
+        == "Tap Kyoshi Village for {W}"
+    )
+
+    # During a payment, opening the color modal does not leak the raw offer label,
+    # and returning to payment stays quiet until the spell is cast.
+    assert (
+        narrate_move(
+            board("payment"),
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            [],
+            [own("payment", 0, "Tap Gruul Guildgate for {R}/{G}")],
+        )
+        is None
+    )
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            board("payment"),
+            [],
+            [
+                own("payment", 0, "Tap Gruul Guildgate for {R}/{G}"),
+                own("mana_color", 0, "Add {R}", "Add {G}"),
+            ],
+        )
+        is None
+    )
+
+    # A resolution payment (e.g. Ward) folds the tap + color choice into one phrase.
+    ward_events = [
+        {
+            "actor": 0,
+            "action": 0,
+            "action_description": "Tap Kyoshi Village for {G}/{W}",
+            "actions": [
+                {
+                    "type": "PRIORITY_ACTIVATE_ABILITY",
+                    "description": "Tap Kyoshi Village for {G}/{W}",
+                }
+            ],
+            "observation": {
+                "decision_context": {
+                    "stage": "resolution_payment",
+                    "source": {"label": "Waterfall Aerialist"},
+                }
+            },
+        },
+        {
+            "actor": 0,
+            "action": 1,
+            "action_description": "Add {W}",
+            "actions": [
+                {"type": "CHOOSE_MODE", "description": "Add {G}"},
+                {"type": "CHOOSE_MODE", "description": "Add {W}"},
+            ],
+            "observation": {
+                "decision_context": {
+                    "stage": "mana_color",
+                    "source": {"label": "Kyoshi Village"},
+                }
+            },
+        },
+        {
+            "actor": 0,
+            "action": 0,
+            "action_description": "Pay the cost",
+            "actions": [{"type": "PAY_COST", "description": "Pay the cost"}],
+            "observation": {
+                "decision_context": {
+                    "stage": "resolution_payment",
+                    "source": {"label": "Waterfall Aerialist"},
+                }
+            },
+        },
+    ]
+    assert (
+        narrate_move(
+            board("resolution_payment", source={"label": "Waterfall Aerialist"}),
+            board("priority"),
+            [],
+            own_steps(ward_events, 2),
+        )
+        == "Waterfall Aerialist: tap Kyoshi Village for {W}, pay the cost"
+    )
+
+    # Even without a modal (auto-picked color), pool delta resolves the mana symbol.
+    before_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 0, 0]},
+    }
+    after_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 1, 0]},
+    }
+    assert (
+        narrate_move(
+            before_pool,
+            after_pool,
+            [],
+            [own("priority", 0, "Tap Kyoshi Village for {G}/{W}")],
+        )
+        == "Tap Kyoshi Village for {G}"
+    )

@@ -29,52 +29,140 @@ impl Game {
         if self.state.cast_caller.is_some() {
             return None;
         }
-        let _scan = self.board_scan();
         let tap_count = taps.len();
-        let mut classes: Vec<Vec<UsefulTap>> = Vec::new();
-        // Only unbound permanents can represent a class with multiple members.
-        let mut representatives: Vec<usize> = Vec::new();
-        for tap in taps {
-            if self.unbound_mana_source(tap.source) {
-                if let Some(&index) = representatives
-                    .iter()
-                    .find(|&&index| self.same_mana_permanent(classes[index][0].source, tap.source))
-                {
-                    classes[index].push(tap);
-                    continue;
-                }
-                representatives.push(classes.len());
-            }
-            classes.push(vec![tap]);
+        let spare = tap_count.checked_sub(needed)?;
+        if spare == 0 {
+            return None;
         }
-        // Spare taps need at least one multi-member interchangeable class.
-        if classes.len() == tap_count {
+        // The unique optional class leaves `spare` untapped members and
+        // contributes at least one tap (`count >= 1`), so it must have at
+        // least `spare + 1` interchangeable members sharing a definition.
+        let min_opt = spare + 1;
+        let mut def_counts: Vec<(crate::state::card::CardDefId, usize)> = Vec::new();
+        for tap in &taps {
+            let def = self.state[tap.source.object].definition_id;
+            if let Some((_, count)) = def_counts.iter_mut().find(|(id, _)| *id == def) {
+                *count += 1;
+            } else {
+                def_counts.push((def, 1));
+            }
+        }
+        if !def_counts.iter().any(|(_, count)| *count >= min_opt) {
             return None;
         }
 
-        let mut mandatory = Vec::new();
-        let mut optional = None;
-        for class in classes {
-            if model.payable_after_tap(
-                class[0].source.permanent,
-                pool.clone(),
-                obligations.to_vec(),
-            ) {
+        let _scan = self.board_scan();
+        // Only taps whose definition appears at least `min_opt` times can form
+        // the optional class; skip board-wide binding scans for all others.
+        let mut candidate_classes: Vec<Vec<usize>> = Vec::new();
+        for (index, tap) in taps.iter().enumerate() {
+            let def = self.state[tap.source.object].definition_id;
+            if !def_counts
+                .iter()
+                .any(|(id, count)| *id == def && *count >= min_opt)
+            {
+                continue;
+            }
+            if !self.unbound_mana_source(tap.source) {
+                continue;
+            }
+            if let Some(class) = candidate_classes
+                .iter_mut()
+                .find(|class| self.same_mana_permanent(taps[class[0]].source, tap.source))
+            {
+                class.push(index);
+            } else {
+                candidate_classes.push(vec![index]);
+            }
+        }
+        candidate_classes.retain(|class| class.len() >= min_opt);
+        if candidate_classes.is_empty() {
+            return None;
+        }
+
+        // Fast arithmetic affordability check when every source is fixed-only.
+        let fixed_direct = match obligations {
+            [Obligation::Pay {
+                cost,
+                taps: super::Taps::None,
+            }] if model.sources.iter().all(|s| s.abilities.is_empty()) => {
+                let mut total = pool.clone();
+                for source in model.sources.iter().filter(|s| s.untapped) {
+                    if let Some(output) = &source.fixed {
+                        total.add(output);
+                    }
+                }
+                Some((cost, total))
+            }
+            _ => None,
+        };
+        let payable_without = |source: &ManaSource| -> bool {
+            if let Some((cost, total)) = &fixed_direct {
+                let mut without = total.clone();
+                if let Some(output) = &source.fixed {
+                    without.spend(output);
+                }
+                let fast = without.can_pay(cost);
+                debug_assert_eq!(
+                    fast,
+                    model.payable_after_tap(source.permanent, pool.clone(), obligations.to_vec()),
+                    "direct determined_source_counts differs from model"
+                );
+                fast
+            } else {
+                model.payable_after_tap(source.permanent, pool.clone(), obligations.to_vec())
+            }
+        };
+
+        let mut optional: Option<Vec<usize>> = None;
+        for class in candidate_classes {
+            if payable_without(taps[class[0]].source) {
                 if optional.replace(class).is_some() {
                     return None;
                 }
-            } else {
-                mandatory.extend(class);
             }
         }
-        let count = needed.checked_sub(mandatory.len())?;
-        let optional = optional?;
-        if count == 0 || optional.len() <= count {
+        let opt_indices = optional?;
+        let opt_source = taps[opt_indices[0]].source;
+        let mandatory_count = tap_count - opt_indices.len();
+        let count = needed.checked_sub(mandatory_count)?;
+        if count == 0 || opt_indices.len() <= count {
             return None;
         }
-        mandatory.extend_from_slice(&optional[..count]);
-        mandatory.sort_unstable_by_key(|tap| tap.source.permanent);
-        Some(mandatory)
+
+        // Every tap outside the optional class must be mandatory. Deduplicate
+        // by payment profile since a lone mana obligation reads only profiles.
+        let mut checked_mandatory: Vec<&ManaSource> = Vec::new();
+        for (index, tap) in taps.iter().enumerate() {
+            if opt_indices.contains(&index) {
+                continue;
+            }
+            if tap.source.same_payment_profile(opt_source) {
+                return None;
+            }
+            if checked_mandatory
+                .iter()
+                .any(|seen| seen.same_payment_profile(tap.source))
+            {
+                continue;
+            }
+            if payable_without(tap.source) {
+                return None;
+            }
+            checked_mandatory.push(tap.source);
+        }
+
+        let mut result = Vec::with_capacity(needed);
+        for (index, tap) in taps.iter().enumerate() {
+            if !opt_indices.contains(&index) {
+                result.push(*tap);
+            }
+        }
+        for &index in &opt_indices[..count] {
+            result.push(taps[index]);
+        }
+        result.sort_unstable_by_key(|tap| tap.source.permanent);
+        Some(result)
     }
 
     fn same_mana_permanent(&self, a: &ManaSource, b: &ManaSource) -> bool {
@@ -93,7 +181,8 @@ impl Game {
             return false;
         }
         let view = self.characteristics(a.permanent);
-        if view != self.characteristics(b.permanent) {
+        let other_view = self.characteristics(b.permanent);
+        if !std::sync::Arc::ptr_eq(&view, &other_view) && view != other_view {
             return false;
         }
         // Summoning sickness matters for creatures (CR 302.6), non-lands

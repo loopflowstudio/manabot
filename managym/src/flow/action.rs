@@ -192,11 +192,15 @@ impl Game {
                 let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
             }
-            // A fixed source tapped while an announced cost is paid: its mana
-            // pays toward that cost as it is made (`commit_produced_mana`).
+            // A fixed source tapped while an announced or resolution mana cost is paid.
             Action::TapForMana { permanent, .. }
-                if self.state.suspended_decision.is_none()
-                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
+                if (self.state.suspended_decision.is_none()
+                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))))
+                    || matches!(
+                        self.state.suspended_decision.as_ref().map(|s| &s.decision),
+                        Some(Decision::Payment(payment))
+                            if matches!(payment.owed, CostComponent::Mana { .. })
+                    ) =>
             {
                 let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
