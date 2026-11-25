@@ -326,11 +326,14 @@
   // revision: piles, Pay label and note read it while a person points
   // at other choices, so pointing never reflows the rail or moves a card from
   // under the pointer (which would change what is pointed at).
-  let payAnswer = $state.raw<{ revision: number; answered: NonNullable<typeof answered> } | null>(null);
+  let payAnswer = $state.raw<{ frameHash: string; offerId: number; answered: NonNullable<typeof answered> } | null>(null);
   $effect(() => {
-    if (payOffer && previewing === payOffer && answered) payAnswer = { revision: frame.revision, answered };
+    if (payOffer && previewing === payOffer && answered) {
+      payAnswer = { frameHash: frame.frame_hash, offerId: payOffer.offer.id, answered };
+    }
   });
-  const payKnown = $derived(payOffer && payAnswer?.revision === frame.revision ? payAnswer.answered : null);
+  const payKnown = $derived(live && payAnswer?.frameHash === frame.frame_hash && payAnswer.offerId === payOffer?.offer.id
+    ? payAnswer.answered : null);
   const payKnownPlan = $derived(paymentPlan(payKnown, frame));
   const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
@@ -357,7 +360,10 @@
 
   // Live play only (a recording has its transport). Facts already on screen
   // when the board opens are history, not news.
-  let shownSeq = $state(untrack(() => presentation.events.at(-1)?.seq ?? -1));
+  let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
+  let shownMatch = untrack(() => frame.match_id);
+  let shownRevision = untrack(() => frame.revision);
+  let wasConnected = untrack(() => connection === 'connected');
   let beats = $state.raw<Beat[]>([]);
   let beatAt = $state(0);
   const beat = $derived(beats[beatAt] ?? null);
@@ -365,11 +371,22 @@
   // Before the DOM updates: a frame that brings beats draws the first beat's board first, never the final one.
   $effect.pre(() => {
     const facts = recent.facts;
-    if (connection == null) return;
+    const lastSeq = presentation.events.at(-1)?.seq ?? -1;
+    const { match_id, revision } = frame;
+    const connected = connection === 'connected';
+    if (connection === null) return;
     untrack(() => {
-      const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : beatsFor(facts, shownSeq, players);
-      shownSeq = Math.max(shownSeq, facts.at(-1)?.seq ?? -1, presentation.events.at(-1)?.seq ?? -1);
-      if (fresh.length) { beats = fresh; beatAt = 0; }
+      if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
+        endReadOut();
+        shownSeq = lastSeq;
+      } else {
+        const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : beatsFor(facts, shownSeq, players);
+        if (fresh.length || revision !== shownRevision) { beats = fresh; beatAt = 0; }
+        shownSeq = Math.max(shownSeq, lastSeq);
+      }
+      shownMatch = match_id;
+      shownRevision = revision;
+      wasConnected = connected;
     });
   });
   $effect(() => {
@@ -414,18 +431,24 @@
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && !beatBoard && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
+  const acting = $derived(live && !readingOut && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
   /** The pointer press that ended a read-out; its click acts on nothing. */
   let endedByPress = false;
-  function onPress(): void {
+  function onPress(event: PointerEvent): void {
+    if (event.button !== 0) return;
     endedByPress = readingOut;
-    if (endedByPress) endReadOut();
+    if (endedByPress) {
+      event.stopPropagation();
+      endReadOut();
+    }
   }
   function onClick(event: MouseEvent): void {
-    if (!endedByPress) return;
-    endedByPress = false;
+    const endedByPointer = event.detail > 0 && endedByPress;
+    if (event.detail > 0) endedByPress = false;
+    if (!readingOut && !endedByPointer) return;
     event.preventDefault();
     event.stopPropagation();
+    endReadOut();
   }
   // Capturing listeners on the whole game: board, rail, tray and menus end a read-out alike.
   $effect(() => {
@@ -730,15 +753,22 @@
     (event.shiftKey ? stops.at(-1) : stops[0])?.focus();
   }
 
-  /** Keys that move focus or open help; every other key ends a read-out. */
+  /** Keys that move focus or open help during a read-out. */
   const MOVES_FOCUS = new Set(['Tab', 'Shift', '?', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+  let skippedKey: string | null = null;
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
-    // A key's own click (Enter on a button) is not the press that ended a read-out.
-    endedByPress = false;
+    if (!event.repeat) skippedKey = null;
+    const key = event.code || event.key;
+    if (event.repeat && key === skippedKey) { event.preventDefault(); return; }
     // Enter on a focused choice, Space, Esc or a number key ends a read-out and acts on nothing.
-    if (readingOut && !MOVES_FOCUS.has(event.key)) { event.preventDefault(); endReadOut(); return; }
+    if (readingOut && !MOVES_FOCUS.has(event.key)) {
+      event.preventDefault();
+      skippedKey = key;
+      endReadOut();
+      return;
+    }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }

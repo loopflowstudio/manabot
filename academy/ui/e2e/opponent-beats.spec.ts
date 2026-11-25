@@ -42,10 +42,10 @@ interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean;
 
 /**
  * Press during a beat in one task, so the beat cannot end between reading the
- * page and the press: a number key, or a pointer press and click on the first
- * choice. Null when no beat was showing.
+ * page and the press: a held number key, or activation of the first choice
+ * with or without a pointer. Null when no beat was showing.
  */
-async function pressDuringBeat(page: Page, how: 'key' | 'choice'): Promise<Seen | null> {
+async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'): Promise<Seen | null> {
   return page.evaluate(how => {
     const beat = document.querySelector('[data-testid=beat]');
     if (!beat) return null;
@@ -61,10 +61,11 @@ async function pressDuringBeat(page: Page, how: 'key' | 'choice'): Promise<Seen 
     };
     if (how === 'key') {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
-    } else {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, repeat: true }));
+    } else if (how === 'pointer') {
       row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-      row.click();
-    }
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    } else row.click();
     return seen;
   }, how);
 }
@@ -115,7 +116,7 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   await expect(page.getByTestId('recent')).toBeVisible();
 });
 
-test('each beat is shown on its own board, and a press on the board or a choice ends the reading', async ({ page }) => {
+test('pressing the board or activating a choice ends the reading without acting', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -133,15 +134,20 @@ test('each beat is shown on its own board, and a press on the board or a choice 
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('beat')).toHaveCount(0);
   expect(sent.count).toBe(before);
-  // At a later read-out, a click on a held choice ends it and commits nothing.
-  const heldBefore = { count: 0 };
-  await playUntil(page, async () => {
-    heldBefore.count = sent.count;
-    return await pressDuringBeat(page, 'choice') !== null;
-  }, 160);
-  await expect(page.getByTestId('beat')).toHaveCount(0);
-  await expect(board).toHaveAttribute('data-board', 'frame');
-  expect(sent.count).toBe(heldBefore.count);
+  // A held choice can also be activated without pointer events by assistive technology.
+  for (const how of ['pointer', 'activation'] as const) {
+    let heldBefore = 0;
+    let seen = false;
+    await playUntil(page, async () => {
+      heldBefore = sent.count;
+      seen = await pressDuringBeat(page, how) !== null;
+      return seen;
+    }, 160);
+    expect(seen).toBe(true);
+    await expect(page.getByTestId('beat')).toHaveCount(0);
+    await expect(board).toHaveAttribute('data-board', 'frame');
+    expect(sent.count).toBe(heldBefore);
+  }
 });
 
 test('reduced motion reads out no beats', async ({ page }) => {

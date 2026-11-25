@@ -86,7 +86,7 @@
       {#if hasPlain}<span aria-hidden="true"> <Pips cost={poolSymbols(plain)} size={16} /></span>{/if}
       <!-- Each class of mana is its pips and what sets it apart; with no plain mana the first joins the Floating line. -->
       {#each special as part, index (index)}
-        <span class="pool-class" class:own-line={index > 0 || hasPlain} data-testid="mana-pool-class">{' '}<span aria-hidden="true"><Pips cost={poolSymbols(part.mana)} size={14} /></span>{part.terms}</span>
+        <span class="pool-class" class:own-line={index > 0 || hasPlain} data-testid="mana-pool-class">{' '}<span aria-hidden="true"><Pips cost={poolSymbols(part.mana)} size={14} /></span><span class="sr-only">{manaText(part.mana)}{' '}</span>{part.terms}</span>
       {/each}
     {:else}No floating mana{/if}
   </p>

@@ -6,7 +6,7 @@
    * drawn, and never take pointer input. Each line is also said in words: the
    * stack entry, the blocker's accessible name and the log carry the same facts.
    */
-  import { LONGEST_TRAVEL_MS } from './motion';
+  import { LONGEST_TRAVEL_MS, prefersReducedMotion } from './motion';
   import type { Endpoint, BoardLine } from './recent';
 
   interface Props {
@@ -51,13 +51,14 @@
   // instead of pointing from where a card was, then on any resize.
   $effect(() => {
     void revision;
-    void lines;
     if (!root) return;
+    if (!lines.length) { drawn = []; return; }
+    const followFor = prefersReducedMotion() ? 0 : LONGEST_TRAVEL_MS;
     const start = performance.now();
     let frame = 0;
     const follow = (now: number): void => {
       measure();
-      if (now - start <= LONGEST_TRAVEL_MS) frame = requestAnimationFrame(follow);
+      if (followFor && now - start <= followFor) frame = requestAnimationFrame(follow);
     };
     frame = requestAnimationFrame(follow);
     const observer = new ResizeObserver(() => measure());

@@ -676,11 +676,11 @@ The rail holds:
   attacked, blocked, were targeted or were dealt damage are ringed on the board,
   and damage dealt since your last move shows on the card or the player's plate
   as it lands ("−2").
-- **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
-  Accumulate Wisdom. Space pays automatically, or click lands to tap them
-  yourself"; it stays the same when the planned lands are dashed),
-  and its buttons. Mana in the prompt, the buttons and the choices is drawn as
-  pips. **Rules detail** holds the engine's full instruction.
+- **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
+  Accumulate Wisdom"), and the buttons. For mana payments the hint below the
+  prompt says how to pay. It stays steady as different previews appear.
+  Mana in the prompt, the buttons and the choices is drawn as pips.
+  **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
   step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
@@ -970,10 +970,11 @@ board at that next turn. A past board outlines nothing. While the reading lasts,
 the top bar names the turn the fact happened in, and the step bar marks that
 turn's step when the board shows it and no step when the board is a later
 turn's. Your decision's buttons and numbered choices stay in place
-but wait: they are announced as unavailable and still take focus. The first
-input of any kind ends the reading and does nothing else: a click on the board,
-the rail, a button or a choice, Space, Enter, Escape or a number key. The
-current board and your live decision then answer the next input. So when
+but wait. They are announced as unavailable and still take focus. Clicking
+the board or rail, activating a control, or pressing a key such as Space,
+Enter, Escape or a number key ends the reading. Focus keys still move and
+`?` opens keyboard help. The current board and your live decision answer the
+next press. So when
 Heuristic attacks, you watch the attack land before you are asked to block, and
 pressing `1` early shows the blocking board rather than declaring a block.
 Damage marks ("−2") and a finished game's result card wait with the decision,
