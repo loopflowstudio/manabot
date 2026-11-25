@@ -336,7 +336,9 @@ Remaining:
 
 **2. One Python path (next).** Scalar `Env` returns `managym.Observation`;
 `TargetPracticeVector` on `observation_rows()`; delete `manabot/env/vector_env.py`;
-`RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`;
+`RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`
+(including the `PrefixObservation({}, …)` that Pass 1's
+`manabot/backends/captured_observations.py` restores);
 `ObservationSelection` drops `Mapping`; `blank_decision_memory()` native;
 `admit_native` → `admit`; `prepare()` reads spans only; `reference_distribution`
 on CSR; collectors, `combat_probe`, `selection_data`, decision-memory probes,
