@@ -120,9 +120,11 @@ open at the card. Number keys, Space (primary) and F6 act from the keyboard. Row
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
 sideways width and wrapping before scrolling. See [playing on the board](../../docs/academy.md#playing-on-the-board).
 Priority stops are set on the bottom step bar (off, every time or once)
-and in the top bar's Menu; see
+and in the top bar's Menu; default stops include active combat (**Declare
+attackers** and **Declare blockers** while creatures are attacking) and
+require a non-mana legal play. See
 [priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
-stack responses and F6. Recorded policy/search evidence is attached to the
+stack responses, **Full control** and F6. Recorded policy/search evidence is attached to the
 decision it describes; the live board has no example Advice panel. Replay,
 Watch and Study keep the earlier lane board and choice panel until they move to
 the board. Public mana pools, spending restrictions and chooser-only inspected
@@ -131,8 +133,9 @@ details were not recorded.
 
 Academy uses native trivial-decision skipping, like every game runner: the
 engine resolves sole legal actions for either seat, so no forced prompt reaches
-a person or a policy. Disable **Use priority stops** to surface every priority
-window that offers a real choice. Priority stop/F6 automation retains its
+a person or a policy. Turn off **Auto-pass outside stops** to enter **Full
+control** and surface every priority window that offers a real choice
+(including empty combat and mana-only floats). Priority stop/F6 automation retains its
 Commands and is marked **auto** in the move list; traces from before native
 skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
