@@ -1,14 +1,34 @@
 """Native skipping keeps forced decisions away from people and policies."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import managym
 from managym.academy import server
-from managym.academy.server import GameSession, LogEntry
+from managym.academy.server import GameSession
 from managym.bots import BotDecision, BotPolicy
 from managym.experience import Command, ExperienceFrame
+
+
+def _auto_pass_turns(
+    events: list[dict[str, Any]], human_seat: int
+) -> list[int | None]:
+    """Turn number of each automated priority pass on the person's track."""
+    turn: int | None = None
+    turns: list[int | None] = []
+    for event in events:
+        kind = event["kind"]
+        if kind["kind"] == "turn_started":
+            turn = int(kind["turn_number"])
+        elif (
+            kind["kind"] == "passed"
+            and int(kind["player"]) == human_seat
+            and event["caused_by"] is None
+        ):
+            turns.append(turn)
+    return turns
 
 
 @pytest.mark.parametrize("auto_pass", [True, False])
@@ -37,10 +57,9 @@ def test_forced_decisions_never_surface(
             "auto_pass": auto_pass,
         }
     )
-    frame = ExperienceFrame.model_validate(
-        session.current_recovery("reconnect")["frame"]
-    )
-    log: list[LogEntry] = []
+    recovery = session.current_recovery("reconnect")
+    frame = ExperienceFrame.model_validate(recovery["frame"])
+    events: list[dict[str, Any]] = list(recovery["presentation_tail"])
     for index in range(30):
         if frame.prompt is None:
             break
@@ -63,7 +82,7 @@ def test_forced_decisions_never_surface(
         )
         result = session.hero_command(command.model_dump(mode="json"))
         assert result["status"] == "accepted"
-        log.extend(result["update"].get("log", []))
+        events.extend(result["update"]["presentation"])
         frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
     assert session.env is not None
@@ -72,14 +91,12 @@ def test_forced_decisions_never_surface(
     assert all(len(event.actions) > 1 for event in session.trace.events)
     automatic = [row for row in session.authority_transitions if row.automatic]
     assert all(row.action_type == "PRIORITY_PASS_PRIORITY" for row in automatic)
-    assert [entry["text"] for entry in log if entry["actor"] == "auto"].count(
-        "Pass priority"
-    ) == len(automatic)
+    assert len(_auto_pass_turns(events, session.human_seat)) == len(automatic)
     assert policy_calls
 
 
 def test_priority_automation_is_logged(tmp_path: Path) -> None:
-    """Passes outside configured stops are real choices, logged as automation."""
+    """Passes outside configured stops are real choices, told as automation."""
     session = GameSession(tmp_path, capture_authority_evidence=True)
     session.new_game(
         {
@@ -89,10 +106,9 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
             "seed": 1,
         }
     )
-    frame = ExperienceFrame.model_validate(
-        session.current_recovery("reconnect")["frame"]
-    )
-    log: list[LogEntry] = []
+    recovery = session.current_recovery("reconnect")
+    frame = ExperienceFrame.model_validate(recovery["frame"])
+    events: list[dict[str, Any]] = list(recovery["presentation_tail"])
     for index, label in enumerate(("Keep hand", "Play Mountain", "Pass priority")):
         assert frame.prompt is not None
         offer = next(row for row in frame.offers if row.label == label)
@@ -106,17 +122,15 @@ def test_priority_automation_is_logged(tmp_path: Path) -> None:
         )
         result = session.hero_command(command.model_dump(mode="json"))
         assert result["status"] == "accepted"
-        log.extend(result["update"].get("log", []))
+        events.extend(result["update"]["presentation"])
         frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
     automatic = [row for row in session.authority_transitions if row.automatic]
     assert automatic
-    # Each line names the turn its action was taken in, never a later one.
+    auto_turns = _auto_pass_turns(events, session.human_seat)
+    # Each pass sits under the turn its action was taken in, never a later one.
     assert all(
-        1 <= entry["turn"] <= frame.projection.turn.turn_number
-        for entry in log
-        if entry["actor"] == "auto"
+        turn is not None and 1 <= turn <= frame.projection.turn.turn_number
+        for turn in auto_turns
     )
-    assert [entry["text"] for entry in log if entry["actor"] == "auto"].count(
-        "Pass priority"
-    ) == len(automatic)
+    assert len(auto_turns) == len(automatic)

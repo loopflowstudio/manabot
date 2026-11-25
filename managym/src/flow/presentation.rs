@@ -239,11 +239,16 @@ impl Game {
             GameEvent::PermanentSacrificed { object_id, .. } => self.object_event_ref(*object_id),
             _ => None,
         };
-        let mut lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer));
+        let lines = if self
+            .presentation
+            .as_deref()
+            .is_some_and(|sink| sink.follows_player_damage(event))
+        {
+            [Vec::new(), Vec::new()]
+        } else {
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer))
+        };
         let sink = self.presentation.as_deref_mut().expect("checked above");
-        if sink.follows_player_damage(event) {
-            lines = [Vec::new(), Vec::new()];
-        }
         // Combat damage is one fact: the observation tells it by the
         // `CombatDamageDealt` emitted right after its `DamageDealt`.
         if let GameEvent::CombatDamageDealt { .. } = event {

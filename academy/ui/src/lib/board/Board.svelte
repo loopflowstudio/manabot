@@ -26,9 +26,9 @@
   import Lines from './Lines.svelte';
   import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, Travel, type DeathMark } from './motion';
   import { region } from './region';
-  import { BEAT_MS, computeStopDeltas, cursorView, scrubberStops, sharedLaterCount, stopHasSeq, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
+  import { BEAT_MS, computeStopDeltas, cursorView, scrubberStops, sharedLaterCount, stopHasSeq, unreadWalkStops, walkStops, type BeatPace } from './beats';
   import { findBoard, type StepBoard } from './boards';
-  import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
+  import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
@@ -499,10 +499,6 @@
   const board = $derived(activeCursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
   const stopDeltas = $derived(computeStopDeltas(presentation.events, active.seqs, boardProjection));
-  const boardNames = $derived(activeCursor !== null && cursorHit
-    ? new Map([...cursorHit.projection.agent.battlefield, ...cursorHit.projection.opponent.battlefield]
-      .map(permanent => [permanent.id, permanent.name ?? 'permanent']))
-    : names);
   const owners = $derived(turnOwners(frame, presentation.events));
   const turnNumber = $derived(activeCursor !== null ? turnAt(presentation.events, activeCursor.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
   const turnStep = $derived(turnNumber === boardProjection.turn.turn_number ? boardProjection.turn.step : null);
@@ -513,15 +509,19 @@
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
   const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
+  const boardNotice = $derived.by<{ testid: string; text: string } | null>(() => {
+    if (activeCursor === null) return null;
+    if (stepBoardsError) return { testid: 'board-unavailable', text: 'Board unavailable for this step' };
+    if (boardMissing) return { testid: 'board-not-kept', text: 'Board not kept for this step' };
+    if (boardSharedCount > 0) {
+      return { testid: 'board-shared', text: `shared with ${boardSharedCount} later ${boardSharedCount === 1 ? 'line' : 'lines'}` };
+    }
+    return null;
+  });
   const activeCursorReading = $derived.by<string | null>(() => {
     if (activeCursor === null) return null;
     const reading = cursorReading(history, presentation.events, activeCursor, players, active.stop);
-    if (stepBoardsError) return `${reading} · Board unavailable for this step`;
-    if (!showWalkBar && boardMissing) return `${reading} · Board not kept for this step`;
-    if (!showWalkBar && boardSharedCount > 0) {
-      return `${reading} · shared with ${boardSharedCount} later ${boardSharedCount === 1 ? 'line' : 'lines'}`;
-    }
-    return reading;
+    return boardNotice && (stepBoardsError || !showWalkBar) ? `${reading} · ${boardNotice.text}` : reading;
   });
   function clearActiveCursor(): void {
     if (selection !== null) returnToNow();
@@ -699,6 +699,7 @@
 
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
+  const boardNames = $derived(new Map([...permanents].map(([id, permanent]) => [id, permanent.name ?? 'permanent'])));
   const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
@@ -1061,12 +1062,8 @@
               onmouseenter={() => (captionHovered = true)} onmouseleave={() => (captionHovered = false)}>
               {#if cursor !== null}
                 <span class="walk-text">{active.caption}</span>
-                {#if stepBoardsError}
-                  <span class="walk-note" data-testid="board-unavailable"> · Board unavailable for this step</span>
-                {:else if boardMissing}
-                  <span class="walk-note" data-testid="board-not-kept"> · Board not kept for this step</span>
-                {:else if boardSharedCount > 0}
-                  <span class="walk-note" data-testid="board-shared"> · shared with {boardSharedCount} later {boardSharedCount === 1 ? 'line' : 'lines'}</span>
+                {#if boardNotice}
+                  <span class="walk-note" data-testid={boardNotice.testid}> · {boardNotice.text}</span>
                 {/if}
               {:else}
                 <span class="walk-idle">Turn {scrubber.turn ?? turnNumber} · {scrubber.stops.length} {scrubber.stops.length === 1 ? 'stop' : 'stops'}</span>
@@ -1086,7 +1083,7 @@
           </div>
           <div class="walk-scrubber" data-testid="walk-scrubber" role="group" aria-label={`Turn ${scrubber.turn ?? turnNumber} stops`}>
             {#each scrubber.stops as stop, idx (stop.seq)}
-              {@const isActive = cursor !== null && stopHasSeq(stop, cursor)}
+              {@const isActive = idx === activeStopIndex}
               <button type="button" class="walk-tick" class:move={stop.moveStart} class:active={isActive}
                 class:passed={activeStopIndex >= 0 && idx < activeStopIndex}
                 data-testid="walk-tick" data-stop-seq={stop.seq} data-move-start={stop.moveStart ? 'true' : undefined}
@@ -1151,7 +1148,7 @@
   <section class="dock" aria-label="Inspect" data-testid="inspect-dock" tabindex="0">
     {#if docked}
       <Inspect name={docked.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? docked.text} permanent={shownPermanent} card={shownCard} {castTerms}
-        blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} art={72} />
+        blocks={shownPermanent?.blocking !== undefined ? boardNames.get(shownPermanent.blocking) ?? null : null} art={72} />
     {:else}
       <p class="type-body text-ink-3">Hover or focus a card to inspect it.</p>
     {/if}
@@ -1161,7 +1158,7 @@
 {#if inspectMode === 'float' && hovered}
   <div class="preview" aria-hidden="true" style:left={`${hovered.x}px`} style:top={`${hovered.y}px`} data-testid="card-preview">
     <Inspect name={hovered.subject.name} text={shownPermanent?.text_box ?? shownCard?.text_box ?? hovered.subject.text} permanent={shownPermanent} card={shownCard} {castTerms}
-      blocks={shownPermanent?.blocking !== undefined ? names.get(shownPermanent.blocking) ?? null : null} />
+      blocks={shownPermanent?.blocking !== undefined ? boardNames.get(shownPermanent.blocking) ?? null : null} />
   </div>
 {/if}
 

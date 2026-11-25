@@ -137,9 +137,9 @@ impl Game {
         })
     }
 
-    /// One `targeted` line per target an ability on the stack chose, after
-    /// the line that put it there.
-    fn ability_target_lines(
+    /// One `targeted` line per target a spell or ability on the stack chose,
+    /// after the line that put it there.
+    fn target_lines(
         &self,
         targets: &[Target],
         stack: StackRenderId,
@@ -217,7 +217,7 @@ impl Game {
                     controller: seat(stacked.controller()),
                     stack,
                 })];
-                lines.extend(self.ability_target_lines(stacked.targets(), stack, &name, viewer));
+                lines.extend(self.target_lines(stacked.targets(), stack, &name, viewer));
                 return lines;
             }
         };
@@ -240,21 +240,13 @@ impl Game {
                 ) else {
                     return vec![];
                 };
+                let name = labels.stacks[&stack.0.to_string()].clone();
                 let mut lines = vec![labels.line(Kind::Cast {
                     object,
                     stack,
                     controller: seat(*caster),
                 })];
-                for target in targets {
-                    let mut labels = PresentationLabels::default();
-                    if let Some(target) = self.named_target(*target, viewer, &mut labels) {
-                        self.named_spell(*object_id, &mut labels);
-                        lines.push(labels.line(Kind::Targeted {
-                            source: SubjectRef::Stack { id: stack },
-                            target,
-                        }));
-                    }
-                }
+                lines.extend(self.target_lines(targets, stack, &name, viewer));
                 return lines;
             }
             SpellCountered { object_id, .. } => {
@@ -447,7 +439,7 @@ impl Game {
                     controller: seat(*controller),
                     stack,
                 })];
-                lines.extend(self.ability_target_lines(&targets, stack, &name, viewer));
+                lines.extend(self.target_lines(&targets, stack, &name, viewer));
                 return lines;
             }
             CountersPut {

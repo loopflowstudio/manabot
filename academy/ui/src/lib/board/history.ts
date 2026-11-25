@@ -13,6 +13,7 @@
  * before moves were recorded as presentation events into the same `HistoryTurn`
  * shape so the rail renders one structure everywhere.
  */
+import { presentationSubjects } from '$lib/presentation';
 import type {
   GameLogEntry,
   PresentationEvent,
@@ -155,32 +156,31 @@ export function hasTrackHistory(events: readonly PresentationEvent[]): boolean {
 }
 
 function objectEntities(event: PresentationEvent): number[] {
+  return presentationSubjects(event).flatMap(subject => (subject.kind === 'object' ? [subject.id.entity] : []));
+}
+
+function eventSeat(event: PresentationEvent): number | null {
   const kind = event.kind;
   switch (kind.kind) {
-    case 'cast': return [kind.object.entity];
-    case 'targeted': return kind.target.kind === 'object' ? [kind.target.id.entity] : [];
-    case 'damage':
-      return [kind.source, kind.target].flatMap(s => (s?.kind === 'object' ? [s.id.entity] : []));
-    case 'died':
-    case 'destroyed':
-    case 'discarded':
-    case 'sacrificed':
-      return kind.objects.map(o => o.entity);
-    case 'attack_group':
-      return kind.attackers.map(o => o.entity);
-    case 'blocked':
-      return [kind.attacker.entity, ...kind.blockers.map(o => o.entity)];
-    case 'land_played':
-    case 'counters':
-      return [kind.object.entity];
-    case 'drew':
-      return kind.object ? [kind.object.entity] : [];
+    case 'cast':
     case 'activated':
     case 'triggered':
-    case 'ability_resolved':
-      return [kind.source.entity];
+      return kind.controller;
+    case 'attack_group':
+      return kind.defender.kind === 'player' ? 1 - kind.defender.id : null;
+    case 'land_played':
+    case 'passed':
+    case 'discarded':
+    case 'drew':
+    case 'revealed':
+    case 'searched':
+    case 'looked':
+    case 'sacrificed':
+    case 'lost':
+    case 'life':
+      return kind.player;
     default:
-      return [];
+      return null;
   }
 }
 
@@ -189,27 +189,12 @@ function actorForMove(
   players: TellPlayers,
   turnOwner: 'you' | 'opponent' | null,
 ): HistoryActor {
-  const kind = event.kind;
-  let seat: number | null = null;
-  switch (kind.kind) {
-    case 'cast':
-    case 'activated':
-      seat = kind.controller;
-      break;
-    case 'land_played':
-    case 'passed':
-      seat = kind.player;
-      break;
-    case 'attack_group':
-      seat = kind.defender.kind === 'player' ? 1 - kind.defender.id : null;
-      break;
-    case 'blocked':
-      if (event.caused_by !== null) return 'you';
-      return turnOwner === 'opponent' ? 'you' : 'opponent';
-    default:
-      return 'note';
+  if (event.kind.kind === 'blocked') {
+    if (event.caused_by !== null) return 'you';
+    return turnOwner === 'opponent' ? 'you' : 'opponent';
   }
-  if (seat === null) return 'opponent';
+  const seat = eventSeat(event);
+  if (seat === null) return event.kind.kind === 'attack_group' ? 'opponent' : 'note';
   if (seat === players.youSeat) {
     return event.caused_by === null || event.caused_by.startsWith('authority.auto.') ? 'auto' : 'you';
   }
@@ -227,19 +212,23 @@ function sameObjects(a: readonly { entity: number; incarnation: number }[], b: r
   return a.length === b.length && a.every((item, i) => item.entity === b[i].entity && item.incarnation === b[i].incarnation);
 }
 
-export interface TrackFold {
-  /** Indices of redundant `destroyed` (before matching `died`) and folded `targeted` events. */
+interface TrackFold {
+  /** Indices of redundant `destroyed`, folded `targeted`, folded resolutions, and absorbed passes. */
   consumed: Set<number>;
   /** Targets folded onto their parent `cast` / `activated` / `triggered` event, keyed by parent seq. */
   foldedTargets: Map<number, (FoldedTarget & { seq: number })[]>;
+  /** Immediate resolution (ignoring passes) folded onto its `cast` / `activated` index. */
+  foldedResolution: Map<number, { resolvedIndex: number; passIndices: number[] }>;
+  /** Passes immediately preceding a standalone resolution, keyed by resolution index. */
+  absorbedBeforeResolution: Map<number, number[]>;
   /** Stack ids created by `triggered` events (so `ability_resolved` reads "trigger"). */
   stackTriggers: Set<number>;
   /** Stack id -> seq of the `cast` / `activated` / `triggered` event that put it on the stack. */
   stackSourceSeq: Map<number, number>;
 }
 
-/** Shared track pass: index stack origins, fold `targeted` onto its parent, and drop redundant `destroyed`. */
-export function preprocessTrackEvents(
+/** Pass 1: index stack origins, fold targets and immediate resolutions, and absorb passes before resolutions. */
+function foldTrackEvents(
   events: readonly PresentationEvent[],
   labelsAt: (index: number) => PresentationLabels,
 ): TrackFold {
@@ -247,6 +236,8 @@ export function preprocessTrackEvents(
   const stackSourceSeq = new Map<number, number>();
   const consumed = new Set<number>();
   const foldedTargets = new Map<number, (FoldedTarget & { seq: number })[]>();
+  const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
+  const absorbedBeforeResolution = new Map<number, number[]>();
 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
@@ -285,7 +276,58 @@ export function preprocessTrackEvents(
       }
     }
   }
-  return { consumed, foldedTargets, stackTriggers, stackSourceSeq };
+
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue;
+    const event = events[i];
+    if (event.kind.kind === 'cast' || event.kind.kind === 'activated') {
+      const expectedKind = event.kind.kind === 'cast' ? 'resolved' : 'ability_resolved';
+      const stackId = event.kind.stack;
+      const passIndices: number[] = [];
+      let j = i + 1;
+      while (j < events.length) {
+        if (consumed.has(j)) { j += 1; continue; }
+        if (events[j].kind.kind === 'passed') {
+          passIndices.push(j);
+          j += 1;
+          continue;
+        }
+        break;
+      }
+      if (j < events.length) {
+        const nextKind = events[j].kind;
+        if (nextKind.kind === expectedKind && nextKind.stack === stackId) {
+          foldedResolution.set(i, { resolvedIndex: j, passIndices });
+          consumed.add(j);
+          for (const passIdx of passIndices) consumed.add(passIdx);
+        }
+      }
+    }
+  }
+
+  // Absorb passes that immediately precede a standalone resolution so
+  // "Trigger · X" -> "X's trigger resolved" is not split by a pass line.
+  for (let i = 0; i < events.length; i += 1) {
+    if (consumed.has(i)) continue;
+    const kind = events[i].kind.kind;
+    if (kind !== 'resolved' && kind !== 'ability_resolved') continue;
+    const passIndices: number[] = [];
+    for (let back = i - 1; back >= 0; back -= 1) {
+      if (consumed.has(back)) continue;
+      if (events[back].kind.kind === 'passed') {
+        passIndices.push(back);
+        continue;
+      }
+      break;
+    }
+    if (passIndices.length > 0) {
+      passIndices.reverse();
+      absorbedBeforeResolution.set(i, passIndices);
+      for (const passIdx of passIndices) consumed.add(passIdx);
+    }
+  }
+
+  return { consumed, foldedTargets, foldedResolution, absorbedBeforeResolution, stackTriggers, stackSourceSeq };
 }
 
 function sideForEvent(
@@ -293,29 +335,9 @@ function sideForEvent(
   players: TellPlayers,
   actor: HistoryActor,
 ): 'you' | 'opponent' | null {
-  if (actor === 'you') return 'you';
-  if (actor === 'opponent') return 'opponent';
-  const kind = event.kind;
-  switch (kind.kind) {
-    case 'cast':
-    case 'activated':
-    case 'triggered':
-      return playerSide(kind.controller, players.youSeat);
-    case 'attack_group':
-      return kind.defender.kind === 'player' ? playerSide(1 - kind.defender.id, players.youSeat) : null;
-    case 'land_played':
-    case 'discarded':
-    case 'drew':
-    case 'revealed':
-    case 'searched':
-    case 'looked':
-    case 'sacrificed':
-    case 'lost':
-    case 'life':
-      return playerSide(kind.player, players.youSeat);
-    default:
-      return null;
-  }
+  if (actor === 'you' || actor === 'opponent') return actor;
+  const seat = eventSeat(event);
+  return seat === null ? null : playerSide(seat, players.youSeat);
 }
 
 function makeLine(
@@ -373,62 +395,14 @@ export function buildHistory(
   players: TellPlayers,
   options: HistoryOptions = {},
 ): HistoryTurn[] {
-  // Pass 1: fold targets onto their parent event, fold immediate resolutions
-  // (ignoring passes) into their cast/activation, and absorb passes that
-  // immediately precede a stack resolution.
-  const { consumed, foldedTargets, stackTriggers, stackSourceSeq } = preprocessTrackEvents(events, labelsAt);
-  const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
-  const absorbedBeforeResolution = new Map<number, number[]>();
-
-  for (let i = 0; i < events.length; i += 1) {
-    if (consumed.has(i)) continue;
-    const event = events[i];
-    if (event.kind.kind === 'cast' || event.kind.kind === 'activated') {
-      const expectedKind = event.kind.kind === 'cast' ? 'resolved' : 'ability_resolved';
-      const stackId = event.kind.stack;
-      const passIndices: number[] = [];
-      let j = i + 1;
-      while (j < events.length) {
-        if (consumed.has(j)) { j += 1; continue; }
-        if (events[j].kind.kind === 'passed') {
-          passIndices.push(j);
-          j += 1;
-          continue;
-        }
-        break;
-      }
-      if (j < events.length) {
-        const next = events[j];
-        if (next.kind.kind === expectedKind && next.kind.stack === stackId) {
-          foldedResolution.set(i, { resolvedIndex: j, passIndices });
-          consumed.add(j);
-          for (const passIdx of passIndices) consumed.add(passIdx);
-        }
-      }
-    }
-  }
-
-  // Absorb passes that immediately precede a standalone resolution so
-  // "Trigger · X" -> "X's trigger resolved" is not split by a pass line.
-  for (let i = 0; i < events.length; i += 1) {
-    if (consumed.has(i)) continue;
-    const kind = events[i].kind.kind;
-    if (kind !== 'resolved' && kind !== 'ability_resolved') continue;
-    const passIndices: number[] = [];
-    for (let back = i - 1; back >= 0; back -= 1) {
-      if (consumed.has(back)) continue;
-      if (events[back].kind.kind === 'passed') {
-        passIndices.push(back);
-        continue;
-      }
-      break;
-    }
-    if (passIndices.length > 0) {
-      passIndices.reverse();
-      absorbedBeforeResolution.set(i, passIndices);
-      for (const passIdx of passIndices) consumed.add(passIdx);
-    }
-  }
+  const {
+    consumed,
+    foldedTargets,
+    foldedResolution,
+    absorbedBeforeResolution,
+    stackTriggers,
+    stackSourceSeq,
+  } = foldTrackEvents(events, labelsAt);
 
   // Pass 2: assemble turns, blocks, indented consequences, pass runs, and notes.
   const turns: HistoryTurn[] = [];
@@ -849,23 +823,15 @@ export function cursorReading(
     ? `${parent.actor === 'you' ? (players.you === 'You' ? 'Your' : possessive(players.you)) : possessive(players.opponent)} ${parentCard}`
     : null;
 
-  let body = '';
-  if (isMultiLineStop && stop) {
-    body = stop.caption;
-  } else if (entry) {
-    body = parentPrefix
-      ? segmentText(entry.line.segments)
-      : (entry.line.sentence || segmentText(entry.line.segments));
-  } else if (stop?.caption) {
-    body = stop.caption;
-  }
+  const body = isMultiLineStop && stop
+    ? stop.caption
+    : entry
+      ? (parentPrefix ? segmentText(entry.line.segments) : (entry.line.sentence || segmentText(entry.line.segments)))
+      : (stop?.caption ?? '');
 
-  let detail = body;
-  if (parentPrefix && body && !body.includes(parentCard!)) {
-    detail = `${parentPrefix} · ${body}`;
-  } else if (!detail && parentPrefix) {
-    detail = parentPrefix;
-  }
+  const detail = parentPrefix && parentCard
+    ? (!body ? parentPrefix : body.includes(parentCard) ? body : `${parentPrefix} · ${body}`)
+    : body;
 
   if (turn !== null && detail) return `Turn ${turn} · ${detail}`;
   if (turn !== null) return `Turn ${turn}`;

@@ -14,14 +14,12 @@ import { findBoard, type StepBoard } from './boards';
 import {
   flattenHistory,
   lineAtCursor,
-  turnAt,
   type CursorSelection,
   type FlatHistoryLine,
   type HistoryTurn,
 } from './history';
+import { playerIndex } from './recent';
 import { tellCounter } from './tell';
-
-export { turnAt };
 
 export interface CursorView {
   stop: WalkStop | null;
@@ -58,25 +56,19 @@ export function cursorView(
   if (selection === null) return EMPTY_CURSOR_VIEW;
   const stop = stops.find(candidate => stopHasSeq(candidate, selection.seq)) ?? null;
   const line = lineAtCursor(turns, selection.seq);
-  const isStop = selection.scope === 'stop';
-  const lineIds = isStop && stop
+  const useStop = selection.scope === 'stop' && stop !== null;
+  const lineIds = useStop
     ? new Set(stop.lineIds)
     : line
       ? new Set([line.line.id])
-      : stop
-        ? new Set(stop.lineIds)
-        : new Set<string>();
+      : new Set(stop?.lineIds ?? []);
   const subjects = new Set(
-    isStop
-      ? (stop?.subjects ?? line?.line.subjects ?? [])
-      : (line?.line.subjects ?? stop?.subjects ?? []),
+    useStop ? stop.subjects : (line?.line.subjects ?? stop?.subjects ?? []),
   );
-  const seqs = isStop && stop
+  const seqs = useStop
     ? new Set(stop.seqs)
-    : line
-      ? new Set(line.line.seqs)
-      : new Set(stop?.seqs ?? [selection.seq]);
-  const caption = (isStop ? stop?.caption : line?.line.sentence) ?? stop?.caption ?? '';
+    : new Set(line?.line.seqs ?? stop?.seqs ?? [selection.seq]);
+  const caption = (useStop ? stop.caption : line?.line.sentence) ?? stop?.caption ?? '';
   return {
     stop,
     line,
@@ -120,12 +112,7 @@ export function computeStopDeltas(
         const id = event.kind.target.id.entity;
         objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
       } else if (event.kind.target.kind === 'player') {
-        const id = event.kind.target.id;
-        const idx = id === projection.agent.id || id === projection.agent.player_index
-          ? projection.agent.player_index
-          : id === projection.opponent.id || id === projection.opponent.player_index
-            ? projection.opponent.player_index
-            : null;
+        const idx = playerIndex(projection, event.kind.target.id);
         if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
       }
     } else if (event.kind.kind === 'counters') {

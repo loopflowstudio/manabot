@@ -117,6 +117,12 @@
   let logEnd = $state<HTMLElement | null>(null);
   let logList = $state<HTMLElement | null>(null);
   let expanded = $state<Set<string>>(new Set());
+  const hasCursor = $derived((cursorLineIds?.size ?? 0) > 0);
+  function isLineCurrent(entry: HistoryLine, fallbackId = false): boolean {
+    if (hasCursor) return cursorLineIds!.has(entry.id);
+    const key = entry.jumpKey ?? (fallbackId ? entry.id : null);
+    return currentMove !== null && key === currentMove;
+  }
   function toggleExpanded(id: string): void {
     const next = new Set(expanded);
     if (next.has(id)) next.delete(id);
@@ -129,7 +135,6 @@
     void history.at(-1)?.lines.length;
     void history.at(-1)?.lines.at(-1)?.children.length;
     void cursorLineIds;
-    const hasCursor = (cursorLineIds?.size ?? 0) > 0;
     const current = currentMove;
     if (!hasCursor && current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
@@ -168,6 +173,10 @@
       {segment.text}
     {/if}
   {/each}
+{/snippet}
+
+{#snippet moveWhat(entry: HistoryLine, prevWho: string, focusable: boolean)}
+  <span class="what">{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, focusable)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
 {/snippet}
 
 <aside class="rail" aria-label="Stack, decision and legal choices">
@@ -359,12 +368,9 @@
             {#each turn.lines as entry, at (entry.id)}
               {@const jumpId = entry.jumpKey ?? entry.id}
               {@const prevWho = at > 0 ? turn.lines[at - 1]?.who : ''}
-              {@const hasCursor = (cursorLineIds?.size ?? 0) > 0}
-              {@const isCurrent = hasCursor ? cursorLineIds!.has(entry.id) : (currentMove !== null && currentMove === jumpId)}
+              {@const isCurrent = isLineCurrent(entry, true)}
               {@const isSource = cursorSourceSeq !== null && entry.seq === cursorSourceSeq}
-              {@const childCurrent = hasCursor
-                ? entry.children.some(child => cursorLineIds!.has(child.id))
-                : (currentMove !== null && entry.children.some(child => child.jumpKey === currentMove))}
+              {@const childCurrent = entry.children.some(child => isLineCurrent(child))}
               {@const isJump = Boolean(onjump && entry.jumpKey)}
               {@const isSelectable = !entry.passes && Boolean(onselectline && entry.boardSeq !== null)}
               {#if isJump || isSelectable}
@@ -374,7 +380,11 @@
                   <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
                     data-move={isJump ? jumpId : undefined} data-history-seq={entry.boardSeq ?? undefined}
                     onclick={() => (isJump ? onjump!(jumpId, entry.boardSeq) : onselectline!(entry))}>
-                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, false)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
+                    {#if entry.passes}
+                      <span class="what">passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}</span>
+                    {:else}
+                      {@render moveWhat(entry, prevWho, false)}
+                    {/if}
                   </button>
                 </li>
               {:else if entry.passes}
@@ -383,7 +393,7 @@
                 </li>
               {:else}
                 <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
-                  <span class="what">{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, true)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+                  {@render moveWhat(entry, prevWho, true)}
                 </li>
               {/if}
               {#if entry.children.length > 0}
@@ -402,23 +412,20 @@
                     {/if}
                     <ol class="consequences">
                       {#each entry.children as child (child.id)}
-                        {@const isChildCurrent = hasCursor ? cursorLineIds!.has(child.id) : (currentMove !== null && child.jumpKey === currentMove)}
                         {@const isChildJump = Boolean(onjump && child.jumpKey)}
-                        {@const isChildSelectable = Boolean(onselectline && child.boardSeq !== null)}
-                        {#if isChildJump || isChildSelectable}
-                          <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
-                            <button type="button" aria-current={isChildCurrent ? 'true' : undefined}
+                        {@const isChildInteractive = isChildJump || Boolean(onselectline && child.boardSeq !== null)}
+                        <li class="consequence type-caption" class:jump={isChildInteractive} data-testid="history-consequence" data-depth="1">
+                          {#if isChildInteractive}
+                            <button type="button" aria-current={isLineCurrent(child) ? 'true' : undefined}
                               data-move={isChildJump ? child.jumpKey! : undefined}
                               data-history-seq={child.boardSeq ?? undefined}
                               onclick={() => (isChildJump ? onjump!(child.jumpKey!, child.boardSeq) : onselectline!(child))}>
                               <span class="what">{@render lineSegments(child.segments, false)}</span>
                             </button>
-                          </li>
-                        {:else}
-                          <li class="consequence type-caption" data-testid="history-consequence" data-depth="1">
+                          {:else}
                             <span class="what">{@render lineSegments(child.segments, true)}</span>
-                          </li>
-                        {/if}
+                          {/if}
+                        </li>
                       {/each}
                     </ol>
                   </li>
@@ -536,17 +543,14 @@
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
   .move.jump { padding: 0; }
-  .move.jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
-  .move.jump button:hover { background: var(--bg-field); }
-  .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
-  .move.jump button[data-cursor-source='true'] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 2px 0 0 var(--border-strong); }
+  .jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .jump button:hover { background: var(--bg-field); }
+  .jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .jump button[data-cursor-source='true'] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 2px 0 0 var(--border-strong); }
   .consequences-wrap, .consequence-summary { padding-left: 6px; }
   .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 7px; margin: 1px 0 3px; }
   .consequence { color: var(--text-secondary); line-height: 20px; }
   .consequence .what { display: block; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
-  .consequence.jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
-  .consequence.jump button:hover { background: var(--bg-field); }
-  .consequence.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
   .consequence-toggle { min-height: 0; color: var(--text-tertiary); padding: 1px 3px; text-decoration: underline dotted; }
   .consequence-toggle:hover { color: var(--text); }
 </style>

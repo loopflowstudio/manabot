@@ -122,7 +122,6 @@
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
   const EMPTY_LABELS = { objects: {}, players: {}, stacks: {} };
-  const entries = $derived(replayLog(positions, heroSeat, saidOf));
   const useTrack = $derived(
     !studying && (
       (index?.watch
@@ -130,6 +129,7 @@
         : hasTrackHistory(index?.history ?? []))
     ),
   );
+  const entries = $derived(useTrack ? [] : replayLog(positions, heroSeat, saidOf));
   const history = $derived.by<HistoryTurn[]>(() => {
     const players = { youSeat: heroSeat, you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) };
     if (studying) {

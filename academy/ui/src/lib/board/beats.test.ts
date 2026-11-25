@@ -7,12 +7,11 @@ import {
   saveBeatPace,
   scrubberStops,
   sharedLaterCount,
-  turnAt,
   unreadWalkStops,
   walkStops,
 } from './beats';
 import type { StepBoard } from './boards';
-import { buildHistory } from './history';
+import { buildHistory, turnAt } from './history';
 
 const EMPTY = { objects: {}, players: {}, stacks: {} };
 const PLAYERS = { youSeat: 0, you: 'You', opponent: 'Heuristic' };

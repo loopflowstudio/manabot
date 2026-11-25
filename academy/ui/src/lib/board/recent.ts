@@ -15,6 +15,7 @@
  */
 import type {
   ExperienceFrame,
+  Observation,
   PresentationEvent,
   PresentationLabels,
   SubjectRef,
@@ -51,17 +52,18 @@ export interface RecentMarks {
   damage: { objects: Map<number, number>; players: Map<number, number> };
 }
 
-function playerSide(frame: ExperienceFrame, id: number): Side | null {
-  const { agent, opponent } = frame.projection;
+function playerSide(projection: Pick<Observation, 'agent' | 'opponent'>, id: number): Side | null {
+  const { agent, opponent } = projection;
   // Presentation player references use engine ids; prompts use indexes. Both are 0/1 today.
   if (id === agent.id || id === agent.player_index) return 'you';
   if (id === opponent.id || id === opponent.player_index) return 'opponent';
   return null;
 }
 
-function playerIndex(frame: ExperienceFrame, id: number): number | null {
-  const side = playerSide(frame, id);
-  return side === null ? null : side === 'you' ? frame.projection.agent.player_index : frame.projection.opponent.player_index;
+/** Resolve a presentation player reference to its `player_index` in `projection`. */
+export function playerIndex(projection: Pick<Observation, 'agent' | 'opponent'>, id: number): number | null {
+  const side = playerSide(projection, id);
+  return side === null ? null : side === 'you' ? projection.agent.player_index : projection.opponent.player_index;
 }
 
 /** Stack card ids (spells) and stack-object ids (triggered/activated abilities) currently on the stack. */
@@ -79,7 +81,7 @@ function battlefieldIds(frame: ExperienceFrame): Set<number> {
 
 function endpoint(subject: SubjectRef, frame: ExperienceFrame, onBoard: Set<number>, onStack: Set<number>): Endpoint | null {
   if (subject.kind === 'player') {
-    const index = playerIndex(frame, subject.id);
+    const index = playerIndex(frame.projection, subject.id);
     return index === null ? null : { kind: 'player', index };
   }
   const id = subject.kind === 'stack' ? subject.id : subject.id.entity;
@@ -183,7 +185,7 @@ export function recentMarks(
           marks.touched.add(kind.target.id.entity);
           marks.damage.objects.set(kind.target.id.entity, (marks.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
         } else if (kind.target.kind === 'player') {
-          const idx = playerIndex(frame, kind.target.id);
+          const idx = playerIndex(frame.projection, kind.target.id);
           if (idx !== null) marks.damage.players.set(idx, (marks.damage.players.get(idx) ?? 0) + kind.amount);
         }
         break;
@@ -205,7 +207,7 @@ export function turnOwners(frame: ExperienceFrame, events: readonly Presentation
   const owners = new Map<number, Side>();
   for (const event of events) {
     if (event.kind.kind !== 'turn_started') continue;
-    const side = playerSide(frame, event.kind.player);
+    const side = playerSide(frame.projection, event.kind.player);
     if (side) owners.set(event.kind.turn_number, side);
   }
   const { turn, agent } = frame.projection;
