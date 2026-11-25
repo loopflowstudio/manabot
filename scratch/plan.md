@@ -279,6 +279,18 @@ Of the 14 drifted cases, 13 changed only definition ids and hashes; `sacrifice-1
 authored-match authority and parity receipts were regenerated on the rebuilt release
 extension (same 174 commands and terminal board; 3/3 and 5/5).
 
+## Decomposition review at `d1887e600c` · Holds
+
+Followed Tempest Djinn (`LayerValue::count(LayerCount::YouControl)` under
+`StaticAbility::continuous`), Banner of Kinship (`EntersWithCounters.count:
+EffectValue::BattlefieldMatching` plus `LayerCount::SourceCounters`, both over the
+chosen-type predicate) and Crystal Barricade (`ModifyDamage` with `combat: Some(false)`,
+`DamageRecipient { by: You, except_source }`, `PreventAll`). A grep finds no deleted
+D1-D3 name outside `token_renames.rs`, prose research notes and the historical
+`tle-allocation.jsonl` implementation strings; `Layer::CharacteristicPower` is the
+CR 613.4a layer name. No engine source matches a card key or printed name outside
+in-module tests. Focused results of `338f79de16` stand; the head adds only plan text.
+
 ## Remaining
 
 Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,
