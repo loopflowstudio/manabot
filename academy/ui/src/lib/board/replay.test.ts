@@ -6,7 +6,7 @@ import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
 import { markText } from '$lib/analysis';
-import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, liveAnalysedMarks, logMarks } from './replay';
+import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, liveAnalysedMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -261,13 +261,14 @@ describe('liveAnalysedMarks', () => {
   ];
 
   it('places each reading where the log stood, a pass that logs nothing included', () => {
-    const marks = liveAnalysedMarks(logMarks(log), [
+    const marks = liveAnalysedMarks(log, [
       { event: 2, at: 1, score: 0.6, semantic: 'signed_outcome' },
       { event: 3, at: 1, score: 0.55, semantic: 'signed_outcome' },
       { event: 8, at: 4, score: 0.3, semantic: 'signed_outcome' },
     ]);
     expect(marks.map(mark => [mark.key, mark.value])).toEqual([['a', null], ['read-2', 0.6], ['read-3', 0.55], ['b', null], ['c', null], ['d', null], ['read-8', 0.3]]);
     expect(marks.map(mark => mark.at)).toEqual([0, 1, 2, 3, 4, 5, 6]);
-    expect(marks.at(-1)).toMatchObject({ side: 'you', decision: true, turn: 2, label: 'Turn 2 · Your decision, read' });
+    expect(marks.at(-1)).toMatchObject({ side: 'you', decision: true, turn: 2, label: 'Turn 2 · after You cast Shock' });
+    expect(marks[1].label).toBe('Turn 1 · after Opponent plays Island');
   });
 });

@@ -1212,7 +1212,8 @@ chosen, raised or reordered for you, and no key plays the policy's choice.
 
 Turning it on also opens the strip under the board, which draws the policy's
 estimate from your seat at each decision it has read this game, on Review's
-fixed 0–100 axis. The line keeps its points when you turn analysis off and on
+fixed 0–100 axis; hovering it names the nearest point by the move before it
+and its score. The line keeps its points when you turn analysis off and on
 again, and starts over if you switch to another policy.
 
 Academy first replays the game so far with the policy in your seat, which takes

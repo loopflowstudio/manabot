@@ -2,9 +2,10 @@
   /**
    * The game's decisions as one line under the board, drawn while open; its
    * toggle sits in the stop bar's row (`Board`), so a folded strip costs the
-   * board no height. Each decision is a tick, coloured by whose it was; where the
-   * chooser's value was recorded it is a point on that chooser's line instead.
-   * Turns are ruled and numbered. In a recording the open strip is the
+   * board no height. Where a chooser's value was recorded it is a point on that
+   * chooser's line; turns are ruled and numbered. With an analysis the strip is
+   * a chart: taller, a 0–100 axis with gridlines, and hovering names the
+   * nearest point (its turn, where it was, its score). In a recording the open strip is the
    * recording's one navigable line (`onjump`): a slider over it, so a click,
    * a drag or the arrow keys move to a position. Live play has no past
    * positions to show yet, so its marks only count.
@@ -23,7 +24,7 @@
 
   let { marks, selected, onjump, note = null, scale = null }: Props = $props();
 
-  const HEIGHT = 44;
+  const HEIGHT = $derived(scale !== null ? 80 : 44);
   const decisions = $derived(marks.filter(mark => mark.decision));
   const values = $derived(decisions.map(mark => mark.value).filter((value): value is number => value !== null));
   // An analysis's scores sit on a fixed 0–100 axis. Recorded values keep their
@@ -43,21 +44,42 @@
     .filter(mark => mark.side === side && mark.value !== null).map(mark => `${x(mark.at)},${y(mark.value!)}`).join(' ');
 
   const turn = $derived(selected !== null ? marks[selected]?.turn ?? null : null);
+
+  // Hover: the valued decision nearest the pointer, named with its score.
+  const valued = $derived(decisions.filter(mark => mark.value !== null));
+  let hover = $state<{ mark: StripMark; left: number } | null>(null);
+  function track(event: PointerEvent): void {
+    const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    if (!valued.length || box.width === 0) { hover = null; return; }
+    const at = ((event.clientX - box.left) / box.width) * span;
+    const mark = valued.reduce((best, item) => Math.abs(item.at - at) < Math.abs(best.at - at) ? item : best);
+    hover = { mark, left: (mark.at / span) * 100 };
+  }
+  const readout = (mark: StripMark): string => scale !== null
+    ? `${mark.label} · ${Math.round(mark.value! * 100)}`
+    : `${mark.label} · ${mark.value!.toFixed(2)}`;
 </script>
 
 <section class="strip" aria-label="Decisions" data-testid="decision-strip" data-open="true">
   {#if values.length || note || scale !== null}
     <p class="caption type-caption text-ink-3" data-testid="strip-caption">{#if scale !== null}{scale}{:else if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
   {/if}
-  <div class="lane" class:jumps={!!onjump}>
-  <svg class="line" viewBox={`0 0 1000 ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
+  <div class="plot" class:chart={scale !== null}>
+  {#if scale !== null}
+    <div class="axis type-caption text-ink-3" aria-hidden="true" style:height={`${HEIGHT}px`}>
+      {#each [1, 0.5, 0] as tick (tick)}<span style:top={`${y(tick)}px`}>{tick * 100}</span>{/each}
+    </div>
+  {/if}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="lane" class:jumps={!!onjump} onpointermove={track} onpointerleave={() => (hover = null)}>
+  <svg class="line" style:height={`${HEIGHT}px`} viewBox={`0 0 1000 ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
     {#if range && range.low < 0}<line class="zero" x1="0" x2="1000" y1={y(0)} y2={y(0)} />{/if}
-    {#if scale !== null}<line class="zero" data-testid="strip-midline" x1="0" x2="1000" y1={y(0.5)} y2={y(0.5)} />{/if}
+    {#if scale !== null}
+      {#each [0.25, 0.75] as grid (grid)}<line class="grid" x1="0" x2="1000" y1={y(grid)} y2={y(grid)} />{/each}
+      <line class="zero" data-testid="strip-midline" x1="0" x2="1000" y1={y(0.5)} y2={y(0.5)} />
+    {/if}
     {#each marks as mark (mark.key)}
       {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
-      {#if mark.decision && mark.value === null}
-        <line class="tick" class:theirs={mark.side === 'opponent'} x1={x(mark.at)} x2={x(mark.at)} y1={mark.side === 'opponent' ? 6 : HEIGHT / 2} y2={mark.side === 'opponent' ? HEIGHT / 2 : HEIGHT - 6}><title>{mark.label}</title></line>
-      {/if}
     {/each}
     <polyline class="value" points={line('you')} data-testid="strip-value" data-points={decisions.filter(mark => mark.side === 'you' && mark.value !== null).length} />
     {#each decisions as mark (mark.key)}
@@ -65,14 +87,20 @@
     {/each}
     <polyline class="value theirs" points={line('opponent')} />
     {#if selected !== null && marks[selected]}<line class="here" x1={x(selected)} x2={x(selected)} y1="0" y2={HEIGHT} />{/if}
+    {#if hover}<line class="hover" x1={x(hover.mark.at)} x2={x(hover.mark.at)} y1="0" y2={HEIGHT} />{/if}
   </svg>
+  {#if hover}
+    <span class="dot" style:left={`${hover.left}%`} style:top={`${y(hover.mark.value!)}px`}></span>
+    <p class="readout type-caption" data-testid="strip-readout" class:flip={hover.left > 60} style:left={`${hover.left}%`}>{readout(hover.mark)}</p>
+  {/if}
   {#if onjump && selected !== null}
     <input type="range" class="seek" aria-label="Replay position" min="0" max={Math.max(0, marks.length - 1)} value={selected}
       aria-valuetext={`Position ${selected + 1} of ${marks.length}${turn !== null ? `, turn ${turn}` : ''}`}
       oninput={event => onjump(Number(event.currentTarget.value))} />
   {/if}
   </div>
-  <div class="turns" aria-hidden="true">
+  </div>
+  <div class="turns" class:chart={scale !== null} aria-hidden="true">
     {#each labelledTurns(marks, 0.02) as mark (mark.key)}<span style:left={`${(mark.at / span) * 100}%`}>{mark.turn ?? ''}</span>{/each}
   </div>
 </section>
@@ -83,16 +111,25 @@
   .note { margin-left: auto; }
   .lane { position: relative; border-radius: var(--radius-sm); }
   .lane:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .line { display: block; width: 100%; height: 44px; background: var(--bg-field); border-radius: var(--radius-sm); }
+  .plot { display: flex; gap: 6px; }
+  .plot > .lane { flex: 1; min-width: 0; }
+  .axis { position: relative; width: 22px; flex: none; }
+  .axis span { position: absolute; right: 0; transform: translateY(-50%); font-variant-numeric: tabular-nums; line-height: 1; }
+  .line { display: block; width: 100%; background: var(--bg-field); border-radius: var(--radius-sm); }
+  .grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: .7; }
+  .hover { stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .dot { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--info-text, var(--accent)); pointer-events: none; }
+  .readout { position: absolute; bottom: calc(100% + 4px); transform: translateX(-6px); margin: 0; padding: 2px 8px; white-space: nowrap; pointer-events: none;
+    background: var(--bg-surface, var(--bg-field)); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); z-index: 2; }
+  .readout.flip { transform: translateX(calc(-100% + 6px)); }
+  .turns.chart { margin-left: 28px; }
   /* The slider is the line's input: invisible, the full lane, a hairline thumb so
      a click lands on the position drawn under it. */
   .seek { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-  .seek::-webkit-slider-thumb { appearance: none; width: 1px; height: 44px; }
-  .seek::-moz-range-thumb { width: 1px; height: 44px; border: 0; }
+  .seek::-webkit-slider-thumb { appearance: none; width: 1px; height: 80px; }
+  .seek::-moz-range-thumb { width: 1px; height: 80px; border: 0; }
   .turn { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .zero { stroke: var(--border-strong); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-  .tick { stroke: var(--info-text, var(--accent)); stroke-width: 2; vector-effect: non-scaling-stroke; }
-  .tick.theirs { stroke: var(--text-tertiary); }
   .value { fill: none; stroke: var(--info-text, var(--accent)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .value.theirs { stroke: var(--text-tertiary); }
   /* Where you and the policy chose differently: a neutral fact, not a fault. */

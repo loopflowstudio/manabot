@@ -408,7 +408,7 @@
     if (!name || !liveAnalysis.policy) return null;
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} from your seat · ${liveAnalysis.points.length} decisions read`;
   });
-  const liveMarks = $derived(liveScale ? liveAnalysedMarks(logMarks(gameStore.actionLog), liveAnalysis.points) : logMarks(gameStore.actionLog));
+  const liveMarks = $derived(liveScale ? liveAnalysedMarks(gameStore.actionLog, liveAnalysis.points) : logMarks(gameStore.actionLog));
   $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length

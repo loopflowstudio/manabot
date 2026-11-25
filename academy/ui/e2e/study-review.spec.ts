@@ -110,6 +110,9 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   const points = Number(await value.getAttribute('data-points'));
   expect(points).toBeGreaterThan(0);
   await expect(page.getByTestId('strip-caption')).toHaveText(`Reader's expected score from your seat · ${points} of ${points} decisions`);
+  await page.getByTestId('decision-strip').locator('.lane').hover({ position: { x: 4, y: 20 } });
+  await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · .+ · \d+$/);
+  await page.screenshot({ path: shot('review-chart-hover') });
 
   // (f) The summary's agreement is the count of "same" marks, and nothing grades you.
   await page.getByTestId('game-menu').click();
@@ -174,6 +177,10 @@ test('a decision made with analysis shown says so in Review and Games', async ({
       await expect(page.getByTestId('strip-caption')).toContainText("Reader's expected score from your seat · 2 decisions read");
       await expect(page.getByTestId('strip-midline')).toHaveCount(1);
       expect(Number(await page.getByTestId('strip-value').getAttribute('data-points'))).toBe(2);
+      // Hovering the line names the nearest point: where it was, and its score.
+      const plot = page.getByTestId('decision-strip').locator('.lane');
+      await plot.hover({ position: { x: 4, y: 20 } });
+      await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · (after .+|before the first move) · \d+$/);
       await page.screenshot({ path: shot('play-live-line') });
       await toggle.uncheck();
       await expect(page.getByTestId('choices-heading')).not.toContainText('Analysis by');

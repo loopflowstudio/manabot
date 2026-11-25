@@ -409,18 +409,22 @@ export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
  * that logs nothing (a priority pass) still has its point. Logged moves keep
  * their ticks; only the points carry values.
  */
-export function liveAnalysedMarks(marks: readonly StripMark[], points: readonly LivePoint[]): StripMark[] {
+export function liveAnalysedMarks(entries: readonly GameLogEntry[], points: readonly LivePoint[]): StripMark[] {
+  const marks = logMarks(entries);
   const out: StripMark[] = [];
   let next = 0;
-  const point = (live: LivePoint): StripMark => {
-    const turn = out.at(-1)?.turn ?? marks[0]?.turn ?? null;
-    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score, label: `Turn ${turn ?? '?'} · Your decision, read` };
+  // A point is named by the last move logged before it, which is where it sits.
+  const point = (live: LivePoint, before: number): StripMark => {
+    const last = entries[before - 1];
+    const turn = last?.turn ?? entries[0]?.turn ?? null;
+    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score,
+      label: `Turn ${turn ?? '?'} · ${last ? `after ${last.text}` : 'before the first move'}` };
   };
   marks.forEach((mark, index) => {
-    while (next < points.length && points[next].at <= index) out.push(point(points[next++]));
+    while (next < points.length && points[next].at <= index) out.push(point(points[next++], index));
     out.push({ ...mark, value: null });
   });
-  while (next < points.length) out.push(point(points[next++]));
+  while (next < points.length) out.push(point(points[next++], marks.length));
   return out.map((mark, at) => ({ ...mark, at, turnStart: at === 0 || mark.turn !== out[at - 1].turn }));
 }
 
