@@ -666,6 +666,43 @@ def projection_with_addresses(
     return payload
 
 
+def play_decisions_with_addresses(
+    replay: CanonicalReplayV1,
+    viewer: int,
+) -> dict[str, Any]:
+    """Return every client-authored decision across seats with DecisionAddressV2 addresses."""
+    track = next(
+        (
+            candidate
+            for candidate in replay.presentation_tracks
+            if candidate.viewer == viewer
+        ),
+        None,
+    )
+    if track is None:
+        raise DecisionNotFoundError("decision not found")
+    decisions: list[dict[str, Any]] = []
+    for row in replay.decisions:
+        if row.source != DecisionSource.CLIENT:
+            continue
+        row_payload = row.model_dump(mode="json")
+        row_payload["address"] = DecisionAddressV2.from_decision(
+            replay, row
+        ).serialize()
+        decisions.append(row_payload)
+    return {
+        "version": replay.version,
+        "replay_id": replay.replay_id,
+        "match_id": replay.match_id,
+        "content_hash": replay.content_hash,
+        "asset_manifest_hash": replay.asset_manifest_hash,
+        "viewer": viewer,
+        "decisions": decisions,
+        "presentation_head": track.head,
+        "presentation": [event.model_dump(mode="json") for event in track.events],
+    }
+
+
 def restore_decision(
     replay: CanonicalReplayV1,
     raw_address: str,

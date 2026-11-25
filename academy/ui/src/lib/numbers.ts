@@ -47,9 +47,19 @@ export interface RecordRow {
 
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-/** "On the play" for seat 0, else "On the draw". */
-export function playOrDraw(seat: number): string {
+/** "On the play" for seat 0, else "On the draw"; notes both when starting and final order differ after a swap. */
+export function playOrDraw(seat: number, startingSeat?: number): string {
+  if (startingSeat !== undefined && startingSeat !== seat) {
+    return startingSeat === 0 ? 'Started on the play · finished on the draw' : 'Started on the draw · finished on the play';
+  }
   return seat === 0 ? 'On the play' : 'On the draw';
+}
+
+/** Column heading for a native seat's whole-game counts: pilot name unswapped, or native seat/deck plus finisher when swapped. */
+export function seatColumnLabel(seat: 0 | 1, finishedBy: string, deck: string | null, swapped: boolean): string {
+  if (!swapped) return finishedBy;
+  const head = deck ? `Seat ${seat + 1} · ${deck}` : `Seat ${seat + 1}`;
+  return `${head} (${finishedBy} at end)`;
 }
 
 /** "45 s", "12 min", "1 h 05 min" between two ISO times; null without both. */
@@ -95,8 +105,9 @@ export function agreement(analysis: Analysis): { same: number; of: number } {
   return { same: read.filter(decision => firstChoice(decision) === decision.played).length, of: read.length };
 }
 
-/** The analysis's estimate from your seat at its first, highest and last decision, 0–100. */
-export function estimateArc(analysis: Analysis): { start: string; peak: string; end: string } | null {
+/** The analysis's estimate from your seat at its first, highest and last decision, 0–100; omitted when seats swapped mid-game. */
+export function estimateArc(analysis: Analysis, seatSwaps: readonly unknown[] = []): { start: string; peak: string; end: string } | null {
+  if (seatSwaps.length) return null;
   const scores = analysis.decisions
     .map(decision => score(decision.annotation.value, decision.semantic))
     .filter((value): value is number => value !== null);

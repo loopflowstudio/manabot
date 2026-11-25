@@ -170,6 +170,7 @@ from .replay_index import (
     decision_source_sha256,
     load_canonical_replay,
     parse_decision_address,
+    play_decisions_with_addresses,
     project_replay,
     projection_with_addresses,
     restore_decision,
@@ -1671,12 +1672,14 @@ class GameSession:
         request_id: str,
         match_id: str,
         expected_revision: int,
+        committed: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Swap the human pilot and bot between native seats in place on the live game.
 
         All fallible work (policy admission, load, and recurrent warm-up) runs
         before mutating session state so a refusal leaves the live game untouched
-        at the same revision.
+        at the same revision. When `committed` is provided, the flipped board is
+        published immediately before `_advance()` runs the bot in the vacated seat.
         """
         recorded = self._swap_receipts.get(request_id)
         if recorded is not None:
@@ -1732,6 +1735,13 @@ class GameSession:
             }
         )
         self._persist_attempt(config_changed=True)
+        if committed is not None:
+            self.work.stage("advance", self.match_id, self.revision)
+            early = self._wire_message(reason="explicit_resync")
+            if live_analysis_policy is not None and not self.obs.game_over:
+                early["analysis"] = {"policy": live_analysis_policy}
+            committed(early)
+            self._last_presentation_cursor = self.presentation.next_seq
         self._advance()
         if (
             live_analysis_policy is not None
@@ -3100,7 +3110,7 @@ class GameSession:
         """Fork an authorized acting-player decision for ephemeral Study."""
         provider = self.study_fork_provider()
         viewer = _authorized_decision_viewer(
-            provider.replay,
+            self._canonical_replay_snapshot(),
             raw_address,
             watch_mode=self.watch_mode,
             fallback_seat=self.human_seat,
@@ -3998,14 +4008,20 @@ def _dispatch_table_request(
         return response, True
     if isinstance(request, SwapSidesMessage):
         previous_revision = record.game.revision
+
+        def swap_committed(message: dict[str, Any]) -> None:
+            record.table_revision += 1
+            if committed is not None:
+                committed(message)
+
         response = record.game.swap_sides(
             request_id=request.request_id,
             match_id=request.match_id,
             expected_revision=request.expected_revision,
+            committed=swap_committed,
         )
         if record.game.revision == previous_revision:
             return response, False
-        record.table_revision += 1
         return response, True
     if isinstance(request, CommandMessage):
         command_id = request.command.command_id
@@ -5253,11 +5269,11 @@ def see_line(trace_id: str, analysis_id: str, request: LineRequest) -> dict[str,
 @app.get("/api/traces/{trace_id}/decisions")
 async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
-    return projection_with_addresses(
-        project_replay(
-            replay, trace_store.human_seat_at(trace_store.load_trace(trace_id))
-        )
-    )
+    payload = trace_store.load_trace(trace_id)
+    viewer = trace_store.human_seat_at(payload)
+    if bool(payload["config"].get("watch_players")):
+        return projection_with_addresses(project_replay(replay, viewer))
+    return play_decisions_with_addresses(replay, viewer)
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")

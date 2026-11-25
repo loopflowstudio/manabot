@@ -474,9 +474,13 @@ def prepare_trace_payload(
         and bool(payload.get("final_observation", {}).get("game_over"))
     )
     if config.get("decklists") == "closed" and not reveal_hidden:
-        config["villain_deck"] = {}
-        config["villain_sideboard"] = {}
-        config["villain_deck_name"] = "closed"
+        starting_seat = int(config.get("human_seat", 0))
+        bot_role = (
+            "villain" if human_seat_at(prepared, None) == starting_seat else "hero"
+        )
+        config[f"{bot_role}_deck"] = {}
+        config[f"{bot_role}_sideboard"] = {}
+        config[f"{bot_role}_deck_name"] = "closed"
         config.pop("asset_pack", None)
 
     events = prepared.get("events", [])

@@ -6,7 +6,7 @@ import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
 import { markText } from '$lib/analysis';
-import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, liveAnalysedMarks } from './replay';
+import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, positionHeading, recordedFrame, replayLog, seatIdentity, sinceRevision, stripMarks, liveAnalysedMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -309,5 +309,72 @@ describe('mid-game seat swaps in Review', () => {
       ['you', true],
       ['you', false],
     ]);
+  });
+
+  it('separates permanent native seat from position-dependent pilot before and after a swap', () => {
+    const swaps = [{ event: 2, turn: 2 }];
+    // Game started with human in seat 0 (UR Lessons) and Reader in seat 1 (GW Allies),
+    // swapped once at event 2 so final players have Reader in seat 0 and You in seat 1.
+    const index = {
+      watch: false,
+      players: [
+        { seat: 0, kind: 'bot', name: 'Reader', player_id: 'policy:p1', version: 'ab'.repeat(32), deck: 'ur_lessons', deck_name: 'UR Lessons' },
+        { seat: 1, kind: 'human', name: 'Human', player_id: 'human:1', version: null, deck: 'gw_allies', deck_name: 'GW Allies' },
+      ] as never,
+      opponent: { name: 'Reader', sha256: 'ab'.repeat(32), producer: 'manabot' },
+      opponent_checkpoint: { source: 'runs', world: 'w17', step: 8 },
+    };
+    const finalHero: 0 | 1 = 1;
+    const nameOf = (seat: 0 | 1): string => (seat === finalHero ? 'You' : 'Reader');
+
+    // Pre-swap (event 0): human piloted seat 0 (UR Lessons), bot piloted seat 1 (GW Allies).
+    const preHero = humanSeatAt(0, swaps, 0);
+    expect(preHero).toBe(0);
+    expect(nameOf(pilotSeatAt(0, finalHero, preHero))).toBe('You');
+    expect(nameOf(pilotSeatAt(1, finalHero, preHero))).toBe('Reader');
+    expect(positionHeading(
+      { kind: 'choice', actor: 0, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, preHero)),
+      false,
+      null,
+    )).toBe('Your choice');
+    expect(positionHeading(
+      { kind: 'consequences', actor: 1, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, preHero)),
+      false,
+      null,
+    )).toBe("After Reader's move");
+
+    // Post-swap (event 2): human pilots seat 1 (GW Allies), bot pilots seat 0 (UR Lessons).
+    const postHero = humanSeatAt(0, swaps, 2);
+    expect(postHero).toBe(1);
+    expect(nameOf(pilotSeatAt(1, finalHero, postHero))).toBe('You');
+    expect(nameOf(pilotSeatAt(0, finalHero, postHero))).toBe('Reader');
+    expect(positionHeading(
+      { kind: 'choice', actor: 1, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, postHero)),
+      false,
+      null,
+    )).toBe('Your choice');
+    expect(positionHeading(
+      { kind: 'state', actor: null, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, humanSeatAt(0, swaps, null))),
+      true,
+      1,
+    )).toBe('Game over · You win');
+
+    // Bot provenance attaches to the bot player (seat 0 after swap), never to the human (seat 1).
+    const botIdentity = seatIdentity(index, 0);
+    const humanIdentity = seatIdentity(index, 1);
+    expect(botIdentity.producer).toBe('manabot');
+    expect(botIdentity.provenance).toEqual({ source: 'runs', world: 'w17', step: 8 });
+    expect(humanIdentity.producer).toBeUndefined();
+    expect(humanIdentity.provenance).toBeUndefined();
+
+    // Fixed Perspective options label native seat + deck when swapped, and pilot when unswapped.
+    expect(perspectiveLabel(0, 'Reader', 'UR Lessons', true)).toBe('Seat 1 at the bottom · UR Lessons');
+    expect(perspectiveLabel(1, 'You', 'GW Allies', true)).toBe('Seat 2 at the bottom · GW Allies');
+    expect(perspectiveLabel(1, 'You', null, true)).toBe('Seat 2 at the bottom');
+    expect(perspectiveLabel(0, 'You', 'UR Lessons', false)).toBe('Seat 1 at the bottom · You');
   });
 });

@@ -74,27 +74,7 @@ Choices made for review are listed in `scratch/questions.md`.
 
 1. Done (`4a7adb5b29`) — server swap, record and readers; `tests/academy/test_swap_sides.py` 6 passed.
 2. Done (`c97527f9c3`, `381937fb24`, `61f8621a45`) — protocol, Settings This game / Next game, Swap play/draw rename, Review dividers, estimate breaks, QA fixes (`liveAnalysis` reset on seat change, narrow rail move name, Play again matchup decks), `e2e/swap-sides.spec.ts` green.
-3. **Next (from post-build concept review `scratch/concept-review.html`):** fix the three conceptual mismatches left in `HEAD`, plus closed-decklist consistency and leftover probe cleanup:
-   - **3a. Review seat-vs-pilot separation (`academy/ui/src/routes/replay/+page.svelte`, `academy/ui/src/lib/board/replay.ts`, `academy/ui/src/lib/numbers.ts`):**
-     - Resolve who piloted `seat` at the shown position via `currentHero = humanSeatAt(startingHeroSeat, seatSwaps, current?.event ?? null)` (for non-Watch Play games; Watch keeps fixed seat identities).
-     - Use position-aware pilot naming for `<Board you={...} opponent={...}>` (plates + top bar) and `positionHeading(...)` (rail heading), while keeping `deckOf(seat)` permanent per native seat.
-     - Fix `identity(seat)` to attach `index.opponent` producer/provenance to the `kind === 'bot'` player (not hardcoded `seat === 1`, which attached bot provenance to `You` whenever the bot finished in seat 0).
-     - When `seatSwaps.length > 0`:
-       - Label fixed Perspective options by native seat and deck (e.g. `Seat 1 at the bottom · UR Lessons`), not solely by final pilot.
-       - In `This game`, show starting vs final order when they differ (e.g. `Started on the play · finished on the draw`), label the seat-total table columns by native seat/deck (noting who finished in each) rather than plain `You` / `<Bot>`, and omit the single-line `estimateArc` (`start · peak · end`) so complementary pre- and post-swap scores are never combined into one fake arc.
-       - Update `docs/academy.md` if `This game` wording changes.
-     - Add unit/component tests covering Review at a pre-swap position of a once-swapped game (plates, heading, provenance, Perspective, `estimateArc` omitted).
-   - **3b. Authorized Play decisions on `GET /api/traces/{trace_id}/decisions` (`managym/academy/server.py`, `managym/academy/replay_index.py`):**
-     - Stop calling single-viewer `project_replay(replay, final_seat)` for swapped Play traces in `get_trace_decisions` (`server.py:5253`), which drops pre-swap human `CLIENT` decisions and leaks pre-swap bot `POLICY` decisions whose addresses then 404 on `/decisions/{address}`.
-     - For Play traces (`not watch_mode`), return every `DecisionSource.CLIENT` decision across seats with its `DecisionAddressV2` address and zero `DecisionSource.POLICY` decisions (keep `project_replay(replay, viewer)` single-viewer for Watch/per-seat callers and preserve exact payload shape for unswapped Play traces).
-     - Align closed-decklist redaction in `prepare_trace_payload` (`managym/academy/trace.py:476`) with `get_recording_index` (`managym/academy/server.py:4993`) so both redact the current bot seat consistently when `not reveal_hidden`.
-     - Add tests in `tests/academy/test_swap_sides.py`: `GET /api/traces/{id}/decisions` on a once-swapped game returns pre-swap Seat 0 and post-swap Seat 1 `CLIENT` decisions, returns zero `POLICY` decisions, and every returned `address` restores 200 on `GET /api/traces/{id}/decisions/{address}`; plus a closed-decklists swapped test checking consistency between `/api/traces/{id}` and `/recording`.
-   - **3c. Immediate board flip before `_advance()` (`managym/academy/server.py`, `tests/academy/test_swap_sides.py`):**
-     - Thread `_dispatch_table_request`'s existing `committed` callback into `GameSession.swap_sides(...)` (matching `hero_command`).
-     - Right after `_commit_seat_flip` + `_persist_attempt` and before `self._advance()`: bump `record.table_revision` (or emit via `committed` with the updated viewer), send the immediate flipped frame (`reason="explicit_resync"`) preserving `"analysis": {"policy": live_analysis_policy}` when live analysis is restarting so the client's `"Analysis on"` chip never flickers, and set `self._last_presentation_cursor = self.presentation.next_seq` before `_advance()`.
-     - Then run `self._advance()`, start `LiveAnalysis` for the new seat if it was on and the game is not over, and return the settled message.
-     - Add a WebSocket test verifying that during `swap_sides` the pilot (and any watcher) receives the flipped board (`rules_viewer == 1`, `"Swapped sides"` log entry) BEFORE the bot finishes choosing, and then receives the settled frame after the bot moves.
-   - **3d. Remove superseded probe:** delete `scratch/probe/` (`swap_replay.py`) if still present.
+3. Done — post-build concept review fixes (3a–3d): Review seat-vs-pilot separation (`pilotSeatAt`, `seatIdentity`, `perspectiveLabel`, `playOrDraw`, `seatColumnLabel`, `estimateArc` omitted when swapped, `docs/academy.md` updated), Play `GET /api/traces/{id}/decisions` (`play_decisions_with_addresses`, zero `POLICY` rows) + closed-decklist redaction alignment (`prepare_trace_payload`), immediate committed board flip before `_advance()` preserving live analysis, `fork_study` snapshot fix, `scratch/probe/` removed. Full CI/remaining suite checks deferred to gate.
 
 ## Acceptance check at gate
 

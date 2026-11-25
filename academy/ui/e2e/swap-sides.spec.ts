@@ -62,10 +62,47 @@ test('swapping sides mid-game flips seat, hand, and deck names, keeps move log, 
   expect(handAfter).not.toEqual(handBefore);
 
   // Next Command in the new seat is accepted.
-  const revAfterSwap = await page.locator('main').getAttribute('data-frame-revision');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 15_000 });
+  const revAfterSwap = await page.locator('main').getAttribute('data-frame-revision');
   await page.getByTestId('action-option').first().click();
   await expect(page.locator('main')).not.toHaveAttribute('data-frame-revision', revAfterSwap!, { timeout: 15_000 });
+
+  // Open this swapped game in Review from Turn 1 (pre-swap) via Games.
+  await page.goto('/games');
+  const gameLink = page.locator('a[href^="/replay?trace="]').first();
+  await expect(gameLink).toBeVisible({ timeout: 15_000 });
+  const href = await gameLink.getAttribute('href');
+  expect(href).toBeTruthy();
+  await page.goto(`${href}&review=1`);
+
+  // Position 0 (pre-swap): seat 0 (UR Lessons) was piloted by You, seat 1 (GW Allies) by Passive.
+  const reviewNear = page.locator('[data-testid="player-plate"][data-plate-side="you"]');
+  const reviewFar = page.locator('[data-testid="player-plate"][data-plate-side="opponent"]');
+  await expect(reviewNear).toHaveAttribute('data-player-index', '0', { timeout: 15_000 });
+  await expect(reviewNear).toHaveAttribute('aria-label', "You's plate");
+  await expect(reviewFar).toHaveAttribute('data-player-index', '1');
+  await expect(reviewFar).toHaveAttribute('aria-label', "Passive's plate");
+  await expect(page.getByTestId('deck-names')).toContainText('You · UR Lessons');
+  await expect(page.getByTestId('deck-names')).toContainText('GW Allies');
+  await expect(page.locator('p.whose')).toHaveText('Your choice');
+
+  // Perspective defaults to Follow the chooser and labels fixed seats by native seat and deck.
+  const perspective = page.getByTestId('perspective');
+  await expect(perspective).toHaveValue('chooser');
+  await expect(perspective.locator('option[value="0"]')).toHaveText('Seat 1 at the bottom · UR Lessons');
+  await expect(perspective.locator('option[value="1"]')).toHaveText('Seat 2 at the bottom · GW Allies');
+
+  // Clicking the Swapped sides divider moves past the swap (Seat 0 is now Passive),
+  // and stepping to the next recorded choice lands on our post-swap Seat 1 decision (You · GW Allies).
+  const swapDivider = page.getByRole('button', { name: /Swapped sides/ }).first();
+  await expect(swapDivider).toBeVisible();
+  await swapDivider.click();
+  await expect(reviewNear).toHaveAttribute('aria-label', "Passive's plate", { timeout: 15_000 });
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(reviewNear).toHaveAttribute('data-player-index', '1', { timeout: 15_000 });
+  await expect(reviewNear).toHaveAttribute('aria-label', "You's plate");
+  await expect(page.getByTestId('deck-names')).toContainText('You · GW Allies');
+  await expect(page.locator('p.whose')).toHaveText('Your choice');
 
   expect(errors).toEqual([]);
 });

@@ -24,6 +24,7 @@
  */
 import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex, type SeatSwap } from '$lib/recording';
 import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark, type LivePoint } from '$lib/analysis';
+import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
@@ -40,6 +41,36 @@ export function humanSeatAt(startingSeat: 0 | 1, swaps: readonly SeatSwap[], eve
     ? swaps.length
     : swaps.filter(swap => swap.event <= eventIndex).length;
   return ((startingSeat ^ (flips & 1)) as 0 | 1);
+}
+
+/** Native seat in `index.players` whose pilot controlled `seat` when `currentHeroSeat` was the human's seat. */
+export function pilotSeatAt(seat: 0 | 1, finalHeroSeat: 0 | 1, currentHeroSeat: 0 | 1): 0 | 1 {
+  return seat === currentHeroSeat ? finalHeroSeat : ((1 - finalHeroSeat) as 0 | 1);
+}
+
+/**
+ * A seat's recorded identity; a record that predates recorded players falls back to
+ * its configured opponent. In a Play game the bot's seat (whichever seat it finished in)
+ * carries the checkpoint's producer and provenance.
+ */
+export function seatIdentity(
+  index: Pick<RecordingIndex, 'players' | 'opponent' | 'opponent_checkpoint' | 'watch'> | null | undefined,
+  seat: number,
+): PlayerIdentity {
+  const recorded = index?.players.find(player => player.seat === seat);
+  const opponent = recorded
+    ? (!index?.watch && recorded.kind === 'bot' ? index?.opponent : null)
+    : (seat === 1 ? index?.opponent : null);
+  const base = recorded ? recordedIdentity(recorded)
+    : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: `Seat ${seat + 1}` });
+  return opponent ? { ...base, producer: opponent.producer, provenance: index?.opponent_checkpoint ?? undefined } : base;
+}
+
+/** Fixed-perspective dropdown label: names the pilot when unswapped, or the permanent native seat and deck when swapped. */
+export function perspectiveLabel(seat: 0 | 1, name: string, deck: string | null, swapped: boolean): string {
+  const base = `Seat ${seat + 1} at the bottom`;
+  if (!swapped) return `${base} · ${name}`;
+  return deck ? `${base} · ${deck}` : base;
 }
 
 /** The address's `near` value, or the recording's natural seat: chooser when swapped or watched, else the person. */

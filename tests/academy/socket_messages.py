@@ -15,9 +15,12 @@ def settled_message(socket: WebSocketTestSession) -> dict[str, Any]:
         if message["type"] == "work_status":
             continue
         if (
-            message["type"] == "command_outcome"
-            and message.get("status") == "accepted"
+            message["type"] in {"command_outcome", "observation"}
             and (message.get("work") or {}).get("state") == "running"
+            and (
+                message["type"] == "observation"
+                or message.get("status") == "accepted"
+            )
         ):
             continue
         return message

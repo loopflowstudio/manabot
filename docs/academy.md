@@ -797,9 +797,10 @@ The game remains one game through the end:
   stays out of **My record** even if you swap sides during it.
 - **Review and Analysis**: **Review** defaults **Perspective** to **Follow the
   chooser** so the bottom seat follows you across each swap (fixed Seat 1 and
-  Seat 2 perspectives remain selectable), marks each swap in the move list as
-  **Swapped sides · Turn T** with a notice, and shows every decision you made
-  before and after each swap. Post-game **Analysis** reads all of your
+  Seat 2 perspectives remain selectable, labelled by native seat and deck), names
+  each seat by who piloted it at the shown position, marks each swap in the move
+  list as **Swapped sides · Turn T** with a notice, and shows every decision you
+  made before and after each swap. Post-game **Analysis** reads all of your
   deliberate decisions across both seats, **See its line** works from any
   analysed decision before or after a swap, and **Play on from here** places you
   in the seat you piloted at that decision.
@@ -1292,9 +1293,10 @@ their marks. A game you play without it saves exactly as before.
 The result card of a game you played ends with one line of its numbers, such as
 **9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
 2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
-the play or the draw and how long the game took, and a table of both seats (in a
-game where you swapped sides mid-game, each column counts that native seat
-across the whole game, labelled by who finished in it):
+the play or the draw (noting starting and final order when a mid-game swap
+changed it) and how long the game took, and a table of both seats (in a game
+where you swapped sides mid-game, each column counts that native seat across the
+whole game, labelled by native seat, deck and who finished in it):
 
 | Count | What it counts |
 |---|---|
@@ -1307,8 +1309,8 @@ across the whole game, labelled by who finished in it):
 
 With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
 chose as Reader would: 8 of 20**, where the policy's first choice was yours,
-and the policy's estimate from your seat at the start, at its highest and at
-the end. A game with choices made while [analysis was
+and (for games without a mid-game swap) the policy's estimate from your seat at
+the start, at its highest and at the end. A game with choices made while [analysis was
 shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
 decisions**. A game that stopped early is counted to where it stopped. Academy
 counts each game once, by replaying it when it ends. An older game is counted
