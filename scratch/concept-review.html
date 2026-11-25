@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept Review — MTG-430 Planeswalkers, Loyalty, Empower, Emblems &amp; Combat Defenders</title>
+<style>
+  :root {
+    --bg: #f8f6f1;
+    --surface: #ffffff;
+    --surface-2: #f1ede4;
+    --ink: #1d1b18;
+    --muted: #5d564c;
+    --border: #ddd5c7;
+    --accent: #7c3f1c;
+    --accent-soft: #f6e7dc;
+    --yes: #1e6b43;
+    --yes-bg: #e4f3ea;
+    --no: #a62626;
+    --no-bg: #fbe7e7;
+    --prop: #214e8a;
+    --prop-bg: #e5effb;
+    --exist: #5a5347;
+    --exist-bg: #ece7dd;
+    --code-bg: #f3efe6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412;
+      --surface: #1e1c19;
+      --surface-2: #272420;
+      --ink: #efeae1;
+      --muted: #b1a89a;
+      --border: #38332c;
+      --accent: #e0915e;
+      --accent-soft: #352419;
+      --yes: #63cf93;
+      --yes-bg: #163022;
+      --no: #f28482;
+      --no-bg: #3a1a1a;
+      --prop: #7eb6ff;
+      --prop-bg: #17273d;
+      --exist: #c8bfb0;
+      --exist-bg: #2b2722;
+      --code-bg: #25221e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+    padding: 2rem 1.25rem 4rem;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  header {
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .eyebrow {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 { margin: 0.25rem 0 0.5rem; font-size: 1.9rem; line-height: 1.2; }
+  h2 {
+    margin: 2.4rem 0 0.75rem;
+    font-size: 1.32rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.35rem;
+  }
+  h3 { margin: 1.35rem 0 0.45rem; font-size: 1.04rem; }
+  p { margin: 0.55rem 0; }
+  .lede { font-size: 1.02rem; color: var(--muted); max-width: 78ch; }
+  .meta-bar {
+    display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem;
+    font-size: 0.84rem; color: var(--muted);
+  }
+  .meta-bar span {
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 0.2rem 0.55rem; border-radius: 5px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.14rem 0.48rem;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+  .badge-yes { background: var(--yes-bg); color: var(--yes); border: 1px solid color-mix(in srgb, var(--yes) 35%, transparent); }
+  .badge-no { background: var(--no-bg); color: var(--no); border: 1px solid color-mix(in srgb, var(--no) 35%, transparent); }
+  .badge-exist { background: var(--exist-bg); color: var(--exist); border: 1px solid var(--border); }
+  .badge-prop { background: var(--prop-bg); color: var(--prop); border: 1px solid color-mix(in srgb, var(--prop) 35%, transparent); }
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1.2rem 0;
+  }
+  .callout.danger { border-left-color: var(--no); }
+  .callout.proposed { border-left-color: var(--prop); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.4rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 0.91rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-2);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  tr:last-child td { border-bottom: none; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.08rem 0.3rem;
+    border-radius: 4px;
+  }
+  pre {
+    margin: 0.6rem 0;
+    padding: 0.85rem 1rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.81rem;
+    line-height: 1.45;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    margin: 0.9rem 0 1.2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.95rem 1.05rem;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.5rem; margin-bottom: 0.5rem;
+    font-weight: 700; font-size: 0.92rem;
+  }
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.7rem;
+    margin: 0.9rem 0 1.2rem;
+  }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0.75rem 0.85rem;
+    font-size: 0.88rem;
+  }
+  .step.bad { border-color: color-mix(in srgb, var(--no) 55%, var(--border)); background: color-mix(in srgb, var(--no-bg) 35%, var(--surface)); }
+  .step.good { border-color: color-mix(in srgb, var(--yes) 55%, var(--border)); background: color-mix(in srgb, var(--yes-bg) 35%, var(--surface)); }
+  .step-num { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); font-weight: 700; }
+  .mock-ui {
+    background: var(--surface-2);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    font-size: 0.86rem;
+    margin: 0.6rem 0;
+  }
+  .mock-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+    margin-top: 0.45rem;
+  }
+  .mock-btn {
+    padding: 0.3rem 0.65rem; border-radius: 5px; font-weight: 600; font-size: 0.82rem;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  }
+  .mock-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mock-btn.disabled { opacity: 0.45; }
+  .mock-select {
+    padding: 0.25rem 0.45rem; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--ink); font-size: 0.8rem;
+  }
+  .mock-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.79rem;
+    background: var(--prop-bg); color: var(--prop); border: 1px solid color-mix(in srgb, var(--prop) 35%, transparent);
+  }
+  .q-list { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.85rem; }
+  .q-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1.05rem;
+  }
+  .q-title { font-weight: 700; margin-bottom: 0.35rem; }
+  .q-opts { margin: 0.4rem 0 0; padding-left: 1.25rem; font-size: 0.91rem; }
+  .q-opts li { margin: 0.25rem 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Concept Review &middot; MTG-430 &middot; Headless Graph Pass</div>
+    <h1>Do the rules, learner and Academy concepts line up with the code?</h1>
+    <p class="lede">
+      <strong>Area reviewed:</strong> Planeswalker rules, loyalty &amp; empower mechanics, command-zone emblems, non-player combat defenders, and announcement-time target division across <code>managym</code>, <code>manabot</code>, and Academy (<code>main..HEAD</code> at <code>bc184fc81f</code>).
+      Reviewed as one whole area against <code>main</code> because these features share the announcement pipeline, the derived-characteristics authority (<code>layers.rs</code>), combat state/offers, and the v11 observation contract.
+    </p>
+    <div class="meta-bar">
+      <span>Base: <code>main</code></span>
+      <span>Reviewed HEAD: <code>bc184fc81f</code></span>
+      <span>Outcome: <strong>Plan updated (3 concept-repair passes + gate)</strong></span>
+      <span><span class="badge badge-exist">Existing</span> = on branch now &nbsp; <span class="badge badge-prop">Proposed</span> = written into <code>scratch/plan.md</code></span>
+    </div>
+  </header>
+
+  <div class="callout danger">
+    <strong>Bottom line:</strong> The core planeswalker primitives (printed loyalty, per-turn loyalty quota, instant-speed timing, Way grants, empower composition, and command-zone emblem execution) are clean and CR-faithful. Six surrounding places break the "one concept, one authority" bar:
+    (1) <strong>biggest mismatch</strong> — announcement-time target division aliases <code>X</code> in both continuation frames and action tensors while silently overriding <code>Effect::DealDamage.amount</code>;
+    (2) <code>LoyaltyCost::MinusX</code> can hide legal abilities at priority, offer uncompletable <code>X</code> values, and silently truncate past <code>max_actions</code>;
+    (3) <code>FactKind::EmblemAbility</code> duplicates printed catalog metadata as runtime facts;
+    (4) <code>StateBasedActionDoesntApply</code> introduces two heap allocations and a permanent-only static scan on every SBA check instead of projecting through <code>layers.rs</code>;
+    (5) combat defenders are split across <code>attack_targets</code> + <code>attackers_without_defender</code>, bypass <code>structured_offers()</code> in <code>bind_frame_candidates</code>, put <code>attack_target</code> on every <code>PendingEvent</code>, and block Academy confirmation behind mandatory per-creature dropdowns;
+    (6) death-to-exile replacement now has two separate engines (<code>normalize_proposal</code> vs <code>collect_replacements</code>).
+  </div>
+
+  <h2>1. Concept Alignment Table</h2>
+  <p class="muted small">Engine/RL surfaces are judged by CR directness, single ownership, cache/allocation cost, statistical validity (policy distinguishability), and composability; Academy surfaces by shared decision-surface clarity.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 21%;">Product / CR Concept</th>
+        <th style="width: 27%;">Code Concept <span class="badge badge-exist">Existing</span></th>
+        <th style="width: 8%;">Aligns?</th>
+        <th>Assessment / What Is Wrong</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Printed loyalty &amp; entering counters</strong><br><span class="muted small">CR 306.5b; doubles with Doubling Season, copied on enter-as-copy</span></td>
+        <td><code>PrintedCharacteristics.loyalty</code>, intrinsic <code>EntersWithCounters</code> in <code>proposed_event.rs</code>, v11 <code>printed_loyalty</code> column on card/permanent/stack.</td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Direct CR state; intrinsic replacement composes naturally with copy entry and counter doublers.</td>
+      </tr>
+      <tr>
+        <td><strong>Loyalty quota, timing &amp; activation events</strong><br><span class="muted small">CR 606.3–606.4; once per permanent per turn; Way grants; activation triggers &amp; turn count</span></td>
+        <td><code>Permanent.loyalty_activated_this_turn</code>, <code>LoyaltyCost</code>, <code>Modification::LoyaltyAtInstantSpeed</code>, <code>GameEvent::LoyaltyAbilityActivated</code>, <code>PlayerTurnHistory.loyalty_abilities_activated</code>, Way <code>StaticAbility::Continuous</code> + <code>GrantActivated</code>.</td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Reuses existing source-counter costs, layer grants, and turn-history counters cleanly. <em>(Variable <code>MinusX</code> offer/target authority is separated below.)</em></td>
+      </tr>
+      <tr>
+        <td><strong>Empower Jace N</strong><br><span class="muted small">CR 701.71a; create Jace token if none, then choose a Jace token and add N loyalty</span></td>
+        <td><code>Effect::empower_jace(amount)</code> returning 2 existing <code>Effect</code>s; recognized in <code>ability_description.rs</code>.</td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Zero new <code>Effect</code> variant or runtime branch; Doubling Season + choice + SBA interaction falls out for free.</td>
+      </tr>
+      <tr>
+        <td><strong>Emblems — rules &amp; live command zone</strong><br><span class="muted small">CR 114; nameless command-zone object with static/triggered abilities</span></td>
+        <td><code>ObjectKind::Emblem</code>, <code>EmblemDefinition { label, key, printed }</code>, <code>ZoneType::Command</code>, <code>layers.rs</code> (<code>Node.source: ObjectId</code>) &amp; <code>triggers.rs</code> reading <code>game.emblems()</code>.</td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>One <code>Object</code> model; keeps <code>printed.name</code> empty for CR 114.3 while exposing public <code>label</code> in Academy &amp; text.</td>
+      </tr>
+      <tr>
+        <td><strong>Emblems — v11 policy input</strong><br><span class="muted small">Policy sees the emblem in command zone and knows its printed abilities</span></td>
+        <td><code>agent_cards</code> row (<code>zone_command = 1</code>, <code>semantic_cards = registry_key</code>) <strong>PLUS</strong> <code>FactKind::EmblemAbility = 17</code> with <code>"Emblem::Static"</code> / <code>"Emblem::Triggered"</code>.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>Concept the code invented for derived catalog metadata.</strong> Every emblem's static/triggered tokens already live in <code>catalog_tokens</code> joined by <code>semantic_cards</code>. Re-looking up <code>default_content_pack()</code> on every encode emits zero runtime information, wastes <code>max_facts</code> slots, and breaks the v11 rule that <code>facts</code> holds dynamic state only.</td>
+      </tr>
+      <tr>
+        <td><strong>Divided target amounts</strong><br><span class="muted small">CR 601.2d / 602.2b; announce shares (&ge;1 each) during announcement, independent of <code>X</code></span></td>
+        <td><code>TargetRequirement.division</code>, <code>PendingChoice::DivideAmount</code>, <code>DivisionParent</code>, <code>frame.x = *remaining</code>, <code>announces_x() = true</code>, <code>Effect::DealDamage</code> ignoring <code>amount</code> when <code>slot.division &gt; 0</code>.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>Biggest mismatch — two ideas under one name (<code>X</code>) + silent override.</strong> Clobbers real <code>X</code> on <code>ContinuationFrame</code>, marks division actions as <code>action::HAS_X = 1</code>, duplicates the total in card definitions, silently overrides any <code>DealDamage</code> inside a divided clause, and duplicates 7 spell fields in <code>DivisionParent::Spell</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Variable loyalty <code>[&minus;X]</code> offers</strong><br><span class="muted small">CR 606.4 / 601.2b; announce payable <code>X</code> that has legal targets</span></td>
+        <td><code>LoyaltyCost::MinusX</code>, <code>legal_activation_x_values</code> returning raw <code>least..=most</code>, priority checking <code>activation_targets_available(..., x_min)</code>, flat <code>0..=N</code> <code>ChooseMode</code> offers.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>No single offer/completion authority.</strong> Priority hides a legal <code>&minus;X</code> ability if <code>x_min = 0</code> has no targets (e.g. <code>division: X</code> or <code>total_mana_value_x</code>); <code>legal_activation_x_values</code> offers uncompletable <code>X</code> values that error when chosen; flat <code>0..=N</code> silently truncates at <code>max_actions</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Zero-loyalty SBA exemption</strong><br><span class="muted small">CR 704.5i static exemption (Sanctum Lurker)</span></td>
+        <td><code>StaticAbility::StateBasedActionDoesntApply</code> scanned in <code>sba.rs</code> by collecting <code>views: Vec</code> and <code>loyalty_exemptions: Vec</code> on every SBA pass.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>Bypasses derived-characteristics authority + hot-path allocation.</strong> Allocates two <code>Vec</code>s and scans every permanent's <code>static_abilities</code> on every SBA check (every priority pass &amp; MCTS node), and ignores emblems because it only reads battlefield permanents.</td>
+      </tr>
+      <tr>
+        <td><strong>Combat defenders &amp; entering attacking</strong><br><span class="muted small">CR 508.1b, 506.4c, 508.4; attack player or planeswalker, defender leaves, Tomik, Academy drafting</span></td>
+        <td><code>CombatState.attack_targets</code> + <code>attackers_without_defender</code>; <code>bind_frame_candidates</code> raw <code>ActionSpace</code> bypass; <code>PendingEvent.attack_target</code>; <code>Board.svelte</code> mandatory <code>&lt;select&gt;</code> per attacker.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>Split state + two binding authorities + bloated event struct + awkward UI.</strong> Departed defenders linger in <code>attack_targets</code>; <code>decision.rs</code> bypasses <code>structured_offers()</code>; every non-entry event carries <code>Option&lt;AttackTarget&gt;</code>; <code>zones.rs::create_token</code> hardcodes player target; Academy blocks Space until every dropdown is clicked; Tomik refusal says "can't attack now".</td>
+      </tr>
+      <tr>
+        <td><strong>Death-to-exile replacement</strong><br><span class="muted small">CR 614.1a / 616.1; "if it would die, exile it instead"</span></td>
+        <td><code>Modification::ExileIfWouldDie</code> + finality in <code>normalize_proposal()</code> <strong>AND</strong> <code>ReplacementEffect::ExileIfWouldDie</code> in <code>collect_replacements()</code>.</td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>One CR rule under two engines.</strong> <code>normalize_proposal</code> rewrites <code>to = Exile</code> before <code>collect_replacements</code> runs, bypassing CR 616.1 replacement ordering whenever it competes with another death replacement.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Biggest Mismatch: Divided Amounts Conflated with <code>X</code> &amp; Silently Overriding <code>DealDamage</code></h2>
+
+  <p>Walk one concrete interaction: <em>Chandra, Flameshaper's <code>&minus;4</code></em> ("Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers") — and test it against a real Magic counterexample: <strong>a <code>&minus;X</code> loyalty ability (or <code>{X}{R}</code> spell) that divides <code>X</code> damage among targets, or a divided clause followed by a fixed damage instruction.</strong></p>
+
+  <div class="timeline">
+    <div class="step">
+      <div class="step-num">STEP 1 &middot; TARGETS</div>
+      Player picks two targets: <code>Grizzly Bears</code> and <code>Jace</code>. Engine enters <code>PendingChoice::DivideAmount { remaining: 8 }</code>.
+    </div>
+    <div class="step bad">
+      <div class="step-num">STEP 2 &middot; POLICY OBSERVATION (BROKEN)</div>
+      <code>continuation.rs:874</code> writes <code>frame.x = 8</code> (overwriting any real announced <code>X</code>). <code>action.rs:38</code> sets <code>announces_x = true</code>, so every offer sets <code>action::HAS_X = 1</code>, <code>action::X = amt/10</code>, <code>decision = None</code>. To the network, dividing remaining budget looks identical to announcing <code>X</code>.
+    </div>
+    <div class="step bad">
+      <div class="step-num">STEP 3 &middot; COUNTEREXAMPLE FAILURE</div>
+      On a <code>&minus;X</code> divided ability with <code>min = 1</code>: (a) priority calls <code>activation_targets_available(..., x_min=0)</code> &rarr; <code>effective_clause_max = 0 &lt; 1</code> &rarr; ability is <strong>never offered</strong>; (b) if offered, <code>legal_activation_x_values</code> still offers <code>X = 0</code> &rarr; selecting it returns <code>Err("no legal ability targets")</code>.
+    </div>
+    <div class="step bad">
+      <div class="step-num">STEP 4 &middot; RESOLUTION OVERRIDE</div>
+      <code>fdn.rs:606</code> writes <code>8</code> twice (in <code>division: Some(8)</code> and <code>deal_damage(8, ...)</code>). <code>resolution.rs:1878</code> ignores <code>amount</code> whenever <code>active_targets().any(|s| s.division &gt; 0)</code>. A second <code>deal_damage(1, ...)</code> in the same clause silently deals the divided shares a second time!
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <span>Before <span class="badge badge-exist">Existing</span></span>
+        <code>fdn.rs / continuation.rs / resolution.rs</code>
+      </div>
+<pre>// 1. Total authored twice; DealDamage silently ignores `8`
+Effect::TargetClause {
+    requirement: TargetRequirement {
+        division: Some(EffectValue::Fixed(8)),
+        ..TargetRequirement::up_to(ANY_NUMBER, spec.clone())
+    },
+    effects: vec![Effect::deal_damage(
+        8, // &lt;-- IGNORED at runtime!
+        ObjectSelector::Targets(spec),
+    )],
+}
+
+// 2. ContinuationFrame clobbers real X with `remaining`
+PendingChoice::DivideAmount { remaining, parent, .. } =&gt; {
+    frame.x = *remaining; // &lt;-- loses cast.x / targeting.x!
+    ...
+}
+
+// 3. Action space pretends division is announcing X
+pub(crate) fn announces_x(&amp;self) -&gt; bool {
+    matches!(self.pending_choice,
+        Some(AnnounceX {..} | ActivationX {..} | DivideAmount {..})
+    )
+}</pre>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span>After <span class="badge badge-prop">Proposed</span></span>
+        <span>Explicit division signal + <code>EffectValue::TargetDivision</code></span>
+      </div>
+<pre>// 1. Single source of truth: DealDamage explicitly reads division
+Effect::TargetClause {
+    requirement: TargetRequirement {
+        division: Some(EffectValue::Fixed(8)),
+        ..TargetRequirement::up_to(ANY_NUMBER, spec.clone())
+    },
+    effects: vec![Effect::deal_damage(
+        EffectValue::TargetDivision, // &lt;-- explicit, composable
+        ObjectSelector::Targets(spec),
+    )],
+}
+
+// 2. Continuation preserves real X AND exposes remaining budget
+PendingChoice::DivideAmount { remaining, parent, .. } =&gt; {
+    frame.x = parent.announced_x();
+    frame.division_remaining = Some(*remaining); // distinct column
+    ...
+}
+
+// 3. Action space distinguishes division from X
+// announces_x() is false for DivideAmount;
+// action carries division_amount (or mode under DivideAmount stage)
+// + legal_activation_x_values filters by target availability!</pre>
+    </div>
+  </div>
+
+  <p class="small">
+    <strong>Recovery &amp; replay check:</strong> Separating <code>frame.division_remaining</code> from <code>frame.x</code> and adding <code>EffectValue::TargetDivision</code> changes no existing non-divided card's tokens or observations. Only Chandra, Flameshaper's <code>&minus;4</code> (added in this branch) uses <code>division</code>. Factoring <code>SpellTargeting</code> (mirroring <code>ActivatedTargeting</code>) also removes the 7-field copy between <code>PendingChoice::ChooseTargets</code> and <code>DivisionParent::Spell</code>.
+  </p>
+
+  <h2>3. Other High-Leverage Mismatches (Before &rarr; After)</h2>
+
+  <h3>3a. Redundant <code>FactKind::EmblemAbility</code> vs <code>catalog_tokens</code></h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><span>Before <span class="badge badge-exist">Existing</span></span><code>observation_encoder.rs:1762</code></div>
+<pre>// Emitted on EVERY encode for every command-zone emblem:
+// Card row already has: zone_command=1, semantic_cards=registry_key
+// AND ALSO emits derived catalog metadata into `facts`:
+if card.zone == ZoneType::Command {
+    if let Some(row) = default_content_pack().definition(card.registry_key) {
+        push(card.id, FactKind::EmblemAbility, "Emblem::Static", 0);
+        push(card.id, FactKind::EmblemAbility, "Emblem::Triggered", 0);
+    }
+}</pre>
+    </div>
+    <div class="card">
+      <div class="card-head"><span>After <span class="badge badge-prop">Proposed</span></span><span>Delete <code>FactKind::EmblemAbility</code></span></div>
+<pre>// Card row in agent_cards / opponent_cards:
+//   zone_command = 1, is_mine = 0|1, valid = 1
+// Semantic join:
+//   semantic_cards[slot] -&gt; catalog_tokens[registry_key]
+//   (already encodes is_emblem=true + full statics &amp; abilities)
+// Zero extra facts, zero record-vocab tokens, zero encode lookups.</pre>
+    </div>
+  </div>
+
+  <h3>3b. Zero-Loyalty SBA Exemption: Hot-Path Allocations &rarr; <code>layers.rs</code></h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><span>Before <span class="badge badge-exist">Existing</span></span><code>sba.rs:163-179</code></div>
+<pre>// Runs on EVERY SBA check (every priority pass &amp; search node):
+let views: Vec&lt;_&gt; = self.layer_views(...).collect();      // alloc #1
+let loyalty_exemptions: Vec&lt;_&gt; = views.iter()              // alloc #2
+    .flat_map(|(id, view)| view.static_abilities.iter()...) // O(P * S)
+    .collect();
+// Also misses command-zone emblems (only scans battlefield `views`).</pre>
+    </div>
+    <div class="card">
+      <div class="card-head"><span>After <span class="badge badge-prop">Proposed</span></span><code>layers.rs &rarr; PermanentView</code></div>
+<pre>// Projected once in layers.rs (cached by revision, covers emblems too):
+// PermanentView.exempt_from_zero_loyalty: bool
+//
+// In sba.rs — zero heap allocations, streaming iterator restored:
+for (id, view) in self.layer_views((0..n).map(PermanentId)) {
+    let zero_loyalty = view.types.is_planeswalker()
+        &amp;&amp; permanent.counter_count(CounterKind::Loyalty) == 0
+        &amp;&amp; !view.exempt_from_zero_loyalty;
+    ...
+}</pre>
+    </div>
+  </div>
+
+  <h3>3c. Combat Defenders: Split State, Shadow Binding &amp; Academy Drafting</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><span>Before <span class="badge badge-exist">Existing</span></span><code>combat.rs / decision.rs / proposed_event.rs</code></div>
+<pre>// 1. Two parallel lists in CombatState (stale targets stay in attack_targets)
+pub attack_targets: Vec&lt;(PermanentId, AttackTarget)&gt;,
+pub attackers_without_defender: Vec&lt;PermanentId&gt;,
+
+// 2. decision.rs bypasses structured_offers() for planeswalker attacks
+let bindings = if actions.iter().any(|a| matches!(a,
+    Action::DeclareAttacker { attack: Some(AttackTarget::Permanent(_)), .. }
+)) { /* hand-mint OfferId/RoleId/CandidateId */ } else {
+    self.structured_offers()...
+};
+
+// 3. Every PendingEvent (damage, counters, discard...) carries:
+pub(crate) attack_target: Option&lt;AttackTarget&gt;,</pre>
+    </div>
+    <div class="card">
+      <div class="card-head"><span>After <span class="badge badge-prop">Proposed</span></span><span>One state, one binding authority, <code>ZoneEntry</code></span></div>
+<pre>// 1. Single source of truth in CombatState (None = CR 506.4c departed)
+pub attack_targets: Vec&lt;(PermanentId, Option&lt;AttackTarget&gt;)&gt;,
+
+// 2. Single offer-candidate binding owner in structured_offer.rs
+// (decision.rs never inspects raw Action::DeclareAttacker)
+
+// 3. Battlefield-entry metadata lives on ZoneEntry, not PendingEvent
+pub struct ZoneEntry {
+    pub tapped: bool,
+    pub attack_target: Option&lt;AttackTarget&gt;,
+    ...
+}</pre>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><span>Academy Combat Bar — Before <span class="badge badge-exist">Existing</span></span><code>Board.svelte:908</code></div>
+      <div class="mock-ui">
+        <div class="muted small">Player clicked 2 creatures to attack; opponent controls Jace. Confirm is <strong>disabled</strong> until both dropdowns are touched:</div>
+        <div class="mock-bar">
+          <span class="mock-btn primary disabled">Attack with 2 [Space]</span>
+          <label class="small">Attack with Tiger-Seal <select class="mock-select"><option>Choose a defender</option></select></label>
+          <label class="small">Attack with Grizzly Bears <select class="mock-select"><option>Choose a defender</option></select></label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span>Academy Combat Bar — After <span class="badge badge-prop">Proposed</span></span><span>Default player + direct retarget</span></div>
+      <div class="mock-ui">
+        <div class="muted small">Clicking a creature drafts it attacking the defending player immediately (Space ready); clicking a planeswalker or chip retargets that attacker. Under Tomik, refusal names the defender conflict.</div>
+        <div class="mock-bar">
+          <span class="mock-btn primary">Attack with 2 [Space]</span>
+          <span class="mock-chip">Tiger-Seal &rarr; Defending player &#x25BE;</span>
+          <span class="mock-chip">Grizzly Bears &rarr; Jace &#x25BE;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>3d. Death-to-Exile Replacement: One CR 614.1a / 616.1 Owner</h3>
+  <p class="small">
+    <span class="badge badge-exist">Existing</span> <code>Modification::ExileIfWouldDie</code> and finality counters silently rewrite <code>to = Exile</code> inside <code>normalize_proposal()</code> before <code>collect_replacements()</code> runs, whereas MTG-430's <code>ReplacementEffect::ExileIfWouldDie</code> (Garruk, Veiled Butcher) runs inside <code>collect_replacements()</code>.
+    <span class="badge badge-prop">Proposed</span> Move <code>Modification::ExileIfWouldDie</code> and finality counters into <code>collect_replacements()</code> alongside <code>ReplacementEffect::ExileIfWouldDie</code> so every "if it would die, exile it instead" effect shares one CR 616.1 ordering pipeline (single candidates still auto-apply with zero extra decisions or replay drift).
+  </p>
+
+  <h2>4. Bold Choices Made for Review (Written into <code>scratch/plan.md</code>)</h2>
+  <div class="callout proposed">
+    Because this review runs headlessly in a Graph, reversible architectural choices are committed into <code>scratch/plan.md</code> for the next implementation passes and flagged here for human review:
+    <ol class="small">
+      <li><strong>Delete <code>FactKind::EmblemAbility</code></strong> rather than keeping it for parity with an earlier slice. Emblems already carry full ability tokens via <code>semantic_cards &rarr; catalog_tokens</code>; keeping synthetic static-count facts leaks derived catalog metadata into runtime <code>facts</code>.</li>
+      <li><strong>Explicit <code>EffectValue::TargetDivision</code> + dedicated continuation remaining field</strong> rather than keeping <code>frame.x = *remaining</code> and silent <code>DealDamage</code> override. Costs one clean schema adjustment now, prevents permanent conflation of <code>X</code> and target division.</li>
+      <li><strong>Default Academy drafted attackers to the defending player</strong> (when legal) instead of blocking <code>Space</code> behind mandatory blank <code>&lt;select&gt;</code> dropdowns. Still preserves explicit choice (retarget via chip/dropdown or planeswalker click) without adding friction to the common player-attack case.</li>
+      <li><strong>Keep <code>LoyaltyCost::MinusX</code> bounded &amp; target-filtered</strong> rather than removing it — Chandra, Chill of Compliance (pending <code>ManaUse</code>) will need it next, so fixing its offer/target contract now prevents shipping a latent Principle #2 bug.</li>
+    </ol>
+  </div>
+
+  <h2>5. Outside This Task (Not Added to MTG-430 Scope)</h2>
+  <ul class="small">
+    <li><strong>Pending cards waiting on separate roadmap authorities:</strong> Countersculpt &amp; Theorist's Sanctum (behold), Tam (resumable proliferate), Gideon's Memorial &amp; Chandra, Chill of Compliance (card-type <code>ManaUse</code>), Return to the Light Realms (CR 303.4f non-cast Aura attachment), Loot (negative-power combat damage assignment). Already tracked in <code>fdn.jsonl</code> / <code>fra.jsonl</code>.</li>
+    <li><strong>Unifying <code>SpellOnStack.x</code> (<code>u8</code>) with <code>ActivatedAbilityOnStack.x</code> (<code>i32</code>) and multi-step large-<code>X</code> offers (&gt; <code>max_actions</code>):</strong> Widening spell <code>X</code> touches legacy cast/payment receipts beyond planeswalkers; for MTG-430, enforce an explicit error/bound contract when <code>legal_activation_x_values</code> exceeds <code>max_actions</code> instead of silent truncation, and defer multi-digit/tree <code>X</code> entry to a dedicated decision-surface task if huge loyalty counts become common.</li>
+    <li><strong>Full board-arrow retargeting UX for planeswalker attacks in Academy:</strong> Keeping compact attacker&rarr;defender chips in the combat bar is enough for MTG-430; drawing canvas/SVG attack arrows to planeswalkers belongs to a dedicated Academy visual pass.</li>
+  </ul>
+
+  <h2>6. Questions for Review</h2>
+  <p class="muted small">Reply with the question number and letter (for example, <code>2b</code>) to override any choice above.</p>
+  <ol class="q-list">
+    <li class="q-item">
+      <div class="q-title">1. Should <code>FactKind::EmblemAbility</code> be deleted from v11?</div>
+      <ol class="q-opts" type="a">
+        <li><strong>(Chosen) Delete it</strong> — rely on the emblem's <code>agent_cards</code>/<code>opponent_cards</code> row (<code>zone_command = 1</code>) + <code>semantic_cards &rarr; catalog_tokens</code> join, matching permanents and graveyard cards.</li>
+        <li>Keep <code>FactKind::EmblemAbility</code> if you want a dedicated fact-table index for emblem abilities independent of <code>semantic_cards</code>.</li>
+      </ol>
+    </li>
+    <li class="q-item">
+      <div class="q-title">2. How should divided target damage/counters be expressed in <code>Effect</code>?</div>
+      <ol class="q-opts" type="a">
+        <li><strong>(Chosen) <code>EffectValue::TargetDivision</code></strong> on <code>Effect::DealDamage</code> (and future counter distribution) so the total is declared once on <code>TargetRequirement.division</code> and verbs explicitly opt in to per-target shares.</li>
+        <li>Keep <code>Effect::DealDamage { amount: 8, .. }</code> duplicating the total and add a boolean <code>divided: true</code> flag on <code>Effect::DealDamage</code> instead of a new <code>EffectValue</code> variant.</li>
+      </ol>
+    </li>
+    <li class="q-item">
+      <div class="q-title">3. In Academy combat drafting when the opponent controls a planeswalker, how should newly drafted attackers behave?</div>
+      <ol class="q-opts" type="a">
+        <li><strong>(Chosen) Default to the defending player</strong> (when legal) with one-click retargeting to any planeswalker, so confirming player attacks stays one Space press.</li>
+        <li>Keep the current blank "Choose a defender" dropdown that blocks confirmation until every attacker's defender is explicitly chosen (to prevent accidental player attacks when a planeswalker is out).</li>
+      </ol>
+    </li>
+    <li class="q-item">
+      <div class="q-title">4. Should <code>LoyaltyCost::MinusX</code> stay capped to <code>max_actions - 1</code> (or raise a typed capacity error) when a planeswalker accumulates &gt; 511 loyalty?</div>
+      <ol class="q-opts" type="a">
+        <li><strong>(Chosen) Raise the typed capacity error in the encoder</strong> (never silently drop offers via <code>.take(max_actions)</code>) while keeping exact <code>0..=available_loyalty</code> offers in rules state.</li>
+        <li>Introduce a hierarchical/tree choice for large <code>X</code> (like <code>NameCard</code> branching) now as part of MTG-430.</li>
+      </ol>
+    </li>
+  </ol>
+</main>
+</body>
+</html>
