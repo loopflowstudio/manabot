@@ -15,42 +15,24 @@ Done:
   The rebuilt cp313 wheel passed Academy’s loyalty offer/fork test and
   reopened the saved combat Command at the next Ogre’s declaration.
 
+- Slice 2 (`0674982740`) gives every declared or entering attacker a defender. Tomik grants
+  each controlled planeswalker its own declaration limit. The v11 rows,
+  combat preview, compound offers, Academy draft and text observation carry
+  the choice. All nine FRA cases and six directed combat cases passed. The
+  cp313 wheel cold-restored all nine positions in the five Academy opening
+  fixtures. Across their 444 prefix decisions, all 109 player-only attack
+  frames matched their previous bytes. The player-only object-bound Command
+  at revision 12 retained its original fingerprint and cold-restored. A
+  separate Command naming Jace and its attacker also cold-restored.
+
 ## Passes remaining
 
-1. Next: combat defenders (slice 2).
-
-   - **Replay compatibility.** An issued object precondition binds the
-     fingerprint of the whole action-aligned offer projection, so a new
-     defender offer changes a recorded Command's address. No released catalog
-     defines a planeswalker (main has only type predicates), so no retained
-     snapshot, fixture or receipt can reach a declaration with a newly legal
-     defender. The one that does, `scratch/combat-snapshot-v1.json`, was
-     recorded on this branch at `aa35e1a2b6` and is not frozen evidence: it
-     is expected to go stale and is deleted with the change. Requirement:
-     where no planeswalker or battle can be attacked, the declaration keeps
-     indices 0 (attack the player) and 1 (decline) and byte-identical
-     projections; prove it by cold-replaying the five Academy opening
-     fixtures and a recorded object-bound attack Command from a
-     pre-planeswalker position. No historical-engine resolution is needed.
-   - The Academy combat draft and the compound declaration carry only a set
-     of attackers; both gain attacker-to-defender assignments.
-   - Combat needs the defending player or permanent for **every attacking
-     creature**. Fire Navy Trebuchet's Ballistic Boulder enters attacking
-     during trigger resolution, and Doubling Season makes two. Each can attack
-     a different defender, even one Tomik would prohibit when declaring
-     attackers (CR 508.4, 508.4c). The controller chooses as they enter.
-     Store that choice with each entry before publishing the simultaneous
-     results. Share the defender representation with declared attackers.
-     A declaration-only change would force the player as defender for both
-     Boulders. Exercise this position alongside the declaration, trample,
-     removal, attack-history and Academy checks below.
-
-2. Slices 3 + 4: emblems and empower/Jace token cards.
-3. Slices 5 + 6: granted loyalty abilities, zero-loyalty exception, loyalty
-   activation events and their cards.
-4. Slice 7 planeswalkers and the rest of slice 8; ledger, fixtures, debug
-   nextest, budget. Record current-catalog conformance and authored-match
-   evidence at gate, retaining main's MTG-420 receipts at their revision.
+1. Slices 3 and 4 introduce emblems and the empower/Jace token cards.
+2. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
+   loyalty activation events and their cards.
+3. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
+   debug nextest, Engine Budget and the pinned pilot, recording a reason if
+   its output moves. Keep main’s MTG-420 receipts at their original revision.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text
@@ -200,8 +182,8 @@ and your planeswalker. Python env/Academy tests for declare-attackers offers;
 Academy parity fixtures refreshed. Engine Budget: `bench_steps` digest moves
 only if curated decks attack planeswalkers (they don't today) — expect no
 digest change; record if it does.
-Stress state: 10 untapped attackers into 6 opposing planeswalkers + 1 battle
-(offers 10×8), plus Tomik on each planeswalker.
+Stress state exercised here: ten attackers and six opposing planeswalkers, with
+and without Tomik. Battle protectors belong to the later battle rules.
 
 Deletes: `declare_attacker(permanent, attack: bool)` signature and the
 `non_active_player()` defender in `combat_actions.rs:173/277`; the "to

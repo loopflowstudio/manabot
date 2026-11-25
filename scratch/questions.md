@@ -43,3 +43,14 @@
   hold a newly legal defender; positions without one keep identical offers.
   Simpler than resolving a historical engine from a v1 snapshot that omits
   its source revision.
+
+- Treat battle defenders as part of battle support. The current catalog has
+  no battle and the rules state has no protector. The stress case uses ten
+  attackers and six opposing planeswalkers.
+- Tomik changes the catalog digest used for cold admission. Check the old
+  player-only snapshot before registering the card, and keep its exact Command
+  and offer fingerprint as a regression case against the new catalog.
+- The advice schema’s new attacked_permanent property matches the Pydantic
+  generator. At 1679c477fd, the checked-in advice schema already differed
+  from that generator in eight definitions, including LegacyPermanentView.
+  This slice updates the combat property only.

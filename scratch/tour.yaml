@@ -1,31 +1,31 @@
-at: 15f55a69496500a707c85f0cb7718e0021684a86
+at: 06749827400462c108fd370664ada54ddfda331b
 first:
   - path: docs/engine.md
-    why: Follows a loyalty activation from announcement through resolution
-  - path: managym/state/src/card.rs
-    why: Defines printed loyalty and fixed or variable costs
+    why: Describes loyalty, damage to planeswalkers and declaration choices
+  - path: managym/src/flow/combat.rs
+    why: Identifies each attacker’s original and current defender
+  - path: managym/src/flow/tick.rs
+    why: Builds legal offers and records the declared attack batch
+  - path: managym/src/flow/proposed_event.rs
+    why: Collects every entering token’s choice before simultaneous entry
+  - path: managym/src/flow/combat_actions.rs
+    why: Applies declaration restrictions and assigns damage to the chosen defender
   - path: managym/cards/src/fra.rs
-    why: Defines The Theorist and ten planeswalker lands
-  - path: managym/state/src/permanent.rs
-    why: Checks available counters and the shared activation limit
-  - path: managym/src/flow/game.rs
-    why: Keeps announced X alongside targeting progress
-  - path: managym/src/flow/play.rs
-    why: Offers payable values and resumes after each choice
-  - path: managym/src/flow/payment.rs
-    why: Pays loyalty before placing the ability on stack
-  - path: managym/src/agent/continuation.rs
-    why: Projects announced X while choosing and resolving
-  - path: managym/cards/tests/cards/fra.rs
-    why: Exercises 256 loyalty, targets, costs and resolution
+    why: Composes Tomik’s granted restriction and counter-dependent flying ability
+  - path: managym/src/agent/structured_offer.rs
+    why: Groups independent defender assignments into a compound declaration
+  - path: managym/src/flow/combat_preview.rs
+    why: Replays exact attacker and defender identities to preview the Academy draft
+  - path: academy/ui/src/lib/board/Board.svelte
+    why: Collects defender choices and confirms each native offer
+  - path: managym/tests/rules/attack_targets.rs
+    why: Exercises trample, loss of the defender, doubled tokens and ten attackers
   - path: tests/academy/test_loyalty.py
-    why: Commits a loyalty offer across exact forks
+    why: Cold-restores object-bound Commands for both a player and a planeswalker
   - path: scratch/plan.md
-    why: Explains the combat replay case and remaining work
-  - path: scratch/combat-snapshot-v1.json
-    why: Reopens the recorded Ogre attack against Jace’s controller
+    why: Records replay evidence and the remaining card cohorts
 hide:
   - path: managym/academy/fixtures/
-    why: Replayed opening manifests, frames and digests
+    why: Opening fixtures refreshed by replaying their recorded choices
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Snapshotted Oracle characteristics
+    why: Oracle characteristics for Tomik
