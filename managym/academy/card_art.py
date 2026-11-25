@@ -7,7 +7,6 @@ cannot disclose their game. One lock serializes cold requests and atomic writes.
 
 from collections.abc import Callable
 from functools import cache
-from importlib.metadata import version
 import json
 import os
 from pathlib import Path
@@ -54,7 +53,7 @@ def _fetch(url: str, accept: str) -> bytes:
     request = Request(
         url,
         headers={
-            "User-Agent": f"managym-academy/{version('managym')}",
+            "User-Agent": f"managym-academy/{managym.__version__}",
             "Accept": accept,
         },
     )

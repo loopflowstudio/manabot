@@ -2217,6 +2217,10 @@
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, action_index)"
           },
+          "permanent_details_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
           "player_controls_json": {
             "kind": "method",
             "signature": "(self)"
@@ -4138,6 +4142,9 @@
             "value": 4
           }
         }
+      },
+      "__version__": {
+        "kind": "value"
       },
       "admit_decklists": {
         "kind": "function",

@@ -53,6 +53,8 @@ class RecordedDecision:
     commitment: int | Command
     annotation: DecisionAnnotation | None
     frame: DecisionFrame | None = None
+    # The record's interventions applied at this boundary, before `observation`.
+    interventions: tuple[Intervention, ...] = ()
 
     @property
     def chosen(self) -> int:
@@ -243,6 +245,7 @@ class RecordWalker:
                     commitment,
                     game.annotations[index] if index < len(game.annotations) else None,
                     frame,
+                    tuple(operations),
                 )
                 # Check the transition on a search fork before committing it to
                 # the Env owning the retained card facts or consumer presentation.

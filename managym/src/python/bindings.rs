@@ -4547,6 +4547,15 @@ impl PyEnv {
         serde_json::to_string(&controls).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn permanent_details_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let details = env.permanent_details(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&details).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
             .inner
@@ -5569,6 +5578,7 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
     m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(

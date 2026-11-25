@@ -81,7 +81,7 @@ export class ReplayStore {
     const generation = ++this.generation;
     this.busy = true; this.error = '';
     try {
-      // Reveal is a per-choice capability. Consequences never borrow it.
+      // Reveal is a per-position capability the server grants.
       const reveal = this.reveal && position.can_reveal;
       let current = await this.api<RecordedPosition>(`/api/traces/${encodeURIComponent(this.id)}/positions/${encodeURIComponent(position.key)}?reveal=${reveal}`);
       if (generation !== this.generation) return;

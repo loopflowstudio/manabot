@@ -21,6 +21,7 @@ import type {
   PlayerState,
   StackEntryView,
 } from '$lib/types';
+import { badgesOf } from './badges';
 
 // ———————————————————————————————————————— Types
 
@@ -194,8 +195,8 @@ function isLand(permanent: PermanentState): boolean {
 function pileKey(item: PermanentItem): string {
   const p = item.permanent;
   if (item.paid || item.attached.length || p.attacking || p.first_strike_participant || p.blocking !== undefined || p.effects?.length || p.copy_of) return `#${p.id}`;
-  return JSON.stringify([p.name, p.controller_id, p.tapped, p.power, p.toughness, p.damage, p.summoning_sick,
-    p.plus1_counters, p.chosen ?? null, p.counters ?? null, p.is_token ?? false, p.abilities_lost ?? false,
+  return JSON.stringify([p.name, p.controller_id, p.power, p.toughness, p.face_down ?? false,
+    p.summoning_sick, badgesOf(p),
     item.offers.map(placed => placed.offer.label)]);
 }
 
@@ -377,15 +378,18 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   };
 }
 
+/** All rendered permanents on a side, including attachments behind their hosts. */
+export function fieldItems(side: SideView): PermanentItem[] {
+  return [...side.creatures, ...side.support].flatMap(pile => pile.items.flatMap(item => [item, ...item.attached]));
+}
+
 /** Every place an offer is drawn, for the invariant that each appears somewhere. */
 export function offerPlacements(view: BoardView): Map<number, number> {
   const counts = new Map<number, number>();
   const count = (placed: PlacedOffer): void => { counts.set(placed.offer.id, (counts.get(placed.offer.id) ?? 0) + 1); };
-  const permanents = (pile: Pile[]): PermanentItem[] =>
-    pile.flatMap(p => p.items).flatMap(item => [item, ...item.attached]);
   for (const s of [view.you, view.opponent]) {
     s.offers.forEach(count);
-    permanents([...s.creatures, ...s.support]).forEach(item => item.offers.forEach(count));
+    fieldItems(s).forEach(item => item.offers.forEach(count));
   }
   view.hand.forEach(item => item.offers.forEach(count));
   view.stack.forEach(item => item.offers.forEach(count));

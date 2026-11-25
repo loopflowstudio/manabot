@@ -63,6 +63,11 @@ pub struct ExposureCapture {
     pub attackers_lost_for_nothing: [u64; 2],
     pub blockers_committed: [u64; 2],
     pub blockers_lost_for_nothing: [u64; 2],
+    /// Damage dealt to each player, from any source (CR 120.3a); dealt even
+    /// when the life total can't change (CR 119.7).
+    pub player_damage_taken: [u64; 2],
+    /// Damage each player's sources dealt to the other player.
+    pub player_damage_dealt: [u64; 2],
     #[serde(skip)]
     pub(crate) combat: CombatDeclarations,
 }
@@ -240,6 +245,24 @@ impl CardCapture {
 impl Game {
     pub(crate) fn exposure_mut(&mut self) -> Option<&mut ExposureCapture> {
         self.card_capture.as_mut()?.exposure.as_mut()
+    }
+
+    pub(crate) fn player_damage_capture(
+        &mut self,
+        source: Option<ObjectId>,
+        recipient: PlayerId,
+        amount: i32,
+    ) {
+        if self.exposure_mut().is_none() {
+            return;
+        }
+        let controller = source.and_then(|source| self.source_controller(source));
+        let amount = u64::try_from(amount).unwrap_or(0);
+        let exposure = self.exposure_mut().expect("exposure checked above");
+        exposure.player_damage_taken[recipient.0] += amount;
+        if let Some(controller) = controller.filter(|c| *c != recipient) {
+            exposure.player_damage_dealt[controller.0] += amount;
+        }
     }
 
     pub(crate) fn finish_combat_capture(&mut self) {

@@ -45,7 +45,7 @@ async function openMenu(page: Page): Promise<void> {
 async function openStopsPanel(page: Page): Promise<void> {
   await openMenu(page);
   const panel = page.getByTestId('stops-panel');
-  if (!(await panel.getAttribute('open'))) {
+  if ((await panel.getAttribute('open')) === null) {
     await panel.locator('summary').first().click();
   }
   await expect(page.getByTestId('auto-pass-toggle').first()).toBeVisible();
@@ -230,7 +230,8 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await expect(stop('opponent', 'upkeep')).toHaveAttribute('data-state', 'off');
   await expect(page.getByTestId('stop-opponent-upkeep').first()).not.toBeChecked();
 
-  // The Menu's change shows on the bar; the stops are one Tab stop, moved by arrows.
+  // The Settings sheet's change shows on the bar; the stops are one Tab stop, moved by arrows.
+  await openStopsPanel(page);
   await page.getByTestId('stop-my-main2').first().click();
   await expect(stop('my', 'main2')).toHaveAttribute('data-state', 'off');
   await stop('opponent', 'upkeep').focus();

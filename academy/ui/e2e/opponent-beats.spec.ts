@@ -7,19 +7,21 @@
  * it treats `aria-disabled` as not yet enabled.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
 
 /**
- * Start a game against the random opponent on a fixed deal: ordinary play
- * draws a new seed, and some deals end before the opponent's moves reach the
- * recap at one of your decisions.
+ * Start a seeded game against the random opponent, counting the commands sent.
+ * Seed 1 reaches a past board (an opponent window of several moves) at the
+ * fourth decision under `playUntil`'s choices.
  */
-async function startAgainstRandom(page: Page, sent: { count: number }): Promise<void> {
+async function startAgainstRandom(page: Page): Promise<{ count: number }> {
+  const sent = { count: 0 };
   await page.routeWebSocket('**/ws/play', socket => {
     const server = socket.connectToServer();
     socket.onMessage(message => {
       if (typeof message !== 'string') { server.send(message); return; }
       const payload = JSON.parse(message);
-      if (payload.type === 'new_game') payload.config.seed = 0;
+      if (payload.type === 'new_game') payload.config.seed = 1;
       if (payload.type === 'command') sent.count += 1;
       server.send(JSON.stringify(payload));
     });
@@ -29,14 +31,21 @@ async function startAgainstRandom(page: Page, sent: { count: number }): Promise<
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('game')).toBeVisible();
+  return sent;
 }
 
-/** Decide until `until` holds, preferring lands, spells and attacks so the game moves. */
-async function playUntil(page: Page, until: () => Promise<boolean>, limit: number): Promise<number> {
+/**
+ * Decide until `until` returns a truthy result, preferring lands, spells and
+ * attacks so the game moves. Throws, naming why, when the game ends or the
+ * budget runs out first.
+ */
+async function playUntil<T>(page: Page, until: () => Promise<T | null | false>, limit: number): Promise<T> {
   for (let decisions = 0; decisions < limit; decisions += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
-    if (await until()) return decisions;
-    if (await page.getByTestId('result-card').isVisible()) return decisions;
+    const result = await until();
+    if (result) return result;
+    if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
@@ -46,7 +55,7 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
     await rows.nth(Math.max(0, pick)).click();
     await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision')), { timeout: 30_000 }).toBeGreaterThan(revision);
   }
-  return limit;
+  throw new Error(`no awaited state within the ${limit}-decision budget`);
 }
 
 /** What the page showed in the instant before a press during a beat. */
@@ -54,15 +63,18 @@ interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean;
 
 /**
  * Press during a beat in one task, so the beat cannot end between reading the
- * page and the press: a held number key, or activation of the first choice
- * with or without a pointer. Null when no beat was showing.
+ * page and the press: a held number key, activation of the first choice with
+ * or without a pointer, or a pointer press on a card of the past board. Null
+ * when no beat was showing (for `board`, no beat on a past board).
  */
-async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'): Promise<Seen | null> {
+async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation' | 'board'): Promise<Seen | null> {
   return page.evaluate(how => {
     const beat = document.querySelector('[data-testid=beat]');
     if (!beat) return null;
     const row = document.querySelector<HTMLElement>('[data-testid=action-option]')!;
     const board = document.querySelector('[data-testid=game-board]')!;
+    const card = board.querySelector<HTMLElement>('[data-testid=board-card]');
+    if (how === 'board' && (board.getAttribute('data-board') !== 'step' || !card)) return null;
     const seen = {
       text: beat.textContent ?? '',
       inPanel: beat.closest('[data-testid=action-panel]') !== null,
@@ -74,9 +86,10 @@ async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'
     if (how === 'key') {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, repeat: true }));
-    } else if (how === 'pointer') {
-      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    } else if (how === 'pointer' || how === 'board') {
+      const target = how === 'board' ? card! : row;
+      target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
     } else row.click();
     return seen;
   }, how);
@@ -86,31 +99,25 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  const sent = await startAgainstRandom(page);
   const main = page.locator('main');
-  let seen: Seen | null = null;
-  let before = 0;
-  let revision: string | null = null;
   // A number key during a beat ends the reading and chooses nothing.
-  await playUntil(page, async () => {
-    before = sent.count;
-    revision = await main.getAttribute('data-frame-revision');
-    seen = await pressDuringBeat(page, 'key');
-    return seen !== null;
+  const { read, before, revision } = await playUntil(page, async () => {
+    const before = sent.count;
+    const revision = await main.getAttribute('data-frame-revision');
+    const read = await pressDuringBeat(page, 'key');
+    return read && { read, before, revision };
   }, 120);
-  const read = seen as Seen | null;
-  expect(read).not.toBeNull();
-  expect(read!.text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
-  expect(read!.text).toMatch(/\d+ of \d+ · Space to skip/);
+  expect(read.text).toMatch(/ cast | played | discarded | attacked with | dealt | died| blocked /);
+  expect(read.text).toMatch(/\d+ of \d+ · Space to skip/);
   // The beat headed the decision block, and the choices beneath it waited, still listed.
-  expect(read!.inPanel).toBe(true);
-  expect(read!.held).toBe(true);
+  expect(read.inPanel).toBe(true);
+  expect(read.held).toBe(true);
   // A beat is shown on the board it happened on, when that is not the frame's
   // own: a past board, with no card outlined (its offers belong to the frame).
-  if (read!.onStep) expect(read!.outlined).toBe(0);
+  if (read.onStep) expect(read.outlined).toBe(0);
   // Damage marks, which add up the whole window, and the result card wait with the decision.
-  expect(read!.windowMarks).toBe(0);
+  expect(read.windowMarks).toBe(0);
   const board = page.getByTestId('game-board');
   await expect(page.getByTestId('beat')).toHaveCount(0);
   // Ending the reading shows the frame's own board, with the live decision.
@@ -130,46 +137,31 @@ test('pressing the board or activating a choice ends the reading without acting'
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
+  const sent = await startAgainstRandom(page);
   const board = page.getByTestId('game-board');
-  await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
-  await expect(board).toHaveAttribute('data-board', 'step');
-  await page.screenshot({ path: test.info().outputPath('step-board.png') });
-  const before = sent.count;
-  // A press on a past board commits nothing: its cards had no offers when pressed.
-  const card = board.getByTestId('board-card').first();
-  await card.click();
-  await expect(board).toHaveAttribute('data-board', 'frame');
-  await expect(page.getByTestId('beat')).toHaveCount(0);
-  expect(sent.count).toBe(before);
-  // A held choice can also be activated without pointer events by assistive technology.
-  for (const how of ['pointer', 'activation'] as const) {
-    let heldBefore = 0;
-    let seen = false;
-    await playUntil(page, async () => {
-      heldBefore = sent.count;
-      seen = await pressDuringBeat(page, how) !== null;
-      return seen;
+  // A press on a past board (cards with no offers), a pointer press on a held
+  // choice, or assistive-technology activation without pointer events all end
+  // the reading without acting.
+  for (const how of ['board', 'pointer', 'activation'] as const) {
+    const { seen, before } = await playUntil(page, async () => {
+      const before = sent.count;
+      const seen = await pressDuringBeat(page, how);
+      return seen && { seen, before };
     }, 160);
-    expect(seen).toBe(true);
-    await expect(page.getByTestId('beat')).toHaveCount(0);
+    if (how === 'board') expect(seen.onStep).toBe(true);
     await expect(board).toHaveAttribute('data-board', 'frame');
-    expect(sent.count).toBe(heldBefore);
+    await expect(page.getByTestId('beat')).toHaveCount(0);
+    expect(sent.count).toBe(before);
   }
 });
 
 test('reduced motion reads out no beats', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  let opponentFacts = 0;
+  await startAgainstRandom(page);
   await playUntil(page, async () => {
     expect(await page.getByTestId('beat').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
+    return await page.locator('[data-testid=recent-fact].theirs').count() > 0;
   }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
   await expect(page.getByTestId('beat')).toHaveCount(0);
 });

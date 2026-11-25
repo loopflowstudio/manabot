@@ -47,6 +47,12 @@ class RecordedPlayer:
     inference: dict | None = None
 
 
+@dataclass(frozen=True)
+class RetainedAttempt:
+    trace: dict[str, Any]
+    world_json: str
+
+
 def bot_player(config: dict[str, Any]) -> RecordedPlayer:
     identity = config.get("opponent") or {}
     policy = config["villain_type"]
@@ -120,7 +126,10 @@ class AttemptStore:
                     record_version INTEGER NOT NULL DEFAULT 2,
                     visibility TEXT NOT NULL DEFAULT 'shared',
                     origin TEXT NOT NULL DEFAULT 'unknown',
-                    num_events INTEGER NOT NULL DEFAULT 0
+                    num_events INTEGER NOT NULL DEFAULT 0,
+                    -- The game's numbers (`numbers.GameNumbers`), saved once it
+                    -- is no longer being played; NULL until first computed.
+                    numbers_json TEXT
                 );
                 CREATE TABLE IF NOT EXISTS players (
                     id TEXT PRIMARY KEY, credential_hash TEXT UNIQUE NOT NULL,
@@ -166,6 +175,23 @@ class AttemptStore:
                     attempt_id TEXT NOT NULL REFERENCES attempts(id),
                     PRIMARY KEY(owner,request_id)
                 );
+                -- A policy's reading of one seat of a game (`analysis.py`): never
+                -- part of the trace, any frame or any export.
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id TEXT PRIMARY KEY,
+                    attempt_id TEXT NOT NULL REFERENCES attempts(id),
+                    seat INTEGER NOT NULL CHECK(seat IN (0, 1)),
+                    policy_json TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('running', 'complete', 'stopped')),
+                    reason TEXT, total INTEGER NOT NULL,
+                    process_id TEXT NOT NULL, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS analyses_attempt ON analyses(attempt_id, created_at);
+                CREATE TABLE IF NOT EXISTS analysed_decisions (
+                    analysis_id TEXT NOT NULL REFERENCES analyses(id),
+                    event INTEGER NOT NULL, evidence_json TEXT NOT NULL,
+                    PRIMARY KEY(analysis_id, event)
+                );
             """)
             self._migrate(db)
             db.execute(
@@ -200,6 +226,10 @@ class AttemptStore:
                 )
             for column in ("bot_sha256", "hero_deck", "villain_deck"):
                 db.execute(f"ALTER TABLE attempts DROP COLUMN {column}")
+        if "numbers_json" not in {
+            row[1] for row in db.execute("PRAGMA table_info(attempts)")
+        }:
+            db.execute("ALTER TABLE attempts ADD COLUMN numbers_json TEXT")
         feedback_columns = {row[1] for row in db.execute("PRAGMA table_info(feedback)")}
         for column in ("author_id", "decision_address"):
             if column not in feedback_columns:
@@ -547,19 +577,34 @@ class AttemptStore:
         return None if row is None else row[0]
 
     def load(self, attempt: str) -> dict | None:
+        retained = self.load_attempt(attempt)
+        return retained.trace if retained is not None else None
+
+    def has_attempt(self, attempt: str) -> bool:
         with self.connect() as db:
-            row = db.execute("SELECT * FROM attempts WHERE id=?", (attempt,)).fetchone()
+            return (
+                db.execute("SELECT 1 FROM attempts WHERE id=?", (attempt,)).fetchone()
+                is not None
+            )
+
+    def load_attempt(self, attempt: str) -> RetainedAttempt | None:
+        """Read the private trace and its world from the same database snapshot."""
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT trace_json, world_json, status FROM attempts WHERE id=?",
+                (attempt,),
+            ).fetchone()
         if row is None:
             return None
         trace = json.loads(row["trace_json"])
         if row["status"] == "interrupted":
             trace["end_reason"] = "server_restart"
-        return trace
+        return RetainedAttempt(trace, row["world_json"])
 
     def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute(
-                "SELECT record_version,origin,revision,status,ending_reason FROM attempts WHERE id=?",
+                "SELECT record_version,origin,revision,status,ending_reason,started_at,ended_at FROM attempts WHERE id=?",
                 (attempt,),
             ).fetchone()
             if row is None:
@@ -744,7 +789,7 @@ class AttemptStore:
             args.extend(position)
         with self.connect() as db:
             rows = db.execute(
-                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility,g.session_id,g.game_number, {mine} AS mine FROM attempts a LEFT JOIN session_games g ON g.attempt_id=a.id WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
+                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility,a.numbers_json,g.session_id,g.game_number, {mine} AS mine FROM attempts a LEFT JOIN session_games g ON g.attempt_id=a.id WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
                 [*mine_args, *args, limit],
             ).fetchall()
             players_by_attempt = self._players_for(db, [row["id"] for row in rows])
@@ -779,6 +824,9 @@ class AttemptStore:
                         "status": row["status"],
                         "end_reason": row["ending_reason"] or "active",
                         "num_events": row["num_events"],
+                        "numbers": json.loads(row["numbers_json"])
+                        if row["numbers_json"]
+                        else None,
                         "revision": row["revision"],
                         "players": seats,
                         "play_session_id": row["session_id"] if row["mine"] else None,
@@ -796,6 +844,130 @@ class AttemptStore:
                     }
                 )
         return summaries
+
+    # ———————————————— Numbers and record
+
+    def numbers(self, attempt: str) -> tuple[str, str | None] | None:
+        """The game's status and saved numbers JSON, or None for no such game."""
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT status, numbers_json FROM attempts WHERE id=?", (attempt,)
+            ).fetchone()
+        return None if row is None else (row["status"], row["numbers_json"])
+
+    def save_numbers(self, attempt: str, numbers_json: str) -> None:
+        """Save a game's numbers once, after it is no longer being played."""
+        with self.connect() as db:
+            db.execute(
+                "UPDATE attempts SET numbers_json=? WHERE id=? AND status<>'active' AND numbers_json IS NULL",
+                (numbers_json, attempt),
+            )
+
+    def record(
+        self, owners: set[str], token: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Your completed games against bots, counted by opponent identity and
+        your deck and theirs, across sessions. Counts, never a rating;
+        `with_analysis` counts the games with a decision made while a live
+        analysis was shown. A game played on from another is left out: its
+        opening moves were not played in it."""
+        mine, args = self._mine(owners, token)
+        with self.connect() as db:
+            rows = db.execute(
+                f"""SELECT b.player_id AS opponent_id, b.name AS opponent_name,
+                    h.deck AS human_deck, b.deck AS opponent_deck,
+                    count(*) AS games,
+                    sum(a.winner=h.seat) AS wins,
+                    sum(a.winner IS NULL) AS draws,
+                    sum(a.winner IS NOT NULL AND a.winner<>h.seat) AS losses,
+                    sum(coalesce(json_extract(a.numbers_json,'$.analysis_shown'),0)>0)
+                        AS with_analysis
+                FROM attempts a
+                JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
+                JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'
+                WHERE a.status='completed' AND {mine}
+                    AND json_extract(a.numbers_json,'$.played_from') IS NULL
+                GROUP BY b.player_id,b.name,h.deck,b.deck
+                ORDER BY games DESC,b.name,h.deck,b.deck""",
+                args,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # ———————————————— Analyses
+
+    def start_analysis(
+        self, attempt: str, seat: int, policy: dict[str, Any], total: int
+    ) -> str:
+        """A new running analysis of `seat`, owned by this process."""
+        identifier = secrets.token_hex(8)
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO analyses VALUES(?,?,?,?,'running',NULL,?,?,?)",
+                (
+                    identifier,
+                    attempt,
+                    seat,
+                    json.dumps(policy, sort_keys=True),
+                    total,
+                    PROCESS_ID,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        return identifier
+
+    def add_analysed_decision(self, analysis: str, event: int, evidence: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO analysed_decisions VALUES(?,?,?)",
+                (analysis, event, evidence),
+            )
+
+    def end_analysis(self, analysis: str, reason: str | None) -> None:
+        """Complete without a reason, else stopped with it."""
+        with self.connect() as db:
+            db.execute(
+                "UPDATE analyses SET status=?, reason=? WHERE id=?",
+                ("stopped" if reason else "complete", reason, analysis),
+            )
+
+    def analyses(self, attempt: str) -> list[dict[str, Any]]:
+        """Every analysis of a game, oldest first, with its decisions so far.
+
+        A running analysis another process started stopped with that process.
+        """
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM analyses WHERE attempt_id=? ORDER BY created_at, id",
+                (attempt,),
+            ).fetchall()
+            decisions = {
+                row["id"]: [
+                    json.loads(evidence)
+                    for (evidence,) in db.execute(
+                        "SELECT evidence_json FROM analysed_decisions WHERE analysis_id=? ORDER BY event",
+                        (row["id"],),
+                    )
+                ]
+                for row in rows
+            }
+        result = []
+        for row in rows:
+            orphaned = row["status"] == "running" and row["process_id"] != PROCESS_ID
+            result.append(
+                {
+                    "id": row["id"],
+                    "seat": row["seat"],
+                    "policy": json.loads(row["policy_json"]),
+                    "status": "stopped" if orphaned else row["status"],
+                    "reason": "Academy stopped before this analysis finished."
+                    if orphaned
+                    else row["reason"],
+                    "total": row["total"],
+                    "created_at": row["created_at"],
+                    "decisions": decisions[row["id"]],
+                }
+            )
+        return result
 
     def feedback(
         self,

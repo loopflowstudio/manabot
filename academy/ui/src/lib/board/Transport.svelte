@@ -6,7 +6,8 @@
    * line (`line` false): the transport keeps its buttons and counter. At a
    * Watch's live edge, Next asks the bots for the next decision (Continue).
    * Keys are the page's: ←/→ step, Shift+←/→ jump decisions, Space plays,
-   * Home/End.
+   * Home/End. With an analysis that has key moments, Next key moment jumps
+   * to the next one.
    */
   import { labelledTurns, type StripMark } from './replay';
 
@@ -30,11 +31,13 @@
     onTogglePlaying: () => void;
     onScrub: (index: number) => void;
     onSpeedChange: (speed: number) => void;
+    /** Jump to the analysis's next key moment: absent without key moments, null when none is ahead. */
+    onKeyMoment?: (() => void) | null;
   }
 
   let {
     selected, total, marks, playing, speed, disabled = false, busy = false, producing = false, canProduce = false,
-    retrySearch = false, retryBot = false, line = true, onPrevious, onNext, onDecision, onTogglePlaying, onScrub, onSpeedChange,
+    retrySearch = false, retryBot = false, line = true, onPrevious, onNext, onDecision, onTogglePlaying, onScrub, onSpeedChange, onKeyMoment,
   }: Props = $props();
 
   const edge = $derived(selected + 1 === total);
@@ -58,6 +61,10 @@
     </button>
     <button type="button" class="btn btn-ghost btn-sm" disabled={disabled || !hasDecisionAfter} onclick={() => onDecision(1)}
       aria-label="Next decision" title="Next decision (Shift+→)">⇥</button>
+    {#if onKeyMoment !== undefined}
+      <button type="button" class="btn btn-ghost btn-sm" data-testid="next-key-moment" disabled={disabled || busy || onKeyMoment === null}
+        onclick={() => onKeyMoment?.()}>Next key moment</button>
+    {/if}
   </div>
   {#if line}<div class="scrub">
     <input type="range" aria-label="Replay position" aria-valuetext={`Position ${selected + 1} of ${total}${turn !== null ? `, turn ${turn}` : ''}`}
