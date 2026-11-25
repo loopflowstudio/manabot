@@ -125,7 +125,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
 **Training resume and game errors.**
-`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py tests/training/test_training_game_journals.py -q`.
 Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
 for portable state, sampling-domain changes and historical Torch saves.
 On Apple Silicon, run the Metal subprocess cases serially. Resume restores
@@ -285,7 +285,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
-| Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
+| Academy Integration | `academy-integration.yml` (world bindings, Elemental admission, play, game records and card art) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v6` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |

@@ -11,11 +11,13 @@ mkdir managym-example
 cd managym-example
 uv venv --python 3.13
 uv pip install --python .venv/bin/python --only-binary :all: managym
-uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.world_identity())'
+uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.__version__, managym.world_identity())'
 ```
 
-The last command prints the installed world's version and card digest. The
-`managym` distribution contains the compiled engine and its Python API. It
+The last command prints the engine version (`managym.__version__`) and card
+digest, both read directly from the compiled extension without requiring
+installed package metadata. The `managym` distribution contains the compiled
+engine and its Python API. It
 installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
 native observation buffers; Pydantic supports the structured decision API.
 No Rust compiler is needed when installing a wheel.
