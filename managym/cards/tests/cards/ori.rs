@@ -524,3 +524,33 @@ fn dwynen_counts_attacking_elves_including_a_changeling() {
     settle(&mut s);
     s.assert_life(0, 22);
 }
+
+#[test]
+fn joraga_invocation_requires_crystal_barricade_to_block() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, zone_of},
+        play::{attack_with, cast, settle},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Joraga Invocation", "Gray Ogre", "Crystal Barricade"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wall = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    let card = card_of(&s, wall);
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    clear_summoning_sickness(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    assert!(
+        matches!(s.action_space().actions.as_slice(), [Action::DeclareBlocker {
+        blocker, attacker: Some(attacker), ..
+    }] if *blocker == wall && *attacker == ogre)
+    );
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 20);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+}

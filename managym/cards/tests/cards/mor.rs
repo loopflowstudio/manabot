@@ -76,3 +76,66 @@ fn changeling_defines_types_before_later_type_and_ability_changes() {
     assert!(face.has_subtype("Elf"));
     assert!(!face.has_subtype("Vampire"));
 }
+
+#[test]
+fn mauler_counts_as_an_angel_elf_advisor_and_attacking_vampire() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::{counters, counters_of, mode_labels, permanent_named},
+        play::{attack_with, cast, choose_mode, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        flow::turn::StepKind,
+        state::{card::Keyword, permanent::CounterKind, player::ManaPayment},
+    };
+
+    let mut s = five_color_setup(&[
+        "Giada, Font of Hope",
+        "Dwynen, Gilt-Leaf Daen",
+        "Crossway Troublemakers",
+        "Taurean Mauler",
+        "Banner of Kinship",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    for name in [
+        "Giada, Font of Hope",
+        "Dwynen, Gilt-Leaf Daen",
+        "Crossway Troublemakers",
+    ] {
+        s.force_permanent_on_battlefield(0, name);
+    }
+    cast(&mut s, "Taurean Mauler");
+    settle(&mut s);
+    let mauler = permanent_named(&s, "Taurean Mauler");
+    assert_eq!(counters(&s, mauler), 1);
+    assert_eq!(s.game().characteristics(mauler).pt(), (4, 4));
+
+    cast(&mut s, "Banner of Kinship");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    let advisor = mode_labels(&s)
+        .iter()
+        .position(|name| name == "Advisor")
+        .unwrap();
+    choose_mode(&mut s, advisor);
+    settle(&mut s);
+    let banner = permanent_named(&s, "Banner of Kinship");
+    assert_eq!(counters_of(&s, banner, CounterKind::Fellowship), 1);
+    assert_eq!(s.game().characteristics(mauler).pt(), (5, 5));
+    assert!(!s
+        .game()
+        .characteristics(mauler)
+        .keywords
+        .has(Keyword::Lifelink));
+
+    clear_summoning_sickness(&mut s, mauler);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, mauler);
+    for keyword in [Keyword::Lifelink, Keyword::Deathtouch] {
+        assert!(s.game().characteristics(mauler).keywords.has(keyword));
+    }
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(0, 25);
+    s.assert_life(1, 15);
+}

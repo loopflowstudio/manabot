@@ -180,35 +180,19 @@ Passes 1–5 implement slices 1–8.
   | Angel of Vitality | 4 | 52.0 | 43.9 | 75.0 |
   | Angel of Vitality | 8 | 25.5 | 62.7 | 83.7 |
 
-- **Pass 6 (next, last)**: one integrated directed test per synergy listed
-  below, and the cohort's FDN ledger rows in
-  `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl`. Rows still
-  marked pending include Crystal Barricade (prevention now built), Mossborn
-  Hydra, Banner of Kinship, Giada and Wildwood Scourge. Each row becomes
-  `source definition found` with its directed fixture, but only if the ledger is
-  this step's to edit. Otherwise, propose the rows in `scratch/`. The full debug
-  nextest suite and Engine Budget reference belong to gate.
+## Pass 6 · Integrated positions complete
 
-## Cross-slice validation (integrated)
+| Position | Observable result |
+|---|---|
+| Taurean Mauler with Giada, Dwynen, Banner and Crossway | Mauler enters with one counter, becomes a 4/4 Elf, counts as Banner's only Advisor, then attacks as a 5/5 Vampire with deathtouch and lifelink. |
+| Confiscate on Giada | With two other Angels, the new controller uses Giada's white mana to cast a third Angel. It enters with three counters. Crusader of Odric costs the same and cannot use that mana. |
+| Progenitus with Confiscate, Joraga and Dryad Militant | Confiscate must target another permanent. Joraga goes to exile and Progenitus attacks unblocked for 13. Fumigate sends Progenitus back to its library. |
+| Myojin into two Wilt-Leaf Lieges | The opponent's Ogre goes to the graveyard and both Lieges enter as 6/6s. The activating player's Liege stays in hand. |
+| Angel of Vitality with Elenda | A Hawk dealing one damage takes Elenda's controller from 19 to 21 or from 28 to 30, crossing each threshold by exactly the extra life. |
+| Joraga with Crystal Barricade | The Wall's only legal block stops the 5/5 Ogre and costs the Wall its life. |
 
-Synergies to show together at the end:
-- Changeling Taurean Mauler under Banner (any type), Dwynen (Elf), Crossway
-  (Vampire) and Giada (Angel counters).
-- Confiscate stealing a Giada or Banner: the counted "you" changes with control.
-- Progenitus against Confiscate, Joraga (unblockable under protection) and
-  Dryad Militant.
-- Myojin's discard into Wilt-Leaf Liege.
-- Angel of Vitality with Elenda's life thresholds.
-- Joraga with Crystal Barricade (defender can still block).
-
-Each slice finishes with:
-- the debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2 --test-threads 2`);
-- `observability.rs` guards for every new variant;
-- the Python observation and text tests on a rebuilt extension;
-- `tests/model/test_pinned_pilot.py` (append columns or add a token rename; no
-  input version bump);
-- the FDN ledger rows marked `source definition found`, naming their directed
-  fixture.
-
-Engine Budget runs at gate: new definitions move the decision digest, so record a
-new reference with `scripts/engine_budget.py record --reason`.
+The focused debug run passed all 16 tests, including these six positions.
+The FDN ledger has ten updated rows. All 29 cohort rows were checked for a
+source definition and a named directed fixture. Implementation is complete.
+Gate owns the full debug nextest suite (CI profile, two build jobs and two
+test threads) and the Engine Budget reference record with its reason.

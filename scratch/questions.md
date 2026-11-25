@@ -38,3 +38,6 @@
   Angel replacement position uses its own name so both measurements remain
   reproducible. The Giada position uses Sakashima to keep four legendary
   Giadas on the battlefield.
+- Pass 6 uses Giada for the Confiscate position. Two Angels on the new
+  controller's side make the pre-entry count observable, and Giada supplies
+  the only white mana for two cards with the same cost.

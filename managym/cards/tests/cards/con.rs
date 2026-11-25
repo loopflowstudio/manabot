@@ -100,3 +100,41 @@ fn finality_competes_with_progenitus_own_replacement() {
         assert_eq!(zone_of(&branch, card), Some(zone));
     }
 }
+
+#[test]
+fn progenitus_ignores_confiscate_and_required_blocks_and_shuffles_past_militant() {
+    let mut s = five_color_setup(&[
+        "Progenitus",
+        "Confiscate",
+        "Joraga Invocation",
+        "Dryad Militant",
+        "Fumigate",
+    ]);
+    let hydra = s.force_permanent_on_battlefield(0, "Progenitus");
+    let card = card_of(&s, hydra);
+    s.force_permanent_on_battlefield(1, "Dryad Militant");
+    let land = s.force_permanent_on_battlefield(1, "Island");
+    cast(&mut s, "Confiscate");
+    assert!(!offered_targets(&s).contains(&Target::Permanent(hydra)));
+    assert!(s.choose_target(Target::Permanent(land)));
+    settle(&mut s);
+
+    let invocation = cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    assert_eq!(zone_of(&s, invocation), Some(ZoneType::Exile));
+    assert_eq!(s.game().characteristics(hydra).pt(), (13, 13));
+    clear_summoning_sickness(&mut s, hydra);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, hydra);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    assert!(!s.action_space().actions.iter().any(|action| matches!(
+        action, Action::DeclareBlocker { attacker: Some(id), .. } if *id == hydra
+    )));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 7);
+
+    s.set_player_mana_pool(0, "3WW");
+    cast(&mut s, "Fumigate");
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Library));
+}

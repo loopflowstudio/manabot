@@ -381,3 +381,27 @@ fn myojin_discard_resumes_each_sampled_hand_and_removes_divinity_once() {
     }
     s.assert_zone_size(1, ZoneType::Hand, 3);
 }
+
+#[test]
+fn myojin_discards_two_lieges_into_play_together() {
+    use crate::support::{game::move_from_library, inspect::permanent_of};
+
+    let mut s = five_color_setup(&["Myojin of Night's Reach", "Wilt-Leaf Liege", "Gray Ogre"]);
+    cast(&mut s, "Myojin of Night's Reach");
+    settle(&mut s);
+    let myojin = permanent_named(&s, "Myojin of Night's Reach");
+    let mine = move_to_hand(&mut s, "Wilt-Leaf Liege");
+    let lieges = [(); 2].map(|_| move_from_library(&mut s, 1, "Wilt-Leaf Liege", ZoneType::Hand));
+    let ogre = move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+
+    activate(&mut s, myojin, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mine), Some(ZoneType::Hand));
+    s.assert_zone_size(1, ZoneType::Hand, 0);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+    for card in lieges {
+        let liege = permanent_of(&s, card).unwrap();
+        assert_eq!(permanent(&s, liege).controller, PlayerId(1));
+        assert_eq!(s.game().characteristics(liege).pt(), (6, 6));
+    }
+}
