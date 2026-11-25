@@ -1,4 +1,4 @@
-at: 38aeeb671611746a884064c9ae1083426fb3386d
+at: ad195a1129984ae9481ebf23be9b05bbdc1cd698
 first:
   - path: scratch/plan.md
     why: Outcome, determinism rule, and verified passes.
@@ -15,7 +15,7 @@ first:
   - path: managym/src/flow/mana.rs
     why: Source offers, color equivalence, and surplus-pruned automatic taps.
   - path: managym/src/flow/mana/interchangeable.rs
-    why: Indistinguishable source classes (including played-this-turn plain lands) and single-unit tap count proofs.
+    why: Indistinguishable source classes and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
     why: Unified skip check and produced-mana commitment.
   - path: managym/src/flow/decision.rs
@@ -23,14 +23,17 @@ first:
   - path: managym/src/agent/ability_description.rs
     why: Unified tap-for-mana wording across choice sources.
   - path: managym/src/flow/action.rs
+  - path: academy/ui/src/lib/board/prompt.ts
+    why: Mana color modal prompt wording in Academy.
+  - path: academy/ui/src/lib/board/prompt.test.ts
   - path: managym/tests/source_taps.rs
-    why: Engine tests for forced skips, real PlayLand turns, labels, resolution payments, and guards.
+    why: Engine tests for skips, PlayLand turns, labels, and guards.
   - path: tests/academy/test_dual_land_payment.py
-    why: Academy session checks for dual-land skip, real PlayLand turns, and labels.
+    why: Academy session checks for dual-land skip and labels.
   - path: tests/academy/test_payment_preview.py
     why: Payment preview checks with a distinct blue dual.
   - path: tests/academy/test_choice_navigation.py
-    why: Updated Accumulate Wisdom prefix after played-this-turn basic payment skip.
+    why: Updated Accumulate Wisdom prefix after basic payment skip.
 hide:
   - path: managym/academy/fixtures/
     why: Regenerated fixture prefixes after redundant-basic skips.
