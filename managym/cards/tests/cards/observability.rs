@@ -114,26 +114,26 @@ enum Seen {
     Identity,
 }
 
-/// Keyword → (card column, permanent column). Every keyword is evergreen
-/// today, so each has columns; the first non-evergreen keyword names its fact
-/// row here instead of columns. The token is the `Keyword::<name>` variant in
-/// the definition's keyword list, present only when the keyword is.
-fn keyword_columns(keyword: Keyword) -> (usize, usize) {
+/// Keyword → (card column, permanent column) for evergreen keywords.
+/// Non-evergreen keywords like Changeling are observed via their definition
+/// tokens and effect facts rather than dedicated columns.
+fn keyword_columns(keyword: Keyword) -> Option<(usize, usize)> {
     match keyword {
-        Keyword::Flying => (card::FLYING, permanent::FLYING),
-        Keyword::Reach => (card::REACH, permanent::REACH),
-        Keyword::Haste => (card::HASTE, permanent::HASTE),
-        Keyword::Flash => (card::FLASH, permanent::FLASH),
-        Keyword::Vigilance => (card::VIGILANCE, permanent::VIGILANCE),
-        Keyword::Trample => (card::TRAMPLE, permanent::TRAMPLE),
-        Keyword::FirstStrike => (card::FIRST_STRIKE, permanent::FIRST_STRIKE),
-        Keyword::DoubleStrike => (card::DOUBLE_STRIKE, permanent::DOUBLE_STRIKE),
-        Keyword::Deathtouch => (card::DEATHTOUCH, permanent::DEATHTOUCH),
-        Keyword::Lifelink => (card::LIFELINK, permanent::LIFELINK),
-        Keyword::Defender => (card::DEFENDER, permanent::DEFENDER),
-        Keyword::Menace => (card::MENACE, permanent::MENACE),
-        Keyword::Hexproof => (card::HEXPROOF, permanent::HEXPROOF),
-        Keyword::Indestructible => (card::INDESTRUCTIBLE, permanent::INDESTRUCTIBLE),
+        Keyword::Flying => Some((card::FLYING, permanent::FLYING)),
+        Keyword::Reach => Some((card::REACH, permanent::REACH)),
+        Keyword::Haste => Some((card::HASTE, permanent::HASTE)),
+        Keyword::Flash => Some((card::FLASH, permanent::FLASH)),
+        Keyword::Vigilance => Some((card::VIGILANCE, permanent::VIGILANCE)),
+        Keyword::Trample => Some((card::TRAMPLE, permanent::TRAMPLE)),
+        Keyword::FirstStrike => Some((card::FIRST_STRIKE, permanent::FIRST_STRIKE)),
+        Keyword::DoubleStrike => Some((card::DOUBLE_STRIKE, permanent::DOUBLE_STRIKE)),
+        Keyword::Deathtouch => Some((card::DEATHTOUCH, permanent::DEATHTOUCH)),
+        Keyword::Lifelink => Some((card::LIFELINK, permanent::LIFELINK)),
+        Keyword::Defender => Some((card::DEFENDER, permanent::DEFENDER)),
+        Keyword::Menace => Some((card::MENACE, permanent::MENACE)),
+        Keyword::Hexproof => Some((card::HEXPROOF, permanent::HEXPROOF)),
+        Keyword::Indestructible => Some((card::INDESTRUCTIBLE, permanent::INDESTRUCTIBLE)),
+        Keyword::Changeling => None,
     }
 }
 
@@ -516,6 +516,8 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Moved => "ObjectSelector::Moved",
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Unselected => "ObjectSelector::Unselected",
+        ObjectSelector::LibraryTop(_) => "ObjectSelector::LibraryTop",
         ObjectSelector::Paid(_) => "ObjectSelector::Paid",
         ObjectSelector::Matching { .. } => "ObjectSelector::Matching",
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
@@ -527,7 +529,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 23] {
+fn selector_witnesses() -> [ObjectSelector; 25] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -544,6 +546,8 @@ fn selector_witnesses() -> [ObjectSelector; 23] {
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
+        ObjectSelector::Unselected,
+        ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(3))),
         ObjectSelector::Paid(How::Sacrificed),
         ObjectSelector::Matching {
             of: Box::new(ObjectSelector::CardsThisWay),
@@ -841,9 +845,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::Simultaneously { .. } => "Effect::Simultaneously",
         Effect::Airbend { .. } => "Effect::Airbend",
-        Effect::GrantGraveyardCastThisTurn { .. } => "Effect::GrantGraveyardCastThisTurn",
+        Effect::GrantPlay { .. } => "Effect::GrantPlay",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
-        Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::ExileEachLibraryTopCastFree => "Effect::ExileEachLibraryTopCastFree",
@@ -883,7 +886,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 101;
+const EFFECT_VARIANTS: usize = 100;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -957,6 +960,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::SelectCards {
             from: ObjectSelector::CardsThisWay,
             predicate: creature(),
+            max_mana_value: None,
             min: 0,
             max: EffectValue::Fixed(2),
             effects: draw(),
@@ -1050,16 +1054,11 @@ fn effect_witnesses() -> Vec<Effect> {
                 exact_mana_value: None,
             },
         },
-        Effect::GrantGraveyardCastThisTurn {
-            flashback: false,
-            target: TargetSpec::GraveyardCardYouOwn {
-                predicate: creature(),
-            },
-        },
-        Effect::OpponentsCastOnlyFromHand,
-        Effect::ExileTopCardsToPlay {
-            count: 2,
+        Effect::GrantPlay {
+            what: ObjectSelector::Moved,
             until: PlayWindow::WhileExiled,
+            play_lands: true,
+            flashback: false,
             face_down: true,
             condition: Some(Condition::ControlsAtLeast {
                 distinct_names: false,
@@ -1067,6 +1066,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 predicate: CardPredicate::subtype("Wizard"),
             }),
         },
+        Effect::OpponentsCastOnlyFromHand,
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,
             zone: ZoneType::Battlefield,
@@ -2281,7 +2281,7 @@ fn card_row(
         (card::HAS_WARD, permanent::HAS_WARD),
         (card::WARD_COST, permanent::WARD_COST),
     ];
-    shared.extend(Keyword::ALL.into_iter().map(keyword_columns));
+    shared.extend(Keyword::ALL.into_iter().filter_map(keyword_columns));
     for (card_column, permanent_column) in shared {
         assert_eq!(
             card_row[card_column], permanent_row[permanent_column],
@@ -2772,6 +2772,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
@@ -2833,37 +2834,38 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
     }));
     for keyword in Keyword::ALL {
         let name = keyword.name();
-        let (card_column, permanent_column) = keyword_columns(keyword);
         let keywords = Keywords::of(&[keyword]);
 
-        let mut granted = base_game.clone();
-        let affected = granted.affected_permanent(ogre).unwrap();
-        granted.apply_continuous(
-            None,
-            PlayerId(0),
-            [affected],
-            Modification::AddKeywords(keywords),
-            EffectDuration::EndOfTurn,
-        );
-        let (_, after) = observe(&granted, 0);
-        assert_eq!(
-            changed(permanent_row(&base), permanent_row(&after)),
-            [permanent_column],
-            "{name}"
-        );
+        if let Some((card_column, permanent_column)) = keyword_columns(keyword) {
+            let mut granted = base_game.clone();
+            let affected = granted.affected_permanent(ogre).unwrap();
+            granted.apply_continuous(
+                None,
+                PlayerId(0),
+                [affected],
+                Modification::AddKeywords(keywords),
+                EffectDuration::EndOfTurn,
+            );
+            let (_, after) = observe(&granted, 0);
+            assert_eq!(
+                changed(permanent_row(&base), permanent_row(&after)),
+                [permanent_column],
+                "{name}"
+            );
 
-        let mut printed = base_game.clone();
-        let object = printed.state.permanents[ogre].as_ref().unwrap().object;
-        printed.state[object].keywords = keywords;
-        let (obs, after) = observe(&printed, 0);
-        assert!(
-            changed(
-                &card_row(&base_game, &base_obs, &base, ogre),
-                &card_row(&printed, &obs, &after, ogre),
-            )
-            .contains(&card_column),
-            "{name}"
-        );
+            let mut printed = base_game.clone();
+            let object = printed.state.permanents[ogre].as_ref().unwrap().object;
+            printed.state[object].keywords = keywords;
+            let (obs, after) = observe(&printed, 0);
+            assert!(
+                changed(
+                    &card_row(&base_game, &base_obs, &base, ogre),
+                    &card_row(&printed, &obs, &after, ogre),
+                )
+                .contains(&card_column),
+                "{name}"
+            );
+        }
 
         let definition = ObjectDefinition::face(PrintedCharacteristics {
             name: "Witness".into(),
@@ -4009,7 +4011,9 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
         }
     }
     for keyword in Keyword::ALL {
-        let (object, permanent) = keyword_columns(keyword);
+        let Some((object, permanent)) = keyword_columns(keyword) else {
+            continue;
+        };
         for (buffer, index) in [(Buffer::Card, object), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),

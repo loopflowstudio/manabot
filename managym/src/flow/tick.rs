@@ -257,8 +257,9 @@ impl Game {
     }
 
     fn on_step_end(&mut self, step: StepKind) {
-        // CR 106.4 — Unspent mana empties at the end of each step and phase.
-        self.clear_mana_pools();
+        // CR 106.4 — Unspent mana empties at the end of each step and phase,
+        // respecting classes that survive until end of combat or end of turn.
+        self.clear_mana_pools(step);
         if step == StepKind::EndOfCombat {
             // CR 511.3 — Creatures stop being attacking as combat ends.
             for permanent in self.state.permanents.iter_mut().flatten() {

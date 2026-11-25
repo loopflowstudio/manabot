@@ -1036,7 +1036,7 @@ impl Game {
                 frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
             }
             Decision::Payment(progress) => {
-                if let CostComponent::Mana { cost, .. } = &progress.owed {
+                if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
                     frame.cost(cost);
                 }
                 frame.waterbend = progress.waterbends();
@@ -1579,6 +1579,8 @@ mod tests {
                 origin: crate::flow::decision::SelectionOrigin::Other,
                 player,
                 from: None,
+                pool: vec![],
+                looked: vec![],
                 candidates: vec![],
                 selected: vec![],
                 min: 0,

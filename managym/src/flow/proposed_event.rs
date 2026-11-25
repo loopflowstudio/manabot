@@ -1593,7 +1593,19 @@ impl Game {
                             }
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
-                                    self.check_static_condition(condition, entering_controller)
+                                    let mut frame = crate::flow::decision::EffectFrame::new(
+                                        entering_controller,
+                                        Vec::new(),
+                                    );
+                                    frame.kicked = entry.spell.as_ref().is_some_and(|s| s.kicked);
+                                    frame.x = entry.spell.as_ref().map_or(0, |s| s.x);
+                                    self.condition_holds(
+                                        condition,
+                                        entering_controller,
+                                        Some(&frame),
+                                        Some(source),
+                                        None,
+                                    )
                                 }) =>
                             {
                                 effect.clone()

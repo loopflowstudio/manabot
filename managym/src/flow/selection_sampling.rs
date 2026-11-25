@@ -977,6 +977,7 @@ impl Game {
         // child may remember or otherwise alias a selected exact object.
         let objects = &rebinding.objects;
         rebind(frame.selected.iter_mut(), objects);
+        rebind(frame.unselected.iter_mut(), objects);
         rebind(
             frame
                 .remembered
@@ -1008,11 +1009,15 @@ impl Game {
         match decision {
             Decision::SelectCards {
                 from,
+                pool,
+                looked,
                 candidates,
                 selected,
                 ..
             } => {
                 rebind(selected.iter_mut(), &rebinding.objects);
+                rebind(pool.iter_mut(), &rebinding.objects);
+                rebind(looked.iter_mut(), &rebinding.objects);
                 if let Some(source) = from
                     .as_ref()
                     .filter(|source| hidden_from(self, source, rebinding.viewer))

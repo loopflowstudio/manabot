@@ -38,13 +38,11 @@ pub struct CardPredicate {
     /// one (CR 201.2). An empty name names nothing (CR 201.2a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub named: Option<String>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub flying: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keyword: Option<Keyword>,
     /// "without flying", as the object's characteristics are now.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub not_flying: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub deathtouch: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -250,7 +248,7 @@ impl CardPredicate {
             choice,
             &object.name,
             |c| object.colors().contains(&c),
-            |s| object.subtypes.iter().any(|t| t == s),
+            |s| object.has_subtype(s),
         ) {
             return false;
         }
@@ -260,8 +258,7 @@ impl CardPredicate {
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
-            || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
-            || (self.flying && !object.keywords.has(Keyword::Flying))
+            || self.keyword.is_some_and(|k| !object.keywords.has(k))
             || (self.not_flying && object.keywords.has(Keyword::Flying))
             || self
                 .min_toughness
@@ -278,11 +275,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if !self.subtypes_any.is_empty()
-            && !self
-                .subtypes_any
-                .iter()
-                .any(|s| object.subtypes.iter().any(|value| value == s))
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
         {
             return false;
         }
@@ -306,11 +299,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if self
-            .not_subtypes
-            .iter()
-            .any(|s| object.subtypes.iter().any(|value| value == s))
-        {
+        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
             return false;
         }
         if self
@@ -351,7 +340,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !object.subtypes.contains(subtype) {
+            if !object.has_subtype(subtype) {
                 return false;
             }
         }

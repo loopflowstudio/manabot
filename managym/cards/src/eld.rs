@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        wishclaw_talisman(),
         run_away_together(),
         charming_prince(),
         heraldic_banner(),
@@ -75,6 +76,7 @@ fn fabled_passage() -> CardDefinition {
                 effects: vec![Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Library),
                     predicate: CardPredicate::basic_land(),
+                    max_mana_value: None,
                     min: 0,
                     max: EffectValue::Fixed(1),
                     effects: vec![
@@ -460,4 +462,25 @@ fn run_away_together() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn wishclaw_talisman() -> CardDefinition {
+    use managym_state::{ability::PlayerSelector, effect::EffectDuration};
+    CardDefinition {
+key: "eld.wishclaw_talisman",
+scryfall_id: "07c17b01-ee5d-491a-8403-b3f819b778c4",
+printed: PrintedCharacteristics {
+name: "Wishclaw Talisman".into(),
+mana_cost: Some(ManaCost::parse("{1}{B}")),
+types: CardTypes::new([CardType::Artifact]),
+replacement_effects: vec![ReplacementEffect::EntersWithCounters {kind: CounterKind::Wish, count: 3, if_cast: false}],
+activated_abilities: vec![ActivatedAbilityDefinition {
+own_turn_only: true, mana_cost: ManaCost::parse("{1}"), tap_source: true, remove_counters: Some((CounterKind::Wish, 1)),
+effects: vec![Effect::search_for_card(ZoneType::Hand), Effect::GainControl {what: ObjectSelector::This, player: PlayerSelector::EachOpponent, duration: EffectDuration::Indefinite}], ..Default::default()
+}],
+text_box: "This artifact enters with three wish counters on it.\n{1}, {T}, Remove a wish counter from this artifact: Search your library for a card, put it into your hand, then shuffle. An opponent gains control of this artifact. Activate only during your turn.".into(),
+..Default::default()
+},
+..Default::default()
+}
 }

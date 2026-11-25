@@ -125,11 +125,29 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Text, "selected lands", None),
     // Split into `contribution` facts naming how and toward what each paid.
     (Text, "waterbend contributions", None),
+    // Slice 6 & 8: GrantPlay replaces ExileTopCardsToPlay and GrantGraveyardCastThisTurn;
+    // CardPredicate.keyword replaces flying/deathtouch; ManaClass.expiry replaces combat.
+    (Variant, "Effect::ExileTopCardsToPlay", None),
+    (Structure, "/Effect::ExileTopCardsToPlay", None),
+    (
+        Variant,
+        "Effect::GrantGraveyardCastThisTurn",
+        Some("Effect::GrantPlay"),
+    ),
+    (
+        Structure,
+        "/Effect::GrantGraveyardCastThisTurn",
+        Some("/Effect::GrantPlay"),
+    ),
+    (Field, "flying", None),
+    (Field, "deathtouch", None),
+    (Field, "combat", None),
 ];
 
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    ("token", "execution/2/combat", None),
     (
         "token",
         "execution/6/kept creature",

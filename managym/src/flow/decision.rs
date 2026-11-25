@@ -173,6 +173,11 @@ pub struct EffectFrame {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub selected: Vec<ObjectId>,
+    /// Exact objects from the enclosing selection's `from` domain that were
+    /// not chosen (`ObjectSelector::Unselected`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub unselected: Vec<ObjectId>,
     /// Private membership from which the selected exact objects were chosen.
     /// Inherited child scopes keep it until those objects leave that zone.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -288,6 +293,7 @@ impl EffectFrame {
             life_lost: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
+            unselected: Vec::new(),
             selected_revealed: false,
             selected_from: None,
             moved: Vec::new(),
@@ -311,6 +317,7 @@ impl EffectFrame {
         Self {
             program: self.program.clone(),
             selected: self.selected.clone(),
+            unselected: self.unselected.clone(),
             selected_revealed: self.selected_revealed,
             selected_from: self.selected_from.clone(),
             remembered: self.remembered.clone(),
@@ -337,11 +344,13 @@ impl EffectFrame {
     pub(crate) fn select_scope(
         &mut self,
         selected: Vec<ObjectId>,
+        unselected: Vec<ObjectId>,
         from: Option<ZoneSelection>,
         effects: Vec<Effect>,
     ) {
         let mut child = self.child_scope(effects);
         child.selected = selected;
+        child.unselected = unselected;
         child.selected_revealed = false;
         child.selected_from = from;
         let parent = std::mem::replace(self, child);
@@ -655,6 +664,15 @@ pub enum Decision {
         origin: SelectionOrigin,
         player: PlayerId,
         from: Option<ZoneSelection>,
+        /// Complete `from` domain captured when `SelectCards` started, so
+        /// `Unselected` names everything in `from` not chosen.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        pool: Vec<ObjectId>,
+        /// Top-of-library cards privately inspected by `ObjectSelector::LibraryTop`.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        looked: Vec<ObjectId>,
         #[serde(serialize_with = "crate::state::game_object::exact")]
         candidates: Vec<ObjectId>,
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -899,6 +917,9 @@ impl Decision {
             | Self::ManifestDread { player, looked }
             | Self::Surveil { player, looked, .. }
             | Self::LookAndSelect { player, looked, .. } => Some((*player, looked)),
+            Self::SelectCards { player, looked, .. } if !looked.is_empty() => {
+                Some((*player, looked))
+            }
             Self::OrderLibrary {
                 player,
                 object_ids: objects,
@@ -952,6 +973,7 @@ impl Decision {
             Decision::LookAndSelect { looked, .. }
             | Decision::ManifestDread { looked, .. }
             | Decision::Surveil { looked, .. } => looked,
+            Decision::SelectCards { looked, .. } if !looked.is_empty() => looked,
             Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
@@ -1321,7 +1343,7 @@ impl Game {
 
     /// Finish the instruction's batch before exposing its next decision.
     /// Without a next decision, the frame runs the batch and its remaining effects.
-    fn continue_resolution(&mut self, mut frame: EffectFrame, next: Option<Decision>) {
+    pub(crate) fn continue_resolution(&mut self, mut frame: EffectFrame, next: Option<Decision>) {
         match next {
             Some(decision) => {
                 if let Some(batch) = frame.batch.take() {
@@ -1846,14 +1868,21 @@ impl Game {
             }
             Decision::Payment(payment) => {
                 let player = payment.player;
-                let (cost, help) = match &payment.owed {
-                    CostComponent::Discard => {
-                        let mut actions: Vec<_> = self
-                            .discard_candidates(player, None)
-                            .into_iter()
-                            .map(|object| Action::SelectCard { player, object })
-                            .collect();
-                        actions.push(Action::Decline { player });
+                let tail_payable =
+                    self.can_pay_resolution_tail(player, payment.owed.get(1..).unwrap_or(&[]));
+                let (cost, help) = match payment.owed.first() {
+                    Some(CostComponent::Discard) => {
+                        let mut actions: Vec<_> = if tail_payable {
+                            self.discard_candidates(player, None)
+                                .into_iter()
+                                .map(|object| Action::SelectCard { player, object })
+                                .collect()
+                        } else {
+                            Vec::new()
+                        };
+                        if payment.can_decline() {
+                            actions.push(Action::Decline { player });
+                        }
                         return Some(ActionSpace {
                             player: Some(player),
                             kind: ActionSpaceKind::Discard,
@@ -1863,12 +1892,14 @@ impl Game {
                     }
                     // Paying life is one action under manual and automatic
                     // payment alike.
-                    CostComponent::Life(life) => {
+                    Some(CostComponent::Life(life)) => {
                         let mut actions = Vec::new();
-                        if self.can_pay_life(player, *life) {
+                        if tail_payable && self.can_pay_life(player, *life) {
                             actions.push(Action::PayCost { player });
                         }
-                        actions.push(Action::Decline { player });
+                        if payment.can_decline() {
+                            actions.push(Action::Decline { player });
+                        }
                         return Some(ActionSpace {
                             player: Some(player),
                             kind: ActionSpaceKind::PayOrNot,
@@ -1876,14 +1907,16 @@ impl Game {
                             focus: source_focus,
                         });
                     }
-                    CostComponent::Mana { cost, help } => (cost, *help),
+                    Some(CostComponent::Mana { cost, help }) => (cost, *help),
                     _ => unreachable!("unexpected resolution payment component"),
                 };
                 let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
                     let mut actions = Vec::new();
                     let pool = self.pooled_mana(player);
-                    if self.payable_with_help(player, &pool, cost, help, waterbend, None) {
+                    if tail_payable
+                        && self.payable_with_help(player, &pool, cost, help, waterbend, None)
+                    {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1895,20 +1928,22 @@ impl Game {
                     });
                 }
                 let mut actions = self.mana_ability_actions(player);
-                actions.extend(
-                    self.help_taps(
-                        player,
-                        cost,
-                        help,
-                        waterbend,
-                        &self.waterbend_candidates(player),
-                        None,
-                    )
-                    .into_iter()
-                    .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
-                );
-                if self.can_pay_mana_cost(player, cost) {
-                    actions.push(Action::PayCost { player });
+                if tail_payable {
+                    actions.extend(
+                        self.help_taps(
+                            player,
+                            cost,
+                            help,
+                            waterbend,
+                            &self.waterbend_candidates(player),
+                            None,
+                        )
+                        .into_iter()
+                        .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
+                    );
+                    if self.can_pay_mana_cost(player, cost) {
+                        actions.push(Action::PayCost { player });
+                    }
                 }
                 if payment.can_decline() {
                     actions.push(Action::Decline { player });
@@ -2503,7 +2538,7 @@ impl Game {
                 suspended.frame.x = x;
                 let payment = PaymentProgress::new(
                     *player,
-                    CostComponent::mana(ManaCost::default().with_generic(x)),
+                    vec![CostComponent::mana(ManaCost::default().with_generic(x))],
                     std::mem::take(if_paid),
                     Vec::new(),
                 );
@@ -2552,23 +2587,37 @@ impl Game {
                 Ok(())
             }
             (Decision::Payment(payment), Action::SelectCard { object, .. })
-                if matches!(payment.owed, CostComponent::Discard) =>
+                if matches!(payment.owed.first(), Some(CostComponent::Discard)) =>
             {
+                if !self
+                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("cannot pay remaining resolution cost".into()));
+                }
                 if let Err(error) =
                     self.pay_discard_cost(payment.player, None, *object, &mut payment.receipt)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
                 }
-                let Decision::Payment(payment) = suspended.decision else {
+                let Decision::Payment(mut payment) = suspended.decision else {
                     unreachable!()
                 };
-                self.finish_resolution_payment(payment, suspended.frame);
+                payment.owed.remove(0);
+                payment.committed = true;
+                self.advance_resolution_payment(payment, suspended.frame);
                 Ok(())
             }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
-                let tapped = match &mut payment.owed {
-                    CostComponent::Mana { cost, help } => self.resolution_help_tap(
+                if !self
+                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("cannot pay remaining resolution cost".into()));
+                }
+                let tapped = match payment.owed.first_mut() {
+                    Some(CostComponent::Mana { cost, help }) => self.resolution_help_tap(
                         payment.player,
                         *permanent,
                         cost,
@@ -2581,21 +2630,29 @@ impl Game {
                 tapped
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
-                let cost = match &payment.owed {
-                    CostComponent::Life(life) => {
+                if !self
+                    .can_pay_resolution_tail(payment.player, payment.owed.get(1..).unwrap_or(&[]))
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("cannot pay remaining resolution cost".into()));
+                }
+                let cost = match payment.owed.first() {
+                    Some(CostComponent::Life(life)) => {
                         let (player, life) = (payment.player, *life);
                         if !self.can_pay_life(player, life) {
                             *self.state.suspended_decision_mut() = Some(suspended);
                             return Err(AgentError("cannot pay life cost".into()));
                         }
                         self.pay_life_cost(player, life, &mut payment.receipt);
-                        let Decision::Payment(payment) = suspended.decision else {
+                        let Decision::Payment(mut payment) = suspended.decision else {
                             unreachable!()
                         };
-                        self.finish_resolution_payment(payment, suspended.frame);
+                        payment.owed.remove(0);
+                        payment.committed = true;
+                        self.advance_resolution_payment(payment, suspended.frame);
                         return Ok(());
                     }
-                    CostComponent::Mana { cost, .. } => cost.clone(),
+                    Some(CostComponent::Mana { cost, .. }) => cost.clone(),
                     _ => unreachable!("unexpected resolution payment component"),
                 };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
@@ -3908,6 +3965,7 @@ impl Game {
 
     fn finish_card_selection(&mut self, suspended: SuspendedResolution) {
         let Decision::SelectCards {
+            pool,
             selected,
             from,
             effects,
@@ -3917,13 +3975,17 @@ impl Game {
         else {
             unreachable!("card selection");
         };
+        let unselected: Vec<ObjectId> = pool
+            .into_iter()
+            .filter(|object| !selected.contains(object) && self.state.live(*object).is_some())
+            .collect();
         let effects = if selected.is_empty() {
             if_declined
         } else {
             effects
         };
         let mut frame = suspended.frame;
-        frame.select_scope(selected, from, effects);
+        frame.select_scope(selected, unselected, from, effects);
         self.run_frame(frame);
     }
 
@@ -5158,13 +5220,13 @@ mod payment_tests {
         };
         assert_eq!(
             payment.owed,
-            CostComponent::Mana {
+            vec![CostComponent::Mana {
                 cost: ManaCost::parse("{1}"),
                 help: crate::flow::payment::Help {
                     waterbend: 2,
                     ..Default::default()
                 },
-            }
+            }]
         );
         assert_eq!(
             payment

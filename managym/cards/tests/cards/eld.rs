@@ -448,3 +448,58 @@ fn run_away_together_returns_two_creatures_controlled_by_different_players() {
         assert!(s.game().state.permanents[other_mine].is_some());
     }
 }
+
+#[test]
+fn wishclaw_talisman_counters_and_opponent_turn_only() {
+    use crate::support::game::{five_color_setup, move_to_hand};
+    use crate::support::inspect::{counters_of, offered_cards, permanent, permanent_of, zone_of};
+    use crate::support::play::{
+        activate, cast_card, offers_ability, pass_until, select_card, settle, spend_colorless,
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::permanent::CounterKind;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Wishclaw Talisman", "Gray Ogre"]);
+    let card = move_to_hand(&mut s, "Wishclaw Talisman");
+    cast_card(&mut s, card);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    let talisman = permanent_of(&s, card).unwrap();
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 3);
+
+    activate(&mut s, talisman, 0);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let found = offered_cards(&s)[0];
+    select_card(&mut s, found);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, found), Some(ZoneType::Hand));
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 2);
+    assert_eq!(permanent(&s, talisman).controller, PlayerId(1));
+
+    // Even if untapped during player 0's turn, opponent cannot activate it off-turn.
+    s.game_mut().state.permanents[talisman]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.set_player_mana_pool(1, "2");
+    s.pass_priority();
+    assert!(!offers_ability(&mut s, talisman, 0));
+
+    // On opponent's own turn, they can activate it and pass control back.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(offers_ability(&mut s, talisman, 0));
+    activate(&mut s, talisman, 0);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let foe_found = offered_cards(&s)[0];
+    select_card(&mut s, foe_found);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, talisman, CounterKind::Wish), 1);
+    assert_eq!(permanent(&s, talisman).controller, PlayerId(0));
+}

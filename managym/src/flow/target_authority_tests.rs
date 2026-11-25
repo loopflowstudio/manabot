@@ -918,6 +918,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
         source,
         vec![Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
@@ -1350,7 +1351,9 @@ fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     let stack = game.state.stack_objects.last().unwrap().as_target();
-    assert!(game.next_retarget(player, stack, Vec::new(), true).is_some());
+    assert!(game
+        .next_retarget(player, stack, Vec::new(), true)
+        .is_some());
     assert_eq!(
         game.retarget_candidates(stack, 0),
         vec![Target::GraveyardCard(second)]

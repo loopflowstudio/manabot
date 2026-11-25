@@ -66,13 +66,13 @@ impl SpendPredicate {
     pub fn matches(&self, context: &SpendingContext) -> bool {
         match (self, context) {
             (Self::CastCreatureSubtype(name), SpendingContext::Cast { spell, .. }) => {
-                spell.0.types.is_creature() && spell.0.subtypes.contains(name)
+                spell.0.types.is_creature() && spell.0.has_subtype(name)
             }
             (Self::ActivateCreatureSubtype(name), SpendingContext::Activate { source, .. }) => {
                 source.creature && source.has_subtype(name)
             }
             (Self::CastSubtype(name), SpendingContext::Cast { spell, .. }) => {
-                spell.0.subtypes.iter().any(|subtype| subtype == name)
+                spell.0.has_subtype(name)
             }
             (Self::ActivateSubtype(name), SpendingContext::Activate { source, .. }) => {
                 source.has_subtype(name)
@@ -233,8 +233,7 @@ impl SpendEffect {
         let spell = &*spell.0;
         match self {
             Self::CreatureEntersWithPlusOneCounter { without_subtype } => {
-                spell.types.is_creature()
-                    && !spell.subtypes.iter().any(|name| name == without_subtype)
+                spell.types.is_creature() && !spell.has_subtype(without_subtype)
             }
             Self::SpellGainsKeyword {
                 spell: predicate, ..
@@ -246,15 +245,30 @@ impl SpendEffect {
     }
 }
 
+/// When unspent mana of a class empties from its pool (CR 106.4).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub enum ManaExpiry {
+    #[default]
+    Step,
+    EndOfCombat,
+    EndOfTurn,
+}
+
+impl ManaExpiry {
+    pub fn is_step(&self) -> bool {
+        *self == Self::Step
+    }
+}
+
 /// Every rule-visible property that tells pooled mana apart from ordinary
-/// mana of its type: a spending restriction, a spend effect, and combat expiry
-/// in the combined pool. Mana merges only within one class; its units are
-/// indistinguishable.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+/// mana of its type: a spending restriction, a spend effect, and expiry
+/// duration in the combined pool. Mana merges only within one class; its
+/// units are indistinguishable.
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ManaClass {
-    /// Until-end-of-combat mana remains distinct during payment search.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub combat: bool,
+    /// Non-step expiry remains distinct during payment search.
+    #[serde(skip_serializing_if = "ManaExpiry::is_step")]
+    pub expiry: ManaExpiry,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub restriction: Option<ManaRestriction>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -277,7 +291,7 @@ pub enum SpendOrder {
 impl From<ManaRestriction> for ManaClass {
     fn from(restriction: ManaRestriction) -> Self {
         Self {
-            combat: false,
+            expiry: ManaExpiry::Step,
             restriction: Some(restriction),
             effect: None,
         }
@@ -287,7 +301,7 @@ impl From<ManaRestriction> for ManaClass {
 impl From<SpendEffect> for ManaClass {
     fn from(effect: SpendEffect) -> Self {
         Self {
-            combat: false,
+            expiry: ManaExpiry::Step,
             restriction: None,
             effect: Some(effect),
         }
@@ -295,6 +309,14 @@ impl From<SpendEffect> for ManaClass {
 }
 
 impl ManaClass {
+    pub fn until_end_of_turn() -> Self {
+        Self {
+            expiry: ManaExpiry::EndOfTurn,
+            restriction: None,
+            effect: None,
+        }
+    }
+
     /// Whether mana of this class may pay a cost spent in `context`.
     pub fn allows(&self, context: &SpendingContext) -> bool {
         self.restriction
@@ -429,6 +451,9 @@ impl serde::Serialize for SpellSnapshot {
         use serde::ser::SerializeStruct;
         let mut out = serializer.serialize_struct("SpellSnapshot", 2)?;
         out.serialize_field("subtypes", &self.0.subtypes)?;
+        if self.0.keywords.has(Keyword::Changeling) {
+            out.serialize_field("all_creature_types", &true)?;
+        }
         out.serialize_field("types", &self.0.types)?;
         out.end()
     }
@@ -1097,11 +1122,50 @@ impl Mana {
         self.prune();
     }
 
+    /// Whether every unit in `unit` is present in `self`.
+    pub fn contains(&self, unit: &Mana) -> bool {
+        self.mana
+            .iter()
+            .zip(unit.mana)
+            .all(|(available, needed)| *available >= needed)
+            && unit.classes().iter().all(|(class, needed)| {
+                let available = self.class_of(class);
+                available
+                    .iter()
+                    .zip(needed)
+                    .all(|(have, need)| *have >= *need)
+            })
+    }
+
+    /// Tag every unit in `self` with `expiry`.
+    pub fn with_expiry(self, expiry: ManaExpiry) -> Self {
+        if expiry == ManaExpiry::Step {
+            return self;
+        }
+        let mut out = Self::default();
+        if self.mana != [0; 6] {
+            out.add_class(
+                &ManaClass {
+                    expiry,
+                    restriction: None,
+                    effect: None,
+                },
+                self.mana,
+            );
+        }
+        for (class, amounts) in self.classes() {
+            let mut class = class.clone();
+            class.expiry = expiry;
+            out.add_class(&class, *amounts);
+        }
+        out
+    }
+
     /// Combine combat mana without losing which units survive a step end.
     pub fn add_combat(&mut self, combat: &Mana) {
         self.add_class(
             &ManaClass {
-                combat: true,
+                expiry: ManaExpiry::EndOfCombat,
                 restriction: None,
                 effect: None,
             },
@@ -1109,7 +1173,7 @@ impl Mana {
         );
         for (class, amounts) in combat.classes() {
             let mut class = class.clone();
-            class.combat = true;
+            class.expiry = ManaExpiry::EndOfCombat;
             self.add_class(&class, *amounts);
         }
     }
@@ -1296,6 +1360,51 @@ impl ManaPool {
             source: pooled.origin,
             effect,
         }
+    }
+
+    /// Partition pooled units into `(surviving, expiring)`. Expiring units
+    /// drop their special expiry duration so any retention (Ozai, keep-red)
+    /// treats them as ordinary step-scoped mana thereafter.
+    pub fn split_expiring(&self, expires: impl Fn(ManaExpiry) -> bool) -> (Self, Self) {
+        let mut surviving = Self::default();
+        let mut expiring = Self::default();
+        for unit in &self.units {
+            let expiry = unit.class.as_ref().map_or(ManaExpiry::Step, |c| c.expiry);
+            let mut amounts = [0u8; 6];
+            amounts[unit.color as usize] = 1;
+            if expires(expiry) {
+                let class = unit.class.clone().and_then(|mut c| {
+                    c.expiry = ManaExpiry::Step;
+                    (c.restriction.is_some() || c.effect.is_some()).then_some(c)
+                });
+                match &class {
+                    Some(c) => expiring.mana.add_class(c, amounts),
+                    None => {
+                        expiring.mana.mana[unit.color as usize] =
+                            expiring.mana.mana[unit.color as usize].saturating_add(1)
+                    }
+                }
+                expiring.units.push(PooledUnit {
+                    class,
+                    color: unit.color,
+                    origin: unit.origin,
+                });
+            } else {
+                match &unit.class {
+                    Some(c) => surviving.mana.add_class(c, amounts),
+                    None => {
+                        surviving.mana.mana[unit.color as usize] =
+                            surviving.mana.mana[unit.color as usize].saturating_add(1)
+                    }
+                }
+                surviving.units.push(unit.clone());
+            }
+        }
+        surviving.drop_uncounted_units();
+        expiring.drop_uncounted_units();
+        surviving.check();
+        expiring.check();
+        (surviving, expiring)
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions and

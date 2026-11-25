@@ -269,3 +269,37 @@ fn foundations_5e_seismic_rupture() {
     assert_eq!(permanent(&s, drake).damage, 0);
     assert_eq!(permanent(&s, lifted).damage, 0);
 }
+
+#[test]
+fn savage_ventmaw_mana_survives_until_cleanup() {
+    use crate::support::game::{clear_summoning_sickness, five_color_unfunded_setup};
+    use crate::support::play::{attack_with, settle};
+    use managym::agent::observation::Observation;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::mana::Mana;
+
+    let mut s = five_color_unfunded_setup(&["Savage Ventmaw"]);
+    let ventmaw = s.force_permanent_on_battlefield(0, "Savage Ventmaw");
+    clear_summoning_sickness(&mut s, ventmaw);
+    s.advance_to_step(StepKind::DeclareAttackers);
+    attack_with(&mut s, ventmaw);
+    settle(&mut s);
+
+    // Ordinary mana added now empties at step end; Ventmaw's RRRGGG survives.
+    s.game_mut().state.players[0]
+        .mana_pool
+        .add(&Mana::parse("U"), None);
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(obs.agent.pooled_mana_classes.len(), 1);
+    assert!(!obs.agent.pooled_mana_classes[0].combat);
+
+    s.advance_to_step(StepKind::PostcombatMain);
+    let pool = &s.game().state.players[0].mana_pool;
+    assert_eq!(pool.total(), 6);
+    assert_eq!(pool.unrestricted_colors(), [0, 0, 0, 3, 3, 0]);
+
+    // Empties at cleanup (next turn has 0 mana).
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+}

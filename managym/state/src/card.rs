@@ -190,7 +190,7 @@ macro_rules! keywords {
     ($( $(#[$meta:meta])* $variant:ident => $name:literal ),+ $(,)?) => {
         /// A parameterless keyword ability (CR 702), held in a [`Keywords`] set.
         /// Parameterized keywords (ward, firebending) have their own rules types.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
         pub enum Keyword {
             $( $(#[$meta])* #[serde(rename = $name)] $variant, )+
         }
@@ -225,6 +225,7 @@ keywords! {
     /// control.
     Hexproof => "hexproof",
     Indestructible => "indestructible",
+    Changeling => "changeling",
 }
 
 impl Keyword {
@@ -1875,6 +1876,12 @@ impl PrintedCharacteristics {
             StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
             _ => None,
         })
+    }
+
+    /// Changeling defines creature types in every zone (CR 702.73a).
+    pub fn has_subtype(&self, name: &str) -> bool {
+        self.subtypes.iter().any(|s| s == name)
+            || (self.keywords.has(Keyword::Changeling) && crate::subtype::is_creature_type(name))
     }
 
     pub fn colors(&self) -> Colors {

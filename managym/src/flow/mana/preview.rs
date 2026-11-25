@@ -57,7 +57,7 @@ impl From<&Mana> for PreviewPool {
                 .iter()
                 .map(|(class, amounts)| PooledManaView {
                     mana: amounts.map(i32::from),
-                    combat: class.combat,
+                    combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
                     restriction: class.restriction.as_ref().map(|r| r.describe()),
                     effect: class
                         .effect
@@ -271,8 +271,8 @@ impl Game {
                 // A cost paid in life has no mana route: `None` answers
                 // `not_applicable` below, as for any other decision.
                 match suspended.decision {
-                    Decision::Payment(payment) => match payment.owed.clone() {
-                        CostComponent::Mana { cost, .. } => {
+                    Decision::Payment(payment) => match payment.owed.first().cloned() {
+                        Some(CostComponent::Mana { cost, .. }) => {
                             sources.extend(
                                 offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
                             );
@@ -689,7 +689,7 @@ mod tests {
                     effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
                         without_subtype: "Human".into(),
                     }),
-                    combat: false,
+                    expiry: crate::state::mana::ManaExpiry::Step,
                 },
                 blue,
             ),

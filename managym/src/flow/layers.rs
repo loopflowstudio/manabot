@@ -160,7 +160,7 @@ impl ReadSet {
         if p.chosen_color || !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying || p.not_flying || p.deathtouch {
+        if p.keyword.is_some() || p.not_flying {
             self.fields |= KEYWORDS;
         }
         if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
@@ -602,6 +602,11 @@ impl<'a> Context<'a> {
             view: Arc::new(Characteristics {
                 name: source.name.clone(),
                 subtypes: source.subtypes.clone(),
+                creature_types: if source.keywords.has(Keyword::Changeling) {
+                    CreatureTypes::All
+                } else {
+                    CreatureTypes::default()
+                },
                 types: source.types.clone(),
                 colors: source.colors(),
                 mana_abilities: source.mana_abilities.clone(),
@@ -1082,7 +1087,12 @@ impl<'a> Context<'a> {
                 .max(0),
             EffectValue::GreatestSharedCreatureType => {
                 let mut counts = BTreeMap::new();
+                let mut all = 0;
                 for id in controlled().filter(|id| self.objects[id].view.is_creature()) {
+                    if self.objects[&id].view.has_all_creature_types() {
+                        all += 1;
+                        continue;
+                    }
                     for subtype in self.objects[&id]
                         .view
                         .subtypes
@@ -1092,7 +1102,7 @@ impl<'a> Context<'a> {
                         *counts.entry(subtype).or_insert(0) += 1;
                     }
                 }
-                counts.into_values().max().unwrap_or(0)
+                all + counts.into_values().max().unwrap_or(0)
             }
             EffectValue::CreaturesWithCounters => controlled()
                 .filter(|&id| {
@@ -1716,8 +1726,7 @@ impl CharacteristicView<'_> {
                 |c| self.colors.contains(&c),
                 |s| self.has_subtype(s),
             )
-            && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
-            && (!p.flying || self.keywords.has(Keyword::Flying))
+            && p.keyword.is_none_or(|k| self.keywords.has(k))
             && (!p.not_flying || !self.keywords.has(Keyword::Flying))
             && (!p.no_counters || self.counters.is_empty())
             && (!p.in_combat || self.derived.in_combat())

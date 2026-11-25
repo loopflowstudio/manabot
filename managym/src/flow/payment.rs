@@ -158,20 +158,28 @@ impl CostComponent {
     }
 
     /// What a resolving effect's `cost` owes as its payment decision is
-    /// made: the one place a definition's `PaymentCost` becomes a component.
+    /// made: the one place a definition's `PaymentCost` becomes components.
     /// A waterbend cost is its generic mana, all of which taps may pay.
-    pub fn resolving(cost: &PaymentCost) -> Self {
+    pub fn resolving(cost: &PaymentCost) -> Vec<Self> {
         match cost {
-            PaymentCost::Mana(cost) => Self::mana(cost.clone()),
-            PaymentCost::Waterbend { generic } => Self::Mana {
+            PaymentCost::Mana(cost) => vec![Self::mana(cost.clone())],
+            PaymentCost::Waterbend { generic } => vec![Self::Mana {
                 cost: ManaCost::default().with_generic(*generic),
                 help: Help {
                     waterbend: *generic,
                     ..Help::default()
                 },
-            },
-            PaymentCost::Discard => Self::Discard,
-            PaymentCost::Life(life) => Self::Life(*life),
+            }],
+            PaymentCost::Discard => vec![Self::Discard],
+            PaymentCost::Life(life) => vec![Self::Life(*life)],
+            PaymentCost::All(parts) => {
+                let components: Vec<_> = parts.iter().flat_map(Self::resolving).collect();
+                if components.is_empty() {
+                    vec![Self::mana(ManaCost::default())]
+                } else {
+                    components
+                }
+            }
         }
     }
 }
@@ -350,18 +358,23 @@ impl Payment {
 
 /// What one payment made during resolution still owes, what has paid toward
 /// it and the branches its outcome selects. Mana activation costs commit
-/// immediately through the mana authority. Only a waterbend contribution
-/// closes the decline branch (the existing contract). The receipt names the
-/// exact objects that paid, as evidence; they are never followed or untapped.
+/// immediately through the mana authority. Only a waterbend contribution or a
+/// paid component closes the decline branch (the existing contract). The
+/// receipt names the exact objects that paid, as evidence; they are never
+/// followed or untapped.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentProgress {
     /// Acceptance of an optional payment precedes choosing its sources in auto mode.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub committed: bool,
+    /// Set once a waterbend mana component has been paid, so finishing a
+    /// composite payment still records waterbending even without taps.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
     pub player: PlayerId,
-    /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
-    /// `Life` or `Discard` (`CostComponent::resolving`).
-    pub owed: CostComponent,
+    /// Remaining components in payment order: `Mana` (whose help allows
+    /// waterbend taps), `Life`, or `Discard` (`CostComponent::resolving`).
+    pub owed: Vec<CostComponent>,
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
@@ -380,7 +393,7 @@ pub struct PaymentProgress {
 impl PaymentProgress {
     pub fn new(
         player: PlayerId,
-        owed: CostComponent,
+        owed: Vec<CostComponent>,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     ) -> Self {
@@ -389,6 +402,7 @@ impl PaymentProgress {
             owed,
             receipt: PaymentReceipt::default(),
             committed: false,
+            waterbend: false,
             if_paid,
             if_declined,
             spends: None,
@@ -396,17 +410,64 @@ impl PaymentProgress {
         }
     }
 
+    pub fn current(&self) -> Option<&CostComponent> {
+        self.owed.first()
+    }
+
     pub fn can_decline(&self) -> bool {
         !self.committed && self.receipt.contributions().is_empty()
     }
 
-    /// Whether the cost is a waterbend cost, however it is paid.
+    /// Whether the current cost is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
-        matches!(self.owed, CostComponent::Mana { help, .. } if help.waterbend > 0)
+        self.waterbend
+            || matches!(self.current(), Some(CostComponent::Mana { help, .. }) if help.waterbend > 0)
     }
 }
 
 impl Game {
+    /// Whether `player` can pay every remaining component after the front one
+    /// (e.g. a composite ward's life component after its mana component).
+    pub(crate) fn can_pay_resolution_tail(&self, player: PlayerId, tail: &[CostComponent]) -> bool {
+        let mut life = 0u32;
+        let mut discards = 0usize;
+        for component in tail {
+            match component {
+                CostComponent::Life(amount) => life = life.saturating_add(*amount),
+                CostComponent::Discard => discards += 1,
+                CostComponent::Mana { cost, .. } => {
+                    if !self.can_pay_mana_cost(player, cost) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        (life == 0 || self.can_pay_life(player, life))
+            && (discards == 0 || self.discard_candidates(player, None).len() >= discards)
+    }
+
+    /// Advance a resolution payment after its front component has been paid.
+    /// Once committed, trailing no-choice life components pay immediately.
+    pub(crate) fn advance_resolution_payment(
+        &mut self,
+        mut payment: PaymentProgress,
+        frame: EffectFrame,
+    ) {
+        while !payment.can_decline() {
+            let Some(&CostComponent::Life(life)) = payment.owed.first() else {
+                break;
+            };
+            payment.owed.remove(0);
+            self.pay_life_cost(payment.player, life, &mut payment.receipt);
+        }
+        if payment.owed.is_empty() {
+            self.finish_resolution_payment(payment, frame);
+        } else {
+            self.continue_resolution(frame, Some(Decision::Payment(payment)));
+        }
+    }
+
     /// The cost of a resolution payment is paid: spend its once-each-turn
     /// option, then run the "if paid" branch before the rest of `frame`.
     pub(crate) fn finish_resolution_payment(
@@ -417,7 +478,13 @@ impl Game {
         if let Some(key) = payment.spends {
             self.spend_once_each_turn(key);
         }
-        if payment.waterbends() {
+        if payment.waterbends()
+            || payment
+                .receipt
+                .contributed(How::Tapped, Toward::Waterbend)
+                .next()
+                .is_some()
+        {
             self.record_bending(payment.player, crate::flow::turn::Bending::Water);
         }
         frame.prepend_effects(payment.if_paid.into_iter());

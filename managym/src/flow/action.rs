@@ -480,7 +480,11 @@ impl Game {
             Some(Decision::ManaSpend { player, cost, .. }) => {
                 let choices = self.mana_spend_choices(*player, cost);
                 let unit = &choices.get(mode)?.unit;
-                let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                let expiry = if unit
+                    .classes()
+                    .iter()
+                    .any(|(class, _)| class.expiry != crate::state::mana::ManaExpiry::Step)
+                {
                     ""
                 } else {
                     " (expires at step end)"
@@ -1366,7 +1370,7 @@ impl Game {
                 frame.bind_source(Some(*object), Some(*object));
                 frame.completion = FrameCompletion::TurnFaceUp(*object);
                 let mut payment =
-                    PaymentProgress::new(*player, CostComponent::mana(cost), vec![], vec![]);
+                    PaymentProgress::new(*player, vec![CostComponent::mana(cost)], vec![], vec![]);
                 payment.committed = true;
                 *self.state.suspended_decision_mut() = Some(SuspendedResolution {
                     frame,

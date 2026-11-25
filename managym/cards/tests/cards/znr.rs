@@ -184,3 +184,36 @@ fn crawling_barrens_keeps_its_counters_and_animates_only_when_chosen() {
     assert!(!s.game().characteristics(barrens).is_creature());
     assert_eq!(counters(&s, barrens), 4);
 }
+
+#[test]
+fn gnarlid_colony_kicker_counters_and_trample() {
+    use crate::support::game::{five_color_setup, set_counters};
+    use crate::support::inspect::{counters, keywords, permanent_of};
+    use crate::support::play::{cast_card, choose, settle, spend_colorless};
+    use managym::agent::action::Action;
+    use managym::state::card::Keyword;
+    use managym::state::permanent::CounterKind;
+
+    for kicked in [false, true] {
+        let mut s = five_color_setup(&["Gnarlid Colony", "Gray Ogre", "Hill Giant"]);
+        let bare = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let countered = s.force_permanent_on_battlefield(0, "Hill Giant");
+        set_counters(&mut s, countered, CounterKind::PlusOnePlusOne, 1);
+
+        let card = crate::support::game::move_to_hand(&mut s, "Gnarlid Colony");
+        cast_card(&mut s, card);
+        if kicked {
+            choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+        }
+        spend_colorless(&mut s);
+        settle(&mut s);
+
+        let colony = permanent_of(&s, card).unwrap();
+        assert_eq!(counters(&s, colony), if kicked { 2 } else { 0 });
+        assert_eq!(keywords(&s, colony).has(Keyword::Trample), kicked);
+        assert!(keywords(&s, countered).has(Keyword::Trample));
+        assert!(!keywords(&s, bare).has(Keyword::Trample));
+    }
+}

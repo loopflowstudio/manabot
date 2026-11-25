@@ -217,6 +217,16 @@
       "W"
     ]
   },
+  "Adaptive Automaton": {
+    "name": "Adaptive Automaton",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "As this creature enters, choose a creature type.\nThis creature is the chosen type in addition to its other types.\nOther creatures you control of the chosen type get +1/+1.",
+    "colors": []
+  },
   "Adventuring Gear": {
     "name": "Adventuring Gear",
     "mana_cost": "{1}",
@@ -266,6 +276,20 @@
     "oracle_text": "Return all attacking creatures to their owner's hand.",
     "colors": [
       "U"
+    ]
+  },
+  "Affectionate Indrik": {
+    "name": "Affectionate Indrik",
+    "mana_cost": "{5}{G}",
+    "type_line": "Creature — Beast",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Fight"
+    ],
+    "oracle_text": "When this creature enters, you may have it fight target creature you don't control. (Each deals damage equal to its power to the other.)",
+    "colors": [
+      "G"
     ]
   },
   "Agent of Treachery": {
@@ -502,6 +526,20 @@
       "Flying"
     ],
     "oracle_text": "Flying\nWhen this creature enters, exile target player's graveyard.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Angelic Destiny": {
+    "name": "Angelic Destiny",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +4/+4, has flying and first strike, and is an Angel in addition to its other types.\nWhen enchanted creature dies, return this card to its owner's hand.",
     "colors": [
       "W"
     ]
@@ -989,6 +1027,18 @@
       "R"
     ]
   },
+  "Ballyrush Banneret": {
+    "name": "Ballyrush Banneret",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Kithkin Soldier",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Kithkin spells and Soldier spells you cast cost {1} less to cast.",
+    "colors": [
+      "W"
+    ]
+  },
   "Balmor, Battlemage Captain": {
     "name": "Balmor, Battlemage Captain",
     "mana_cost": "{U}{R}",
@@ -1002,6 +1052,18 @@
     "colors": [
       "R",
       "U"
+    ]
+  },
+  "Banishing Light": {
+    "name": "Banishing Light",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, exile target nonland permanent an opponent controls until this enchantment leaves the battlefield.",
+    "colors": [
+      "W"
     ]
   },
   "Barrels of Blasting Jelly": {
@@ -1244,6 +1306,20 @@
     "oracle_text": "Flying\nWhen this creature enters, mill three cards. (Put the top three cards of your library into your graveyard.)\nThreshold — This creature gets +2/+1 as long as there are seven or more cards in your graveyard.",
     "colors": [
       "B"
+    ]
+  },
+  "Biogenic Upgrade": {
+    "name": "Biogenic Upgrade",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Double"
+    ],
+    "oracle_text": "Distribute three +1/+1 counters among one, two, or three target creatures, then double the number of +1/+1 counters on each of those creatures.",
+    "colors": [
+      "G"
     ]
   },
   "Bishop's Soldier": {
@@ -1971,6 +2047,52 @@
       "W"
     ]
   },
+  "Cecil, Dark Knight": {
+    "name": "Cecil, Dark Knight",
+    "mana_cost": "{B}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Darkness",
+      "Deathtouch",
+      "Transform"
+    ],
+    "oracle_text": "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Cecil, Redeemed Paladin": {
+    "name": "Cecil, Redeemed Paladin",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Lifelink",
+      "Protect"
+    ],
+    "oracle_text": "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Celestial Armor": {
+    "name": "Celestial Armor",
+    "mana_cost": "{2}{W}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this Equipment enters, attach it to target creature you control. That creature gains hexproof and indestructible until end of turn.\nEquipped creature gets +2/+0 and has flying.\nEquip {3}{W} ({3}{W}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": [
+      "W"
+    ]
+  },
   "Cemetery Recruitment": {
     "name": "Cemetery Recruitment",
     "mana_cost": "{1}{B}",
@@ -1981,6 +2103,20 @@
     "oracle_text": "Return target creature card from your graveyard to your hand. If it's a Zombie card, draw a card.",
     "colors": [
       "B"
+    ]
+  },
+  "Charming Prince": {
+    "name": "Charming Prince",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Noble",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "When this creature enters, choose one —\n• Scry 2.\n• You gain 3 life.\n• Exile another target creature you own. Return it to the battlefield under your control at the beginning of the next end step.",
+    "colors": [
+      "W"
     ]
   },
   "Chart a Course": {
@@ -2413,6 +2549,20 @@
       "R"
     ]
   },
+  "Curator of Destinies": {
+    "name": "Curator of Destinies",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Sphinx",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "This spell can't be countered.\nFlying\nWhen this creature enters, look at the top five cards of your library and separate them into a face-down pile and a face-up pile. An opponent chooses one of those piles. Put that pile into your hand and the other into your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
   "Curious Farm Animals": {
     "name": "Curious Farm Animals",
     "mana_cost": "{W}",
@@ -2538,6 +2688,19 @@
     "oracle_text": "Flying\nWhenever another creature you control enters, you gain 1 life.",
     "colors": [
       "W"
+    ]
+  },
+  "Deadly Brew": {
+    "name": "Deadly Brew",
+    "mana_cost": "{B}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each player sacrifices a creature or planeswalker of their choice. If you sacrificed a permanent this way, you may return another permanent card from your graveyard to your hand.",
+    "colors": [
+      "B",
+      "G"
     ]
   },
   "Deadly Dispute": {
@@ -2677,6 +2840,16 @@
     "colors": [
       "W"
     ]
+  },
+  "Diamond Mare": {
+    "name": "Diamond Mare",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Horse",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "As this creature enters, choose a color.\nWhenever you cast a spell of the chosen color, you gain 1 life.",
+    "colors": []
   },
   "Diaochan, Artful Beauty": {
     "name": "Diaochan, Artful Beauty",
@@ -2829,6 +3002,20 @@
       "U"
     ]
   },
+  "Divine Resilience": {
+    "name": "Divine Resilience",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2}{W} (You may pay an additional {2}{W} as you cast this spell.)\nTarget creature you control gains indestructible until end of turn. If this spell was kicked, instead any number of target creatures you control gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)",
+    "colors": [
+      "W"
+    ]
+  },
   "Diviner of Victory": {
     "name": "Diviner of Victory",
     "mana_cost": "{U}",
@@ -2963,6 +3150,20 @@
       "U"
     ]
   },
+  "Drakuseth, Maw of Flames": {
+    "name": "Drakuseth, Maw of Flames",
+    "mana_cost": "{4}{R}{R}{R}",
+    "type_line": "Legendary Creature — Dragon",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever Drakuseth attacks, Drakuseth deals 4 damage to any target and 3 damage to each of up to two other targets.",
+    "colors": [
+      "R"
+    ]
+  },
   "Dramatic Reversal": {
     "name": "Dramatic Reversal",
     "mana_cost": "{1}{U}",
@@ -3001,6 +3202,18 @@
       "B"
     ]
   },
+  "Driver of the Dead": {
+    "name": "Driver of the Dead",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature dies, return target creature card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "B"
+    ]
+  },
   "Drogskol Reaver": {
     "name": "Drogskol Reaver",
     "mana_cost": "{5}{W}{U}",
@@ -3016,6 +3229,18 @@
     "colors": [
       "U",
       "W"
+    ]
+  },
+  "Dropkick Bomber": {
+    "name": "Dropkick Bomber",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"",
+    "colors": [
+      "R"
     ]
   },
   "Druid of the Cowl": {
@@ -3265,6 +3490,20 @@
     "colors": [
       "G",
       "W"
+    ]
+  },
+  "Electroduplicate": {
+    "name": "Electroduplicate",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
     ]
   },
   "Elemental Bond": {
@@ -3583,6 +3822,22 @@
       "U"
     ]
   },
+  "Esper Origins": {
+    "name": "Esper Origins",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Transform",
+      "Flashback"
+    ],
+    "oracle_text": "Surveil 2. You gain 2 life. If this spell was cast from a graveyard, exile it, then put it onto the battlefield transformed under its owner's control with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)\nFlashback {3}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Essence Scatter": {
     "name": "Essence Scatter",
     "mana_cost": "{1}{U}",
@@ -3677,6 +3932,18 @@
       "B"
     ]
   },
+  "Extravagant Replication": {
+    "name": "Extravagant Replication",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.",
+    "colors": [
+      "U"
+    ]
+  },
   "Eyetwitch": {
     "name": "Eyetwitch",
     "mana_cost": "{B}",
@@ -3714,6 +3981,20 @@
       "U"
     ]
   },
+  "Fake Your Own Death": {
+    "name": "Fake Your Own Death",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "Until end of turn, target creature gets +2/+0 and gains \"When this creature dies, return it to the battlefield tapped under its owner's control and you create a Treasure token.\" (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "B"
+    ]
+  },
   "Fanatical Firebrand": {
     "name": "Fanatical Firebrand",
     "mana_cost": "{R}",
@@ -3738,6 +4019,18 @@
     "oracle_text": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
     "colors": [
       "W"
+    ]
+  },
+  "Fang, Fearless l'Cie": {
+    "name": "Fang, Fearless l'Cie",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Warrior",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)",
+    "colors": [
+      "B"
     ]
   },
   "Fatal Fissure": {
@@ -3950,6 +4243,18 @@
     "oracle_text": "When this creature enters, you may search your library for a creature card with mana value 6 or greater, reveal it, put it into your hand, then shuffle.",
     "colors": [
       "G"
+    ]
+  },
+  "Fiery Annihilation": {
+    "name": "Fiery Annihilation",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.",
+    "colors": [
+      "R"
     ]
   },
   "Fire Elemental": {
@@ -4527,6 +4832,20 @@
       "R"
     ]
   },
+  "Gatekeeper of Malakir": {
+    "name": "Gatekeeper of Malakir",
+    "mana_cost": "{B}{B}",
+    "type_line": "Creature — Vampire Warrior",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {B} (You may pay an additional {B} as you cast this spell.)\nWhen this creature enters, if it was kicked, target player sacrifices a creature of their choice.",
+    "colors": [
+      "B"
+    ]
+  },
   "Gateway Sneak": {
     "name": "Gateway Sneak",
     "mana_cost": "{2}{U}",
@@ -4551,6 +4870,16 @@
     "oracle_text": "Create a 1/1 white Ally creature token for each Plains you control. Scry 2. (Look at the top two cards of your library, then put any number of them on the bottom and the rest on top in any order.)",
     "colors": [
       "W"
+    ]
+  },
+  "Genesis Wave": {
+    "name": "Genesis Wave",
+    "mana_cost": "{X}{G}{G}{G}",
+    "type_line": "Sorcery",
+    "keywords": [],
+    "oracle_text": "Reveal the top X cards of your library. You may put any number of permanent cards with mana value X or less from among them onto the battlefield. Then put all cards revealed this way that weren't put onto the battlefield into your graveyard.",
+    "colors": [
+      "G"
     ]
   },
   "Geyser Leaper": {
@@ -4793,6 +5122,20 @@
       "Learn"
     ],
     "oracle_text": "Trample\nWhen this creature enters, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Gnarlid Colony": {
+    "name": "Gnarlid Colony",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Beast",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2}{G} (You may pay an additional {2}{G} as you cast this spell.)\nIf this creature was kicked, it enters with two +1/+1 counters on it.\nEach creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "G"
     ]
@@ -5069,6 +5412,21 @@
       "U"
     ]
   },
+  "Gutless Plunderer": {
+    "name": "Gutless Plunderer",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Skeleton Pirate",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Raid",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nRaid — When this creature enters, if you attacked this turn, look at the top three cards of your library. You may put one of those cards back on top of your library. Put the rest into your graveyard.",
+    "colors": [
+      "B"
+    ]
+  },
   "Guttersnipe": {
     "name": "Guttersnipe",
     "mana_cost": "{2}{R}",
@@ -5324,6 +5682,16 @@
       "W"
     ]
   },
+  "Heraldic Banner": {
+    "name": "Heraldic Banner",
+    "mana_cost": "{3}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, choose a color.\nCreatures you control of the chosen color get +1/+0.\n{T}: Add one mana of the chosen color.",
+    "colors": []
+  },
   "Hermitic Herbalist": {
     "name": "Hermitic Herbalist",
     "mana_cost": "{G}{U}",
@@ -5463,6 +5831,20 @@
     "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Hoarding Dragon": {
+    "name": "Hoarding Dragon",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you may search your library for an artifact card, exile it, then shuffle.\nWhen this creature dies, you may put the exiled card into its owner's hand.",
+    "colors": [
+      "R"
     ]
   },
   "Hog-Monkey": {
@@ -5663,6 +6045,18 @@
     "oracle_text": "Incinerating Blast deals 6 damage to target creature.\nYou may discard a card. If you do, draw a card.",
     "colors": [
       "R"
+    ]
+  },
+  "Infernal Vessel": {
+    "name": "Infernal Vessel",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature dies, if it wasn't a Demon, return it to the battlefield under its owner's control with two +1/+1 counters on it. It's a Demon in addition to its other types.",
+    "colors": [
+      "B"
     ]
   },
   "Infestation Sage": {
@@ -6365,6 +6759,21 @@
       "R"
     ]
   },
+  "Kykar, Zephyr Awakener": {
+    "name": "Kykar, Zephyr Awakener",
+    "mana_cost": "{2}{W}{U}",
+    "type_line": "Legendary Creature — Bird Wizard",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a noncreature spell, choose one —\n• Exile another target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.\n• Create a 1/1 white Spirit creature token with flying.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
   "Kyoshi Battle Fan": {
     "name": "Kyoshi Battle Fan",
     "mana_cost": "{2}",
@@ -6872,6 +7281,21 @@
       "U"
     ]
   },
+  "Manifest Dread": {
+    "name": "Manifest Dread",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Manifest",
+      "Manifest dread"
+    ],
+    "oracle_text": "Manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Marang River Regent": {
     "name": "Marang River Regent",
     "mana_cost": "{4}{U}{U}",
@@ -7106,6 +7530,18 @@
     "oracle_text": "Raid — At the beginning of your end step, if you attacked this turn, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n{2}{B}, Sacrifice this enchantment: Target opponent loses X life, where X is the amount of life you gained this turn.",
     "colors": [
       "B"
+    ]
+  },
+  "Mild-Mannered Librarian": {
+    "name": "Mild-Mannered Librarian",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Human",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{3}{G}: This creature becomes a Werewolf. Put two +1/+1 counters on it and you draw a card. Activate only once.",
+    "colors": [
+      "G"
     ]
   },
   "Mindsparker": {
@@ -7394,6 +7830,20 @@
       "U"
     ]
   },
+  "Mystical Teachings": {
+    "name": "Mystical Teachings",
+    "mana_cost": "{3}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Search your library for an instant card or a card with flash, reveal it, put it into your hand, then shuffle.\nFlashback {5}{B} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Needletooth Pack": {
     "name": "Needletooth Pack",
     "mana_cost": "{3}{G}{G}",
@@ -7430,6 +7880,18 @@
     "oracle_text": "At the beginning of combat on your turn, if you control another creature with power 4 or greater, put a +1/+1 counter on this creature.",
     "colors": [
       "G"
+    ]
+  },
+  "Nine-Lives Familiar": {
+    "name": "Nine-Lives Familiar",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Creature — Cat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "This creature enters with eight revival counters on it if you cast it.\nWhen this creature dies, if it had a revival counter on it, return it to the battlefield with one fewer revival counter on it at the beginning of the next end step.",
+    "colors": [
+      "B"
     ]
   },
   "Niv-Mizzet, Visionary": {
@@ -7493,6 +7955,22 @@
       "Menace"
     ],
     "oracle_text": "Menace\nWhen this creature enters, you may destroy another target creature. If a creature is destroyed this way, you gain life equal to its toughness.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Nullpriest of Oblivion": {
+    "name": "Nullpriest of Oblivion",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Menace",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {3}{B} (You may pay an additional {3}{B} as you cast this spell.)\nLifelink\nMenace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, if it was kicked, return target creature card from your graveyard to the battlefield.",
     "colors": [
       "B"
     ]
@@ -7581,6 +8059,20 @@
       "U"
     ]
   },
+  "Ordeal of Nylea": {
+    "name": "Ordeal of Nylea",
+    "mana_cost": "{1}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
+  },
   "Origin of Metalbending": {
     "name": "Origin of Metalbending",
     "mana_cost": "{1}{G}",
@@ -7639,6 +8131,22 @@
     "oracle_text": "Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Ovika, Enigma Goliath": {
+    "name": "Ovika, Enigma Goliath",
+    "mana_cost": "{5}{U}{R}",
+    "type_line": "Legendary Creature — Phyrexian Nightmare",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying\nWard—{3}, Pay 3 life.\nWhenever you cast a noncreature spell, create X 1/1 red Phyrexian Goblin creature tokens, where X is the mana value of that spell. They gain haste until end of turn.",
+    "colors": [
+      "R",
+      "U"
     ]
   },
   "Ozai's Cruelty": {
@@ -7938,6 +8446,20 @@
     "oracle_text": "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature.",
     "colors": [
       "B"
+    ]
+  },
+  "Prayer of Binding": {
+    "name": "Prayer of Binding",
+    "mana_cost": "{3}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this enchantment enters, exile up to one target nonland permanent an opponent controls until this enchantment leaves the battlefield. You gain 2 life.",
+    "colors": [
+      "W"
     ]
   },
   "Predator Ooze": {
@@ -8281,6 +8803,37 @@
       "R"
     ]
   },
+  "Ragnarok, Divine Deliverance": {
+    "name": "Ragnarok, Divine Deliverance",
+    "mana_cost": "",
+    "type_line": "Legendary Creature — Beast Avatar",
+    "power": "7",
+    "toughness": "6",
+    "keywords": [
+      "Reach",
+      "Vigilance",
+      "Haste",
+      "Trample",
+      "Menace"
+    ],
+    "oracle_text": "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Raise the Past": {
+    "name": "Raise the Past",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
+      "W"
+    ]
+  },
   "Rakdos Guildgate": {
     "name": "Rakdos Guildgate",
     "mana_cost": "",
@@ -8531,6 +9084,18 @@
       "W"
     ]
   },
+  "Relm's Sketching": {
+    "name": "Relm's Sketching",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create a token that's a copy of target artifact, creature, or land.",
+    "colors": [
+      "U"
+    ]
+  },
   "Rending Volley": {
     "name": "Rending Volley",
     "mana_cost": "{R}",
@@ -8609,6 +9174,32 @@
     "oracle_text": "Flying, vigilance\nAt the beginning of combat on your turn, another target creature you control gets +1/+0 until end of turn.",
     "colors": [
       "W"
+    ]
+  },
+  "Rise of the Dark Realms": {
+    "name": "Rise of the Dark Realms",
+    "mana_cost": "{7}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put all creature cards from all graveyards onto the battlefield under your control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Rite of Replication": {
+    "name": "Rite of Replication",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.",
+    "colors": [
+      "U"
     ]
   },
   "Rite of the Dragoncaller": {
@@ -8775,6 +9366,18 @@
       "R"
     ]
   },
+  "Run Away Together": {
+    "name": "Run Away Together",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose two target creatures controlled by different players. Return those creatures to their owners' hands.",
+    "colors": [
+      "U"
+    ]
+  },
   "Rune-Scarred Demon": {
     "name": "Rune-Scarred Demon",
     "mana_cost": "{5}{B}{B}",
@@ -8929,6 +9532,21 @@
     "oracle_text": "Whenever this creature attacks, each opponent loses 1 life and you gain 1 life.",
     "colors": [
       "B"
+    ]
+  },
+  "Savage Ventmaw": {
+    "name": "Savage Ventmaw",
+    "mana_cost": "{4}{R}{G}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, add {R}{R}{R}{G}{G}{G}. Until end of turn, you don't lose this mana as steps and phases end.",
+    "colors": [
+      "G",
+      "R"
     ]
   },
   "Savannah Lions": {
@@ -9094,6 +9712,16 @@
       "R"
     ]
   },
+  "Secluded Courtyard": {
+    "name": "Secluded Courtyard",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this land enters, choose a creature type.\n{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a creature spell of the chosen type or activate an ability of a creature source of the chosen type.",
+    "colors": []
+  },
   "Secret Tunnel": {
     "name": "Secret Tunnel",
     "mana_cost": "",
@@ -9177,6 +9805,20 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\n{T}: Add {G} or {W}.",
     "colors": []
+  },
+  "Self-Reflection": {
+    "name": "Self-Reflection",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
   },
   "Semester Foreseer": {
     "name": "Semester Foreseer",
@@ -9577,6 +10219,16 @@
       "R"
     ]
   },
+  "Sorcerous Spyglass": {
+    "name": "Sorcerous Spyglass",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, look at an opponent's hand, then choose any card name.\nActivated abilities of sources with the chosen name can't be activated unless they're mana abilities.",
+    "colors": []
+  },
   "Soul-Guide Lantern": {
     "name": "Soul-Guide Lantern",
     "mana_cost": "{1}",
@@ -9585,6 +10237,16 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "When this artifact enters, exile target card from a graveyard.\n{T}, Sacrifice this artifact: Exile each opponent's graveyard.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
+    "colors": []
+  },
+  "Soulstone Sanctuary": {
+    "name": "Soulstone Sanctuary",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
     "colors": []
   },
   "South Pole Voyager": {
@@ -9777,6 +10439,20 @@
       "U"
     ]
   },
+  "Stasis Snare": {
+    "name": "Stasis Snare",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this enchantment enters, exile target creature an opponent controls until this enchantment leaves the battlefield.",
+    "colors": [
+      "W"
+    ]
+  },
   "Steel Hellkite": {
     "name": "Steel Hellkite",
     "mana_cost": "{6}",
@@ -9899,6 +10575,20 @@
       "R"
     ]
   },
+  "Strongbox Raider": {
+    "name": "Strongbox Raider",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Creature — Orc Pirate",
+    "power": "5",
+    "toughness": "2",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — When this creature enters, if you attacked this turn, exile the top two cards of your library. Choose one of them. Until the end of your next turn, you may play that card.",
+    "colors": [
+      "R"
+    ]
+  },
   "Studious First-Year": {
     "name": "Studious First-Year",
     "mana_cost": "{G}",
@@ -9938,6 +10628,18 @@
       "W"
     ]
   },
+  "Summon: Esper Maduin": {
+    "name": "Summon: Esper Maduin",
+    "mana_cost": "",
+    "type_line": "Enchantment Creature — Saga Elemental",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Reveal the top card of your library. If it's a permanent card, put it into your hand.\nII — Add {G}{G}.\nIII — Other creatures you control get +2/+2 and gain trample until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
   "Sun Warriors": {
     "name": "Sun Warriors",
     "mana_cost": "{2}{R}{W}",
@@ -9950,6 +10652,21 @@
     "oracle_text": "Firebending X, where X is the number of creatures you control. (Whenever this creature attacks, add X {R}. This mana lasts until end of combat.)\n{5}: Create a 1/1 white Ally creature token.",
     "colors": [
       "R",
+      "W"
+    ]
+  },
+  "Sun-Blessed Healer": {
+    "name": "Sun-Blessed Healer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink",
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.",
+    "colors": [
       "W"
     ]
   },
@@ -10467,6 +11184,18 @@
       "G"
     ]
   },
+  "The Fire Crystal": {
+    "name": "The Fire Crystal",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.",
+    "colors": [
+      "R"
+    ]
+  },
   "The Fire Nation Drill": {
     "name": "The Fire Nation Drill",
     "mana_cost": "{2}{B}{B}",
@@ -10753,6 +11482,18 @@
       "W"
     ]
   },
+  "Three Tree Mascot": {
+    "name": "Three Tree Mascot",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Shapeshifter",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Changeling"
+    ],
+    "oracle_text": "Changeling (This card is every creature type.)\n{1}: Add one mana of any color. Activate only once each turn.",
+    "colors": []
+  },
   "Thrill of Possibility": {
     "name": "Thrill of Possibility",
     "mana_cost": "{1}{R}",
@@ -11022,6 +11763,18 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {G}.\n{1}{G}: This land becomes a 3/3 green Ape creature with trample until end of turn. It's still a land. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": []
   },
+  "Tribute to Hunger": {
+    "name": "Tribute to Hunger",
+    "mana_cost": "{2}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent sacrifices a creature of their choice. You gain life equal to that creature's toughness.",
+    "colors": [
+      "B"
+    ]
+  },
   "True Ancestry": {
     "name": "True Ancestry",
     "mana_cost": "{1}{G}",
@@ -11230,6 +11983,16 @@
       "B"
     ]
   },
+  "Uncharted Haven": {
+    "name": "Uncharted Haven",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped. As it enters, choose a color.\n{T}: Add one mana of the chosen color.",
+    "colors": []
+  },
   "Uncharted Voyage": {
     "name": "Uncharted Voyage",
     "mana_cost": "{3}{U}",
@@ -11271,6 +12034,18 @@
     "oracle_text": "Converge — Return up to X permanent cards from your graveyard to your hand, where X is the number of colors of mana spent to cast this spell.\nExile Uncle's Musings.",
     "colors": [
       "G"
+    ]
+  },
+  "Undying Malice": {
+    "name": "Undying Malice",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Until end of turn, target creature gains \"When this creature dies, return it to the battlefield tapped under its owner's control with a +1/+1 counter on it.\"",
+    "colors": [
+      "B"
     ]
   },
   "Unflinching Courage": {
@@ -11361,6 +12136,18 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhenever a Mountain you control enters, if you control at least five other Mountains, you may have this land deal 3 damage to any target.\n{T}: Add {R}.",
     "colors": []
+  },
+  "Valkyrie's Call": {
+    "name": "Valkyrie's Call",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a nontoken, non-Angel creature you control dies, return that card to the battlefield under its owner's control with a +1/+1 counter on it. It has flying and is an Angel in addition to its other types.",
+    "colors": [
+      "W"
+    ]
   },
   "Valorous Stance": {
     "name": "Valorous Stance",
@@ -11453,6 +12240,21 @@
     "oracle_text": "Flying\nWhenever you gain life for the first time each turn, surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
     "colors": [
       "W"
+    ]
+  },
+  "Vanille, Cheerful l'Cie": {
+    "name": "Vanille, Cheerful l'Cie",
+    "mana_cost": "{3}{G}",
+    "type_line": "Legendary Creature — Human Cleric",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Meld",
+      "Mill"
+    ],
+    "oracle_text": "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.",
+    "colors": [
+      "G"
     ]
   },
   "Vastlands Scavenger": {
@@ -12033,6 +12835,18 @@
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {R} or {W}.",
     "colors": []
   },
+  "Wishclaw Talisman": {
+    "name": "Wishclaw Talisman",
+    "mana_cost": "{1}{B}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This artifact enters with three wish counters on it.\n{1}, {T}, Remove a wish counter from this artifact: Search your library for a card, put it into your hand, then shuffle. An opponent gains control of this artifact. Activate only during your turn.",
+    "colors": [
+      "B"
+    ]
+  },
   "Witness Protection": {
     "name": "Witness Protection",
     "mana_cost": "{U}",
@@ -12306,711 +13120,6 @@
     "oracle_text": "Ward—Pay 2 life. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays 2 life.)\n{T}: You may cast target Zombie creature card from your graveyard this turn.",
     "colors": [
       "B"
-    ]
-  },
-  "Fiendish Panda": {
-    "name": "Fiendish Panda",
-    "mana_cost": "{2}{W}{B}",
-    "type_line": "Creature — Bear Demon",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.",
-    "colors": [
-      "B",
-      "W"
-    ]
-  },
-  "Valkyrie's Call": {
-    "name": "Valkyrie's Call",
-    "mana_cost": "{3}{W}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Whenever a nontoken, non-Angel creature you control dies, return that card to the battlefield under its owner's control with a +1/+1 counter on it. It has flying and is an Angel in addition to its other types.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Nine-Lives Familiar": {
-    "name": "Nine-Lives Familiar",
-    "mana_cost": "{1}{B}{B}",
-    "type_line": "Creature — Cat",
-    "power": "1",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "This creature enters with eight revival counters on it if you cast it.\nWhen this creature dies, if it had a revival counter on it, return it to the battlefield with one fewer revival counter on it at the beginning of the next end step.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Infernal Vessel": {
-    "name": "Infernal Vessel",
-    "mana_cost": "{2}{B}",
-    "type_line": "Creature — Human Cleric",
-    "power": "2",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "When this creature dies, if it wasn't a Demon, return it to the battlefield under its owner's control with two +1/+1 counters on it. It's a Demon in addition to its other types.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Kykar, Zephyr Awakener": {
-    "name": "Kykar, Zephyr Awakener",
-    "mana_cost": "{2}{W}{U}",
-    "type_line": "Legendary Creature — Bird Wizard",
-    "power": "3",
-    "toughness": "4",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "Flying\nWhenever you cast a noncreature spell, choose one —\n• Exile another target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.\n• Create a 1/1 white Spirit creature token with flying.",
-    "colors": [
-      "U",
-      "W"
-    ]
-  },
-  "Banishing Light": {
-    "name": "Banishing Light",
-    "mana_cost": "{2}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "When this enchantment enters, exile target nonland permanent an opponent controls until this enchantment leaves the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Stasis Snare": {
-    "name": "Stasis Snare",
-    "mana_cost": "{1}{W}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flash"
-    ],
-    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this enchantment enters, exile target creature an opponent controls until this enchantment leaves the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Prayer of Binding": {
-    "name": "Prayer of Binding",
-    "mana_cost": "{3}{W}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flash"
-    ],
-    "oracle_text": "Flash\nWhen this enchantment enters, exile up to one target nonland permanent an opponent controls until this enchantment leaves the battlefield. You gain 2 life.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Hoarding Dragon": {
-    "name": "Hoarding Dragon",
-    "mana_cost": "{3}{R}{R}",
-    "type_line": "Creature — Dragon",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "Flying\nWhen this creature enters, you may search your library for an artifact card, exile it, then shuffle.\nWhen this creature dies, you may put the exiled card into its owner's hand.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Angelic Destiny": {
-    "name": "Angelic Destiny",
-    "mana_cost": "{2}{W}{W}",
-    "type_line": "Enchantment — Aura",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Enchant"
-    ],
-    "oracle_text": "Enchant creature\nEnchanted creature gets +4/+4, has flying and first strike, and is an Angel in addition to its other types.\nWhen enchanted creature dies, return this card to its owner's hand.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Fake Your Own Death": {
-    "name": "Fake Your Own Death",
-    "mana_cost": "{1}{B}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Treasure"
-    ],
-    "oracle_text": "Until end of turn, target creature gets +2/+0 and gains \"When this creature dies, return it to the battlefield tapped under its owner's control and you create a Treasure token.\" (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
-    "colors": [
-      "B"
-    ]
-  },
-  "Undying Malice": {
-    "name": "Undying Malice",
-    "mana_cost": "{B}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Until end of turn, target creature gains \"When this creature dies, return it to the battlefield tapped under its owner's control with a +1/+1 counter on it.\"",
-    "colors": [
-      "B"
-    ]
-  },
-  "Relm's Sketching": {
-    "name": "Relm's Sketching",
-    "mana_cost": "{2}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Create a token that's a copy of target artifact, creature, or land.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Extravagant Replication": {
-    "name": "Extravagant Replication",
-    "mana_cost": "{4}{U}{U}",
-    "type_line": "Enchantment",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Self-Reflection": {
-    "name": "Self-Reflection",
-    "mana_cost": "{4}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flashback"
-    ],
-    "oracle_text": "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "U"
-    ]
-  },
-  "Ragnarok, Divine Deliverance": {
-    "name": "Ragnarok, Divine Deliverance",
-    "mana_cost": "",
-    "type_line": "Legendary Creature — Beast Avatar",
-    "power": "7",
-    "toughness": "6",
-    "keywords": [
-      "Reach",
-      "Vigilance",
-      "Haste",
-      "Trample",
-      "Menace"
-    ],
-    "oracle_text": "Reach, vigilance, menace, trample, haste\nWhen Ragnarok dies, destroy target permanent and return target nonlegendary permanent card from your graveyard to the battlefield.",
-    "colors": [
-      "B",
-      "G"
-    ]
-  },
-  "Vanille, Cheerful l'Cie": {
-    "name": "Vanille, Cheerful l'Cie",
-    "mana_cost": "{3}{G}",
-    "type_line": "Legendary Creature — Human Cleric",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [
-      "Meld",
-      "Mill"
-    ],
-    "oracle_text": "When Vanille enters, mill two cards, then return a permanent card from your graveyard to your hand.\nAt the beginning of your first main phase, if you both own and control Vanille and a creature named Fang, Fearless l'Cie, you may pay {3}{B}{G}. If you do, exile them, then meld them into Ragnarok, Divine Deliverance.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Fang, Fearless l'Cie": {
-    "name": "Fang, Fearless l'Cie",
-    "mana_cost": "{2}{B}",
-    "type_line": "Legendary Creature — Human Warrior",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [],
-    "oracle_text": "Whenever one or more cards leave your graveyard, you draw a card and you lose 1 life. This ability triggers only once each turn.\n(Melds with Vanille, Cheerful l'Cie.)",
-    "colors": [
-      "B"
-    ]
-  },
-  "Manifest Dread": {
-    "name": "Manifest Dread",
-    "mana_cost": "{1}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Manifest",
-      "Manifest dread"
-    ],
-    "oracle_text": "Manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
-    "colors": [
-      "G"
-    ]
-  },
-  "Esper Origins": {
-    "name": "Esper Origins",
-    "mana_cost": "{1}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Surveil",
-      "Transform",
-      "Flashback"
-    ],
-    "oracle_text": "Surveil 2. You gain 2 life. If this spell was cast from a graveyard, exile it, then put it onto the battlefield transformed under its owner's control with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)\nFlashback {3}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "G"
-    ]
-  },
-  "Summon: Esper Maduin": {
-    "name": "Summon: Esper Maduin",
-    "mana_cost": "",
-    "type_line": "Enchantment Creature — Saga Elemental",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [],
-    "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Reveal the top card of your library. If it's a permanent card, put it into your hand.\nII — Add {G}{G}.\nIII — Other creatures you control get +2/+2 and gain trample until end of turn.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Homunculus Horde": {
-    "name": "Homunculus Horde",
-    "mana_cost": "{3}{U}",
-    "type_line": "Creature — Homunculus",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "Whenever you draw your second card each turn, create a token that's a copy of this creature.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Cecil, Dark Knight": {
-    "name": "Cecil, Dark Knight",
-    "mana_cost": "{B}",
-    "type_line": "Legendary Creature — Human Knight",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [
-      "Darkness",
-      "Deathtouch",
-      "Transform"
-    ],
-    "oracle_text": "Deathtouch\nDarkness — Whenever Cecil deals damage, you lose that much life. Then if your life total is less than or equal to half your starting life total, untap Cecil and transform it.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Cecil, Redeemed Paladin": {
-    "name": "Cecil, Redeemed Paladin",
-    "mana_cost": "",
-    "type_line": "Legendary Creature — Human Knight",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [
-      "Lifelink",
-      "Protect"
-    ],
-    "oracle_text": "Lifelink\nProtect — Whenever Cecil attacks, other attacking creatures gain indestructible until end of turn.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Driver of the Dead": {
-    "name": "Driver of the Dead",
-    "mana_cost": "{3}{B}",
-    "type_line": "Creature — Vampire",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "When this creature dies, return target creature card with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Electroduplicate": {
-    "name": "Electroduplicate",
-    "mana_cost": "{2}{R}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Flashback"
-    ],
-    "oracle_text": "Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\nFlashback {2}{R}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-    "colors": [
-      "R"
-    ]
-  },
-  "Rite of Replication": {
-    "name": "Rite of Replication",
-    "mana_cost": "{2}{U}{U}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.",
-    "colors": [
-      "U"
-    ]
-  },
-  "The Fire Crystal": {
-    "name": "The Fire Crystal",
-    "mana_cost": "{2}{R}{R}",
-    "type_line": "Legendary Artifact",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Red spells you cast cost {1} less to cast.\nCreatures you control have haste.\n{4}{R}{R}, {T}: Create a token that's a copy of target creature you control. Sacrifice it at the beginning of the next end step.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Nullpriest of Oblivion": {
-    "name": "Nullpriest of Oblivion",
-    "mana_cost": "{1}{B}",
-    "type_line": "Creature — Vampire Cleric",
-    "power": "2",
-    "toughness": "1",
-    "keywords": [
-      "Lifelink",
-      "Menace",
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {3}{B} (You may pay an additional {3}{B} as you cast this spell.)\nLifelink\nMenace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, if it was kicked, return target creature card from your graveyard to the battlefield.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Sun-Blessed Healer": {
-    "name": "Sun-Blessed Healer",
-    "mana_cost": "{1}{W}",
-    "type_line": "Creature — Human Cleric",
-    "power": "3",
-    "toughness": "1",
-    "keywords": [
-      "Lifelink",
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {1}{W} (You may pay an additional {1}{W} as you cast this spell.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, if it was kicked, return target nonland permanent card with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Raise the Past": {
-    "name": "Raise the Past",
-    "mana_cost": "{2}{W}{W}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Return all creature cards with mana value 2 or less from your graveyard to the battlefield.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Rise of the Dark Realms": {
-    "name": "Rise of the Dark Realms",
-    "mana_cost": "{7}{B}{B}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Put all creature cards from all graveyards onto the battlefield under your control.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Ordeal of Nylea": {
-    "name": "Ordeal of Nylea",
-    "mana_cost": "{1}{G}",
-    "type_line": "Enchantment — Aura",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Enchant"
-    ],
-    "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Heartfire Immolator": {
-    "name": "Heartfire Immolator",
-    "mana_cost": "{1}{R}",
-    "type_line": "Creature — Human Wizard",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [
-      "Prowess"
-    ],
-    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\n{R}, Sacrifice this creature: It deals damage equal to its power to target creature or planeswalker.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Soulstone Sanctuary": {
-    "name": "Soulstone Sanctuary",
-    "mana_cost": "",
-    "type_line": "Land",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "{T}: Add {C}.\n{4}: This land becomes a 3/3 creature with vigilance and all creature types. It's still a land.",
-    "colors": []
-  },
-  "Dropkick Bomber": {
-    "name": "Dropkick Bomber",
-    "mana_cost": "{2}{R}",
-    "type_line": "Creature — Goblin Warrior",
-    "power": "2",
-    "toughness": "3",
-    "keywords": [],
-    "oracle_text": "Other Goblins you control get +1/+1.\n{R}: Until end of turn, another target Goblin you control gains flying and \"When this creature deals combat damage, sacrifice it.\"",
-    "colors": [
-      "R"
-    ]
-  },
-  "Celestial Armor": {
-    "name": "Celestial Armor",
-    "mana_cost": "{2}{W}",
-    "type_line": "Artifact — Equipment",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Equip",
-      "Flash"
-    ],
-    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this Equipment enters, attach it to target creature you control. That creature gains hexproof and indestructible until end of turn.\nEquipped creature gets +2/+0 and has flying.\nEquip {3}{W} ({3}{W}: Attach to target creature you control. Equip only as a sorcery.)",
-    "colors": [
-      "W"
-    ]
-  },
-  "Mild-Mannered Librarian": {
-    "name": "Mild-Mannered Librarian",
-    "mana_cost": "{G}",
-    "type_line": "Creature — Human",
-    "power": "1",
-    "toughness": "1",
-    "keywords": [],
-    "oracle_text": "{3}{G}: This creature becomes a Werewolf. Put two +1/+1 counters on it and you draw a card. Activate only once.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Adaptive Automaton": {
-    "name": "Adaptive Automaton",
-    "mana_cost": "{3}",
-    "type_line": "Artifact Creature — Construct",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "As this creature enters, choose a creature type.\nThis creature is the chosen type in addition to its other types.\nOther creatures you control of the chosen type get +1/+1.",
-    "colors": []
-  },
-  "Diamond Mare": {
-    "name": "Diamond Mare",
-    "mana_cost": "{2}",
-    "type_line": "Artifact Creature — Horse",
-    "power": "1",
-    "toughness": "3",
-    "keywords": [],
-    "oracle_text": "As this creature enters, choose a color.\nWhenever you cast a spell of the chosen color, you gain 1 life.",
-    "colors": []
-  },
-  "Heraldic Banner": {
-    "name": "Heraldic Banner",
-    "mana_cost": "{3}",
-    "type_line": "Artifact",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "As this artifact enters, choose a color.\nCreatures you control of the chosen color get +1/+0.\n{T}: Add one mana of the chosen color.",
-    "colors": []
-  },
-  "Secluded Courtyard": {
-    "name": "Secluded Courtyard",
-    "mana_cost": "",
-    "type_line": "Land",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "As this land enters, choose a creature type.\n{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a creature spell of the chosen type or activate an ability of a creature source of the chosen type.",
-    "colors": []
-  },
-  "Sorcerous Spyglass": {
-    "name": "Sorcerous Spyglass",
-    "mana_cost": "{2}",
-    "type_line": "Artifact",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "As this artifact enters, look at an opponent's hand, then choose any card name.\nActivated abilities of sources with the chosen name can't be activated unless they're mana abilities.",
-    "colors": []
-  },
-  "Uncharted Haven": {
-    "name": "Uncharted Haven",
-    "mana_cost": "",
-    "type_line": "Land",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "This land enters tapped. As it enters, choose a color.\n{T}: Add one mana of the chosen color.",
-    "colors": []
-  },
-  "Curator of Destinies": {
-    "name": "Curator of Destinies",
-    "mana_cost": "{4}{U}{U}",
-    "type_line": "Creature — Sphinx",
-    "power": "5",
-    "toughness": "5",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "This spell can't be countered.\nFlying\nWhen this creature enters, look at the top five cards of your library and separate them into a face-down pile and a face-up pile. An opponent chooses one of those piles. Put that pile into your hand and the other into your graveyard.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Biogenic Upgrade": {
-    "name": "Biogenic Upgrade",
-    "mana_cost": "{4}{G}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Double"
-    ],
-    "oracle_text": "Distribute three +1/+1 counters among one, two, or three target creatures, then double the number of +1/+1 counters on each of those creatures.",
-    "colors": [
-      "G"
-    ]
-  },
-  "Affectionate Indrik": {
-    "name": "Affectionate Indrik",
-    "mana_cost": "{5}{G}",
-    "type_line": "Creature — Beast",
-    "power": "4",
-    "toughness": "4",
-    "keywords": [
-      "Fight"
-    ],
-    "oracle_text": "When this creature enters, you may have it fight target creature you don't control. (Each deals damage equal to its power to the other.)",
-    "colors": [
-      "G"
-    ]
-  },
-  "Charming Prince": {
-    "name": "Charming Prince",
-    "mana_cost": "{1}{W}",
-    "type_line": "Creature — Human Noble",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [
-      "Scry"
-    ],
-    "oracle_text": "When this creature enters, choose one —\n• Scry 2.\n• You gain 3 life.\n• Exile another target creature you own. Return it to the battlefield under your control at the beginning of the next end step.",
-    "colors": [
-      "W"
-    ]
-  },
-  "Deadly Brew": {
-    "name": "Deadly Brew",
-    "mana_cost": "{B}{G}",
-    "type_line": "Sorcery",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Each player sacrifices a creature or planeswalker of their choice. If you sacrificed a permanent this way, you may return another permanent card from your graveyard to your hand.",
-    "colors": [
-      "B",
-      "G"
-    ]
-  },
-  "Divine Resilience": {
-    "name": "Divine Resilience",
-    "mana_cost": "{W}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [
-      "Kicker"
-    ],
-    "oracle_text": "Kicker {2}{W} (You may pay an additional {2}{W} as you cast this spell.)\nTarget creature you control gains indestructible until end of turn. If this spell was kicked, instead any number of target creatures you control gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)",
-    "colors": [
-      "W"
-    ]
-  },
-  "Tribute to Hunger": {
-    "name": "Tribute to Hunger",
-    "mana_cost": "{2}{B}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Target opponent sacrifices a creature of their choice. You gain life equal to that creature's toughness.",
-    "colors": [
-      "B"
-    ]
-  },
-  "Fiery Annihilation": {
-    "name": "Fiery Annihilation",
-    "mana_cost": "{2}{R}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.",
-    "colors": [
-      "R"
-    ]
-  },
-  "Run Away Together": {
-    "name": "Run Away Together",
-    "mana_cost": "{1}{U}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Choose two target creatures controlled by different players. Return those creatures to their owners' hands.",
-    "colors": [
-      "U"
-    ]
-  },
-  "Drakuseth, Maw of Flames": {
-    "name": "Drakuseth, Maw of Flames",
-    "mana_cost": "{4}{R}{R}{R}",
-    "type_line": "Legendary Creature — Dragon",
-    "power": "7",
-    "toughness": "7",
-    "keywords": [
-      "Flying"
-    ],
-    "oracle_text": "Flying\nWhenever Drakuseth attacks, Drakuseth deals 4 damage to any target and 3 damage to each of up to two other targets.",
-    "colors": [
-      "R"
     ]
   }
 }

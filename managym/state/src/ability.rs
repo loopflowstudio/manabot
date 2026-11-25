@@ -1086,19 +1086,36 @@ pub enum EffectValue {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PaymentCost {
     Mana(ManaCost),
-    Waterbend { generic: u8 },
+    Waterbend {
+        generic: u8,
+    },
     Life(u32),
     Discard,
+    /// Multiple costs that must all be paid (e.g. "Ward—{3}, Pay 3 life").
+    All(Vec<PaymentCost>),
 }
 
 impl PaymentCost {
     /// The mana this cost states, or `None` for a nonmana payment. For readers of a definition (a ward's price); a
-    /// payment being made owes a `CostComponent`.
+    /// payment being made owes `CostComponent`s.
     pub fn mana(&self) -> Option<ManaCost> {
         match self {
             Self::Mana(cost) => Some(cost.clone()),
             Self::Waterbend { generic } => Some(ManaCost::default().with_generic(*generic)),
             Self::Life(_) | Self::Discard => None,
+            Self::All(parts) => parts
+                .iter()
+                .filter_map(Self::mana)
+                .reduce(|a, b| a.plus(&b)),
+        }
+    }
+
+    /// Total life this cost requires; 0 without a life component.
+    pub fn life(&self) -> u32 {
+        match self {
+            Self::Life(life) => *life,
+            Self::All(parts) => parts.iter().map(Self::life).sum(),
+            Self::Mana(_) | Self::Waterbend { .. } | Self::Discard => 0,
         }
     }
 }
@@ -1198,6 +1215,13 @@ pub enum ObjectSelector {
     CardsThisWay,
     /// Exact objects chosen by the enclosing SelectCards operation.
     Selected,
+    /// Exact objects from the enclosing `SelectCards`' `from` domain that
+    /// were not chosen (`from` minus `Selected`, still live). Available in
+    /// both `effects` and `if_declined`.
+    Unselected,
+    /// Top N cards of the resolving player's library, top first, fixed when
+    /// the instruction runs.
+    LibraryTop(Box<EffectValue>),
     /// The objects that paid the resolving spell's or ability's cost by
     /// being `How` ("the sacrificed creature", CR 602.2b). Property reads
     /// use each object's last known information once it has left; the
@@ -1369,6 +1393,8 @@ impl ObjectSelector {
             | Self::Moved
             | Self::CardsThisWay
             | Self::Selected
+            | Self::Unselected
+            | Self::LibraryTop(_)
             | Self::Paid(_)
             | Self::Zone(_)
             | Self::You
@@ -1470,6 +1496,9 @@ pub enum Effect {
         /// Move a hidden card into hand without revealing its identity.
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         unrevealed: bool,
+        /// Exile face down (CR 406.3): hidden until a play grant reveals it.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        face_down: bool,
         /// A stated end replaces the usual shuffle-into-library movement.
         #[serde(skip_serializing_if = "Option::is_none")]
         library_end: Option<LibraryEnd>,
@@ -1560,11 +1589,14 @@ pub enum Effect {
         predicate: CardPredicate,
     },
     /// Choose a subset of exact objects from `from`, then run `effects` in
-    /// a child scope where `Selected` names them. An empty selection runs
+    /// a child scope where `Selected` names them and `Unselected` names the
+    /// remaining live objects of `from`. An empty selection runs
     /// `if_declined`; the caller retains its earlier results and suffix.
     SelectCards {
         from: ObjectSelector,
         predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_mana_value: Option<Box<EffectValue>>,
         min: usize,
         max: EffectValue,
         effects: Vec<Effect>,
@@ -1675,19 +1707,17 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
-    /// The controller may cast the targeted graveyard card this turn at its normal cost and timing.
-    GrantGraveyardCastThisTurn {
+    /// Grant the resolving player permission to cast — or with `play_lands`,
+    /// play — each card `what` names for `until`. `flashback` exiles the
+    /// spell when it leaves the stack (CR 702.34); `face_down` and
+    /// `condition` match cards exiled face down (CR 406.3, Flameshape).
+    GrantPlay {
+        what: ObjectSelector,
+        until: PlayWindow,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        play_lands: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         flashback: bool,
-        target: TargetSpec,
-    },
-    /// "Exile the top `count` cards of your library [face down]. You may
-    /// play them [`until`] [if `condition`]." A face-down card is hidden
-    /// from everyone, its exiler included, while the condition fails
-    /// (Flameshape).
-    ExileTopCardsToPlay {
-        count: usize,
-        until: PlayWindow,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         face_down: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -2261,6 +2291,7 @@ impl ObjectSelector {
         match self {
             Self::Triggering => read == ContextRead::TriggeringObject,
             Self::Paid(_) => read == ContextRead::PaidCost,
+            Self::LibraryTop(count) => count.reads(read),
             Self::Each {
                 exact_mana_value,
                 max_mana_value,
@@ -2424,7 +2455,11 @@ impl Effect {
             }
             Self::If { condition, .. } if condition.reads(read) => true,
             Self::Repeat { count, .. } if count.reads(read) => true,
-            Self::SelectCards { max, .. } if max.reads(read) => true,
+            Self::SelectCards {
+                max,
+                max_mana_value,
+                ..
+            } if max.reads(read) || max_mana_value.as_ref().is_some_and(|v| v.reads(read)) => true,
             Self::TriggerModes {
                 up_to: Some(limit), ..
             } if limit.reads(read) => true,
@@ -2530,6 +2565,7 @@ impl Effect {
             }
             | Effect::Sacrifice { what: selector, .. }
             | Effect::Move { what: selector, .. }
+            | Effect::GrantPlay { what: selector, .. }
             | Effect::Prepare { what: selector }
             | Effect::Unprepare { what: selector }
             | Effect::Tap { what: selector }
@@ -2646,8 +2682,7 @@ impl Effect {
                 ..
             }
             | Effect::MillUntil { player, .. } => player.target_spec(),
-            Effect::GrantGraveyardCastThisTurn { target, .. }
-            | Effect::ExileLinked { target, .. } => Some(target),
+            Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target, .. }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
@@ -2702,7 +2737,7 @@ impl Effect {
             | Effect::ApplyContinuous { .. }
             | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
-            | Effect::ExileTopCardsToPlay { .. }
+            | Effect::GrantPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::ExileEachLibraryTopCastFree
             | Effect::Cascade
@@ -2829,13 +2864,20 @@ impl Effect {
 
     /// "Exile the top `count` cards of your library. You may play them
     /// [`until`]."
-    pub fn exile_top_to_play(count: usize, until: PlayWindow) -> Self {
-        Effect::ExileTopCardsToPlay {
-            count,
-            until,
-            face_down: false,
-            condition: None,
-        }
+    pub fn exile_top_to_play(count: usize, until: PlayWindow) -> Vec<Self> {
+        vec![
+            Self::exile(ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(
+                count as i32,
+            )))),
+            Self::GrantPlay {
+                what: ObjectSelector::Moved,
+                until,
+                play_lands: true,
+                flashback: false,
+                face_down: false,
+                condition: None,
+            },
+        ]
     }
 
     /// Copy the next matching spell its controller casts this turn.
@@ -2890,6 +2932,7 @@ impl Effect {
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate,
+            max_mana_value: None,
             min,
             max,
             effects,
@@ -2905,6 +2948,7 @@ impl Effect {
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Hand),
             predicate: CardPredicate::default(),
+            max_mana_value: None,
             min: 0,
             max: EffectValue::Fixed(up_to as i32),
             effects,
@@ -2969,6 +3013,7 @@ impl Effect {
     fn zone_move(what: ObjectSelector, to: ZoneType, unrevealed: bool) -> Self {
         Effect::Move {
             unrevealed,
+            face_down: false,
             library_end: None,
             what,
             to,
@@ -2985,6 +3030,7 @@ impl Effect {
     pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: Some(end),
             what,
             to: ZoneType::Library,
@@ -3015,6 +3061,7 @@ impl Effect {
             Effect::exile(ObjectSelector::This),
             Effect::Move {
                 unrevealed: false,
+                face_down: false,
                 library_end: None,
                 what: ObjectSelector::Moved,
                 to: ZoneType::Battlefield,
@@ -3035,6 +3082,7 @@ impl Effect {
     ) -> Self {
         Self::Move {
             unrevealed: false,
+            face_down: false,
             what,
             to: ZoneType::Battlefield,
             tapped,
@@ -3062,6 +3110,7 @@ impl Effect {
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what,
             to: ZoneType::Battlefield,
@@ -3091,6 +3140,7 @@ impl Effect {
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
             unrevealed: false,
+            face_down: false,
             library_end: None,
             what,
             to: ZoneType::Exile,

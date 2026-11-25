@@ -320,6 +320,7 @@ fn campus_guide() -> CardDefinition {
                         vec![Effect::SelectCards {
                             from: ObjectSelector::Zone(ZoneType::Library),
                             predicate: CardPredicate::basic_land(),
+                            max_mana_value: None,
                             min: 0,
                             max: EffectValue::Fixed(1),
                             effects: vec![
@@ -381,6 +382,7 @@ fn deadly_brew() -> CardDefinition {
                         except: Some(managym_state::ability::Except::Moved),
                     },
                     predicate: CardPredicate::default(),
+                    max_mana_value: None,
                     min: 0,
                     max: 1.into(),
                     effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

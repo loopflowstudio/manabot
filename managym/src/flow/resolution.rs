@@ -1113,6 +1113,7 @@ impl Game {
             }
             Effect::Move {
                 unrevealed,
+                face_down,
                 library_end,
                 what,
                 to,
@@ -1149,6 +1150,7 @@ impl Game {
                 if let Some(entry) = with_counter {
                     counters.change(entry.kind, self.effect_value(&entry.count, frame).max(0));
                 }
+                let library_top_departure = matches!(what, ObjectSelector::LibraryTop(_));
                 let mut events = Vec::new();
                 for object in selected {
                     let from = self.state.zones.zone_of(object);
@@ -1170,6 +1172,10 @@ impl Game {
                     {
                         continue;
                     }
+                    let inspected_library_departure = !library_top_departure
+                        && from == Some(ZoneType::Library)
+                        && matches!(what, ObjectSelector::Selected | ObjectSelector::Unselected)
+                        && frame.selected_from.is_none();
                     let entry = if *to == ZoneType::Battlefield {
                         ZoneEntry {
                             tapped: *tapped,
@@ -1180,12 +1186,18 @@ impl Game {
                             },
                             counters: counters.clone(),
                             controller,
+                            library_top_departure,
+                            inspected_library_departure,
                             ..ZoneEntry::default()
                         }
                     } else {
-                        // "exile it with a stash counter on it" (CR 122.1).
+                        // "exile it with a stash counter on it" (CR 122.1) or
+                        // "exile them face down" (CR 406.3).
                         ZoneEntry {
+                            face_down: *face_down && *to == ZoneType::Exile,
                             counters: counters.clone(),
+                            library_top_departure,
+                            inspected_library_departure,
                             ..ZoneEntry::default()
                         }
                     };
@@ -1363,6 +1375,7 @@ impl Game {
             Effect::SelectCards {
                 from,
                 predicate,
+                max_mana_value,
                 min,
                 max,
                 effects,
@@ -1378,14 +1391,25 @@ impl Game {
                         | ObjectSelector::TargetPlayersZone { .. }
                         | ObjectSelector::ZoneMatching { .. }
                         | ObjectSelector::CardsThisWay
+                        | ObjectSelector::LibraryTop(_)
                 );
-                let candidates: Vec<_> = self
-                    .select(from, frame)
-                    .into_iter()
-                    .filter(|object| {
-                        let object = *object;
+                let pool = self.select(from, frame);
+                let library_top = matches!(from, ObjectSelector::LibraryTop(_));
+                if library_top {
+                    self.remember_library_objects(frame.controller, &pool);
+                }
+                let max_mv = max_mana_value
+                    .as_ref()
+                    .map(|value| self.effect_value(value, frame));
+                let candidates: Vec<_> = pool
+                    .iter()
+                    .copied()
+                    .filter(|&object| {
                         (!cards_only || self.state.card_of(object).is_some())
                             && self.object_matches_predicate(object, predicate)
+                            && max_mv.is_none_or(|limit| {
+                                i32::from(self.object_mana_value(object)) <= limit
+                            })
                     })
                     .collect();
                 let max = self.effect_value(max, frame).max(0) as usize;
@@ -1396,7 +1420,7 @@ impl Game {
                     });
                 }
                 if max == 0 || candidates.is_empty() {
-                    frame.select_scope(Vec::new(), None, if_declined.clone());
+                    frame.select_scope(Vec::new(), pool, None, if_declined.clone());
                     None
                 } else {
                     Some(Decision::SelectCards {
@@ -1408,7 +1432,10 @@ impl Game {
                             | ObjectSelector::TargetPlayersZone {
                                 zone: ZoneType::Library,
                                 ..
-                            } => super::decision::SelectionOrigin::Library,
+                            }
+                            | ObjectSelector::LibraryTop(_) => {
+                                super::decision::SelectionOrigin::Library
+                            }
                             ObjectSelector::Zone(ZoneType::Hand) => {
                                 super::decision::SelectionOrigin::Hand
                             }
@@ -1422,6 +1449,12 @@ impl Game {
                                 predicate: predicate.clone(),
                             }
                         }),
+                        looked: if library_top {
+                            pool.clone()
+                        } else {
+                            Vec::new()
+                        },
+                        pool,
                         candidates,
                         selected: Vec::new(),
                         min,
@@ -1647,14 +1680,41 @@ impl Game {
                 }
                 None
             }
-            Effect::GrantGraveyardCastThisTurn { flashback, .. } => {
-                if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
+            Effect::GrantPlay {
+                what,
+                until,
+                play_lands,
+                flashback,
+                face_down,
+                condition,
+            } => {
+                let turn = self.state.turn.turn_number;
+                let origin = frame
+                    .source_ref()
+                    .map(|source| self.state.source_base(source).0);
+                for object in self.select(what, frame) {
+                    if self.state.card_of(object).is_none() {
+                        continue;
+                    }
+                    let zone = self.state.zones.zone_of(object);
+                    if (*face_down || *until == crate::state::ability::PlayWindow::WhileExiled)
+                        && zone != Some(ZoneType::Exile)
+                    {
+                        continue;
+                    }
+                    if !matches!(zone, Some(ZoneType::Exile | ZoneType::Graveyard)) {
+                        continue;
+                    }
                     let grant = PlayGrant {
+                        origin,
+                        play_lands: *play_lands,
+                        this_turn: *until == crate::state::ability::PlayWindow::ThisTurn,
+                        through_next_turn: (*until
+                            == crate::state::ability::PlayWindow::ThroughYourNextTurn)
+                            .then_some(turn),
                         flashback: *flashback,
-                        origin: frame
-                            .source_ref()
-                            .map(|source| self.state.source_base(source).0),
-                        this_turn: true,
+                        face_down: *face_down,
+                        condition: condition.clone(),
                         ..PlayGrant::new(object, frame.controller)
                     };
                     self.state.cast_permissions.grant(grant);
@@ -1757,7 +1817,7 @@ impl Game {
                 let cost = (0..ages).fold(ManaCost::default(), |cost, _| cost.plus(each));
                 Some(Decision::Payment(PaymentProgress::new(
                     frame.controller,
-                    CostComponent::mana(cost),
+                    vec![CostComponent::mana(cost)],
                     Vec::new(),
                     vec![Effect::sacrifice_this()],
                 )))
@@ -1815,11 +1875,15 @@ impl Game {
                 decision
             }
             Effect::Reveal { what } => {
-                for object in self.select(what, frame) {
+                let objects = self.select(what, frame);
+                for &object in &objects {
                     self.emit(GameEvent::CardRevealed {
                         owner: self.state[object].owner,
                         definition: self.state[object].definition_id,
                     });
+                }
+                if matches!(what, ObjectSelector::LibraryTop(_)) {
+                    self.reveal_library_objects(frame.controller, &objects);
                 }
                 frame.selected_revealed |= *what == ObjectSelector::Selected;
                 None
@@ -1897,21 +1961,6 @@ impl Game {
                     },
                     [self.zone_move_proposal(object_id, ZoneType::Library, Default::default())],
                 ));
-                None
-            }
-            Effect::ExileTopCardsToPlay {
-                count,
-                until,
-                face_down,
-                condition,
-            } => {
-                self.exile_top_cards_to_play(
-                    frame.controller,
-                    *count,
-                    *until,
-                    *face_down,
-                    condition.as_ref(),
-                );
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {
@@ -2135,7 +2184,7 @@ impl Game {
                 }
                 let mut payment = PaymentProgress::new(
                     frame.controller,
-                    CostComponent::mana(ManaCost::default()),
+                    vec![CostComponent::mana(ManaCost::default())],
                     effects.clone(),
                     Vec::new(),
                 );
@@ -2621,6 +2670,7 @@ impl Game {
                         ),
                         effects: DelayedEffects::new(vec![Effect::Move {
                             unrevealed: false,
+                            face_down: false,
                             library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,
@@ -2852,17 +2902,23 @@ impl Game {
                 .into_iter()
                 .filter(|object| self.object_matches_predicate(*object, predicate))
                 .collect(),
-            ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
-                (match what {
-                    ObjectSelector::Moved => &frame.moved,
-                    ObjectSelector::CardsThisWay => &frame.this_way,
-                    ObjectSelector::Selected => &frame.selected,
-                    _ => unreachable!(),
-                })
-                .iter()
-                .copied()
-                .filter(|object| self.state.live(*object).is_some())
-                .collect()
+            ObjectSelector::Moved
+            | ObjectSelector::CardsThisWay
+            | ObjectSelector::Selected
+            | ObjectSelector::Unselected => (match what {
+                ObjectSelector::Moved => &frame.moved,
+                ObjectSelector::CardsThisWay => &frame.this_way,
+                ObjectSelector::Selected => &frame.selected,
+                ObjectSelector::Unselected => &frame.unselected,
+                _ => unreachable!(),
+            })
+            .iter()
+            .copied()
+            .filter(|object| self.state.live(*object).is_some())
+            .collect(),
+            ObjectSelector::LibraryTop(count) => {
+                let count = self.effect_value(count, frame).max(0) as usize;
+                self.library_top_objects(frame.controller, count)
             }
             ObjectSelector::Zone(_) | ObjectSelector::TargetPlayersZone { .. } => {
                 let Some((owner, zone)) = self.selection_zone(what, frame) else {

@@ -35,6 +35,7 @@ use crate::{
         payment::{CostComponent, Help, Operation, Payment},
         proposed_event::{CounterProvenance, EventCause, ProposedEvent},
         statics::Characteristics,
+        turn::StepKind,
     },
     state::{
         ability::{Effect, EffectValue},
@@ -44,8 +45,8 @@ use crate::{
         },
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::{
-            Color, Mana, ManaCost, ManaPool, ManaSpendChoice, SpellSnapshot, SpendOrder,
-            SpendingContext,
+            Color, Mana, ManaCost, ManaExpiry, ManaPool, ManaSpendChoice, SpellSnapshot,
+            SpendOrder, SpendingContext,
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
@@ -2024,7 +2025,7 @@ impl Game {
                 // A life cost is paid or declined in one action: it never
                 // commits, so it never reaches the solver as an obligation.
                 Decision::Payment(progress) if !progress.can_decline() => {
-                    if let CostComponent::Mana { cost, .. } = &progress.owed {
+                    if let Some(CostComponent::Mana { cost, .. }) = progress.owed.first() {
                         result.push(Obligation::Pay {
                             cost: cost.clone(),
                             taps: if progress.waterbends() {
@@ -3262,26 +3263,31 @@ impl Game {
         cost: &ManaCost,
     ) -> Vec<SpentMana> {
         let (regular, combat) = self.state.mana_pools_mut(player);
-        if let Some((class, amounts)) = unit.classes().first().filter(|(class, _)| class.combat) {
-            let mut class = class.clone();
-            class.combat = false;
-            let unit = if class.restriction.is_none() && class.effect.is_none() {
+        if let Some((class, amounts)) = unit
+            .classes()
+            .first()
+            .filter(|(class, _)| class.expiry == ManaExpiry::EndOfCombat)
+        {
+            let mut stripped = class.clone();
+            stripped.expiry = ManaExpiry::Step;
+            let combat_unit = if stripped.restriction.is_none() && stripped.effect.is_none() {
                 Mana {
                     mana: *amounts,
                     ..Mana::default()
                 }
             } else {
-                Mana::of_class(class, *amounts)
+                Mana::of_class(stripped, *amounts)
             };
-            combat.spend(&unit, &cost.purpose)
-        } else {
-            let spent = regular.spend(unit, &cost.purpose);
-            let pooled = regular.total();
-            if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
-                exposure.mana[player.0].remove(unit.total(), pooled, false);
+            if combat.mana().contains(&combat_unit) {
+                return combat.spend(&combat_unit, &cost.purpose);
             }
-            spent
         }
+        let spent = regular.spend(unit, &cost.purpose);
+        let pooled = regular.total();
+        if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
+            exposure.mana[player.0].remove(unit.total(), pooled, false);
+        }
+        spent
     }
 
     /// Feasible unit selections preserve every saved caller, including the
@@ -3407,7 +3413,12 @@ impl Game {
                 }
                 SpendCompletion::Resolution(mut payment) => {
                     payment.receipt.record_mana(spent.mana().iter().cloned());
-                    self.finish_resolution_payment(payment, suspended.frame);
+                    if payment.waterbends() {
+                        payment.waterbend = true;
+                    }
+                    payment.owed.remove(0);
+                    payment.committed = true;
+                    self.advance_resolution_payment(payment, suspended.frame);
                 }
                 SpendCompletion::Foretell(card) => self.complete_foretell(player, card),
             }
@@ -3434,21 +3445,34 @@ impl Game {
         total
     }
 
-    /// CR 106.4 — regular pools empty as each step/phase ends. The combat
-    /// pool (until-end-of-combat mana) survives; see
-    /// `clear_combat_mana_pools`.
-    pub(crate) fn clear_mana_pools(&mut self) {
+    /// CR 106.4 — regular pools empty as each step/phase ends, except mana
+    /// whose class lasts until end of combat or end of turn. The firebending
+    /// combat pool also empties in `clear_combat_mana_pools`.
+    pub(crate) fn clear_mana_pools(&mut self, step: StepKind) {
+        let expires = |expiry: ManaExpiry| match expiry {
+            ManaExpiry::Step => true,
+            ManaExpiry::EndOfCombat => matches!(step, StepKind::EndOfCombat | StepKind::Cleanup),
+            ManaExpiry::EndOfTurn => step == StepKind::Cleanup,
+        };
         for player in [PlayerId(0), PlayerId(1)] {
             if self.state.players[player.0].mana_pool.total() == 0 {
                 continue;
             }
             let pool = std::mem::take(self.state.mana_pool_mut(player));
-            let before = pool.total();
-            let kept = self.unspent_mana_retained(player, pool);
-            if let Some(capture) = self.mana_capture(player) {
-                capture.remove(before - kept.total(), kept.total(), true);
+            let (mut surviving, expiring) = pool.split_expiring(expires);
+            let before = expiring.total();
+            if before > 0 {
+                let kept = self.unspent_mana_retained(player, expiring);
+                if let Some(capture) = self.mana_capture(player) {
+                    capture.remove(
+                        before - kept.total(),
+                        surviving.total() + kept.total(),
+                        true,
+                    );
+                }
+                surviving.absorb(kept);
             }
-            *self.state.mana_pool_mut(player) = kept;
+            *self.state.mana_pool_mut(player) = surviving;
         }
     }
 

@@ -8970,3 +8970,147 @@ fn fiery_annihilation_exiles_only_equipment_still_attached_to_its_target() {
         .iter()
         .any(|action| matches!(action, Action::ChooseTarget { .. })));
 }
+
+#[test]
+fn gutless_plunderer_raid_top_three_privacy_and_keep() {
+    use crate::support::game::{clear_summoning_sickness, five_color_setup, move_to_hand, pin_top};
+    use crate::support::inspect::{library_top, offered_cards, zone_of};
+    use crate::support::play::{
+        attack_with, cast_card, choose, pass_until, select_card, settle, spend_colorless,
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    use managym::agent::observation::Observation;
+    use managym::flow::event::GameEvent;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    // 1. Without attacking: no Raid trigger.
+    let mut s = five_color_setup(&["Gutless Plunderer", "Gray Ogre"]);
+    let plunderer = move_to_hand(&mut s, "Gutless Plunderer");
+    cast_card(&mut s, plunderer);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 0);
+
+    // 2. After attacking: Raid looks privately at top 3; keep 1 or decline all 3.
+    let mut s = five_color_setup(&[
+        "Gutless Plunderer",
+        "Gray Ogre",
+        "Hill Giant",
+        "Wind Drake",
+        "Lightning Bolt",
+    ]);
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    s.advance_to_step(StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    s.advance_to_step(StepKind::PostcombatMain);
+    s.set_player_mana_pool(0, "5B");
+    let top = pin_top(&mut s, &["Hill Giant", "Wind Drake", "Lightning Bolt"]);
+    let card = move_to_hand(&mut s, "Gutless Plunderer");
+    s.drain_events();
+    cast_card(&mut s, card);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+
+    // Viewer privacy: controller sees the 3 looked cards; opponent sees none of them.
+    let self_obs = Observation::for_player(s.game(), PlayerId(0));
+    let opp_obs = Observation::for_player(s.game(), PlayerId(1));
+    assert_eq!(offered_cards(&s).len(), 3);
+    let self_lib: Vec<_> = self_obs
+        .agent_cards
+        .iter()
+        .filter(|c| c.zone == ZoneType::Library)
+        .collect();
+    let opp_lib: Vec<_> = opp_obs
+        .opponent_cards
+        .iter()
+        .filter(|c| c.zone == ZoneType::Library)
+        .collect();
+    assert_eq!(self_lib.len(), 3);
+    assert!(
+        opp_lib.is_empty(),
+        "opponent must not see privately looked cards"
+    );
+
+    // Branch A: keep the middle card ("Wind Drake") on top; others go to graveyard, not surveil.
+    let mut keep_branch = s.clone();
+    select_card(&mut keep_branch, top[1]);
+    settle(&mut keep_branch);
+    let events = keep_branch.drain_events();
+    assert!(!events
+        .iter()
+        .any(|e| matches!(e, GameEvent::Surveilled { .. })));
+    assert_eq!(library_top(&keep_branch, 0), top[1]);
+    assert_eq!(zone_of(&keep_branch, top[0]), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&keep_branch, top[2]), Some(ZoneType::Graveyard));
+
+    // Branch B: decline keeps nothing; all three go to graveyard.
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    for id in top {
+        assert_eq!(zone_of(&s, id), Some(ZoneType::Graveyard));
+    }
+}
+
+#[test]
+fn strongbox_raider_raid_exile_two_choose_one_through_next_turn() {
+    use crate::support::game::{clear_summoning_sickness, five_color_setup, move_to_hand, pin_top};
+    use crate::support::inspect::{can_cast, offered_cards, zone_of};
+    use crate::support::play::{
+        attack_with, cast_card, pass_until, select_card, settle, spend_colorless,
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Strongbox Raider", "Gray Ogre", "Hill Giant", "Wind Drake"]);
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    s.advance_to_step(StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    s.advance_to_step(StepKind::PostcombatMain);
+    s.set_player_mana_pool(0, "6RR");
+
+    let top = pin_top(&mut s, &["Hill Giant", "Wind Drake"]);
+    let raider = move_to_hand(&mut s, "Strongbox Raider");
+    cast_card(&mut s, raider);
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+
+    let choices = offered_cards(&s);
+    assert_eq!(choices.len(), 2);
+    let chosen = choices
+        .into_iter()
+        .find(|id| s.game().state[*id].name == "Hill Giant")
+        .unwrap();
+    let other = offered_cards(&s)
+        .into_iter()
+        .find(|id| *id != chosen)
+        .unwrap();
+    select_card(&mut s, chosen);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Exile));
+
+    // Chosen card is playable this turn; the other exiled card is not.
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, chosen));
+    assert!(!can_cast(&s, other));
+
+    // Survives into controller's next turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, chosen));
+    assert!(!can_cast(&s, other));
+
+    // Playing it resolves normally onto the battlefield.
+    cast_card(&mut s, chosen);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Hill Giant").len(), 1);
+}

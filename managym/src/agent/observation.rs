@@ -1407,7 +1407,7 @@ impl Observation {
                 })
                 .collect(),
             // Restrictions without player columns are fact rows, as is mana
-            // with a spend effect or combat expiry.
+            // with a spend effect or non-step expiry.
             pooled_mana_classes: pool
                 .classes()
                 .iter()
@@ -1416,11 +1416,14 @@ impl Observation {
                         .restriction
                         .as_ref()
                         .is_some_and(|restriction| !representable(restriction));
-                    if class.effect.is_none() && !class.combat && !unrepresentable {
+                    if class.effect.is_none()
+                        && class.expiry == crate::state::mana::ManaExpiry::Step
+                        && !unrepresentable
+                    {
                         return None;
                     }
                     Some(PooledManaClassData {
-                        combat: class.combat,
+                        combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
                         restriction: class.restriction.as_ref().map(|r| r.describe()),
                         effect: class
                             .effect
@@ -1578,6 +1581,7 @@ impl Observation {
                     Decision::SelectCards {
                         from: Some(source), ..
                     } => game.selection_zone_objects(source.owner, source.zone),
+                    Decision::SelectCards { looked, .. } if !looked.is_empty() => looked.clone(),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_objects(decision)
                     }
@@ -2740,17 +2744,14 @@ fn ward_value(cost: Option<&PaymentCost>) -> i32 {
 
 /// The life a ward costs; 0 without ward and for a ward paid in mana.
 fn ward_life(cost: Option<&PaymentCost>) -> i32 {
-    match cost {
-        Some(PaymentCost::Life(life)) => *life as i32,
-        _ => 0,
-    }
+    cost.map_or(0, |cost| cost.life() as i32)
 }
 
 /// A ward cost `ward_cost` cannot state, in learning tokens: empty without
 /// ward and for a ward whose price is its mana value.
 fn ward_program(cost: Option<&PaymentCost>) -> Vec<(u16, i32)> {
     match cost {
-        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard)) => {
+        Some(cost @ (PaymentCost::Life(_) | PaymentCost::Discard | PaymentCost::All(_))) => {
             crate::cards::tokens::rules_tokens(cost, default_content_pack())
                 .expect("registered rules payload")
         }

@@ -99,6 +99,15 @@ impl Game {
         Some(object)
     }
 
+    /// Both seats learn the positions of revealed library cards (Genesis Wave).
+    pub(crate) fn reveal_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        self.state.library_order_pins_mut(owner).extend(objects);
+        let facts = self.library_positions_of(owner, objects);
+        let knowledge = self.state.known_library_mut(owner);
+        knowledge.public.extend(facts);
+        LibraryKnowledge::bound(&mut knowledge.public);
+    }
+
     pub(crate) fn refresh_visible_library_tops(&mut self) {
         let visible = self.visible_library_tops();
         for owner in [PlayerId(0), PlayerId(1)] {

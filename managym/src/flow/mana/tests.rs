@@ -1387,7 +1387,7 @@ fn projected_output_bound_keeps_class_maxima_and_saturation() {
         Mana::restricted_to(ally, [0, 5, 0, 0, 0, 0]),
         Mana::of_class(
             crate::state::mana::ManaClass {
-                combat: true,
+                expiry: crate::state::mana::ManaExpiry::EndOfCombat,
                 restriction: None,
                 effect: None,
             },

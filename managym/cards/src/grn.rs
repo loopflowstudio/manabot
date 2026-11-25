@@ -197,6 +197,7 @@ fn affectionate_indrik() -> CardDefinition {
                 effects: vec![Effect::SelectCards {
                     from: ObjectSelector::ExactSource,
                     predicate: CardPredicate::creature(),
+                    max_mana_value: None,
                     min: 0,
                     max: 1.into(),
                     effects: vec![Effect::Fight {

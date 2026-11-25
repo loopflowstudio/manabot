@@ -1,9 +1,9 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::ability::{
     Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind, DamageRecipientFilter,
-    Effect, EffectValue, EntryCounters, KeywordAction, ObjectProperty, ObjectSelector, PaymentCost,
-    Per, PlayWindow, PlayerSelector, Scope, TargetRelation, TargetRequirement, TargetSpec,
-    TriggerCondition, TriggerSubject, TurnStep,
+    Effect, EffectValue, EntryCounters, KeywordAction, LibraryEnd, ObjectProperty, ObjectSelector,
+    PaymentCost, Per, PlayWindow, PlayerSelector, Scope, TargetRelation, TargetRequirement,
+    TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
@@ -19,6 +19,8 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        gutless_plunderer(),
+        strongbox_raider(),
         fiery_annihilation(),
         divine_resilience(),
         curator_of_destinies(),
@@ -459,10 +461,7 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                                         per: Per::Object,
                                     },
                                     intervening_if: None,
-                                    effects: vec![Effect::exile_top_to_play(
-                                        1,
-                                        PlayWindow::ThisTurn,
-                                    )],
+                                    effects: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
                                 })),
                             ),
                         ],
@@ -3326,14 +3325,18 @@ fn zul_ashur_lich_lord() -> CardDefinition {
             statics: vec![StaticAbility::Ward(PaymentCost::Life(2))],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::GrantGraveyardCastThisTurn {
-                    flashback: false,
-                    target: TargetSpec::GraveyardCardYouOwn {
+                effects: vec![Effect::GrantPlay {
+                    what: ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             subtype: Some("Zombie".into()),
                             ..CardPredicate::creature()
                         },
-                    },
+                    }),
+                    until: PlayWindow::ThisTurn,
+                    play_lands: false,
+                    flashback: false,
+                    face_down: false,
+                    condition: None,
                 }],
                 ..Default::default()
             }],
@@ -3457,14 +3460,15 @@ fn redcap_gutter_dweller() -> CardDefinition {
                     condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
                     effects: vec![
                         Effect::may_sacrifice(CardPredicate::creature(), true),
-                        Effect::if_you_do(vec![
-                            Effect::put_counters(
+                        Effect::if_you_do({
+                            let mut effects = vec![Effect::put_counters(
                                 ObjectSelector::This,
                                 CounterKind::PlusOnePlusOne,
                                 1,
-                            ),
-                            Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
-                        ]),
+                            )];
+                            effects.extend(Effect::exile_top_to_play(1, PlayWindow::ThisTurn));
+                            effects
+                        }),
                     ],
                 },
             ],
@@ -3537,6 +3541,7 @@ fn tinybones_bauble_burglar() -> CardDefinition {
                 },
                 effects: vec![Effect::Move {
                     unrevealed: false,
+                    face_down: false,
                     library_end: None,
                     what: ObjectSelector::Triggering,
                     to: ZoneType::Exile,
@@ -3584,14 +3589,18 @@ fn sphinx_of_forgotten_lore() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
-                effects: vec![Effect::GrantGraveyardCastThisTurn {
-                    flashback: true,
-                    target: TargetSpec::GraveyardCardYouOwn {
+                effects: vec![Effect::GrantPlay {
+                    what: ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             card_types_any: vec![CardType::Instant, CardType::Sorcery],
                             ..Default::default()
                         },
-                    },
+                    }),
+                    until: PlayWindow::ThisTurn,
+                    play_lands: false,
+                    flashback: true,
+                    face_down: false,
+                    condition: None,
                 }],
             }],
             ..Default::default()
@@ -3842,6 +3851,7 @@ fn nine_lives_familiar() -> CardDefinition {
                     ObjectSelector::This,
                     vec![Effect::Move {
                         unrevealed: false,
+                        face_down: false,
                         what: ObjectSelector::Remembered,
                         to: ZoneType::Battlefield,
                         tapped: false,
@@ -4114,6 +4124,91 @@ fn fiery_annihilation() -> CardDefinition {
                     Modification::ExileIfWouldDie,
                 ),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gutless_plunderer() -> CardDefinition {
+    let text_box = "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nRaid — When this creature enters, if you attacked this turn, look at the top three cards of your library. You may put one of those cards back on top of your library. Put the rest into your graveyard.";
+    CardDefinition {
+        key: "fdn.gutless_plunderer",
+        scryfall_id: "909d7778-c7f8-4fa4-89f2-8b32e86e96e4",
+        printed: PrintedCharacteristics {
+            name: "Gutless Plunderer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Skeleton".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::SelectCards {
+                    from: ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(3))),
+                    predicate: CardPredicate::default(),
+                    max_mana_value: None,
+                    min: 0,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![
+                        Effect::put_in_library(ObjectSelector::Selected, LibraryEnd::Top),
+                        Effect::move_to(ObjectSelector::Unselected, ZoneType::Graveyard),
+                    ],
+                    if_declined: vec![Effect::move_to(
+                        ObjectSelector::Unselected,
+                        ZoneType::Graveyard,
+                    )],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn strongbox_raider() -> CardDefinition {
+    let text_box = "Raid — When this creature enters, if you attacked this turn, exile the top two cards of your library. Choose one of them. Until the end of your next turn, you may play that card.";
+    CardDefinition {
+        key: "fdn.strongbox_raider",
+        scryfall_id: "b2223eb8-59f9-489b-a3f3-b6496218cb79",
+        printed: PrintedCharacteristics {
+            name: "Strongbox Raider".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Orc".into(), "Pirate".into()],
+            power: Some(5),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![
+                    Effect::exile(ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(2)))),
+                    Effect::SelectCards {
+                        from: ObjectSelector::Moved,
+                        predicate: CardPredicate::default(),
+                        max_mana_value: None,
+                        min: 1,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::GrantPlay {
+                            what: ObjectSelector::Selected,
+                            until: PlayWindow::ThroughYourNextTurn,
+                            play_lands: true,
+                            flashback: false,
+                            face_down: false,
+                            condition: None,
+                        }],
+                        if_declined: Vec::new(),
+                    },
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

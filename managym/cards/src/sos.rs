@@ -515,6 +515,7 @@ fn all_aboard() -> PrintedCharacteristics {
             ),
             Effect::Move {
                 unrevealed: false,
+                face_down: false,
                 what: ObjectSelector::Moved,
                 to: ZoneType::Battlefield,
                 under: Some(PlayerSelector::Owner),
@@ -725,6 +726,7 @@ fn vastlands_scavenger() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 0,
                         max: 1.into(),
                         effects: vec![Effect::return_to_battlefield(
@@ -1188,6 +1190,7 @@ fn harmonized_trio() -> CardDefinition {
     let put_on_top = Effect::SelectCards {
         from: ObjectSelector::Zone(ZoneType::Hand),
         predicate: CardPredicate::default(),
+        max_mana_value: None,
         min: 1,
         max: EffectValue::Fixed(1),
         effects: vec![Effect::put_in_library(

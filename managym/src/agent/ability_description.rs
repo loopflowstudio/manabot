@@ -719,9 +719,8 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         chosen_subtype,
         chosen_name,
         named,
-        flying,
+        keyword,
         not_flying,
-        deathtouch,
         no_counters,
         in_combat,
         token,
@@ -759,11 +758,8 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
                 .join(" or "),
         );
     }
-    if *deathtouch {
-        terms.push("deathtouch".into());
-    }
-    if *flying {
-        terms.push("flying".into());
+    if let Some(keyword) = keyword {
+        terms.push(keyword.printed().into());
     }
     terms.extend(supertype.iter().cloned());
     if *nonlegendary {
@@ -989,6 +985,11 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
         ObjectSelector::Moved => "it".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
+        ObjectSelector::Unselected => "the unselected cards".into(),
+        ObjectSelector::LibraryTop(count) => format!(
+            "the top {} cards of your library",
+            value_description(triggering, count)
+        ),
         ObjectSelector::Paid(how) => {
             format!("the permanent {} to pay", format!("{how:?}").to_lowercase())
         }
@@ -1334,8 +1335,14 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
         })
         .collect();
     for (class, _) in mana.classes() {
-        if class.combat {
-            text.push_str(" (expires at end of combat)");
+        match class.expiry {
+            crate::state::mana::ManaExpiry::Step => {}
+            crate::state::mana::ManaExpiry::EndOfCombat => {
+                text.push_str(" (expires at end of combat)");
+            }
+            crate::state::mana::ManaExpiry::EndOfTurn => {
+                text.push_str(" (expires at end of turn)");
+            }
         }
         if let Some(restriction) = &class.restriction {
             let spend = restriction.describe();
@@ -1360,6 +1367,11 @@ fn payment_description(cost: &PaymentCost) -> String {
         // Read after "pays" and "You may pay": the amount only.
         PaymentCost::Discard => "a discarded card".into(),
         PaymentCost::Life(life) => format!("{life} life"),
+        PaymentCost::All(parts) => parts
+            .iter()
+            .map(payment_description)
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }
 
@@ -1438,7 +1450,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(triggering, amount), counter_description(*kind), selector_description(triggering, on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(triggering, from), selector_description(triggering, on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(triggering, what)),
-        Move { what, to, tapped, transformed, under, with_counter, linked, library_end, unrevealed } => {
+        Move { what, to, tapped, transformed, under, with_counter, linked, library_end, unrevealed, face_down: _ } => {
             if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(triggering, what), format!("{end:?}").to_lowercase()) }
             else if *unrevealed && *to == ZoneType::Hand { format!("Put {} into its owner's hand without revealing it", selector_description(triggering, what)) }
             else { move_description(triggering, what, *to, *tapped, *transformed, under.as_ref(), with_counter.as_ref(), *linked) }
@@ -1462,32 +1474,31 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         MillCards { count, target: None, .. } => format!("Mill {} cards", value_description(triggering, count)),
         MillCards { count, target: Some(target), .. } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
         MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
-        SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
+        SelectCards { from, predicate, max_mana_value, min, max, effects, if_declined } => {
+            let mv = max_mana_value.as_ref().map(|v| format!(" with mana value {} or less", value_description(triggering, v))).unwrap_or_default();
+            format!("Choose {min}–{} {}{mv} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined))
+        }
         TargetClause { requirement, effects } => format!("Choose {}–{} {}{}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },relation_description(requirement.relation),effects_description_in(triggering, effects)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(triggering, what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(triggering, what)),
         Airbend { what: what @ ObjectSelector::Each { .. } } => format!("Airbend {}. Their owners may cast them from exile for {{2}}", selector_description(triggering, what)),
         Airbend { what } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",selector_description(triggering, what)),
-        GrantGraveyardCastThisTurn { target, flashback } => if *flashback {
-            format!("{} gains flashback at its mana cost until end of turn", target_description(target))
-        } else { format!("You may cast {} this turn", target_description(target)) },
-        OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileTopCardsToPlay { count, until, face_down, condition } => {
-            let them = if *count == 1 { "that card" } else { "those cards" };
+        GrantPlay { what, until, play_lands, flashback, face_down: _, condition } => {
             let window = match until {
                 crate::state::ability::PlayWindow::ThisTurn => "this turn",
                 crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
                 crate::state::ability::PlayWindow::WhileExiled => "for as long as they remain exiled",
             };
-            let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
-            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text_in(triggering, condition))).unwrap_or_default();
-            if *face_down {
-                format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
+            let condition = condition.as_ref().map(|c| format!(" if {}", condition_text_in(triggering, c))).unwrap_or_default();
+            if *flashback {
+                format!("{} gains flashback at its mana cost {window}{condition}", selector_description(triggering, what))
             } else {
-                format!("Exile the top {cards} of your library. You may play {them} {window}{condition}")
+                let verb = if *play_lands { "play" } else { "cast" };
+                format!("You may {verb} {} {window}{condition}", selector_description(triggering, what))
             }
         }
+        OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         CumulativeUpkeep { each } => format!("Sacrifice this unless you pay {} for each age counter on it", cost_description(each)),
         ExileEachLibraryTopCastFree => "Exile the top card of each library. You may cast any number of spells from among those cards without paying their mana costs".into(),
@@ -2080,6 +2091,7 @@ mod tests {
                 Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                 Effect::Move {
                     unrevealed: false,
+            face_down: false,
                     what: ObjectSelector::Moved,
                     to: ZoneType::Battlefield,
                     tapped: false,

@@ -1525,6 +1525,7 @@ pub(crate) fn project_decision(
             }
         }
         Decision::SelectCards {
+            looked,
             selected,
             min,
             max,
@@ -1532,6 +1533,9 @@ pub(crate) fn project_decision(
             if_declined,
             ..
         } => {
+            if !looked.is_empty() {
+                out.object_ids("inspected", looked);
+            }
             out.objects("selected so far", selected);
             out.field("selection limits", &(min, max));
             out.summary(|| {

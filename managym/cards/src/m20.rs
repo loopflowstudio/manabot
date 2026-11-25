@@ -259,7 +259,7 @@ fn empyrean_eagle() -> CardDefinition {
         printed: PrintedCharacteristics {
             statics: vec![StaticAbility::continuous(
                 StaticScope::OtherYouControl(CardPredicate {
-                    flying: true,
+                    keyword: Some(Keyword::Flying),
                     ..CardPredicate::creature()
                 }),
                 None,
