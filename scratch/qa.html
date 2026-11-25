@@ -1,75 +1,83 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>MTG-439 QA after Pass 5</title>
+<html><head><meta charset="utf-8"><title>MTG-439 QA after Pass 6 and compress</title>
 <style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f4f4;padding:0 3px}pre{padding:.6em;overflow:auto}h2{margin-top:2em}</style></head>
 <body>
-<h1>MTG-439 QA after Pass 5 and compress</h1>
-<p>Compress (<code>87c42e1734</code>) changed <code>mana.rs</code> after the last build. I rebuilt the release
-extension and the static SPA before running anything. Browser games ran in a configured launch
-(<code>managym academy play --opponent passive --seed 11</code>, imported decks) driven by headless Chromium.
-The Ward and LLM-text checks used a real seeded game through Academy's <code>GameSession</code> and through <code>managym.Env</code>.
-No scenario helpers were used.</p>
+<h1>MTG-439 QA after Pass 6 and compress</h1>
+<p>Pass 6 (<code>c43f83e3d3</code>) moved modal collapse into <code>Game::mana_choice_actions</code>. Compress
+(<code>046392c616</code>) then rewrote the payability and equivalence checks in <code>mana.rs</code>
+after the last QA build. Before running anything, I rebuilt the release extension from HEAD and swapped it in atomically. I also rebuilt the static SPA,
+which main's merge had changed (new Settings menu, combat draft). The browser games ran in configured launches
+(<code>managym academy play --opponent passive --seed 11</code>, imported decks) in headless Chromium with
+<b>Manual tap</b> selected. The Ward and LLM-text checks used real seeded games through Academy's <code>GameSession</code>
+and <code>managym.Env</code>. No scenario helpers were used.</p>
 
-<h2>1. Kyoshi Village + Plains in the browser</h2>
-<p>Deck: 14 Kyoshi Village / 10 Plains / 16 Youthful Knight against 40 Plains.</p>
-<p><b>Default table (Auto-tap on).</b> No payment stop ever appeared. In the Moves log, every cast read
-<code>Auto-tapped {1}{W} for Youthful Knight</code>, and the mana renders as pips. This is Academy's client Auto-tap
-from main (#610), which is on by default and submits "Pay the cost". It is not part of this change.</p>
-<img src="qa/auto-tap-moves.png" alt="Moves log with pips under Auto-tap">
-<p><b>Manual tap.</b> With Village + Plains, the Knight was cast with no stop. With Village + 3 Plains, each cast stopped with
-<code>Tap Kyoshi Village for {G}/{W}</code>, three <code>Tap Plains for {W}</code> and <code>Pay the cost</code>.
-Clicking the Village tap finished the payment: no color modal and no second stop (7 casts).</p>
-<img src="qa/village-manual-stop.png" alt="Manual stop">
+<h2>1. Kyoshi Village + Plains (browser and GameSession)</h2>
+<p>Village + Plains for Youthful Knight <code>{1}{W}</code>: cast with no stop.</p>
+<p>Village + 3 Plains: one stop offering <code>Tap Kyoshi Village for {G}/{W}</code>, three <code>Tap Plains for {W}</code> and
+<code>Pay the cost</code> (shown as "Auto pay"). Clicking the Village tap finished the payment with no color modal.
+The recorded trace shows the result: Village + 1 Plains tapped, 2 Plains untapped.</p>
+<p>I ran the same position through <code>GameSession</code> twice: casting on the turn the third Plains was played (<code>entered_this_turn</code>)
+and on a later turn. Both gave the same single stop, and both ended with <code>['Kyoshi Village', 'Plains']</code> tapped.</p>
+<img src="qa/p6-village-stop.png" alt="Village plus three Plains payment stop">
 
-<h2>2. Gruul Guildgate ×2 + Forest + Mountain for Gray Ogre</h2>
-<p>The 3-land exact case cast with no stop. With 4 lands the payment stopped. Tapping a Guildgate asked
-<em>Choose the mana to add</em>. After <code>Add {R}</code> it stopped at <code>Pay {2}</code>, showing
-<code>{R} from Gruul Guildgate</code> as committed and pips on every tap offer. This matched in all 5 casts.</p>
-<img src="qa/guildgate-second-stop.png" alt="Second Guildgate stop">
+<h2>2. Gruul Guildgate, Forest, Mountain for Gray Ogre</h2>
+<p>Guildgate + Forest + Mountain (exact <code>{2}{R}</code>): no stop.</p>
+<p>The first browser run cast Ogre on the turn the second Guildgate was played. There was no stop, and all four lands
+looked upright in the end screenshot. That looked like an over-tap, but it was correct. Gruul Guildgate enters tapped,
+so the payment was again exact. Replaying the browser's recorded Commands through <code>GameSession</code> confirmed it.
+The DOM showed four <code>.turned</code> cards labelled "— Tapped". Academy draws a tapped land as a landscape box,
+not a rotated picture.</p>
+<img src="qa/p6-guildgate-exact-tapped.png" alt="Exact Guildgate payment, lands drawn tapped">
+<p>Casting on a later turn with two untapped Guildgates + Forest + Mountain behaved the same in all five casts:</p>
+<ul>
+<li>A stop offering both Guildgates, Forest and Mountain taps.</li>
+<li>Tapping a Guildgate opened <b>Choose the mana to add</b>, because <code>R</code> and <code>G</code> lead to different payments.</li>
+<li>After <code>Add {R}</code>, a <code>Pay {2}</code> stop showing <code>{R} from Gruul Guildgate</code> as committed.</li>
+<li>A second Guildgate tap there needed no modal, since either color pays the generic cost.</li>
+</ul>
+<img src="qa/p6-guildgate-modal.png" alt="Color modal">
+<img src="qa/p6-guildgate-after-r.png" alt="Stop after Add R">
 
-<h2>3. Ward {2} payments (resolution payment), real game — <b>bug found and fixed</b></h2>
-<p>The hero ran Mountain / Kyoshi Village / Plains / Lightning Bolt and Bolted the opponent's Waterfall Aerialist (random opponent; seeds 3, 5 and 7).
-The stops offered per-source taps beside <code>Pay the cost (Waterfall Aerialist)</code> and <code>Decline</code>, as planned.</p>
-<p><b>Defect:</b> with two or more Villages, the <em>second</em> Village tap opened an <code>Add {G}</code> / <code>Add {W}</code> modal,
-even though either color pays the generic {2} whole. The cause: <code>equivalent_mana_choices</code> credited each new unit
-on its own in a resolution payment. It refused whenever the first tap's mana was already floating.</p>
-<p><b>Fix</b> (<code>managym/src/flow/mana.rs</code>): in a resolution payment, if a mode's pool pays the cost exactly and every unit is spent,
-that mode completes the payment, so all such modes are equivalent.
-I added a regression case to <code>ward_offers_per_source_taps_on_real_choice_and_skips_when_forced</code>. It fails without the fix
-(<code>left: [ChooseMode…, ChooseMode…]</code>) and passes with it. After a rebuild, the same seeds show:</p>
+<h2>3. Ward {2} resolution payments (GameSession, seeds 3, 5, 7)</h2>
+<p>The stops offer per-source taps beside <code>Pay the cost (Waterfall Aerialist)</code> and <code>Decline</code>.
+With ≥2 Villages, the second Village tap no longer opens a modal. That was the regression fixed in the last QA, and it still holds after compress.
+When only identical Plains remain, the tap offers drop out and the stop offers only Pay/Decline:</p>
 <pre>STOP ['Tap Kyoshi Village for {G}/{W}' ×3, 'Tap Plains for {W}', 'Pay the cost (Waterfall Aerialist)', 'Decline']
 STOP ['Tap Kyoshi Village for {G}/{W}' ×2, 'Tap Plains for {W}', 'Pay the cost (Waterfall Aerialist)', 'Decline']
-STOP ['Pay the cost (Waterfall Aerialist)', 'Decline']      # no modal any more</pre>
+STOP ['Pay the cost (Waterfall Aerialist)', 'Decline']
+STOP ['Tap Kyoshi Village for {G}/{W}', 'Tap Plains for {W}' ×3, …]  →  ['Pay the cost (Waterfall Aerialist)', 'Decline']   # seed 5</pre>
 
-<h2>4. LLM text at a real stop — <b>inconsistency fixed</b></h2>
-<p>Pass 5 rendered the dual and the basics beside it differently:</p>
-<pre>A0 Tap Kyoshi Village for {G}/{W} (P1); ability 2
-A1 Tap for mana P2 (Plains). Native description: Tap Plains for {W}</pre>
-<p>The task's direction says tapping a dual and tapping a basic are the same thing. The dual now reads exactly like the basics,
-with no ability index and no "Activate ability". Basic and convoke wording is unchanged:</p>
+<h2>4. LLM text at a real stop</h2>
 <pre>A0 Tap for mana P1 (Kyoshi Village). Native description: Tap Kyoshi Village for {G}/{W}
-A1 Tap for mana P2 (Plains). Native description: Tap Plains for {W}</pre>
-<p>The open question (whether to bump <code>manabot-text-10</code>) is in <code>scratch/questions.md</code>.</p>
+A1 Tap for mana P2 (Plains). Native description: Tap Plains for {W}
+A2 Tap for mana P3 (Plains). Native description: Tap Plains for {W}
+A3 Tap for mana P4 (Plains). Native description: Tap Plains for {W}
+A4 Pay the offered cost</pre>
 
-<h2>Checks run</h2>
+<h2>5. Fixed: forced-decision guard tripped by a Pass 6 doc comment</h2>
+<p>The plan's Python acceptance run (plus <code>tests/env/test_skip_forced_decisions.py</code>) gave 161 passed and 1 failed.
+<code>test_no_runner_turns_skipping_off</code> greps the source for <code>skip_trivial=false</code>. It flagged
+<code>managym/src/flow/mana.rs:2883</code>, the doc comment Pass 6 wrote on <code>mana_choice_actions</code>
+(<code>so `skip_trivial=false` and `skip_trivial=true` stay in lockstep</code>). CI would have failed the same way.
+I reworded the comment to "games with and without <code>skip_trivial</code> stay in lockstep". That file now passes 4/4, and the
+other 161 tests had already passed. The change is comment-only, so the built extension still matches.</p>
+
+<h2>What works now</h2>
 <ul>
-<li>Debug <code>cargo nextest -E 'binary(source_taps)'</code>: 32/32 passed with the fix. The new assertion fails without it.</li>
-<li><code>pytest</code> dual-land payment, payment preview, skip-forced, recording narration and text observation: 120 passed. Text, manifest-text, native-observation-contract and casting-profile tests: 137 passed.</li>
+<li>Exact dual + basic payments cast with no stop, including a Guildgate that entered tapped.</li>
+<li>A real Village-vs-Plains choice stops once, and one Village tap finishes it, whether or not the last Plains was played that turn.</li>
+<li>The Guildgate color modal appears only when the colors lead to different payments, and the committed color is shown.</li>
+<li>Ward stops offer per-source taps, skip redundant modals, and drop the taps when only identical sources remain.</li>
+<li>LLM text reads choice taps like basics.</li>
 </ul>
 
-<h2>What works</h2>
-<ul>
-<li>Exact dual + basic payments cast with no stop. A real Village-vs-Plains choice stops once, and tapping the Village finishes the payment.</li>
-<li>The Guildgate color modal appears only when the remaining cost differs, and the committed color is shown.</li>
-<li>Moves log mana renders as pips.</li>
-<li>Ward stops offer per-source taps and now skip redundant color modals.</li>
-</ul>
 <h2>Not reached / still open, worst first</h2>
 <ul>
-<li>The plan's Demo assumes manual payment, but the default table has Auto-tap on, so a first-time visitor never sees these stops. To see them, click "Auto-tap" in the header to switch it to "Manual tap".</li>
-<li>Payment taps fold into the "Cast …" move, so a resolved-color line such as <code>Tap Kyoshi Village for {W}</code>
-appears in Moves only for standalone taps. I did not see one in these games; it is covered by <code>test_recording_narration.py</code>.</li>
-<li>The decision panel's "Committed to this cost" line still prints <code>{R}</code> as text rather than pips. This predates the change.</li>
-<li>After a Ward tap, <code>Pay the cost</code> / <code>Decline</code> remains a stop. Decline is a real legal choice, so this is correct.</li>
-<li>Not re-checked here: Engine Budget <code>bench_search</code> against base, which is the gate's job.</li>
+<li>I didn't run the Rust suites (debug <code>source_taps</code>, <code>semantic_conformance_tests</code>) or <code>Engine Budget</code>.
+  The release build is on a host under heavy load (load average 50–90), so those, and the speed comparison against base, are left to CI on the next push.</li>
+<li>A first-time visitor still never sees these stops: Auto-tap is on by default, and since main's merge it is turned off in <b>Settings</b>,
+  not by a header button. The plan's demo should say "Settings → Auto-tap off".</li>
+<li>The decision panel's "Committed to this cost" line prints <code>{R}</code> as text rather than pips. This predates the change.</li>
+<li>Payment taps fold into the "Cast …" move, so I saw no resolved-color Moves line in these games. <code>test_recording_narration.py</code> covers it and passes.</li>
 </ul>
 </body></html>

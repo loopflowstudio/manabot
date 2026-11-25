@@ -2880,8 +2880,8 @@ impl Game {
 
     /// Feasible `Decision::ManaChoice` modes; when every offered mode leads to
     /// an indistinguishable payment state under manual payment, collapse to the
-    /// single deterministic first mode (`len == 1`) so `skip_trivial=false` and
-    /// `skip_trivial=true` stay in lockstep.
+    /// single deterministic first mode (`len == 1`) so games with and without
+    /// `skip_trivial` stay in lockstep.
     pub(crate) fn mana_choice_actions(&self, player: PlayerId, choices: &[Mana]) -> Vec<Action> {
         let _scan = self.payment_scan();
         let model = self.payment_model(player, None);
