@@ -120,23 +120,21 @@ const MOVE_KINDS = new Set([
   'passed',
 ]);
 
-const MODERN_KINDS = new Set([
-  'passed',
-  'activated',
-  'triggered',
-  'ability_resolved',
-  'countered',
-  'counters',
-  'drew',
-  'searched',
-  'looked',
-  'sacrificed',
-  'lost',
-  'life',
-  'exiled',
-  'token_created',
-  'pt_changed',
-  'control_changed',
+// The 12 original pre-history presentation kinds; any other kind guarantees
+// a recording carries modern track history (immune to drift as kinds grow).
+const LEGACY_KINDS = new Set([
+  'cast',
+  'targeted',
+  'resolved',
+  'damage',
+  'destroyed',
+  'died',
+  'attack_group',
+  'blocked',
+  'turn_started',
+  'land_played',
+  'discarded',
+  'revealed',
 ]);
 
 /** Exact definition of a player move: move kind with no cause and no rule. */
@@ -155,7 +153,7 @@ export function hasTrackHistory(events: readonly PresentationEvent[]): boolean {
       event.labels !== undefined
       || event.cause !== undefined
       || event.rule !== undefined
-      || MODERN_KINDS.has(event.kind.kind),
+      || !LEGACY_KINDS.has(event.kind.kind),
   );
 }
 

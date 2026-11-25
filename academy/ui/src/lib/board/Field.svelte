@@ -5,6 +5,7 @@
    * spilling under its neighbours. A tapped card lies on its side in the
    * width its pile reserves for it, centred on the upright cards' line.
    */
+  import type { StopDelta } from './beats';
   import BoardCard from './BoardCard.svelte';
   import type { DeathMark } from './motion';
   import type { PlannedSource } from './payment';
@@ -21,12 +22,12 @@
     asked: Set<number>;
     /** Permanents that acted or were acted on since your last move. */
     touched: Set<number>;
-    /** Objects the opponent's move being read out is about. */
+    /** Objects the active stop or history line is about. */
     beat?: Set<number>;
     /** Damage dealt to each permanent since your last move. */
     damage: Map<number, number>;
     /** Damage, counter or P/T deltas at the active cursor stop. */
-    stopDeltas?: ReadonlyMap<number, readonly { kind: 'damage' | 'counters' | 'pump'; text: string }[]>;
+    stopDeltas?: ReadonlyMap<number, readonly StopDelta[]>;
     /** Sources the automatic payer would tap, by permanent id. */
     planned: Map<number, PlannedSource> | null;
     /** Copies to take out of their piles: the pending payment's own plan. */

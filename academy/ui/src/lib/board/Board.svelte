@@ -27,7 +27,7 @@
   import Lines from './Lines.svelte';
   import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, Travel, type DeathMark } from './motion';
   import { region } from './region';
-  import { computeStopDeltas, cursorView, hasWalkableTurn, paceMs, scrubberStops, sharedLaterCount, stopHasSeq, unreadWalkStops, walkStops, type WalkPace } from './beats';
+  import { computeStopDeltas, cursorView, hasWalkableTurn, PACE_MS, scrubberStops, sharedLaterCount, stopHasSeq, unreadWalkStops, walkStops, type WalkPace } from './beats';
   import { buildCombatTable } from './combat-table';
   import { findBoard, type StepBoard } from './boards';
   import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
@@ -406,7 +406,7 @@
 
   // One cursor into the history (`selection: { seq, scope } | null` + timer
   // state `walking: boolean`). `selection === null` rests on now. Walking,
-  // clicking a scrubber tick, and "Show their turn again" select `scope: 'stop'`
+  // clicking a scrubber tick, and "Replay turn" select `scope: 'stop'`
   // (keeping multi-line stops intact when paused); clicking a history line,
   // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
@@ -420,7 +420,7 @@
   let combatTableHovered = $state(false);
   let combatRowSubjects = $state<number[]>([]);
 
-  const activePaceMs = $derived(paceMs(walkPace));
+  const activePaceMs = $derived(PACE_MS[walkPace]);
 
   const activeCursor = $derived<CursorSelection | null>(
     connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
@@ -460,14 +460,21 @@
     if (seq !== null) setCursor(seq, 'line');
   }
 
-  function replayTurn(): void {
-    const turnStops = scrubber.stops;
-    if (!turnStops.length) return;
-    walkQueue = turnStops.map(stop => stop.seq);
-    selection = { seq: walkQueue[0], scope: 'stop' };
+  function startWalk(seqs: number[], auto: boolean): void {
+    walkQueue = seqs;
+    selection = { seq: seqs[0], scope: 'stop' };
     captionHovered = false;
     combatTableHovered = false;
-    walking = !prefersReducedMotion() && activePaceMs !== null;
+    combatRowSubjects = [];
+    walking = auto;
+  }
+
+  function replayTurn(): void {
+    if (!scrubber.stops.length) return;
+    startWalk(
+      scrubber.stops.map(stop => stop.seq),
+      !prefersReducedMotion() && activePaceMs !== null,
+    );
   }
 
   // Before the DOM updates: a frame that brings unread stops starts walking
@@ -498,11 +505,7 @@
             if (appended.length > 0) walkQueue = [...walkQueue, ...appended];
           }
         } else if (fresh.length > 0) {
-          walkQueue = fresh.map(stop => stop.seq);
-          selection = { seq: walkQueue[0], scope: 'stop' };
-          walking = true;
-          captionHovered = false;
-          combatTableHovered = false;
+          startWalk(fresh.map(stop => stop.seq), true);
         }
         shownSeq = Math.max(shownSeq, lastSeq);
       }
@@ -1049,26 +1052,17 @@
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
     }
-    // Space while looking back (or walking) only returns to now and never acts.
-    if (event.key === ' ' && !recording && cursor !== null) {
-      event.preventDefault();
-      returnToNow();
-      return;
-    }
-    // Never let Space re-activate a previously clicked history line or scrubber tick.
-    const inHistoryOrWalk = event.target instanceof HTMLElement && event.target.closest('.log, .walk-bar') !== null;
-    if (event.key === ' ' && inHistoryOrWalk) {
-      event.preventDefault();
-      if (drafting) { confirmDraft(); return; }
-      if (view.primary && live) { act(view.primary); }
-      return;
-    }
-    // An open card menu takes Space as a press of its focused item.
-    if (event.key === ' ' && menuAt) return;
-    if (event.key === ' ' && !ownsSpace(event.target) && drafting) { event.preventDefault(); confirmDraft(); return; }
-    if (event.key === ' ' && !ownsSpace(event.target) && view.primary && live) {
-      event.preventDefault();
-      act(view.primary);
+    if (event.key === ' ') {
+      // Space while looking back (or walking) only returns to now and never acts.
+      if (!recording && cursor !== null) { event.preventDefault(); returnToNow(); return; }
+      // An open card menu takes Space as a press of its focused item.
+      if (menuAt) return;
+      // Never let Space re-activate a previously clicked history line or scrubber tick.
+      const inHistoryOrWalk = event.target instanceof HTMLElement && event.target.closest('.log, .walk-bar') !== null;
+      if (inHistoryOrWalk) event.preventDefault();
+      if (!inHistoryOrWalk && ownsSpace(event.target)) return;
+      if (drafting) { event.preventDefault(); confirmDraft(); return; }
+      if (view.primary && live) { event.preventDefault(); act(view.primary); }
     }
   }
 

@@ -164,14 +164,24 @@ export function boardLines(
     }
   }
   // With default stops combat ends before the person's next decision, so a
-  // frame rarely holds a block; the block events since their last move keep
-  // it drawn, like the recap that says it, while both creatures remain.
-  for (const event of events) {
-    if (event.kind.kind !== 'blocked' || since === null || event.from_revision < since) continue;
-    const attacker = event.kind.attacker.entity;
-    for (const blocker of event.kind.blockers) {
-      if (onBoard.has(blocker.entity) && onBoard.has(attacker)) {
-        add({ from: { kind: 'object', id: blocker.entity }, to: { kind: 'object', id: attacker }, kind: 'block' });
+  // frame rarely holds a block; the block events from the current turn since
+  // the person's last move keep it drawn while both creatures remain.
+  if (since !== null) {
+    const recentBlocks: { blocker: number; attacker: number }[] = [];
+    for (const event of events) {
+      if (event.from_revision < since) continue;
+      if (event.kind.kind === 'turn_started') {
+        recentBlocks.length = 0;
+      } else if (event.kind.kind === 'blocked') {
+        const attacker = event.kind.attacker.entity;
+        for (const blocker of event.kind.blockers) {
+          recentBlocks.push({ blocker: blocker.entity, attacker });
+        }
+      }
+    }
+    for (const { blocker, attacker } of recentBlocks) {
+      if (onBoard.has(blocker) && onBoard.has(attacker)) {
+        add({ from: { kind: 'object', id: blocker }, to: { kind: 'object', id: attacker }, kind: 'block' });
       }
     }
   }
@@ -199,8 +209,13 @@ export function recentMarks(
     const kind = event.kind;
     switch (kind.kind) {
       case 'turn_started':
-        // Creature damage wears off at cleanup; never carry stale creature damage badges into the next turn.
+        // Board marks at now never cross a turn boundary: creature damage wears
+        // off at cleanup, and prior-turn life deltas, touched rings and
+        // resolved-spell target outlines must not read as current state.
         marks.damage.objects.clear();
+        marks.damage.players.clear();
+        marks.touched.clear();
+        casts.clear();
         break;
       case 'targeted':
         if (kind.target.kind === 'object') marks.touched.add(kind.target.id.entity);

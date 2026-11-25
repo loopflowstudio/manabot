@@ -99,8 +99,7 @@ class PresentationProjector:
             for index, line in enumerate(fact["lines"]):
                 kind = line["kind"]
                 name = kind["kind"]
-                # Multiple simultaneous discards, sacrifices or reveals share a
-                # line, but a new cause, board or intervening event starts a new one.
+                # Coalesce adjacent same-cause/same-board events of COALESCED_KINDS.
                 previous = events[-1] if events else None
                 if (
                     previous is not None

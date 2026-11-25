@@ -7,6 +7,7 @@
 import type { Observation, PermanentState, PresentationEvent, PresentationLabels } from '$lib/types';
 import { eventObjectName, playerSide, tellRule, type TellPlayers } from './tell';
 import { turnAt } from './history';
+import { possessive } from './view';
 
 /** Minimum number of participating creatures (attackers + blockers) required to show the table. */
 export const COMBAT_TABLE_MIN_CREATURES = 3;
@@ -25,13 +26,9 @@ export interface CombatRow {
   result: string;
   /** Entity ids involved in this exchange (hovering a row raises them on the board). */
   subjects: number[];
-  /** Representative event seq for this attacker's exchange. */
-  seq: number;
 }
 
 export interface CombatTable {
-  turn: number | null;
-  attackerSide: 'you' | 'opponent';
   heading: string;
   creatureCount: number;
   rows: CombatRow[];
@@ -53,13 +50,6 @@ function permanentPt(
   return null;
 }
 
-function formatName(
-  entity: number,
-  knownNames: ReadonlyMap<number, string>,
-): string {
-  return knownNames.get(entity) ?? 'Creature';
-}
-
 /**
  * Build a combat table when `activeSeqs` rests on a combat damage or combat
  * death stop involving at least `COMBAT_TABLE_MIN_CREATURES` creatures.
@@ -77,12 +67,8 @@ export function buildCombatTable(
 
   // Locate the latest event in `activeSeqs` to anchor the active combat window.
   let maxActiveIdx = -1;
-  let minActiveIdx = -1;
   for (let i = 0; i < events.length; i += 1) {
-    if (activeSeqs.has(events[i].seq)) {
-      if (minActiveIdx < 0) minActiveIdx = i;
-      maxActiveIdx = i;
-    }
+    if (activeSeqs.has(events[i].seq)) maxActiveIdx = i;
   }
   if (maxActiveIdx < 0) return null;
 
@@ -149,11 +135,10 @@ export function buildCombatTable(
 
   // Identify combat damage events (source is a combatant) and deaths caused by them.
   const combatDamageSeqs = new Set<number>();
-  const combatEventsInActive = { hit: false };
-  const dealtBySource = new Map<number, { targetName: string; targetEntity: number | null; amount: number; isPlayer: boolean }[]>();
+  let hasActiveCombatEvent = false;
+  const dealtBySource = new Map<number, { targetName: string; amount: number; isPlayer: boolean }[]>();
   const tookByTarget = new Map<number, number>();
   const diedRule = new Map<number, string>();
-  const firstSeqForAttacker = new Map<number, number>();
 
   for (let i = attackIdx + 1; i <= endIdx; i += 1) {
     const event = events[i];
@@ -162,34 +147,23 @@ export function buildCombatTable(
       const srcEntity = kind.source.id.entity;
       recordName(event, i, kind.source.id);
       combatDamageSeqs.add(event.seq);
-      if (activeSeqs.has(event.seq)) combatEventsInActive.hit = true;
+      if (activeSeqs.has(event.seq)) hasActiveCombatEvent = true;
 
+      const list = dealtBySource.get(srcEntity) ?? [];
       if (kind.target.kind === 'object') {
         const tgtEntity = kind.target.id.entity;
         recordName(event, i, kind.target.id);
-        const targetName = formatName(tgtEntity, knownNames);
-        const list = dealtBySource.get(srcEntity) ?? [];
-        list.push({ targetName, targetEntity: tgtEntity, amount: kind.amount, isPlayer: false });
-        dealtBySource.set(srcEntity, list);
+        list.push({ targetName: knownNames.get(tgtEntity) ?? 'Creature', amount: kind.amount, isPlayer: false });
         tookByTarget.set(tgtEntity, (tookByTarget.get(tgtEntity) ?? 0) + kind.amount);
-        if (attackerSet.has(srcEntity) && !firstSeqForAttacker.has(srcEntity)) {
-          firstSeqForAttacker.set(srcEntity, event.seq);
-        } else if (attackerSet.has(tgtEntity) && !firstSeqForAttacker.has(tgtEntity)) {
-          firstSeqForAttacker.set(tgtEntity, event.seq);
-        }
       } else if (kind.target.kind === 'player') {
-        const list = dealtBySource.get(srcEntity) ?? [];
-        list.push({ targetName: defenderName, targetEntity: null, amount: kind.amount, isPlayer: true });
-        dealtBySource.set(srcEntity, list);
-        if (attackerSet.has(srcEntity) && !firstSeqForAttacker.has(srcEntity)) {
-          firstSeqForAttacker.set(srcEntity, event.seq);
-        }
+        list.push({ targetName: defenderName, amount: kind.amount, isPlayer: true });
       }
+      dealtBySource.set(srcEntity, list);
     } else if (kind.kind === 'died') {
       const isCombatDeath = (event.cause !== undefined && combatDamageSeqs.has(event.cause))
         || (combatDamageSeqs.size > 0 && kind.objects.some(o => combatants.has(o.entity)));
       if (!isCombatDeath) continue;
-      if (activeSeqs.has(event.seq)) combatEventsInActive.hit = true;
+      if (activeSeqs.has(event.seq)) hasActiveCombatEvent = true;
       const ruleText = event.rule ? tellRule(event.rule) : 'died';
       for (const obj of kind.objects) {
         recordName(event, i, obj);
@@ -199,70 +173,52 @@ export function buildCombatTable(
   }
 
   // Only show the combat table on the combat damage / combat death stop(s).
-  if (!combatEventsInActive.hit) return null;
+  if (!hasActiveCombatEvent) return null;
 
   const projections = [priorProjection, projection];
+  const participant = (entity: number): CombatParticipant => ({
+    entity,
+    name: knownNames.get(entity) ?? 'Creature',
+    pt: permanentPt(entity, projections),
+  });
   const rows: CombatRow[] = attackers.map(att => {
     const entity = att.entity;
-    const name = formatName(entity, knownNames);
-    const attacker: CombatParticipant = {
-      entity,
-      name,
-      pt: permanentPt(entity, projections),
-    };
+    const attacker = participant(entity);
     const blockerEntities = blockersByAttacker.get(entity) ?? [];
-    const blockers: CombatParticipant[] = blockerEntities.map(bId => ({
-      entity: bId,
-      name: formatName(bId, knownNames),
-      pt: permanentPt(bId, projections),
-    }));
+    const blockers = blockerEntities.map(participant);
 
     const hits = dealtBySource.get(entity) ?? [];
-    const dealt = hits.length === 0
-      ? '0'
-      : hits.map(h => (h.isPlayer ? `${h.amount} to ${h.targetName}` : `${h.amount} to ${h.targetName}`)).join(', ');
-
+    const dealt = hits.length === 0 ? '0' : hits.map(h => `${h.amount} to ${h.targetName}`).join(', ');
     const tookAmount = tookByTarget.get(entity) ?? 0;
-    const took = String(tookAmount);
 
     const outcomes: string[] = [];
     const attDeath = diedRule.get(entity);
     if (attDeath) {
-      outcomes.push(attDeath === 'died' ? `${name} died` : `died · ${attDeath}`);
+      outcomes.push(attDeath === 'died' ? `${attacker.name} died` : `died · ${attDeath}`);
     }
     for (const blocker of blockers) {
-      const bDeath = diedRule.get(blocker.entity);
-      if (bDeath) {
-        outcomes.push(`${blocker.name} died`);
-      }
+      if (diedRule.has(blocker.entity)) outcomes.push(`${blocker.name} died`);
     }
     const playerDmg = hits.filter(h => h.isPlayer).reduce((sum, h) => sum + h.amount, 0);
-    if (playerDmg > 0) {
-      outcomes.push(`${defenderName} −${playerDmg}`);
-    }
-    if (outcomes.length === 0) {
-      outcomes.push(tookAmount > 0 ? 'survived' : '—');
-    }
+    if (playerDmg > 0) outcomes.push(`${defenderName} −${playerDmg}`);
+    if (outcomes.length === 0) outcomes.push(tookAmount > 0 ? 'survived' : '—');
 
     return {
       attacker,
       blockers,
       dealt,
-      took,
+      took: String(tookAmount),
       result: outcomes.join(' · '),
       subjects: [entity, ...blockerEntities],
-      seq: firstSeqForAttacker.get(entity) ?? attackEvent.seq,
     };
   });
 
   const turn = turnAt(events, attackEvent.seq);
   const attackerLabel = attackerSide === 'you'
-    ? (players.you === 'You' ? 'Your' : `${players.you}'s`)
-    : `${players.opponent}'s`;
+    ? (players.you === 'You' ? 'Your' : possessive(players.you))
+    : possessive(players.opponent);
 
   return {
-    turn,
-    attackerSide,
     heading: `${attackerLabel} attack${turn !== null ? ` · turn ${turn}` : ''} (${combatants.size} creatures)`,
     creatureCount: combatants.size,
     rows,

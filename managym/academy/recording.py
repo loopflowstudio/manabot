@@ -232,20 +232,22 @@ class Recording:
         self._boards: dict[int, dict[str, Any]] = {}
         self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
-    _MODERN_PRESENTATION_KINDS = frozenset(
+    # The 12 original pre-history presentation kinds; any other kind guarantees
+    # a recording carries modern track history (immune to drift as kinds grow).
+    _LEGACY_PRESENTATION_KINDS = frozenset(
         {
-            "passed",
-            "activated",
-            "triggered",
-            "ability_resolved",
-            "countered",
-            "counters",
-            "drew",
-            "searched",
-            "looked",
-            "sacrificed",
-            "lost",
-            "life",
+            "cast",
+            "targeted",
+            "resolved",
+            "damage",
+            "destroyed",
+            "died",
+            "attack_group",
+            "blocked",
+            "turn_started",
+            "land_played",
+            "discarded",
+            "revealed",
         }
     )
 
@@ -255,7 +257,7 @@ class Recording:
             event.labels is not None
             or event.cause is not None
             or event.rule is not None
-            or event.kind.kind in self._MODERN_PRESENTATION_KINDS
+            or event.kind.kind not in self._LEGACY_PRESENTATION_KINDS
             for events in self.tracks.values()
             for event in events
         )

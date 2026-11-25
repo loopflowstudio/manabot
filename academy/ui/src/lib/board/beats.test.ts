@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { Observation, PresentationEvent } from '$lib/types';
 import {
-  BEAT_MS,
   PACE_MS,
   computeStopDeltas,
   cursorView,
   hasWalkableTurn,
-  paceMs,
   scrubberStops,
   sharedLaterCount,
   unreadWalkStops,
@@ -100,7 +98,6 @@ describe('walk stops over kept boards', () => {
       // Ability resolved and drew share board 47..48, so they form one stop.
       { seq: 47, moveStart: false, caption: "Tiger-Seal's trigger resolved · Heuristic drew a card" },
     ]);
-    expect(stops[2].rules).toEqual(['lethal_damage']);
     expect(unreadWalkStops(stops, 40).map(s => s.seq)).toEqual([41, 44, 45, 46, 47]);
     expect(unreadWalkStops(stops, 48)).toEqual([]);
 
@@ -160,10 +157,7 @@ describe('walk stops over kept boards', () => {
     // A bare draw step alone after everything else was already shown does not walk.
     expect(unreadWalkStops(stops, 6)).toEqual([]);
     expect(hasWalkableTurn(stops)).toBe(true);
-    expect(BEAT_MS).toBe(1400);
     expect(PACE_MS).toEqual({ study: 1400, quick: 700, off: null });
-    expect(paceMs('quick')).toBe(700);
-    expect(paceMs('off')).toBeNull();
   });
 
   it('selects the cursor turn or the latest turn with a move for the scrubber', () => {

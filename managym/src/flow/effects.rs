@@ -56,26 +56,20 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
-        let pt_delta = if self.presentation.is_some() {
-            match modification {
-                Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
-                    Some((power, toughness))
-                }
-                _ => None,
+        let pt_delta = self.presentation.is_some().then_some(&modification).and_then(|m| match *m {
+            Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
+                Some((power, toughness))
             }
-        } else {
-            None
-        };
-        if let Some((power, toughness)) = pt_delta {
-            let affected: Vec<Affected> = affected.into_iter().collect();
-            let objects: Vec<ObjectId> = affected
-                .iter()
-                .filter_map(|item| match item {
-                    Affected::Object(object) => Some(*object),
-                    Affected::Player(_) => None,
-                })
-                .collect();
-            self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
+            _ => None,
+        });
+        let mut pt_objects = Vec::new();
+        self.push_effects(affected.into_iter().map(|affected| {
+            if pt_delta.is_some() {
+                if let Affected::Object(object) = affected {
+                    pt_objects.push(object);
+                }
+            }
+            ContinuousEffect {
                 timestamp,
                 source,
                 controller,
@@ -83,19 +77,11 @@ impl Game {
                 modification: modification.clone(),
                 duration,
                 source_object,
-            }));
-            self.presentation_pt_changed(&objects, power, toughness);
-            return;
-        }
-        self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
-            timestamp,
-            source,
-            controller,
-            affected,
-            modification: modification.clone(),
-            duration,
-            source_object,
+            }
         }));
+        if let Some((power, toughness)) = pt_delta {
+            self.presentation_pt_changed(&pt_objects, power, toughness);
+        }
     }
 
     /// Earthbend's animation (CR 702.182a): the object becomes a 0/0 creature

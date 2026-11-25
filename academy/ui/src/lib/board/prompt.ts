@@ -133,18 +133,13 @@ export function offerChoiceLabel(
   );
   if (peers.length <= 1) return base;
 
-  const yours = new Map(projection.agent.battlefield.map(p => [p.id, p]));
-  const theirs = new Map(projection.opponent.battlefield.map(p => [p.id, p]));
-  const lookup = (id: number): { perm: PermanentState; side: 'yours' | 'theirs' } | null => {
-    const own = yours.get(id);
-    if (own) return { perm: own, side: 'yours' };
-    const opp = theirs.get(id);
-    return opp ? { perm: opp, side: 'theirs' } : null;
-  };
-
+  const byId = new Map<number, { perm: PermanentState; side: 'yours' | 'theirs' }>([
+    ...projection.agent.battlefield.map(perm => [perm.id, { perm, side: 'yours' as const }] as const),
+    ...projection.opponent.battlefield.map(perm => [perm.id, { perm, side: 'theirs' as const }] as const),
+  ]);
   const infos = peers.map(peer => ({
     id: peer.offer.id,
-    info: peer.anchor.kind === 'object' ? lookup(peer.anchor.id) : null,
+    info: peer.anchor.kind === 'object' ? (byId.get(peer.anchor.id) ?? null) : null,
   }));
   const present = infos.flatMap(entry => (entry.info ? [entry.info] : []));
   // Only disambiguate battlefield permanents (not identical basic lands in hand).

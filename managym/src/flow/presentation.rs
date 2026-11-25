@@ -357,11 +357,11 @@ impl Game {
         if self.presentation.is_none() || objects.is_empty() {
             return;
         }
-        let lines = [PlayerId(0), PlayerId(1)].map(|_| self.destroyed_line(objects));
+        let line = self.destroyed_line(objects);
         self.presentation
             .as_deref_mut()
             .unwrap()
-            .push_caused(None, None, Note::Destroyed(objects.to_vec()), lines);
+            .push_caused(None, None, Note::Destroyed(objects.to_vec()), [line.clone(), line]);
     }
 
     /// Note a spell/ability P/T modification applied to battlefield permanents.

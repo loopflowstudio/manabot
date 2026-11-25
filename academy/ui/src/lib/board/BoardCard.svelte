@@ -27,6 +27,7 @@
    */
   import { artUrl, loadArt } from '$lib/card-art';
   import { cardFace, frameColors } from '$lib/card-faces.svelte';
+  import type { StopDelta } from './beats';
   import { labelText } from './inspect';
   import type { CardState, PermanentState } from '$lib/types';
   import { getContext } from 'svelte';
@@ -56,12 +57,12 @@
     side?: 'you' | 'opponent';
     /** It attacked, blocked, was dealt damage or was targeted since your last move. */
     touched?: boolean;
-    /** The opponent's move being read out is about this card. */
+    /** The active stop or history line is about this card. */
     beat?: boolean;
     /** Damage it was dealt since your last move, shown as it lands. */
     dealt?: number;
     /** Damage, counter or P/T changes at the active cursor stop ("−3", "+1/+1 · 2", "+1/+0"). */
-    stopDeltas?: readonly { kind: 'damage' | 'counters' | 'pump'; text: string }[];
+    stopDeltas?: readonly StopDelta[];
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
     /** What it has committed to the pending cost: "tapped to crew". */
@@ -424,12 +425,11 @@
   .stop-delta {
     font: 600 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
     padding: 0 5px; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised);
-    animation: delta-land var(--motion-move) var(--motion-move-ease);
+    animation: land var(--motion-move) var(--motion-move-ease);
   }
   .stop-delta.damage { color: var(--bg); background: var(--damage); }
   .stop-delta.counters, .stop-delta.pump { color: var(--bg); background: var(--gain); }
   @keyframes land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
-  @keyframes delta-land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);
     font-family: var(--font-sans); font-weight: 600; font-variant-numeric: tabular-nums;

@@ -110,7 +110,6 @@ describe('buildCombatTable', () => {
         took: '5',
         result: 'died · lethal damage',
         subjects: [10, 20],
-        seq: 4,
       },
       {
         attacker: { entity: 11, name: 'Wandering Musicians', pt: '2/5' },
@@ -119,7 +118,6 @@ describe('buildCombatTable', () => {
         took: '0',
         result: 'you −2',
         subjects: [11],
-        seq: 6,
       },
     ]);
   });

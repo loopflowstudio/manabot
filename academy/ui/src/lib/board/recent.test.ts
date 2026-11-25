@@ -57,33 +57,52 @@ describe('recentMarks', () => {
     expect([...marks.touched].sort((a, b) => a - b)).toEqual([93, 95, 98, 137]);
   });
 
-  it('clears creature damage badges after a turn boundary or once damage wears off, while keeping player damage', () => {
+  it('clears creature damage, life-plate deltas, touched rings, and resolved-spell target outlines across a turn boundary', () => {
     const base = bolt.recovery.presentation_tail[0];
     const damagedFrame = withBoard(bolt.recovery.frame, projection => {
-      projection.agent.battlefield = [permanent(60, 'Beetle-Headed Merchants', { controller_id: 0, damage: 2 })];
+      projection.agent.battlefield = [permanent(60, 'White Lotus Reinforcements', { controller_id: 0, damage: 2 })];
+      projection.opponent.battlefield = [permanent(61, 'Earth Kingdom Jailer', { controller_id: 1, damage: 0 })];
     });
     const healedFrame = withBoard(bolt.recovery.frame, projection => {
-      projection.agent.battlefield = [permanent(60, 'Beetle-Headed Merchants', { controller_id: 0, damage: 0 })];
+      projection.agent.battlefield = [permanent(60, 'White Lotus Reinforcements', { controller_id: 0, damage: 0 })];
+      projection.opponent.battlefield = [permanent(61, 'Earth Kingdom Jailer', { controller_id: 1, damage: 0 })];
     });
     const eventsSameTurn: PresentationEvent[] = [
-      { ...base, seq: 20, from_revision: 3, to_revision: 4,
-        kind: { kind: 'damage', source: null, target: { kind: 'object', id: { entity: 60, incarnation: 1 } }, amount: 2 } },
+      { ...base, seq: 18, from_revision: 3, to_revision: 4,
+        kind: { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 },
+        labels: { objects: { '44:1': 'Firebending Lesson' }, stacks: { '44': 'Firebending Lesson' } } },
+      { ...base, seq: 19, from_revision: 3, to_revision: 4, cause: 18,
+        kind: { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 60, incarnation: 1 } } } },
+      { ...base, seq: 20, from_revision: 3, to_revision: 4, cause: 18,
+        kind: { kind: 'damage', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 60, incarnation: 1 } }, amount: 2 } },
       { ...base, seq: 21, from_revision: 3, to_revision: 4,
-        kind: { kind: 'damage', source: null, target: { kind: 'player', id: 0 }, amount: 2 } },
+        kind: { kind: 'damage', source: null, target: { kind: 'player', id: 1 }, amount: 3 } },
+      { ...base, seq: 22, from_revision: 3, to_revision: 4,
+        kind: { kind: 'blocked', attacker: { entity: 61, incarnation: 1 }, blockers: [{ entity: 60, incarnation: 1 }] } },
     ];
-    // Same turn while damage is still on the creature: both creature and player badges appear.
+    // Same turn while damage is still on the creature: badges, touched rings, and lingering lines show.
     const sameTurn = recentMarks(damagedFrame, 3, eventsSameTurn, () => emptyLabels);
     expect(sameTurn.damage.objects.get(60)).toBe(2);
-    expect(sameTurn.damage.players.get(0)).toBe(2);
+    expect(sameTurn.damage.players.get(1)).toBe(3);
+    expect(sameTurn.touched.has(60)).toBe(true);
+    expect(sameTurn.resolved).toEqual([{ id: 44, name: 'Firebending Lesson' }]);
+    expect(boardLines(damagedFrame, eventsSameTurn, sameTurn.resolved, 3)).toHaveLength(2);
 
-    // After a new turn starts (cleanup wore damage off): creature damage badge clears, player damage stays.
+    // Same turn if damage is already gone on the board: creature damage badge is suppressed.
+    expect(recentMarks(healedFrame, 3, eventsSameTurn, () => emptyLabels).damage.objects.size).toBe(0);
+
+    // After a new turn starts: creature damage, life-plate delta, touched outline,
+    // resolved-spell target outline, and prior-turn block line all clear.
     const eventsNextTurn: PresentationEvent[] = [
       ...eventsSameTurn,
-      { ...base, seq: 22, from_revision: 4, to_revision: 5, kind: { kind: 'turn_started', player: 0, turn_number: 7 } },
+      { ...base, seq: 23, from_revision: 4, to_revision: 5, kind: { kind: 'turn_started', player: 0, turn_number: 7 } },
     ];
     const nextTurn = recentMarks(healedFrame, 3, eventsNextTurn, () => emptyLabels);
     expect(nextTurn.damage.objects.size).toBe(0);
-    expect(nextTurn.damage.players.get(0)).toBe(2);
+    expect(nextTurn.damage.players.size).toBe(0);
+    expect(nextTurn.touched.size).toBe(0);
+    expect(nextTurn.resolved).toEqual([]);
+    expect(boardLines(healedFrame, eventsNextTurn, nextTurn.resolved, 3)).toEqual([]);
   });
 });
 

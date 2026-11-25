@@ -674,10 +674,11 @@ The rail holds:
   historical stack). Hovering a card name inspects it and clicking a line seeks
   the board to it. The first three show; the rest open with **more**. A spell
   that already resolved keeps its card here, and its line to a target that is
-  still on the board, until your next move. Cards that attacked, blocked, were
-  targeted or were dealt damage are ringed on the board at now, and damage dealt
-  since your last move shows in the card's corner or on the player's plate as it
-  lands ("−2").
+  still on the board, until your next move or the turn ends. Cards that
+  attacked, blocked, were targeted or were dealt damage this turn are ringed on
+  the board at now, and damage dealt this turn shows in the card's corner (while
+  still marked on it) or on the player's plate ("−2"); transient board marks
+  clear when the turn ends.
 - **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
   Accumulate Wisdom"), and the buttons. For mana payments the hint below the
   prompt says how to pay. It stays steady as different previews appear.
@@ -958,7 +959,7 @@ When **Pass Turn (F6)** is available, activating it yields through priority
 windows, including checked stops and stack responses, until the turn ends or
 a non-priority decision needs you. With **Use priority stops** off, priority
 windows continue to appear. Automatic passes are marked **auto** in the
-history and recording. The opponent-move pace does not change these settings.
+history and recording. The move pace does not change these settings.
 
 ### Reading the history
 
@@ -987,10 +988,12 @@ what order and why.
 play a land, attack, block, pass) and sits at the left edge. Turn-based
 actions, state-based losses, and triggers with no recent cause also appear at
 the left edge, naming their rule or source instead of a player move. The lines
-indented under a line are what followed from it: damage, deaths, counters,
-triggers reaching the stack, abilities resolving or being countered, cards
-drawn, discarded, revealed or sacrificed, a library searched, a scry or
-surveil, life gained or lost other than by damage, a player losing. An
+indented under a line are what followed from it: damage, deaths, destruction,
+exile, token creation, power/toughness changes, control changes (and their
+cleanup return), counters, triggers reaching the stack, abilities resolving or
+being countered, cards drawn, discarded, revealed or sacrificed, a library
+searched, a scry or surveil, life gained or lost other than by damage, a player
+losing. An
 ability names its targets as a spell does. A fact about a card you may not
 see names it by role ("a card", "a permanent"). Tapping for mana is never a line.
 
@@ -1059,8 +1062,8 @@ you are looking at. Damage window totals and the result card wait until the
 cursor reaches now. The decision in the rail stays live throughout: pressing
 one of its buttons or a number key (`1`–`9`) returns to now and commits that
 choice. A click on an earlier board, or Space, only returns to now and never
-acts. History lines, scrubber ticks, ← →, caption hover and **Show their turn
-again** always respond directly. Reconnecting or reloading returns the cursor
+acts. History lines, scrubber ticks, ← →, caption hover and **Replay turn**
+always respond directly. Reconnecting or reloading returns the cursor
 to now and shows the actual pending decision; turns already told are not
 walked again.
 
@@ -1687,10 +1690,10 @@ scripted prefixes and do not count as human completions.
 ## Presentation runtime
 
 The presentation track is the one record of what happened in a game as one
-viewer may read it. The rail's history, the recap, the opponent-turn walk
-(caption and scrubber), board marks, game-over summary counts, the live
-decision strip count, and motion are all views of it; none of them is a source
-of game facts, and none can alter or delay the committed frame.
+viewer may read it. The rail's history, the recap, the move walk
+(caption, scrubber and large-combat table), board marks, game-over summary
+counts, the live decision strip count, and motion are all views of it; none of
+them is a source of game facts, and none can alter or delay the committed frame.
 
 ```json
 [

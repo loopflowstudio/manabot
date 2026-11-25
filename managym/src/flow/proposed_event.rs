@@ -905,7 +905,7 @@ impl Game {
                         to: ZoneType::Graveyard,
                         ..
                     },
-                ) => self.object_event_ref(*object_id),
+                ) if self.presentation.is_some() => self.object_event_ref(*object_id),
                 _ => None,
             };
             let known_hand_entry = match (&batch.binding, event) {

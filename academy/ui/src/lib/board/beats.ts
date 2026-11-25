@@ -1,15 +1,15 @@
 /**
- * The opponent's turn on the table, one kept board stop at a time.
+ * Moves on the table, one kept board stop at a time.
  *
- * The walk is the history's one cursor advancing on a timer (`BEAT_MS`) across
+ * The walk is the history's one cursor advancing on a timer (`PACE_MS`) across
  * unread board stops: lines that happened at once in the rules (sharing one
  * kept `StepBoard`) form one stop, passes are never a stop, and the caption
  * reads the stop's sentence(s) from `tell` (carried on `HistoryLine.sentence`).
  * Clicking a scrubber tick or selecting a history line moves that same cursor
  * and holds; reduced motion never auto-walks, while the scrubber, captions and
- * "Show their turn again" still work by hand.
+ * "Replay turn" still work by hand.
  */
-import type { Observation, PresentationEvent, PresentationRule } from '$lib/types';
+import type { Observation, PresentationEvent } from '$lib/types';
 import { findBoard, type StepBoard } from './boards';
 import {
   flattenHistory,
@@ -43,7 +43,7 @@ const EMPTY_CURSOR_VIEW: CursorView = {
 
 /**
  * Resolve what the board, rail and caption focus for `selection`.
- * `scope: 'stop'` (walk, scrubber tick, "Show their turn again") keeps every
+ * `scope: 'stop'` (walk, scrubber tick, "Replay turn") keeps every
  * line, subject, seq and caption phrase of the kept board stop intact even
  * when the walk is paused; `scope: 'line'` (clicking a history line, ← →, or
  * a Review sub-step) focuses that exact line.
@@ -151,12 +151,8 @@ export interface WalkStop {
   moveStart: boolean;
   /** Sentence caption for this stop's line(s), including any rule. */
   caption: string;
-  /** Rules named on lines in this stop. */
-  rules: PresentationRule[];
   /** Board objects raised while the cursor rests on this stop. */
   subjects: number[];
-  /** True when the opponent took an action or a non-draw-step event occurred on their turn. */
-  opponentAction: boolean;
   /** True when this stop belongs solely to the person's own move or draw step. */
   yoursOnly: boolean;
   /** True when every line in this stop is only a turn-based draw step. */
@@ -182,8 +178,7 @@ export function walkStops(
     const isOpponentMove = line.actor === 'opponent' || parent?.actor === 'opponent';
     const isYouMove = line.actor === 'you' || parent?.actor === 'you';
     const isDrawStep = line.rule === 'draw_step';
-    const opponentAction = isOpponentMove || (!isYouMove && ownerSide === 'opponent' && !isDrawStep);
-    const yoursOnly = isYouMove || (!opponentAction && ownerSide === 'you' && isDrawStep);
+    const yoursOnly = isYouMove || (!isOpponentMove && ownerSide === 'you' && isDrawStep);
     const prev = stops.at(-1);
     if (prev && boardKey !== null && prev.boardKey === boardKey && prev.turn === turn) {
       for (const s of line.seqs) {
@@ -194,11 +189,9 @@ export function walkStops(
       if (line.sentence && !prev.caption.includes(line.sentence)) {
         prev.caption = prev.caption ? `${prev.caption} · ${line.sentence}` : line.sentence;
       }
-      if (line.rule && !prev.rules.includes(line.rule)) prev.rules.push(line.rule);
       for (const subject of line.subjects) {
         if (!prev.subjects.includes(subject)) prev.subjects.push(subject);
       }
-      prev.opponentAction = prev.opponentAction || opponentAction;
       prev.yoursOnly = prev.yoursOnly && yoursOnly;
       prev.drawStepOnly = prev.drawStepOnly && isDrawStep;
       continue;
@@ -210,9 +203,7 @@ export function walkStops(
       turn,
       moveStart: line.isMove,
       caption: line.sentence,
-      rules: line.rule ? [line.rule] : [],
       subjects: [...new Set(line.subjects)],
-      opponentAction,
       yoursOnly,
       drawStepOnly: isDrawStep,
       boardKey,
@@ -293,9 +284,6 @@ export const PACE_MS: Record<WalkPace, number | null> = {
   off: null,
 };
 
-/** Default duration each stop stays while walking, in milliseconds (Study pace). */
-export const BEAT_MS = PACE_MS.study!;
-
 const PACE_STORAGE_KEY = 'academy.table.pace';
 
 export function loadWalkPace(): WalkPace {
@@ -310,8 +298,4 @@ export function saveWalkPace(pace: WalkPace): void {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(PACE_STORAGE_KEY, pace);
   } catch { /* Preference persistence is best-effort. */ }
-}
-
-export function paceMs(pace: WalkPace): number | null {
-  return PACE_MS[pace];
 }
