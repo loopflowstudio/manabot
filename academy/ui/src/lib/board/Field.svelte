@@ -168,12 +168,12 @@
   .death-ghost.delayed { animation: ghost-in var(--motion-move) ease-out; }
   @keyframes ghost-in { from { opacity: 0; } to { opacity: 1; } }
   .death-ghost-name {
-    font: 600 12px/15px var(--font-serif); color: var(--text);
+    font: 600 12px/16px var(--font-serif); color: var(--text);
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
   }
   .death-ghost-rule {
     align-self: flex-start; padding: 1px 5px; border-radius: var(--radius-sm);
-    font: 600 11px/14px var(--font-sans); color: var(--bg); background: var(--damage);
+    font: 600 12px/16px var(--font-sans); color: var(--bg); background: var(--damage);
     max-width: 100%; overflow-wrap: anywhere;
   }
   @media (prefers-reduced-motion: reduce) {

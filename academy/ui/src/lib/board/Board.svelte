@@ -1557,9 +1557,9 @@
     padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--bg-field);
   }
   .combat-table-scroll { overflow-y: auto; padding: 4px 12px 8px; }
-  .combat-table-sheet table { width: 100%; border-collapse: collapse; font: 13px/18px var(--font-sans); }
+  .combat-table-sheet table { width: 100%; border-collapse: collapse; font: 14px/20px var(--font-sans); }
   .combat-table-sheet th {
-    text-align: left; font-weight: 600; font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+    text-align: left; font: 600 12px/16px var(--font-sans);
     color: var(--text-tertiary); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border);
   }
   .combat-table-sheet td { padding: 4px 8px 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); vertical-align: top; color: var(--text); }
@@ -1590,7 +1590,7 @@
   .walk-btn:hover, .walk-btn:focus-visible { color: var(--text); background: var(--bg-field); }
   .walk-pace { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
   .pace-btn {
-    min-height: 0; padding: 1px 6px; font: 500 11px/16px var(--font-sans); color: var(--text-secondary); background: none; border: 0; cursor: pointer;
+    min-height: 0; padding: 1px 6px; font: 500 12px/16px var(--font-sans); color: var(--text-secondary); background: none; border: 0; cursor: pointer;
   }
   .pace-btn + .pace-btn { border-left: 1px solid var(--border); }
   .pace-btn:hover, .pace-btn:focus-visible { color: var(--text); background: var(--bg-field); }

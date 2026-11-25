@@ -17,6 +17,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   a walk caption offline. Giant Spider (2/4) against Hill Giant + Lightning Bolt
   (`--opponent search --sims 8 --seed 7`) gives surviving damaged creatures,
   turn-boundary damage and 3–5-creature combats within 19 turns.
+  Gray Ogre + Lightning Bolt against Vengeful Bloodwitch + Lightning Bolt
+  (same opponent, `--seed 11`) gives signed +1/−1 plate deltas on trigger
+  stops and a "did not resolve · illegal targets" fizzle within 14 turns.
+  Under reduced motion nothing walks automatically, by design.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
