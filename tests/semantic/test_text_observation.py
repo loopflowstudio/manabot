@@ -278,11 +278,12 @@ def test_simple_choice_mana_taps_follow_native_description_in_text() -> None:
     )
     _choose(env, "Cast ")
     payment = capture_text_decision(env)
-    dual = next(
-        a for a in payment.actions if "Tap Kyoshi Village for {G}/{W}" in a.description
-    )
-    assert "Activate ability" not in dual.description
-    assert "Native description:" not in dual.description
+    # The dual reads exactly like the basics beside it.
+    assert [a.description for a in payment.actions[:2]] == [
+        "Tap for mana P1 (Kyoshi Village). Native description: "
+        "Tap Kyoshi Village for {G}/{W}",
+        "Tap for mana P2 (Plains). Native description: Tap Plains for {W}",
+    ]
 
     any_color_env = priority_root(
         ("Youthful Knight",),
@@ -294,8 +295,7 @@ def test_simple_choice_mana_taps_follow_native_description_in_text() -> None:
         for a in capture_text_decision(any_color_env).actions
         if "Tap Hermitic Herbalist for any color" in a.description
     )
-    assert "Activate ability" not in herbalist.description
-    assert "Native description:" not in herbalist.description
+    assert herbalist.description.startswith("Tap for mana P1 (Hermitic Herbalist). ")
 
 
 def test_x_cost_definition_renders_its_x() -> None:

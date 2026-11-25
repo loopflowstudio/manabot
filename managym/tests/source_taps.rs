@@ -713,6 +713,29 @@ fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
     pay_cost(&mut dual_choice);
     assert!(untapped(&dual_choice).contains(&"Forest".into()));
 
+    // A second Kyoshi Village tap completes Ward {2} beside the first one's
+    // floating mana: either color is spent whole, so no {G}/{W} modal.
+    let (mut second_dual, _) = cast_at_ward(&["Kyoshi Village", "Kyoshi Village", "Plains"], false);
+    for _ in 0..2 {
+        let dual = payment_labels(&second_dual)
+            .iter()
+            .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+            .unwrap();
+        second_dual.step(dual).unwrap();
+    }
+    assert_eq!(
+        second_dual.action_space().unwrap().actions,
+        [Action::PayCost { player }, Action::Decline { player }]
+    );
+    pay_cost(&mut second_dual);
+    assert_eq!(
+        untapped(&second_dual)
+            .into_iter()
+            .filter(|name| name != "Waterfall Aerialist")
+            .collect::<Vec<_>>(),
+        ["Plains"]
+    );
+
     // Non-simple mana abilities (Treasure) remain offered alongside PayCost/Decline.
     let (with_treasure, treasure) = cast_at_ward(&["Plains", "Plains"], true);
     let treasure = treasure.unwrap();

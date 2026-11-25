@@ -287,7 +287,15 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   played this turn are interchangeable with earlier copies; creatures,
   non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
   Mid-payment color choices are MODAL frames with
-  `decision_context.stage == "mana_color"`.
+  `decision_context.stage == "mana_color"`. The table's client Auto-tap
+  (`[data-testid=auto-tap-toggle]`, on by default) submits "Pay the cost" at
+  every mandatory payment, so the browser never shows a native payment stop
+  and Moves reads `Auto-tapped {1}{W} for <spell>`; click the toggle until it
+  reads "Manual tap" before checking stops. A payment's taps fold into its
+  "Cast …" move. Ward payments come from a real `GameSession` with
+  `villain_type: "random"`, `{"Island": 22, "Waterfall Aerialist": 18}` and a
+  Mountain/Kyoshi Village/Plains/Lightning Bolt hero (seeds 3, 5, 7 reach
+  Bolt → Ward {2} stops at `stage == "resolution_payment"`).
   `14 Gruul Guildgate / 6 Mountain / 6 Forest / 14 Gray Ogre` (seed 11) reaches
   Guildgate + Forest + Mountain (exact {2}{R}, no stop) and then two Guildgates
   + Forest + Mountain (stop, color modal, second stop). Rebuild the static SPA

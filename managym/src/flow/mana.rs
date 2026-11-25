@@ -2888,6 +2888,19 @@ impl Game {
             {
                 return false;
             }
+            // A resolution payment spends its pool only when it is paid. A
+            // pool that now covers the cost exactly is spent whole, whichever
+            // color this mode added beside mana already floating.
+            if matches!(enclosing, Enclosing::Resolution(_))
+                && next_pool.can_pay(cost)
+                && next_pool.spendable_units(cost) == next_pool.total()
+            {
+                if !remainders.contains(&ManaCost::default()) {
+                    remainders.push(ManaCost::default());
+                }
+                next_pools.push(next_pool);
+                continue;
+            }
             let units = ManaPool::from(output.clone());
             let mut left = next_pool.clone();
             let mut rest = cost.clone();
@@ -2910,7 +2923,9 @@ impl Game {
                             )
                         })
                         .filter(|candidate| {
-                            left.other_than(&unit).spendable_units(&rest.less(candidate)) == 0
+                            left.other_than(&unit)
+                                .spendable_units(&rest.less(candidate))
+                                == 0
                         }),
                 };
                 let Some(next) = next else {
@@ -3437,10 +3452,7 @@ impl Game {
             vec![Obligation::mana(cost.clone())],
             SourcePolicy::FixedOnly,
         );
-        let can_pay = fixed_payable
-            || self
-                .choice_tap_witness(player, cost, model, pool)
-                .is_some();
+        let can_pay = fixed_payable || self.choice_tap_witness(player, cost, model, pool).is_some();
         (fixed_payable, can_pay)
     }
 

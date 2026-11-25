@@ -10,9 +10,13 @@
   payments too (`Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`), moving
   decision counts across games. Assumed wanted from steer `5d5904ae` (b) to
   keep one rule for basics and duals.
-- **LLM text** (`manabot/semantic/text_observation.py:658`) still says
-  `"Activate ability of <Name>"`; left alone as frozen prompt wording. Should
-  it follow native `action.description`?
+- **LLM text (QA after Pass 5, reversible):** Pass 5 rendered simple choice
+  taps as `"Tap Kyoshi Village for {G}/{W} (P1); ability 2"` while basics at the
+  same stop read `"Tap for mana P2 (Plains). Native description: Tap Plains for
+  {W}"`. QA gave choice taps the basics' shape, `"Tap for mana P1 (Kyoshi
+  Village). Native description: Tap Kyoshi Village for {G}/{W}"`, so both read
+  alike without rewording basics or convoke taps. `REPRESENTATION_VERSION`
+  stays `manabot-text-10`; should this wording change bump it?
 - **Non-simple mana abilities** (pain lands, Treasure, filter lands, tap-N)
   keep `"Activate ability: <Name>"` and their modal so extra costs/effects stay
   clearly distinct from free mana taps. Should they get a `"for mana"` hint?
