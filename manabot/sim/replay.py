@@ -15,7 +15,6 @@ from manabot.env.env import Env
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
@@ -37,7 +36,7 @@ from managym.replay import (
     ReplayAgreement,
     matches_retained_error,
     replay_failure_inputs,
-    require_replay_runtime as require_record_runtime,
+    require_replay_runtime,
     run_bounded_replay,
     walk,
 )
@@ -559,7 +558,7 @@ def main() -> None:
     game = games[args.game - 1]
     try:
         if "record" in game:
-            require_record_runtime(
+            require_replay_runtime(
                 GameRecord.model_validate(game["record"]).identities,
                 allow_changed_runtime=args.allow_changed_runtime,
                 require_source=True,

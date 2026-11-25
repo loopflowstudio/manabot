@@ -16,10 +16,9 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import CaptureScope, capture_scope, runtime_identities
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
@@ -67,39 +66,6 @@ def _bounded(path: Path) -> dict[str, Any]:
     assert path.read_bytes() == before
     assert path.stat().st_mode & 0o777 == 0o600
     return json.loads(result.stdout)
-
-
-@pytest.mark.parametrize("field", ["world", "engine_extension_sha256", "source_sha256"])
-@pytest.mark.parametrize("allow_changed_runtime", [False, True])
-def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> None:
-    identities = {**runtime_identities(), field: "changed"}
-    if field == "world" or not allow_changed_runtime:
-        with pytest.raises(ValueError, match="differs|bytes differ"):
-            require_replay_runtime(
-                identities,
-                allow_changed_runtime=allow_changed_runtime,
-                require_source=True,
-            )
-    else:
-        assert (
-            require_replay_runtime(
-                identities, allow_changed_runtime=True, require_source=True
-            )
-            == runtime_identities()["engine_extension_sha256"]
-        )
-
-
-def test_replay_requires_source_only_for_automatic_records() -> None:
-    identities = runtime_identities().copy()
-    del identities["source_sha256"]
-    assert (
-        require_replay_runtime(identities, allow_changed_runtime=False)
-        == identities["engine_extension_sha256"]
-    )
-    with pytest.raises(KeyError, match="source_sha256"):
-        require_replay_runtime(
-            identities, allow_changed_runtime=False, require_source=True
-        )
 
 
 def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:

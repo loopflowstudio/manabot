@@ -10,16 +10,13 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from functools import cache
 import hashlib
 import json
 from pathlib import Path
-import platform
 from typing import Any, Literal
 from uuid import uuid4
 import warnings
 
-import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.infra.log import getLogger
@@ -203,27 +200,6 @@ def capture_scope(scope: CaptureScope) -> Iterator[None]:
             scope._diagnostics.close()
             scope._diagnostics = None
         _scope.reset(token)
-
-
-@cache
-def runtime_identities() -> dict[str, object]:
-    """Bind source/native bytes once, when this process first constructs a capture."""
-    root = Path(__file__).resolve().parents[2]
-    sources = hashlib.sha256()
-    for directory, suffix in (
-        (root / "manabot", "*.py"),
-        (root / "managym" / "src", "*.rs"),
-    ):
-        for path in sorted(directory.rglob(suffix)):
-            sources.update(str(path.relative_to(root)).encode())
-            sources.update(path.read_bytes())
-    extension = Path(managym._managym.__file__)
-    return {
-        "python": platform.python_version(),
-        "numpy": np.__version__,
-        "source_sha256": sources.hexdigest(),
-        "engine_extension_sha256": hashlib.sha256(extension.read_bytes()).hexdigest(),
-    }
 
 
 class _TrainingCapture:

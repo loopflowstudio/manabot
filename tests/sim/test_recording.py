@@ -23,7 +23,7 @@ from managym.recording import GameInputs
 @pytest.fixture(scope="module")
 def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Retained receipt reader fixture; ordinary collectors no longer write these."""
-    from manabot.env.failures import NativeTrainingGame, runtime_identities
+    from manabot.env.failures import NativeTrainingGame
     import managym
 
     directory = tmp_path_factory.mktemp("retained-exposure")
@@ -52,7 +52,7 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
                 }
             ),
             skip_trivial=True,
-            identities=runtime_identities(),
+            identities=capture.identities,
             context={"players": ["learner", "learner"]},
             seconds=1,
         )
