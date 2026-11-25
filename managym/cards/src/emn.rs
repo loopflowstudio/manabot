@@ -8,7 +8,7 @@ use managym_state::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, StaticAbility, StaticScope,
     },
-    effect::Modification,
+    effect::{EffectDuration, Modification},
     mana::{Colors, Mana, ManaCost},
     predicate::CardPredicate,
     zone::ZoneType,
@@ -17,9 +17,42 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         cemetery_recruitment(),
+        harmless_offering(),
         imprisoned_in_the_moon(),
         mirrorwing_dragon(),
     ]
+}
+
+fn harmless_offering() -> CardDefinition {
+    let permanent = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::default(),
+    };
+    CardDefinition {
+        key: "emn.harmless_offering",
+        scryfall_id: "f8f3cc4f-7943-4025-b332-b40653b13014",
+        printed: PrintedCharacteristics {
+            name: "Harmless Offering".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Opponent),
+                    effects: vec![],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(permanent.clone()),
+                    effects: vec![Effect::GainControl {
+                        player: PlayerSelector::TargetClause(0),
+                        what: ObjectSelector::Target(permanent),
+                        duration: EffectDuration::Indefinite,
+                    }],
+                },
+            ],
+            text_box: "Target opponent gains control of target permanent you control.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn mirrorwing_dragon() -> CardDefinition {

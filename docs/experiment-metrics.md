@@ -342,7 +342,7 @@ Read these alongside off-turn casting to see when a checkpoint holds mana.
 Compare declaration rates with **Chump attacks** and **Chump blocks**. Those
 curves count declared creatures that died in combat while their opposing
 combatant survived (for attackers, all their blockers survived). The denominator
-includes forced blocks and excludes lone blocks cleared by menace. A block
+includes forced blocks and excludes blocks forbidden by menace. A block
 that prevents lethal damage can count. **Turns per game** gives the game
 length behind these rates. See the [measurement definitions](evaluation.md#custom-statistics-for-every-evaluation-game)
 for mana availability, combat deaths and replay coverage.

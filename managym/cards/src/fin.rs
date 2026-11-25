@@ -260,7 +260,10 @@ fn esper_origins() -> CardDefinition {
                 Effect::Surveil { count: 2 },
                 Effect::gain_life(2),
                 Effect::If {
-                    condition: Condition::CastFromGraveyard,
+                    condition: Condition::CastFrom {
+                        zone: Some(ZoneType::Graveyard),
+                        owner: None,
+                    },
                     then: Effect::exile_and_return_transformed(
                         Some(PlayerSelector::Owner),
                         Some(CounterKind::Finality),

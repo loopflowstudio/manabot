@@ -232,7 +232,8 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     history = managym.observation_layout(policy_history=True)
     assert raw["agent_cards"]["columns"]["valid"]["index"] == 55
     assert raw["facts"]["shape"] == [None, 12]
-    assert set(raw["facts"]["row_kinds"]) == set(range(1, 17)) - {6}
+    assert set(raw["facts"]["row_kinds"]) == set(range(1, 18)) - {6}
+    assert raw["facts"]["row_kind_names"]["keyword"] == 17
     assert raw["effect_details"]["shape"] == [4096, 3]
     assert set(raw["relations"]["row_kinds"]) == set(range(1, 12))
     assert raw["name_candidates"]["columns"]["group_last"]["index"] == 3

@@ -37,7 +37,11 @@ impl Game {
         modification: Modification,
         duration: EffectDuration,
     ) {
+        let changes_control = modification == Modification::Control;
         self.record_continuous(source, None, controller, affected, modification, duration);
+        if changes_control {
+            self.refresh_control();
+        }
     }
 
     /// [`Game::apply_continuous`], naming the exact source object a
@@ -55,15 +59,30 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
-        self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
-            timestamp,
-            source,
-            controller,
-            affected,
-            modification: modification.clone(),
-            duration,
-            source_object,
+        let phasing_out = modification == Modification::PhasedOut;
+        let mut phased_out = Vec::new();
+        self.push_effects(affected.into_iter().map(|affected| {
+            if phasing_out {
+                if let Affected::Object(object) = affected {
+                    phased_out.push(object);
+                }
+            }
+            ContinuousEffect {
+                timestamp,
+                source,
+                controller,
+                affected,
+                modification: modification.clone(),
+                duration,
+                source_object,
+            }
         }));
+        // CR 506.4, 702.26b: a phased-out permanent leaves combat.
+        for object in phased_out {
+            if let Ok(id) = self.lookup_current_permanent(object) {
+                self.remove_permanent_from_combat(id);
+            }
+        }
     }
 
     /// Earthbend's animation (CR 702.182a): the object becomes a 0/0 creature
@@ -178,19 +197,9 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::CantActivateAbilities)
     }
 
-    /// "All creatures able to block [it] this turn do so."
-    pub fn must_be_blocked_by_all_able(&self, permanent_id: PermanentId) -> bool {
-        self.permanent_has_modification(permanent_id, &Modification::MustBeBlockedByAllAble)
-    }
-
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
-    }
-
-    /// "If it would leave the battlefield, exile it instead" (unearth).
-    pub fn exiled_if_it_would_leave(&self, permanent_id: PermanentId) -> bool {
-        self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldLeave)
     }
 
     /// The modes the permanent's "choose one that hasn't been chosen"
@@ -251,10 +260,11 @@ impl Game {
             .any(|effect| effect.modification == Modification::LifeTotalCantChange)
     }
 
-    /// Whether `player` has protection from everything (CR 702.16j).
-    pub fn has_protection_from_everything(&self, player: PlayerId) -> bool {
+    /// Player rules granted by records and by effective battlefield abilities.
+    pub fn player_has(&self, player: PlayerId, modification: &Modification) -> bool {
         self.player_effects(player)
-            .any(|effect| effect.modification == Modification::ProtectionFromEverything)
+            .any(|effect| &effect.modification == modification)
+            || self.layer_board().player_modifications[player.0].contains(modification)
     }
 
     /// The most life `player` can pay: none other than 0 while their life
@@ -352,6 +362,7 @@ impl Game {
             effect.modification == Modification::PhasedOut
                 && matches!(effect.affected, Affected::Object(object) if phasing_in.contains(&object))
         });
+        self.refresh_control();
     }
 
     /// `player`'s turn begins: their "until your next turn" records end.
@@ -390,29 +401,6 @@ impl Game {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
-        // A control change that ends hands its object back (CR 613.1b).
-        let returned: Vec<_> = self
-            .state
-            .effects
-            .iter()
-            .filter(|effect| ends(effect))
-            .filter_map(|effect| match (effect.affected, &effect.modification) {
-                (Affected::Object(object), Modification::ControlChanged { previous }) => {
-                    Some((object, effect.controller, *previous))
-                }
-                _ => None,
-            })
-            .collect();
         self.state.effects.retain(|effect| !ends(effect));
-        for (object, holder, previous) in returned {
-            if let Ok(id) = self.lookup_current_permanent(object) {
-                if self.state.permanents[id]
-                    .as_ref()
-                    .is_some_and(|permanent| permanent.controller == holder)
-                {
-                    self.change_control(id, previous);
-                }
-            }
-        }
     }
 }
