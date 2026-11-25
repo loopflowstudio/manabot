@@ -1236,7 +1236,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
         .into(),
         [0, 1, 0, 0, 0, 0],
     );
-    pool.add_combat(&Mana::parse("R"));
+    pool.add(&Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat));
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(Vec::new()),
@@ -1251,7 +1251,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
 fn funded_final_payment_needs_no_unit_search() {
     let model = forests(1);
     let mut pool = Mana::parse("U");
-    pool.add_combat(&Mana::parse("R"));
+    pool.add(&Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat));
     pool.add(&Mana::of_class(
         SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),

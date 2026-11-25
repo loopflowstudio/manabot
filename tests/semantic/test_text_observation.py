@@ -2842,38 +2842,17 @@ def test_retarget_and_keep_permanents_surface_in_text_and_academy() -> None:
 
 
 def test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy() -> None:
-    env = priority_root(
-        (),
-        ("Savage Ventmaw",),
-        opponent=(),
-    )
-    while not env.is_game_over():
-        obs = env.observation_for_player(0)
-        if obs.agent.pooled_mana_classes:
-            break
-        actions = env.observation_for_player(
-            env.current_agent_index()
-        ).action_space.actions
-        attack = next(
-            (
-                i
-                for i, a in enumerate(actions)
-                if "Attack with Savage Ventmaw" in (a.description or "")
+    env = priority_root((), ("Savage Ventmaw",), opponent=())
+    while not env.is_game_over() and not env.observation_for_player(0).agent.pooled_mana_classes:
+        decision = capture_text_decision(env)
+        action = next(
+            (a for a in decision.actions if "Attack with Savage Ventmaw" in a.description),
+            next(
+                (a for a in decision.actions if "Pass" in a.description or "Decline" in a.description),
+                decision.actions[0],
             ),
-            None,
         )
-        if attack is not None:
-            env.step(attack)
-            continue
-        step_index = next(
-            (
-                i
-                for i, a in enumerate(actions)
-                if "Pass" in (a.description or "") or "Decline" in (a.description or "")
-            ),
-            0,
-        )
-        env.step(step_index)
+        submit_response(env, decision, action.reference)
     decision = capture_text_decision(env)
     assert "Of the mana above: R 3, G 3; expires at end of turn." in decision.text
     view = decision_surface_view(env, 0)

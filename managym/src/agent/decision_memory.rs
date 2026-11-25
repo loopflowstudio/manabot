@@ -1633,74 +1633,60 @@ mod tests {
             .find(|(_, row)| row.owner == PlayerId(0))
             .unwrap()
             .0;
-        let root_scope = NameScope {
-            start: 0,
-            end: creature_type_names().len(),
-        };
-        assert!(!root_scope.is_leaf());
         let target_row = creature_type_names()
             .iter()
             .position(|&name| name == "Goblin")
             .unwrap();
-        let group_mode = (0..root_scope.option_count())
-            .find(|&i| matches!(root_scope.option(i), Some(NameOption::Group(g)) if target_row >= g.start && target_row < g.end))
-            .unwrap();
-        let Some(NameOption::Group(leaf_scope)) = root_scope.option(group_mode) else {
-            unreachable!()
-        };
-        let space_for = |scope: NameScope| ActionSpace {
-            player: Some(PlayerId(0)),
-            kind: ActionSpaceKind::Modal,
-            actions: (0..scope.option_count())
-                .map(|mode| Action::ChooseMode {
+        let set_scope = |game: &mut Game, scope: NameScope| {
+            *game.state.suspended_decision_mut() = Some(SuspendedResolution {
+                frame: EffectFrame::new(PlayerId(0), Vec::new()),
+                decision: Decision::ChooseEntryValue {
                     player: PlayerId(0),
-                    mode,
-                })
-                .collect(),
-            focus: Vec::new(),
-        };
-        *game.state.suspended_decision_mut() = Some(SuspendedResolution {
-            frame: EffectFrame::new(PlayerId(0), Vec::new()),
-            decision: Decision::ChooseEntryValue {
-                player: PlayerId(0),
-                question: EntryQuestion {
-                    object,
-                    kind: EntryChoiceKind::CreatureType,
+                    question: EntryQuestion {
+                        object,
+                        kind: EntryChoiceKind::CreatureType,
+                    },
+                    scope,
                 },
-                scope: root_scope,
-            },
-        });
-        let root_space = space_for(root_scope);
-        assert!(
-            capture(&game, &root_space, &root_space.actions[group_mode]).is_none(),
-            "non-leaf group clicks must not emit a decision-memory record"
-        );
+            });
+            ActionSpace {
+                player: Some(PlayerId(0)),
+                kind: ActionSpaceKind::Modal,
+                actions: (0..scope.option_count())
+                    .map(|mode| Action::ChooseMode {
+                        player: PlayerId(0),
+                        mode,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }
+        };
 
-        let mut scope = leaf_scope;
+        let mut scope = NameScope {
+            start: 0,
+            end: creature_type_names().len(),
+        };
+        assert!(!scope.is_leaf());
         while !scope.is_leaf() {
-            let next = (0..scope.option_count())
-                .find(|&i| matches!(scope.option(i), Some(NameOption::Group(g)) if target_row >= g.start && target_row < g.end))
+            let space = set_scope(&mut game, scope);
+            let (group_mode, child) = (0..scope.option_count())
+                .find_map(|i| match scope.option(i) {
+                    Some(NameOption::Group(g)) if (g.start..g.end).contains(&target_row) => {
+                        Some((i, g))
+                    }
+                    _ => None,
+                })
                 .unwrap();
-            let Some(NameOption::Group(sub)) = scope.option(next) else {
-                unreachable!()
-            };
-            scope = sub;
+            assert!(
+                capture(&game, &space, &space.actions[group_mode]).is_none(),
+                "non-leaf group clicks must not emit a decision-memory record"
+            );
+            scope = child;
         }
         let leaf_mode = (0..scope.option_count())
             .find(|&i| scope.option(i) == Some(NameOption::Name(target_row)))
             .unwrap();
-        *game.state.suspended_decision_mut() = Some(SuspendedResolution {
-            frame: EffectFrame::new(PlayerId(0), Vec::new()),
-            decision: Decision::ChooseEntryValue {
-                player: PlayerId(0),
-                question: EntryQuestion {
-                    object,
-                    kind: EntryChoiceKind::CreatureType,
-                },
-                scope,
-            },
-        });
-        let leaf_space = space_for(scope);
+        let leaf_space = set_scope(&mut game, scope);
         let captured = capture(&game, &leaf_space, &leaf_space.actions[leaf_mode])
             .expect("leaf entry choice is recorded");
         assert_eq!(captured.record.choice.kind.as_deref(), Some("ChooseMode"));

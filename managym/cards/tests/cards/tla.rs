@@ -5124,10 +5124,8 @@ fn fire_nation_palace_grants_firebending_four_to_one_creature() {
     }
     assert_eq!(s.current_step(), StepKind::DeclareAttackers);
     let pool = &s.game().state.players[0].mana_pool;
-    let combat_class = managym::state::mana::ManaClass {
-        expiry: managym::state::mana::ManaExpiry::EndOfCombat,
-        ..Default::default()
-    };
+    let combat_class =
+        managym::state::mana::ManaClass::from(managym::state::mana::ManaExpiry::EndOfCombat);
     assert_eq!(pool.class_of(&combat_class)[Color::Red as usize], 4);
     assert_eq!(combat_red(&s), 4);
 }
@@ -6410,10 +6408,8 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
 
     declare_attackers(&mut s, &[ozai]);
     settle(&mut s);
-    let combat_class = managym::state::mana::ManaClass {
-        expiry: managym::state::mana::ManaExpiry::EndOfCombat,
-        ..Default::default()
-    };
+    let combat_class =
+        managym::state::mana::ManaClass::from(managym::state::mana::ManaExpiry::EndOfCombat);
     assert_eq!(
         s.game().state.players[0].mana_pool.class_of(&combat_class),
         [0, 0, 0, 4, 0, 0]
@@ -14183,10 +14179,9 @@ fn firebender_ascension_counts_attack_triggers_and_copies_them_at_four() {
     assert_eq!(
         s.game().state.players[0]
             .mana_pool
-            .class_of(&managym::state::mana::ManaClass {
-                expiry: managym::state::mana::ManaExpiry::EndOfCombat,
-                ..Default::default()
-            })[Color::Red as usize],
+            .class_of(&managym::state::mana::ManaClass::from(
+                managym::state::mana::ManaExpiry::EndOfCombat
+            ),)[Color::Red as usize],
         2,
         "firebending and its copy"
     );
@@ -15548,10 +15543,9 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
     assert_eq!(
         s.game().state.players[0]
             .mana_pool
-            .class_of(&managym::state::mana::ManaClass {
-                expiry: managym::state::mana::ManaExpiry::EndOfCombat,
-                ..Default::default()
-            })[3],
+            .class_of(&managym::state::mana::ManaClass::from(
+                managym::state::mana::ManaExpiry::EndOfCombat
+            ),)[3],
         2,
         "Azula's firebending 2, from Koh"
     );

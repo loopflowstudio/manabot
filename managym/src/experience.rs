@@ -532,14 +532,6 @@ pub struct SideboardCardView {
     pub name: String,
 }
 
-fn default_mana_expiry() -> String {
-    "step".into()
-}
-
-fn is_step_mana_expiry(expiry: &str) -> bool {
-    expiry.is_empty() || expiry == "step"
-}
-
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PooledManaView {
@@ -550,8 +542,8 @@ pub struct PooledManaView {
     pub restriction: Option<String>,
     pub combat: bool,
     #[serde(
-        default = "default_mana_expiry",
-        skip_serializing_if = "is_step_mana_expiry"
+        default = "crate::agent::observation::default_mana_expiry",
+        skip_serializing_if = "crate::agent::observation::is_step_mana_expiry"
     )]
     pub expiry: String,
 }

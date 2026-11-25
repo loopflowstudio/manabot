@@ -3268,8 +3268,8 @@ impl Game {
         let spent = pool.spend(unit, &cost.purpose);
         if !combat_unit {
             let remaining_non_combat = pool.total() - pool.expiry_total(ManaExpiry::EndOfCombat);
-            if let Some(exposure) = self.card_capture.as_mut().and_then(|c| c.exposure.as_mut()) {
-                exposure.mana[player.0].remove(unit.total(), remaining_non_combat, false);
+            if let Some(capture) = self.mana_capture(player) {
+                capture.remove(unit.total(), remaining_non_combat, false);
             }
         }
         spent
@@ -3428,9 +3428,10 @@ impl Game {
     /// CR 106.4 — pools empty as each step/phase ends, respecting classes
     /// whose expiry lasts until end of combat (firebending) or end of turn.
     pub(crate) fn clear_mana_pools(&mut self, step: StepKind) {
+        let combat_expires = matches!(step, StepKind::EndOfCombat | StepKind::Cleanup);
         let expires = |expiry: ManaExpiry| match expiry {
             ManaExpiry::Step => true,
-            ManaExpiry::EndOfCombat => matches!(step, StepKind::EndOfCombat | StepKind::Cleanup),
+            ManaExpiry::EndOfCombat => combat_expires,
             ManaExpiry::EndOfTurn => step == StepKind::Cleanup,
         };
         for player in [PlayerId(0), PlayerId(1)] {
@@ -3438,8 +3439,15 @@ impl Game {
                 continue;
             }
             let pool = std::mem::take(self.state.mana_pool_mut(player));
+            // Separate combat-expiring mana only when combat actually ends,
+            // keeping `combat_expired` accounting distinct without rebuilding
+            // the pool twice on ordinary steps.
             let (rest, combat_expiring) =
-                pool.split_expiring(|expiry| expiry == ManaExpiry::EndOfCombat && expires(expiry));
+                if combat_expires && pool.expiry_total(ManaExpiry::EndOfCombat) > 0 {
+                    pool.split_expiring(|expiry| expiry == ManaExpiry::EndOfCombat)
+                } else {
+                    (pool, ManaPool::default())
+                };
             let (mut surviving, regular_expiring) = rest.split_expiring(expires);
             let regular_before = regular_expiring.total();
             if regular_before > 0 {

@@ -1998,15 +1998,18 @@ impl Game {
             } => {
                 let count = self.effect_value(amount, frame).max(0);
                 let origin = frame.source().map(|source| self.mana_origin(source));
+                let combat_mana;
                 let added = if *until_end_of_combat {
-                    mana.clone()
-                        .with_expiry(crate::state::mana::ManaExpiry::EndOfCombat)
+                    combat_mana = mana
+                        .clone()
+                        .with_expiry(crate::state::mana::ManaExpiry::EndOfCombat);
+                    &combat_mana
                 } else {
-                    mana.clone()
+                    mana
                 };
                 let pool = self.state.mana_pool_mut(frame.controller);
                 for _ in 0..count {
-                    pool.add(&added, origin);
+                    pool.add(added, origin);
                 }
                 if *until_end_of_combat {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Fire);

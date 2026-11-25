@@ -145,11 +145,11 @@ pub struct RestrictedManaData {
     pub mana: [i32; 6],
 }
 
-fn default_mana_expiry() -> String {
+pub(crate) fn default_mana_expiry() -> String {
     crate::state::mana::ManaExpiry::Step.as_str().into()
 }
 
-fn is_step_mana_expiry(expiry: &str) -> bool {
+pub(crate) fn is_step_mana_expiry(expiry: &str) -> bool {
     expiry.is_empty() || expiry == crate::state::mana::ManaExpiry::Step.as_str()
 }
 

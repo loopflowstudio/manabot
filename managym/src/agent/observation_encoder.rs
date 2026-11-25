@@ -1729,7 +1729,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
 }
 
 /// The id of an `EffectProgram` on a player that states pooled mana with a
-/// spend effect or combat expiry (`PooledManaClassData::program`).
+/// spend effect or non-step expiry (`PooledManaClassData::program`).
 pub const POOLED_MANA: &str = "PooledMana";
 
 /// The id of an effect program that states a permanent's ward price when
