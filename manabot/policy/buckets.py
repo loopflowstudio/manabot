@@ -15,7 +15,7 @@ from manabot.infra.config import ModelConfig
 
 MIN_BUCKET = 8
 
-# Fixed column order of retained rollout extents, including absent legacy axes.
+# Fixed column order of retained rollout extents.
 AXES = (
     "facts",
     "effects",
@@ -61,13 +61,13 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     """(axis, start, rows) of each object segment after the two player rows.
 
     The object table is players, agent cards, opponent cards, agent
-    permanents, opponent permanents, then (input v11) the stack, each segment
-    at its declared capacity.
+    permanents, opponent permanents, then the stack, each segment at its
+    declared capacity.
     """
     segments: list[tuple[str, int, int]] = []
     start = 2
     for axis in ("cards", "cards", "permanents", "permanents", "stack"):
-        rows = capacities.get(axis, 0)
+        rows = capacities[axis]
         segments.append((axis, start, rows))
         start += rows
     return segments

@@ -139,11 +139,11 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         .is_empty());
 
     // The policy input encodes group spans at ordinary capacity.
-    let v9 = ObservationEncoderConfig {
+    let config = ObservationEncoderConfig {
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };
-    let encoded = InputRows::read(&obs, &v9).unwrap();
+    let encoded = InputRows::read(&obs, &config).unwrap();
     assert_eq!(encoded.count("name_candidates"), groups.len());
     for (row, [first, last]) in groups.iter().enumerate() {
         assert_eq!(
@@ -176,7 +176,7 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
                     leaf_obs.action_space.actions[offer].description.as_deref(),
                     Some(format!("Name {}", names.get(index).unwrap().name).as_str())
                 );
-                let leaf_encoded = InputRows::read(&leaf_obs, &v9).unwrap();
+                let leaf_encoded = InputRows::read(&leaf_obs, &config).unwrap();
                 assert_eq!(
                     leaf_encoded.row("name_candidates", offer)[0],
                     (index + 1) as f32

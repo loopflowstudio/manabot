@@ -148,13 +148,14 @@ _EVENT_STATUS = columns("events", "source_status", "target_status")
 SEATS = ("agent", "opponent")
 
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
-# The two seats' object rows in gather order. V11 appends the stack.
+# All visible object rows in gather order: seats' players, cards, permanents, then stack.
 OBJECT_KEYS = (
     "agent_player",
     "opponent_player",
     "agent_cards",
     "opponent_cards",
     *_PERMANENT_KEYS,
+    "stack",
 )
 OBJECT_VALIDITY_KEYS = tuple(f"{key}_valid" for key in OBJECT_KEYS)
 
@@ -659,6 +660,10 @@ class Prepared[A]:
     deck_rows: A  # [B,2,R]
     deck_counts: A  # [B,2,R,4] already / 60
     permanent_rows: A  # [B,2,P]
+    stack: A  # [B,S,numeric]
+    stack_rows: A  # [B,S]
+    stack_targets: A  # [B*S] flat object index
+    stack_mask: A  # [B,S] float
     link_targets: tuple[A, ...]  # per link column [B*2P] flat object index
     link_masks: tuple[A, ...]  # [B,2P] float
     facts: FactRoutes[A]
@@ -704,11 +709,6 @@ class Prepared[A]:
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
     bucket_needs: np.ndarray | None = field(default=None, metadata={"host_only": True})
-    # Input v11 appends one shared stack segment before optional belief rows.
-    stack: A | None = None
-    stack_rows: A | None = None
-    stack_targets: A | None = None
-    stack_mask: A | None = None
     packed_attention: PackedAttention[A] | None = None
 
 
@@ -785,7 +785,7 @@ def prepare(
     fact_valid = fact_span.mask(stop)
     fact_rows = fact_span.integers[:, : layout.widths["facts"]]
     validity_rows = [
-        obs.tables[key].mask(obs.capacities[key]) for key in (*OBJECT_KEYS, "stack")
+        obs.tables[key].mask(obs.capacities[key]) for key in OBJECT_KEYS
     ]
     if belief is not None:
         validity_rows.extend(
@@ -800,7 +800,7 @@ def prepare(
         else:
             start = 0
             segments = []
-            for key in (*OBJECT_KEYS, "stack"):
+            for key in OBJECT_KEYS:
                 segments.append(
                     start + np.arange(obs.tables[key].counts.max(initial=0))
                 )
@@ -919,9 +919,8 @@ def prepare(
         else:
             # An object's padded index is its packed index plus the number
             # of unused slots in all preceding (batch, segment) groups.
-            keys = (*OBJECT_KEYS, "stack")
-            counts = np.column_stack([obs.tables[key].counts for key in keys])
-            capacities = np.array([obs.capacities[key] for key in keys])
+            counts = np.column_stack([obs.tables[key].counts for key in OBJECT_KEYS])
+            capacities = np.array([obs.capacities[key] for key in OBJECT_KEYS])
             if value_token:
                 counts = np.column_stack((counts, np.ones(batch, dtype=np.int64)))
                 capacities = np.append(capacities, 1)

@@ -888,7 +888,7 @@ class MLXActorCritic(nn.Module):
         def defs(rows: np.ndarray) -> mx.array:
             return _take(definitions, mx.array(rows))
 
-        # Objects: players, cards, permanents and optional v11 stack rows.
+        # Objects: players, cards, permanents and stack rows.
         card_programs = defs(batch.card_rows)
         agent_player = self._stream(
             "player", self.player_embedding(self._floating(batch.agent_player))
@@ -948,12 +948,9 @@ class MLXActorCritic(nn.Module):
             opponent_cards,
             permanents[:, 0],
             permanents[:, 1],
-        ]
-        assert batch.stack is not None and batch.stack_rows is not None
-        parts.append(
             self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
-            + defs(batch.stack_rows)
-        )
+            + defs(batch.stack_rows),
+        ]
         if (belief := batch.belief) is not None:
             rows = (
                 self.belief_card_embedding(mx.array(belief.cards))
@@ -1236,8 +1233,6 @@ class MLXActorCritic(nn.Module):
         self, batch: Prepared[np.ndarray], objects: mx.array
     ) -> mx.array:
         """`ActorCritic._join_stack_sources`: add source embeddings to v11 stack rows."""
-        assert batch.stack is not None
-        assert batch.stack_targets is not None and batch.stack_mask is not None
         b, total, hidden = objects.shape
         start = 2 + 2 * batch.agent_cards.shape[1] + 2 * batch.permanents.shape[2]
         count = batch.stack.shape[1]

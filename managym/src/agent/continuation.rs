@@ -1179,42 +1179,15 @@ pub fn decision_code(decision: &Decision) -> u8 {
     }
 }
 
-/// Write directly into the caller's reusable tensor. References use the same
-/// padded object table as action focus; absent/expired links encode as zero.
-pub fn encode_into(
-    frames: &[ContinuationFrame],
-    viewer: usize,
-    objects: &std::collections::HashMap<i32, i32>,
-    out: &mut [f32],
-) -> Result<usize, super::observation_encoder::ObservationEncodeError> {
-    if out.len() != RELATION_ROWS * RELATION_DIM {
-        return Err(ObservationEncodeError::InvalidLength {
-            field: "relations",
-            expected: RELATION_ROWS * RELATION_DIM,
-            actual: out.len(),
-        });
-    }
-    out.fill(0.0);
-    let mut rows = out.as_chunks_mut::<RELATION_DIM>().0.iter_mut();
-    relation_rows(frames, viewer, objects, |row| {
-        let dst = rows.next().unwrap();
-        for (dst, n) in dst.iter_mut().zip(row) {
-            *dst = *n as f32;
-        }
-        Ok(())
-    })
-}
-
 pub(super) fn write_rows(
     frames: &[ContinuationFrame],
     viewer: usize,
     objects: &std::collections::HashMap<i32, i32>,
-    width: usize,
     out: &mut impl RowWriter,
 ) -> Result<usize, ObservationEncodeError> {
     let mut slot = 0;
     relation_rows(frames, viewer, objects, |row| {
-        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer)[..width])?;
+        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer))?;
         slot += 1;
         Ok(())
     })
@@ -1674,9 +1647,9 @@ mod tests {
     #[test]
     fn relation_capacity_rejects_instead_of_truncating() {
         let frames = vec![ContinuationFrame::default(); RELATION_ROWS + 1];
-        let mut out = vec![0.0; RELATION_ROWS * RELATION_DIM];
+        let mut out = super::super::observation_rows::InputRows::default();
         assert!(matches!(
-            encode_into(&frames, 0, &HashMap::new(), &mut out),
+            write_rows(&frames, 0, &HashMap::new(), &mut out),
             Err(super::super::observation_encoder::ObservationEncodeError::Capacity { .. })
         ));
     }
@@ -1708,19 +1681,20 @@ mod tests {
             ],
             ..ContinuationFrame::default()
         }];
-        let mut left = vec![0.0; RELATION_ROWS * RELATION_DIM];
-        encode_into(&frames, 0, &HashMap::new(), &mut left).unwrap();
+        let mut left = super::super::observation_rows::InputRows::default();
+        write_rows(&frames, 0, &HashMap::new(), &mut left).unwrap();
         frames[0].targets.reverse();
-        let mut right = left.clone();
-        encode_into(&frames, 0, &HashMap::new(), &mut right).unwrap();
-        assert_ne!(left, right);
-        assert_eq!(&left[12..19], &[0., 1., 0., 0., 0., 0., 3.]);
-        assert_eq!(left[19], 1.);
+        let mut right = super::super::observation_rows::InputRows::default();
+        write_rows(&frames, 0, &HashMap::new(), &mut right).unwrap();
+        assert_ne!(left.rows("relations"), right.rows("relations"));
         assert_eq!(
-            &left[3 * RELATION_DIM + 26..3 * RELATION_DIM + 28],
-            &[1., 3.]
+            &left.row("relations", 0)[12..19],
+            &[0., 1., 0., 0., 0., 0., 3.]
         );
-        encode_into(&[], 0, &HashMap::new(), &mut right).unwrap();
-        assert!(right.iter().all(|value| *value == 0.));
+        assert_eq!(left.row("relations", 0)[19], 1.);
+        assert_eq!(&left.row("relations", 3)[26..28], &[1., 3.]);
+        let mut empty = super::super::observation_rows::InputRows::default();
+        write_rows(&[], 0, &HashMap::new(), &mut empty).unwrap();
+        assert_eq!(empty.count("relations"), 0);
     }
 }

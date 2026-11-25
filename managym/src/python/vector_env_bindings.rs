@@ -783,7 +783,7 @@ impl PyVectorEnv {
         });
         drop(borrowed);
         let writes = writer.into_inner().unwrap();
-        if result.is_ok() {
+        if result.is_ok() && !writes.slots.is_empty() {
             let batch = Py::new(
                 py,
                 observation_batch::freeze(
@@ -828,6 +828,38 @@ impl PyRolloutPool {
             config: ObservationEncoderConfig::default(),
             packed_layout: None,
         }
+    }
+
+    fn run_active_batch(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(
+                &mut RolloutPool,
+                &mut dyn FnMut(usize, &Observation) -> Result<(), AgentError>,
+            ) -> Result<Vec<usize>, AgentError>
+            + Send,
+    ) -> PyResult<(Vec<usize>, ObservationBatch)> {
+        let layout = self
+            .packed_layout
+            .as_ref()
+            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
+            .clone_ref(py);
+        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
+        let config = self.config;
+        let inner = &mut self.inner;
+        let mut encode_err = None;
+        let active = py
+            .allow_threads(|| {
+                run(inner, &mut |_, obs| {
+                    rows.append(obs, &config).map_err(|error| {
+                        encode_err = Some(error);
+                        AgentError(String::new())
+                    })
+                })
+            })
+            .map_err(|err| encode_err.map_or_else(|| map_agent_err(err), map_encode_err))?;
+        let count = active.len();
+        Ok((active, observation_batch::freeze(py, layout, rows, count)))
     }
 }
 
@@ -883,33 +915,7 @@ impl PyRolloutPool {
 
     /// Encode observations for every active slot into one immutable v11 batch.
     fn encode_active_batch(&mut self, py: Python<'_>) -> PyResult<(Vec<usize>, ObservationBatch)> {
-        let layout = self
-            .packed_layout
-            .as_ref()
-            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
-            .clone_ref(py);
-        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
-        let config = self.config;
-        let inner = &mut self.inner;
-        let mut encode_err = None;
-        let active = py
-            .allow_threads(|| {
-                inner.encode_active_into(|_, obs| {
-                    rows.append(obs, &config).map_err(|error| {
-                        encode_err = Some(error);
-                        AgentError(String::new())
-                    })
-                })
-            })
-            .map_err(|err| {
-                if let Some(encode_err) = encode_err {
-                    map_encode_err(encode_err)
-                } else {
-                    map_agent_err(err)
-                }
-            })?;
-        let count = active.len();
-        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+        self.run_active_batch(py, |inner, write| inner.encode_active_into(write))
     }
 
     /// Step every active slot and return the still-active indices with one v11 batch.
@@ -918,33 +924,7 @@ impl PyRolloutPool {
         py: Python<'_>,
         actions: Vec<i64>,
     ) -> PyResult<(Vec<usize>, ObservationBatch)> {
-        let layout = self
-            .packed_layout
-            .as_ref()
-            .ok_or_else(|| PyValueError::new_err("no registered observation layout"))?
-            .clone_ref(py);
-        let mut rows = PackedRows::new(&layout.borrow(py).arrays);
-        let config = self.config;
-        let inner = &mut self.inner;
-        let mut encode_err = None;
-        let active = py
-            .allow_threads(|| {
-                inner.step_active_into(&actions, |_, obs| {
-                    rows.append(obs, &config).map_err(|error| {
-                        encode_err = Some(error);
-                        AgentError(String::new())
-                    })
-                })
-            })
-            .map_err(|err| {
-                if let Some(encode_err) = encode_err {
-                    map_encode_err(encode_err)
-                } else {
-                    map_agent_err(err)
-                }
-            })?;
-        let count = active.len();
-        Ok((active, observation_batch::freeze(py, layout, rows, count)))
+        self.run_active_batch(py, |inner, write| inner.step_active_into(&actions, write))
     }
 
     /// Finish all still-active slots with engine-side random play to

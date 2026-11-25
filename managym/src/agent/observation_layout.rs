@@ -1142,18 +1142,11 @@ pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{
-        observation::KEYWORD_COUNT,
-        observation_encoder::{ObservationEncoderConfig, FACT_DIM},
-    };
+    use crate::agent::{observation::KEYWORD_COUNT, observation_encoder::FACT_DIM};
 
     #[test]
     fn named_layout_matches_every_encoder_width() {
         for policy_history in [false, true] {
-            let config = ObservationEncoderConfig {
-                policy_history,
-                ..Default::default()
-            };
             let layout = observation_layout(policy_history);
             for array in layout.values() {
                 assert_eq!(array.axes.len(), array.shape.len());
@@ -1167,16 +1160,20 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", config.player_dim(), 75),
+                ("agent_player", player::WIDTH, 75),
                 ("agent_cards", card::WIDTH, 56),
-                ("agent_permanents", config.permanent_dim(), 57),
-                ("actions", config.action_dim(), 30),
+                ("agent_permanents", permanent::WIDTH, 57),
+                ("actions", action::WIDTH, 30),
                 (
                     "events",
-                    config.event_dim(),
+                    if policy_history {
+                        history::WIDTH
+                    } else {
+                        event::WIDTH
+                    },
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", config.relation_dim(), 50),
+                ("relations", super::super::continuation::RELATION_DIM, 50),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1190,20 +1187,8 @@ mod tests {
             }
             assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
             assert_eq!(stack::WIDTH, 47);
-            assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
             assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
-            assert_eq!(
-                config.cards_len(),
-                config.max_cards_per_player * layout["agent_cards"].columns.len()
-            );
-            assert_eq!(
-                config.player_turn_state_len(),
-                2 * layout["player_turn_state"].columns.len()
-            );
-            assert_eq!(
-                config.relations_len(),
-                super::super::continuation::RELATION_ROWS * config.relation_dim()
-            );
+            assert_eq!(layout["player_turn_state"].columns.len(), turn_state::WIDTH);
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
             assert_eq!(

@@ -78,7 +78,7 @@ def kept_object_slots(space: ObservationSpace, spans: ObservationSpans) -> np.nd
     """Original coordinates in compact order, directly from each segment's width."""
     parts = []
     start = 0
-    for key in (*OBJECT_KEYS, "stack"):
+    for key in OBJECT_KEYS:
         parts.append(start + np.arange(spans.capacities[key]))
         start += space.shapes[key][0]
     return np.concatenate(parts)
@@ -289,9 +289,7 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
         spans, tables, belief=belief, attention="live_tokens", value_token=True
     )
     assert batch.belief is belief
-    visible_objects = sum(
-        space.shapes[key][0] for key in (*OBJECT_VALIDITY_KEYS, "stack_valid")
-    )
+    visible_objects = sum(space.shapes[key][0] for key in OBJECT_VALIDITY_KEYS)
     assert batch.validity.shape[1] == visible_objects + 3
     np.testing.assert_array_equal(
         batch.validity[:, -3:], [[0, 1, 1], [0, 0, 1], [0, 1, 1]]

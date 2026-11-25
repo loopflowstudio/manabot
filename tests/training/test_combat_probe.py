@@ -50,7 +50,6 @@ def scoring_policy(space: ObservationSpace, board_aware: bool) -> Mock:
     """Declare with gap 3, optionally adding my power minus their untapped power."""
 
     columns = combat_columns(space)
-    assert columns is not None
 
     readings = dict(fresh_readings(space))
     for key in ("agent_permanents", "opponent_permanents"):
@@ -102,7 +101,6 @@ def test_played_combat_distinguishes_lock_from_board_dependence(
 ) -> None:
     batch, space = rollout
     columns = combat_columns(space)
-    assert columns is not None
     blind = combat_probe(scoring_policy(space, False), batch, limit=16)
     aware = combat_probe(scoring_policy(space, True), batch, limit=16)
     for kind, column in (
@@ -133,7 +131,6 @@ def test_no_combat_omits_metrics(
     batch, space = rollout
     packed = batch.action_data
     cols = combat_columns(space)
-    assert cols is not None
     # Two-offer decisions that are neither an attack nor a block declaration.
     two = np.flatnonzero(np.diff(packed.offsets) == 2)
     kinds = packed.action_columns(
@@ -155,7 +152,6 @@ def test_prepared_edits_match_reencoding_with_saved_readings(
 ) -> None:
     batch, space = rollout
     cols = combat_columns(space)
-    assert cols is not None
     indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 4)
     rows = batch.observations(indexes).observation
     model = ActorCritic(

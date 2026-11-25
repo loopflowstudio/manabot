@@ -1,5 +1,6 @@
-//! Encode one acting view in checkpoint object coordinates. The row writer
-//! selects dense compatibility buffers or immutable typed CSR records.
+//! Encode one acting view in checkpoint object coordinates.
+//! Writes live rows through a `RowWriter` (`PackedRows` for policies,
+//! `InputRows` for engine tests).
 
 use super::observation_layout::{
     action, card, decklist, event, fact, name, permanent, player, relation, stack, turn_state,
@@ -195,110 +196,6 @@ impl Default for ObservationEncoderConfig {
     }
 }
 
-impl ObservationEncoderConfig {
-    /// Two seats, each with a definition and position per retained fact.
-    pub fn known_library_len(&self) -> usize {
-        4 * crate::state::knowledge::KNOWN_LIBRARY_ROWS
-    }
-
-    /// Candidate rows share the action axis, but never consume object capacity.
-    pub fn name_candidates_len(&self) -> usize {
-        NAME_DIM * self.max_actions
-    }
-
-    pub fn relations_len(&self) -> usize {
-        super::continuation::RELATION_ROWS * self.relation_dim()
-    }
-
-    pub fn relation_dim(&self) -> usize {
-        super::continuation::RELATION_DIM
-    }
-
-    /// Two seats of decklist rows.
-    pub fn decklists_len(&self) -> usize {
-        2 * self.max_cards_per_player * DECKLIST_DIM
-    }
-
-    pub fn effects_len(&self) -> usize {
-        super::shared_effects::EFFECT_ROWS * super::shared_effects::EFFECT_DIM
-    }
-
-    pub fn effect_details_len(&self) -> usize {
-        super::shared_effects::DETAIL_ROWS * super::shared_effects::DETAIL_DIM
-    }
-
-    pub fn effect_members_len(&self) -> usize {
-        super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
-    }
-
-    /// Columns in one seat's turn state row.
-    pub fn turn_state_dim(&self) -> usize {
-        turn_state::WIDTH
-    }
-
-    /// Turn state, with the viewer first.
-    pub fn player_turn_state_len(&self) -> usize {
-        2 * self.turn_state_dim()
-    }
-
-    /// Turn-state flags aligned with each seat’s card rows.
-    pub fn card_turn_state_len(&self) -> usize {
-        2 * self.max_cards_per_player
-    }
-
-    pub fn facts_len(&self) -> usize {
-        self.max_facts * FACT_DIM
-    }
-
-    pub fn cards_len(&self) -> usize {
-        self.max_cards_per_player * CARD_DIM
-    }
-
-    pub fn player_dim(&self) -> usize {
-        player::WIDTH
-    }
-
-    pub fn permanent_dim(&self) -> usize {
-        PERMANENT_DIM
-    }
-
-    pub fn permanents_len(&self) -> usize {
-        self.max_permanents_per_player * self.permanent_dim()
-    }
-
-    pub fn stack_rows(&self) -> usize {
-        self.max_stack_objects
-    }
-
-    pub fn stack_len(&self) -> usize {
-        self.stack_rows() * STACK_DIM
-    }
-
-    pub fn action_dim(&self) -> usize {
-        action::WIDTH
-    }
-
-    pub fn actions_len(&self) -> usize {
-        self.max_actions * self.action_dim()
-    }
-
-    pub fn action_focus_len(&self) -> usize {
-        self.max_actions * self.max_focus_objects
-    }
-
-    pub fn event_dim(&self) -> usize {
-        if self.policy_history {
-            super::policy_history::HISTORY_DIM
-        } else {
-            EVENT_DIM
-        }
-    }
-
-    pub fn events_len(&self) -> usize {
-        self.max_events * self.event_dim()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
     InvalidShared(&'static str),
@@ -306,11 +203,6 @@ pub enum ObservationEncodeError {
     Capacity {
         field: &'static str,
         capacity: usize,
-        actual: usize,
-    },
-    InvalidLength {
-        field: &'static str,
-        expected: usize,
         actual: usize,
     },
     /// State the policy input has no columns or rows for; encoding it would
@@ -339,14 +231,6 @@ impl fmt::Display for ObservationEncodeError {
             } => write!(
                 f,
                 "observation capacity exceeded: {field} {actual} > {capacity}"
-            ),
-            Self::InvalidLength {
-                field,
-                expected,
-                actual,
-            } => write!(
-                f,
-                "invalid length for {field}: expected {expected}, got {actual}"
             ),
         }
     }
@@ -386,7 +270,7 @@ pub fn encode_rows(
             obs.opponent_permanents.len(),
             config.max_permanents_per_player,
         ),
-        ("stack", obs.stack_objects.len(), config.stack_rows()),
+        ("stack", obs.stack_objects.len(), config.max_stack_objects),
         (
             "actions",
             policy_action_count(
@@ -498,7 +382,7 @@ pub fn encode_rows(
         .saturating_add(config.max_permanents_per_player)
         .saturating_mul(2)
         .saturating_add(2)
-        .saturating_add(config.stack_rows());
+        .saturating_add(config.max_stack_objects);
     check_capacity("object coordinates", object_capacity, i32::MAX as usize)?;
     let mut objects = HashMap::with_capacity(
         2 + obs.agent_cards.len()
@@ -672,18 +556,11 @@ pub fn encode_rows(
         out.write(Table::Stack, 0, slot, &row)?;
     }
     encode_facts(obs, &objects, &ranks, config.max_facts, out)?;
-    super::shared_effects::encode(
-        obs,
-        &objects,
-        &ranks,
-        config.effect_details_len() / super::shared_effects::DETAIL_DIM,
-        out,
-    )?;
+    super::shared_effects::encode(obs, &objects, &ranks, out)?;
     let continuation_rows = super::continuation::write_rows(
         &obs.continuation,
         obs.agent.player_index as usize,
         &objects,
-        config.relation_dim(),
         out,
     )?;
 
@@ -1597,7 +1474,6 @@ fn encode_actions(
         .enumerate()
     {
         let mut row = [Cell::ZERO; ACTION_DIM];
-        let row = &mut row[..config.action_dim()];
         let action_type_index = action.action_type as usize;
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = Integer(1);
@@ -1627,31 +1503,18 @@ fn encode_actions(
                 .map_or(0, |index| index as i64 + 1),
         );
         row[action::VALID] = Integer(1);
-        if let Some(column) = row.get_mut(action::PAYS_DIRECTLY) {
-            *column = flag(action.pays_directly);
+        row[action::PAYS_DIRECTLY] = flag(action.pays_directly);
+        if let (true, Some(x)) = (action.announces_x, action.mode_index) {
+            row[action::HAS_X] = Integer(1);
+            row[action::X] = Scalar(x as f32 / 10.0);
         }
-        if let (true, Some(x), Some([has_x, value])) = (
-            action.announces_x,
-            action.mode_index,
-            row.get_mut(action::HAS_X..=action::X),
-        ) {
-            *has_x = Integer(1);
-            *value = Scalar(x as f32 / 10.0);
-        }
-        if let Some([has_cost, value, quota]) =
-            row.get_mut(action::HAS_ROUTE_COST..=action::QUOTA_TYPE)
-        {
-            *has_cost = flag(action.route_mana_value.is_some());
-            *value = Scalar(f32::from(action.route_mana_value.unwrap_or_default()) / 10.0);
-            *quota = Integer(i64::from(action.quota_type.unwrap_or_default()));
-        }
-        if let Some(profile) = row.get_mut(action::SPELL_PROFILE) {
-            *profile = Integer(i64::from(action.spell_profile));
-        }
-        if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
-            *route = Integer(i64::from(action.play_route.unwrap_or_default()));
-        }
-        out.write(Table::Actions, 0, action_index, row)?;
+        row[action::HAS_ROUTE_COST] = flag(action.route_mana_value.is_some());
+        row[action::ROUTE_MANA_VALUE] =
+            Scalar(f32::from(action.route_mana_value.unwrap_or_default()) / 10.0);
+        row[action::QUOTA_TYPE] = Integer(i64::from(action.quota_type.unwrap_or_default()));
+        row[action::SPELL_PROFILE] = Integer(i64::from(action.spell_profile));
+        row[action::PLAY_ROUTE] = Integer(i64::from(action.play_route.unwrap_or_default()));
+        out.write(Table::Actions, 0, action_index, &row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;
         focus.fill(Integer(-1));
         for (target, id) in focus.iter_mut().zip(&action.focus) {

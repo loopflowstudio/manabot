@@ -170,7 +170,7 @@ class Dimensions:
     token_rows: int
     name_rows: int
     links: int
-    stack: int = 0
+    stack: int
 
     @classmethod
     def from_layout(

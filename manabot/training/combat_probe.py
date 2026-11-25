@@ -38,7 +38,7 @@ class CombatColumns:
     theirs: PermanentColumns
 
 
-def combat_columns(space: ObservationSpace) -> CombatColumns | None:
+def combat_columns(space: ObservationSpace) -> CombatColumns:
     arrays = space.layout.arrays
 
     def permanents(key: str) -> PermanentColumns:
@@ -54,17 +54,13 @@ def combat_columns(space: ObservationSpace) -> CombatColumns | None:
         )
 
     actions = arrays["actions"]["columns"]
-    try:
-        return CombatColumns(
-            actions["declare_attacker"]["index"],
-            actions["declare_blocker"]["index"],
-            actions["declared"]["index"],
-            permanents("agent_permanents"),
-            permanents("opponent_permanents"),
-        )
-    except KeyError:
-        # Earlier layouts do not identify creatures on the battlefield.
-        return None
+    return CombatColumns(
+        actions["declare_attacker"]["index"],
+        actions["declare_blocker"]["index"],
+        actions["declared"]["index"],
+        permanents("agent_permanents"),
+        permanents("opponent_permanents"),
+    )
 
 
 def combat_rows(
@@ -190,8 +186,6 @@ def combat_probe(
         raise ValueError("execution_rows must be positive")
     columns = combat_columns(policy.observation_space)
     metrics: dict[str, float | int] = {}
-    if columns is None:
-        return metrics
     for kind, index in (
         ("attack", columns.declare_attacker),
         ("block", columns.declare_blocker),

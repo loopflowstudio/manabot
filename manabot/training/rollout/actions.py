@@ -63,7 +63,7 @@ class PackedActions:
         Distribution/selected-action checks run before learning on every row.
         Padding must be checked here because it is deliberately not retained.
         """
-        counts = np.asarray(observation.batch.action_counts, dtype=np.int64)
+        counts = observation.action_counts.astype(np.int64, copy=False)
         mask = np.arange(observation.space.config.max_actions) < counts[:, None]
         valid = validator.packing_mask(mask, log_probabilities)
         return cls(

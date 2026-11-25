@@ -167,7 +167,7 @@ The policy is split by what depends on an array framework:
 ## Observation admission
 
 A policy forward reads only a `Prepared` batch. The policy's `prepare`
-admits a dense NumPy mapping or native v11 batch on the host and builds
+admits a native v11 batch or selection on the host and builds
 every index the forward reads; `forward`, `forward_distribution`,
 `get_action_and_value` and `get_value` then do no validation and no lookups
 of their own:

@@ -126,12 +126,8 @@ class TargetPracticeVector:
     def _encode(self, slots: list[int], games: list[Env]) -> None:
         """Publish these projections together, retaining every unselected slot."""
         batch = encode_policy_batch(self.space, [game.last_raw_obs for game in games])
-        if isinstance(batch, managym.ObservationBatch):
-            for index, slot in enumerate(slots):
-                self.rows[slot] = (batch, index)
-        else:
-            for key, values in batch.items():
-                self.buffers[key][slots] = values
+        for index, slot in enumerate(slots):
+            self.rows[slot] = (batch, index)
 
     def reset_all_into_buffers(self, configs: object) -> None:
         self.load_slots_into_buffers(

@@ -112,8 +112,6 @@ class LocalUpdateTeacher:
                 "scalar local-search checkpoint must declare signed_outcome values"
             )
         self.space = self.likelihood.obs_space
-        # Native frontier encoding reuses these teacher-owned buffers across
-        # forwards, so one teacher serves one search at a time.
         self.config = config
         if file_sha256(checkpoint) != sha256:
             raise ValueError("checkpoint changed during local-search admission")

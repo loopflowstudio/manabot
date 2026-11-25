@@ -1064,13 +1064,9 @@ class ActorCritic(nn.Module):
             enc_opp_cards,
             enc_agent_perms,
             enc_opp_perms,
-        ]
-        assert obs.stack is not None
-        assert obs.stack_rows is not None
-        parts.append(
             self._stream("stack", self.stack_embedding(obs.stack))
-            + lookup(obs.stack_rows)
-        )
+            + lookup(obs.stack_rows),
+        ]
         if obs.belief is not None:
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
@@ -1114,8 +1110,6 @@ class ActorCritic(nn.Module):
         self, obs: Prepared[torch.Tensor], objects: torch.Tensor
     ) -> torch.Tensor:
         """Add source embeddings to the host-prepared v11 stack rows."""
-        assert obs.stack is not None
-        assert obs.stack_targets is not None and obs.stack_mask is not None
         start = 2 + 2 * obs.agent_cards.shape[1] + 2 * obs.permanents.shape[2]
         count = obs.stack.shape[1]
         sources = objects.flatten(0, 1)[obs.stack_targets].reshape(
@@ -1294,10 +1288,10 @@ class PolicyInference:
     @torch.no_grad()
     def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
-            not isinstance(value, np.ndarray) for value in obs.values()
-        ):
-            raise TypeError("inference preparation requires NumPy observation buffers")
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection):
+            raise TypeError(
+                "inference preparation requires a native ObservationBatch or ObservationSelection"
+            )
         roots = (
             self.memory.roots(obs)
             if self.agent.config.decision_memory == "gru"

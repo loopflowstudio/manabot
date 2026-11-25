@@ -1,7 +1,7 @@
 //! A JSON header binds the configuration and packed schema. In table-name order,
 //! offsets determine each values block's length. A final SHA-256 covers both.
 //! All indexing below follows layout-derived widths and bounds checked on borrowed bytes.
-use super::{FrozenTable, ObservationBatch, ObservationLayout};
+use super::{FrozenTable, ObservationBatch, ObservationLayout, PackedTableLayout};
 use crate::agent::{
     continuation::RELATION_ROWS,
     observation_encoder::{FactKind, ObservationEncoderConfig},
@@ -127,31 +127,23 @@ impl<'a> Table<'a> {
         input: &mut &'a [u8],
         key: &str,
         array: &ArrayLayout,
+        spec: PackedTableLayout,
         batch_size: usize,
     ) -> PyResult<Self> {
-        let seat_axis = array.packed_seat_axis(key);
+        let PackedTableLayout {
+            seat_axis,
+            capacity,
+            stride,
+        } = spec;
         let groups = if seat_axis { 2 } else { 1 };
-        let capacity = array.shape[usize::from(seat_axis)].unwrap();
         let fields = array.packed_fields(key);
         let mut columns = vec![0; array.columns.len().max(1)];
         let mut width = 0;
         for field in &fields {
             columns[field.index] = width;
-            width += if field.storage == Storage::Uint8 {
-                1
-            } else {
-                4
-            };
+            width += field.storage.bytes();
         }
         let overflow = || PyValueError::new_err("observation batch dimensions overflow");
-        let stride = if array.element.is_some() {
-            array.shape[usize::from(seat_axis) + 1..]
-                .iter()
-                .try_fold(width, |n: usize, dim| n.checked_mul(dim.unwrap()))
-                .ok_or_else(overflow)?
-        } else {
-            width
-        };
         let size = batch_size
             .checked_mul(groups)
             .and_then(|n| n.checked_add(1))
@@ -240,13 +232,17 @@ pub(super) fn decode(py: Python<'_>, bytes: &[u8]) -> PyResult<ObservationBatch>
     )?;
     let mut input = &body[boundary + 1..];
     let mut tables = BTreeMap::new();
-    for (key, array) in &layout.arrays {
-        if !key.ends_with("_valid") {
-            tables.insert(
-                key.as_str(),
-                Table::read(&mut input, key, array, header.batch_size)?,
-            );
-        }
+    for (key, &spec) in &layout.packed {
+        tables.insert(
+            key.as_str(),
+            Table::read(
+                &mut input,
+                key,
+                &layout.arrays[key],
+                spec,
+                header.batch_size,
+            )?,
+        );
     }
     require(input.is_empty(), "trailing observation batch data")?;
     for game in 0..header.batch_size {

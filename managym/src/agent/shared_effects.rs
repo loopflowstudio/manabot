@@ -141,7 +141,6 @@ pub fn encode(
     observation: &super::observation::Observation,
     objects: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, i64>,
-    detail_capacity: usize,
     out: &mut impl RowWriter,
 ) -> Result<[usize; 3], super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::ObservationEncodeError as Error;
@@ -165,7 +164,7 @@ pub fn encode(
     let member_count: usize = records.iter().map(|record| record.members.len()).sum();
     for (field, actual, capacity) in [
         ("effects", records.len(), EFFECT_ROWS),
-        ("effect_details", detail_count, detail_capacity),
+        ("effect_details", detail_count, DETAIL_ROWS),
         ("effect_members", member_count, MEMBER_ROWS),
     ] {
         if actual > capacity {

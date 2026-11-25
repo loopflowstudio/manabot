@@ -95,8 +95,7 @@ def test_outputs_and_gradients_match_padded(
     with torch.no_grad(), PolicyInference(live) as scope:
         prepared = scope.prepare(obs)
         present = sum(
-            int(np.count_nonzero(obs.project(key)))
-            for key in (*OBJECT_VALIDITY_KEYS, "stack_valid")
+            int(np.count_nonzero(obs.project(key))) for key in OBJECT_VALIDITY_KEYS
         )
         tokens = len(obs.coordinates) if value_aggregation == "value_token" else 0
         assert prepared is not None

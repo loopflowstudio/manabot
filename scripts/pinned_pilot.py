@@ -189,7 +189,7 @@ def names_at(revision: str) -> None:
         crate = Path(directory) / "managym"
         serializer = crate / "src/cards/tokens.rs"
         source_text = serializer.read_text()
-        # These two functions are the writer ABI for the supported v9-v11 family.
+        # These two functions are the writer ABI for the supported v11 policy input.
         # Work only in the temporary archive so its checkout and imports stay intact.
         hooks = {
             "pub fn name_value(name: &str) -> i32 {": """
