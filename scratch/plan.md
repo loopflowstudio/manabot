@@ -39,65 +39,11 @@ save/belief loaders":
 
 ## Steady-state model across layers
 
-1. **Single-owner save admission and non-optional resumed host state
-   (`manabot/training/state/continuation.py`,
-   `manabot/training/loops/self_play.py`,
-   `manabot/training/state/backend.py`,
-   `manabot/backends/{torch,mlx}/state.py`).**
-   - `continuation.py` owns save-format admission via a read-only helper
-     `admit_save_format(folder) -> dict[str, Any]`:
-     1. If `(folder / "training.safetensors").exists()`, raise
-        `ValueError("training.safetensors: unsupported pre-portable MLX save")`.
-     2. Read `record = json.loads((folder / "state.json").read_bytes())`.
-     3. If `"learner" in record["files"]` or `(folder / "learner.pt").exists()`,
-        raise `ValueError("state.json: this save holds learner.pt, written
-        before portable saves; resume it with manabot 0.2.5, or start a new run
-        warm-started from the run's published policy")`.
-     4. Return `record`.
-   - `self_play.resume_training`'s `restore(folder)` callback executes a strict
-     three-phase read-before-mutate sequence without inspecting save files
-     itself:
-     1. `record = admit_save_format(folder)` (refuses legacy Torch and
-        pre-portable MLX saves first, even if `counts.model` or
-        `counts.readings` is absent or changed);
-     2. `resume_model(counts.model, settings.model)` and `readings =
-        resume_readings(counts, learner.agent.readings,
-        learner.agent.observation_space)` (runs before `counts_sha256` and
-        before tensor loading so edited/drifted portable saves still produce
-        the semantic model/readings refusal without mutating live weights);
-     3. `restored = restore_continuation(folder, ..., record=record)`
-        (validates `updates`, `counts_sha256`, portable `expected_files`,
-        headers, buffers, parameters, Adam, `HostContinuation`, and sampling,
-        then copies into live `learner`, `ema`, and `adam` last).
-     (`restore_continuation` calls `admit_save_format(folder)` if `record is
-     None` so direct callers also enforce format admission.)
-   - `RestoredContinuation.host` becomes required (`HostContinuation`, not
-     `HostContinuation | None = None`): the `host=None` half-state existed only
-     for legacy `.pt` saves and as a fresh-run sentinel. `resume_training`
-     returns `tuple[Counts, RestoredContinuation | None]` (`None` when fresh;
-     `RestoredContinuation` when resumed). `self_play` branches once on
-     `restored is not None`.
-   - `Continuation.restore_legacy` is removed from `training/state/backend.py`,
-     along with `restore_legacy`, `legacy_file`, `legacy_parameters`,
-     `legacy_adam` (and now-unused `Iterator`, `contextmanager`, `Path`,
-     `pickle`) from `backends/torch/state.py` and `restore_legacy` (and `Path`)
-     from `backends/mlx/state.py`.
-
-2. **Single-format belief sampler admission (`manabot/belief/checkpoint.py`,
-   `manabot/belief/protocol.py`, `manabot/backends/{torch,mlx}/belief.py`).**
-   - Delete `decode_legacy_sampler` from `SamplerCodec`,
-     `backends/torch/belief.py` (dropping unused `io`, `Any`, and inlining
-     single-caller `canonical_sampler_parameters` if no other caller remains),
-     and `backends/mlx/belief.py`.
-   - Delete the `if data.startswith(b"PK\x03\x04"):` branch in
-     `read_belief_sampler`.
-   - Wrap `decode_safetensors(data)` and metadata `json.loads` in
-     `try ... except (ValueError, TypeError, KeyError, AttributeError,
-     struct.error) as error: raise ValueError("unknown sampler checkpoint
-     format") from error` (matching `continuation.py:read_tensors`), so Torch
-     zips, truncated files, and malformed headers never leak raw decode
-     exceptions.
-
+1. **Done (81d29271b7, 3a7afc0e9a, e025de680c).** `continuation.admit_save_format`
+   refuses `training.safetensors` / `learner.pt` before model/reading diffing;
+   `RestoredContinuation.host` is required; legacy Torch/MLX save loaders gone.
+2. **Done (3a7afc0e9a).** Belief samplers are safetensors-only; decode errors
+   raise `ValueError("unknown sampler checkpoint format")`.
 3. **One recording module (`managym.recording`), one arena-trace module
    (`manabot.sim.replay`), one replay runtime check (`managym.replay`).**
    - Move `record_actions` (dropping its dead `option_counts` parameter, whose
@@ -196,35 +142,7 @@ Tests converted or added:
 
 ## Decisions made for review
 
-Recorded alongside alternatives in `scratch/concept-review.html`:
-
-1. **Single ordered save-admission sequence + non-optional
-   `RestoredContinuation.host` (2a).** `admit_save_format` in `continuation.py`
-   refuses `training.safetensors` and `learner.pt` before `resume_model` /
-   `resume_readings`, which still run before `counts_sha256` and tensor
-   loading. `RestoredContinuation.host` is required and `resume_training`
-   returns `RestoredContinuation | None`. Passed over: keeping `host: None`
-   for a deleted legacy path, or running `restore_continuation` wholesale
-   before `resume_readings` (which breaks edited-readings refusal tests and
-   atomic weight admission).
-2. **`record_actions` moves to `manabot/sim/replay.py`; `manabot/sim/recording.py`
-   is deleted (1a).** `record_actions` builds Command traces for `write_trace`,
-   already depends on `sim/replay.py`, and was never a documented public API;
-   deleting `manabot/sim/recording.py` eliminates the duplicate `recording.py`
-   filename across `managym` and `manabot`. Passed over: keeping a 1-function
-   `manabot/sim/recording.py`.
-3. **Legacy belief zips get the generic `"unknown sampler checkpoint format"`
-   refusal (3a).** Wrapping `decode_safetensors` + JSON decoding catches
-   `struct.error` / `UnicodeDecodeError` / `JSONDecodeError` / `KeyError` /
-   `TypeError` / `AttributeError` and raises `ValueError("unknown sampler
-   checkpoint format")` with no `PK\x03\x04` check left in code. Passed over:
-   keeping a `PK\x03\x04` branch for a zip-specific error message.
-4. **Legacy source admission is deleted with `manabot/env/replay.py` (4a).**
-   Its `source_sha256` comparison cannot pass for records written by earlier
-   revisions. Callers move to `managym.replay.require_replay_runtime`;
-   `failures.runtime_identities` is deleted; `managym/replay.py:406` and
-   `docs/engine-python.md:367` stop claiming legacy verification requires
-   manabot. Passed over: moving an unpassable wrapper into `failures.py`.
+Listed in `scratch/questions.md` and `scratch/concept-review.html`.
 
 ## Exclusions
 
@@ -243,7 +161,8 @@ Recorded alongside alternatives in `scratch/concept-review.html`:
 
 ## Docs
 
-Updated in place to state the steady state (dropping the "deprecated, removed
+Written ahead of the code in a89108db3e; the gate re-reads them against
+the final code. Updated in place to state the steady state (dropping the "deprecated, removed
 in 0.3.0" sentences and legacy-loader fallbacks):
 
 - `AGENTS.md`: `managym.replay.matches_retained_error`.
@@ -341,13 +260,22 @@ plus the repository's lint/type configuration, and
 
 ## Passes
 
-1. **Complete.** Removed legacy training and belief loaders and moved replay admission to managym. Torch ↔ MLX portable resume, rejection with missing settings/readings and intact weights/save bytes, sampler reports, and both replay CLIs passed.
-2. **Next. Shims, aliases, CLI, and `sim/recording.py` removal** — move
-   `record_actions` to `manabot/sim/replay.py`, delete `manabot/sim/recording.py`,
-   `manabot/env/card_capture.py`, `manabot/infra/journal.py`,
-   `manabot/sim/search/flat.py`, and remove all deprecated aliases/commands in
-   the table above alongside their caller, CI, and test conversions.
-3. **Docs, CI check, and acceptance gate.**
+1. **Done.** Legacy training and belief loaders removed; replay admission moved
+   to `managym.replay` (`manabot/env/replay.py` deleted, 213995e159). Torch ↔ MLX
+   portable resume, refusal with missing settings/readings and intact
+   weights/save bytes, sampler reports, and both replay CLIs passed.
+2. **Next: shims, aliases, CLI and `sim/recording.py`.** Everything in "What
+   goes" still present at 43fb4add55: `card_capture.py`, `infra/journal.py`,
+   `sim/search/flat.py`, `sim/recording.py` (move `record_actions` to
+   `sim/replay.py`), `failures.py` `__getattr__` / `TrainingExposureReceipt` /
+   `NativeTrainingGame` / `NativeTrainingTrace` / `runtime_identities`,
+   `export-game`, `CheckpointVillain`, `SelfPlayPoint.position`,
+   `compute_targets`, `InMemorySnapshotVector`, torch `learner.__getattr__`,
+   both `rl.damped_policy_loss`; with the test, CI-path and smoke-script
+   conversions in "Tests removed and converted". Delivers the acceptance script printing `ok`.
+3. **Gate.** Acceptance check, consumer tests with manabot
+   `DeprecationWarning`s as errors, CI workflow paths, docs re-read against the
+   final code.
 
 ## Done when
 
