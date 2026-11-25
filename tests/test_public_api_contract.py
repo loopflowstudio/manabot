@@ -2,6 +2,7 @@
 
 import ast
 from importlib import import_module
+import inspect
 from pathlib import Path
 import re
 import subprocess
@@ -18,6 +19,7 @@ from scripts.public_api import (
     main,
     native_exports,
     python_class,
+    resolve,
     update,
 )
 
@@ -30,18 +32,28 @@ def test_public_api_matches_snapshot() -> None:
 
 def test_match_config_publishes_fields_and_methods_without_validator_hooks() -> None:
     members = python_class(MatchConfig).members
-    assert members["world"].kind == "field"
+    assert members["decklists"].kind == "field"
     assert members["authored"].kind == "classmethod"
     decorators = MatchConfig.__pydantic_decorators__
+    assert decorators.field_validators and decorators.model_validators
     assert members.keys().isdisjoint(decorators.field_validators)
     assert members.keys().isdisjoint(decorators.model_validators)
 
 
-def test_packed_actions_is_published_from_its_defining_module() -> None:
-    owners = [
-        mod for mod in PUBLIC_MODULES if "PackedActions" in import_module(mod).__all__
-    ]
-    assert owners == ["manabot.training.rollout.actions"]
+def test_published_symbols_come_from_their_defining_module() -> None:
+    owners: dict[str, str] = {}
+    for mod in PUBLIC_MODULES:
+        module = import_module(mod)
+        for name in module.__all__:
+            value, warned = resolve(module, name)
+            if warned or getattr(value, "__deprecated__", False):
+                continue
+            assert name not in owners, f"{name} published by {owners[name]} and {mod}"
+            owners[name] = mod
+            if isinstance(value, type) or inspect.isfunction(value):
+                assert value.__module__ == mod, (
+                    f"{mod}.{name} is defined in {value.__module__}"
+                )
 
 
 def test_stub_comments_mark_only_the_deprecated_declaration() -> None:
