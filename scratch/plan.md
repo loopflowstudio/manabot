@@ -738,6 +738,9 @@ change.
 ## Passes
 
 1. **Native layer with combat parity and the library kinds** — done (`b3ae75976c`).
+   Realign 2026-11-25: `tests/env/test_group.py` (2 tests) and
+   `scripts/public_api.py check` pass; the 7 Rust tests in
+   `managym/tests/rules/group.rs` were not rerun here (gate runs them in debug).
 2. **Academy authority & `testing-house-v1` schema.** `live_group`, `group` in
    `_response_with_participant` (pilot-only, including `role_changed`),
    `/group-preview` (no `steps`), `GroupCommandMessage` in
@@ -747,7 +750,8 @@ change.
    `group_incomplete` rejections; `tests/academy/test_group_command.py`;
    removal of `/combat-preview`. Shows: acceptance step 2, recording equality,
    and `test_shared_table_protocol.py`.
-3. **Browser and docs.** Needs MTG-441 on main. `gameStore.liveGroup`,
+3. **Browser and docs.** MTG-441 (PR #613) merged 2026-11-25 and is in this
+   branch (`3460ec64c5`), so nothing blocks this pass. `gameStore.liveGroup`,
    `PendingSubmission` reconnect/reload reconciliation in `socket.svelte.ts`,
    `sendGroupCommand` + `fetchGroupPreview`, combat on one-shot Confirm (with
    1-creature parity), `ArrangePanel.svelte` (Scry, Surveil, OrderLibrary Top &

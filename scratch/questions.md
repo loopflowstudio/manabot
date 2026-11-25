@@ -48,8 +48,6 @@
 
 ## Open
 
-- Pass 3 waits for MTG-441 (PR #613) on main. As of 2026-11-25 it has
-  auto-merge on with `Academy UI` failing.
 - See numbered review questions (1a–4b) in `scratch/concept-review.html`.
 
 ## Follow-ups for ship-review to file or drop
