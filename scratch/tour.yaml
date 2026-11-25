@@ -1,0 +1,15 @@
+at: b17ed61f623efb725abb42160456a25ac7f91408
+first:
+  - path: scratch/plan.md
+    why: Places the land cycle within the planeswalker work
+  - path: managym/cards/src/fra.rs
+    why: Ten printings share entry and mana rules
+  - path: managym/cards/tests/cards/fra.rs
+    why: Plays each land and checks both mana colors
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fra.jsonl
+    why: Records the behavior verified for each printing
+hide:
+  - path: managym/academy/fixtures/
+    why: Replayed catalog identities and digests
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Oracle snapshots for the ten land printings
