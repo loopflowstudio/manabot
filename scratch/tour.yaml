@@ -1,0 +1,17 @@
+at: 0605ac68f7bf451a26f9512605e86e441caa9f23
+first:
+  - path: docs/engine.md
+    why: Public enum values and runnable observation round trip
+  - path: managym/src/flow/turn.rs
+    why: Rules order, public names and historical integer codes
+  - path: managym/src/agent/observation_json.rs
+    why: Canonical writer, decoder and frozen capture checks
+  - path: managym/src/agent/observation_encoder.rs
+    why: Stable policy indices for both damage steps
+  - path: managym/src/agent/decision_memory.rs
+    why: Committed decisions use the same stored indices
+  - path: tests/verify/test_opponent_decision_memory.py
+    why: Live double strike through cleanup and policy admission
+  - path: tests/env/test_observation.py
+    why: Every retained turn code through both public readers
+hide: []
