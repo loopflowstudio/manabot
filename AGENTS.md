@@ -84,30 +84,29 @@ source-byte identities. Keep wheel exclusions narrow: `**/cards/**` and
 
 ## Academy's shared decision surface
 
-Jack Heart's direction (2026-10-21): Academy should make the acting agent's
-viewer-safe observations and complete legal action space understandable to a
-human. Navigation, grouping and labels may clarify that shared contract; they
-must not hide strategic choices, silently select actions, reveal unavailable
-information or introduce human-only game semantics. Evaluate awkward decisions
-at the shared observation/action authority rather than disguising them in the
-browser. Preserve Command binding, stale rejection, actual pending decisions on
-reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
-explicit shared action and cannot erase committed costs or revealed information.
-Configured priority-stop automation must remain identifiable as automation,
-separate from deliberate human decisions.
+Academy makes the acting agent's viewer-safe observations and complete legal
+action space understandable to a human. Navigation, grouping and labels may
+clarify that shared contract; they must not hide strategic choices, silently
+select actions, reveal unavailable information or introduce human-only game
+semantics. Evaluate awkward decisions at the shared authority rather than
+disguising them in the browser. Preserve Command binding, stale rejection,
+actual pending decisions on reconnect, replay/fork identity and accessibility.
+Cancellation or undo requires an explicit shared action and cannot erase
+committed costs or revealed information. Priority-stop automation must stay
+identifiable as automation, separate from deliberate human decisions.
+Live combat is one joint board draft (click or drag) sent via the existing
+sequential per-creature Commands with no engine change: fold raw per-creature
+offers under a collapsed disclosure while drafting (not beside the draft), and
+keep them listed in Replay and Study where recorded policy probabilities attach.
 Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
 `GameConfig.human_seat` orders them at the native boundary. Record and project
 actual native seats; Watch keeps its two-seat acting-view contract.
-Academy resume credentials and the started-launch marker live in browser
-`sessionStorage`. Keep them scoped together; a launch must not resume another
-tab's or another launch's game.
-Game-file imports send original JSON source spans: JavaScript numeric parsing and
-re-encoding can round u64 identities and invalidate retained digests.
-Watch history is the selected acting viewer's recorded track strictly before
-that decision's `presentation_cursor`; spectator reveal never supplies history
-labels. Event emphasis stays separate from choice focus and lane navigation.
-This direction does not approve a particular redesign or change frozen worlds,
-checkpoints or experiment evidence.
+Scope Academy resume credentials and the started-launch marker together in
+`sessionStorage` so a launch cannot resume another tab's or launch's game.
+Game-file imports send original JSON source spans so JS parsing cannot round u64
+identities or invalidate digests. Watch history is the acting viewer's recorded
+track strictly before `presentation_cursor` (never spectator reveal); keep event
+emphasis separate from choice focus and lane navigation.
 
 ## Style
 
