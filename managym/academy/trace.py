@@ -238,6 +238,16 @@ class RecordingImport:
     build_differs: bool
 
 
+@dataclass(frozen=True)
+class PlayedFrom:
+    """A game played on from another: its first `event` steps are that game's
+    (`trace_id`), replayed through the Command path, and the person chooses
+    from that decision on."""
+
+    trace_id: str
+    event: int
+
+
 @dataclass
 class Trace:
     config: GameConfig
@@ -251,6 +261,7 @@ class Trace:
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
     recording_import: RecordingImport | None = None
+    played_from: PlayedFrom | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -265,6 +276,10 @@ class Trace:
             record.pop("recording_import")
         else:
             record["recording_import"] = asdict(self.recording_import)
+        if self.played_from is None:
+            record.pop("played_from")
+        else:
+            record["played_from"] = asdict(self.played_from)
         record["config"] = self.config.to_record()
         record["mana_payment"] = list(
             self.config.by_seat(self.config.mana_payment, "manual")

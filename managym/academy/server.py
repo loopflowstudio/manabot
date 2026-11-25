@@ -196,7 +196,7 @@ from .study_runtime import (
     join_historical_study_evidence,
     select_study_plan,
 )
-from .trace import GameConfig, Trace, TraceEvent
+from .trace import GameConfig, PlayedFrom, Trace, TraceEvent
 from .villain import build_villain_policy
 from .work import Work, WorkStatus
 
@@ -1044,6 +1044,23 @@ class GameSession:
         if demo_name is not None:
             demo = load_play_demo(demo_name)
             raw_config = {**raw_config, **demo.config}
+        played_from: PlayedFrom | None = None
+        source_events: list[dict[str, Any]] = []
+        if isinstance(raw_config, dict) and raw_config.get("played_from") is not None:
+            played_from, source = self._played_from_source(
+                raw_config["played_from"], raw_config.get("player_token")
+            )
+            source_events = source["events"]
+            # The source's own setup and seed; only identity travels with the request.
+            raw_config = {
+                **setup_draft(GameConfig(**source["config"])),
+                "seed": str(source["config"]["seed"]),
+                **{
+                    key: raw_config[key]
+                    for key in ("player_token", "player_name", "request_id")
+                    if key in raw_config
+                },
+            }
 
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
@@ -1152,6 +1169,7 @@ class GameSession:
             winner=None,
             end_reason="active",
             timestamp=self._clock(),
+            played_from=played_from,
         )
         self._trace_saved = False
         self.trace_id = None
@@ -1215,20 +1233,119 @@ class GameSession:
         # decisions. Retain every Command and Study root in memory, then persist
         # its complete final snapshot once instead of rewriting the growing
         # replay at each internal setup step.
-        self._preparing_demo = demo is not None
+        self._preparing_demo = demo is not None or played_from is not None
         try:
-            self._advance()
+            if played_from is not None:
+                self._play_recorded_prefix(source_events, played_from.event)
+            else:
+                self._advance()
             self._last_presentation_cursor = self.presentation.next_seq
             update = self._wire_message(reason="initial_connect")
             if demo is not None:
                 replay_checked_prefix(self, update, demo, demo_name)
         finally:
             self._preparing_demo = False
-        if demo is not None:
+        if demo is not None or played_from is not None:
             update = self._wire_message(reason="initial_connect")
         if launch_id is not None:
             update["launch"] = launch_id
         return update
+
+    def _played_from_source(
+        self, raw: Any, player_token: Any
+    ) -> tuple[PlayedFrom, dict[str, Any]]:
+        """The game to play on from and its stored trace: one of yours, no longer
+        being played, at one of your deliberate decisions."""
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("trace_id"), str)
+            or type(raw.get("event")) is not int
+        ):
+            raise ValueError("played_from needs a game and a decision.")
+        trace_id, event = raw["trace_id"], raw["event"]
+        access = self.attempt_store.access(
+            trace_id,
+            {self.attempt_owner},
+            player_token if isinstance(player_token, str) else None,
+        )
+        if access is None or not access["mine"]:
+            raise ValueError("played_from_unavailable: Only your own games can be played on.")
+        source = self.attempt_store.load(trace_id)
+        assert source is not None
+        if source["end_reason"] == "active":
+            raise ValueError("played_from_active: That game is still being played.")
+        events = source["events"]
+        if (
+            not 0 <= event < len(events)
+            or events[event]["actor"] != "hero"
+            or events[event].get("auto")
+        ):
+            raise ValueError("played_from_decision: That step is not one of your decisions.")
+        return PlayedFrom(trace_id, event), source
+
+    def _play_recorded_prefix(self, events: list[dict[str, Any]], upto: int) -> None:
+        """Play a recorded game's first `upto` steps through the Command path.
+
+        The opponent's recorded choices go through the offer-policy hook (a
+        recurrent opponent is still asked at each, so it has the history it
+        would have had) and the person's through `hero_command`. Every window
+        surfaces meanwhile, so the steps automation took replay as recorded,
+        now as Commands. The game is left at decision `upto`, the person's.
+        Raises ValueError where the game no longer plays as recorded.
+        """
+        assert self.trace is not None
+
+        def recorded(actor: str, context: DecisionContext) -> int:
+            index = len(self.trace.events)
+            event = events[index] if index < upto else None
+            action = None if event is None else int(event["action"])
+            offers = [
+                offer
+                for offer, engine in context.action_by_offer.items()
+                if engine == action
+            ]
+            if (
+                event is None
+                or event["actor"] != actor
+                or len(offers) != 1
+                or context.actions[action]["description"]
+                != event["action_description"]
+            ):
+                raise ValueError(
+                    f"played_from_diverged: Step {index + 1} no longer plays as recorded."
+                )
+            return offers[0]
+
+        def opponent(context: DecisionContext) -> int:
+            policy = self.villain_policy
+            if isinstance(policy, PolicyRunner) and policy.base_descriptor.recurrent:
+                choose_bot(policy, self.env, self.obs)
+            return recorded("villain", context)
+
+        saved = self._villain_offer_policy, self.auto_pass
+        self._villain_offer_policy, self.auto_pass = opponent, False
+        try:
+            self._advance()
+            while len(self.trace.events) < upto:
+                context = self._publish_current_prompt()
+                if context is None:
+                    raise ValueError("played_from_diverged: The game ended early.")
+                result = self.hero_command(
+                    {
+                        "command_id": f"played-from.{len(self.trace.events)}",
+                        "match_id": self.match_id,
+                        "expected_revision": context.revision,
+                        "prompt_id": context.prompt_id,
+                        "offer_id": recorded("hero", context),
+                        "answers": [],
+                    }
+                )
+                if result["status"] != "accepted":
+                    raise ValueError("played_from_diverged: A recorded move was refused.")
+        finally:
+            self._villain_offer_policy, self.auto_pass = saved
+        if len(self.trace.events) != upto or self._publish_current_prompt() is None:
+            raise ValueError("played_from_diverged: The decision was not reached.")
 
     def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
         """Resolve one revision-bound next game from the owner-private draft."""
