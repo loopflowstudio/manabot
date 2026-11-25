@@ -1,16 +1,17 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Thirteen of the 56 scoped Foundations rows have directed implementation evidence.
-Slices 1, 2, 3 and 5 delivered eleven cards. Demonic Pact and Maze's End
-already had working definitions.
+Eighteen of the 56 scoped Foundations rows have directed implementation
+evidence. Slices 1, 2, 3, 5, and 7 are complete. Slice 4 delivered Divine
+Resilience, Charming Prince, and Affectionate Indrik. Demonic Pact and
+Maze’s End already had working definitions.
 
-**Next pass: Slices 4 and 7.** Carry target relations, fighting, last known
-information and shared sacrifice through the eight cards in those slices.
+**Next pass: finish Slice 4.** Choose new targets as a complete assignment.
+Valid swaps on a copy disprove the proposed per-slot restriction filter.
+The correction and its response cases are recorded in Slice 4 below.
 
-Remaining passes (13 implemented, 43 pending):
+Remaining passes (18 implemented, 38 pending):
 
-1. Slices 4 + 7 — target relations, `Fight`, LKI of moved objects, shared
-   sacrifice (8 cards).
+1. Finish Slice 4 — Drakuseth, Fiery Annihilation and Run Away Together.
 2. Slices 6 + 8 — library-top selection, kicked entries, composite ward,
    mana expiry, Changeling, keyword predicate (11 cards).
 3. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
@@ -115,7 +116,7 @@ Scryfall conformance, card-program observability and the two bundled pilot
 replays passed. The optional u1952 checkpoint was unconfigured. Four Academy
 demos replayed 192 Commands and five navigation positions refreshed.
 
-### Slice 4 — Target relations and targeting cardinality (6 cards)
+### Slice 4 — Target relations and targeting cardinality (3 of 6 complete)
 
 Cards: Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience,
 Charming Prince, Affectionate Indrik (with Primal Might in Slice 9 using the
@@ -150,15 +151,13 @@ in play if its creature target becomes illegal, even if it remains attached.
     has left.
   - `TargetClause` currently allows the same object in different clauses
     (`ability.rs:1472`); the relation is how a card says otherwise.
-- `TargetRequirement.max_if_kicked: Option<usize>`, read in `min_for` /
-  `max_for` from `CastChoices.kicked`. Kicker is chosen before targets.
-- `TargetSpec::PermanentYouOwn { predicate }` (Charming Prince, with
-  `another: true`).
-- `Effect::Fight { first: ObjectSelector, second: ObjectSelector }` replaces
-  `FightLastTarget`. Keep CR 701.14b (both creatures present and legal) and
-  deal both damages as one batch. Convert all 5 uses: `fight_last_target()`
-  becomes a constructor.
-- Charming Prince's delayed return uses `CreateDelayedTrigger { remember: Moved, EndStep }` (`bro.rs:44`).
+Divine Resilience uses `up_to_if_kicked` to change both bounds. An empty
+battlefield admits the zero-target cast only if the kicker is payable.
+Charming Prince’s blink uses `PermanentYouOwn` with the existing “another”
+constraint and remembers the exiled card until the next end step.
+`Fight { first, second }` reads two exact creatures and deals both directions
+of damage in the same batch. Bushwhack and the two TLA fight spells use
+their original target clauses.
 
 Checks:
 
@@ -357,4 +356,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-43 scoped rows remain pending, including Abyssal Harvester.
+38 scoped rows remain pending, including Abyssal Harvester.
