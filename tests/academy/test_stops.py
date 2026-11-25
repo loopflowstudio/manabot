@@ -1,11 +1,14 @@
 """
 test_stops.py
-MTGO-style priority stops: server-side auto-pass, stop configuration
-(new_game + set_stops), stop-on-stack, F6 pass-turn, and trace auto marks.
+Arena-style priority stops: server-side auto-pass, active-combat stops,
+non-mana play gating, stop configuration (new_game + set_stops),
+stop-on-stack, F6 pass-turn, and trace auto marks.
 """
 
+from collections.abc import Callable
 import json
 import sqlite3
+from typing import Any
 
 from fastapi.testclient import TestClient
 import pytest
@@ -134,6 +137,7 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
     assert payload["type"] == "game_over"
 
     assert surfaced, "Expected surfaced priority windows"
+    # BOLT_DECK has no creatures, so active-combat stops auto-pass on empty boards.
     allowed = {("my", "main1"), ("my", "main2"), ("opponent", "end_step")}
     assert set(surfaced) <= allowed, sorted(set(surfaced) - allowed)
     # The hero held castable instants all game (BOLT_DECK), so un-stopped
@@ -283,8 +287,8 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
             # Default stops: game opens at my main1, with the config echoed.
             assert payload["data"]["turn"]["step"] == "PRECOMBAT_MAIN_STEP"
             assert payload["stops"] == {
-                "my": ["main1", "main2"],
-                "opponent": ["end_step"],
+                "my": ["main1", "declare_attackers", "declare_blockers", "main2"],
+                "opponent": ["declare_attackers", "declare_blockers", "end_step"],
                 "stop_on_stack": True,
                 "auto_pass": True,
             }
@@ -455,3 +459,266 @@ def test_pass_turn_requires_active_game(isolated_traces):
             payload = settled_message(websocket)
             assert payload["type"] == "error"
             assert "No active game session" in payload["message"]
+
+
+RAZOR_RINGS_DECK = {"Plains": 10, "Savannah Lions": 6, "Razor Rings": 6}
+ACTIVE_COMBAT_ENGINE_STEPS = {"COMBAT_DECLARE_ATTACKERS", "COMBAT_DECLARE_BLOCKERS"}
+
+
+def _play_ws_game(
+    config: dict[str, Any],
+    policy: Callable[[dict[str, Any]], int],
+    *,
+    on_payload: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            return _play_game(websocket, config, policy, on_payload=on_payload)
+
+
+def _make_razor_rings_policy(*, attack: bool) -> Callable[[dict[str, Any]], int]:
+    """Develop Plains and Savannah Lions, hold Razor Rings, and attack or hold back."""
+    attacker_phrase = "Attack" if attack else "Don't"
+
+    def policy(payload: dict[str, Any]) -> int:
+        for action in payload["actions"]:
+            if action["type"] == "PRIORITY_PLAY_LAND":
+                return action["index"]
+        for action in payload["actions"]:
+            if action["type"] == "PRIORITY_CAST_SPELL" and "Savannah Lions" in (
+                action.get("description") or ""
+            ):
+                return action["index"]
+        for action in payload["actions"]:
+            if action["type"] == "DECLARE_ATTACKER" and attacker_phrase in (
+                action.get("description") or ""
+            ):
+                return action["index"]
+        if not attack:
+            for action in payload["actions"]:
+                if action["type"] == "DECLARE_BLOCKER" and "Don't" in (
+                    action.get("description") or ""
+                ):
+                    return action["index"]
+        for action in payload["actions"]:
+            if action["type"] == "PRIORITY_PASS_PRIORITY":
+                return action["index"]
+        return payload["actions"][0]["index"]
+
+    return policy
+
+
+def _combat_window_recorder(
+    side: str | None = None,
+) -> tuple[list[tuple[str, list[str]]], Callable[[dict[str, Any]], None]]:
+    windows: list[tuple[str, list[str]]] = []
+
+    def observe(payload: dict[str, Any]) -> None:
+        if payload["type"] != "observation" or not _is_priority_window(payload):
+            return
+        step = payload["data"]["turn"]["step"]
+        if step in ACTIVE_COMBAT_ENGINE_STEPS and (
+            side is None or _turn_side(payload) == side
+        ):
+            windows.append(
+                (step, [a.get("description") or "" for a in payload["actions"]])
+            )
+
+    return windows, observe
+
+
+def test_active_combat_stop_surfaces_razor_rings_for_attacker(isolated_traces):
+    """Default stops pause in declare_attackers when attacking while holding Razor Rings."""
+    combat_windows, observe = _combat_window_recorder(side="my")
+    payload = _play_ws_game(
+        {
+            "villain_type": "passive",
+            "seed": 3,
+            "hero_deck": RAZOR_RINGS_DECK,
+            "villain_deck": {"Island": 16},
+        },
+        _make_razor_rings_policy(attack=True),
+        on_payload=observe,
+    )
+    assert payload["type"] == "game_over"
+    assert any(
+        step == "COMBAT_DECLARE_ATTACKERS"
+        and any("Cast Razor Rings" in desc for desc in descs)
+        for step, descs in combat_windows
+    ), combat_windows
+
+
+def test_active_combat_stops_surface_razor_rings_for_defender(isolated_traces):
+    """Default stops pause in both declare_attackers and declare_blockers while defending."""
+    combat_windows, observe = _combat_window_recorder(side="opponent")
+    payload = _play_ws_game(
+        {
+            "villain_type": "random",
+            "seed": 3,
+            "hero_deck": RAZOR_RINGS_DECK,
+            "villain_deck": {"Mountain": 10, "Raging Goblin": 10},
+        },
+        _make_razor_rings_policy(attack=False),
+        on_payload=observe,
+    )
+    assert payload["type"] == "game_over"
+    defender_steps = {
+        step
+        for step, descs in combat_windows
+        if any("Cast Razor Rings" in desc for desc in descs)
+    }
+    assert defender_steps == ACTIVE_COMBAT_ENGINE_STEPS, combat_windows
+
+
+def test_active_combat_with_no_instant_surfaces_no_combat_priority_window(
+    isolated_traces,
+):
+    """Attacking with no playable instant never pauses at combat priority."""
+    declared_attack = False
+    combat_windows, record_combat = _combat_window_recorder()
+
+    def observe(payload: dict) -> None:
+        nonlocal declared_attack
+        if payload["type"] == "observation" and "DECLARE_ATTACKER" in _action_types(
+            payload
+        ):
+            declared_attack = True
+        record_combat(payload)
+
+    payload = _play_ws_game(
+        {
+            "villain_type": "passive",
+            "seed": 3,
+            "hero_deck": {"Plains": 10, "Savannah Lions": 10},
+            "villain_deck": {"Island": 16},
+        },
+        _make_razor_rings_policy(attack=True),
+        on_payload=observe,
+    )
+    assert payload["type"] == "game_over"
+    assert declared_attack, "Expected combat with attacking creatures"
+    assert combat_windows == []
+
+
+def test_mana_abilities_alone_auto_pass_under_auto_pass_and_surface_in_full_control(
+    isolated_traces,
+):
+    """Under mana_floats='all', untapped lands and mana-producing activated
+    abilities alone do not hold priority when auto_pass=True, but still surface
+    in Full control (auto_pass=False)."""
+    # Plains gives TapForMana; Kyoshi Village gives a mana-choice
+    # PRIORITY_ACTIVATE_ABILITY. No instants exist in the deck, so combat
+    # windows only ever offer pass + mana abilities.
+    base_config = {
+        "villain_type": "passive",
+        "seed": 3,
+        "mana_floats": "all",
+        "hero_deck": {"Plains": 6, "Kyoshi Village": 6, "Savannah Lions": 8},
+        "villain_deck": {"Island": 16},
+    }
+
+    def run(auto_pass: bool) -> tuple[list[dict], list[dict]]:
+        server.SESSION_REGISTRY.clear()
+        combat_windows: list[dict] = []
+        mana_only_windows: list[dict] = []
+
+        def observe(payload: dict) -> None:
+            if payload["type"] != "observation" or not _is_priority_window(payload):
+                return
+            types = _action_types(payload)
+            if payload["data"]["turn"]["step"] in ACTIVE_COMBAT_ENGINE_STEPS:
+                combat_windows.append(payload)
+            # Exclude Kyoshi Village's "{4}, {T}, Sacrifice: Draw a card" non-mana ability.
+            if types <= {
+                "PRIORITY_PASS_PRIORITY",
+                "TAP_FOR_COST",
+                "PRIORITY_ACTIVATE_ABILITY",
+            } and not any(
+                "Draw" in (a.get("description") or "") for a in payload["actions"]
+            ):
+                mana_only_windows.append(payload)
+
+        payload = _play_ws_game(
+            {**base_config, "auto_pass": auto_pass},
+            _make_razor_rings_policy(attack=True),
+            on_payload=observe,
+        )
+        assert payload["type"] == "game_over"
+        return combat_windows, mana_only_windows
+
+    auto_combat, auto_mana_only = run(auto_pass=True)
+    assert auto_combat == [], "Mana abilities alone must not hold active combat"
+    assert auto_mana_only == [], (
+        "Mana abilities alone must not hold any stop under auto_pass=True"
+    )
+
+    (isolated_traces / "play.sqlite").unlink()
+    full_combat, full_mana_only = run(auto_pass=False)
+    assert full_combat, "Full control must still surface combat mana-float windows"
+    assert any(
+        "TAP_FOR_COST" in _action_types(w) for w in full_mana_only
+    ), "Expected fixed-source mana taps in Full control"
+    assert any(
+        "PRIORITY_ACTIVATE_ABILITY" in _action_types(w) for w in full_mana_only
+    ), "Expected mana-producing activated abilities in Full control"
+
+
+def test_turning_off_combat_stops_skips_razor_rings_window(isolated_traces):
+    """Turning combat stops off skips the Razor Rings combat window."""
+    combat_windows, observe = _combat_window_recorder()
+    payload = _play_ws_game(
+        {
+            "villain_type": "passive",
+            "seed": 3,
+            "hero_deck": RAZOR_RINGS_DECK,
+            "villain_deck": {"Island": 16},
+            "stops": {"my": ["main1", "main2"], "opponent": ["end_step"]},
+        },
+        _make_razor_rings_policy(attack=True),
+        on_payload=observe,
+    )
+    assert payload["type"] == "game_over"
+    assert combat_windows == []
+    trace = _load_single_trace(isolated_traces)
+    assert any(e["actor"] == "hero" and e["auto"] for e in trace["events"])
+
+
+def test_f6_yields_through_active_combat_stops(isolated_traces):
+    """F6 at an active-combat Razor Rings window yields through the rest of the turn."""
+    policy = _make_razor_rings_policy(attack=True)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json(
+                {
+                    "type": "new_game",
+                    "config": {
+                        "villain_type": "passive",
+                        "seed": 3,
+                        "hero_deck": RAZOR_RINGS_DECK,
+                        "villain_deck": {"Island": 16},
+                    },
+                }
+            )
+            payload = settled_message(websocket)
+            combat_turn: int | None = None
+            for _ in range(200):
+                assert payload["type"] == "observation"
+                if (
+                    _is_priority_window(payload)
+                    and payload["data"]["turn"]["step"] == "COMBAT_DECLARE_ATTACKERS"
+                    and any(
+                        "Cast Razor Rings" in (a.get("description") or "")
+                        for a in payload["actions"]
+                    )
+                ):
+                    combat_turn = int(payload["data"]["turn"]["turn_number"])
+                    break
+                websocket.send_json({"type": "action", "index": policy(payload)})
+                payload = settled_message(websocket)
+            assert combat_turn is not None, "Expected Razor Rings window in combat"
+
+            websocket.send_json({"type": "pass_turn"})
+            after_f6 = settled_message(websocket)
+            assert after_f6["type"] == "observation"
+            assert int(after_f6["data"]["turn"]["turn_number"]) > combat_turn
+            assert after_f6.get("auto_passed", 0) > 0

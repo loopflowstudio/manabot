@@ -2595,6 +2595,9 @@ pub struct PyAction {
     /// The tap pays part of the cost itself rather than making mana.
     #[pyo3(get)]
     pub pays_directly: bool,
+    /// The action is a mana ability (fixed-source tap or mana activation).
+    #[pyo3(get)]
+    pub is_mana_ability: bool,
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
@@ -2722,6 +2725,7 @@ impl From<ActionOption> for PyAction {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
@@ -2746,6 +2750,7 @@ impl From<PyAction> for ActionOption {
             ability_index: value.ability_index,
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
+            is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,

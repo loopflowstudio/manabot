@@ -181,11 +181,11 @@ export class GameStore {
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
   deckNames = $state<DeckNames | null>(null);
-  // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
-  // with new_game, and overwritten by the server's effective-config echo.
+  // Priority stops. Loaded from localStorage, sent with new_game, and updated
+  // in memory by the server's effective-config echo.
   stops = $state<StopsConfig>(loadStoredStops());
   // Stops set to hold once: still ordinary stops in `stops`, cleared by the
-  // client when the game stops there (`spendOnce`).
+  // client when the person leaves a window the game held there (`spendOnce`).
   onceStops = $state<OnceStops>(loadStoredOnce());
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
@@ -359,7 +359,7 @@ export class GameStore {
     this.updateStops(next.stops);
   }
 
-  /** The game stopped at a once stop: clear it, and say so as automation. */
+  /** The person left a window a once stop held: clear it, and say so as automation. */
   spendOnce(side: StopSide, step: string): void {
     const next = withStopState(this.stops, this.onceStops, side, step, 'off');
     this.updateOnce(next.once);
@@ -405,7 +405,7 @@ export class GameStore {
       this.stopsInFlight = settled ? null : { ...flight, echoes: flight.echoes - 1 };
       if (!settled) return;
     }
-    this.updateStops(stops);
+    this.updateStops(stops, false);
   }
 
   beginFastForward(): void {
@@ -608,9 +608,9 @@ export class GameStore {
     this.setFocus([]);
   }
 
-  private updateStops(next: StopsConfig): void {
+  private updateStops(next: StopsConfig, persist = true): void {
     this.stops = next;
-    if (this.persistPreferences) saveStoredStops(next);
+    if (persist && this.persistPreferences) saveStoredStops(next);
     const once = pruneOnce(this.onceStops, next);
     if (once.my.length !== this.onceStops.my.length || once.opponent.length !== this.onceStops.opponent.length) this.updateOnce(once);
   }
