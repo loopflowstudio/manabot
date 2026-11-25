@@ -40,16 +40,19 @@ impl PresentationLabels {
 }
 
 impl Game {
+    fn can_name_object(&self, object: ObjectId, viewer: PlayerId) -> bool {
+        // A departed battlefield object keeps its exact public appearance in LKI.
+        self.object_lki(object).is_some()
+            || self.visible_reference(object, viewer).object.is_some()
+    }
+
     fn named_object(
         &self,
         object: ObjectId,
         viewer: PlayerId,
         labels: &mut PresentationLabels,
     ) -> Option<ObjectRenderId> {
-        // A departed battlefield object keeps its exact public appearance in LKI.
-        if self.object_lki(object).is_none()
-            && self.visible_reference(object, viewer).object.is_none()
-        {
+        if !self.can_name_object(object, viewer) {
             return None;
         }
         let id = self.object_event_ref(object)?.into();
@@ -123,8 +126,7 @@ impl Game {
             },
             Target::StackAbility(id) => {
                 let source = self.stack_ability_source(id)?;
-                let mut names = PresentationLabels::default();
-                if self.named_object(source, viewer, &mut names).is_some() {
+                if self.can_name_object(source, viewer) && self.object_event_ref(source).is_some() {
                     labels
                         .stacks
                         .insert(id.0.to_string(), self.observed_object_name(source));

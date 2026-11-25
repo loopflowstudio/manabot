@@ -2,10 +2,10 @@
 // State-based actions.
 
 use crate::{
+    experience::PresentationRule,
     flow::{
         decision::{EffectFrame, FrameCompletion},
         game::{Game, GameOutcome, GameProcedure, LossCauses},
-        presentation::Rule,
         proposed_event::{EventBinding, ProposedEvent},
         statics::Characteristics,
     },
@@ -106,11 +106,11 @@ impl Game {
                     continue;
                 }
                 let rule = if causes.life_total {
-                    Rule::ZeroLife
+                    PresentationRule::ZeroLife
                 } else if causes.deck_empty {
-                    Rule::EmptyLibrary
+                    PresentationRule::EmptyLibrary
                 } else {
-                    Rule::Poison
+                    PresentationRule::Poison
                 };
                 self.presentation_lost(PlayerId(seat), Some(rule));
             }
@@ -206,17 +206,17 @@ impl Game {
                 continue;
             };
             let rule = if zero_toughness {
-                Rule::ZeroToughness
+                PresentationRule::ZeroToughness
             } else if zero_counters && characteristics.types.is_planeswalker() {
-                Rule::ZeroLoyalty
+                PresentationRule::ZeroLoyalty
             } else if zero_counters {
-                Rule::ZeroDefense
+                PresentationRule::ZeroDefense
             } else if legend_loser {
-                Rule::LegendRule
+                PresentationRule::LegendRule
             } else if illegal_aura {
-                Rule::UnattachedAura
+                PresentationRule::UnattachedAura
             } else {
-                Rule::LethalDamage
+                PresentationRule::LethalDamage
             };
             rules.push((object_ref, rule));
             candidates.push((object_ref, destroy));

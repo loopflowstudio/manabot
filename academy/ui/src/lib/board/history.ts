@@ -220,50 +220,49 @@ function sameObjects(a: readonly { entity: number; incarnation: number }[], b: r
   return a.length === b.length && a.every((item, i) => item.entity === b[i].entity && item.incarnation === b[i].incarnation);
 }
 
-/** Build the unified turn-grouped history from one viewer's presentation track. */
-export function buildHistory(
+export interface TrackFold {
+  /** Indices of redundant `destroyed` (before matching `died`) and folded `targeted` events. */
+  consumed: Set<number>;
+  /** Targets folded onto their parent `cast` / `activated` / `triggered` event, keyed by parent seq. */
+  foldedTargets: Map<number, (FoldedTarget & { seq: number })[]>;
+  /** Stack ids created by `triggered` events (so `ability_resolved` reads "trigger"). */
+  stackTriggers: Set<number>;
+  /** Stack id -> seq of the `cast` / `activated` / `triggered` event that put it on the stack. */
+  stackSourceSeq: Map<number, number>;
+}
+
+/** Shared track pass: index stack origins, fold `targeted` onto its parent, and drop redundant `destroyed`. */
+export function preprocessTrackEvents(
   events: readonly PresentationEvent[],
   labelsAt: (index: number) => PresentationLabels,
-  players: TellPlayers,
-  options: HistoryOptions = {},
-): HistoryTurn[] {
+): TrackFold {
   const stackTriggers = new Set<number>();
   const stackSourceSeq = new Map<number, number>();
-  for (const event of events) {
-    if (event.kind.kind === 'triggered') {
-      stackTriggers.add(event.kind.stack);
-      stackSourceSeq.set(event.kind.stack, event.seq);
-    } else if (event.kind.kind === 'cast' || event.kind.kind === 'activated') {
-      stackSourceSeq.set(event.kind.stack, event.seq);
-    }
-  }
-
-  // Pass 1: fold targets onto their parent event, fold immediate resolutions
-  // (ignoring passes) into their cast/activation, and absorb passes that
-  // immediately precede a stack resolution.
   const consumed = new Set<number>();
   const foldedTargets = new Map<number, (FoldedTarget & { seq: number })[]>();
-  const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
-  const absorbedBeforeResolution = new Map<number, number[]>();
 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
-    if (event.kind.kind === 'destroyed') {
+    const kind = event.kind;
+    if (kind.kind === 'triggered') {
+      stackTriggers.add(kind.stack);
+      stackSourceSeq.set(kind.stack, event.seq);
+    } else if (kind.kind === 'cast' || kind.kind === 'activated') {
+      stackSourceSeq.set(kind.stack, event.seq);
+    } else if (kind.kind === 'destroyed') {
       const next = events[i + 1];
-      if (next?.kind.kind === 'died' && sameObjects(event.kind.objects, next.kind.objects)) {
+      if (next?.kind.kind === 'died' && sameObjects(kind.objects, next.kind.objects)) {
         consumed.add(i);
       }
-      continue;
-    }
-    if (event.kind.kind === 'targeted') {
+    } else if (kind.kind === 'targeted') {
       let parentSeq: number | null = event.cause ?? null;
-      if (parentSeq === null && event.kind.source.kind === 'stack') {
+      if (parentSeq === null && kind.source.kind === 'stack') {
         // Legacy fallback when events carry no `cause`: look back for matching stack cast/activation/trigger.
         for (let back = i - 1; back >= 0; back -= 1) {
           const prev = events[back];
           if (
             (prev.kind.kind === 'cast' || prev.kind.kind === 'activated' || prev.kind.kind === 'triggered')
-            && prev.kind.stack === event.kind.source.id
+            && prev.kind.stack === kind.source.id
           ) {
             parentSeq = prev.seq;
             break;
@@ -273,12 +272,73 @@ export function buildHistory(
       }
       if (parentSeq !== null) {
         const list = foldedTargets.get(parentSeq) ?? [];
-        list.push({ target: event.kind.target, labels: labelsAt(i), event, seq: event.seq });
+        list.push({ target: kind.target, labels: labelsAt(i), event, seq: event.seq });
         foldedTargets.set(parentSeq, list);
         consumed.add(i);
       }
     }
   }
+  return { consumed, foldedTargets, stackTriggers, stackSourceSeq };
+}
+
+function makeLine(
+  fields: Pick<HistoryLine, 'id' | 'actor' | 'who' | 'segments' | 'sentence'> & Partial<HistoryLine>,
+): HistoryLine {
+  return {
+    seq: null,
+    boardSeq: null,
+    seqs: [],
+    sourceSeq: null,
+    fromRevision: null,
+    isMove: false,
+    children: [],
+    rule: null,
+    subjects: [],
+    count: 1,
+    passes: null,
+    jumpKey: null,
+    ...fields,
+  };
+}
+
+function pushPassRun(
+  turn: HistoryTurn,
+  actor: 'opponent' | 'auto',
+  who: string,
+  meta: { id: string; seq: number | null; fromRevision: number | null; jumpKey: string | null },
+): void {
+  const last = turn.lines.at(-1);
+  if (last?.passes) {
+    if (meta.seq !== null) last.seqs.push(meta.seq);
+    const part = last.passes.find(candidate => candidate.actor === actor);
+    if (part) part.count += 1;
+    else last.passes.push({ actor, who, count: 1 });
+    return;
+  }
+  turn.lines.push(makeLine({
+    ...meta,
+    seqs: meta.seq !== null ? [meta.seq] : [],
+    actor: 'note',
+    who: '',
+    segments: [{ text: 'passed', card: null }],
+    sentence: `${who} passed`,
+    passes: [{ actor, who, count: 1 }],
+  }));
+}
+
+/** Build the unified turn-grouped history from one viewer's presentation track. */
+export function buildHistory(
+  events: readonly PresentationEvent[],
+  labelsAt: (index: number) => PresentationLabels,
+  players: TellPlayers,
+  options: HistoryOptions = {},
+): HistoryTurn[] {
+  // Pass 1: fold targets onto their parent event, fold immediate resolutions
+  // (ignoring passes) into their cast/activation, and absorb passes that
+  // immediately precede a stack resolution.
+  const { consumed, foldedTargets, stackTriggers, stackSourceSeq } = preprocessTrackEvents(events, labelsAt);
+  const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
+  const absorbedBeforeResolution = new Map<number, number[]>();
 
   for (let i = 0; i < events.length; i += 1) {
     if (consumed.has(i)) continue;
@@ -336,7 +396,7 @@ export function buildHistory(
   let currentOwner: 'you' | 'opponent' | null = options.initialOwner ?? null;
   let openBlock: { line: HistoryLine; seqs: Set<number>; castSeq: number | null; resolvedSeq: number | null } | null = null;
 
-  const pendingNotes = [...(options.notes ?? [])];
+  const pendingNotes = options.notes ?? [];
   let noteCursor = 0;
 
   const ensureTurn = (turnNum: number | null, owner: 'you' | 'opponent' | null): HistoryTurn => {
@@ -373,26 +433,13 @@ export function buildHistory(
     closeBlock();
     const targetTurn = note.turn ?? currentTurn;
     const owner = targetTurn === currentTurn ? currentOwner : null;
-    const turn = ensureTurn(targetTurn, owner);
-    turn.lines.push({
+    ensureTurn(targetTurn, owner).lines.push(makeLine({
       id: note.id,
-      seq: null,
-      boardSeq: null,
-      seqs: [],
-      sourceSeq: null,
-      fromRevision: null,
       actor: note.actor,
       who: whoForActor(note.actor, players),
       segments: [{ text: note.text, card: null }],
       sentence: note.text,
-      isMove: false,
-      children: [],
-      rule: null,
-      subjects: [],
-      count: 1,
-      passes: null,
-      jumpKey: null,
-    });
+    }));
   };
 
   const flushNotesUpTo = (nextSeq: number | null): void => {
@@ -422,60 +469,30 @@ export function buildHistory(
     const move = isMoveEvent(event);
 
     if (event.kind.kind === 'passed') {
+      closeBlock();
       const actor = actorForMove(event, players, currentOwner);
+      const jumpKey = options.jumpKeyFor?.(event, true) ?? null;
       if (actor === 'opponent' || actor === 'auto') {
-        closeBlock();
-        const who = actor === 'opponent' ? players.opponent : 'auto';
-        const last = turn.lines.at(-1);
-        if (last?.passes) {
-          last.seqs.push(event.seq);
-          const part = last.passes.find(candidate => candidate.actor === actor);
-          if (part) part.count += 1;
-          else last.passes.push({ actor, who, count: 1 });
-        } else {
-          turn.lines.push({
-            id: `seq-${event.seq}`,
-            seq: event.seq,
-            boardSeq: null,
-            seqs: [event.seq],
-            sourceSeq: null,
-            fromRevision: event.from_revision,
-            actor: 'note',
-            who: '',
-            segments: [{ text: 'passed', card: null }],
-            sentence: `${who} passed`,
-            isMove: false,
-            children: [],
-            rule: null,
-            subjects: [],
-            count: 1,
-            passes: [{ actor, who, count: 1 }],
-            jumpKey: options.jumpKeyFor?.(event, true) ?? null,
-          });
-        }
+        pushPassRun(turn, actor, whoForActor(actor, players), {
+          id: `seq-${event.seq}`,
+          seq: event.seq,
+          fromRevision: event.from_revision,
+          jumpKey,
+        });
         continue;
       }
       // Person's own explicit pass stays a move.
-      closeBlock();
-      turn.lines.push({
+      turn.lines.push(makeLine({
         id: `seq-${event.seq}`,
         seq: event.seq,
-        boardSeq: null,
         seqs: [event.seq],
-        sourceSeq: null,
         fromRevision: event.from_revision,
         actor: 'you',
         who: players.you,
         segments: tell(event, labels, players, { form: 'move' }),
         sentence: segmentText(tell(event, labels, players, { form: 'sentence' })),
-        isMove: false,
-        children: [],
-        rule: null,
-        subjects: [],
-        count: 1,
-        passes: null,
-        jumpKey: options.jumpKeyFor?.(event, true) ?? null,
-      });
+        jumpKey,
+      }));
       continue;
     }
 
@@ -514,7 +531,7 @@ export function buildHistory(
         ? (stackSourceSeq.get(event.kind.stack) ?? null)
         : null;
     const actor: HistoryActor = move ? actorForMove(event, players, currentOwner) : 'note';
-    const line: HistoryLine = {
+    const line = makeLine({
       id: `seq-${event.seq}`,
       seq: event.seq,
       boardSeq: event.seq,
@@ -526,13 +543,10 @@ export function buildHistory(
       segments,
       sentence,
       isMove: move,
-      children: [],
       rule: event.rule ?? null,
       subjects,
-      count: 1,
-      passes: null,
       jumpKey: options.jumpKeyFor?.(event, move) ?? null,
-    };
+    });
 
     if (indented && openBlock) {
       openBlock.line.children.push(line);
@@ -578,6 +592,7 @@ export function legacyMoveHistory(
   owners: ReadonlyMap<number, 'you' | 'opponent'>,
   names: readonly string[],
 ): HistoryTurn[] {
+  const tellPlayers: TellPlayers = { youSeat: 0, ...players };
   const turns: HistoryTurn[] = [];
   for (const entry of entries) {
     let turn = turns.at(-1);
@@ -589,58 +604,27 @@ export function legacyMoveHistory(
     const actor = LEGACY_ACTORS[entry.actor];
     const last = turn.lines.at(-1);
     if (entry.text === LEGACY_PASS && (actor === 'opponent' || actor === 'auto')) {
-      const who = actor === 'opponent' ? players.opponent : 'auto';
-      if (last?.passes) {
-        const part = last.passes.find(candidate => candidate.actor === actor);
-        if (part) part.count += 1;
-        else last.passes.push({ actor, who, count: 1 });
-      } else {
-        turn.lines.push({
-          id: entry.id,
-          seq: null,
-          boardSeq: null,
-          seqs: [],
-          sourceSeq: null,
-          fromRevision: null,
-          actor: 'note',
-          who: '',
-          segments: [{ text: 'passed', card: null }],
-          sentence: `${who} passed`,
-          isMove: false,
-          children: [],
-          rule: null,
-          subjects: [],
-          count: 1,
-          passes: [{ actor, who, count: 1 }],
-          jumpKey: entry.id,
-        });
-      }
+      pushPassRun(turn, actor, whoForActor(actor, tellPlayers), {
+        id: entry.id,
+        seq: null,
+        fromRevision: null,
+        jumpKey: entry.id,
+      });
       continue;
     }
     if (last && actor !== 'you' && last.actor === actor && segmentText(last.segments) === entry.text) {
       last.count += 1;
       continue;
     }
-    const who = actor === 'you' ? players.you : actor === 'opponent' ? players.opponent : actor === 'auto' ? 'auto' : '';
-    turn.lines.push({
+    turn.lines.push(makeLine({
       id: entry.id,
-      seq: null,
-      boardSeq: null,
-      seqs: [],
-      sourceSeq: null,
-      fromRevision: null,
       actor,
-      who,
+      who: whoForActor(actor, tellPlayers),
       segments: segmentsFromText(entry.text, names),
       sentence: entry.text,
       isMove: actor === 'you' || actor === 'opponent',
-      children: [],
-      rule: null,
-      subjects: [],
-      count: 1,
-      passes: null,
       jumpKey: entry.id,
-    });
+    }));
   }
   return turns;
 }
@@ -722,12 +706,16 @@ export function flattenHistory(turns: readonly HistoryTurn[]): FlatHistoryLine[]
   return flat;
 }
 
+function cursorIndex(flat: readonly FlatHistoryLine[], cursor: number): number {
+  const exact = flat.findIndex(item => item.cursor === cursor);
+  return exact >= 0 ? exact : flat.findIndex(item => item.line.seqs.includes(cursor));
+}
+
 /** The selectable line matching `cursor` (exact `boardSeq` first, then folded `seqs`). */
 export function lineAtCursor(turns: readonly HistoryTurn[], cursor: number): FlatHistoryLine | null {
   const flat = flattenHistory(turns);
-  return flat.find(item => item.cursor === cursor)
-    ?? flat.find(item => item.line.seqs.includes(cursor))
-    ?? null;
+  const index = cursorIndex(flat, cursor);
+  return index >= 0 ? flat[index] : null;
 }
 
 /**
@@ -739,8 +727,7 @@ export function stepCursor(turns: readonly HistoryTurn[], cursor: number | null,
   const flat = flattenHistory(turns);
   if (flat.length === 0) return null;
   if (cursor === null) return direction < 0 ? flat.at(-1)!.cursor : null;
-  let index = flat.findIndex(item => item.cursor === cursor);
-  if (index < 0) index = flat.findIndex(item => item.line.seqs.includes(cursor));
+  const index = cursorIndex(flat, cursor);
   if (index < 0) return direction < 0 ? flat.at(-1)!.cursor : null;
   if (direction < 0) return flat[Math.max(0, index - 1)].cursor;
   return index + 1 < flat.length ? flat[index + 1].cursor : null;

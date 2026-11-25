@@ -24,12 +24,11 @@
   import Inspect from './Inspect.svelte';
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
-  import { animateDeathTravel, prefersReducedMotion, Travel, type DeathMark } from './motion';
+  import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, Travel, type DeathMark } from './motion';
   import { region } from './region';
-  import { BEAT_MS, scrubberStops, sharedLaterCount, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
+  import { BEAT_MS, computeStopDeltas, scrubberStops, sharedLaterCount, stopHasSeq, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
   import { findBoard, type StepBoard } from './boards';
   import { buildHistory, cursorReading, lineAtCursor, stepCursor, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
-  import { eventObjectName, tellCounter, tellRule } from './tell';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
@@ -401,15 +400,9 @@
   const scrubber = $derived(scrubberStops(stopsAll, cursor));
   const hasOpponentTurn = $derived(stopsAll.some(stop => stop.opponentAction));
   const showWalkBar = $derived(connection !== null && (hasOpponentTurn || cursor !== null));
-  const activeStop = $derived.by(() => {
-    const seq = cursor;
-    return seq === null ? null : stopsAll.find(stop => stop.seq === seq || stop.seqs.includes(seq)) ?? null;
-  });
+  const activeStop = $derived(cursor === null ? null : stopsAll.find(stop => stopHasSeq(stop, cursor!)) ?? null);
   const activeLine = $derived(cursor === null ? null : lineAtCursor(history, cursor));
-  const activeStopIndex = $derived.by(() => {
-    const seq = cursor;
-    return seq === null ? -1 : scrubber.stops.findIndex(stop => stop.seq === seq || stop.seqs.includes(seq));
-  });
+  const activeStopIndex = $derived(cursor === null ? -1 : scrubber.stops.findIndex(stop => stopHasSeq(stop, cursor!)));
   const liveCursorLineIds = $derived.by<ReadonlySet<string>>(() => {
     if (cursor === null) return new Set();
     if (walking && activeStop) return new Set(activeStop.lineIds);
@@ -427,23 +420,20 @@
     cursor === null ? '' : (walking ? activeStop?.caption : activeLine?.line.sentence) ?? activeStop?.caption ?? '',
   );
 
-  function returnToNow(): void {
-    cursor = null;
+  function setCursor(next: number | null): void {
     walking = false;
     walkQueue = [];
     captionHovered = false;
+    cursor = next;
   }
 
-  function selectCursor(seq: number): void {
-    walking = false;
-    walkQueue = [];
-    captionHovered = false;
-    cursor = seq;
+  function returnToNow(): void {
+    setCursor(null);
   }
 
   function selectHistoryLine(selected: HistoryLine): void {
     const seq = selected.boardSeq ?? selected.seq;
-    if (seq !== null) selectCursor(seq);
+    if (seq !== null) setCursor(seq);
   }
 
   function replayTurn(): void {
@@ -513,40 +503,6 @@
     if (activeLine) return new Set(activeLine.line.seqs);
     return new Set(activeStop?.seqs ?? [cursor]);
   });
-  const stopDeltas = $derived.by(() => {
-    const objects = new Map<number, { kind: 'damage' | 'counters'; text: string }[]>();
-    const players = new Map<number, number>();
-    if (cursor === null || activeSeqSet.size === 0) return { objects, players };
-    const objectDamage = new Map<number, number>();
-    for (const event of presentation.events) {
-      if (!activeSeqSet.has(event.seq)) continue;
-      if (event.kind.kind === 'damage') {
-        if (event.kind.target.kind === 'object') {
-          const id = event.kind.target.id.entity;
-          objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
-        } else if (event.kind.target.kind === 'player') {
-          const id = event.kind.target.id;
-          const idx = id === boardProjection.agent.id || id === boardProjection.agent.player_index
-            ? boardProjection.agent.player_index
-            : id === boardProjection.opponent.id || id === boardProjection.opponent.player_index
-              ? boardProjection.opponent.player_index
-              : null;
-          if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
-        }
-      } else if (event.kind.kind === 'counters') {
-        const id = event.kind.object.entity;
-        const list = objects.get(id) ?? [];
-        list.push({ kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
-        objects.set(id, list);
-      }
-    }
-    for (const [id, amount] of objectDamage) {
-      const list = objects.get(id) ?? [];
-      list.unshift({ kind: 'damage', text: `−${amount}` });
-      objects.set(id, list);
-    }
-    return { objects, players };
-  });
 
   // Look up the kept board for `cursor`: a past board has no live offers, while
   // the rail stays live throughout.
@@ -556,6 +512,7 @@
   const drawn = $derived(cursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
   const board = $derived(cursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
+  const stopDeltas = $derived(computeStopDeltas(presentation.events, activeSeqSet, boardProjection));
   const boardNames = $derived(cursor !== null && cursorHit
     ? new Map([...cursorHit.projection.agent.battlefield, ...cursorHit.projection.opponent.battlefield]
       .map(permanent => [permanent.id, permanent.name ?? 'permanent']))
@@ -596,75 +553,23 @@
     travel.snapshot(root);
   });
   $effect(() => {
-    const proj = boardProjection;
-    const stopSeqs = activeSeqSet;
-    const cur = cursor;
-    const sinceRev = sinceRevision;
-    const pace = beatPace;
-    const events = presentation.events;
-    const matchId = frame.match_id;
-    const rev = frame.revision;
     const reduced = prefersReducedMotion();
     travel.play(root, reduced);
-
-    // Build death marks for creatures dying at this stop (or since your last move
-    // when staying on now under reduced motion / pace Off).
-    const onBoard = new Set([...proj.agent.battlefield, ...proj.opponent.battlefield].map(p => p.id));
-    const relevant: { event: typeof events[number]; index: number }[] = [];
-    if (cur !== null) {
-      events.forEach((event, index) => {
-        if (event.kind.kind === 'died' && stopSeqs.has(event.seq)) relevant.push({ event, index });
-      });
-    } else if ((reduced || pace === 'off') && sinceRev !== null) {
-      events.forEach((event, index) => {
-        if (event.kind.kind === 'died' && event.from_revision >= sinceRev) relevant.push({ event, index });
-      });
-    }
-    if (!relevant.length || !boardEl || !root) {
-      deathMarks = [];
-      return;
-    }
-    const boardRect = boardEl.getBoundingClientRect();
-    const marks: DeathMark[] = [];
-    for (const { event, index } of relevant) {
-      if (event.kind.kind !== 'died') continue;
-      const labels = presentation.labelsAt(index);
-      const rule = event.rule ? tellRule(event.rule) : null;
-      for (const obj of event.kind.objects) {
-        if (onBoard.has(obj.entity)) continue;
-        const travelKey = `perm:${obj.entity}`;
-        const before = travel.seenBefore(travelKey);
-        const known = travel.knownPosition(travelKey);
-        const side: 'you' | 'opponent' = known?.side
-          ?? (proj.agent.graveyard.some(c => c.id === obj.entity) ? 'you' : 'opponent');
-        const fallbackRow = root.querySelector<HTMLElement>(`.half.${side} .row.creatures`)?.getBoundingClientRect();
-        const rect = known?.rect ?? fallbackRow;
-        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-        const x = known ? rect.left - boardRect.left : rect.left - boardRect.left + rect.width / 2 - 44;
-        const y = known ? rect.top - boardRect.top : rect.top - boardRect.top + rect.height / 2 - 20;
-        const width = known ? rect.width : 88;
-        const height = known ? rect.height : 40;
-        const gyRect = root.querySelector<HTMLElement>(`[data-graveyard-side="${side}"]`)?.getBoundingClientRect();
-        const toDx = gyRect ? (gyRect.left + gyRect.width / 2) - (boardRect.left + x + width / 2) : 0;
-        const toDy = gyRect ? (gyRect.top + gyRect.height / 2) - (boardRect.top + y + height / 2) : 0;
-        const name = eventObjectName(event, obj, labels) ?? known?.name ?? 'Creature';
-        marks.push({
-          entity: obj.entity,
-          name,
-          rule,
-          side,
-          x,
-          y,
-          width,
-          height,
-          toDx,
-          toDy,
-          key: `${matchId}:${cur ?? rev}:${event.seq}:${obj.entity}`,
-          animate: !reduced && before !== null,
-        });
-      }
-    }
-    deathMarks = marks;
+    deathMarks = collectDeathMarks({
+      root,
+      boardEl,
+      travel,
+      projection: boardProjection,
+      events: presentation.events,
+      labelsAt: index => presentation.labelsAt(index),
+      activeSeqs: activeSeqSet,
+      cursor,
+      sinceRevision,
+      pace: beatPace,
+      matchId: frame.match_id,
+      revision: frame.revision,
+      reduced,
+    });
   });
 
   // Battlefield frames are printed cards, upright or tapped on their side;
@@ -957,10 +862,7 @@
         && (target.closest('button, a, input, select, textarea, summary, [data-testid=stop-bar], [data-region]') !== null);
       if (!inControl) {
         event.preventDefault();
-        walking = false;
-        walkQueue = [];
-        captionHovered = false;
-        cursor = stepCursor(history, cursor, event.key === 'ArrowLeft' ? -1 : 1);
+        setCursor(stepCursor(history, cursor, event.key === 'ArrowLeft' ? -1 : 1));
         return;
       }
     }
@@ -1189,14 +1091,14 @@
           </div>
           <div class="walk-scrubber" data-testid="walk-scrubber" role="group" aria-label={`Turn ${scrubber.turn ?? turnNumber} stops`}>
             {#each scrubber.stops as stop, idx (stop.seq)}
-              {@const isActive = cursor !== null && (stop.seq === cursor || stop.seqs.includes(cursor))}
+              {@const isActive = cursor !== null && stopHasSeq(stop, cursor)}
               <button type="button" class="walk-tick" class:move={stop.moveStart} class:active={isActive}
                 class:passed={activeStopIndex >= 0 && idx < activeStopIndex}
                 data-testid="walk-tick" data-stop-seq={stop.seq} data-move-start={stop.moveStart ? 'true' : undefined}
                 aria-pressed={isActive}
                 aria-label={`Stop ${idx + 1} of ${scrubber.stops.length}: ${stop.caption}`}
                 title={stop.caption}
-                onclick={() => selectCursor(stop.seq)}>
+                onclick={() => setCursor(stop.seq)}>
                 <span class="tick-bar" aria-hidden="true"></span>
               </button>
             {/each}

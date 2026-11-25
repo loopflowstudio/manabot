@@ -55,6 +55,10 @@ CUES: dict[str, tuple[str, int, str | None]] = {
 }
 
 
+# Simultaneous discards, sacrifices or reveals share one line when adjacent.
+COALESCED_KINDS = frozenset({"discarded", "sacrificed", "revealed"})
+
+
 class PresentationProjector:
     """Append events at consecutive addresses on one viewer's track."""
 
@@ -92,10 +96,11 @@ class PresentationProjector:
                 previous = events[-1] if events else None
                 if (
                     previous is not None
-                    and name in {"discarded", "sacrificed", "revealed"}
+                    and name in COALESCED_KINDS
                     and previous["kind"]["kind"] == name
                     and previous["kind"]["player"] == kind["player"]
                     and previous.get("cause") == cause
+                    and previous.get("rule") == fact["rule"]
                     and self.position(previous["seq"]) == fact["position"]
                 ):
                     key = "cards" if name == "revealed" else "objects"

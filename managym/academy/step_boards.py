@@ -46,7 +46,7 @@ class WireStepBoard(TypedDict):
     last: int
     patch: dict[str, Any]
 
-# The newest boards kept per batch: beats read out at most the last few moves.
+# The newest per-line boards kept per Command batch.
 MAX_STEP_BOARDS = 24
 
 

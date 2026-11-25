@@ -26,6 +26,9 @@
  * its slot once its travel ends.
  */
 
+import type { Observation, PresentationEvent, PresentationLabels } from '$lib/types';
+import { eventObjectName, tellRule } from './tell';
+
 export interface SeenCard {
   id: string;
   name: string;
@@ -167,6 +170,82 @@ export class Travel {
       else element.animate([{ opacity: 0 }, { opacity: 1 }], { id: TRAVEL, duration: ARRIVE_MS, easing: 'ease-out' });
     }
   }
+}
+
+/**
+ * Build death marks (travel ghost + rule chip) for creatures dying on the
+ * active cursor stop (or since the last decision when staying on now under
+ * reduced motion / pace Off).
+ */
+export function collectDeathMarks(params: {
+  root: HTMLElement | null;
+  boardEl: HTMLElement | null;
+  travel: Travel;
+  projection: Observation;
+  events: readonly PresentationEvent[];
+  labelsAt: (index: number) => PresentationLabels;
+  activeSeqs: ReadonlySet<number>;
+  cursor: number | null;
+  sinceRevision: number | null;
+  pace: string;
+  matchId: string;
+  revision: number;
+  reduced: boolean;
+}): DeathMark[] {
+  const { root, boardEl, travel, projection, events, labelsAt, activeSeqs, cursor, sinceRevision, pace, matchId, revision, reduced } = params;
+  const relevant: { event: PresentationEvent; index: number }[] = [];
+  if (cursor !== null) {
+    events.forEach((event, index) => {
+      if (event.kind.kind === 'died' && activeSeqs.has(event.seq)) relevant.push({ event, index });
+    });
+  } else if ((reduced || pace === 'off') && sinceRevision !== null) {
+    events.forEach((event, index) => {
+      if (event.kind.kind === 'died' && event.from_revision >= sinceRevision) relevant.push({ event, index });
+    });
+  }
+  if (!relevant.length || !boardEl || !root) return [];
+
+  const onBoard = new Set([...projection.agent.battlefield, ...projection.opponent.battlefield].map(p => p.id));
+  const boardRect = boardEl.getBoundingClientRect();
+  const marks: DeathMark[] = [];
+  for (const { event, index } of relevant) {
+    if (event.kind.kind !== 'died') continue;
+    const labels = labelsAt(index);
+    const rule = event.rule ? tellRule(event.rule) : null;
+    for (const obj of event.kind.objects) {
+      if (onBoard.has(obj.entity)) continue;
+      const travelKey = `perm:${obj.entity}`;
+      const before = travel.seenBefore(travelKey);
+      const known = travel.knownPosition(travelKey);
+      const side: 'you' | 'opponent' = known?.side
+        ?? (projection.agent.graveyard.some(c => c.id === obj.entity) ? 'you' : 'opponent');
+      const fallbackRow = root.querySelector<HTMLElement>(`.half.${side} .row.creatures`)?.getBoundingClientRect();
+      const rect = known?.rect ?? fallbackRow;
+      if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+      const x = known ? rect.left - boardRect.left : rect.left - boardRect.left + rect.width / 2 - 44;
+      const y = known ? rect.top - boardRect.top : rect.top - boardRect.top + rect.height / 2 - 20;
+      const width = known ? rect.width : 88;
+      const height = known ? rect.height : 40;
+      const gyRect = root.querySelector<HTMLElement>(`[data-graveyard-side="${side}"]`)?.getBoundingClientRect();
+      const toDx = gyRect ? (gyRect.left + gyRect.width / 2) - (boardRect.left + x + width / 2) : 0;
+      const toDy = gyRect ? (gyRect.top + gyRect.height / 2) - (boardRect.top + y + height / 2) : 0;
+      marks.push({
+        entity: obj.entity,
+        name: eventObjectName(event, obj, labels) ?? known?.name ?? 'Creature',
+        rule,
+        side,
+        x,
+        y,
+        width,
+        height,
+        toDx,
+        toDy,
+        key: `${matchId}:${cursor ?? revision}:${event.seq}:${obj.entity}`,
+        animate: !reduced && before !== null,
+      });
+    }
+  }
+  return marks;
 }
 
 /** Animate a dying card ghost from its last battlefield slot to its owner's graveyard count. */

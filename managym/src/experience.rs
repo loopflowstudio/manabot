@@ -993,7 +993,7 @@ pub enum LookAction {
 
 /// The state-based or turn-based action (CR 704.5, 504, 514) that did what an
 /// event tells, when no player chose it.
-#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PresentationRule {
     DrawStep,

@@ -6,9 +6,10 @@
 //! clones omit it, rollback snapshots keep it, and nothing a policy reads
 //! comes from it. It mirrors every [`GameEvent`] `emit` commits and adds the
 //! notes no event carries (an activation reaching the stack, a stack object
-//! beginning to resolve). [`Game::presentation_facts`] projects the facts
-//! through the observation's own event filter, so a viewer is told exactly
-//! what `recent_events` would tell it, plus the notes, causes and rules.
+//! beginning to resolve, priority passes, state-based losses). Each fact is
+//! projected eagerly for both viewer seats in `presentation_lines` at commit
+//! time, attaching only viewer-safe labels from that moment; [`Game::presentation_facts`]
+//! reads one viewer's lines non-destructively.
 //!
 //! Causes: while a stack object resolves, and through the stabilization after
 //! it, every fact follows from that resolution; outside a resolution, a death
@@ -18,20 +19,20 @@
 //! when stabilization reaches priority (`sba_done`).
 //!
 //! Positions: the sink keeps a copy of the game (a *position*) each time the
-//! game reaches a whole state after at least one new fact: an action finished
-//! (and before the next one starts), a stack object finished resolving,
-//! stabilization began (after combat damage or a turn-based action), a
-//! state-based batch was performed, a round of triggers reached the stack.
+//! game reaches a whole state after at least one new non-pass fact: an action
+//! finished (and before the next one starts), a stack object finished
+//! resolving, stabilization began (after combat damage or a turn-based action),
+//! a state-based batch was performed, a round of triggers reached the stack.
 //! Each fact names the position cut after it, so a person can see the board
 //! as it was after each told line; facts after the last cut are on the board
 //! the step ends with. A position has no presentation sink and no published
-//! decision, so it shows a board and never a stale choice. A priority pass
-//! notes no fact and so never cuts one.
+//! decision, so it shows a board and never a stale choice. Priority passes are
+//! recorded on the track without marking `uncut` and so never cut a position.
 
 use serde::Serialize;
 
 use crate::{
-    experience::{PresentationKind, PresentationLabels},
+    experience::{PresentationKind, PresentationLabels, PresentationRule},
     flow::{
         event::{DamageTarget, GameEvent, ObjectEventRef},
         game::Game,
@@ -47,34 +48,6 @@ use crate::{
 /// A fact's place in the game's told order; never reused, so a cause can
 /// name a fact taken in an earlier step.
 pub type FactId = u32;
-
-/// A state-based or turn-based action (CR 704.5, 504, 514) that moved a
-/// permanent, discarded a card or ended the game, in words a person reads.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Rule {
-    DrawStep,
-    /// CR 514.1.
-    Cleanup,
-    /// CR 704.5g.
-    LethalDamage,
-    /// CR 704.5f.
-    ZeroToughness,
-    /// CR 704.5i.
-    ZeroLoyalty,
-    /// CR 704.5v.
-    ZeroDefense,
-    /// CR 704.5j.
-    LegendRule,
-    /// CR 704.5m.
-    UnattachedAura,
-    /// CR 704.5a.
-    ZeroLife,
-    /// CR 704.5b.
-    EmptyLibrary,
-    /// CR 704.5c.
-    Poison,
-}
 
 #[derive(Clone, Debug)]
 enum Note {
@@ -94,7 +67,7 @@ enum Note {
 struct Fact {
     id: FactId,
     cause: Option<FactId>,
-    rule: Option<Rule>,
+    rule: Option<PresentationRule>,
     note: Note,
     lines: [Vec<PresentationLine>; 2],
     /// Index of the position cut after this fact, once one is.
@@ -113,7 +86,7 @@ pub struct PresentationSink {
     /// Triggers waiting to be put on the stack, by the event that made them.
     trigger_causes: Vec<(TriggerId, FactId)>,
     /// State-based reasons for the batch being performed.
-    rules: Vec<(ObjectEventRef, Rule)>,
+    rules: Vec<(ObjectEventRef, PresentationRule)>,
     /// Permanents already told as sacrificed in the current batch so a
     /// simultaneous `PermanentsDied` (finished Saga) does not tell them twice.
     pub(super) sacrificed: Vec<ObjectEventRef>,
@@ -133,7 +106,7 @@ impl PresentationSink {
     fn push_caused(
         &mut self,
         fallback: Option<FactId>,
-        rule: Option<Rule>,
+        rule: Option<PresentationRule>,
         note: Note,
         lines: [Vec<PresentationLine>; 2],
     ) -> FactId {
@@ -154,7 +127,7 @@ impl PresentationSink {
 
     /// The rule behind a state-based death, and for lethal damage the
     /// damage fact that dealt it.
-    fn event_rule(&self, event: &GameEvent) -> (Option<Rule>, Option<FactId>) {
+    fn event_rule(&self, event: &GameEvent) -> (Option<PresentationRule>, Option<FactId>) {
         let GameEvent::PermanentsDied { objects } = event else {
             return (None, None);
         };
@@ -166,7 +139,7 @@ impl PresentationSink {
         }) else {
             return (None, None);
         };
-        let damage = (rule == Rule::LethalDamage)
+        let damage = (rule == PresentationRule::LethalDamage)
             .then(|| {
                 self.damaged
                     .iter()
@@ -184,7 +157,7 @@ impl PresentationSink {
 pub struct PresentationFact {
     pub id: FactId,
     pub cause: Option<FactId>,
-    pub rule: Option<Rule>,
+    pub rule: Option<PresentationRule>,
     pub lines: Vec<PresentationLine>,
     pub position: Option<u32>,
 }
@@ -345,16 +318,16 @@ impl Game {
             Note::Event(GameEvent::CardDrawn { .. })
         ));
         fact.lines = lines;
-        fact.rule = draw_step.then_some(Rule::DrawStep);
+        fact.rule = draw_step.then_some(PresentationRule::DrawStep);
     }
 
     /// Note a player losing the game (CR 104.3, 704.5a–c).
-    pub(crate) fn presentation_lost(&mut self, player: PlayerId, rule: Option<Rule>) {
+    pub(crate) fn presentation_lost(&mut self, player: PlayerId, rule: Option<PresentationRule>) {
         let Some(sink) = self.presentation.as_deref_mut() else {
             return;
         };
         let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::lost_line(player));
-        let fallback = (rule == Some(Rule::ZeroLife))
+        let fallback = (rule == Some(PresentationRule::ZeroLife))
             .then(|| sink.player_damaged[player.0])
             .flatten();
         sink.push_caused(fallback, rule, Note::Lost, lines);
@@ -374,7 +347,7 @@ impl Game {
                     ..
                 })
             ) {
-                fact.rule = Some(Rule::Cleanup);
+                fact.rule = Some(PresentationRule::Cleanup);
             }
         }
     }
@@ -390,7 +363,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn presentation_rule(&mut self, object: ObjectId, rule: Rule) {
+    pub(crate) fn presentation_rule(&mut self, object: ObjectId, rule: PresentationRule) {
         if self.presentation.is_none() {
             return;
         }

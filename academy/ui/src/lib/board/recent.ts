@@ -13,21 +13,18 @@
  */
 import type {
   ExperienceFrame,
-  PlayerState,
   PresentationEvent,
   PresentationLabels,
   SubjectRef,
 } from '$lib/types';
+import { preprocessTrackEvents } from './history';
 import {
   eventObjectName,
   eventStackName,
   segmentText,
   tell,
-  type FoldedTarget,
-  type Segment,
   type TellPlayers,
 } from './tell';
-import { inspectableCards } from './view';
 
 /** Something on screen a line can start or end at. */
 export type Endpoint =
@@ -48,42 +45,14 @@ export type Side = 'you' | 'opponent';
 export interface ResolvedSpell {
   id: number;
   name: string;
-  by: Side;
-  targets: string[];
 }
-
-/** What a fact reports; beats group consecutive facts of one kind. */
-export type FactKind =
-  | 'cast'
-  | 'activated'
-  | 'triggered'
-  | 'ability_resolved'
-  | 'countered'
-  | 'counters'
-  | 'damage'
-  | 'died'
-  | 'destroyed'
-  | 'attacked'
-  | 'blocked'
-  | 'land'
-  | 'discarded'
-  | 'revealed'
-  | 'drew'
-  | 'searched'
-  | 'looked'
-  | 'sacrificed'
-  | 'lost';
 
 export interface RecentFact {
   seq: number;
   by: Side | null;
-  kind: FactKind;
   text: string;
-  segments: Segment[];
   /** The card id of the spell a cast fact names. */
   spell: number | null;
-  /** The objects on the board the fact is about (attackers, blockers, targets, what was dealt damage), by id. */
-  subjects: number[];
 }
 
 export interface RecentView {
@@ -180,11 +149,30 @@ export function boardLines(
   return lines;
 }
 
-function sameObjects(
-  a: readonly { entity: number; incarnation: number }[],
-  b: readonly { entity: number; incarnation: number }[],
-): boolean {
-  return a.length === b.length && a.every((o, i) => o.entity === b[i].entity && o.incarnation === b[i].incarnation);
+const SKIPPED_RECAP_KINDS = new Set(['targeted', 'resolved', 'turn_started', 'passed']);
+
+function factSide(frame: ExperienceFrame, kind: PresentationEvent['kind']): Side | null {
+  switch (kind.kind) {
+    case 'cast':
+      return playerSide(frame, kind.controller) ?? 'opponent';
+    case 'activated':
+      return playerSide(frame, kind.controller);
+    case 'attack_group': {
+      const defender = kind.defender.kind === 'player' ? playerSide(frame, kind.defender.id) : null;
+      return defender === 'you' ? 'opponent' : defender === 'opponent' ? 'you' : null;
+    }
+    case 'land_played':
+    case 'discarded':
+    case 'drew':
+    case 'revealed':
+    case 'searched':
+    case 'looked':
+    case 'sacrificed':
+    case 'lost':
+      return playerSide(frame, kind.player);
+    default:
+      return null;
+  }
 }
 
 /**
@@ -207,122 +195,37 @@ export function recentView(
   };
   const onStack = stackCardIds(frame);
   const casts = new Map<number, ResolvedSpell>();
-  const stackTriggers = new Set<number>();
-  for (const event of events) {
-    if (event.kind.kind === 'triggered') stackTriggers.add(event.kind.stack);
-  }
-
-  // Fold targets onto their cast/activated/triggered event inside the recap window.
-  const foldedTargets = new Map<number, FoldedTarget[]>();
-  const consumed = new Set<number>();
-  for (let i = 0; i < events.length; i += 1) {
-    const event = events[i];
-    if (event.from_revision < since) continue;
-    if (event.kind.kind === 'targeted') {
-      let parentSeq: number | null = event.cause ?? null;
-      if (parentSeq === null && event.kind.source.kind === 'stack') {
-        for (let back = i - 1; back >= 0; back -= 1) {
-          const prev = events[back];
-          if (
-            (prev.kind.kind === 'cast' || prev.kind.kind === 'activated' || prev.kind.kind === 'triggered')
-            && prev.kind.stack === event.kind.source.id
-          ) {
-            parentSeq = prev.seq;
-            break;
-          }
-          if (prev.kind.kind !== 'targeted') break;
-        }
-      }
-      if (parentSeq !== null) {
-        const list = foldedTargets.get(parentSeq) ?? [];
-        list.push({ target: event.kind.target, labels: labelsAt(i), event });
-        foldedTargets.set(parentSeq, list);
-        consumed.add(i);
-      }
-    }
-  }
+  const { consumed, foldedTargets, stackTriggers } = preprocessTrackEvents(events, labelsAt);
 
   events.forEach((event, index) => {
     if (event.from_revision < since) return;
-    if (consumed.has(index)) {
-      if (event.kind.kind === 'targeted') {
-        const target = event.kind.target;
-        if (target.kind === 'object') view.touched.add(target.id.entity);
-        if (event.kind.source.kind === 'stack') {
-          const cast = casts.get(event.kind.source.id);
-          if (cast) {
-            const labels = labelsAt(index);
-            const targetName = target.kind === 'player'
-              ? (playerSide(frame, target.id) === 'you'
-                  ? (names.you === 'You' ? (cast.by === 'you' ? 'yourself' : 'you') : names.you)
-                  : names.opponent)
-              : target.kind === 'stack'
-                ? (eventStackName(event, target.id, labels) ?? 'a spell')
-                : (eventObjectName(event, target.id, labels) ?? 'a permanent');
-            cast.targets.push(targetName);
-          }
-        }
-      }
+    const kind = event.kind;
+    if (kind.kind === 'targeted') {
+      if (kind.target.kind === 'object') view.touched.add(kind.target.id.entity);
       return;
     }
+    if (consumed.has(index) || SKIPPED_RECAP_KINDS.has(kind.kind)) return;
 
     const labels = labelsAt(index);
-    const kind = event.kind;
-    const targets = foldedTargets.get(event.seq);
-    const targetEntities = targets?.flatMap(t => (t.target.kind === 'object' ? [t.target.id.entity] : [])) ?? [];
-
-    const push = (
-      by: Side | null,
-      factKind: FactKind,
-      spell: number | null = null,
-      subjects: number[] = [],
-      trigger = false,
-    ): void => {
-      const segments = tell(event, labels, players, { form: 'sentence', targets, trigger });
-      view.facts.push({
-        seq: event.seq,
-        by,
-        kind: factKind,
-        text: segmentText(segments),
-        segments,
-        spell,
-        subjects,
-      });
-    };
-
+    let spell: number | null = null;
     switch (kind.kind) {
       case 'cast': {
-        const by = playerSide(frame, kind.controller) ?? 'opponent';
         const name =
           eventObjectName(event, kind.object, labels)
           ?? eventStackName(event, kind.stack, labels)
           ?? 'a spell';
-        casts.set(kind.stack, { id: kind.stack, name, by, targets: [] });
-        push(by, 'cast', kind.stack, targetEntities);
+        casts.set(kind.stack, { id: kind.stack, name });
+        spell = kind.stack;
         break;
       }
-      case 'activated': {
-        const by = playerSide(frame, kind.controller);
-        push(by, 'activated', null, [kind.source.entity, ...targetEntities]);
+      case 'activated':
         view.touched.add(kind.source.entity);
         break;
-      }
-      case 'triggered':
-        push(null, 'triggered', null, [kind.source.entity, ...targetEntities]);
-        break;
-      case 'ability_resolved':
-        push(null, 'ability_resolved', null, [kind.source.entity], stackTriggers.has(kind.stack));
-        break;
-      case 'countered':
-        push(null, 'countered');
-        break;
       case 'counters':
-        push(null, 'counters', null, [kind.object.entity]);
+      case 'land_played':
         view.touched.add(kind.object.entity);
         break;
-      case 'damage': {
-        const subjects = [kind.source, kind.target].flatMap(s => (s?.kind === 'object' ? [s.id.entity] : []));
-        push(null, 'damage', null, subjects);
+      case 'damage':
         if (kind.target.kind === 'object') {
           view.touched.add(kind.target.id.entity);
           view.damage.objects.set(kind.target.id.entity, (view.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
@@ -331,74 +234,21 @@ export function recentView(
           if (idx !== null) view.damage.players.set(idx, (view.damage.players.get(idx) ?? 0) + kind.amount);
         }
         break;
-      }
-      case 'destroyed':
-      case 'died': {
-        const next = events[index + 1]?.kind;
-        if (kind.kind === 'destroyed' && next?.kind === 'died' && sameObjects(kind.objects, next.objects)) break;
-        push(null, kind.kind, null, kind.objects.map(o => o.entity));
-        break;
-      }
-      case 'attack_group': {
-        const owner = kind.defender.kind === 'player' ? playerSide(frame, kind.defender.id) : null;
-        const by: Side | null = owner === 'you' ? 'opponent' : owner === 'opponent' ? 'you' : null;
-        push(by, 'attacked', null, kind.attackers.map(o => o.entity));
+      case 'attack_group':
         kind.attackers.forEach(o => view.touched.add(o.entity));
         break;
-      }
-      case 'blocked': {
-        push(null, 'blocked', null, [kind.attacker.entity, ...kind.blockers.map(o => o.entity)]);
+      case 'blocked':
         view.touched.add(kind.attacker.entity);
         kind.blockers.forEach(o => view.touched.add(o.entity));
         break;
-      }
-      case 'land_played': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'land', null, [kind.object.entity]);
-        view.touched.add(kind.object.entity);
-        break;
-      }
-      case 'discarded': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'discarded', null, kind.objects.map(o => o.entity));
-        break;
-      }
-      case 'drew': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'drew', null, kind.object ? [kind.object.entity] : []);
-        break;
-      }
-      case 'revealed': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'revealed');
-        break;
-      }
-      case 'searched': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'searched');
-        break;
-      }
-      case 'looked': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'looked');
-        break;
-      }
-      case 'sacrificed': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'sacrificed', null, kind.objects.map(o => o.entity));
-        break;
-      }
-      case 'lost': {
-        const by = playerSide(frame, kind.player);
-        push(by, 'lost');
-        break;
-      }
-      case 'targeted':
-      case 'resolved':
-      case 'turn_started':
-      case 'passed':
-        break;
     }
+
+    const segments = tell(event, labels, players, {
+      form: 'sentence',
+      targets: foldedTargets.get(event.seq),
+      trigger: kind.kind === 'ability_resolved' && stackTriggers.has(kind.stack),
+    });
+    view.facts.push({ seq: event.seq, by: factSide(frame, kind), text: segmentText(segments), spell });
   });
   view.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));
   return view;
@@ -415,12 +265,4 @@ export function turnOwners(frame: ExperienceFrame, events: readonly Presentation
   const { turn, agent } = frame.projection;
   owners.set(turn.turn_number, turn.active_player_id === agent.id ? 'you' : 'opponent');
   return owners;
-}
-
-/** Every card name this viewer can see now, for inspecting names in legacy logs. */
-export function visibleNames(frame: ExperienceFrame, labels: PresentationLabels): string[] {
-  const players: PlayerState[] = [frame.projection.agent, frame.projection.opponent];
-  const names = inspectableCards(players).map(card => card.name)
-    .concat(players.flatMap(player => player.battlefield.map(p => p.name ?? '')));
-  return [...new Set([...names, ...Object.values(labels.objects), ...Object.values(labels.stacks)].filter(Boolean))];
 }

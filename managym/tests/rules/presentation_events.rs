@@ -110,8 +110,8 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
 #[test]
 fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
     use managym::{
-        experience::PresentationKind,
-        flow::presentation::{PresentationFact, Rule},
+        experience::{PresentationKind, PresentationRule},
+        flow::presentation::PresentationFact,
         state::game_object::PlayerId,
     };
 
@@ -151,7 +151,7 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
         2
     );
     for death in deaths {
-        assert_eq!(death.rule, Some(Rule::LethalDamage));
+        assert_eq!(death.rule, Some(PresentationRule::LethalDamage));
         let cause = facts
             .iter()
             .find(|fact| Some(fact.id) == death.cause)
@@ -187,8 +187,7 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
 fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
     use managym::{
         agent::action::{Action, ActionType},
-        experience::{LookAction, PresentationKind},
-        flow::presentation::Rule,
+        experience::{LookAction, PresentationKind, PresentationRule},
         state::{game_object::PlayerId, target::Target, zone::ZoneType},
     };
 
@@ -340,7 +339,7 @@ fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
                 .any(|l| matches!(l.kind, PresentationKind::Lost { player } if player.0 == 1))
         })
         .expect("expected lost fact");
-    assert_eq!(lost_fact.rule, Some(Rule::ZeroLife));
+    assert_eq!(lost_fact.rule, Some(PresentationRule::ZeroLife));
     assert!(lost_fact.cause.is_some());
 
     // 3. Empty library draw -> Lost with Rule::EmptyLibrary.
@@ -380,5 +379,5 @@ fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
                 .any(|l| matches!(l.kind, PresentationKind::Lost { player } if player.0 == 0))
         })
         .expect("expected empty-library lost fact");
-    assert_eq!(empty_lost.rule, Some(Rule::EmptyLibrary));
+    assert_eq!(empty_lost.rule, Some(PresentationRule::EmptyLibrary));
 }

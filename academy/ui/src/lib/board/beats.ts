@@ -9,11 +9,67 @@
  * and holds; pace `off` or reduced motion never auto-walks, while the
  * scrubber, captions and "Show their turn again" still work by hand.
  */
-import type { PresentationRule } from '$lib/types';
+import type { Observation, PresentationEvent, PresentationRule } from '$lib/types';
 import { findBoard, type StepBoard } from './boards';
 import { flattenHistory, turnAt, type HistoryTurn } from './history';
+import { tellCounter } from './tell';
 
 export { turnAt };
+
+export interface StopDelta {
+  kind: 'damage' | 'counters';
+  text: string;
+}
+
+export interface StopDeltas {
+  objects: Map<number, StopDelta[]>;
+  players: Map<number, number>;
+}
+
+/** Whether `stop` owns cursor `seq` (as its representative seq or a folded event seq). */
+export function stopHasSeq(stop: Pick<WalkStop, 'seq' | 'seqs'>, seq: number): boolean {
+  return stop.seq === seq || stop.seqs.includes(seq);
+}
+
+/** Per-stop damage and counter badges drawn on cards and player plates while walking or looking back. */
+export function computeStopDeltas(
+  events: readonly PresentationEvent[],
+  activeSeqs: ReadonlySet<number>,
+  projection: Pick<Observation, 'agent' | 'opponent'>,
+): StopDeltas {
+  const objects = new Map<number, StopDelta[]>();
+  const players = new Map<number, number>();
+  if (activeSeqs.size === 0) return { objects, players };
+  const objectDamage = new Map<number, number>();
+  for (const event of events) {
+    if (!activeSeqs.has(event.seq)) continue;
+    if (event.kind.kind === 'damage') {
+      if (event.kind.target.kind === 'object') {
+        const id = event.kind.target.id.entity;
+        objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
+      } else if (event.kind.target.kind === 'player') {
+        const id = event.kind.target.id;
+        const idx = id === projection.agent.id || id === projection.agent.player_index
+          ? projection.agent.player_index
+          : id === projection.opponent.id || id === projection.opponent.player_index
+            ? projection.opponent.player_index
+            : null;
+        if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
+      }
+    } else if (event.kind.kind === 'counters') {
+      const id = event.kind.object.entity;
+      const list = objects.get(id) ?? [];
+      list.push({ kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
+      objects.set(id, list);
+    }
+  }
+  for (const [id, amount] of objectDamage) {
+    const list = objects.get(id) ?? [];
+    list.unshift({ kind: 'damage', text: `−${amount}` });
+    objects.set(id, list);
+  }
+  return { objects, players };
+}
 
 export interface WalkStop {
   /** Representative cursor seq for this stop (its first line's `boardSeq`). */
@@ -116,7 +172,7 @@ export function scrubberStops(
 ): { turn: number | null; stops: WalkStop[] } {
   let targetTurn: number | null = null;
   if (cursor !== null) {
-    const active = stops.find(stop => stop.seq === cursor || stop.seqs.includes(cursor));
+    const active = stops.find(stop => stopHasSeq(stop, cursor));
     targetTurn = active?.turn ?? null;
   }
   if (targetTurn === null) {

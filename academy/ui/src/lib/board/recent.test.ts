@@ -30,8 +30,8 @@ describe('recentView', () => {
       'An effect dealt 3 to Search 64',
       'Grizzly Bears died',
     ]);
-    // The spell left the stack, so it is shown as resolved with its target.
-    expect(view.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt', by: 'you', targets: ['Search 64'] }]);
+    // The spell left the stack, so it is shown as resolved beside the stack.
+    expect(view.resolved).toEqual([{ id: 4001, name: 'Lightning Bolt' }]);
   });
 
   it('calls the person "you" mid-sentence, and "yourself" in their own move', () => {
@@ -84,7 +84,7 @@ describe('recentView', () => {
       '+1/+1 counter on South Pole Voyager (now 2)',
       'Search 64 drew a card',
     ]);
-    expect(view.resolved).toEqual([{ id: 44, name: 'Allies at Last', by: 'opponent', targets: ['Tiger-Seal'] }]);
+    expect(view.resolved).toEqual([{ id: 44, name: 'Allies at Last' }]);
   });
 });
 
@@ -102,10 +102,11 @@ describe('lands, discards and reveals', () => {
       labels: { objects: { '96:2': 'Earth Kingdom Jailer', '97:2': 'Yip Yip!' } },
     };
     const view = recentView(bolt.recovery.frame, 3, [land, discard], () => emptyLabels, names);
-    expect(view.facts.map(fact => [fact.by, fact.text, fact.subjects])).toEqual([
-      ['opponent', 'Search 64 played Plains', [95]],
-      ['opponent', 'Search 64 discarded Earth Kingdom Jailer and Yip Yip!', [96, 97]],
+    expect(view.facts.map(fact => [fact.by, fact.text])).toEqual([
+      ['opponent', 'Search 64 played Plains'],
+      ['opponent', 'Search 64 discarded Earth Kingdom Jailer and Yip Yip!'],
     ]);
+    expect(view.touched.has(95)).toBe(true);
   });
 
   it("tells the opponent's reveal by the cards' names", () => {
@@ -115,8 +116,8 @@ describe('lands, discards and reveals', () => {
       kind: { kind: 'revealed', cards: ['Kyoshi Warriors'], player: 1 },
     };
     const view = recentView(bolt.recovery.frame, 3, [reveal], () => emptyLabels, names);
-    expect(view.facts.map(fact => [fact.by, fact.kind, fact.text])).toEqual([
-      ['opponent', 'revealed', 'Search 64 revealed Kyoshi Warriors'],
+    expect(view.facts.map(fact => [fact.by, fact.text])).toEqual([
+      ['opponent', 'Search 64 revealed Kyoshi Warriors'],
     ]);
   });
 });
@@ -131,7 +132,7 @@ describe('boardLines', () => {
   });
 
   it('keeps the line of a spell that just resolved while it is shown beside the stack', () => {
-    const resolved = [{ id: 4001, name: 'Lightning Bolt', by: 'you' as const, targets: [] }];
+    const resolved = [{ id: 4001, name: 'Lightning Bolt' }];
     expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail, resolved)).toHaveLength(1);
   });
 

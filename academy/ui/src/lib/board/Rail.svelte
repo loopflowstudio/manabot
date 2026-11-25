@@ -9,6 +9,7 @@
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { HistoryLine, HistoryTurn } from './history';
+  import type { Segment } from './tell';
   import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
@@ -149,6 +150,21 @@
     };
   }
 </script>
+
+{#snippet lineSegments(parts: readonly Segment[], focusable: boolean)}
+  {#each parts as segment, segIdx (segIdx)}
+    {#if segment.card}
+      {#if focusable}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) -->
+        <span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>
+      {:else}
+        <span class="card-name" {...hover(segment.card)}>{segment.text}</span>
+      {/if}
+    {:else}
+      {segment.text}
+    {/if}
+  {/each}
+{/snippet}
 
 <aside class="rail" aria-label="Stack, decision and legal choices">
   {#if notices}<div class="notices">{@render notices()}</div>{/if}
@@ -336,14 +352,17 @@
               {@const childCurrent = hasCursor
                 ? entry.children.some(child => cursorLineIds!.has(child.id))
                 : (currentMove !== null && entry.children.some(child => child.jumpKey === currentMove))}
-              {#if onjump && entry.jumpKey}
-                <!-- A recording's line jumps to its position (and per-line board when retained). -->
+              {@const isJump = Boolean(onjump && entry.jumpKey)}
+              {@const isSelectable = !entry.passes && Boolean(onselectline && entry.boardSeq !== null)}
+              {#if isJump || isSelectable}
+                <!-- A recording's line jumps to its position; a live line selects its cursor board. -->
                 <li class="move type-caption jump" class:quiet={entry.passes !== null} class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'}
                   data-testid={entry.passes ? 'pass-run' : 'log-entry'} data-actor={entry.actor}>
                   <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
-                    data-move={jumpId} data-history-seq={entry.boardSeq ?? undefined} onclick={() => onjump(jumpId, entry.boardSeq)}>
+                    data-move={isJump ? jumpId : undefined} data-history-seq={entry.boardSeq ?? undefined}
+                    onclick={() => (isJump ? onjump!(jumpId, entry.boardSeq) : onselectline!(entry))}>
                     <span class="who" class:repeat={!entry.passes && entry.who !== '' && prevWho === entry.who}>{entry.passes ? '' : entry.who}</span>
-                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
+                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{@render lineSegments(entry.segments, false)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
                   </button>
                 </li>
               {:else if entry.passes}
@@ -351,19 +370,11 @@
                   <span class="who" aria-hidden="true"></span>
                   <span class="what">passed{#each entry.passes as part, idx (part.actor)}{idx ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
                 </li>
-              {:else if onselectline && entry.boardSeq !== null}
-                <li class="move type-caption jump" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
-                  <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
-                    data-history-seq={entry.boardSeq} onclick={() => onselectline(entry)}>
-                    <span class="who" class:repeat={entry.who !== '' && prevWho === entry.who}>{entry.who}</span>
-                    <span class="what">{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
-                  </button>
-                </li>
               {:else}
                 <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
                   <!-- A score names the player once per run of their moves. -->
                   <span class="who" class:repeat={entry.who !== '' && prevWho === entry.who}>{entry.who}</span>
-                  <span class="what">{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+                  <span class="what">{@render lineSegments(entry.segments, true)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
                 </li>
               {/if}
               {#if entry.children.length > 0}
@@ -383,23 +394,20 @@
                     <ol class="consequences">
                       {#each entry.children as child (child.id)}
                         {@const isChildCurrent = hasCursor ? cursorLineIds!.has(child.id) : (currentMove !== null && child.jumpKey === currentMove)}
-                        {#if onjump && child.jumpKey}
-                          <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
-                            <button type="button" aria-current={isChildCurrent ? 'true' : undefined} data-move={child.jumpKey}
-                              data-history-seq={child.boardSeq ?? undefined} onclick={() => onjump(child.jumpKey!, child.boardSeq)}>
-                              <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
-                            </button>
-                          </li>
-                        {:else if onselectline && child.boardSeq !== null}
+                        {@const isChildJump = Boolean(onjump && child.jumpKey)}
+                        {@const isChildSelectable = Boolean(onselectline && child.boardSeq !== null)}
+                        {#if isChildJump || isChildSelectable}
                           <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
                             <button type="button" aria-current={isChildCurrent ? 'true' : undefined}
-                              data-history-seq={child.boardSeq} onclick={() => onselectline(child)}>
-                              <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
+                              data-move={isChildJump ? child.jumpKey! : undefined}
+                              data-history-seq={child.boardSeq ?? undefined}
+                              onclick={() => (isChildJump ? onjump!(child.jumpKey!, child.boardSeq) : onselectline!(child))}>
+                              <span class="what">{@render lineSegments(child.segments, false)}</span>
                             </button>
                           </li>
                         {:else}
                           <li class="consequence type-caption" data-testid="history-consequence" data-depth="1">
-                            <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus shows the card; a button would not wrap inside a line) --><span class="card-name" tabindex="0" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
+                            <span class="what">{@render lineSegments(child.segments, true)}</span>
                           </li>
                         {/if}
                       {/each}

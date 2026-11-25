@@ -423,12 +423,11 @@
   .stop-delta {
     font: 600 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
     padding: 0 5px; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised);
-    animation: land var(--motion-move) var(--motion-move-ease);
+    animation: delta-land var(--motion-move) var(--motion-move-ease);
   }
   .stop-delta.damage { color: var(--bg); background: var(--damage); }
   .stop-delta.counters { color: var(--bg); background: var(--gain); }
   @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
-  .stop-delta { animation-name: delta-land; }
   @keyframes delta-land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);

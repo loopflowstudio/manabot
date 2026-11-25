@@ -125,6 +125,15 @@ function validateSubjectRef(value: unknown, field: string, seq: number): void {
   throw new Error(`Presentation event ${seq} has unsupported ${field}.kind`);
 }
 
+function validateObjectRenderIds(value: unknown, field: string, seq: number): void {
+  if (!Array.isArray(value)) {
+    throw new Error(`Presentation event ${seq} has invalid ${field}`);
+  }
+  for (const object of value) {
+    validateObjectRenderId(object, `${field}[]`, seq);
+  }
+}
+
 function validatePresentationKind(value: unknown, seq: number): void {
   if (!isRecord(value) || typeof value.kind !== 'string') {
     throw new Error(`Presentation event ${seq} has invalid kind`);
@@ -140,6 +149,7 @@ function validatePresentationKind(value: unknown, seq: number): void {
       validateSubjectRef(value.target, 'kind.target', seq);
       return;
     case 'resolved':
+    case 'countered':
       requireInteger(value.stack, 'kind.stack', seq);
       return;
     case 'damage':
@@ -151,30 +161,15 @@ function validatePresentationKind(value: unknown, seq: number): void {
       return;
     case 'destroyed':
     case 'died':
-      if (!Array.isArray(value.objects)) {
-        throw new Error(`Presentation event ${seq} has invalid kind.objects`);
-      }
-      for (const object of value.objects) {
-        validateObjectRenderId(object, 'kind.objects[]', seq);
-      }
+      validateObjectRenderIds(value.objects, 'kind.objects', seq);
       return;
     case 'attack_group':
-      if (!Array.isArray(value.attackers)) {
-        throw new Error(`Presentation event ${seq} has invalid kind.attackers`);
-      }
-      for (const attacker of value.attackers) {
-        validateObjectRenderId(attacker, 'kind.attackers[]', seq);
-      }
+      validateObjectRenderIds(value.attackers, 'kind.attackers', seq);
       validateSubjectRef(value.defender, 'kind.defender', seq);
       return;
     case 'blocked':
       validateObjectRenderId(value.attacker, 'kind.attacker', seq);
-      if (!Array.isArray(value.blockers)) {
-        throw new Error(`Presentation event ${seq} has invalid kind.blockers`);
-      }
-      for (const blocker of value.blockers) {
-        validateObjectRenderId(blocker, 'kind.blockers[]', seq);
-      }
+      validateObjectRenderIds(value.blockers, 'kind.blockers', seq);
       return;
     case 'turn_started':
       requireInteger(value.player, 'kind.player', seq);
@@ -189,12 +184,8 @@ function validatePresentationKind(value: unknown, seq: number): void {
       if (value.object !== undefined) validateObjectRenderId(value.object, 'kind.object', seq);
       return;
     case 'discarded':
-      if (!Array.isArray(value.objects)) {
-        throw new Error(`Presentation event ${seq} has invalid kind.objects`);
-      }
-      for (const object of value.objects) {
-        validateObjectRenderId(object, 'kind.objects[]', seq);
-      }
+    case 'sacrificed':
+      validateObjectRenderIds(value.objects, 'kind.objects', seq);
       requireInteger(value.player, 'kind.player', seq);
       return;
     case 'revealed':
@@ -213,10 +204,9 @@ function validatePresentationKind(value: unknown, seq: number): void {
       validateObjectRenderId(value.source, 'kind.source', seq);
       requireInteger(value.stack, 'kind.stack', seq);
       return;
-    case 'countered':
-      requireInteger(value.stack, 'kind.stack', seq);
-      return;
     case 'passed':
+    case 'searched':
+    case 'lost':
       requireInteger(value.player, 'kind.player', seq);
       return;
     case 'counters':
@@ -227,24 +217,11 @@ function validatePresentationKind(value: unknown, seq: number): void {
       requireInteger(value.count, 'kind.count', seq);
       requireInteger(value.total, 'kind.total', seq);
       return;
-    case 'searched':
-    case 'lost':
-      requireInteger(value.player, 'kind.player', seq);
-      return;
     case 'looked':
       requireInteger(value.player, 'kind.player', seq);
       if (value.action !== 'scry' && value.action !== 'surveil') {
         throw new Error(`Presentation event ${seq} has invalid kind.action`);
       }
-      return;
-    case 'sacrificed':
-      if (!Array.isArray(value.objects)) {
-        throw new Error(`Presentation event ${seq} has invalid kind.objects`);
-      }
-      for (const object of value.objects) {
-        validateObjectRenderId(object, 'kind.objects[]', seq);
-      }
-      requireInteger(value.player, 'kind.player', seq);
       return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
@@ -362,27 +339,26 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
   switch (kind.kind) {
     case 'cast': return [object(kind.object), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
     case 'targeted': return [kind.source, kind.target];
-    case 'resolved': return [{ kind: 'stack', id: kind.stack }];
+    case 'resolved':
+    case 'countered': return [{ kind: 'stack', id: kind.stack }];
     case 'damage': return [...(kind.source ? [kind.source] : []), kind.target];
     case 'died': case 'destroyed': return kind.objects.map(object);
     case 'attack_group': return [...kind.attackers.map(object), kind.defender];
     case 'blocked': return [object(kind.attacker), ...kind.blockers.map(object)];
-    case 'turn_started': return [{ kind: 'player', id: kind.player }];
     case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
     case 'drew': return [...(kind.object ? [object(kind.object)] : []), { kind: 'player', id: kind.player }];
-    case 'discarded': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
-    case 'revealed': return [{ kind: 'player', id: kind.player }];
+    case 'discarded':
+    case 'sacrificed': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
     case 'activated': case 'triggered': return [object(kind.source), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
     case 'ability_resolved': return [object(kind.source), { kind: 'stack', id: kind.stack }];
-    case 'countered': return [{ kind: 'stack', id: kind.stack }];
-    case 'passed': return [{ kind: 'player', id: kind.player }];
     case 'counters': return [object(kind.object)];
+    case 'turn_started':
+    case 'revealed':
+    case 'passed':
     case 'searched':
     case 'looked':
     case 'lost':
       return [{ kind: 'player', id: kind.player }];
-    case 'sacrificed':
-      return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
   }
 }
 
@@ -397,6 +373,3 @@ export function presentationEventLabels(event: PresentationEvent, labels: Presen
   }
   return retained;
 }
-
-/** Read-only board context; narration never changes choice focus or lane paging. */
-export const PRESENTATION_CONTEXT = Symbol('presentation');

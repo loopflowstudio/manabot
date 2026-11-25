@@ -232,9 +232,8 @@ class Recording:
         self._boards: dict[int, dict[str, Any]] = {}
         self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
-    def has_track_history(self) -> bool:
-        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
-        modern_kinds = {
+    _MODERN_PRESENTATION_KINDS = frozenset(
+        {
             "passed",
             "activated",
             "triggered",
@@ -242,12 +241,20 @@ class Recording:
             "countered",
             "counters",
             "drew",
+            "searched",
+            "looked",
+            "sacrificed",
+            "lost",
         }
+    )
+
+    def has_track_history(self) -> bool:
+        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
         return any(
             event.labels is not None
             or event.cause is not None
             or event.rule is not None
-            or event.kind.kind in modern_kinds
+            or event.kind.kind in self._MODERN_PRESENTATION_KINDS
             for events in self.tracks.values()
             for event in events
         )

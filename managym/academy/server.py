@@ -1993,7 +1993,7 @@ class GameSession:
 
         live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
-        step_boards = self._keep_step_board(live_events, positions) or []
+        step_boards = self._keep_step_board(live_events, positions)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
