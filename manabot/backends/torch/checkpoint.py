@@ -217,6 +217,7 @@ def assemble(
         checkpoint.space,
         checkpoint.model,
         readings=checkpoint.readings,
+        fact_kinds=checkpoint.fact_kinds,
         bucketed_shapes=bucketed_shapes,
         live_tokens=live_tokens,
     )

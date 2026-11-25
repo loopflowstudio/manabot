@@ -96,6 +96,7 @@ _STAGES = frozenset(
         "opening_entry",
         "priority",
         "targets",
+        "announcement",
         "additional_cost",
         "payment",
         "mode",
@@ -333,8 +334,25 @@ def _turn_history(player: managym.Player) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if count := history.life_gains:
+        parts.append(f"gained life {count} time{'s' if count != 1 else ''}")
+    if amount := history.life_gained:
+        parts.append(f"gained {amount} life")
+    if count := history.creatures_died:
+        parts.append(
+            f"had {count} creature{'' if count == 1 else 's'} they controlled die"
+        )
+    if count := history.permanents_left:
+        parts.append(
+            f"had {count} permanent{'' if count == 1 else 's'} they controlled leave "
+            f"the battlefield ({history.nonland_permanents_left} nonland)"
+        )
+    if history.warped_this_turn:
+        parts.append("cast a spell for warp")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
+    if amount := history.mana_spent_casting:
+        parts.append(f"spent {amount} mana casting spells")
     if count := player.spells_cast:
         parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)
@@ -807,6 +825,8 @@ class _Renderer:
             details.append(
                 f"source transform count at activation/trigger {relation.source_transforms}"
             )
+        if relation.triggering_amount and not relation.trigger_damage:
+            details.append(f"triggering amount {relation.triggering_amount}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
@@ -1088,11 +1108,21 @@ class _Renderer:
             parts.append("has lost all abilities")
         if permanent.transforms:
             parts.append(f"transformed {permanent.transforms} times")
+        for index, count in permanent.ability_resolutions:
+            parts.append(
+                f"ability {index + 1} resolved {count} time{'s' if count != 1 else ''} this turn"
+            )
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.attacked_this_turn:
+            parts.append("attacked this turn")
         if permanent.entered_this_turn:
             parts.append("entered this turn")
+        for seat in permanent.combat_damage_to_players:
+            parts.append(f"dealt combat damage to seat {seat} this turn")
+        for target in permanent.damaged_permanents:
+            parts.append(f"dealt damage to {self.name(target)} this turn")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
         if permanent.copy is not None:
@@ -1247,6 +1277,11 @@ class _Renderer:
             "All legal alternatives are listed. Further choices occur only when offered.",
             "Optional details are shown when provided; unavailable facts are marked explicitly.",
             "",
+            *(
+                ["A creature died this turn."]
+                if state.turn.creature_died_this_turn
+                else []
+            ),
             f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
@@ -1288,6 +1323,12 @@ class _Renderer:
                 f"controller {self.name(item.controller_id)}",
                 f"source {source}",
             ]
+            if item.ability_resolutions:
+                details.append(
+                    f"prior resolutions this turn: {item.ability_resolutions}"
+                )
+            for seat in item.combat_damage_to_players:
+                details.append(f"source dealt combat damage to seat {seat} this turn")
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
@@ -1299,6 +1340,8 @@ class _Renderer:
                 details.append(f"granted keywords {granted}")
             if item.cast_from_graveyard:
                 details.append("cast from graveyard")
+            if item.mana_spent:
+                details.append(f"spent {item.mana_spent} mana to cast")
             if item.kicked:
                 details.append(self.taken_cost(item.source_card_registry_key).taken)
             if item.from_prepared:

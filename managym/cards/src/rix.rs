@@ -1,19 +1,22 @@
 //! Rivals of Ixalan.
-use managym_state::{
-    ability::{
-        Ability, Condition, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject,
-    },
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
-    },
-    effect::Modification,
-    mana::ManaCost,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Aggregate, Condition, Effect, ObjectProperty, ObjectSelector, TargetSpec,
+    TriggerCondition, TriggerSubject,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, StaticAbility, StaticScope,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::ManaCost;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        brasss_bounty(),
+        ghalta_primal_hunger(),
+        fanatical_firebrand(),
+        thrashing_brontodon(),
         kitesail_corsair(),
         moment_of_craving(),
         moment_of_triumph(),
@@ -21,8 +24,6 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         swab_goblin(),
         gleaming_barrier(),
         etali_primal_storm(),
-        fanatical_firebrand(),
-        thrashing_brontodon(),
     ]
 }
 
@@ -80,6 +81,56 @@ fn thrashing_brontodon() -> CardDefinition {
                     },
                 ))],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn brasss_bounty() -> CardDefinition {
+    let text_box = "For each land you control, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "rix.brasss_bounty",
+        scryfall_id: "13505866-6ce9-4d11-b3f3-fc2f09839b71",
+        printed: PrintedCharacteristics {
+            name: "Brass's Bounty".into(),
+            mana_cost: Some(ManaCost::parse("{6}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::create_tokens(
+                "token.treasure",
+                ObjectSelector::each_you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                })
+                .count(),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ghalta_primal_hunger() -> CardDefinition {
+    let text_box = "This spell costs {X} less to cast, where X is the total power of creatures you control.\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)";
+    CardDefinition {
+        key: "rix.ghalta_primal_hunger",
+        scryfall_id: "0104b5b3-9376-4ad7-9a77-3e564e9c42e6",
+        printed: PrintedCharacteristics {
+            name: "Ghalta, Primal Hunger".into(),
+            mana_cost: Some(ManaCost::parse("{10}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elder".into(), "Dinosaur".into()],
+            power: Some(12),
+            toughness: Some(12),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            statics: vec![StaticAbility::CostsLess {
+                amount: ObjectSelector::each_you_control(CardPredicate::creature())
+                    .property(ObjectProperty::Power, Aggregate::Sum),
+                condition: None,
             }],
             text_box: text_box.into(),
             ..Default::default()
@@ -251,6 +302,7 @@ fn etali_primal_storm() -> CardDefinition {
                     subject: TriggerSubject::This,
                     per: Per::Object,
                     attackers: AttackSize::Any,
+                    nth: None,
                 },
                 effects: vec![Effect::ExileEachLibraryTopCastFree],
             }],

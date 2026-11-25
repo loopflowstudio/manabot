@@ -20,12 +20,15 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
     vec![
         ally(),
         ballistic_boulder(),
+        bat(),
         bear(),
         cat(),
         lifelink_cat(),
         clue(),
         dragon(),
+        drake(),
         elf_warrior(),
+        fish(),
         elf(),
         food(),
         goblin(),
@@ -37,6 +40,9 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         plain_spirit(),
         flying_spirit(),
         powerstone(),
+        rabbit(),
+        black_rat(),
+        scion_of_the_deep(),
         soldier(),
         white_soldier(),
         spirit(),
@@ -172,6 +178,18 @@ fn ballistic_boulder() -> TokenDefinition {
     )
 }
 
+fn bat() -> TokenDefinition {
+    let base = face("Bat", [CardType::Creature], &["Bat"], "Flying");
+    token(
+        "token.bat",
+        "89d7ed94-564b-415c-b590-d89c972384a1",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 1, 1, [Color::Black])
+        },
+    )
+}
+
 fn bear() -> TokenDefinition {
     let base = face("Bear", [CardType::Creature], &["Bear"], "");
     token(
@@ -220,6 +238,18 @@ fn clue() -> TokenDefinition {
                 &["Clue"],
                 "{2}, Sacrifice this token: Draw a card.",
             )
+        },
+    )
+}
+
+fn drake() -> TokenDefinition {
+    let base = face("Drake", [CardType::Creature], &["Drake"], "Flying");
+    token(
+        "token.drake",
+        "f4a73034-e20f-4e7e-ac15-3460b1e9c69b",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 2, 2, [Color::Blue])
         },
     )
 }
@@ -337,6 +367,15 @@ fn monk() -> TokenDefinition {
             abilities: vec![Ability::prowess()],
             ..creature(base, 1, 1, [Color::Red])
         },
+    )
+}
+
+fn rabbit() -> TokenDefinition {
+    let base = face("Rabbit", [CardType::Creature], &["Rabbit"], "");
+    token(
+        "token.rabbit",
+        "22ca55e0-d269-4178-bc90-920a12066e4f",
+        creature(base, 1, 1, [Color::White]),
     )
 }
 
@@ -644,6 +683,35 @@ fn flying_spirit() -> TokenDefinition {
     )
 }
 
+fn fish() -> TokenDefinition {
+    let base = face("Fish", [CardType::Creature], &["Fish"], "");
+    token(
+        "token.fish",
+        "297fc694-08f6-4477-b898-60ec641a0757",
+        creature(base, 1, 1, [Color::Blue]),
+    )
+}
+
+fn black_rat() -> TokenDefinition {
+    let base = face("Rat", [CardType::Creature], &["Rat"], "");
+    token(
+        "token.black_rat",
+        "1a85fe9d-ef18-46c4-88b0-cf2e222e30e4",
+        creature(base, 1, 1, [Color::Black]),
+    )
+}
+
+fn scion_of_the_deep() -> TokenDefinition {
+    let base = face("Scion of the Deep", [CardType::Creature], &["Octopus"], "");
+    token(
+        "token.scion_of_the_deep",
+        "26c478f7-b426-4055-8d06-e5782226c826",
+        PrintedCharacteristics {
+            supertypes: vec!["Legendary".into()],
+            ..creature(base, 8, 8, [Color::Blue])
+        },
+    )
+}
 fn inkling() -> TokenDefinition {
     token(
         "token.inkling",

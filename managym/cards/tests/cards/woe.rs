@@ -220,6 +220,62 @@ fn mocking_sprite_reduces_only_instant_and_sorcery_spells() {
     s.assert_life(1, 17);
 }
 
+/// Stroke of Midnight's Human goes to the destroyed permanent's controller,
+/// and to the controller of an indestructible target that survives.
+#[test]
+fn stroke_of_midnight_gives_the_targets_controller_a_human() {
+    use crate::support::{
+        game::{five_color_setup, until_end_of_turn},
+        play::{cast, settle},
+    };
+    use managym::state::{
+        card::{Keyword, Keywords},
+        effect::Modification,
+        game_object::Target,
+    };
+    for (owner, indestructible) in [(1, false), (0, false), (1, true)] {
+        let mut s = five_color_setup(&["Stroke of Midnight", "Gray Ogre"]);
+        let ogre = s.force_permanent_on_battlefield(owner, "Gray Ogre");
+        if indestructible {
+            until_end_of_turn(
+                &mut s,
+                ogre,
+                Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+            );
+        }
+        cast(&mut s, "Stroke of Midnight");
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        settle(&mut s);
+        assert_eq!(s.game().state.permanents[ogre].is_some(), indestructible);
+        assert_eq!(s.battlefield_permanents_named(owner, "Human").len(), 1);
+        assert!(s
+            .battlefield_permanents_named(1 - owner, "Human")
+            .is_empty());
+    }
+}
+
+#[test]
+fn ruby_daring_tracker_taps_for_either_color() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::activate;
+    use crate::support::play::choose_mode;
+    use managym::state::mana::Mana;
+    let mut s = five_color_setup(&["Ruby, Daring Tracker"]);
+    let ruby = s.force_permanent_on_battlefield(0, "Ruby, Daring Tracker");
+    s.set_player_mana_pool(0, "");
+    s.allow_priority_floats();
+    activate(&mut s, ruby, 0);
+    let choice = s.game().clone();
+    assert_eq!(s.action_space().actions.len(), 2);
+    for (mode, color) in ["R", "G"].into_iter().enumerate() {
+        *s.game_mut() = choice.clone();
+        choose_mode(&mut s, mode);
+        assert!(crate::support::inspect::tapped(&s, ruby));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(color));
+    }
+}
+
 #[test]
 fn foundations_5e_quick_study() {
     use crate::support::game::five_color_setup;

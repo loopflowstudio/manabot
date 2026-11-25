@@ -342,15 +342,17 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
 
 
 def normalize_observation_to_hero(
-    observation: dict[str, Any], human_seat: int = 0
+    observation: dict[str, Any], human_seat: int, *, winner: int | None
 ) -> None:
     """Present an observation from the recorded human's native perspective.
 
     Trace events record the raw engine observation, whose perspective is the
     player to act — villain events are villain-perspective. The replay viewer
     (and any human-facing payload) renders ``agent`` as the hero, so swap the
-    sides back when needed. Mutates in place; no-op when player_index is
-    missing (e.g. minimal test fixtures).
+    sides back when needed; a swapped final observation reads ``won`` from
+    ``winner`` (``None`` for a draw or an unfinished game), since the villain's
+    ``won: false`` does not say whether the hero won. Mutates in place; no-op
+    when player_index is missing (e.g. minimal test fixtures).
     """
     if not isinstance(observation, dict):
         return
@@ -364,7 +366,7 @@ def normalize_observation_to_hero(
     ):
         observation["agent"], observation["opponent"] = opponent, agent
         if observation.get("game_over") and "won" in observation:
-            observation["won"] = not bool(observation["won"])
+            observation["won"] = winner == human_seat
 
 
 def prepare_trace_payload(
@@ -415,7 +417,9 @@ def prepare_trace_payload(
                 event.pop("bot_decision", None)
 
     for observation in observations:
-        normalize_observation_to_hero(observation, config.get("human_seat", 0))
+        normalize_observation_to_hero(
+            observation, config.get("human_seat", 0), winner=prepared.get("winner")
+        )
         if not reveal_hidden:
             redact_observation(observation)
 

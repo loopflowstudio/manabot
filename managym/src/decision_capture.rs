@@ -292,19 +292,19 @@ mod tests {
                 player: actor,
                 old: 20,
                 new: 20 + amount,
+                gain_ordinal: 0,
             });
         }
-        // Fixture events leave the present observation unchanged; the suffix is
-        // still a different declared model input and is included in its digest.
+        // The capture's observation is the present one; the history suffix is
+        // a separate declared model input and is included in its digest.
+        let present = serde_json::to_value(game.semantic_observation(actor).unwrap()).unwrap();
         let history = game.capture_decision(actor, 3).unwrap();
-        assert_eq!(serde_json::to_value(&history.observation).unwrap(), before);
+        assert_eq!(serde_json::to_value(&history.observation).unwrap(), present);
         assert_eq!(history.history.rows.len(), 3);
         assert_eq!(history.history.rows[0]["amount"], 37);
-        assert_ne!(history.digest, snapshot.digest);
-        assert_eq!(
-            game.capture_decision(actor, 0).unwrap().digest,
-            snapshot.digest
-        );
+        let without_history = game.capture_decision(actor, 0).unwrap();
+        assert_eq!(without_history.history.rows.len(), 0);
+        assert_ne!(history.digest, without_history.digest);
     }
 
     /// Which library card backs the face-down manifest.

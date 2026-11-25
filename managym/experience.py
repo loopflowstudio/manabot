@@ -349,6 +349,13 @@ class PlayerTurnHistoryView(ProtocolModel):
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gains: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    mana_spent_casting: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
@@ -455,9 +462,19 @@ class LegacyPermanentView(ProtocolModel):
     keywords: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    damaged_permanents: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    ability_resolutions: list[tuple[UInt32, UInt32]] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    attacked_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     entered_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
@@ -575,6 +592,7 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
+    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     turn_number: UInt32
     phase: str
     step: str
@@ -583,6 +601,11 @@ class LegacyTurnView(ProtocolModel):
 
 
 class StackEntryView(ProtocolModel):
+    mana_spent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    ability_resolutions: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     id: UInt64
     kind: str
     controller: UInt8

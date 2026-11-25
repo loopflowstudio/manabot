@@ -95,6 +95,9 @@ impl Serialize for TurnJson<'_> {
         map.serialize_entry("agent_player_id", &value.agent_player_id)?;
         map.serialize_entry("phase", &(value.phase as i32))?;
         map.serialize_entry("step", &(value.step as i32))?;
+        if value.creature_died_this_turn {
+            map.serialize_entry("creature_died_this_turn", &true)?;
+        }
         map.serialize_entry("turn_number", &value.turn_number)?;
         map.end()
     }
@@ -337,6 +340,9 @@ impl Serialize for StackObjectJson<'_> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("ability_index", &value.ability_index)?;
+        if value.ability_resolutions > 0 {
+            map.serialize_entry("ability_resolutions", &value.ability_resolutions)?;
+        }
         if let Some(spell) = &value.spell {
             let card = spell.legacy_card(value.x);
             map.serialize_entry("card", &CardJson(&card))?;
@@ -345,6 +351,9 @@ impl Serialize for StackObjectJson<'_> {
             }
         }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
+        if !value.combat_damage_to_players.is_empty() {
+            map.serialize_entry("combat_damage_to_players", &value.combat_damage_to_players)?;
+        }
         map.serialize_entry("controller_id", &value.controller_id)?;
         map.serialize_entry("description", &value.description)?;
         if let Some(keywords) = &value.granted_keywords {
@@ -362,6 +371,15 @@ impl Serialize for StackObjectJson<'_> {
         map.serialize_entry("kind", &(value.kind as i32))?;
         map.serialize_entry("source_card_registry_key", &value.source_card_registry_key)?;
         map.serialize_entry("source_permanent_id", &value.source_permanent_id)?;
+        if value.mana_spent > 0 {
+            map.serialize_entry("mana_spent", &value.mana_spent)?;
+        }
+        if let Some(power) = value.source_power {
+            map.serialize_entry("source_power", &power)?;
+        }
+        if let Some(amount) = value.paid_amount {
+            map.serialize_entry("paid_amount", &amount)?;
+        }
         map.serialize_entry("stack_object_id", &value.stack_object_id)?;
         map.serialize_entry("targets", &StackTargetsJson(&value.targets))?;
         if value.x != 0 {
@@ -863,12 +881,20 @@ pub(super) struct WirePermanentData {
     /// only once") or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damaged_permanents: Vec<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub entered_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -896,6 +922,15 @@ pub(super) struct WirePermanentData {
 pub(super) struct WireStackObjectData {
     #[serde(default)]
     pub x_symbols: u8,
+    #[serde(default)]
+    pub combat_damage_to_players: Vec<usize>,
+    pub source_power: Option<i32>,
+    #[serde(default)]
+    pub paid_amount: Option<i32>,
+    #[serde(default)]
+    pub mana_spent: u16,
+    #[serde(default)]
+    pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     #[serde(default)]
     pub description: Option<String>,
@@ -1000,8 +1035,12 @@ impl From<WirePermanentData> for PermanentData {
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
             face_down: w.face_down,
+            combat_damage_to_players: w.combat_damage_to_players,
+            damaged_permanents: w.damaged_permanents,
+            ability_resolutions: w.ability_resolutions,
             used_abilities: w.used_abilities,
             entered_this_turn: w.entered_this_turn,
+            attacked_this_turn: w.attacked_this_turn,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
             effects: w.effects,
             timestamp: w.timestamp,
@@ -1072,8 +1111,12 @@ impl Serialize for PermanentData {
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
             face_down: self.face_down,
+            combat_damage_to_players: self.combat_damage_to_players.clone(),
+            damaged_permanents: self.damaged_permanents.clone(),
+            ability_resolutions: self.ability_resolutions.clone(),
             used_abilities: self.used_abilities.clone(),
             entered_this_turn: self.entered_this_turn,
+            attacked_this_turn: self.attacked_this_turn,
             dealt_damage_this_turn: self.dealt_damage_this_turn,
             effects: self.effects.clone(),
             timestamp: self.timestamp,
@@ -1090,7 +1133,12 @@ impl Serialize for PermanentData {
 impl From<WireStackObjectData> for StackObjectData {
     fn from(w: WireStackObjectData) -> Self {
         Self {
+            combat_damage_to_players: w.combat_damage_to_players,
+            source_power: w.source_power,
+            paid_amount: w.paid_amount,
+            mana_spent: w.mana_spent,
             description: w.description,
+            ability_resolutions: w.ability_resolutions,
             stack_object_id: w.stack_object_id,
             kind: w.kind,
             controller_id: w.controller_id,

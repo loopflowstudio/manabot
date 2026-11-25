@@ -85,11 +85,7 @@ impl Game {
             return;
         };
         let controller = self.state.stack_objects[index].controller();
-        match &mut self.state.stack_objects[index] {
-            StackObject::Spell(spell) => spell.targets[slot] = target,
-            StackObject::ActivatedAbility(ability) => ability.targets[slot] = target,
-            StackObject::TriggeredAbility(triggered) => triggered.targets[slot] = target,
-        }
+        self.state.stack_objects[index].targets_mut()[slot] = target;
         self.emit_permanents_targeted(&[target], object, controller);
     }
 

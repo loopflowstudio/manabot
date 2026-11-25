@@ -54,7 +54,7 @@ impl Game {
         groups
     }
 
-    fn protected_from_loss(&self, player: PlayerId) -> bool {
+    pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
         self.layer_views(self.iter_battlefield_permanents(player))
             .any(|(_, view)| {
                 view.static_abilities
@@ -210,8 +210,7 @@ impl Game {
                 .map(|target| ProposedEvent::Sacrifice { target }),
         );
         if !events.is_empty() {
-            let mut batch = self.event_batch(events);
-            batch.binding = EventBinding::Deaths;
+            let batch = self.event_batch(EventBinding::Deaths, events);
             let mut frame = EffectFrame::new(self.active_player(), Vec::new());
             frame.batch = Some(batch);
             frame.completion = FrameCompletion::StateBased {

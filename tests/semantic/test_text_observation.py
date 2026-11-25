@@ -13,12 +13,17 @@ import pytest
 from manabot.env.match import Match
 from manabot.env.observation import (
     CARD_PERMISSION_INDEX,
+    FACT_ABILITY_RESOLUTION,
+    FACT_ID_INDEX,
+    FACT_KIND_INDEX,
+    FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
     column,
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.policy.spans import batch_layout
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -499,7 +504,7 @@ def test_continuation_text_states_announcing_only_when_present() -> None:
 
 
 def _choose(env: managym.Env, wording: str) -> None:
-    """Submit the one offered action whose line contains `wording`."""
+    """Submit the unique action whose description contains `wording`."""
     decision = capture_text_decision(env)
     [action] = [action for action in decision.actions if wording in action.description]
     assert f"{action.reference} — {action.description}" in decision.text
@@ -554,6 +559,42 @@ def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
     )
     assert "mana value 2;" in saga
     assert "finality counters 1; lore counters 1;" in saga
+
+
+def test_steel_hellkite_announces_x_and_shows_its_combat_hit_on_the_stack() -> None:
+    env = priority_root((), ("Steel Hellkite", "Mountain"))
+    for _ in range(20):
+        obs = env.observation_for_player(0)
+        if obs.opponent.life < 20:
+            break
+        decision = capture_text_decision(env, history_capacity=0)
+        attack = next(
+            (a for a in decision.actions if a.description.startswith("Attack with")),
+            None,
+        )
+        action = attack or next(
+            a for a in decision.actions if a.description == "Pass priority"
+        )
+        submit_response(env, decision, action.reference)
+    assert obs.opponent.life == 15
+    _choose(env, "Activate ability")
+    announcement = capture_text_decision(env, history_capacity=0)
+    assert any("X = 1" in a.description for a in announcement.actions)
+    zero = next(a for a in announcement.actions if "X = 0" in a.description)
+    submit_response(env, announcement, zero.reference)
+
+    assert (
+        "source dealt combat damage to seat 1 this turn"
+        in capture_text_decision(env, history_capacity=0).text
+    )
+    for viewer in (0, 1):
+        obs = env.observation_for_player(viewer)
+        restored = managym.Observation.from_json(obs.toJSON())
+        assert restored.stack_objects[0].combat_damage_to_players == [1]
+        (entry,) = decision_surface_view(env, viewer)["stack_objects"]
+        assert entry["combat_damage_to_players"] == [1]
+        row = encode_observation(ObservationSpace(), restored)["stack"][0]
+        assert row[column("stack", "combat_damage_to_me")] == (viewer == 1)
 
 
 def test_a_prepared_spell_is_told_apart_from_its_copy() -> None:
@@ -966,6 +1007,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
+        "attacked_this_turn": "attacked this turn",
         "entered_this_turn": "entered this turn",
         "plus1_counters": "+1/+1 counters",
         "cant_be_blocked_this_turn": "cannot be blocked this turn",
@@ -993,6 +1035,9 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
         "face_down": "face down",
+        "ability_resolutions": "ability N resolved",
+        "combat_damage_to_players": "seats dealt combat damage by the source this turn",
+        "damaged_permanents": "dealt damage to each named permanent this turn",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
@@ -1027,6 +1072,11 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
     },
     managym.StackObject: {
         "cast_from_graveyard": "cast from graveyard",
+        "combat_damage_to_players": "seats dealt combat damage by the source this turn",
+        "mana_spent": "mana spent to cast",
+        "source_power": "source power in the ability description",
+        "paid_amount": "paid-cost amount in the ability description",
+        "ability_resolutions": "prior resolutions this turn",
         "characteristics": "spell characteristics; absent for abilities",
         "object_id": "the spell's exact object alias",
         "owner_id": "Spell: owner",
@@ -1055,6 +1105,13 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_gained": "gained N life",
+        "creatures_died": "they controlled die",
+        "permanents_left": "leave the battlefield",
+        "nonland_permanents_left": "nonland)",
+        "warped_this_turn": "cast a spell for warp",
+        "mana_spent_casting": "spent N mana casting spells",
+        "life_gains": "gained life N times",
         "life_lost": "lost N life",
     },
     managym.Player: {
@@ -1129,6 +1186,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "exceptions": "except <effect phrase>",
     },
     managym.Turn: {
+        "creature_died_this_turn": "A creature died this turn.",
         "turn_number": "Turn",
         "phase": "Phase",
         "step": "Step",
@@ -1191,14 +1249,20 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)
     state = payload["observation"]["viewer_state"]
+    state["turn"]["creature_died_this_turn"] = True
     mountain, ogre = state["agent_permanents"]
     ogre |= {
         "attacking": True,
         "abilities_lost": True,
+        "ability_resolutions": [[1, 2]],
         "used_abilities": [0],
         "dealt_damage_this_turn": True,
     }
-    mountain |= {"blocking": ogre["id"]}
+    mountain |= {
+        "blocking": ogre["id"],
+        "damaged_permanents": [ogre["id"]],
+        "combat_damage_to_players": [1],
+    }
     state["agent"] |= {
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
@@ -1209,24 +1273,50 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_gains": 2,
+            "life_gained": 5,
+            "creatures_died": 1,
             "life_lost": 3,
         },
         "restricted_mana": [
             {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
         ],
     }
-    text = render_decision(_redigest(payload)).text
+    decision = render_decision(_redigest(payload))
+    observation = _viewer_observation(decision)
+    battlefield = serialize_observation(observation)["agent"]["battlefield"]
+    assert battlefield[0]["combat_damage_to_players"] == [1]
+    assert "dealt combat damage to seat 1 this turn" in decision.text
+    assert battlefield[0]["damaged_permanents"] == [ogre["id"]]
+    facts = encode_observation(ObservationSpace(ObservationConfig()), observation)[
+        "facts"
+    ]
+    assert "A creature died this turn." in decision.text
+    assert serialize_observation(observation)["turn"]["creature_died_this_turn"]
+    turn_state = encode_observation(ObservationSpace(), observation)[
+        "player_turn_state"
+    ]
+    assert turn_state[0, column("player_turn_state", "creatures_died")] == 1
+    counts = facts[facts[:, FACT_KIND_INDEX] == FACT_ABILITY_RESOLUTION]
+    assert counts[:, [FACT_ID_INDEX + 1, FACT_VALUE_INDEX]].tolist() == [[1, 2]]
+    assert turn_state[0, column("player_turn_state", "life_gains")] == 2
+    assert turn_state[0, column("player_turn_state", "life_gained")] == 5
+    assert "gained 5 life" in decision.text
+    text = decision.text
     assert "; blocking P2 (Gray Ogre);" in text
+    assert "dealt damage to P2 (Gray Ogre) this turn" in text
     assert "; attacking;" in text
     assert (
-        "; has lost all abilities; used-up abilities 1; dealt damage this turn" in text
+        "; has lost all abilities; ability 2 resolved 2 times this turn; used-up abilities 1; dealt damage this turn"
+        in text
     )
     assert "Keeps unspent red mana until end of turn." in text
     assert "Has no maximum hand size for the rest of the game." in text
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card; lost 3 life; cast 2 spells." in text
+        "their control; drew 1 card; gained life 2 times; gained 5 life; had 1 "
+        "creature they controlled die; lost 3 life; cast 2 spells." in text
     )
     assert "Restricted mana for anything but nonartifact spells: C 2." in text
 
@@ -1636,7 +1726,10 @@ def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
     submit_response(env, decision, original.reference)
     text = capture_text_decision(env).text
     assert "; copy of D" in text
-    assert "This turn: sacrificed 1 permanent." in text
+    assert (
+        "This turn: sacrificed 1 permanent; had 1 creature they controlled die; "
+        "had 1 permanent they controlled leave the battlefield (1 nonland)." in text
+    )
 
 
 def test_t6_payment_search_and_timing_context_have_text_meaning() -> None:
@@ -2411,6 +2504,131 @@ def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
     with pytest.raises(SemanticContractError):
         submit_response(env, payment, source.reference)
     assert env.state_digest() == before
+
+
+def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
+    env = priority_root((), ("Drake Hatcher",))
+    for _ in range(32):
+        decision = capture_text_decision(env)
+        capture = DecisionInput.model_validate_json(decision.capture_json)
+        if any(frame.triggering_amount for frame in capture.frames):
+            assert "triggering amount 1" in decision.text
+            label = "Put that many (1) incubation counters"
+            assert label in decision.text
+            for viewer in (0, 1):
+                view = decision_surface_view(env, viewer)
+                (entry,) = view["stack_objects"]
+                assert label in entry["label"]
+                pending = view["decision_context"].get("pending", [])
+                if viewer == env.current_agent_index():
+                    assert "Drake Hatcher triggered on an event amount of 1." in pending
+                else:
+                    assert pending == []
+            return
+        assert capture.observation.decision is not None
+        action = next(
+            text_action
+            for offer, text_action in zip(
+                capture.observation.decision.offers, decision.actions, strict=True
+            )
+            if offer["verb"] == "pass_priority"
+            or text_action.description.startswith("Attack with ")
+        )
+        submit_response(env, decision, action.reference)
+    pytest.fail("Drake Hatcher did not deal combat damage")
+
+
+def test_pending_station_amount_reaches_policy_text_and_academy() -> None:
+    env = priority_root((), ("Lumen-Class Frigate", "Hill Giant", "Gray Ogre"))
+    _choose(env, "Activate ability")
+    _choose(env, "Tap Hill Giant to station")
+    views = [env.observation_for_player(viewer) for viewer in (0, 1)]
+    batch = managym.encode_observation_batch(views, ObservationSpace().layout)
+    _, _, data = batch.tables()["stack"]
+    stack = np.frombuffer(data, batch_layout(batch.layout).records["stack"].dtype)
+    np.testing.assert_allclose(stack["paid_amount"], [0.3, 0.3])
+    for viewer, obs in enumerate(views):
+        (ability,) = obs.stack_objects
+        assert ability.paid_amount == 3
+        (entry,) = decision_surface_view(env, viewer)["stack_objects"]
+        assert "paid its cost: 3" in entry["label"]
+    assert "paid its cost: 3" in capture_text_decision(env, history_capacity=0).text
+
+
+def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:
+    env = priority_root(("Serra Angel",), ("Bakersbane Duo",) + ("Plains",) * 5)
+    payer = env.current_agent_index()
+    for viewer, action in [(payer, "Cast"), (1 - payer, "Pass priority")]:
+        _choose(env, action)
+        assert env.current_agent_index() == viewer
+        obs = env.observation_for_player(viewer)
+        caster = obs.agent if viewer == payer else obs.opponent
+        assert caster.turn_history.mana_spent_casting == 5
+        turn_state = encode_observation(ObservationSpace(), obs)["player_turn_state"]
+        assert (
+            turn_state[
+                int(viewer != payer), column("player_turn_state", "mana_spent_casting")
+            ]
+            == 5
+        )
+        assert "spent 5 mana casting spells" in capture_text_decision(env).text
+
+
+def test_second_draw_triggers_share_public_history_in_text_and_policy_input() -> None:
+    listeners = ("Erudite Wizard", "Homunculus Horde", "Mischievous Mystic")
+    env = priority_root(("Lunar Insight",), listeners + ("Island",) * 3)
+    drawer = env.current_agent_index()
+    _choose(env, "Cast")
+    for action in (
+        "Pass priority",
+        "Pass priority",
+        "Erudite Wizard",
+        "Homunculus Horde",
+    ):
+        _choose(env, action)
+
+    space = ObservationSpace()
+    for viewer, side in ((drawer, "agent_player"), (1 - drawer, "opponent_player")):
+        assert env.current_agent_index() == viewer
+        obs = env.observation_for_player(viewer)
+        player = obs.agent if viewer == drawer else obs.opponent
+        assert player.turn_history.cards_drawn == 3
+        assert "drew 3 cards" in capture_text_decision(env).text
+        row = encode_observation(space, obs)[side]
+        assert row[..., column(side, "cards_drawn")].item() == pytest.approx(0.3)
+        if viewer == drawer:
+            _choose(env, "Pass priority")
+
+
+def test_attack_batch_both_choosers_see_gain_amount_and_occurrences() -> None:
+    env = priority_root(
+        ("Koala-Sheep",),
+        ("Ancestor Dragon", "Gray Ogre", "Midnight Snack") + ("Plains",) * 3,
+    )
+    caster = env.current_agent_index()
+    _choose(env, "Cast")
+    viewers: set[int] = set()
+    for _ in range(32):
+        viewer = env.current_agent_index()
+        assert viewer is not None
+        observation = env.observation_for_player(viewer)
+        player = observation.agent if caster == viewer else observation.opponent
+        decision = capture_text_decision(env)
+        if player.turn_history.life_gained == 5:
+            assert player.turn_history.life_gains == 2
+            assert "gained 5 life" in decision.text
+            assert "gained life 2 times" in decision.text
+            viewers.add(viewer)
+            if len(viewers) == 2:
+                return
+        action = next(
+            action
+            for action in decision.actions
+            if action.description.startswith("Attack with")
+            or action.description == "Pass priority"
+        )
+        submit_response(env, decision, action.reference)
+    pytest.fail(f"turn gain total reached viewers {viewers}")
 
 
 def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() -> None:

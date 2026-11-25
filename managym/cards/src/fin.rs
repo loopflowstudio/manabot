@@ -87,6 +87,7 @@ fn cecil() -> CardDefinition {
                         },
                         except: Some(Except::This),
                         max_mana_value: None,
+                        exact_mana_value: None,
                     },
                     Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                 )],
@@ -146,6 +147,7 @@ fn vanille() -> CardDefinition {
                     intervening_if: None,
                     effects: vec![
                         Effect::MillCards {
+                            player: None,
                             count: 2.into(),
                             target: None,
                         },

@@ -1,23 +1,49 @@
 //! Ixalan.
-use managym_state::{
-    ability::{
-        Ability, Effect, ObjectSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
-    },
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
-    },
-    effect::Modification,
-    mana::ManaCost,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Condition, Effect, ObjectSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, StaticAbility, StaticScope,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::ManaCost;
+use managym_state::predicate::CardPredicate;
+
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        storm_fleet_spy(),
         pirate_s_cutlass(),
         dive_down(),
         rivers_rebuke(),
         bishops_soldier(),
     ]
+}
+
+fn storm_fleet_spy() -> CardDefinition {
+    let text_box = "Raid — When this creature enters, if you attacked this turn, draw a card.";
+    CardDefinition {
+        key: "xln.storm_fleet_spy",
+        scryfall_id: "f7c33ef4-60bb-4f95-92a5-7abedaac6767",
+        printed: PrintedCharacteristics {
+            name: "Storm Fleet Spy".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::DrawCards { count: 1.into() }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn bishops_soldier() -> CardDefinition {

@@ -69,7 +69,7 @@ pub trait ExactIds {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>;
 }
 
-pub(crate) struct Exact<'a, T: ?Sized>(pub(crate) &'a T);
+pub struct Exact<'a, T: ?Sized>(pub &'a T);
 
 impl<T: ExactIds + ?Sized> serde::Serialize for Exact<'_, T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -145,6 +145,12 @@ impl AbilitySource {
         Self {
             object: reference.unwrap_or(object),
             captured: reference.is_some(),
+        }
+    }
+    pub fn exact(object: ObjectId) -> Self {
+        Self {
+            object,
+            captured: true,
         }
     }
     pub fn object(self) -> ObjectId {
@@ -370,6 +376,17 @@ pub struct ObjectLki {
     pub controller: PlayerId,
     pub definition_id: CardDefId,
     pub presentation_id: PublicId,
+}
+
+impl ObjectLki {
+    /// Whether it was a creature immediately before departure (CR 603.10a).
+    pub fn was_creature(&self) -> bool {
+        self.battlefield.types.is_creature()
+    }
+
+    pub fn was_land(&self) -> bool {
+        self.battlefield.types.is_land()
+    }
 }
 
 fn serialize_lki_object<S: serde::Serializer>(
@@ -865,6 +882,12 @@ impl Object {
             }
             _ => self.mana_cost.as_ref(),
         }
+    }
+
+    /// Mana value with the spell's announced X, or zero for X outside the stack.
+    pub fn mana_value_with_x(&self, x: u8) -> u8 {
+        self.mana_value_cost()
+            .map_or(0, |cost| cost.mana_value_at(x))
     }
 
     /// Whether its back face is up (CR 712.8).

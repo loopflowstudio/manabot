@@ -588,6 +588,7 @@ fn omit_variables() -> PrintedCharacteristics {
         spell_effects: vec![Effect::MillCards {
             count: 3.into(),
             target: None,
+            player: None,
         }],
         ..Default::default()
     }

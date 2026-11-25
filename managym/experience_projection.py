@@ -226,7 +226,11 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
+        "combat_damage_to_players": list(permanent.combat_damage_to_players) or None,
+        "damaged_permanents": list(permanent.damaged_permanents) or None,
+        "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "attacked_this_turn": bool(permanent.attacked_this_turn) or None,
         "entered_this_turn": bool(permanent.entered_this_turn) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
@@ -248,6 +252,13 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "land_entered": history.land_entered,
         "cards_drawn": history.cards_drawn,
         "bent": history.bent,
+        "life_gains": history.life_gains,
+        "mana_spent_casting": history.mana_spent_casting,
+        "life_gained": history.life_gained,
+        "creatures_died": history.creatures_died,
+        "permanents_left": history.permanents_left,
+        "nonland_permanents_left": history.nonland_permanents_left,
+        "warped_this_turn": history.warped_this_turn,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -457,6 +468,7 @@ def serialize_observation(
         "won": bool(obs.won),
         "turn": {
             "turn_number": int(obs.turn.turn_number),
+            "creature_died_this_turn": obs.turn.creature_died_this_turn,
             "phase": enum_name(PhaseEnum, obs.turn.phase),
             "step": enum_name(StepEnum, obs.turn.step),
             "active_player_id": int(obs.turn.active_player_id),
@@ -537,11 +549,14 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     }
     data["stack_objects"] = [
         {
+            "combat_damage_to_players": list(entry.combat_damage_to_players),
+            "ability_resolutions": entry.ability_resolutions,
             "id": int(entry.stack_object_id),
             "kind": {0: "spell", 1: "activated_ability", 2: "triggered_ability"}[
                 int(entry.kind)
             ],
             "controller": int(entry.controller_id),
+            "mana_spent": entry.mana_spent,
             "label": entry.description
             or (
                 entry.characteristics.name

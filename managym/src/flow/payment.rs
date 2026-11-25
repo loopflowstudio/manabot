@@ -12,7 +12,7 @@ use crate::{
         cast_permission::PlayRoute,
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        proposed_event::ProposedEvent,
+        proposed_event::{CounterProvenance, EventBinding, EventCause, ProposedEvent},
         turn::OnceEachTurnKey,
     },
     state::{
@@ -113,11 +113,17 @@ pub enum CostComponent {
     /// "Pay N life" (CR 119.4): an ability's life cost, or a spell's life
     /// paid rather than its other cost.
     Life(u32),
+    #[serde(rename = "RemoveCounters")]
+    RemoveSourceCounters(CounterKind, u16),
+    /// "Put N [kind] counters on this" (CR 118.3): always payable while the
+    /// source is on the battlefield.
+    AddCounters(CounterKind, u16),
     /// What the source itself pays: its own {T} (`Tapped`), "sacrifice this"
     /// (`Sacrificed`), "exile this" (`Exiled`) or, for an ability that
     /// functions from hand, "discard this card" (`Discarded`).
     Source(How),
     ExileGrantor(ObjectId),
+    TapGrantor(ObjectId),
 }
 
 impl CostComponent {
@@ -338,7 +344,7 @@ pub struct PaymentProgress {
     pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
-    /// The once-each-turn option (exact source, ability index) paying
+    /// The once-each-turn option `(exact source, printed face, ability index)` paying
     /// spends ("Do this only once each turn").
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -659,11 +665,22 @@ impl Game {
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
+                if let Some((kind, count)) = ability.remove_counters {
+                    owed.push(CostComponent::RemoveSourceCounters(kind, count));
+                }
+                if let Some((kind, count)) = ability.add_counters {
+                    owed.push(CostComponent::AddCounters(kind, count));
+                }
                 if ability.life_cost > 0 {
                     owed.push(CostComponent::Life(ability.life_cost));
                 }
                 if ability.exile_grantor {
                     owed.push(CostComponent::ExileGrantor(
+                        ability.granted_by.expect("attached ability grant").grantor,
+                    ));
+                }
+                if ability.tap_grantor {
+                    owed.push(CostComponent::TapGrantor(
                         ability.granted_by.expect("attached ability grant").grantor,
                     ));
                 }
@@ -1044,7 +1061,12 @@ impl Game {
             CostComponent::TapPays { .. } => {
                 return Err(AgentError("choose what the tapped permanent pays".into()));
             }
-            CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) => {
+            CostComponent::Life(_)
+            | CostComponent::RemoveSourceCounters(..)
+            | CostComponent::AddCounters(..)
+            | CostComponent::Source(_)
+            | CostComponent::ExileGrantor(_)
+            | CostComponent::TapGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -1169,7 +1191,7 @@ impl Game {
         let life = payment.life();
         self.pay_life_cost(player, life, &mut payment.receipt);
         // The source's own discard or exile; its sacrifice is on the receipt.
-        let mut leaves = Vec::new();
+        let mut source_costs = Vec::new();
         let activated = match &payment.operation {
             Operation::Spell { .. } => None,
             Operation::Activation {
@@ -1195,34 +1217,79 @@ impl Game {
                     )?,
                 };
                 let source_object = ability.source_object;
+                let counter_cost = |kind, delta| ProposedEvent::CounterChange {
+                    provenance: CounterProvenance::new(EventCause::Cost),
+                    target: source_object,
+                    kind,
+                    delta,
+                    by: Some(player),
+                };
                 for component in &payment.owed {
-                    let (source_object, how) = match *component {
-                        CostComponent::Source(how) => (source_object, how),
-                        CostComponent::ExileGrantor(object) => (object, How::Exiled),
-                        _ => continue,
-                    };
-                    payment
-                        .receipt
-                        .contribute(source_object, how, Toward::Printed);
-                    let to = match how {
-                        How::Tapped | How::Sacrificed => continue,
-                        How::Discarded => ZoneType::Graveyard,
-                        How::Exiled => ZoneType::Exile,
-                        How::Returned => ZoneType::Hand,
-                    };
-                    leaves.push(self.zone_move_proposal(source_object, to, Default::default()));
+                    match *component {
+                        CostComponent::RemoveSourceCounters(kind, count) => {
+                            let available = self
+                                .state
+                                .permanent_of(source_object)
+                                .and_then(|id| self.state.permanents[id].as_ref())
+                                .map_or(0, |permanent| permanent.counter_count(kind));
+                            if available < i32::from(count) {
+                                return Err(AgentError("cannot pay counter cost".into()));
+                            }
+                            source_costs.push(counter_cost(kind, -i32::from(count)));
+                        }
+                        CostComponent::AddCounters(kind, count) => {
+                            source_costs.push(counter_cost(kind, i32::from(count)));
+                        }
+                        CostComponent::TapGrantor(object) => {
+                            let grantor = self
+                                .state
+                                .permanent_of(object)
+                                .ok_or_else(|| AgentError("the grantor has left".into()))?;
+                            if !self.tap_permanent(grantor, false) {
+                                return Err(AgentError("cannot tap the grantor".into()));
+                            }
+                        }
+                        CostComponent::Source(how) => {
+                            payment
+                                .receipt
+                                .contribute(source_object, how, Toward::Printed);
+                            let to = match how {
+                                How::Tapped | How::Sacrificed => continue,
+                                How::Discarded => ZoneType::Graveyard,
+                                How::Exiled => ZoneType::Exile,
+                                How::Returned => ZoneType::Hand,
+                            };
+                            source_costs.push(self.zone_move_proposal(
+                                source_object,
+                                to,
+                                Default::default(),
+                            ));
+                        }
+                        CostComponent::ExileGrantor(object) => {
+                            payment
+                                .receipt
+                                .contribute(object, How::Exiled, Toward::Printed);
+                            source_costs.push(self.zone_move_proposal(
+                                object,
+                                ZoneType::Exile,
+                                Default::default(),
+                            ));
+                        }
+                        _ => {}
+                    }
                 }
                 Some((ability, *source))
             }
         };
-        let events: Vec<_> = payment
+        let events = payment
             .receipt
-            .sacrificed()
+            .paid_as(How::Sacrificed)
             .filter(|object| self.state.permanent_of(*object).is_some())
             .map(|target| ProposedEvent::Sacrifice { target })
-            .chain(leaves)
-            .collect();
-        let completion = match activated {
+            .chain(source_costs);
+        let mut frame = EffectFrame::new(player, Vec::new());
+        frame.batch = Some(self.event_batch(EventBinding::None, events));
+        frame.completion = match activated {
             None => FrameCompletion::Paid { player, payment },
             Some((mut ability, source)) => {
                 ability.paid = payment.receipt;
@@ -1235,9 +1302,6 @@ impl Game {
                 }
             }
         };
-        let mut frame = EffectFrame::new(player, Vec::new());
-        frame.batch = Some(self.event_batch(events));
-        frame.completion = completion;
         self.run_frame(frame);
         Ok(())
     }
@@ -1336,34 +1400,6 @@ impl Game {
             candidates.retain(|candidate| *candidate != source);
         }
         candidates
-    }
-
-    /// Can `source`'s waterbend ability be paid, its own {T} included?
-    pub(crate) fn can_pay_waterbend_activation(
-        &self,
-        player: PlayerId,
-        source: PermanentId,
-        ability: &ActivatedAbilityDefinition,
-    ) -> bool {
-        // An X cost is payable when its least X is.
-        let cost = ability.mana_cost.with_x(ability.x_min);
-        self.can_pay_with_waterbend(player, &cost, ability.tap_source.then_some(source))
-    }
-
-    /// Can `player` cover `cost` with untapped artifacts and creatures ({1}
-    /// each, generic only) plus available mana, `tapped` tapped anyway?
-    pub(crate) fn can_pay_with_waterbend(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        tapped: Option<PermanentId>,
-    ) -> bool {
-        let help = Help {
-            waterbend: cost.generic(),
-            ..Default::default()
-        };
-        let pool = self.pooled_mana(player);
-        self.payable_with_help(player, &pool, cost, help, help.waterbend, tapped)
     }
 
     /// Pay `life` as a cost (CR 119.4) and record it on `receipt`. The

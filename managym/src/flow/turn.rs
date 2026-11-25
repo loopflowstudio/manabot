@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    ability::PlayerControlDuration,
+    ability::{Actor, GrantClock, PlayerControlDuration},
     game_object::{ObjectId, PlayerId},
     predicate::CardPredicate,
 };
 
-/// A once-each-turn use: the exact source object and its ability index.
-pub type OnceEachTurnKey = (ObjectId, usize);
+/// A once-each-turn use, keyed by exact source, printed face and ability index.
+pub type OnceEachTurnKey = (ObjectId, crate::state::card::CardDefId, usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
@@ -81,6 +81,7 @@ pub struct PlayerControl {
 /// ("if you attacked this turn", "your second card each turn"). The owner of
 /// every such fact: the turn reset, the state hash and the policy's player
 /// row all read this struct.
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]
 #[derive(
     Clone,
     Copy,
@@ -115,6 +116,22 @@ pub struct PlayerTurnHistory {
     /// lower than before), summed over every loss this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub life_lost: u32,
+    /// Separate occurrences, independent of the amount gained.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub life_gains: u32,
+    /// Mana spent by this player to cast spells this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_spent_casting: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub life_gained: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub creatures_died: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub permanents_left: u32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub nonland_permanents_left: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub warped_this_turn: bool,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
@@ -130,6 +147,97 @@ pub enum Bending {
 
 impl Bending {
     pub const ALL: [Bending; 4] = [Bending::Water, Bending::Earth, Bending::Fire, Bending::Air];
+}
+
+/// Each object in a hit names its exact battlefield appearance (CR 400.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+struct DamagePair(
+    #[serde(serialize_with = "crate::state::game_object::exact")] ObjectId,
+    DamageRecipient,
+);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(untagged)]
+enum DamageRecipient {
+    Permanent(#[serde(serialize_with = "crate::state::game_object::exact")] ObjectId),
+    CombatPlayer(PlayerId),
+}
+
+/// Sorted by source then recipient, so each source's hits form one slice.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct DamageHistory(Vec<DamagePair>);
+
+impl DamageHistory {
+    pub fn record(&mut self, source: ObjectId, recipient: ObjectId) {
+        self.insert(DamagePair(source, DamageRecipient::Permanent(recipient)));
+    }
+
+    pub fn record_combat_player(&mut self, source: ObjectId, player: PlayerId) {
+        self.insert(DamagePair(source, DamageRecipient::CombatPlayer(player)));
+    }
+
+    pub fn combat_players(&self, source: ObjectId) -> impl Iterator<Item = PlayerId> + '_ {
+        let first = DamagePair(source, DamageRecipient::CombatPlayer(PlayerId(0)));
+        let start = self.0.partition_point(|pair| *pair < first);
+        self.0[start..].iter().map_while(move |pair| match pair {
+            DamagePair(object, DamageRecipient::CombatPlayer(player)) if *object == source => {
+                Some(*player)
+            }
+            _ => None,
+        })
+    }
+
+    fn insert(&mut self, pair: DamagePair) {
+        if let Err(index) = self.0.binary_search(&pair) {
+            self.0.insert(index, pair);
+        }
+    }
+
+    pub fn contains(&self, source: ObjectId, recipient: ObjectId) -> bool {
+        self.0
+            .binary_search(&DamagePair(source, DamageRecipient::Permanent(recipient)))
+            .is_ok()
+    }
+
+    pub fn recipients(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        let start = self.0.partition_point(|pair| pair.0 < source);
+        self.0[start..]
+            .iter()
+            .take_while(move |pair| pair.0 == source)
+            .filter_map(|pair| match pair.1 {
+                DamageRecipient::Permanent(object) => Some(object),
+                DamageRecipient::CombatPlayer(_) => None,
+            })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// Used once-per-turn grants, ordered by recipient so a viewer can read the
+/// count for one permanent without scanning the rest of the battlefield.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct UsedTriggerGrants(
+    #[serde(serialize_with = "crate::state::game_object::exact")] Vec<(ObjectId, GrantClock)>,
+);
+
+impl UsedTriggerGrants {
+    pub fn contains(&self, source: ObjectId, grant: GrantClock) -> bool {
+        self.0.binary_search(&(source, grant)).is_ok()
+    }
+    pub fn record(&mut self, source: ObjectId, grant: GrantClock) {
+        if let Err(index) = self.0.binary_search(&(source, grant)) {
+            self.0.insert(index, (source, grant));
+        }
+    }
+    pub fn count(&self, source: ObjectId) -> usize {
+        let start = self.0.partition_point(|(id, _)| *id < source);
+        self.0[start..].partition_point(|(id, _)| *id == source)
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// One cast this turn: the spell's stack appearance and the printed profile
@@ -172,15 +280,27 @@ pub struct TurnState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub graveyard_from_battlefield: Vec<ObjectId>,
-    /// Once-each-turn uses by exact source object and ability index: a
+
+    /// Positive damage to permanents and combat damage to players this turn.
+    #[serde(skip_serializing_if = "DamageHistory::is_empty")]
+    pub damage_pairs: DamageHistory,
+    /// Sorted by exact battlefield appearance, incremented only at declaration commit.
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attacks_this_turn: Vec<(ObjectId, u32)>,
+    /// Once-each-turn uses by `(exact source, printed face, ability index)`: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub ability_triggers_this_turn: BTreeMap<OnceEachTurnKey, u32>,
-    /// Times each triggered ability `(card index, ability index)` has
+    #[serde(skip_serializing_if = "UsedTriggerGrants::is_empty")]
+    pub used_trigger_grants: UsedTriggerGrants,
+    /// Times each triggered ability `(exact source, printed face, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.
-    pub ability_resolutions_this_turn: BTreeMap<(usize, usize), u32>,
+    pub ability_resolutions_this_turn: BTreeMap<OnceEachTurnKey, u32>,
     /// Extra turns still to be taken (CR 500.7), the most recently created
     /// last: it is taken first.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -205,6 +325,40 @@ pub struct TurnState {
 }
 
 impl TurnState {
+    pub fn creature_died_this_turn(&self) -> bool {
+        self.history.iter().any(|seat| seat.creatures_died > 0)
+    }
+
+    /// Whether any seat `who` names, relative to `you`, has a turn history
+    /// matching `done`.
+    pub fn any_history(
+        &self,
+        who: Actor,
+        you: PlayerId,
+        done: impl Fn(&PlayerTurnHistory) -> bool,
+    ) -> bool {
+        self.history
+            .iter()
+            .enumerate()
+            .any(|(seat, history)| who.includes(you, PlayerId(seat)) && done(history))
+    }
+
+    pub fn attack_count(&self, object: ObjectId) -> u32 {
+        self.attacks_this_turn
+            .binary_search_by_key(&object, |entry| entry.0)
+            .map_or(0, |index| self.attacks_this_turn[index].1)
+    }
+
+    pub fn record_attack(&mut self, object: ObjectId) {
+        match self
+            .attacks_this_turn
+            .binary_search_by_key(&object, |entry| entry.0)
+        {
+            Ok(index) => self.attacks_this_turn[index].1 += 1,
+            Err(index) => self.attacks_this_turn.insert(index, (object, 1)),
+        }
+    }
+
     pub fn new(active_player: PlayerId) -> Self {
         Self {
             player_controls: Vec::new(),
@@ -212,10 +366,14 @@ impl TurnState {
             turn_number: 1,
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
+
+            attacks_this_turn: Vec::new(),
+            damage_pairs: Default::default(),
             history: Default::default(),
             graveyard_from_battlefield: Vec::new(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
+            used_trigger_grants: UsedTriggerGrants::default(),
             extra_turns: Vec::new(),
             resume_with: None,
             additional_combats: Vec::new(),
@@ -359,11 +517,15 @@ impl TurnState {
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
+
+        self.damage_pairs.0.clear();
+        self.attacks_this_turn.clear();
         self.history = Default::default();
         self.graveyard_from_battlefield.clear();
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();
+        self.used_trigger_grants.0.clear();
         self.active_player = self.next_turn_player();
     }
 

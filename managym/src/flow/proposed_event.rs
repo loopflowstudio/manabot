@@ -211,9 +211,6 @@ pub(crate) enum ProposedDamageTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum EventCause {
     Effect,
-    // The causal domain includes costs even before a registered ability pays
-    // positive counters. Directed CR 614.16 witnesses exercise this boundary.
-    #[allow(dead_code)]
     Cost,
     TurnAction,
 }
@@ -562,9 +559,8 @@ impl EventBatch {
 
 /// Which result of the interrupted instruction its frame consumes. Consequent
 /// child batches never replace these results with their own moves.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum EventBinding {
-    #[default]
     None,
     Moved {
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -574,6 +570,9 @@ pub(crate) enum EventBinding {
         reveal: bool,
     },
     ThisWay,
+    /// A Destroy instruction, including when its zone moves end in exile.
+    Destroyed,
+    LifeLost,
     Damage {
         result: Option<usize>,
     },
@@ -619,9 +618,15 @@ impl EventBinding {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EventResult {
     pub committed: bool,
+    /// Signed difference of the committed life totals for a LifeChange member.
+    pub life_delta: i32,
     /// Destination appearances of this event, in draw order for library placement.
     pub moved: [Option<ObjectId>; 2],
     pub excess_damage: Option<i32>,
+    pub combat_damage: Option<(ObjectId, u32)>,
+    pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
+    /// Life this damage member gains through lifelink; its batch commits it.
+    pub lifelink: Option<crate::flow::damage::LifelinkGain>,
 }
 
 impl EventResult {
@@ -642,7 +647,11 @@ pub(crate) enum BatchProgress {
 }
 
 impl Game {
-    pub(crate) fn event_batch(&self, events: Vec<ProposedEvent>) -> EventBatch {
+    pub(crate) fn event_batch(
+        &self,
+        binding: EventBinding,
+        events: impl IntoIterator<Item = ProposedEvent>,
+    ) -> EventBatch {
         EventBatch {
             events: events
                 .into_iter()
@@ -650,7 +659,7 @@ impl Game {
                 .filter_map(|(ordinal, event)| self.pending_event(ordinal, event))
                 .collect(),
             cursor: 0,
-            binding: EventBinding::None,
+            binding,
         }
     }
 
@@ -835,9 +844,7 @@ impl Game {
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
-        let mut totals: Vec<(PermanentId, u32)> = Vec::new();
-        // CR 119.9: all simultaneous damage from one lifelink source is one gain.
-        let mut lifelink = std::collections::BTreeMap::new();
+        let mut totals: Vec<(ObjectId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
         // choices. Match its subjects while every pre-batch permanent still
         // exists: moving a Food first would erase the predicate it satisfied.
@@ -872,57 +879,23 @@ impl Game {
             }
         }
         for (pending, departing_lki) in batch.events.iter().zip(departing) {
-            if !self.proposal_is_current(&pending.event) {
+            let event = &pending.event;
+            if !self.proposal_is_current(event) {
                 results.push(EventResult::default());
                 continue;
             }
-            let mut event = pending.event.clone();
-            if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
-                *entry = entry.for_zone(*to);
-            }
-            let excess_damage = match &event {
-                ProposedEvent::Damage {
-                    source,
-                    target: ProposedDamageTarget::Object(target),
-                    amount,
-                    ..
-                } => Some(
-                    self.lookup_current_permanent(*target)
-                        .ok()
-                        .map_or(0, |id| self.excess_for_damage(*source, id, *amount)),
-                ),
-                _ => None,
-            };
-            let death = if matches!(batch.binding, EventBinding::Deaths) {
-                match &event {
+            let death = match (&batch.binding, event) {
+                (
+                    EventBinding::Deaths,
                     ProposedEvent::ZoneMove {
-                        object_id: object,
+                        object_id,
                         to: ZoneType::Graveyard,
                         ..
-                    } => self.object_event_ref(*object),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            // Combat damage a permanent dealt: its total joins the step's
-            // totals, and damage to a player is also a hit.
-            let dealt = match (&batch.binding, &event) {
-                (
-                    EventBinding::Combat,
-                    ProposedEvent::Damage {
-                        source: Some(source),
-                        target,
-                        amount,
-                        ..
                     },
-                ) if *amount > 0 => self.lookup_current_permanent(*source).ok().map(|source| {
-                    let to_player = matches!(target, ProposedDamageTarget::Player(_));
-                    (source, *amount as u32, to_player)
-                }),
+                ) => self.object_event_ref(*object_id),
                 _ => None,
             };
-            let known_hand_entry = match (&batch.binding, &event) {
+            let known_hand_entry = match (&batch.binding, event) {
                 (
                     EventBinding::Moved { reveal: true, .. },
                     ProposedEvent::ZoneMove {
@@ -950,12 +923,10 @@ impl Game {
                 }
                 _ => None,
             };
-            let mut result =
-                self.commit_proposed_event(event, departing_lki, &mut followups, &mut lifelink);
+            let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
             if let Some(second_first) = pending.second_card_first {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
             }
-            result.excess_damage = excess_damage;
             if result.committed {
                 if matches!(
                     batch.binding,
@@ -970,18 +941,19 @@ impl Game {
                     self.set_known_hand_count(owner, definition, count);
                 }
                 died.extend(death);
-                if let Some((source, amount, to_player)) = dealt {
-                    if to_player {
-                        hits.push(source);
-                    }
-                    match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
-                        Some((_, total)) => *total += amount,
-                        None => totals.push((source, amount)),
+                if matches!(batch.binding, EventBinding::Combat) {
+                    hits.extend(result.combat_hit);
+                    if let Some((source, amount)) = result.combat_damage {
+                        match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
+                            Some((_, total)) => *total += amount,
+                            None => totals.push((source, amount)),
+                        }
                     }
                 }
             }
             results.push(result);
         }
+        self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
         if let EventBinding::Moved {
             linked: Some((source, returns)),
             ..
@@ -1008,16 +980,11 @@ impl Game {
                 }
             }
         }
-        followups.extend(
-            lifelink
-                .into_iter()
-                .map(|((_, player), delta)| ProposedEvent::LifeChange { player, delta }),
-        );
         if !died.is_empty() {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
         if !hits.is_empty() {
-            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
+            self.emit(GameEvent::CombatDamageToPlayers { hits });
         }
         if !totals.is_empty() {
             self.emit_trigger_event(GameEvent::CombatDamageTotals { dealt: totals });
@@ -1070,14 +1037,10 @@ impl Game {
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
-        let controllers = match scope {
-            crate::state::ability::Scope::YouControl => vec![player],
-            crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
-            _ => vec![PlayerId(0), PlayerId(1)],
-        };
+        let controllers = self.scope_players(&scope, player, Some(*object), None);
         let candidates: Vec<PermanentId> = controllers
             .into_iter()
-            .flat_map(|controller| self.battlefield_permanents(controller))
+            .flat_map(|controller| self.iter_battlefield_permanents(controller))
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .collect();
         let object = *object;
@@ -1185,7 +1148,7 @@ impl Game {
     /// operations that can ask a replacement question retain an EventBatch on
     /// their EffectFrame; this entry point must never turn Pending into success.
     pub(crate) fn apply_immediate_event(&mut self, event: ProposedEvent) -> bool {
-        let batch = self.event_batch(vec![event]);
+        let batch = self.event_batch(EventBinding::None, [event]);
         self.complete_immediate_batch(batch)
             .first()
             .is_some_and(|result| result.committed)
@@ -1197,7 +1160,7 @@ impl Game {
     pub(crate) fn complete_immediate_batch(&mut self, mut batch: EventBatch) -> Vec<EventResult> {
         let (results, mut followups) = self.advance_immediate_batch(&mut batch);
         while !followups.is_empty() {
-            let mut next = self.event_batch(followups);
+            let mut next = self.event_batch(EventBinding::None, followups);
             followups = self.advance_immediate_batch(&mut next).1;
         }
         results
@@ -1747,19 +1710,24 @@ impl Game {
 
     fn commit_proposed_event(
         &mut self,
-        event: ProposedEvent,
+        event: &ProposedEvent,
         lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-        lifelink: &mut std::collections::BTreeMap<(ObjectId, PlayerId), i32>,
     ) -> EventResult {
-        let committed = match event {
+        let mut result = EventResult::default();
+        result.committed = match *event {
             ProposedEvent::Damage {
                 source,
                 target,
                 amount,
                 combat,
-            } => self.commit_damage(source, target, amount, combat, lifelink),
-            ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
+            } => {
+                return self.commit_damage(source, target, amount, combat);
+            }
+            ProposedEvent::LifeChange { player, delta } => {
+                result.life_delta = self.commit_life_change(player, delta);
+                result.life_delta != 0
+            }
             ProposedEvent::CreateTokens { .. } => unreachable!("creation owns an entry batch"),
             ProposedEvent::Destroy { .. } | ProposedEvent::Sacrifice { .. } => {
                 unreachable!("normalized before replacement")
@@ -1775,13 +1743,19 @@ impl Game {
                 object_id,
                 from,
                 to,
-                entry,
-            } => return self.commit_zone_move(object_id, from, to, entry, lki, followups),
+                ref entry,
+            } => {
+                return self.commit_zone_move(
+                    object_id,
+                    from,
+                    to,
+                    entry.for_zone(to),
+                    lki,
+                    followups,
+                )
+            }
         };
-        EventResult {
-            committed,
-            ..Default::default()
-        }
+        result
     }
 
     /// Counter results of a committed event (including damage) stay inside
@@ -1851,7 +1825,9 @@ mod tests {
         state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     };
 
-    use super::{CounterKind, CounterProvenance, EventCause, ProposedEvent, ZoneEntry};
+    use super::{
+        CounterKind, CounterProvenance, EventBinding, EventCause, ProposedEvent, ZoneEntry,
+    };
 
     fn game_with_ogre() -> (Game, crate::state::game_object::PermanentId) {
         let deck = BTreeMap::from([("Gray Ogre".to_string(), 16), ("Mountain".to_string(), 24)]);
@@ -1916,13 +1892,16 @@ mod tests {
                             additional,
                         }];
                 }
-                let mut batch = game.event_batch(vec![ProposedEvent::CounterChange {
-                    target: game.permanent_object(target).unwrap(),
-                    kind: CounterKind::Loyalty,
-                    delta: 1,
-                    by: Some(PlayerId(0)),
-                    provenance: CounterProvenance::new(cause),
-                }]);
+                let mut batch = game.event_batch(
+                    EventBinding::None,
+                    [ProposedEvent::CounterChange {
+                        target: game.permanent_object(target).unwrap(),
+                        kind: CounterKind::Loyalty,
+                        delta: 1,
+                        by: Some(PlayerId(0)),
+                        provenance: CounterProvenance::new(cause),
+                    }],
+                );
                 while let super::BatchProgress::Decision(decision) =
                     game.advance_event_batch(&mut batch, None)
                 {
@@ -2035,6 +2014,20 @@ mod tests {
     }
 
     #[test]
+    fn life_change_result_uses_the_applied_difference_at_the_storage_limit() {
+        let (mut game, _) = game_with_ogre();
+        let player = PlayerId(0);
+        *game.state.life_mut(player).unwrap() = i32::MAX - 1;
+        let batch = game.event_batch(
+            EventBinding::None,
+            [ProposedEvent::LifeChange { player, delta: 3 }],
+        );
+        let results = game.complete_immediate_batch(batch);
+        assert_eq!(game.state.players[0].life, i32::MAX);
+        assert_eq!(results[0].life_delta, 1);
+    }
+
+    #[test]
     fn fog_bank_prevents_only_combat_damage_at_its_own_endpoints() {
         use super::{BatchProgress, ProposedDamageTarget};
         let deck = BTreeMap::from([("Fog Bank".into(), 20), ("Twinflame Tyrant".into(), 20)]);
@@ -2097,7 +2090,7 @@ mod tests {
         let fog_object = game.permanent_object(fog).unwrap();
         let tyrant_object = game.permanent_object(tyrant).unwrap();
         let proposal = damage(game.permanent_object(cat).unwrap(), fog_object, true, 1);
-        let mut batch = game.event_batch(vec![proposal.clone()]);
+        let mut batch = game.event_batch(EventBinding::None, [proposal.clone()]);
         let BatchProgress::Decision(decision) = game.advance_event_batch(&mut batch, None) else {
             panic!("competing prevention and doubling")
         };
@@ -2177,10 +2170,13 @@ mod tests {
                 amount,
                 combat: true,
             };
-            let batch = game.event_batch(vec![
-                damage(first, ProposedDamageTarget::Object(blocker), 2),
-                damage(second, ProposedDamageTarget::Player(PlayerId(1)), 3),
-            ]);
+            let batch = game.event_batch(
+                EventBinding::None,
+                [
+                    damage(first, ProposedDamageTarget::Object(blocker), 2),
+                    damage(second, ProposedDamageTarget::Player(PlayerId(1)), 3),
+                ],
+            );
             game.complete_immediate_batch(batch);
             let gains: Vec<_> = game
                 .state
@@ -2191,6 +2187,7 @@ mod tests {
                         player: PlayerId(0),
                         old,
                         new,
+                        ..
                     } if new > old => Some(new - old),
                     _ => None,
                 })
@@ -2233,6 +2230,7 @@ mod tests {
                 player: PlayerId(0),
                 old: 20,
                 new: 17,
+                gain_ordinal: 0,
             }]
         );
     }

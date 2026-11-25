@@ -785,6 +785,20 @@ pub fn move_and_settle(s: &mut Scenario, id: ObjectId, zone: ZoneType) -> Object
 // Passing and resolving
 // ---------------------------------------------------------------------------
 
+/// Player 0 casts a Lightning Bolt at `target` (floating {R} when its pool
+/// is empty) and both players pass, so it resolves; triggers it causes wait
+/// for the caller.
+pub fn bolt(s: &mut Scenario, target: PermanentId) {
+    if s.game().state.players[0].mana_pool.total() == 0 {
+        s.set_player_mana_pool(0, "R");
+    }
+    let card = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    cast_card(s, card);
+    assert!(s.choose_target(Target::Permanent(target)));
+    s.pass_priority();
+    s.pass_priority();
+}
+
 /// Both players pass priority once.
 pub fn resolve_top(s: &mut Scenario) {
     s.pass_priority();
@@ -914,12 +928,14 @@ pub fn command(
     (Scenario { game: fork }, command)
 }
 
-/// Answer the sole stacked ability with a scenario permanent's counter ability.
+/// Answer the topmost stacked ability with a scenario permanent's counter
+/// ability.
 pub fn counter_stacked_ability(s: &mut Scenario) {
     use managym::state::{
         ability::{Effect, ObjectSelector, TargetSpec},
         card::ActivatedAbilityDefinition,
     };
+    let top = Target::StackAbility(s.game().state.stack_objects.last().unwrap().id());
     let seat = s.action_space().player.unwrap().0;
     let source = s.force_permanent_on_battlefield(seat, "Gray Ogre");
     let object = card_of(s, source);
@@ -932,9 +948,8 @@ pub fn counter_stacked_ability(s: &mut Scenario) {
             ..Default::default()
         });
     activate(s, source, 0);
-    let targets = crate::support::inspect::offered_targets(s);
-    assert!(matches!(targets.as_slice(), [Target::StackAbility(_)]));
-    assert!(s.choose_target(targets[0]));
+    assert!(crate::support::inspect::offered_targets(s).contains(&top));
+    assert!(s.choose_target(top));
     settle(s);
 }
 

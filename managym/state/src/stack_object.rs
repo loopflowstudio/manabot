@@ -41,6 +41,27 @@ pub struct SpellOnStack {
     pub spent: PaymentReceipt,
 }
 
+/// A spell as it is on the stack or last existed there (CR 608.2h): what
+/// "its controller", "the mana spent to cast that spell" and "its mana value"
+/// read after the spell is countered, resolves or otherwise leaves. Copies of
+/// spells are spells too (CR 707.10); one cast without paying mana spent none.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SpellLki {
+    #[serde(serialize_with = "super::game_object::exact")]
+    pub object: ObjectId,
+    pub definition_id: CardDefId,
+    pub controller: PlayerId,
+    #[serde(default, skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
+    /// Including its announced X (CR 202.3e).
+    pub mana_value: u8,
+    /// Total mana actually spent to cast it (CR 601.2h).
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub spent: u16,
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub colors: crate::mana::Colors,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityOnStack {
     /// Chosen effects, captured before costs; resolution never re-reads a source.
@@ -101,10 +122,10 @@ pub struct TriggeredAbilityOnStack {
     /// triggering face. Forks and copied abilities share this immutable value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_face: Option<std::sync::Arc<super::card::PrintedCharacteristics>>,
-    #[serde(skip_serializing_if = "crate::is_zero")]
-    pub trigger_damage: i32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub program: bool,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,
@@ -119,9 +140,9 @@ pub struct TriggeredAbilityOnStack {
     pub source_definition_id: CardDefId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
-    pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -253,6 +274,14 @@ impl StackObject {
             StackObject::Spell(spell) => &spell.targets,
             StackObject::ActivatedAbility(ability) => &ability.targets,
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
+        }
+    }
+
+    pub fn targets_mut(&mut self) -> &mut [Target] {
+        match self {
+            StackObject::Spell(spell) => &mut spell.targets,
+            StackObject::ActivatedAbility(ability) => &mut ability.targets,
+            StackObject::TriggeredAbility(triggered) => &mut triggered.targets,
         }
     }
 }

@@ -14,7 +14,7 @@ use crate::{
         ability::{Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
-            StaticAbility, StaticScope,
+            SpellProfile, StaticAbility, StaticScope,
         },
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -104,11 +104,7 @@ impl Characteristics {
             ability.power_up
                 || ability.reduce_by_source_power
                 || ability.cost_reduction_per.is_some()
-                || matches!(
-                    ability.effects.as_slice(),
-                    [crate::state::ability::Effect::If { .. }
-                        | crate::state::ability::Effect::AddOneColorManaValue { .. }]
-                )
+                || ability.has_dynamic_mana_output()
         })
     }
 
@@ -480,9 +476,11 @@ impl Game {
 
         let power = view.power.clamp(0, u8::MAX.into()) as u8;
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
-            if let [effect] = ability.effects.as_slice() {
-                if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
-                    ability.effects = vec![effect];
+            if ability.has_dynamic_mana_output() {
+                if let Some(output) =
+                    self.current_mana_output(&ability.effects[0], permanent.controller)
+                {
+                    ability.effects[0] = output;
                 }
             }
             if ability.power_up && permanent.entered_this_turn(self.state.turn.turn_number) {
@@ -520,9 +518,6 @@ impl Game {
         }
         total
     }
-    pub(crate) fn effective_pt(&self, id: PermanentId) -> (i32, i32) {
-        self.layer_view(id).pt()
-    }
     pub(super) fn layer_state_condition(
         &self,
         condition: &Condition,
@@ -531,9 +526,12 @@ impl Game {
     ) -> bool {
         debug_assert!(!matches!(
             condition,
-            Condition::ControlsAtLeast { .. }
+            Condition::Compare { .. }
+                | Condition::ControlsAtLeast { .. }
                 | Condition::BattlefieldAtLeast { .. }
+                | Condition::AllOf(_)
                 | Condition::AnyOf(_)
+                | Condition::Not(_)
         ));
         self.condition_holds(
             condition,
@@ -543,25 +541,29 @@ impl Game {
             None,
         )
     }
-    /// Power in the object's current zone (CR 604.3). On the stack "you"
-    /// means the spell's controller; elsewhere off the battlefield it means
-    /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+    /// Power and toughness in the object's current zone (CR 604.3): a
+    /// characteristic-defining ability applies everywhere. On the stack
+    /// "you" means the spell's controller; elsewhere off the battlefield it
+    /// means the owner (CR 109.5), including owned outside-game copies.
+    pub fn object_pt(&self, object_id: ObjectId) -> (i32, i32) {
         if let Some(permanent) = self.state.permanent_of(object_id) {
-            return self.characteristics(permanent).power;
+            return self.layer_view(permanent).pt();
         }
         // An outside-game card is allocated but in no zone.
         let object = self
             .state
             .object(object_id)
             .unwrap_or_else(|_| self.state.entry_object(object_id));
-        let Some(cda) = object.power_cda() else {
-            return object.power.unwrap_or(0);
+        let printed = (object.power.unwrap_or(0), object.toughness.unwrap_or(0));
+        let Some((cda, sets_toughness)) = object.pt_cda() else {
+            return printed;
         };
         let controller = self
-            .stack_spell_controller(object_id)
+            .spell_on_stack(object_id)
+            .map(|spell| spell.controller)
             .unwrap_or(object.owner);
-        self.cda_power(cda, controller)
+        let value = self.cda_value(cda, controller);
+        (value, if sets_toughness { value } else { printed.1 })
     }
 
     /// Contextual predicates must read CDA power rather than a printed star's
@@ -571,36 +573,54 @@ impl Game {
         object_id: ObjectId,
         predicate: &CardPredicate,
     ) -> bool {
-        if predicate.from_battlefield_this_turn {
-            let Some(object) = self.state.live(object_id) else {
-                return false;
-            };
-            return self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
-                && self.state.turn.graveyard_from_battlefield.contains(&object)
-                && self.object_matches_predicate(
-                    object_id,
-                    &CardPredicate {
-                        from_battlefield_this_turn: false,
-                        ..predicate.clone()
-                    },
-                );
-        }
         if let Some(permanent) = self.state.permanent_of(object_id) {
             return self.permanent_matches_predicate(permanent, predicate);
         }
-        let power = if predicate.reads_power() {
-            self.object_power(object_id)
+        self.off_battlefield_matches(object_id, predicate, || self.object_pt(object_id).0)
+    }
+
+    /// A layer calculation supplies the card's CDA power from its partial board.
+    pub(super) fn off_battlefield_matches(
+        &self,
+        object_id: ObjectId,
+        predicate: &CardPredicate,
+        power: impl FnOnce() -> i32,
+    ) -> bool {
+        let ordinary;
+        let predicate = if predicate.from_battlefield_this_turn {
+            if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard)
+                || !self
+                    .state
+                    .turn
+                    .graveyard_from_battlefield
+                    .contains(&object_id)
+            {
+                return false;
+            }
+            ordinary = CardPredicate {
+                from_battlefield_this_turn: false,
+                ..predicate.clone()
+            };
+            &ordinary
         } else {
-            0
+            predicate
         };
         let object = &self.state[object_id];
         predicate.matches_printing(
             object,
             object.kind(),
             self.object_mana_value(object_id),
-            power,
+            if predicate.reads_power() { power() } else { 0 },
             &[],
         )
+    }
+
+    pub(crate) fn lki_matches_predicate(
+        &self,
+        lki: &crate::state::game_object::ObjectLki,
+        predicate: &CardPredicate,
+    ) -> bool {
+        super::layers::matches_departure(lki, predicate)
     }
 
     /// A recorded event can still ask what its departed card was. Read the
@@ -638,10 +658,7 @@ impl Game {
             .provenance(object)
             .expect("recorded provenance");
         let power = if predicate.reads_power() {
-            printing.power_cda().map_or_else(
-                || printing.power.unwrap_or(0),
-                |cda| self.cda_power(cda, owner),
-            )
+            self.printed_power(printing, owner)
         } else {
             0
         };
@@ -666,21 +683,51 @@ impl Game {
         cast: RecordedCast,
         predicate: &CardPredicate,
     ) -> bool {
-        if cast.profile.is_front() || self.state.live(cast.object).is_some() {
-            return self.recorded_object_matches_predicate(cast.object, predicate);
+        self.recorded_spell_matches_predicate(cast.object, cast.profile, predicate)
+    }
+
+    /// Live spells already show their chosen printing. After departure, read
+    /// the profile of that exact stack incarnation from its last known information.
+    pub(super) fn spell_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let profile = self
+            .state
+            .spell_lki
+            .get(&object)
+            .map_or(SpellProfile::Front, |spell| spell.profile);
+        self.recorded_spell_matches_predicate(object, profile, predicate)
+    }
+
+    /// The printed spell `object` was cast as (front face, inset Adventure or
+    /// Omen, or back face) from its retained base.
+    pub(crate) fn recorded_spell_printing(
+        &self,
+        object: ObjectId,
+        profile: SpellProfile,
+    ) -> &crate::state::card::PrintedCharacteristics {
+        let (definition, printing) = self.state.source_base(object);
+        crate::cards::content_pack::default_content_pack()
+            .recorded_spell(definition, printing, profile)
+    }
+
+    fn recorded_spell_matches_predicate(
+        &self,
+        object: ObjectId,
+        profile: SpellProfile,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if profile.is_front() || self.state.live(object).is_some() {
+            return self.recorded_object_matches_predicate(object, predicate);
         }
-        let (definition, printing) = self.state.source_base(cast.object);
         let (_, _, kind) = self
             .state
             .objects
-            .provenance(cast.object)
+            .provenance(object)
             .expect("recorded provenance");
-        let spell = crate::cards::content_pack::default_content_pack().recorded_spell(
-            definition,
-            printing,
-            cast.profile,
-        );
-        predicate.matches_printed_spell(spell, kind)
+        predicate.matches_printed_spell(self.recorded_spell_printing(object, profile), kind)
     }
 
     /// Entry replacements inspect allocated tokens before placement. This is
@@ -708,10 +755,7 @@ impl Game {
         };
         let row = self.state.entry_object(object);
         let power = if predicate.reads_power() {
-            face.power_cda().map_or_else(
-                || face.power.unwrap_or(0),
-                |cda| self.cda_power(cda, entry.controller.unwrap_or(row.owner)),
-            )
+            self.printed_power(face, entry.controller.unwrap_or(row.owner))
         } else {
             0
         };
@@ -739,7 +783,20 @@ impl Game {
             .count()
     }
 
-    fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
+    /// Power as printed, with a characteristic-defining ability evaluated
+    /// for `you` (CR 604.3) instead of the printed star's placeholder.
+    fn printed_power(
+        &self,
+        printing: &crate::state::card::PrintedCharacteristics,
+        you: PlayerId,
+    ) -> i32 {
+        printing.pt_cda().map_or_else(
+            || printing.power.unwrap_or(0),
+            |(cda, _)| self.cda_value(cda, you),
+        )
+    }
+
+    fn cda_value(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
                 .layer_views(self.iter_battlefield_permanents(controller))
@@ -751,6 +808,11 @@ impl Game {
             PowerCda::GraveyardMatching(predicate) => {
                 self.count_graveyard_matching(controller, predicate) as i32
             }
+            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.state.players.len())
+                .map(PlayerId)
+                .filter(|player| who.includes(controller, *player))
+                .map(|player| self.count_graveyard_matching(player, predicate) as i32)
+                .sum(),
         }
     }
 
@@ -802,21 +864,34 @@ impl Game {
         let Some(permanent) = self.state.permanents[target].as_ref() else {
             return false;
         };
-        let predicate = match scope {
-            StaticScope::This => return source == target,
-            StaticScope::Attached => return self.attached_permanent(source) == Some(target),
-            StaticScope::SpellsYouControl(_) => return false,
-            StaticScope::YouControl(p) if permanent.controller == controller => p,
-            StaticScope::OtherYouControl(p)
-                if permanent.controller == controller && source != target =>
-            {
-                p
-            }
-            StaticScope::All(p) => p,
-            StaticScope::Other(p) if source != target => p,
-            _ => return false,
-        };
-        self.permanent_matches_with_source(target, predicate, Some(source))
+        super::layers::matches_static_scope(
+            scope,
+            source,
+            controller,
+            self.attached_permanent(source),
+            target,
+            permanent.controller,
+            |predicate| self.permanent_matches_with_source(target, predicate, Some(source)),
+        )
+    }
+
+    /// Read a permanent while it remains on the battlefield, or from its last
+    /// known information after departure (CR 608.2h).
+    pub(crate) fn with_permanent_or_lki<T>(
+        &self,
+        id: PermanentId,
+        live: impl FnOnce(&crate::state::permanent::Permanent) -> T,
+        departed: impl FnOnce(&crate::state::game_object::ObjectLki) -> T,
+    ) -> Option<T> {
+        match self.state.permanents[id].as_ref() {
+            Some(permanent) => Some(live(permanent)),
+            None => self.departed_permanent_lki(id).map(departed),
+        }
+    }
+
+    /// The permanent's current controller, or its last known controller after departure.
+    pub(crate) fn last_known_controller(&self, id: PermanentId) -> Option<PlayerId> {
+        self.with_permanent_or_lki(id, |p| p.controller, |lki| lki.controller)
     }
 
     /// Whether the permanent is attacking or blocking (CR 506.4).
@@ -977,7 +1052,7 @@ impl Game {
     /// The source questions read `source`, the ability's exact object, which
     /// answers nothing once it has left the battlefield; the triggering
     /// questions read `triggering`, as it is or last existed.
-    fn condition_holds(
+    pub(crate) fn condition_holds(
         &self,
         condition: &Condition,
         controller: PlayerId,
@@ -985,11 +1060,8 @@ impl Game {
         source: Option<ObjectId>,
         triggering: Option<Target>,
     ) -> bool {
-        let source_permanent = || {
-            source
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .and_then(|id| self.state.permanents[id].as_ref())
-        };
+        let source_id = || source.and_then(|source| self.lookup_current_permanent(source).ok());
+        let source_permanent = || source_id().and_then(|id| self.state.permanents[id].as_ref());
         match condition {
             Condition::OwnsMeldPair { partner } => source.is_some_and(|object| {
                 self.meld_partners(controller, object, partner)
@@ -997,8 +1069,28 @@ impl Game {
                     .is_some()
             }),
             Condition::AtMostHalfStartingLife => {
-                self.state.players[controller.0].life
-                    <= crate::state::player::Player::STARTING_LIFE / 2
+                let player = &self.state.players[controller.0];
+                player.life <= player.starting_life / 2
+            }
+            Condition::Compare { left, op, right } => {
+                let context;
+                let frame = match frame {
+                    Some(frame) => frame,
+                    None => {
+                        context = EffectFrame {
+                            source_identity: crate::state::game_object::AbilitySource::optional(
+                                source, source,
+                            ),
+                            context_target: triggering,
+                            ..EffectFrame::new(controller, Vec::new())
+                        };
+                        &context
+                    }
+                };
+                op.test(
+                    self.effect_value(left, frame),
+                    self.effect_value(right, frame),
+                )
             }
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,
@@ -1016,8 +1108,9 @@ impl Game {
                 predicate,
                 distinct_names,
             } => {
-                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                let source_view = source.map(|id| self.layer_view(id));
+                let source_view = source_id()
+                    .filter(|_| predicate.reads_source())
+                    .map(|id| self.layer_view(id));
                 let source_name = source_view.as_ref().map(|view| view.name.as_str());
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
@@ -1030,13 +1123,18 @@ impl Game {
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
-                let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.iter_battlefield_permanents(player))
-                    .filter(|&id| self.permanent_matches_with_source(id, predicate, source))
-                    .take(*count)
-                    .count()
+                let source_view = source_id()
+                    .filter(|_| predicate.reads_source())
+                    .map(|id| self.layer_view(id));
+                let source_name = source_view.as_ref().map(|view| view.name.as_str());
+                self.layer_views(
+                    [PlayerId(0), PlayerId(1)]
+                        .into_iter()
+                        .flat_map(|player| self.iter_battlefield_permanents(player)),
+                )
+                .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name))
+                .take(*count)
+                .count()
                     == *count
             }
             Condition::ControlsUnownedAtLeast { count } => {
@@ -1068,6 +1166,20 @@ impl Game {
                 .iter()
                 .any(|&cast| self.recorded_cast_matches_predicate(cast, predicate)),
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
+            Condition::PermanentLeftThisTurn { who, nonland } => {
+                self.state.turn.any_history(*who, controller, |history| {
+                    if *nonland {
+                        history.nonland_permanents_left > 0
+                    } else {
+                        history.permanents_left > 0
+                    }
+                })
+            }
+            Condition::WarpedThisTurn { who } => {
+                self.state
+                    .turn
+                    .any_history(*who, controller, |history| history.warped_this_turn)
+            }
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
@@ -1076,9 +1188,16 @@ impl Game {
             Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
                 self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
+            Condition::CreatureDiedThisTurn => self.state.turn.creature_died_this_turn(),
+            Condition::AllOf(conditions) => conditions.iter().all(|condition| {
+                self.condition_holds(condition, controller, frame, source, triggering)
+            }),
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)
             }),
+            Condition::Not(condition) => {
+                !self.condition_holds(condition, controller, frame, source, triggering)
+            }
             Condition::CastFromGraveyard => source
                 .and_then(|object| self.spell_on_stack(object))
                 .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
@@ -1118,23 +1237,23 @@ impl Game {
                 source_permanent().is_some_and(|p| self.prepared_copy(p.object).is_none())
             }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
-            Condition::SourceSaddled => source
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .is_some_and(|id| {
-                    self.permanent_has_modification(
-                        id,
-                        &crate::state::effect::Modification::Saddled,
-                    )
-                }),
-            Condition::TriggeringHadCounters => match triggering {
-                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
-                    Some(permanent) => permanent.has_counters(),
-                    None => self
-                        .departed_permanent_lki(id)
-                        .is_some_and(|lki| !lki.counters.is_empty()),
-                },
-                _ => false,
-            },
+            Condition::SourceSaddled => source_id().is_some_and(|id| {
+                self.permanent_has_modification(id, &crate::state::effect::Modification::Saddled)
+            }),
+            Condition::TriggeringHadCounters => matches!(triggering, Some(Target::Permanent(id))
+                if self.with_permanent_or_lki(
+                    id,
+                    |permanent| permanent.has_counters(),
+                    |lki| !lki.counters.is_empty(),
+                ).unwrap_or(false)),
+            Condition::TriggeringMatches(predicate) => {
+                matches!(triggering, Some(Target::Permanent(id))
+                if self.with_permanent_or_lki(
+                    id,
+                    |_| self.permanent_matches_predicate(id, predicate),
+                    |lki| self.lki_matches_predicate(lki, predicate),
+                ).unwrap_or(false))
+            }
             Condition::Moved => frame.is_some_and(|frame| !frame.moved.is_empty()),
             Condition::AttachedCountersAtLeast { kind, count } => frame
                 .and_then(|frame| self.frame_attached(frame))
@@ -1146,13 +1265,7 @@ impl Game {
                 else {
                     return false;
                 };
-                let last_controller = match self.state.permanents[permanent_id].as_ref() {
-                    Some(permanent) => Some(permanent.controller),
-                    None => self
-                        .departed_permanent_lki(permanent_id)
-                        .map(|lki| lki.controller),
-                };
-                last_controller == Some(controller)
+                self.last_known_controller(permanent_id) == Some(controller)
             }
             Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
                 frame
@@ -1161,8 +1274,8 @@ impl Game {
                     .any(|object| self.recorded_object_matches_predicate(*object, predicate))
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
-                frame.and_then(|frame| frame.context_target),
-                Some(Target::StackSpell(object_id)) if self.recorded_object_matches_predicate(object_id, predicate)
+                triggering,
+                Some(Target::StackSpell(object_id)) if self.spell_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =
@@ -1183,12 +1296,12 @@ impl Game {
                     return false;
                 };
                 // A departed target answers from its last known information.
-                match self.state.permanents[permanent_id].as_ref() {
-                    Some(permanent) => permanent.dealt_damage_this_turn,
-                    None => self
-                        .departed_permanent_lki(permanent_id)
-                        .is_some_and(|lki| lki.dealt_damage_this_turn),
-                }
+                self.with_permanent_or_lki(
+                    permanent_id,
+                    |permanent| permanent.dealt_damage_this_turn,
+                    |lki| lki.dealt_damage_this_turn,
+                )
+                .unwrap_or(false)
             }
         }
     }
@@ -1203,14 +1316,16 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
-    fn permanent_matches_with_source(
+    pub(super) fn permanent_matches_with_source(
         &self,
         id: PermanentId,
         predicate: &CardPredicate,
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source = source.map(|id| self.layer_view(id));
+        let source = source
+            .filter(|_| predicate.reads_source())
+            .map(|id| self.layer_view(id));
         matches_view(
             self,
             id,
@@ -1219,6 +1334,19 @@ impl Game {
             source.as_ref().map(|s| s.name.as_str()),
         )
     }
+
+    /// Whether an ability's "tap [its grantor]" cost can be paid: the
+    /// granting permanent is untapped. Summoning sickness doesn't matter
+    /// (CR 302.6). True for an ability without that cost.
+    pub(crate) fn can_tap_grantor(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        !ability.tap_grantor
+            || ability
+                .granted_by
+                .and_then(|grant| self.state.permanent_of(grant.grantor))
+                .and_then(|id| self.state.permanents[id].as_ref())
+                .is_some_and(|grantor| !grantor.tapped)
+    }
+
     /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
     /// untapped, and a creature under its controller's control since the
     /// turn began or with haste, as its characteristics report it. A
@@ -1351,6 +1479,39 @@ mod cache_tests {
     }
 
     #[test]
+    fn recording_creature_damage_reuses_the_layer_board() {
+        use crate::flow::proposed_event::ProposedDamageTarget;
+
+        let player = PlayerId(0);
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            418,
+            true,
+        );
+        game.play();
+        let source = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let target = game
+            .scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let source = game.permanent_object(source).unwrap();
+        let target = game.permanent_object(target).unwrap();
+        let board = game.layer_board();
+
+        assert!(
+            game.commit_damage(Some(source), ProposedDamageTarget::Object(target), 1, true)
+                .committed
+        );
+        assert!(game.state.turn.damage_pairs.contains(source, target));
+        assert!(Arc::ptr_eq(&board, &game.layer_board()));
+    }
+
+    #[test]
     fn mana_revision_reuses_independent_board_but_reprices_dynamic_outputs() {
         let deck = [("Mountain".into(), 24), ("Gray Ogre".into(), 16)].into();
         let mut game = Game::new(
@@ -1422,6 +1583,56 @@ mod cache_tests {
         assert_eq!(branch.characteristics(id).pt(), (4, 4));
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::default().into();
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
+    }
+
+    #[test]
+    fn power_comparison_uses_layer_creatures_and_invalidates_on_tap() {
+        use crate::state::ability::{Aggregate, CompareOp, ObjectProperty, ObjectSelector};
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let id = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let other = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::compare(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        tapped: true,
+                        ..CardPredicate::creature()
+                    })
+                    .property(ObjectProperty::Power, Aggregate::Sum),
+                    CompareOp::Ge,
+                    2,
+                )),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            }))),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(game.characteristics(id).power, 2);
+        game.state.tap(other);
+        assert_eq!(game.characteristics(id).power, 3);
+        game.state.untap(other);
+        assert_eq!(game.characteristics(id).power, 2);
     }
 
     #[test]

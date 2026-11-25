@@ -73,7 +73,7 @@ fn event_log_records_life_change() {
         player: PlayerId(1),
         old: 20,
         new: 17,
-    }));
+    gain_ordinal: 0,}));
 }
 
 #[test]

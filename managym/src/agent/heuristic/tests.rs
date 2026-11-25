@@ -321,7 +321,10 @@ fn heuristic_pumps_only_when_combat_improves() {
     let mut o = board(Space::Priority);
     o.turn.step = StepKind::DeclareBlockers;
     o.agent_cards.push(card(1, "Fancy Footwork", 3));
-    o.agent_permanents.push(creature(30, 10, 2, 2));
+    o.agent_permanents.push(PermanentData {
+        attacking: true,
+        ..creature(30, 10, 2, 2)
+    });
     o.opponent_permanents.push(creature(40, 20, 3, 3));
     o.action_space.actions = vec![
         offer(Action::PriorityCastSpell, &[1], None),
@@ -345,6 +348,32 @@ fn heuristic_pumps_only_when_combat_improves() {
     o.opponent_permanents[0].power = 8;
     o.opponent_permanents[0].toughness = 8;
     assert_eq!(choose(&o), 1);
+}
+/// Attackers are read from the live board: one put onto the battlefield
+/// attacking (no declaration) or a vigilant one (untapped) is still an
+/// unblocked attacker whose pump can be lethal.
+#[test]
+fn heuristic_pumps_live_unblocked_attackers_without_a_declaration() {
+    for (attacking, tapped, expected) in [(true, false, 0), (true, true, 0), (false, false, 1)] {
+        let mut o = board(Space::Priority);
+        o.turn.step = StepKind::DeclareBlockers;
+        o.opponent.life = 3;
+        o.agent_cards.push(card(1, "Fancy Footwork", 3));
+        o.agent_permanents.push(PermanentData {
+            attacking,
+            tapped,
+            ..creature(31, 10, 2, 2)
+        });
+        o.action_space.actions = vec![
+            offer(Action::PriorityCastSpell, &[1], None),
+            offer(Action::PriorityPassPriority, &[], None),
+        ];
+        assert_eq!(
+            choose(&o),
+            expected,
+            "attacking {attacking}, tapped {tapped}"
+        );
+    }
 }
 #[test]
 fn heuristic_abilities_and_lesson_damage() {

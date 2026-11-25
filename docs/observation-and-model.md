@@ -597,6 +597,13 @@ relation references, history contexts) names that row:
 | `agent_permanents`, `opponent_permanents` | a permanent, by controller, with its characteristics: mana value, six card types, legendary, token, Ally, Lesson and ward beside its state |
 | `stack` | a spell, activated ability or triggered ability, top first, one segment with `is_mine` for its controller; a spell's characteristics, an ability's index and source link, mode, X and kicker |
 
+Each player's `turn_history.mana_spent_casting` totals the mana they paid to cast
+spells during the current turn, including spells later countered. Both viewers
+see the total in text and in that seat’s v11 `player_turn_state` row. The row
+also gives separate counts for life-gain events and life gained, creature deaths,
+and permanent and nonland departures under that player’s control. A spell on the
+stack shows its own actual mana expenditure in `stack.mana_spent`.
+
 The published observation exposes `card.characteristics` and
 `permanent.characteristics` as `ObservationCharacteristics`. Effective P/T,
 name, types, keywords and ward come from one layered projection on a permanent;
@@ -614,7 +621,16 @@ object_id = permanent.object_id  # selection, payment and history identity
 A spell's `stack_object.characteristics` is present even for a copy;
 `object_id`, `owner_id`, `is_copy` and `announced_x` belong to the stack object.
 An ability has no spell characteristics and retains its captured source
-definition/reference after the source leaves. `Permanent.name` keeps its old
+definition/reference after the source leaves. A pending ability that reads source power reports that value. This includes
+Heartfire Immolator’s damage and Alesha’s graveyard target limit. After sacrifice this is the power of the departed permanent, even if
+the card returns. The v11 stack column `source_power` stores it in tenths.
+The LLM prompt and Academy stack label show the unscaled value. A pending
+activation reports the amount it reads from the objects that paid its cost
+as `paid_amount`. For Lumen-Class Frigate this tracks the tapped creature’s
+power, with a minimum of zero. Once a payer leaves the battlefield, the ability
+uses its last known characteristics, as Ayli does for a sacrificed creature’s
+toughness. The v11 stack column stores the amount in tenths. Both viewers see
+the unscaled amount in the ability description. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
@@ -705,9 +721,9 @@ Capacities are configuration; widths are the layout.
 | --- | --- | --- |
 | `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
-| `agent_permanents`, `opponent_permanents` | 40 × 53 | Permanents with their characteristics |
-| `stack`, `stack_valid` | 32 × 40 (`max_stack_objects`), 32 | Spells and abilities, top first |
-| `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
+| `agent_permanents`, `opponent_permanents` | 40 × 56 | Permanents with their characteristics |
+| `stack`, `stack_valid` | 32 × 46 (`max_stack_objects`), 32 | Spells and abilities, top first |
+| `player_turn_state`, `card_turn_state` | 2 × 15, 2 × 60 | Turn state (above) |
 | `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |

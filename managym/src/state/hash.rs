@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 19;
+pub const MATCH_STATE_HASH_VERSION: u32 = 31;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -76,18 +76,29 @@ struct CanonicalCard {
 }
 
 #[derive(Serialize)]
-struct CanonicalTurn {
+struct CanonicalTurn<'a> {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     player_controls: Vec<crate::flow::turn::PlayerControl>,
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
     spells_cast: [Vec<crate::flow::turn::RecordedCast>; 2],
+    #[serde(skip_serializing_if = "crate::flow::turn::DamageHistory::is_empty")]
+    damage_pairs: &'a crate::flow::turn::DamageHistory,
+    #[serde(
+        skip_serializing_if = "Vec::is_empty",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    attacks_this_turn: Vec<(ObjectId, u32)>,
+
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
-    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectId, usize, u32)>,
-    ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
+    ability_triggers_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
+    #[serde(skip_serializing_if = "crate::flow::turn::UsedTriggerGrants::is_empty")]
+    used_trigger_grants: &'a crate::flow::turn::UsedTriggerGrants,
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    ability_resolutions_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     extra_turns: Vec<PlayerId>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,24 +114,28 @@ struct CanonicalTurn {
     cleanup_priority: bool,
 }
 
-impl From<&TurnState> for CanonicalTurn {
-    fn from(turn: &TurnState) -> Self {
+impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
+    fn from(turn: &'a TurnState) -> Self {
         Self {
             player_controls: turn.player_controls.clone(),
             active_player: turn.active_player,
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
+            damage_pairs: &turn.damage_pairs,
+            attacks_this_turn: turn.attacks_this_turn.clone(),
+
             history: turn.history,
+            used_trigger_grants: &turn.used_trigger_grants,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()
-                .map(|((source, index), count)| (*source, *index, *count))
+                .map(|(&(source, face, index), &count)| (source, (face, index), count))
                 .collect(),
             ability_resolutions_this_turn: turn
                 .ability_resolutions_this_turn
                 .iter()
-                .map(|(&(object, ability), &count)| (object, ability, count))
+                .map(|(&(object, face, ability), &count)| (object, (face, ability), count))
                 .collect(),
             extra_turns: turn.extra_turns.clone(),
             resume_with: turn.resume_with,
@@ -143,6 +158,8 @@ struct CanonicalCombat {
     regular_damage_step: bool,
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
     blockers_to_declare: Vec<PermanentId>,
 }
@@ -158,6 +175,7 @@ impl From<&CombatState> for CanonicalCombat {
                 .iter()
                 .map(|(&attacker, blockers)| (attacker, blockers.clone()))
                 .collect(),
+            already_attacking: (combat.already_attacking != 0).then_some(combat.already_attacking),
             attackers_to_declare: combat.attackers_to_declare.clone(),
             blockers_to_declare: combat.blockers_to_declare.clone(),
         }
@@ -179,10 +197,16 @@ struct CanonicalMatchState<'a> {
     object_to_permanent: &'a ObjectVec<Option<PermanentId>>,
     object_incarnations: Vec<u32>,
     #[serde(serialize_with = "crate::state::game_object::exact")]
-    object_lki: Vec<(ObjectId, ObjectLki)>,
+    object_lki: Vec<(ObjectId, &'a ObjectLki)>,
+    /// Omitted when empty: no spell has left the stack.
+    #[serde(
+        serialize_with = "crate::state::game_object::exact",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    spell_lki: Vec<(ObjectId, &'a crate::state::stack_object::SpellLki)>,
     players: &'a [crate::state::player::Player; 2],
     zones: &'a crate::state::zone::ZoneManager,
-    turn: CanonicalTurn,
+    turn: CanonicalTurn<'a>,
     priority: &'a crate::flow::priority::PriorityState,
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,
@@ -199,7 +223,7 @@ struct CanonicalMatchState<'a> {
     object_counters: Vec<(ObjectId, &'a crate::state::permanent::Counters)>,
     effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
-    #[serde(skip_serializing_if = "no_cast_permissions")]
+    #[serde(skip_serializing_if = "crate::flow::cast_permission::CastPermissions::is_empty")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -207,10 +231,6 @@ struct CanonicalMatchState<'a> {
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
-}
-
-fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -> bool {
-    value.is_empty()
 }
 
 impl<'a> CanonicalMatchState<'a> {
@@ -228,6 +248,7 @@ impl<'a> CanonicalMatchState<'a> {
             permanents,
             object_to_permanent,
             object_lki,
+            spell_lki,
             players,
             zones,
             turn,
@@ -266,9 +287,13 @@ impl<'a> CanonicalMatchState<'a> {
                 owner: object.owner,
             })
             .collect();
+        let spell_lki = spell_lki
+            .iter()
+            .map(|(&object, lki)| (object, lki))
+            .collect();
         let object_lki = object_lki
             .iter()
-            .map(|(&object_ref, lki)| (object_ref, lki.clone()))
+            .map(|(&object_ref, lki)| (object_ref, lki))
             .collect();
         let mut rng = rng.clone();
         let mut rng_probe = [0_u64; 8];
@@ -287,6 +312,7 @@ impl<'a> CanonicalMatchState<'a> {
             object_to_permanent,
             object_incarnations: zones.generations().collect(),
             object_lki,
+            spell_lki,
             players,
             zones,
             turn: CanonicalTurn::from(turn),
@@ -342,5 +368,103 @@ impl GameState {
             version: MATCH_STATE_HASH_VERSION,
             digest: *blake3::hash(&bytes).as_bytes(),
         }
+    }
+}
+
+/// Turn-history counts above this compare alike in a loop fingerprint: no
+/// card asks for an occurrence or amount this high, and a mandatory loop
+/// passes every lower threshold before it is watched.
+const LOOP_COUNT_SATURATION: u64 = 16;
+
+impl GameState {
+    /// CR 104.4b: the rules-relevant state a mandatory loop returns to,
+    /// sampled after stabilization. The canonical match state, without what
+    /// every repetition advances on its own: life and poison totals (the loop
+    /// watch tracks their progress itself), the event logs, priority
+    /// bookkeeping, identity and timestamp allocation, stack objects' ids,
+    /// and turn-history counts past [`LOOP_COUNT_SATURATION`]. Anything a
+    /// finite chain uses up (other counters, objects, cards, mana) stays in.
+    pub(crate) fn loop_fingerprint(&self) -> u64 {
+        use serde_json::Value;
+
+        fn saturate(value: &mut Value) {
+            match value {
+                Value::Number(number) => {
+                    if number.as_u64().is_some_and(|n| n > LOOP_COUNT_SATURATION) {
+                        *value = Value::from(LOOP_COUNT_SATURATION);
+                    }
+                }
+                Value::Array(items) => items.iter_mut().for_each(saturate),
+                Value::Object(fields) => fields.values_mut().for_each(saturate),
+                _ => {}
+            }
+        }
+
+        let mut canonical = self.deterministic_hash_value();
+        let state = canonical
+            .as_object_mut()
+            .expect("canonical match state is an object");
+        for key in [
+            "events",
+            "pending_events",
+            "observation_events",
+            "priority",
+            "trigger_enqueue_counter",
+            "allocation_watermark",
+        ] {
+            state.remove(key);
+        }
+        if let Some(Value::Array(players)) = state.get_mut("players") {
+            for player in players {
+                let Some(player) = player.as_object_mut() else {
+                    continue;
+                };
+                player.remove("life");
+                // Poison is a total the watch tracks itself, like life; any
+                // other player counter is used up and stays.
+                if let Some(Value::Object(counters)) = player.get_mut("counters") {
+                    counters.remove("poison");
+                    if counters.is_empty() {
+                        player.remove("counters");
+                    }
+                }
+            }
+        }
+        // A stack object's id is its allocation order, renumbered each cycle.
+        // Each entry is `{variant: body}`; the id lives in the body.
+        // Stabilization already emptied `pending_triggers` and `trigger_placement`.
+        if let Some(Value::Array(stack)) = state.get_mut("stack_objects") {
+            for entry in stack {
+                if let Some(variant) = entry.as_object_mut() {
+                    for body in variant.values_mut() {
+                        if let Some(fields) = body.as_object_mut() {
+                            fields.remove("id");
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(Value::Object(turn)) = state.get_mut("turn") {
+            if let Some(history) = turn.get_mut("history") {
+                saturate(history);
+            }
+            // Entries are `[object, [definition, ability], count]`: only the
+            // count saturates, so distinct sources never compare alike.
+            for key in [
+                "ability_triggers_this_turn",
+                "ability_resolutions_this_turn",
+            ] {
+                if let Some(Value::Array(entries)) = turn.get_mut(key) {
+                    for entry in entries {
+                        if let Some(count) = entry.get_mut(2) {
+                            saturate(count);
+                        }
+                    }
+                }
+            }
+        }
+        let bytes = serde_json::to_vec(&canonical).expect("canonical match state serializes");
+        let digest = blake3::hash(&bytes);
+        u64::from_le_bytes(digest.as_bytes()[..8].try_into().expect("eight bytes"))
     }
 }

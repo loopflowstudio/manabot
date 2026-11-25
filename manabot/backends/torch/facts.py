@@ -47,12 +47,13 @@ class FactEncoder(nn.Module):
         width: int,
         *,
         numeric: int,
+        fact_kinds: int = FACT_KINDS,
         buckets: int = 4096,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
         super().__init__()
         self.vocabulary = vocabulary
-        self.kind = nn.Embedding(FACT_KINDS + 1, width)
+        self.kind = nn.Embedding(fact_kinds + 1, width)
         if vocabulary == "hashed":
             self.ident = nn.Embedding(buckets, width)
             self.detail = nn.Embedding(buckets, width)

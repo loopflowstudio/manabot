@@ -34,6 +34,51 @@ fn thrashing_brontodon_sacrifices_itself_to_destroy_an_artifact() {
     crate::support::play::sacrifices_itself_to_destroy_an_artifact("Thrashing Brontodon", "Forest");
 }
 
+/// Brass's Bounty makes one Treasure for each land its caster controls as
+/// it resolves; the opponent's lands do not count.
+#[test]
+fn brasss_bounty_makes_a_treasure_for_each_land_you_control() {
+    use crate::support::{
+        game::{five_color_setup, force_lands},
+        play::{cast, settle},
+    };
+    let mut s = five_color_setup(&["Brass's Bounty"]);
+    force_lands(&mut s, 0, "Mountain", 3);
+    force_lands(&mut s, 1, "Forest", 2);
+    let lands = s.zone_size(0, managym::state::zone::ZoneType::Battlefield);
+    cast(&mut s, "Brass's Bounty");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), lands);
+    assert!(s.battlefield_permanents_named(1, "Treasure").is_empty());
+}
+
+/// Ghalta costs {X} less where X is the total power of its caster's
+/// creatures, reducing generic mana only: twelve power leaves {G}{G}, six
+/// leaves {4}{G}{G}, and the opponent's creatures reduce nothing.
+#[test]
+fn ghalta_costs_less_by_the_total_power_of_your_creatures() {
+    use crate::support::{
+        game::{five_color_setup, force_new_card_in_hand},
+        play::castable,
+    };
+    let mut s = five_color_setup(&["Ghalta, Primal Hunger", "Hill Giant"]);
+    for _ in 0..4 {
+        s.force_permanent_on_battlefield(1, "Hill Giant");
+    }
+    let ghalta = force_new_card_in_hand(&mut s, 0, "Ghalta, Primal Hunger");
+    s.set_player_mana_pool(0, "GG");
+    assert!(!castable(&mut s, ghalta), "opponent's power");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    assert!(!castable(&mut s, ghalta), "six power");
+    s.set_player_mana_pool(0, "4GG");
+    assert!(castable(&mut s, ghalta), "six power and {{4}}{{G}}{{G}}");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    s.force_permanent_on_battlefield(0, "Hill Giant");
+    s.set_player_mana_pool(0, "GG");
+    assert!(castable(&mut s, ghalta), "twelve power");
+}
+
 #[test]
 fn token_producer_gleaming_barrier() {
     use crate::support::{game::five_color_setup, play::enter_and_settle};

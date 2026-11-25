@@ -6,7 +6,8 @@ use managym_state::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
         DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -1234,6 +1235,7 @@ fn avatar_destiny() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::TriggeringPower,
                         target: None,
+                        player: None,
                     },
                     Effect::move_to(ObjectSelector::This, ZoneType::Hand),
                     Effect::SelectCards {
@@ -1325,6 +1327,7 @@ fn avatar_s_wrath() -> CardDefinition {
                             },
                             except: Some(Except::Target),
                             max_mana_value: None,
+                            exact_mana_value: None,
                         },
                     }],
                 },
@@ -2743,6 +2746,7 @@ fn day_of_black_sun() -> CardDefinition {
                     predicate: CardPredicate::creature(),
                     except: None,
                     max_mana_value: Some(Box::new(EffectValue::X)),
+                    exact_mana_value: None,
                 };
                 vec![
                     Effect::until_end_of_turn(creatures.clone(), Modification::LoseAllAbilities),
@@ -4805,6 +4809,7 @@ fn hama_the_bloodbender() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(3),
                         target: Some(TargetSpec::Opponent),
+                        player: None,
                     },
                     Effect::ExileLinked {
                         chooser: LinkedChooser::Controller,
@@ -6105,6 +6110,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         Effect::MillCards {
                             count: EffectValue::Fixed(3),
                             target: None,
+                            player: None,
                         },
                         Effect::create_tokens("token.food", 1),
                     ],
@@ -6370,6 +6376,7 @@ fn master_pakku() -> CardDefinition {
                             },
                         },
                         target: Some(TargetSpec::Player),
+                        player: None,
                     }],
                 },
             ],
@@ -7039,6 +7046,7 @@ fn ostrich_horse() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(3),
                         target: None,
+                        player: None,
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
@@ -7357,6 +7365,7 @@ fn platypus_bear() -> CardDefinition {
                 effects: vec![Effect::MillCards {
                     count: EffectValue::Fixed(2),
                     target: None,
+                    player: None,
                 }],
             }],
             statics: vec![StaticAbility::AttacksDespiteDefender(
@@ -8490,7 +8499,8 @@ fn sokka_lateral_strategist() -> CardDefinition {
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                     per: Per::Object,
-                    attackers: AttackSize::WithAnother,
+                    attackers: AttackSize::AtLeast(2),
+                    nth: None,
                 },
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
@@ -8528,6 +8538,7 @@ fn sokka_s_haiku() -> CardDefinition {
                 Effect::MillCards {
                     count: EffectValue::Fixed(3),
                     target: None,
+                    player: None,
                 },
                 Effect::TargetClause {
                     requirement: TargetRequirement::one(TargetSpec::Permanent {
@@ -8711,6 +8722,7 @@ fn sparring_dummy() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(1),
                         target: None,
+                        player: None,
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
@@ -8974,6 +8986,7 @@ fn team_avatar() -> CardDefinition {
                     }),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
+                    nth: None,
                 },
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::Triggering,
@@ -9543,6 +9556,7 @@ fn the_legend_of_yangchen() -> CardDefinition {
                     who: Actor::You,
                     predicate: CardPredicate::default(),
                     nth: Some(2),
+                    targets: SpellTargetFilter::Any,
                 },
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
@@ -9706,6 +9720,7 @@ fn the_rise_of_sozin() -> CardDefinition {
                         predicate: CardPredicate::creature(),
                         except: None,
                         max_mana_value: None,
+                        exact_mana_value: None,
                     })],
                 ),
                 Ability::chapter(

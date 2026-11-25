@@ -33,10 +33,11 @@ use crate::{
         },
         game::{ActivationSource, Game, PendingChoice},
         payment::{CostComponent, Help, Operation, Payment},
+        proposed_event::{CounterProvenance, EventCause, ProposedEvent},
         statics::Characteristics,
     },
     state::{
-        ability::Effect,
+        ability::{Effect, EffectValue},
         card::{
             ActivatedAbilityDefinition, ActivationZone, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
@@ -184,6 +185,16 @@ impl SourceReservation {
             permanent,
             tap: true,
             sacrifice: false,
+        }
+    }
+
+    /// `permanent` is owed to a cost that taps it or makes it leave. Either
+    /// way it cannot also leave to pay another cost.
+    fn owed(permanent: PermanentId, tap: bool, leaves: bool) -> Self {
+        Self {
+            permanent,
+            tap,
+            sacrifice: tap || leaves,
         }
     }
 }
@@ -1610,12 +1621,11 @@ fn owed_reservation(payment: &Payment) -> Option<SourceReservation> {
         return None;
     };
     let owes = |how| payment.owes(&CostComponent::Source(how));
-    let tap = owes(How::Tapped);
-    Some(SourceReservation {
+    Some(SourceReservation::owed(
         permanent,
-        tap,
-        sacrifice: tap || owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
-    })
+        owes(How::Tapped),
+        owes(How::Sacrificed) || owes(How::Exiled) || owes(How::Returned),
+    ))
 }
 
 impl Game {
@@ -1648,7 +1658,21 @@ impl Game {
                 } else {
                     otherwise
                 };
-                Some(branch[0].clone())
+                Some(
+                    self.current_mana_output(&branch[0], controller)
+                        .unwrap_or_else(|| branch[0].clone()),
+                )
+            }
+            Effect::AddMana {
+                mana,
+                amount,
+                until_end_of_combat: false,
+            } if !matches!(amount, EffectValue::Fixed(1)) => {
+                let mut output = Mana::default();
+                for _ in 0..self.controller_value(amount, controller) {
+                    output.add(mana);
+                }
+                Some(Effect::add_mana(output))
             }
             Effect::AddOneColorManaValue { amount } => {
                 let amount = self.controller_value(amount, controller).max(0) as usize;
@@ -1708,11 +1732,7 @@ impl Game {
             life: self.payable_life(player).max(0) as u32,
         };
         if let Some(source) = sacrifice {
-            model.reserve(SourceReservation {
-                permanent: source,
-                tap: false,
-                sacrifice: true,
-            });
+            model.reserve(SourceReservation::owed(source, false, true));
         }
         // An announcement survives nested mana decisions in pending_choice;
         // its resources are owed in every phase, not only mana spending.
@@ -1737,11 +1757,11 @@ impl Game {
                 } => {
                     let ability =
                         &game.characteristics(*permanent).activated_abilities[*ability_index];
-                    model.reserve(SourceReservation {
-                        permanent: *permanent,
-                        tap: ability.tap_source,
-                        sacrifice: ability.tap_source || ability.source_leaves(),
-                    });
+                    model.reserve(SourceReservation::owed(
+                        *permanent,
+                        ability.tap_source,
+                        ability.source_leaves(),
+                    ));
                     if let Some(next) = resume {
                         reserve(next, game, model);
                     }
@@ -1803,8 +1823,9 @@ impl Game {
                     .filter(|(index, ability)| {
                         !prohibited
                             && (!ability.tap_source || can_tap)
-                            && (!ability.own_turn_only || self.active_player() == player)
+                            && self.check_activation_terms(player, ability).is_ok()
                             && !source.activation_used(*index, ability)
+                            && source.can_pay_counters(ability)
                     })
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
@@ -1816,7 +1837,7 @@ impl Game {
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
                             tap_candidates: self.tap_cost_candidates(player, ability).into(),
-                            limited: ability.is_use_limited(),
+                            limited: ability.is_use_limited() || ability.remove_counters.is_some(),
                             sacrifice_source: ability.sacrifice_source,
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
@@ -1849,16 +1870,17 @@ impl Game {
         }
         model.life = model.life.saturating_sub(payment.life());
         let grantors = payment.owed.iter().filter_map(|component| match component {
-            CostComponent::ExileGrantor(object) => Some(*object),
+            CostComponent::ExileGrantor(object) => Some((*object, false)),
+            CostComponent::TapGrantor(object) => Some((*object, true)),
             _ => None,
         });
-        for object in payment.receipt.sacrificed().chain(grantors) {
+        let sacrificed = payment
+            .receipt
+            .paid_as(How::Sacrificed)
+            .map(|object| (object, false));
+        for (object, tap) in sacrificed.chain(grantors) {
             if let Some(permanent) = self.state.permanent_of(object) {
-                model.reserve(SourceReservation {
-                    permanent,
-                    tap: false,
-                    sacrifice: true,
-                });
+                model.reserve(SourceReservation::owed(permanent, tap, true));
             }
         }
     }
@@ -1871,9 +1893,6 @@ impl Game {
         if self.paying().is_some() {
             return Some(model);
         }
-        if let Some(reservation) = self.payment_reservation(operation) {
-            model.reserve(reservation);
-        }
         if let Operation::Activation {
             source,
             ability_index,
@@ -1881,36 +1900,25 @@ impl Game {
         } = operation
         {
             let ability = self.activation_ability(*source, *ability_index)?;
-            if ability.exile_grantor {
-                model.reserve(SourceReservation {
-                    permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
-                    tap: false,
-                    sacrifice: true,
-                });
+            // Hold the source's own tap/leave cost while considering activation;
+            // once announced, `owed_reservation` reads its cost.
+            if let ActivationSource::Permanent(permanent) = source {
+                model.reserve(SourceReservation::owed(
+                    *permanent,
+                    ability.tap_source,
+                    ability.source_leaves(),
+                ));
+            }
+            if ability.has_grantor_cost() {
+                model.reserve(SourceReservation::owed(
+                    self.state.permanent_of(ability.granted_by?.grantor)?,
+                    ability.tap_grantor,
+                    ability.exile_grantor,
+                ));
             }
             model.life = model.life.checked_sub(ability.life_cost)?;
         }
         Some(model)
-    }
-
-    /// The hold an activation only being considered at priority would place
-    /// on its own source; once announced, `owed_reservation` reads its cost.
-    fn payment_reservation(&self, operation: &Operation) -> Option<SourceReservation> {
-        match operation {
-            Operation::Activation {
-                source: ActivationSource::Permanent(permanent),
-                ability_index,
-                ..
-            } => {
-                let ability = &self.characteristics(*permanent).activated_abilities[*ability_index];
-                Some(SourceReservation {
-                    permanent: *permanent,
-                    tap: ability.tap_source,
-                    sacrifice: ability.tap_source || ability.source_leaves(),
-                })
-            }
-            _ => None,
-        }
     }
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
@@ -2024,11 +2032,11 @@ impl Game {
             .iter()
             .find(|ability| ability.ability_index == ability_index)
             .cloned()?;
-        model.reserve(SourceReservation {
+        model.reserve(SourceReservation::owed(
             permanent,
-            tap: ability.tap_source,
-            sacrifice: ability.tap_source || ability.sacrifice_source,
-        });
+            ability.tap_source,
+            ability.sacrifice_source,
+        ));
         let obligations = PaymentModel::activation_obligations(&ability);
         if ability.limited {
             for source in Arc::make_mut(&mut model.sources) {
@@ -2411,6 +2419,36 @@ impl Game {
         }
     }
 
+    /// Price the announced X with the same mana component used to pay the activation.
+    pub(crate) fn activation_x_payable(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        x: u8,
+    ) -> bool {
+        let operation = Operation::Activation {
+            source: ActivationSource::Permanent(permanent),
+            ability_index,
+            targets: Vec::new(),
+            x,
+        };
+        let Some(model) = self.announced_model(player, &operation) else {
+            return false;
+        };
+        let payment = Payment {
+            owed: self.cost_components(player, &operation),
+            operation,
+            receipt: Default::default(),
+        };
+        let (cost, waterbend) = payment.mana();
+        model.payable(
+            self.pooled_mana(player),
+            self.help_obligations(player, cost, payment.help(), waterbend),
+            SourcePolicy::All,
+        )
+    }
+
     /// Whether `operation`, considered at priority, can pay `cost` beside
     /// its source's own costs and a `sacrifice` chosen for it.
     pub(crate) fn can_pay_announced_activation(
@@ -2424,11 +2462,7 @@ impl Game {
             return false;
         };
         if let Some(permanent) = sacrifice {
-            model.reserve(SourceReservation {
-                permanent,
-                tap: false,
-                sacrifice: true,
-            });
+            model.reserve(SourceReservation::owed(permanent, false, true));
         }
         model.payable(
             self.pooled_mana(player),
@@ -2656,6 +2690,26 @@ impl Game {
         if ability.tap_source {
             self.tap_permanent(permanent, true);
             tapped = Some(self.tapped_for_mana(permanent));
+        }
+        let counter_costs = [
+            ability
+                .remove_counters
+                .map(|(kind, count)| (kind, -i32::from(count))),
+            ability
+                .add_counters
+                .map(|(kind, count)| (kind, i32::from(count))),
+        ];
+        for (kind, delta) in counter_costs.into_iter().flatten() {
+            let Some(target) = self.permanent_object(permanent) else {
+                break;
+            };
+            self.apply_immediate_event(ProposedEvent::CounterChange {
+                provenance: CounterProvenance::new(EventCause::Cost),
+                target,
+                kind,
+                delta,
+                by: Some(player),
+            });
         }
         if ability.life_cost > 0 {
             self.change_life(player, -(ability.life_cost as i32));
@@ -3112,7 +3166,6 @@ impl Game {
         // One validated board for every view; a permanent with no activated
         // ability (a basic land's mana ability is not one) costs nothing more.
         let _scan = self.board_scan();
-        let life = self.payable_life(player);
         let views = self.characteristics_many(model.sources.iter().map(|source| source.permanent));
         for (index, (id, view)) in views.enumerate() {
             if view.activated_abilities.is_empty() {
@@ -3136,12 +3189,7 @@ impl Game {
                     || ability.mana_cost.mana_value == 0
                     || ability.mana_choices().is_some()
                     || permanent.activation_used(ability_index, ability)
-                    || (ability.own_turn_only && self.active_player() != player)
-                    || ability
-                        .condition
-                        .as_ref()
-                        .is_some_and(|condition| !self.check_static_condition(condition, player))
-                    || life < ability.life_cost as i32
+                    || self.check_activation_terms(player, ability).is_err()
                     || (ability.tap_source && !self.permanent_can_tap(source.permanent))
                     || (single_use && ability.mana_cost == *cost)
                 {

@@ -728,6 +728,7 @@ fn vastlands_scavenger() -> CardDefinition {
                     Effect::MillCards {
                         count: 7.into(),
                         target: None,
+                        player: None,
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
@@ -768,6 +769,7 @@ fn abigale_poet_laureate() -> CardDefinition {
                 condition: TriggerCondition::Casts {
                     who: Actor::You,
                     predicate: CardPredicate::creature(),
+                    targets: managym_state::ability::SpellTargetFilter::Any,
                     nth: None,
                 },
                 intervening_if: None,
@@ -865,6 +867,7 @@ fn emeritus_of_conflict() -> CardDefinition {
                 condition: TriggerCondition::Casts {
                     who: Actor::You,
                     predicate: Default::default(),
+                    targets: managym_state::ability::SpellTargetFilter::Any,
                     nth: Some(3),
                 },
                 intervening_if: None,

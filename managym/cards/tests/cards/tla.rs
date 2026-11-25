@@ -4756,6 +4756,43 @@ fn sozins_comet_grants_firebending_five_until_end_of_turn() {
     assert_eq!(pool.total(), 5);
 }
 
+/// Each firebending instance a continuous effect grants is its own attack
+/// trigger (CR 702.189b), so Katara doubles each one: one Comet yields two
+/// five-mana triggers and two Comets four. Countering one leaves the rest.
+#[test]
+fn sozins_comet_grants_firebending_as_ordinary_attack_triggers_katara_doubles() {
+    use managym::state::stack_object::StackObject;
+    for (comets, countered, mana) in [(1, false, 10), (2, false, 20), (2, true, 15)] {
+        let mut s = five_color_setup(&["Sozin's Comet", "Katara, the Fearless"]);
+        let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+        clear_summoning_sickness(&mut s, katara);
+        for _ in 0..comets {
+            let comet = force_new_card_in_hand(&mut s, 0, "Sozin's Comet");
+            cast_card(&mut s, comet);
+            settle(&mut s);
+        }
+        s.set_player_mana_pool(0, "");
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, katara);
+        pass_until(&mut s, ActionSpaceKind::Priority);
+        let triggers = s
+            .game()
+            .state
+            .stack_objects
+            .iter()
+            .filter(|object| matches!(object, StackObject::TriggeredAbility(_)))
+            .count();
+        assert_eq!(triggers, 2 * comets, "{comets} comets");
+        if countered {
+            s.game_mut().state.stack_objects.pop();
+        }
+        while !s.game().state.stack_objects.is_empty() {
+            s.pass_priority();
+        }
+        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), mana);
+    }
+}
+
 fn foretell_offered(s: &mut Scenario, object: ObjectId) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
     s.action_space()
@@ -9236,6 +9273,26 @@ fn sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target() {
 }
 
 #[test]
+fn south_pole_voyager_returning_starts_its_own_resolution_count() {
+    let mut s = five_color_setup(&["South Pole Voyager"]);
+    let voyager = s.force_permanent_on_battlefield(0, "South Pole Voyager");
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    resolve_until_priority(&mut s);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let life = s.life(0);
+    let card = card_of(&s, voyager);
+    let exiled = move_card(&mut s, card, ZoneType::Exile);
+    move_card(&mut s, exiled, ZoneType::Battlefield);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.life(0), life + 1);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}
+
+#[test]
 fn south_pole_voyager_second_resolution_draws() {
     let mut s = Scenario::new(
         deck(&[("Plains", 24), ("South Pole Voyager", 16)]),
@@ -11237,7 +11294,7 @@ fn corrected_card_characteristics_match_oracle() {
     let suki = object("Suki, Kyoshi Warrior");
     assert!(suki.supertypes.iter().any(|s| s == "legendary"));
     assert_eq!(suki.toughness, Some(4));
-    assert!(suki.power_cda().is_some());
+    assert!(suki.pt_cda().is_some());
 }
 
 #[test]
@@ -13932,6 +13989,21 @@ fn zuko_conflicted_takes_each_mode_once_then_switches_sides() {
 /// Bumi chooses up to as many modes as Lesson cards in your graveyard.
 #[test]
 fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
+    let mut s = five_color_setup(&["Bumi, King of Three Trials"]);
+    let bumi = enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    s.pass_priority();
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+        let row = obs.stack_objects.last().expect("Bumi's enter trigger");
+        assert!(row
+            .description
+            .as_deref()
+            .unwrap()
+            .ends_with("no modes chosen"));
+    }
+    settle(&mut s);
+    assert_eq!(counters(&s, bumi), 0);
+
     let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!"]);
     plant_in_graveyard(&mut s, 0, "Yip Yip!");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
@@ -15962,7 +16034,7 @@ fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
 fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre"]);
     let suki = library_card(&s, 0, "Suki, Kyoshi Warrior");
-    assert_eq!(s.game().object_power(suki), 0);
+    assert_eq!(s.game().object_pt(suki).0, 0);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -15973,7 +16045,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         ZoneType::Exile,
     ] {
         s.game_mut().state.place_object(suki, PlayerId(0), zone);
-        assert_eq!(s.game().object_power(suki), 2, "{zone:?}");
+        assert_eq!(s.game().object_pt(suki).0, 2, "{zone:?}");
         if zone != ZoneType::Library {
             let obs = Observation::for_player(s.game(), PlayerId(0));
             let row = obs
@@ -15990,7 +16062,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     cast_card(&mut s, suki);
     spend_colorless(&mut s);
     let suki = now(&s, suki);
-    assert_eq!(s.game().object_power(suki), 2);
+    assert_eq!(s.game().object_pt(suki).0, 2);
     // A control-changing effect changes the spell's "you", not its owner.
     if let managym::state::stack_object::StackObject::Spell(spell) =
         s.game_mut().state.stack_objects.last_mut().unwrap()
@@ -16000,7 +16072,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         panic!("Suki spell expected");
     }
     let suki = now(&s, suki);
-    assert_eq!(s.game().object_power(suki), 1);
+    assert_eq!(s.game().object_pt(suki).0, 1);
 
     let outside = Scenario::with_sideboards(
         deck(&[("Plains", 40)]),
@@ -16013,7 +16085,8 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     assert_eq!(
         outside
             .game()
-            .object_power(outside.game().state.object_of(card)),
+            .object_pt(outside.game().state.object_of(card))
+            .0,
         0
     );
 }
@@ -16089,14 +16162,14 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     let suki = s.force_permanent_on_battlefield(0, "Suki, Kyoshi Warrior");
     let object = card_of(&s, suki);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
-    assert_eq!(s.game().object_power(object), 2);
+    assert_eq!(s.game().object_pt(object).0, 2);
     until_end_of_turn(&mut s, suki, Modification::LoseAllAbilities);
-    assert_eq!(s.game().object_power(object), 0);
+    assert_eq!(s.game().object_pt(object).0, 0);
     cast(&mut s, "Boomerang Basics");
     assert!(s.choose_target(Target::Permanent(suki)));
     settle(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
-    assert_eq!(s.game().object_power(now(&s, object)), 1);
+    assert_eq!(s.game().object_pt(now(&s, object)).0, 1);
 }
 
 fn bloodbending_setup(caster: usize, paid: bool) -> Scenario {
@@ -16865,6 +16938,7 @@ fn attacker_life_gains(s: &Scenario, combat_start: usize) -> Vec<i32> {
                 player: PlayerId(0),
                 old,
                 new,
+                ..
             } if new > old => Some(new - old),
             _ => None,
         })
@@ -16962,7 +17036,11 @@ fn two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step() {
     let (mut replay, _) = crate::support::play::command(&mut s, |a| *a == second);
     for branch in [&mut s, &mut replay] {
         branch.advance_to_active_step(0, StepKind::EndOfCombat);
-        assert_eq!(attacker_life_gains(branch, combat_start), [2, 3]);
+        // Two simultaneous gains, one per lifelink source (CR 119.9); their
+        // relative order is the engine's damage order, not a rules fact.
+        let mut gains = attacker_life_gains(branch, combat_start);
+        gains.sort_unstable();
+        assert_eq!(gains, [2, 3]);
         assert_eq!(branch.life(1), 15);
         assert_eq!(
             counters_of(branch, pridemate, CounterKind::PlusOnePlusOne),

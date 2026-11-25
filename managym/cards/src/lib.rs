@@ -17,6 +17,7 @@ mod afr;
 mod akh;
 mod ala;
 mod apc;
+mod arb;
 mod atq;
 mod avr;
 mod bfz;
@@ -24,10 +25,13 @@ mod blb;
 mod bng;
 mod bro;
 mod c13;
+mod c14;
+mod c15;
 mod c17;
 mod c19;
 mod chk;
 mod clb;
+mod cmd;
 mod cmr;
 mod csp;
 mod dft;
@@ -51,6 +55,7 @@ mod frf;
 mod fut;
 mod gpt;
 mod grn;
+mod gs1;
 mod gtc;
 mod hob;
 mod hou;
@@ -61,6 +66,7 @@ mod isd;
 mod j22;
 mod jmp;
 mod jou;
+mod khc;
 mod khm;
 mod kld;
 mod ktk;
@@ -102,12 +108,15 @@ mod psal;
 mod ptk;
 mod rav;
 mod rix;
+mod rna;
 mod roe;
 mod rtr;
 mod scg;
 mod shm;
 mod snc;
 mod soi;
+mod sok;
+mod som;
 mod sos;
 mod spm;
 mod sth;
@@ -118,6 +127,7 @@ mod ths;
 mod tla;
 mod tle;
 mod tmp;
+mod tmt;
 mod tokens;
 mod tsp;
 mod ulg;
@@ -176,19 +186,23 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
     akh::cards,
+    arb::cards,
+    atq::cards,
     ala::cards,
     apc::cards,
-    atq::cards,
     avr::cards,
     bfz::cards,
     blb::cards,
     bng::cards,
     bro::cards,
+    c14::cards,
+    c15::cards,
     c13::cards,
     c17::cards,
     c19::cards,
     chk::cards,
     clb::cards,
+    cmd::cards,
     cmr::cards,
     csp::cards,
     dft::cards,
@@ -211,6 +225,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     fut::cards,
     gpt::cards,
     grn::cards,
+    gs1::cards,
     gtc::cards,
     hob::cards,
     hou::cards,
@@ -221,16 +236,17 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     j22::cards,
     jmp::cards,
     jou::cards,
+    khc::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
     lci::cards,
     lea::cards,
-    lrw::cards,
     m10::cards,
-    m11::cards,
     m12::cards,
     m13::cards,
+    lrw::cards,
+    m11::cards,
     m14::cards,
     m15::cards,
     m19::cards,
@@ -262,12 +278,15 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ptk::cards,
     rav::cards,
     rix::cards,
+    rna::cards,
     roe::cards,
     rtr::cards,
     scg::cards,
     shm::cards,
     snc::cards,
     soi::cards,
+    sok::cards,
+    som::cards,
     sos::cards,
     spm::cards,
     sth::cards,
@@ -277,6 +296,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ths::cards,
     tla::cards,
     tle::cards,
+    tmt::cards,
     tmp::cards,
     tsp::cards,
     ulg::cards,

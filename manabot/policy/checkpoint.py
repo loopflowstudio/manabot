@@ -181,6 +181,7 @@ class Dimensions:
         *,
         token_rows: int,
         name_rows: int,
+        fact_kinds: int = FACT_KINDS,
     ) -> "Dimensions":
         """Use the policy's input readings and its actual embedding sizes."""
         player = columns.numeric_width("agent_player")
@@ -202,7 +203,7 @@ class Dimensions:
             relation=columns.numeric_width("relations"),
             effect=columns.numeric_width("effects"),
             fact=columns.fact_width(catalog_ids=model.catalog_records()),
-            fact_kinds=FACT_KINDS,
+            fact_kinds=fact_kinds,
             token_rows=token_rows,
             name_rows=name_rows,
             links=len(columns.link_columns),
@@ -295,8 +296,15 @@ class PolicyCheckpoint:
         programs = self.buffers.get("semantic_cards.tokens")
         return len(programs) if programs is not None else 0
 
+    @property
+    def fact_kinds(self) -> int:
+        """The last fact kind with a learned embedding in this policy."""
+        return self.parameters["facts.kind.weight"].shape[0] - 1
+
     def tables(self) -> Tables:
-        return Tables.from_buffers(self.buffers, Layout(self.readings))
+        return Tables.from_buffers(
+            self.buffers, Layout(self.readings), fact_kinds=self.fact_kinds
+        )
 
     def dimensions(self) -> Dimensions:
         token_rows = (
@@ -311,6 +319,7 @@ class PolicyCheckpoint:
             Layout(self.readings),
             token_rows=token_rows,
             name_rows=names.shape[0],
+            fact_kinds=self.fact_kinds,
         )
 
 

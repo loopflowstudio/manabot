@@ -684,7 +684,12 @@ things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
 zero-link control `unprepared-copies`) and one way of paying at size
 (`convoke-duplicates`, `convoke-diverse`, `delve-graveyard`,
 `improvise-artifacts`, `float-origins`, `crew-saddle`, `bargain-forage`), each
-measured again at the decision where its cost is chosen. Combat states put
+measured again at the decision where its cost is chosen. Event-history states
+measure the last priority pass before resolution and the next decision.
+`collector-food` and `mixed-life-gain` open trigger ordering, `fumigate-panda`
+opens graveyard targeting, `blast-discard` opens the optional discard and
+`venom-team` grants the team deathtouch on the second resolution. `lathril-elves` measures each
+successive tap with 10, 11 and 12 other Elves by default. Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
 states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
@@ -697,7 +702,7 @@ naming through rules actions; it is outside the measured region.
 | Layer | Measures | Work reported |
 |---|---|---|
 | `actions` | computing the legal action space at priority, with cached payment answers cleared | payment plans, calls, states; actions offered |
-| `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
+| `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:resolve`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
 | `characteristics` | cold `Game::characteristics` for one permanent then `characteristics_many` for the board | board rebuilds, views, dependency probes |
 | `triggers` | matching one controlled entry event against the indexed trigger sources | sources examined, triggers found |
 | `observe` | the native observation encoder | visible cards, permanents and legal actions (allocated capacities are explicit) |

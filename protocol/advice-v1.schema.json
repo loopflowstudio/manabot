@@ -2618,6 +2618,26 @@
           "title": "Abilities Lost",
           "type": "boolean"
         },
+        "ability_resolutions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            ]
+          }
+        },
         "attached_to": {
           "anyOf": [
             {
@@ -2631,6 +2651,9 @@
           ],
           "default": null,
           "title": "Attached To"
+        },
+        "attacked_this_turn": {
+          "type": "boolean"
         },
         "attacking": {
           "default": false,
@@ -2676,6 +2699,15 @@
           ],
           "default": null,
           "title": "Blocking"
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller_id": {
           "maximum": 4294967295,
@@ -2723,6 +2755,15 @@
           "minimum": -2147483648,
           "title": "Damage",
           "type": "integer"
+        },
+        "damaged_permanents": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Damaged Permanents",
+          "type": "array"
         },
         "dealt_damage_this_turn": {
           "default": false,
@@ -3392,6 +3433,11 @@
           "title": "Agent Player Id",
           "type": "integer"
         },
+        "creature_died_this_turn": {
+          "default": false,
+          "title": "Creature Died This Turn",
+          "type": "boolean"
+        },
         "phase": {
           "title": "Phase",
           "type": "string"
@@ -3811,10 +3857,26 @@
           "title": "Cards Drawn",
           "type": "integer"
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "default": false,
           "title": "Land Entered",
           "type": "boolean"
+        },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "life_gains": {
+          "description": "Separate occurrences, independent of the amount gained.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "life_lost": {
           "default": 0,
@@ -3823,12 +3885,31 @@
           "title": "Life Lost",
           "type": "integer"
         },
+        "mana_spent_casting": {
+          "description": "Mana spent by this player to cast spells this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Permanents Sacrificed",
           "type": "integer"
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "title": "PlayerTurnHistoryView",
@@ -4187,6 +4268,11 @@
           "default": null,
           "title": "Ability Index"
         },
+        "ability_resolutions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "chosen_mode": {
           "anyOf": [
             {
@@ -4200,6 +4286,15 @@
           ],
           "default": null,
           "title": "Chosen Mode"
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller": {
           "maximum": 255,
@@ -4228,6 +4323,11 @@
         "label": {
           "title": "Label",
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "anyOf": [

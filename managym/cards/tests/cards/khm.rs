@@ -81,33 +81,6 @@ fn seize_the_spoils_discards_a_chosen_card_then_draws_two_and_makes_a_treasure()
 }
 
 #[test]
-fn foundations_spell_snakeskin_veil() {
-    use crate::support::game::five_color_setup;
-    use crate::support::play::{cast, settle};
-    use managym::flow::turn::StepKind;
-    use managym::state::card::Keyword;
-    use managym::state::game_object::Target;
-    let mut s = five_color_setup(&["Snakeskin Veil", "Hill Giant"]);
-    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
-    cast(&mut s, "Snakeskin Veil");
-    assert!(s.choose_target(Target::Permanent(subject)));
-    settle(&mut s);
-    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
-    assert!(s
-        .game()
-        .characteristics(subject)
-        .keywords
-        .has(Keyword::Hexproof));
-    s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
-    assert!(!s
-        .game()
-        .characteristics(subject)
-        .keywords
-        .has(Keyword::Hexproof));
-}
-
-#[test]
 fn fynn_poison_and_herald_loss_protection() {
     use crate::support::{
         game::clear_summoning_sickness,
@@ -179,6 +152,88 @@ fn axe_equipped_fynn_poisons_in_both_damage_steps() {
         4
     );
     s.assert_life(1, 16);
+}
+
+#[test]
+fn immersturm_predator_grows_when_it_becomes_tapped_unless_its_one_target_is_gone() {
+    use crate::support::{
+        game::{move_card, plant_in_graveyard},
+        inspect::{card_of, counters_of, offered_targets, tapped, zone_of},
+        play::{choose, select_card},
+    };
+    use managym::state::zone::ZoneType;
+    use managym::{agent::action::Action, state::permanent::CounterKind::PlusOnePlusOne};
+
+    let mut s = five_color_setup(&["Immersturm Predator", "Gray Ogre", "Craw Wurm"]);
+    let predator = s.force_permanent_on_battlefield(0, "Immersturm Predator");
+    let fodder = [0, 1].map(|_| {
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        card_of(&s, ogre)
+    });
+    let wurm = plant_in_graveyard(&mut s, 1, "Craw Wurm");
+    activate(&mut s, predator, 0);
+    select_card(&mut s, fodder[0]);
+    s.advance_until(
+        |s| !offered_targets(s).is_empty(),
+        "the tap trigger chooses up to one graveyard card".into(),
+    );
+    assert!(tapped(&s, predator));
+    assert!(keywords(&s, predator).has(Keyword::Indestructible));
+    let wurm_target = Target::GraveyardCard(wurm);
+    assert!(offered_targets(&s).contains(&wurm_target));
+    let pending = s.game().clone();
+
+    assert!(s.choose_target(wurm_target));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, wurm), Some(ZoneType::Exile));
+    assert_eq!(counters_of(&s, predator, PlusOnePlusOne), 1);
+
+    // CR 608.2b: with its one target gone, the ability doesn't resolve.
+    *s.game_mut() = pending.clone();
+    assert!(s.choose_target(wurm_target));
+    move_card(&mut s, wurm, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, predator, PlusOnePlusOne), 0);
+
+    // Choosing no target, it still grows.
+    *s.game_mut() = pending;
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, predator, PlusOnePlusOne), 1);
+    assert_eq!(zone_of(&s, wurm), Some(ZoneType::Graveyard));
+
+    // Already tapped, "tap it" doesn't make it become tapped again.
+    activate(&mut s, predator, 0);
+    select_card(&mut s, fodder[1]);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, predator, PlusOnePlusOne), 1);
+}
+
+#[test]
+fn foundations_spell_snakeskin_veil() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Snakeskin Veil", "Hill Giant"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    cast(&mut s, "Snakeskin Veil");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(!s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
 }
 
 #[test]

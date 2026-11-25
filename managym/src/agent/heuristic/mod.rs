@@ -47,9 +47,9 @@
 //! These are estimates, not exact combat search. Mana counts untapped lands,
 //! ignoring colors and other sources. Creature identity reads the effective
 //! permanent types. Modal bodies are opaque to spell ratings.
-//! Combat assignments use the observation's attacker/blocker events and current
-//! permanent IDs, remembered for the turn. No hidden hand or library order is
-//! consulted.
+//! Combat assignments read live attacking flags plus the observation's
+//! blocker events and current permanent IDs, remembered for the turn. No
+//! hidden hand or library order is consulted.
 mod knowledge;
 use crate::agent::{
     action::{ActionSpaceKind as Space, ActionType as Action, AgentError},
@@ -265,10 +265,13 @@ impl Heuristic {
                     .entry(e.source_id)
                     .or_default()
                     .insert(e.target_id);
-            } else if e.event_type == EventType::CombatAttackersDeclared as i32 {
-                self.blocks.entry(e.source_id).or_default();
             }
         }
+    }
+    /// No blocker was declared for this attacker this combat (CR 509.1h);
+    /// it stays blocked if its blocker later leaves.
+    fn unblocked(&self, attacker: i32) -> bool {
+        !self.blocks.contains_key(&attacker)
     }
     fn priority(&self, b: &Board<'_>) -> Option<usize> {
         if let Some(land) = b.first(Action::PriorityPlayLand) {
@@ -302,8 +305,7 @@ impl Heuristic {
                 .iter()
                 .copied()
                 .filter(|(_, id)| {
-                    self.blocks.get(id).is_some_and(BTreeSet::is_empty)
-                        && b.permanents.get(id).is_some_and(|p| p.tapped)
+                    b.permanents.get(id).is_some_and(|p| p.attacking) && self.unblocked(*id)
                 })
                 .collect();
             if let Some(i) = self.ability(b, &unblocked, |k| k.pump) {
@@ -437,40 +439,48 @@ impl Heuristic {
         if b.raw.turn.step != StepKind::DeclareBlockers {
             return vec![];
         }
-        let power: i32 = self
-            .blocks
+        // Live attackers in object order, including those put onto the
+        // battlefield attacking (CR 506.3), which were never declared.
+        let mut attackers: Vec<&PermanentData> = b
+            .permanents
+            .values()
+            .copied()
+            .filter(|p| p.attacking)
+            .collect();
+        attackers.sort_by_key(|p| p.id);
+        let power: i32 = attackers
             .iter()
-            .filter(|(_, bs)| bs.is_empty())
-            .filter_map(|(id, _)| b.permanents.get(id))
-            .filter(|p| b.own(p))
+            .filter(|p| b.own(p) && self.unblocked(p.id))
             .map(|p| p.power)
             .sum();
         let mut gains = vec![];
-        for (id, bs) in &self.blocks {
-            let Some(a) = b.permanents.get(id) else {
-                continue;
-            };
-            if bs.is_empty() {
-                if b.own(a) && power + s.pump.0 >= b.raw.opponent.life {
-                    gains.push((3, a.power, *id));
+        for a in attackers {
+            let id = &a.id;
+            match self.blocks.get(id) {
+                None => {
+                    if b.own(a) && power + s.pump.0 >= b.raw.opponent.life {
+                        gains.push((3, a.power, *id));
+                    }
                 }
-            } else if bs.len() == 1 {
-                let Some(blocker) = b.permanents.get(bs.first().unwrap()) else {
-                    continue;
-                };
-                let (ours, theirs) = if b.own(a) {
-                    (*a, *blocker)
-                } else {
-                    (*blocker, *a)
-                };
-                if !b.own(ours) {
-                    continue;
+                Some(bs) if bs.len() == 1 => {
+                    let Some(blocker) = b.permanents.get(bs.first().unwrap()) else {
+                        continue;
+                    };
+                    let (ours, theirs) = if b.own(a) {
+                        (a, *blocker)
+                    } else {
+                        (*blocker, a)
+                    };
+                    if !b.own(ours) {
+                        continue;
+                    }
+                    let before = fight_value(ours, theirs, (0, 0));
+                    let after = fight_value(ours, theirs, s.pump);
+                    if after > before {
+                        gains.push((after - before, ours.power, ours.id));
+                    }
                 }
-                let before = fight_value(ours, theirs, (0, 0));
-                let after = fight_value(ours, theirs, s.pump);
-                if after > before {
-                    gains.push((after - before, ours.power, ours.id));
-                }
+                Some(_) => {}
             }
         }
         gains.sort_by(|a, b| b.cmp(a));
@@ -531,7 +541,7 @@ impl Heuristic {
                     if let Some(pos) = pumps.iter().position(|p| *p == id) {
                         vec![2, (pumps.len() - pos) as i32]
                     } else {
-                        vec![i32::from(self.blocks.contains_key(&id)), p.power]
+                        vec![i32::from(p.attacking), p.power]
                     }
                 } else {
                     vec![
@@ -640,7 +650,7 @@ impl Heuristic {
             .collect();
         let mut attackers: Vec<_> = b
             .creatures(false)
-            .filter(|p| offered.contains(&p.id) || (self.blocks.contains_key(&p.id) && p.tapped))
+            .filter(|p| offered.contains(&p.id) || p.attacking)
             .collect();
         attackers.sort_by_key(|p| -p.power);
         let blockers: Vec<_> = b.creatures(true).filter(|p| !p.tapped).collect();

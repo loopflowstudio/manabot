@@ -279,6 +279,30 @@ carry an exact `ObjectId`, so continuations cannot follow a physical card into
 the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
+For a per-creature combat damage trigger or a life-loss trigger,
+`EffectValue::TriggeringAmount` reads the amount of the event that fired it:
+the damage dealt by that hit, or the life actually lost. The player ordering
+simultaneous triggers sees each amount in its offer, and both players see it
+on the stack. Quilled Greatwurm counts all combat damage each creature dealt
+in that step, including trample damage split across recipients. Drake Hatcher
+puts that many incubation counters on its source even if its power has since
+changed. Its activation
+spends three incubation counters during payment. Countering the ability
+leaves them spent, and resolving it creates the flying Drake.
+
+A trigger that asks about a spell after it leaves the stack reads the spell
+as cast. After Charring Bite is countered, the waiting trigger still sees a
+red sorcery with mana value two. Its pending description names Charring Bite
+even though Twinmaw Stormbrood is a creature card again.
+
+Death triggers check whether each permanent was a creature as it left the
+battlefield. High-Society Hunter draws for each other nontoken creature that
+dies alongside it, including a land that was copying a creature. Sacrificing
+a creature token to its attack trigger puts a counter on Hunter without a draw.
+That sacrifice also satisfies Cackling Prowler's end-step condition. Both
+viewers can see whether a creature died this turn, including a token or a
+land copying a creature. Exile does not count. The fact resets each turn.
+
 Delayed abilities compose event matching, frequency, expiry, captured subjects
 and effects. `CreateDelayedTrigger.event` only matches the event;
 `DelayedFrequency::Once` consumes its watcher on the first match, even if the
@@ -481,7 +505,10 @@ cast. Crew and saddle are the same
 (`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
 toward `Station` that never offers the source; an activated ability's
 resolving frame carries its receipt, and the station effect reads the tapped
-creature's power from it (`EffectValue::PowerTappedToPay`). A Spacecraft's
+creature's power from it (`EffectValue::PowerTappedToPay`). While the ability
+is on the stack, both viewers see the amount used by the counter instruction
+before replacements. It follows the tapped creature's power, down to zero,
+and uses its last known power if it leaves the battlefield. A Spacecraft's
 "N+" lines are static abilities conditioned on its charge counters.
 The automatic payer pays only the mana component, and pays it with mana:
 which creatures crew, saddle or station, every other object a cost takes, and
@@ -748,7 +775,7 @@ their index bases. A `None` column means every element is a reference.
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
-`Game::object_power` reads contextual power in every zone: the layered view on
+`Game::object_pt` reads contextual power and toughness in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
 filters use `object_matches_predicate`; printed-only matching belongs to
@@ -788,6 +815,17 @@ that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation.
 
+A permanent's `damaged_permanents` lists the live permanents it dealt damage
+to this turn. Multiple hits on one recipient give one entry. Either permanent
+leaving and returning breaks the relation. Both viewers get the public
+permanent IDs in the observation and Academy frame. Policy input v11 joins
+their permanent rows in relation kind 11, including with policy history off.
+For combat damage to a player, `combat_damage_to_players` lists the seats hit
+by that exact source this turn. An activated ability on the stack retains
+this information when its source leaves. V11 encodes each seat relative to
+the viewer on the permanent and stack rows. Steel Hellkite checks those
+players’ current nonlands and their mana values when its ability resolves.
+Each Hellkite can activate once per turn, including for X=0 before any hit.
 Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
 that activated its ability. A zone change ends that identity. Avatar Destiny
 uses `ObjectSelector::This` to return the Aura from the graveyard after the
@@ -1038,7 +1076,16 @@ never asked, a planned answer is not offered (a required block) or the
 finished declaration differs from the plan (a lone block of a creature with
 menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. The same address rules as payment previews apply, and the
+would finish it. During attacker selection both viewers can see the attackers
+chosen so far. Raid becomes true for the attacking player when a nonempty
+declaration finishes and lasts through the turn, even if those creatures leave.
+Linden triggers for each white attacker her controller declares. With two white attackers
+and an ability that doubles her triggers, each attacker accounts for two
+occurrences. A creature that enters attacking can deal combat damage. Its
+first declaration in a later combat still counts as its first attack for
+Aurelia. Leaving and returning starts a new attack history for that creature.
+Extra combats preserve raid and each creature’s history until the turn ends.
+The same address rules as payment previews apply, and the
 call is read-only in the same way.
 
 At the combat damage step, the attacking player assigns damage among the
@@ -1054,3 +1101,20 @@ step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAM
 followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
 permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
+### Reading power during combat
+
+Courageous Goblin and Ruby, Daring Tracker check for a creature with power
+four or greater as attackers are declared. Once either ability triggers, removing that
+creature leaves the bonus intact. Nessian Hornbeetle and Surrak, the Hunt
+Caller also check their conditions as their beginning-of-combat abilities
+resolve. Hornbeetle needs another creature with power four or greater.
+Surrak needs total power eight or greater, counting negative power as well.
+
+When Ashroot Animist or Halana and Alena, Partners has a trigger on the
+stack, both viewers can inspect the source power in the stack label. The
+amount follows changes to the source until resolution or departure. If the
+source leaves, the trigger retains its last battlefield power even if the
+card returns. Bulk Up similarly reads the target's power at resolution. A
+creature at −2 power goes to −4, and flashback uses the same calculation.
+Bite Down uses the power of the creature dealing damage at resolution.
+If either target leaves and returns first, it deals no damage.

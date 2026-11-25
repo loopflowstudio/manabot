@@ -129,6 +129,7 @@ export interface PermanentState {
   /** Attacking in the current combat. */
   attacking?: boolean;
   first_strike_participant?: boolean;
+  attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
@@ -139,6 +140,9 @@ export interface PermanentState {
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  combat_damage_to_players?: number[];
+  damaged_permanents?: number[];
+  ability_resolutions?: [number, number][];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;
   entered_this_turn?: boolean;
@@ -171,6 +175,13 @@ export interface PlayerTurnHistory {
   bent?: number;
   /** Life lost this turn (CR 119.3). */
   life_lost?: number;
+  life_gains?: number;
+  life_gained?: number;
+  creatures_died?: number;
+  permanents_left?: number;
+  nonland_permanents_left?: number;
+  warped_this_turn?: boolean;
+  mana_spent_casting?: number;
 }
 
 export interface PlayerState {
@@ -265,6 +276,9 @@ export interface DecisionContextView {
 }
 
 export interface StackEntryView {
+  mana_spent?: number;
+  combat_damage_to_players?: number[];
+  ability_resolutions?: number;
   id: number;
   kind: string;
   controller: number;
@@ -312,6 +326,7 @@ export interface Observation {
   won: boolean;
   turn: {
     turn_number: number;
+    creature_died_this_turn?: boolean;
     phase: string;
     step: string;
     active_player_id: number;

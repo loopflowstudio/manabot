@@ -43,6 +43,8 @@ mod akh;
 mod ala;
 #[path = "cards/apc.rs"]
 mod apc;
+#[path = "cards/arb.rs"]
+mod arb;
 #[path = "cards/atq.rs"]
 mod atq;
 #[path = "cards/avr.rs"]
@@ -57,6 +59,8 @@ mod bng;
 mod bro;
 #[path = "cards/c13.rs"]
 mod c13;
+#[path = "cards/c15.rs"]
+mod c15;
 #[path = "cards/c17.rs"]
 mod c17;
 #[path = "cards/c19.rs"]
@@ -65,6 +69,8 @@ mod c19;
 mod chk;
 #[path = "cards/clb.rs"]
 mod clb;
+#[path = "cards/cmd.rs"]
+mod cmd;
 #[path = "cards/cmr.rs"]
 mod cmr;
 #[path = "cards/csp.rs"]
@@ -131,6 +137,8 @@ mod j22;
 mod jmp;
 #[path = "cards/jou.rs"]
 mod jou;
+#[path = "cards/khc.rs"]
+mod khc;
 #[path = "cards/khm.rs"]
 mod khm;
 #[path = "cards/kld.rs"]
@@ -147,6 +155,8 @@ mod lrw;
 mod m10;
 #[path = "cards/m12.rs"]
 mod m12;
+#[path = "cards/m13.rs"]
+mod m13;
 #[path = "cards/m14.rs"]
 mod m14;
 #[path = "cards/m15.rs"]
@@ -209,6 +219,8 @@ mod ptk;
 mod rav;
 #[path = "cards/rix.rs"]
 mod rix;
+#[path = "cards/rna.rs"]
+mod rna;
 #[path = "cards/roe.rs"]
 mod roe;
 #[path = "cards/rtr.rs"]
@@ -223,6 +235,10 @@ mod shm;
 mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/sok.rs"]
+mod sok;
+#[path = "cards/som.rs"]
+mod som;
 #[path = "cards/sos.rs"]
 mod sos;
 #[path = "cards/spm.rs"]
@@ -243,6 +259,8 @@ mod tla;
 mod tle;
 #[path = "cards/tmp.rs"]
 mod tmp;
+#[path = "cards/tmt.rs"]
+mod tmt;
 #[path = "cards/tsp.rs"]
 mod tsp;
 #[path = "cards/ulg.rs"]

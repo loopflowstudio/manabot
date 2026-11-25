@@ -14,7 +14,6 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
-    TURN_STATE_DIM,
     TURN_STATE_LIFE_LOST_INDEX,
     TURN_STATE_NONARTIFACT_MANA_INDEX,
     TURN_STATE_SPELLS_CAST_INDEX,
@@ -77,7 +76,7 @@ def test_v10_turn_state_rows_hold_life_lost_spells_cast_and_left_battlefield() -
     obs.agent = agent
     encoded = encode_observation(ObservationSpace(config), obs)
     players = encoded["player_turn_state"]
-    assert players.shape == (2, TURN_STATE_DIM)
+    assert players.shape == (2, 8)
     # Agent row first: no life lost, two spells cast.
     assert players[0, TURN_STATE_LIFE_LOST_INDEX] == 0.0
     assert players[0, TURN_STATE_SPELLS_CAST_INDEX] == pytest.approx(2 / 10)
@@ -115,7 +114,7 @@ def test_v10_vector_buffers_reach_the_model(
     ],
 ) -> None:
     space, config, obs = v10_observation
-    assert obs["player_turn_state"].shape == (2, 2, TURN_STATE_DIM)
+    assert obs["player_turn_state"].shape == (2, 2, 8)
     assert obs["card_turn_state"].shape == (2, 2, config.max_cards_per_player)
     torch.manual_seed(0)
     agent = ActorCritic(space, ModelConfig(hidden_dim=4, num_attention_heads=2))

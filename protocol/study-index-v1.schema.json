@@ -1388,6 +1388,26 @@
           "description": "It has lost all abilities.",
           "type": "boolean"
         },
+        "ability_resolutions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            ]
+          }
+        },
         "attached_to": {
           "description": "The permanent this Aura or Equipment is attached to.",
           "type": [
@@ -1396,6 +1416,9 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "attacked_this_turn": {
+          "type": "boolean"
         },
         "attacking": {
           "description": "Attacking in the current combat.",
@@ -1415,6 +1438,15 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller_id": {
           "type": "integer",
@@ -1454,6 +1486,14 @@
         "damage": {
           "type": "integer",
           "format": "int32"
+        },
+        "damaged_permanents": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         },
         "dealt_damage_this_turn": {
           "description": "It was dealt damage this turn.",
@@ -1915,6 +1955,9 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creature_died_this_turn": {
+          "type": "boolean"
+        },
         "phase": {
           "type": "string"
         },
@@ -2081,12 +2124,44 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
         },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "life_gains": {
+          "description": "Separate occurrences, independent of the amount gained.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "life_lost": {
           "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mana_spent_casting": {
+          "description": "Mana spent by this player to cast spells this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
@@ -2096,6 +2171,9 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -2364,6 +2442,11 @@
           "format": "uint32",
           "minimum": 0
         },
+        "ability_resolutions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "chosen_mode": {
           "type": [
             "integer",
@@ -2371,6 +2454,15 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller": {
           "type": "integer",
@@ -2396,6 +2488,11 @@
         },
         "label": {
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "type": [

@@ -36,6 +36,7 @@
     permanent.first_strike_participant ? 'first-strike participant' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
+    ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
     permanent.damage ? `${permanent.damage} damage marked` : '',
     ...counterTerms(permanent.counters),
     permanent.abilities_lost ? 'has lost all abilities' : '',

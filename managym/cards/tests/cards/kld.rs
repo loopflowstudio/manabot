@@ -26,6 +26,51 @@ fn dramatic_reversal_untaps_your_nonland_permanents_only() {
 }
 
 #[test]
+fn fumigate_counts_destroyed_creatures_even_when_their_destination_changes() {
+    use crate::support::{
+        game::set_counters,
+        inspect::{card_of, zone_of},
+        play::cast,
+    };
+    use managym::{
+        flow::event::GameEvent,
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+
+    let mut s = five_color_setup(&["Fumigate", "Gray Ogre", "Predator Ooze"]);
+    let survivor = s.force_permanent_on_battlefield(1, "Predator Ooze");
+    let own = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    set_counters(&mut s, foe, CounterKind::Finality, 1);
+    let (own, foe) = (card_of(&s, own), card_of(&s, foe));
+
+    for expected_gains in [vec![(20, 22)], vec![]] {
+        s.drain_events();
+        s.set_player_mana_pool(0, "3WW");
+        cast(&mut s, "Fumigate");
+        settle(&mut s);
+        let gains: Vec<_> = s
+            .drain_events()
+            .into_iter()
+            .filter_map(|event| match event {
+                GameEvent::LifeChanged {
+                    player: PlayerId(0),
+                    old,
+                    new,
+                    ..
+                } => Some((old, new)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(gains, expected_gains);
+        s.assert_life(0, 22);
+        assert_eq!(zone_of(&s, own), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&s, foe), Some(ZoneType::Exile));
+        assert!(s.game().state.permanents[survivor].is_some());
+    }
+}
+
+#[test]
 fn noxious_gearhulk_gains_the_destroyed_creatures_toughness_only_if_destroyed() {
     use crate::support::{
         game::until_end_of_turn,
@@ -331,7 +376,9 @@ fn authority_checks_entering_control() {
         let gains: Vec<_> = events
             .iter()
             .filter_map(|event| match event {
-                GameEvent::LifeChanged { player, old, new } => Some((*player, *old, *new)),
+                GameEvent::LifeChanged {
+                    player, old, new, ..
+                } => Some((*player, *old, *new)),
                 _ => None,
             })
             .collect();

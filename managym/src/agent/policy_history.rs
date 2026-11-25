@@ -192,7 +192,9 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
                 vec![target_reference(game, target)],
             )
         }
-        GameEvent::LifeChanged { player, old, new } => (
+        GameEvent::LifeChanged {
+            player, old, new, ..
+        } => (
             Life,
             new - old,
             unknown,
@@ -201,6 +203,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         GameEvent::SpellCast {
             object_id: object,
             targets,
+            ..
         } => (
             Cast,
             0,
@@ -366,6 +369,9 @@ mod tests {
         game.emit(GameEvent::SpellCast {
             object_id: object,
             targets: vec![Target::Permanent(target)],
+            caster: PlayerId(0),
+            spend_before: 0,
+            spend_after: 0,
         });
         let initial = Observation::for_player(&game, PlayerId(0));
         let cast = initial.policy_history.back().unwrap();
@@ -451,6 +457,7 @@ mod tests {
                 player: PlayerId(1),
                 old: 20,
                 new: 20 - index,
+                gain_ordinal: 0,
             });
             let object = game.state.zones.latest().nth(index as usize).unwrap();
             game.move_object(object, ZoneType::Hand);
@@ -536,6 +543,9 @@ mod tests {
             game.emit(GameEvent::SpellCast {
                 object_id: source,
                 targets: vec![Target::Permanent(target)],
+                caster: PlayerId(0),
+                spend_before: 0,
+                spend_after: 0,
             });
             Observation::for_player(&game, PlayerId(0))
         };

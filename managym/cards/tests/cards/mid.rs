@@ -93,3 +93,50 @@ fn eaten_alive_takes_a_sacrificed_creature_or_three_and_a_black_more() {
         );
     }
 }
+
+/// Bolt the opponent, then let the given setup run on player 0's turn.
+fn opponent_loses_life(s: &mut crate::support::game::Scenario) {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, target_opponent},
+    };
+    let bolt = force_new_card_in_hand(s, 0, "Lightning Bolt");
+    cast_card(s, bolt);
+    target_opponent(s);
+    settle(s);
+}
+
+#[test]
+fn stromkirk_bloodthief_counts_only_after_an_opponent_lost_life() {
+    use crate::support::inspect::counters;
+    use managym::flow::turn::StepKind;
+    for lost in [false, true] {
+        let mut s = five_color_setup(&["Stromkirk Bloodthief", "Lightning Bolt"]);
+        let thief = s.force_permanent_on_battlefield(0, "Stromkirk Bloodthief");
+        if lost {
+            opponent_loses_life(&mut s);
+        }
+        s.advance_to_active_step(0, StepKind::End);
+        settle(&mut s);
+        assert_eq!(counters(&s, thief), i32::from(lost), "lost life: {lost}");
+        // The opponent's end step never triggers it.
+        s.advance_to_active_step(1, StepKind::End);
+        settle(&mut s);
+        assert_eq!(counters(&s, thief), i32::from(lost));
+    }
+}
+
+#[test]
+fn bloodtithe_collector_makes_each_opponent_discard_after_a_loss() {
+    use crate::support::play::enter_and_settle;
+    for lost in [false, true] {
+        let mut s = five_color_setup(&["Bloodtithe Collector", "Lightning Bolt"]);
+        s.force_card_in_hand(1, "Lightning Bolt");
+        if lost {
+            opponent_loses_life(&mut s);
+        }
+        let hand = s.zone_size(1, ZoneType::Hand);
+        enter_and_settle(&mut s, "Bloodtithe Collector");
+        s.assert_zone_size(1, ZoneType::Hand, hand - usize::from(lost));
+    }
+}

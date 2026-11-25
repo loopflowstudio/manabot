@@ -487,12 +487,20 @@ pub struct LegacyPermanentView {
     /// Activated abilities (indices in its ability list) whose limit is spent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub damaged_permanents: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ability_resolutions: Vec<(u32, u32)>,
     /// It was dealt damage this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
     /// It entered the battlefield during this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub entered_this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacked_this_turn: bool,
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
@@ -612,6 +620,8 @@ pub struct LegacyPlayerView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyTurnView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub creature_died_this_turn: bool,
     pub turn_number: u32,
     pub phase: String,
     pub step: String,
@@ -636,6 +646,12 @@ pub struct DecisionTargetView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackEntryView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub mana_spent: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub combat_damage_to_players: Vec<u8>,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub ability_resolutions: u32,
     pub id: u64,
     pub kind: String,
     pub controller: u8,

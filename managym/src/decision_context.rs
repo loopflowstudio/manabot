@@ -295,10 +295,25 @@ impl Game {
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
-        view.pending = frames
-            .iter()
-            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
-            .collect();
+        for frame in frames.iter().filter(|frame| frame.triggering_amount > 0) {
+            let name = frame
+                .source
+                .definition
+                .and_then(|id| {
+                    crate::cards::content_pack::default_content_pack()
+                        .definition(crate::state::card::CardDefId(id))
+                })
+                .map_or("This ability", |card| card.name.as_str());
+            view.pending.push(format!(
+                "{name} triggered on an event amount of {}.",
+                frame.triggering_amount
+            ));
+        }
+        view.pending.extend(
+            frames
+                .iter()
+                .flat_map(|frame| frame.effect_execution_summary.iter().cloned()),
+        );
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
@@ -446,7 +461,7 @@ impl Game {
                     ("additional_cost", "Choose which kind of counter to remove from the chosen creature. Each mode is one counter kind on it."),
                 CostComponent::TapPays { .. } =>
                     ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
-                CostComponent::Life(_) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) =>
+                CostComponent::Life(_) | CostComponent::RemoveSourceCounters(..) | CostComponent::AddCounters(..) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) | CostComponent::TapGrantor(_) =>
                     unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { toward: Toward::Saddle, .. } =>
                     ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),

@@ -7,6 +7,8 @@ pub use managym_state::*;
 
 pub mod deck;
 pub mod hash;
+#[cfg(test)]
+mod loop_fingerprint_tests;
 pub mod player;
 
 pub mod knowledge;

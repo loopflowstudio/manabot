@@ -15,7 +15,7 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        ability::PaymentCost,
+        ability::{Effect, PaymentCost},
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
@@ -30,6 +30,8 @@ use std::collections::{BTreeMap, HashSet};
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TurnData {
+    #[serde(default)]
+    pub creature_died_this_turn: bool,
     pub turn_number: u32,
     #[serde(deserialize_with = "super::observation_json::phase")]
     pub phase: PhaseKind,
@@ -493,6 +495,15 @@ pub struct StackTargetData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WireStackObjectData")]
 pub struct StackObjectData {
+    /// Seats dealt combat damage this turn by the activated ability’s exact source.
+    pub combat_damage_to_players: Vec<usize>,
+    /// Effective power read by a pending source-power damage instruction.
+    pub source_power: Option<i32>,
+    /// The amount a pending activation reads from the objects that paid its
+    /// cost, using live characteristics or their last known information.
+    pub paid_amount: Option<i32>,
+    pub mana_spent: u16,
+    pub ability_resolutions: u32,
     /// Derived ability text; absent on spells and historical observations.
     pub description: Option<String>,
     pub stack_object_id: i32,
@@ -895,10 +906,14 @@ pub struct PermanentData {
     /// spent: once per object (exhaust CR 702.177a, power-up, "activate
     /// only once") or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
+    pub combat_damage_to_players: Vec<usize>,
+    pub damaged_permanents: Vec<i32>,
+    pub ability_resolutions: Vec<(usize, u32)>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
     pub dealt_damage_this_turn: bool,
     pub entered_this_turn: bool,
+    pub attacked_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     pub effects: Vec<ContinuousEffectData>,
@@ -1106,6 +1121,7 @@ impl Observation {
             game.state.turn.current_step_kind()
         };
         let turn = TurnData {
+            creature_died_this_turn: game.state.turn.creature_died_this_turn(),
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
             step,
@@ -1608,9 +1624,13 @@ impl Observation {
             is_copy: !object.is_card(),
             has_announced_x: has_x,
             cast_from_graveyard: game.was_cast_from_graveyard(spell),
-            characteristics: CharacteristicsData {
-                power: game.object_power(spell.object),
-                ..Self::printed_characteristics_data(game, spell.object)
+            characteristics: {
+                let (power, toughness) = game.object_pt(spell.object);
+                CharacteristicsData {
+                    power,
+                    toughness,
+                    ..Self::printed_characteristics_data(game, spell.object)
+                }
             },
         }
     }
@@ -1655,6 +1675,8 @@ impl Observation {
         characteristics: &Characteristics,
     ) {
         let object = &game.state[permanent.object];
+        let face = object.definition_id;
+        let printed_abilities = (permanent.object, face, 0)..=(permanent.object, face, usize::MAX);
         let pdat = PermanentData {
             front_mana_value: (object
                 .form_faces()
@@ -1705,13 +1727,13 @@ impl Observation {
                 })
                 .count() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
-                + game.permanent_object(perm_id).map_or(0, |object| {
-                    game.state
-                        .turn
-                        .ability_triggers_this_turn
-                        .range((object, 0)..=(object, usize::MAX))
-                        .count()
-                })) as i32,
+                + game.state.turn.used_trigger_grants.count(permanent.object)
+                + game
+                    .state
+                    .turn
+                    .ability_triggers_this_turn
+                    .range(printed_abilities.clone())
+                    .count()) as i32,
             granted_firebending: i32::from(characteristics.firebending),
             temp_subtypes: characteristics
                 .added_subtypes
@@ -1720,12 +1742,11 @@ impl Observation {
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             is_animated: characteristics.is_animated,
-            has_exile_link: game.permanent_object(perm_id).is_some_and(|object_ref| {
-                game.state
-                    .exile_links
-                    .iter()
-                    .any(|link| link.source == object_ref)
-            }),
+            has_exile_link: game
+                .state
+                .exile_links
+                .iter()
+                .any(|link| link.source == permanent.object),
             counters: permanent
                 .counters
                 .iter()
@@ -1755,7 +1776,35 @@ impl Observation {
             abilities_lost: characteristics.abilities_lost,
             face_down: object.is_face_down(),
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            attacked_this_turn: game.state.turn.attack_count(permanent.object) > 0,
             entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
+            combat_damage_to_players: game
+                .state
+                .turn
+                .damage_pairs
+                .combat_players(permanent.object)
+                .map(|p| p.0)
+                .collect(),
+            damaged_permanents: {
+                let mut targets: Vec<_> = game
+                    .state
+                    .turn
+                    .damage_pairs
+                    .recipients(permanent.object)
+                    .filter_map(|target| game.lookup_current_permanent(target).ok())
+                    .filter_map(|id| game.state.permanents[id].as_ref())
+                    .map(|target| target.id.0 as i32)
+                    .collect();
+                targets.sort_unstable();
+                targets
+            },
+            ability_resolutions: game
+                .state
+                .turn
+                .ability_resolutions_this_turn
+                .range(printed_abilities)
+                .map(|((_, _, index), count)| (*index, *count))
+                .collect(),
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -1770,21 +1819,31 @@ impl Observation {
                 .copy()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
             object_id: Some(game.observed_object_id(permanent.object).0 as i32),
-            owner_id: game.state.players[object.owner.0].id.0 as i32,
-            is_token: !object.is_card(),
-            characteristics: CharacteristicsData {
-                name: characteristics.name.clone(),
-                power: characteristics.power,
-                toughness: characteristics.toughness,
-                is_legendary: characteristics.is_legendary,
-                is_ally: characteristics.has_subtype("Ally"),
-                is_lesson: characteristics.has_subtype("Lesson"),
-                ward_cost: ward_value(characteristics.ward.as_ref()),
-                ward_life: ward_life(characteristics.ward.as_ref()),
-                ward_program: ward_program(characteristics.ward.as_ref()),
-                card_types: CardTypeData::from_types(&characteristics.types),
-                keywords: KeywordData::from_keywords(&characteristics.keywords),
-                ..Self::printed_characteristics_data(game, permanent.object)
+            owner_id: game.state.players[game.state[permanent.object].owner.0]
+                .id
+                .0 as i32,
+            is_token: !game.state[permanent.object].is_card(),
+            characteristics: {
+                let object = &game.state[permanent.object];
+                CharacteristicsData {
+                    name: characteristics.name.clone(),
+                    text_box: object.text_box.clone(),
+                    power: characteristics.power,
+                    toughness: characteristics.toughness,
+                    is_legendary: characteristics.is_legendary,
+                    is_ally: characteristics.has_subtype("Ally"),
+                    is_lesson: characteristics.has_subtype("Lesson"),
+                    ward_cost: ward_value(characteristics.ward.as_ref()),
+                    ward_life: ward_life(characteristics.ward.as_ref()),
+                    ward_program: ward_program(characteristics.ward.as_ref()),
+                    kicker_cost: object
+                        .optional_cost()
+                        .map(|cost| i32::from(cost.mana_value))
+                        .unwrap_or(0),
+                    card_types: CardTypeData::from_types(&characteristics.types),
+                    keywords: KeywordData::from_keywords(&characteristics.keywords),
+                    ..Self::printed_characteristics_data(game, permanent.object)
+                }
             },
         };
 
@@ -1796,10 +1855,11 @@ impl Observation {
     }
 
     /// A card's row. On the battlefield every characteristic reads the
-    /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
+    /// layered view (`Game::characteristics`); elsewhere CDAs still set
+    /// power and toughness.
     fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
         let mut card = Self::printed_card_data(game, object_id, zone);
-        card.characteristics.power = game.object_power(object_id);
+        (card.characteristics.power, card.characteristics.toughness) = game.object_pt(object_id);
         card
     }
 
@@ -1838,10 +1898,9 @@ impl Observation {
                     prepared: grant.prepared,
                     face_down: grant.face_down,
                     play_lands: grant.play_lands,
-                    condition: grant
-                        .condition
-                        .as_ref()
-                        .map(crate::agent::ability_description::condition_text),
+                    condition: grant.condition.as_ref().map(|condition| {
+                        crate::agent::ability_description::condition_text("permanent", condition)
+                    }),
                 })
                 .collect(),
             x: None,
@@ -1888,7 +1947,49 @@ impl Observation {
         stack_object: &StackObject,
         viewer: PlayerId,
     ) -> StackObjectData {
+        let source_power = game
+            .stack_object_reads(
+                stack_object,
+                Effect::reads_source_power,
+                crate::state::ability::Ability::reads_source_power,
+            )
+            .then_some(stack_object.source_object())
+            .and_then(|object| game.permanent_power_or_lki(object));
+        let paid_amount = match stack_object {
+            StackObject::ActivatedAbility(a) => a
+                .effects
+                .iter()
+                .find_map(Effect::paid_cost_amount)
+                .map(|amount| game.paid_cost_value(&amount, a.controller, &a.paid)),
+            _ => None,
+        };
         StackObjectData {
+            paid_amount,
+            mana_spent: match stack_object {
+                StackObject::Spell(spell) => spell.spent.total(),
+                _ => 0,
+            },
+            combat_damage_to_players: match stack_object {
+                StackObject::ActivatedAbility(a) => game
+                    .state
+                    .turn
+                    .damage_pairs
+                    .combat_players(a.source_object())
+                    .map(|p| p.0)
+                    .collect(),
+                _ => Vec::new(),
+            },
+            source_power,
+            ability_resolutions: match stack_object {
+                StackObject::TriggeredAbility(a) => game
+                    .state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .get(&(a.source_object(), a.source_definition_id, a.ability_index))
+                    .copied()
+                    .unwrap_or(0),
+                _ => 0,
+            },
             description: match stack_object {
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
@@ -1904,7 +2005,15 @@ impl Observation {
                     Some(text)
                 }
                 _ => None,
-            },
+            }
+            .map(|description| match source_power {
+                Some(power) => format!("{description} (source power {power})"),
+                None => description,
+            })
+            .map(|description| match paid_amount {
+                Some(amount) => format!("{description} (from what paid its cost: {amount})"),
+                None => description,
+            }),
             stack_object_id: stack_object.id().0 as i32,
             kind: match stack_object {
                 StackObject::Spell(_) => StackObjectKindData::Spell,
@@ -1917,6 +2026,10 @@ impl Observation {
                 StackObject::ActivatedAbility(ability) => game
                     .object_event_ref(ability.source_object())
                     .map(|object| object.entity.0 as i32),
+                StackObject::TriggeredAbility(ability) => ability
+                    .source_lki
+                    .as_ref()
+                    .map(|lki| lki.presentation_id.0 as i32),
                 _ => None,
             },
             chosen_mode: match stack_object {
@@ -1978,23 +2091,13 @@ impl Observation {
                 stack_object_id: None,
                 card_id: Some(game.state.object(object).ok()?.id.0 as i32),
             }),
-            Target::StackSpell(object_id) => {
-                let stack_object_id = game.spell_on_stack(object_id)?.id.0 as i32;
+            Target::StackSpell(_) | Target::StackAbility(_) => {
+                let index = game.stack_index_of(target)?;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
                     permanent_id: None,
-                    stack_object_id: Some(stack_object_id),
-                    card_id: None,
-                })
-            }
-            Target::StackAbility(id) => {
-                game.stack_index_of(Target::StackAbility(id))?;
-                Some(StackTargetData {
-                    kind: StackTargetKindData::StackObject,
-                    player_id: None,
-                    permanent_id: None,
-                    stack_object_id: Some(id.0 as i32),
+                    stack_object_id: Some(game.state.stack_objects[index].id().0 as i32),
                     card_id: None,
                 })
             }
@@ -2076,7 +2179,9 @@ impl Observation {
                     None,
                 )]
             }
-            GameEvent::LifeChanged { player, old, new } => vec![Self::build_event_data(
+            GameEvent::LifeChanged {
+                player, old, new, ..
+            } => vec![Self::build_event_data(
                 EventType::LifeChanged,
                 Some(EventEntity::Player(*player)),
                 Some(EventEntity::Player(*player)),
@@ -2190,6 +2295,7 @@ impl Observation {
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
+            | GameEvent::PermanentUntapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CardsLeftGraveyard { .. }
             | GameEvent::SourceDealtDamage { .. }
@@ -2313,7 +2419,7 @@ impl Observation {
                 if let Some(grantor) = view
                     .activated_abilities
                     .get(*ability_index)
-                    .filter(|ability| ability.exile_grantor)
+                    .filter(|ability| ability.has_grantor_cost())
                     .and_then(|ability| ability.granted_by)
                     .and_then(|grant| game.state.permanent_of(grant.grantor))
                 {

@@ -44,6 +44,15 @@ pub enum EventEntity {
     Player(PlayerId),
 }
 
+/// One committed hit within a simultaneous combat damage step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CombatPlayerHit {
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: ObjectId,
+    pub recipient: PlayerId,
+    pub amount: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
     PermanentSacrificed {
@@ -76,20 +85,26 @@ pub enum GameEvent {
         source: Option<ObjectId>,
         target: DamageTarget,
         amount: u32,
-        /// Combat damage (CR 510.2). Trigger matching reads it; the history
-        /// it records keeps its bytes.
-        #[serde(skip)]
+        /// Combat damage (CR 510.2); everything else is noncombat damage.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
         combat: bool,
     },
     LifeChanged {
         player: PlayerId,
         old: i32,
         new: i32,
+        /// One-based occurrence on a gain, zero on a loss. Set at commit.
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        gain_ordinal: u32,
     },
     SpellCast {
         #[serde(rename = "card")]
         object_id: ObjectId,
         targets: Vec<Target>,
+        caster: PlayerId,
+        /// Cumulative mana spent casting by the payer before and after payment.
+        spend_before: u32,
+        spend_after: u32,
     },
     SpellResolved {
         #[serde(rename = "card")]
@@ -130,6 +145,10 @@ pub enum GameEvent {
     PermanentTapped {
         permanent: PermanentId,
         for_mana: bool,
+    },
+    /// A permanent transitioned from tapped to untapped.
+    PermanentUntapped {
+        permanent: PermanentId,
     },
     /// A permanent became the target of a spell or ability (ward, CR
     /// 702.21): `by` is a `Target::StackSpell` or `Target::StackAbility`.
@@ -189,7 +208,7 @@ pub enum GameEvent {
     /// The creatures that dealt combat damage to a player in one combat
     /// damage step (CR 510.2).
     CombatDamageToPlayers {
-        creatures: Vec<PermanentId>,
+        hits: Vec<CombatPlayerHit>,
     },
     CardsLeftGraveyard {
         owner: PlayerId,
@@ -207,7 +226,7 @@ pub enum GameEvent {
     /// split is one entry. Trigger-only (`Game::emit_trigger_event`); the
     /// ledger records the same damage as `DamageDealt`.
     CombatDamageTotals {
-        dealt: Vec<(PermanentId, u32)>,
+        dealt: Vec<(ObjectId, u32)>,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {
@@ -255,6 +274,7 @@ pub enum EventKind {
     Surveilled,
     CardsLeftGraveyard,
     SourceDealtDamage,
+    PermanentUntapped,
 }
 
 impl GameEvent {
@@ -283,6 +303,7 @@ impl GameEvent {
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
+            GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,
             GameEvent::PermanentTargeted { .. } => EventKind::PermanentTargeted,
             GameEvent::AttackersDeclared { .. } => EventKind::AttackersDeclared,
             GameEvent::CombatAttackersDeclared { .. } => EventKind::CombatAttackersDeclared,
@@ -445,6 +466,7 @@ mod tests {
             player: PlayerId(0),
             old: new + 1,
             new,
+            gain_ordinal: 0,
         }
     }
 

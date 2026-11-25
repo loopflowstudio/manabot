@@ -54,9 +54,9 @@ impl TriggerPlacement {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingTrigger {
-    pub trigger_damage: i32,
     /// An inline program granted by a continuous effect, without catalog identity.
     pub program: bool,
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     pub remembered: Vec<ObjectBinding>,
     pub source_identity: AbilitySource,
@@ -226,7 +226,7 @@ impl PendingTrigger {
             context: None,
             player: None,
             attacker: None,
-            trigger_damage: 0,
+            triggering_amount: 0,
             kicked: false,
             x: 0,
             spent: Default::default(),
@@ -248,6 +248,13 @@ impl PendingTrigger {
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.reference()
     }
+    pub fn current_clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
+    }
 }
 
 impl DelayedTrigger {
@@ -261,12 +268,6 @@ impl DelayedTrigger {
 
 // The pending record historically separated its two source projections with
 // target progress. Preserve that field order in v16's streamed state bytes.
-struct ExactReference(Option<ObjectId>);
-impl serde::Serialize for ExactReference {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        crate::state::game_object::exact(&self.0, serializer)
-    }
-}
 impl serde::Serialize for PendingTrigger {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
@@ -281,10 +282,8 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("targets", &self.targets)?;
         map.serialize_entry("target_req_indices", &self.target_req_indices)?;
         map.serialize_entry("requirement_index", &self.requirement_index)?;
-        map.serialize_entry(
-            "source_ref",
-            &ExactReference(self.source_identity.reference()),
-        )?;
+        let source_ref = self.source_identity.reference();
+        map.serialize_entry("source_ref", &crate::state::game_object::Exact(&source_ref))?;
         map.serialize_entry("source_lki", &self.source_lki)?;
         map.serialize_entry("ability_index", &self.ability_index)?;
         map.serialize_entry("controller", &self.controller)?;
@@ -294,11 +293,11 @@ impl serde::Serialize for PendingTrigger {
         if self.player.is_some() {
             map.serialize_entry("player", &self.player)?;
         }
-        if self.trigger_damage != 0 {
-            map.serialize_entry("trigger_damage", &self.trigger_damage)?;
-        }
         if self.kicked {
             map.serialize_entry("kicked", &true)?;
+        }
+        if self.triggering_amount != 0 {
+            map.serialize_entry("triggering_amount", &self.triggering_amount)?;
         }
         if self.x != 0 {
             map.serialize_entry("x", &self.x)?;

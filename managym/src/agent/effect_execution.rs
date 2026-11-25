@@ -28,11 +28,12 @@ use crate::{
         },
     },
     state::{
-        ability::Effect,
+        ability::{Ability, Effect},
         card::CardDefId,
         game_object::{CopiableValues, ObjectId, ObjectLki, PlayerId, Target},
         mana::Mana,
         payment::{Contribution, How, PaymentReceipt, SpentMana, Toward},
+        stack_object::SpellLki,
     },
 };
 
@@ -119,14 +120,22 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
+    "last known attacking",
     "last known characteristics",
+    "last known creature",
+    "last known in combat",
+    "last known land",
+    "last known tapped",
     "last known attachment",
     "last known definition",
+    "last known spell",
+    "last known spell profile",
     "legend group",
     "legends kept",
     "library end",
     "library order",
     "life change",
+    "life lost this way",
     "life paid",
     "linked exile",
     "linked return",
@@ -307,11 +316,59 @@ impl<'a> Projection<'a> {
     }
 
     fn retained_target(&mut self, target: Target) {
-        if let Target::Permanent(id) = target {
-            if let Some(lki) = self.game.departed_permanent_lki(id) {
-                self.lki(lki);
+        match target {
+            Target::Permanent(id) => {
+                if let Some(lki) = self.game.departed_permanent_lki(id) {
+                    self.lki(lki);
+                }
             }
+            // A live spell's stack row already carries these facts.
+            Target::StackSpell(object) => {
+                if let Some(spell) = self.game.state.spell_lki.get(&object) {
+                    self.spell_lki(spell);
+                }
+            }
+            _ => {}
         }
+    }
+
+    /// A departed spell as it last existed on the stack (CR 608.2h): what a
+    /// trigger reading "that spell" will see after it is countered.
+    fn spell_lki(&mut self, spell: &SpellLki) {
+        if self.last_known.contains(&spell.object) {
+            return;
+        }
+        self.last_known.push(spell.object);
+        let definition = VisibleReference {
+            definition: Some(spell.definition_id.0),
+            ..Default::default()
+        };
+        self.reference("pre-event object", definition);
+        self.field("last known definition", &spell.definition_id);
+        self.field(
+            "last known spell",
+            &(spell.mana_value, &spell.colors, spell.spent),
+        );
+        if !spell.profile.is_front() {
+            self.field("last known spell profile", &spell.profile);
+        }
+        let game = self.game;
+        self.summary(|| {
+            let name = if spell.profile.is_front() {
+                Self::label(definition)
+            } else {
+                game.recorded_spell_printing(spell.object, spell.profile)
+                    .name
+                    .clone()
+            };
+            format!(
+                "Last known spell {}: mana value {}, {} color(s), {} mana spent.",
+                name,
+                spell.mana_value,
+                spell.colors.len(),
+                spell.spent
+            )
+        });
     }
 
     fn object_id(&mut self, name: &str, object_id: ObjectId) {
@@ -642,8 +699,15 @@ impl<'a> Projection<'a> {
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}, toughness {}; counters {:?}.",
+                "Last known {}{}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object, viewer)),
+                if lki.battlefield.attacking {
+                    ", attacking"
+                } else if lki.battlefield.in_combat {
+                    ", blocking"
+                } else {
+                    ""
+                },
                 lki.power,
                 lki.toughness,
                 lki.counters
@@ -655,8 +719,8 @@ impl<'a> Projection<'a> {
             inherited_from,
             granted_abilities,
             keywords,
-            creature_types,
             permanent: _,
+            creature_types,
             battlefield,
             attached_to,
             meld_partner: _, // Physical components have their own viewer references on arrival.
@@ -672,6 +736,21 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if lki.was_land() {
+            self.field("last known land", &true);
+        }
+        if lki.was_creature() {
+            self.field("last known creature", &true);
+        }
+        if battlefield.attacking {
+            self.field("last known attacking", &true);
+        }
+        if battlefield.in_combat {
+            self.field("last known in combat", &true);
+        }
+        if battlefield.tapped {
+            self.field("last known tapped", &true);
+        }
         if let Some(attached) = attached_to {
             self.reference(
                 "last known attachment",
@@ -1095,20 +1174,6 @@ pub(crate) fn receipt_matters(
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the receipt of a stack spell or ability onto the frame of `source`.
-pub(crate) fn project_receipt(
-    game: &Game,
-    spent: &PaymentReceipt,
-    source: ObjectId,
-    viewer: PlayerId,
-    frame: &mut ContinuationFrame,
-    text: bool,
-) {
-    let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent, Some(source));
-    out.finish(frame);
-}
-
 /// Project the payment in progress onto its announcement frame: how many
 /// counters a removal cost still owes (Quilled Greatwurm), then what the
 /// payment has already committed. Writes nothing when neither applies.
@@ -1138,10 +1203,96 @@ pub(crate) fn project_pending_payment(
     out.finish(frame);
 }
 
-/// The damage occurrence remains visible while its trigger waits or is stacked.
-pub(crate) fn project_trigger_damage(game: &Game, viewer: PlayerId, frame: &mut ContinuationFrame) {
+fn trigger_reads<'a>(
+    face: impl FnOnce() -> Option<&'a crate::state::card::PrintedCharacteristics>,
+    index: usize,
+    inline: Option<&[Effect]>,
+    effect_reads: fn(&Effect) -> bool,
+    ability_reads: fn(&Ability) -> bool,
+) -> bool {
+    match inline {
+        Some(effects) => effects.iter().any(effect_reads),
+        None => face()
+            .and_then(|face| face.abilities.get(index))
+            .is_some_and(ability_reads),
+    }
+}
+
+impl Game {
+    pub(super) fn stack_object_reads(
+        &self,
+        object: &crate::state::stack_object::StackObject,
+        effect_reads: fn(&Effect) -> bool,
+        ability_reads: fn(&Ability) -> bool,
+    ) -> bool {
+        use crate::state::stack_object::StackObject;
+        match object {
+            StackObject::ActivatedAbility(ability) => ability.effects.iter().any(effect_reads),
+            StackObject::TriggeredAbility(ability) => trigger_reads(
+                || Some(crate::flow::resolution::stacked_trigger_face(ability)),
+                ability.ability_index,
+                ability.inline_effects.as_deref(),
+                effect_reads,
+                ability_reads,
+            ),
+            StackObject::Spell(_) => false,
+        }
+    }
+}
+
+/// Project the payment and any departed object the trigger reads.
+/// Both text and policy read these same public facts.
+pub(crate) fn project_stack_object(
+    game: &Game,
+    object: &crate::state::stack_object::StackObject,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    use crate::state::stack_object::StackObject;
+    let mut out = Projection::new(game, viewer, text);
+    // "The number of soul counters on this artifact" after it was sacrificed
+    // to pay the cost: the source's last known information (CR 608.2h).
+    if game.stack_object_reads(object, Effect::reads_source_lki, Ability::reads_source_lki) {
+        out.retained_object(object.source_object());
+    }
+    if let StackObject::TriggeredAbility(ability) = object {
+        if let Some(target) = ability.context.filter(|_| {
+            game.stack_object_reads(
+                object,
+                Effect::reads_triggering_object,
+                Ability::reads_triggering_object,
+            )
+        }) {
+            out.retained_target(target);
+        }
+    }
+    if let Some(spent) = super::continuation::stack_receipt(object) {
+        out.receipt(spent, Some(object.source_object()));
+    }
+    out.finish(frame);
+}
+
+/// Project a pending trigger's departed triggering object, as its
+/// stacked ability will (`project_stack_object`).
+pub(crate) fn project_pending_trigger(
+    game: &Game,
+    trigger: &crate::flow::trigger::PendingTrigger,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+) {
     let mut out = Projection::new(game, viewer, false);
-    out.field("DamageEvent::Amount", &frame.trigger_damage);
+    if let Some(target) = trigger.context.filter(|_| {
+        trigger_reads(
+            || game.pending_trigger_face(trigger),
+            trigger.ability_index,
+            trigger.inline_effects.as_deref(),
+            Effect::reads_triggering_object,
+            Ability::reads_triggering_object,
+        )
+    }) {
+        out.retained_target(target);
+    }
     out.finish(frame);
 }
 
@@ -1190,11 +1341,14 @@ pub(crate) fn project_frame(
     if let Some(source) = &effect.selected_from {
         out.field("selection domain", source);
     }
-    if effect.trigger_damage != 0 {
-        out.field("DamageEvent::Amount", &effect.trigger_damage);
+    if effect.triggering_amount != 0 {
+        out.field("DamageEvent::Amount", &effect.triggering_amount);
     }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
+    }
+    if effect.life_lost != 0 {
+        out.field("life lost this way", &effect.life_lost);
     }
     let source_definition = effect
         .source()
@@ -1265,7 +1419,7 @@ pub(crate) fn project_decision(
                     out.payment(payment);
                     for permanent in payment
                         .receipt
-                        .sacrificed()
+                        .paid_as(How::Sacrificed)
                         .filter_map(|object| game.state.permanent_of(object))
                     {
                         out.target(
@@ -1279,7 +1433,7 @@ pub(crate) fn project_decision(
                     out.receipt(&payment.receipt, None);
                     if let Some(key) = payment.spends {
                         out.object("once each turn source", key.0);
-                        out.field("once each turn ability", &key.1);
+                        out.field("once each turn ability", &key.2);
                     }
                 }
 
@@ -1417,7 +1571,7 @@ pub(crate) fn project_decision(
             out.effects("if declined", &progress.if_declined);
             if let Some(key) = &progress.spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
             if let Some(target) = progress.counters_on_decline {
                 out.target("counter on decline", target);
@@ -1593,7 +1747,7 @@ pub(crate) fn project_decision(
             }
             if let Some(key) = spends {
                 out.object("once each turn source", key.0);
-                out.field("once each turn ability", &key.1);
+                out.field("once each turn ability", &key.2);
             }
         }
         // Mana output/cost and caller chains are already explicit relation frames;

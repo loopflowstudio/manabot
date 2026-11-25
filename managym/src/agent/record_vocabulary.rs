@@ -166,7 +166,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for (_, definition) in default_content_pack().definition_entries() {
         let json = serde_json::to_value(definition).expect("serializable definition");
         for condition in play_grant_conditions(&json) {
-            add(TokenKind::Text, &condition_text(&condition));
+            add(TokenKind::Text, &condition_text("permanent", &condition));
         }
     }
     add(TokenKind::Structure, "PlayGrantExtension");
@@ -213,6 +213,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Destroyed",
+                "LifeLost",
                 "Damage",
                 "Deaths",
                 "Combat",
@@ -431,6 +433,8 @@ mod tests {
                 &[
                     EventBinding::None,
                     EventBinding::ThisWay,
+                    EventBinding::Destroyed,
+                    EventBinding::LifeLost,
                     EventBinding::Deaths,
                     EventBinding::Combat,
                     EventBinding::Damage { result: Some(1) },

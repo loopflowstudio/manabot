@@ -19,9 +19,9 @@ use crate::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
         permanent::CounterKind,
-        permanent::Permanent,
+        permanent::{Permanent, SpellEntry},
         predicate::CardPredicate,
-        stack_object::{SpellOnStack, StackObject},
+        stack_object::{SpellLki, SpellOnStack, StackObject},
         zone::ZoneType,
     },
 };
@@ -246,18 +246,6 @@ impl Game {
         }
     }
 
-    /// The controller of `card`'s spell on the stack (CR 110.2), or its
-    /// owner once it has left the stack.
-    pub(crate) fn spell_caster(&self, object: ObjectId) -> PlayerId {
-        self.stack_spell_controller(object).unwrap_or_else(|| {
-            self.state
-                .objects
-                .provenance(object)
-                .expect("source provenance")
-                .1
-        })
-    }
-
     /// The permanents `player` controls, in battlefield order.
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.iter_battlefield_permanents(player).collect()
@@ -297,7 +285,7 @@ impl Game {
             {
                 continue;
             }
-            self.state.untap(permanent_id);
+            self.untap_permanent(permanent_id);
         }
     }
 
@@ -307,15 +295,12 @@ impl Game {
     pub(crate) fn untap_during_other_untap_steps(&mut self, active: PlayerId) {
         let other = PlayerId(1 - active.0);
         for permanent_id in self.battlefield_permanents(other) {
-            let untaps = self
-                .characteristics(permanent_id)
+            if self
+                .layer_view(permanent_id)
                 .static_abilities
-                .iter()
-                .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
-            if untaps {
-                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.untap();
-                }
+                .contains(&StaticAbility::UntapsDuringOtherUntapSteps)
+            {
+                self.untap_permanent(permanent_id);
             }
         }
     }
@@ -372,6 +357,21 @@ impl Game {
         true
     }
 
+    /// Untap a permanent, emitting `PermanentUntapped` on the tapped-to-
+    /// untapped transition ("becomes untapped"); a stun counter removed
+    /// instead (CR 122.1d) or an untapped permanent emits nothing. Every
+    /// untap, the untap step's included, comes through here. Returns whether
+    /// the permanent transitioned.
+    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) -> bool {
+        let untapped = self.state.untap(permanent_id);
+        if untapped {
+            self.emit(GameEvent::PermanentUntapped {
+                permanent: permanent_id,
+            });
+        }
+        untapped
+    }
+
     /// Create a token from the token definition keyed `key` (`token.<name>`)
     /// under `controller`'s control. A token is an `ObjectKind::Token` object in
     /// `GameState::objects`, never a card; state-based actions remove it once it
@@ -383,17 +383,20 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
-        let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-            definition: Box::new(crate::flow::proposed_event::TokenSource::Registered(
-                key.into(),
-            )),
-            controller,
-            count: 1,
-            entry: ZoneEntry {
-                tapped: tapped_and_attacking,
-                ..Default::default()
-            },
-        }]);
+        let batch = self.event_batch(
+            EventBinding::None,
+            [ProposedEvent::CreateTokens {
+                definition: Box::new(crate::flow::proposed_event::TokenSource::Registered(
+                    key.into(),
+                )),
+                controller,
+                count: 1,
+                entry: ZoneEntry {
+                    tapped: tapped_and_attacking,
+                    ..Default::default()
+                },
+            }],
+        );
         let results = self.complete_immediate_batch(batch);
         for object in results.iter().flat_map(|result| result.arrivals()) {
             self.finish_created_token(object, tapped_and_attacking);
@@ -563,12 +566,23 @@ impl Game {
             .count()
     }
 
-    pub(crate) fn emit(&mut self, event: GameEvent) {
+    pub(crate) fn emit(&mut self, mut event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
-        // Every life total change is a LifeChanged event, so this is the one
-        // place loss this turn is counted (CR 119.3).
-        if let GameEvent::LifeChanged { player, old, new } = &event {
-            if new < old {
+        // A pending gain keeps its ordinal even if more gains commit before
+        // trigger matching. Life loss counts the applied amount (CR 119.3).
+        if let GameEvent::LifeChanged {
+            player,
+            old,
+            new,
+            gain_ordinal,
+        } = &mut event
+        {
+            if new > old {
+                let history = &mut self.state.turn.history[player.0];
+                history.life_gained += old.abs_diff(*new);
+                history.life_gains += 1;
+                *gain_ordinal = history.life_gains;
+            } else if new < old {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }
@@ -793,7 +807,7 @@ impl Game {
             return object;
         }
         let event = self.zone_move_proposal(object, to_zone, entry);
-        let batch = self.event_batch(vec![event]);
+        let batch = self.event_batch(EventBinding::None, [event]);
         self.complete_immediate_batch(batch)
             .into_iter()
             .next()
@@ -863,41 +877,41 @@ impl Game {
         (!face.types.is_instant_or_sorcery()).then_some(face)
     }
 
-    // Keep the evaluated proposal fields together with its pre-move LKI and
-    // consequent-event sink at this single commit boundary.
-    #[allow(clippy::too_many_arguments)]
+    /// Return the appearance minted by this move (CR 400.7), including
+    /// the initial appearance of an object entering its first zone.
     pub(crate) fn commit_zone_move(
         &mut self,
-        object_id: ObjectId,
+        prior_object: ObjectId,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
         entry: ZoneEntry,
         departing_lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
     ) -> EventResult {
-        let departing_object = object_id;
         // A write through `zones` advances every revision; most moves have
         // no melded card to release, so read before writing.
         let second = self
             .state
             .zones
-            .melded_card(object_id)
-            .and_then(|_| self.state.zones.separate_melded_card(object_id));
-        let owner = self.state.entry_object(object_id).owner;
+            .melded_card(prior_object)
+            .and_then(|_| self.state.zones.separate_melded_card(prior_object));
+        let owner = self.state.entry_object(prior_object).owner;
 
-        let definition = self.state.entry_object(object_id).definition_id;
+        let definition = self.state.entry_object(prior_object).definition_id;
         let public_source = old_zone.is_some_and(|zone| {
             !matches!(zone, ZoneType::Hand | ZoneType::Library)
-                && !(zone == ZoneType::Exile && self.is_face_down_in_exile(object_id))
+                && !(zone == ZoneType::Exile && self.is_face_down_in_exile(prior_object))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
-            self.state.library_order_pins_mut(owner).remove(&object_id);
+            self.state
+                .library_order_pins_mut(owner)
+                .remove(&prior_object);
             if entry.library_top_departure {
                 self.state.known_library_mut(owner).remove_top()
             } else if entry.inspected_library_departure {
                 let position = self
                     .library_from_top(owner)
-                    .position(|object| object == object_id)
+                    .position(|object| object == prior_object)
                     .expect("departing inspected card in library");
                 self.state
                     .known_library_mut(owner)
@@ -915,42 +929,50 @@ impl Game {
             self.forget_hand_card(owner, seen);
         }
 
-        let entry_face_down = entry.is_face_down();
-        let mut event_controller = owner;
-
-        if old_zone == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.state.object_to_permanent[(object_id).slot()].take() {
-                if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
-                    event_controller = permanent.controller;
-                }
-                if to_zone == ZoneType::Graveyard && self.state.combat.is_some() {
-                    if let Some(exposure) = self.exposure_mut() {
-                        exposure.combat.deaths.insert(permanent_id);
-                    }
-                }
-                self.state.permanents[permanent_id] = None;
-            }
-        }
-
-        if let Some(mut lki) = departing_lki {
-            let object = self.state.entry_object(object_id);
-            lki.meld_partner = second;
-            lki.copiable = default_content_pack().retain_copiable_values(object);
-            self.record_object_lki(lki);
-        }
-        if old_zone == Some(ZoneType::Stack) {
-            if let Some(index) = self.stack_index_of(Target::StackSpell(object_id)) {
-                self.state.stack_objects_mut().remove(index);
-            }
-        }
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        // From here `object_id` is the appearance this move makes.
+        let entry_face_down = entry.is_face_down();
+        let event_controller = departing_lki.as_ref().map_or(holder, |lki| lki.controller);
+        if let Some(mut lki) = departing_lki {
+            lki.meld_partner = second;
+            lki.copiable = default_content_pack()
+                .retain_copiable_values(self.state.entry_object(prior_object));
+            let history = &mut self.state.turn.history[lki.controller.0];
+            history.permanents_left += 1;
+            history.nonland_permanents_left += u32::from(!lki.was_land());
+            history.creatures_died +=
+                u32::from(to_zone == ZoneType::Graveyard && lki.was_creature());
+            if to_zone == ZoneType::Graveyard && self.state.combat.is_some() {
+                if let Some(exposure) = self.exposure_mut() {
+                    exposure.combat.deaths.insert(lki.permanent);
+                }
+            }
+            self.state.object_to_permanent[prior_object.slot()] = None;
+            self.state.permanents[lki.permanent] = None;
+            self.record_object_lki(lki);
+        }
+        let cast = match (old_zone == Some(ZoneType::Stack))
+            .then(|| self.stack_index_of(Target::StackSpell(prior_object)))
+            .flatten()
+            .map(|index| self.state.stack_objects_mut().remove(index))
+        {
+            Some(StackObject::Spell(spell)) => {
+                let lki = self.spell_lki(&spell);
+                self.state.spell_lki_mut().insert(spell.object, lki);
+                (to_zone == ZoneType::Battlefield).then_some(SpellEntry {
+                    x: spell.x,
+                    kicked: spell.kicked,
+                    payment: self.state[spell.object].is_card().then_some(spell.spent),
+                })
+            }
+            _ => None,
+        };
+
         let object_id = self
             .state
-            .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
+            .mint_appearance(prior_object, holder, to_zone, entry.entry_copy);
         match entry.profile {
             crate::state::card::SpellProfile::BackFace => self.show_back_face(object_id),
             profile => self.state[object_id].show_inset(profile),
@@ -992,7 +1014,7 @@ impl Game {
                 .insert(object_id, entry.counters.clone());
         }
 
-        if to_zone == ZoneType::Battlefield {
+        let entered_permanent = (to_zone == ZoneType::Battlefield).then(|| {
             match entry.face {
                 EntryFace::Front => {}
                 EntryFace::ModalBack => {
@@ -1025,51 +1047,49 @@ impl Game {
             permanent.manifested = entry.face == EntryFace::Manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
-            permanent.spell_entry = entry.spell;
+            permanent.spell_entry = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             permanent.attached_to = entry.attached_to;
-            event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state[object_id].types.is_land() {
                 self.state.turn.history[holder.0].land_entered = true;
             }
-            self.state.object_to_permanent[(object_id).slot()] = Some(permanent_id);
+            self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
             if entry.prepared {
                 self.prepare_inset(object_id);
             }
-        }
+            permanent_id
+        });
 
         self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             object_id,
-            departed: old_zone.map(|_| departing_object),
+            departed: old_zone.map(|_| prior_object),
             from: old_zone,
             to: to_zone,
             controller: event_controller,
             face_down: entry_face_down,
         };
         self.emit(event);
-        if to_zone == ZoneType::Battlefield {
-            if let Some(permanent) = self.state.permanent_of(object_id) {
-                let counters = self.state.permanents[permanent]
-                    .as_ref()
-                    .expect("entered")
-                    .counters
-                    .clone();
-                for (kind, count) in counters.iter() {
-                    self.emit(GameEvent::CountersPut {
-                        permanent,
-                        kind,
-                        count,
-                        total: count,
-                        by: holder,
-                    });
-                }
+        if let Some(permanent) = entered_permanent {
+            let counters = self.state.permanents[permanent]
+                .as_ref()
+                .expect("entered")
+                .counters
+                .clone();
+            for (kind, count) in counters.iter() {
+                self.emit(GameEvent::CountersPut {
+                    permanent,
+                    kind,
+                    count,
+                    total: count,
+                    by: holder,
+                });
             }
         }
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(departing_object, to_zone, followups);
+            self.handle_leaves_battlefield(prior_object, to_zone, followups);
         }
         let second = second.map(|second| {
             let arrival = self.state.mint_appearance(second, owner, to_zone, false);
@@ -1090,7 +1110,7 @@ impl Game {
         EventResult {
             committed: true,
             moved: [Some(object_id), second],
-            excess_damage: None,
+            ..Default::default()
         }
     }
 
@@ -1279,7 +1299,28 @@ impl Game {
         }
     }
 
-    /// Stack targets identify a spell by its exact object and an ability by its stack id.
+    /// A spell as it is on the stack now, or as it last existed there
+    /// (CR 608.2h): countered, resolved, copied or stolen spells alike.
+    pub(crate) fn spell_info(&self, object: ObjectId) -> Option<SpellLki> {
+        self.spell_on_stack(object)
+            .map(|spell| self.spell_lki(spell))
+            .or_else(|| self.state.spell_lki.get(&object).cloned())
+    }
+
+    fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
+        let object = &self.state[spell.object];
+        SpellLki {
+            object: spell.object,
+            definition_id: object.definition_id,
+            controller: spell.controller,
+            profile: spell.profile,
+            mana_value: object.mana_value_with_x(spell.x),
+            spent: spell.spent.total(),
+            colors: object.colors(),
+        }
+    }
+
+    /// Stack positions use the same exact spell or ability target as commands.
     pub(crate) fn stack_index_of(&self, target: Target) -> Option<usize> {
         self.state
             .stack_objects
@@ -1298,10 +1339,5 @@ impl Game {
             StackObject::Spell(spell) if spell.object == object => Some(spell),
             _ => None,
         })
-    }
-
-    /// The controller of `card` while it is a spell on the stack.
-    pub(crate) fn stack_spell_controller(&self, object_id: ObjectId) -> Option<PlayerId> {
-        self.spell_on_stack(object_id).map(|spell| spell.controller)
     }
 }

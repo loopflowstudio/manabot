@@ -95,6 +95,9 @@ fn spell_events_are_observable_for_creature_spells() {
     assert!(events.contains(&GameEvent::SpellCast {
         object_id: elf,
         targets: Vec::new(),
+        caster: PlayerId(0),
+        spend_before: 0,
+        spend_after: 1,
     }));
     assert!(events.contains(&GameEvent::SpellResolved { object_id: elf }));
     let moves: Vec<_> = events
@@ -170,6 +173,7 @@ fn combat_damage_emits_damage_and_life_change_events() {
         player: PlayerId(1),
         old: 20,
         new: 19,
+        gain_ordinal: 0,
     }));
 }
 

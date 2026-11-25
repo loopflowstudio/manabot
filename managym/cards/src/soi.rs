@@ -125,6 +125,7 @@ fn crow_of_dark_tidings() -> CardDefinition {
                     vec![Effect::MillCards {
                         count: EffectValue::Fixed(2),
                         target: None,
+                        player: None,
                     }],
                 ),
                 Ability::Triggered {
@@ -135,6 +136,7 @@ fn crow_of_dark_tidings() -> CardDefinition {
                     effects: vec![Effect::MillCards {
                         count: EffectValue::Fixed(2),
                         target: None,
+                        player: None,
                     }],
                 },
             ],

@@ -436,3 +436,423 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod card_history_tests {
+    use super::{Env, RestoreOptions};
+    use crate::{
+        agent::action::Action,
+        decision::Command,
+        state::{
+            game_object::{PlayerId, Target},
+            player::PlayerConfig,
+            zone::ZoneType,
+        },
+    };
+
+    #[test]
+    fn drake_hatcher_snapshot_binds_the_amount_dealt_by_the_same_source() {
+        use crate::{flow::combat::CombatState, state::permanent::CounterKind};
+        let mut env = Env::new(418, true, false, false);
+        let deck = [
+            ("Drake Hatcher".to_string(), 12),
+            ("Island".to_string(), 28),
+        ]
+        .into();
+        env.reset(vec![
+            PlayerConfig::new("Hatcher", deck),
+            PlayerConfig::new("Opponent", [("Forest".into(), 40)].into()),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
+        let actor = game.active_player();
+        let source = game
+            .scenario_force_battlefield(actor, "Drake Hatcher", true)
+            .unwrap();
+        game.state.combat = Some(Box::new(CombatState {
+            attackers: vec![source],
+            ..Default::default()
+        }));
+        let combat = env.snapshot().unwrap();
+        for amount in [1, 3] {
+            let mut branch = combat.restore(Default::default()).unwrap();
+            let game = branch.game.as_mut().unwrap();
+            game.state.permanents[source]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::PlusOnePlusOne, amount - 1);
+            game.resolve_combat_damage();
+            let [trigger] = game.state.pending_triggers.as_slice() else {
+                panic!("one Hatcher trigger")
+            };
+            assert_eq!(trigger.triggering_amount, amount);
+            assert_eq!(trigger.player, Some(PlayerId(1 - actor.0)));
+            game.state.permanents[source]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::PlusOnePlusOne, 1 - amount);
+            let witness = branch.selected_witness().unwrap();
+            let pending = branch.snapshot().unwrap();
+            let mut restored = pending.restore(Default::default()).unwrap();
+            assert_eq!(restored.selected_witness().unwrap(), witness);
+            let game = restored.game.as_mut().unwrap();
+            assert!(game.flush_triggers().is_none());
+            game.resolve_top_of_stack();
+            assert_eq!(
+                game.state.permanents[source]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::Incubation),
+                amount
+            );
+        }
+    }
+
+    #[test]
+    fn steel_hellkite_pending_snapshot_retains_combat_seat_after_source_departure() {
+        use crate::agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::stack,
+        };
+        use crate::flow::proposed_event::ProposedDamageTarget;
+        let mut env = Env::new(418, true, false, false);
+        let deck = [("Steel Hellkite".to_owned(), 12), ("Forest".to_owned(), 28)]
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+        env.reset(vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
+        let actor = game.state.priority.holder;
+        let victim = PlayerId(1 - actor.0);
+        let hit = game
+            .scenario_force_battlefield(actor, "Steel Hellkite", true)
+            .unwrap();
+        let other = game
+            .scenario_force_battlefield(actor, "Steel Hellkite", true)
+            .unwrap();
+        let source = game.permanent_object(hit).unwrap();
+        let token = game.create_token("token.food", actor, false).unwrap();
+        for (permanent, combat) in [(other, false), (hit, true)] {
+            assert!(
+                game.commit_damage(
+                    game.permanent_object(permanent),
+                    ProposedDamageTarget::Player(victim),
+                    1,
+                    combat
+                )
+                .committed
+            );
+        }
+        game.state.players[actor.0].mana_pool = crate::state::mana::Mana::parse("2").into();
+        game.publish_action_space(game.priority_action_space(actor));
+        let command = |env: &Env, index: usize| {
+            let frame = env.semantic_decision_frame().unwrap();
+            Command {
+                command_id: format!("hellkite-{}-{index}", frame.revision),
+                expected_revision: frame.revision,
+                offer_id: frame.offers[index].id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            }
+        };
+        let root = env.snapshot().unwrap();
+        let root_witness = env.selected_witness().unwrap();
+        for permanent in [hit, other] {
+            let mut branch = root.restore(RestoreOptions::default()).unwrap();
+            let index = env.game.as_ref().unwrap().action_space().unwrap().actions.iter().position(|action| matches!(action, Action::ActivateAbility {permanent: source, ability_index: 1, ..} if *source == permanent)).unwrap();
+            branch
+                .execute_semantic_command(&command(&env, index))
+                .unwrap();
+            let zero = branch
+                .game
+                .as_ref()
+                .unwrap()
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::ChooseMode { mode: 0, .. }))
+                .unwrap();
+            branch
+                .execute_semantic_command(&command(&branch, zero))
+                .unwrap();
+            let game = branch.game.as_mut().unwrap();
+            game.move_object(source, ZoneType::Graveyard);
+            game.change_control(token, victim);
+            let pending = branch.snapshot().unwrap();
+            let mut restored = pending.restore(RestoreOptions::default()).unwrap();
+            assert_eq!(
+                restored.selected_witness().unwrap(),
+                branch.selected_witness().unwrap()
+            );
+            let game = restored.game.as_mut().unwrap();
+            for viewer in [actor, victim] {
+                let obs = Observation::for_player(game, viewer);
+                let eligible = &obs.stack_objects[0].combat_damage_to_players;
+                assert_eq!(
+                    eligible.as_slice(),
+                    if permanent == hit {
+                        std::slice::from_ref(&victim.0)
+                    } else {
+                        &[]
+                    }
+                );
+                let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+                assert_eq!(
+                    encoded.stack[stack::COMBAT_DAMAGE_TO_ME],
+                    f32::from(permanent == hit && viewer == victim)
+                );
+                assert_eq!(
+                    encoded.stack[stack::COMBAT_DAMAGE_TO_OPPONENT],
+                    f32::from(permanent == hit && viewer == actor)
+                );
+            }
+            game.resolve_top_of_stack();
+            assert_eq!(game.state.permanents[token].is_none(), permanent == hit);
+            if permanent == other {
+                let mut countered = pending.restore(RestoreOptions::default()).unwrap();
+                let g = countered.game.as_mut().unwrap();
+                let id = g.state.stack_objects.last().unwrap().id();
+                g.counter_ability(id, None);
+                assert!(g.state.permanents[other]
+                    .as_ref()
+                    .unwrap()
+                    .activated_this_turn
+                    .contains(&1));
+            }
+        }
+        assert_eq!(env.selected_witness().unwrap(), root_witness);
+    }
+
+    #[test]
+    fn predator_ooze_remembers_only_the_exact_damage_pair_this_turn() {
+        use crate::agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::relation,
+        };
+        use crate::flow::game::Game;
+        use crate::flow::proposed_event::ProposedDamageTarget;
+        let mut env = Env::new(418, true, false, false);
+        let deck = [("Predator Ooze".to_owned(), 12), ("Forest".to_owned(), 28)].into();
+        env.reset(vec![
+            PlayerConfig::new("p0", deck),
+            PlayerConfig::new(
+                "p1",
+                [("Hill Giant".into(), 12), ("Forest".into(), 28)].into(),
+            ),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
+        let source = game
+            .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)
+            .unwrap();
+        let victim = game
+            .scenario_force_battlefield(PlayerId(1), "Hill Giant", true)
+            .unwrap();
+        let recipient = game.permanent_object(victim).unwrap();
+        let ooze = game.permanent_object(source).unwrap();
+        let hit = |g: &mut Game, source| {
+            assert!(
+                g.commit_damage(
+                    Some(source),
+                    ProposedDamageTarget::Object(recipient),
+                    1,
+                    false
+                )
+                .committed
+            )
+        };
+        let other = game
+            .scenario_force_battlefield(PlayerId(0), "Predator Ooze", true)
+            .unwrap();
+        let other_ooze = game.permanent_object(other).unwrap();
+        let mut alternate = game.clone();
+        hit(&mut alternate, other_ooze);
+        hit(game, ooze);
+        let config = ObservationEncoderConfig::default();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let encoded_pair = |g: &Game| {
+                let obs = Observation::for_player(g, viewer);
+                let encoded = encode(&obs, &config).unwrap();
+                let rows: Vec<_> = encoded
+                    .relations
+                    .chunks(relation::WIDTH)
+                    .filter(|r| r[relation::KIND] == 11.)
+                    .collect();
+                assert_eq!(rows.len(), 1);
+                (rows[0][relation::SOURCE], rows[0][relation::REFERENCE])
+            };
+            let pair = encoded_pair(game);
+            let other_pair = encoded_pair(&alternate);
+            assert_ne!(pair.0, other_pair.0);
+            assert_eq!(pair.1, other_pair.1);
+            assert!(pair.0 > 0. && pair.1 > 0.);
+        }
+        let witness = env.selected_witness().unwrap();
+        let snapshot = env.snapshot().unwrap();
+        let fork = || snapshot.restore(RestoreOptions::default()).unwrap();
+        let blink = |g: &mut Game, object| {
+            let exiled = g.move_object(object, ZoneType::Exile);
+            g.move_object(exiled, ZoneType::Battlefield)
+        };
+        let die = |g: &mut Game, object| {
+            g.move_object(object, ZoneType::Graveyard);
+            g.process_game_events();
+            g.state.pending_triggers.len()
+        };
+        let mut branch_env = fork();
+        assert_eq!(branch_env.selected_witness().unwrap(), witness);
+        let repeated = branch_env.game.as_mut().unwrap();
+        hit(repeated, ooze);
+        assert_eq!(die(repeated, recipient), 1);
+        assert!(repeated.flush_triggers().is_none());
+        let pending = branch_env.snapshot().unwrap();
+        let mut restored = pending.restore(RestoreOptions::default()).unwrap();
+        let countered = restored.game.as_mut().unwrap();
+        let repeated = branch_env.game.as_mut().unwrap();
+        let id = countered.state.stack_objects.last().unwrap().id();
+        countered.counter_ability(id, None);
+        repeated.resolve_top_of_stack();
+        assert_eq!(repeated.characteristics(source).power, 2);
+        assert_eq!(countered.characteristics(source).power, 1);
+
+        let mut branch = fork().game.take().unwrap();
+        let returned = blink(&mut branch, recipient);
+        assert_eq!(die(&mut branch, returned), 0);
+        let mut branch = fork().game.take().unwrap();
+        blink(&mut branch, ooze);
+        assert_eq!(die(&mut branch, recipient), 0);
+        let mut both = fork().game.take().unwrap();
+        hit(&mut both, other_ooze);
+        assert_eq!(die(&mut both, recipient), 2);
+        assert_eq!(env.selected_witness().unwrap(), witness);
+        let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
+        let initial_turn = game.state.turn.turn_number;
+        while game.state.turn.turn_number == initial_turn {
+            game.state.turn.advance_step();
+        }
+        assert_eq!(die(game, recipient), 0);
+    }
+
+    #[test]
+    fn panda_snapshot_replays_source_and_target_reentry() {
+        let mut env = Env::new(418, false, false, false);
+        let deck = [
+            "Fiendish Panda",
+            "Gray Ogre",
+            "Hill Giant",
+            "Serra Angel",
+            "Forest",
+        ]
+        .into_iter()
+        .map(|name| (name.to_owned(), 8))
+        .collect();
+        env.reset(vec![
+            PlayerConfig::new("Panda", deck),
+            PlayerConfig::new("Opponent", [("Forest".into(), 40)].into()),
+        ])
+        .unwrap();
+        let game = env.game.as_mut().unwrap();
+        game.keep_opening_hands();
+        let player = PlayerId(0);
+        let panda = game
+            .scenario_force_battlefield(player, "Fiendish Panda", true)
+            .unwrap();
+        let mut bury = |name| {
+            let object = game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, player)
+                .iter()
+                .copied()
+                .find(|id| game.state[*id].name == name)
+                .unwrap();
+            game.move_object(object, ZoneType::Graveyard)
+        };
+        let giant = bury("Hill Giant");
+        let ogre = bury("Gray Ogre");
+        bury("Fiendish Panda");
+        bury("Serra Angel");
+        game.gain_life(player, 3);
+        assert!(game.stabilize_before_priority().is_none());
+        game.resolve_top_of_stack();
+        assert_eq!(game.characteristics(panda).power, 4);
+        let dead = game.move_object(game.permanent_object(panda).unwrap(), ZoneType::Graveyard);
+        let choice = game.stabilize_before_priority().unwrap();
+        let targets: Vec<_> = choice
+            .actions
+            .iter()
+            .map(|action| match action {
+                Action::ChooseTarget { target, .. } => *target,
+                _ => panic!("expected a graveyard target"),
+            })
+            .collect();
+        assert_eq!(targets.len(), 2);
+        assert!(targets.contains(&Target::GraveyardCard(ogre)));
+        let index = targets
+            .iter()
+            .position(|target| *target == Target::GraveyardCard(giant))
+            .unwrap();
+        game.publish_action_space(choice);
+
+        let frame = env.semantic_decision_frame().unwrap();
+        let command = Command {
+            command_id: "return-giant".into(),
+            expected_revision: frame.revision,
+            offer_id: frame.offers[index].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        let snapshot = env.snapshot().unwrap();
+        let boundary = |branch: &Env| {
+            (
+                branch.selected_witness().unwrap(),
+                serde_json::to_value(branch.semantic_decision_frame().unwrap()).unwrap(),
+                [0, 1].map(|seat| branch.observation_for_player(seat).unwrap().to_json()),
+            )
+        };
+        let original = boundary(&env);
+        for move_target in [false, true] {
+            let replay = || {
+                let mut branch = snapshot.restore(RestoreOptions::default()).unwrap();
+                assert_eq!(boundary(&branch), original);
+                branch.execute_semantic_command(&command).unwrap();
+                let game = branch.game.as_mut().unwrap();
+                let card = game.state.card_of(giant).unwrap();
+                if move_target {
+                    let away = game.move_object(giant, ZoneType::Exile);
+                    game.move_object(away, ZoneType::Graveyard);
+                } else {
+                    let returned = game.move_object(dead, ZoneType::Battlefield);
+                    assert_eq!(
+                        game.characteristics(game.state.permanent_of(returned).unwrap())
+                            .power,
+                        3
+                    );
+                }
+                game.resolve_top_of_stack();
+                assert_eq!(
+                    game.state.zones.zone_of(game.state.object_of(card)),
+                    Some(if move_target {
+                        ZoneType::Graveyard
+                    } else {
+                        ZoneType::Battlefield
+                    })
+                );
+                game.scenario_refresh_priority().unwrap();
+                boundary(&branch)
+            };
+            assert_eq!(replay(), replay());
+        }
+        assert_eq!(boundary(&env), original);
+    }
+}
