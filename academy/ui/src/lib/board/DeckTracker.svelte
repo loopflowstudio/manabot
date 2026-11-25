@@ -74,7 +74,7 @@
     {/if}
 
     {#if view.sideboard.length > 0}
-      <p class="sec type-label text-ink-3">Sideboard / Lessons</p>
+      <p class="sec type-label text-ink-3">Sideboard</p>
       {#each view.sideboard as row (row.name)}
         <button
           type="button"
