@@ -2761,6 +2761,7 @@ mod tests {
         CardData {
             characteristics: crate::agent::observation::CharacteristicsData {
                 name: format!("Card {id}"),
+                printed_loyalty: None,
                 text_box: String::new(),
                 power,
                 toughness,
