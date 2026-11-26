@@ -102,27 +102,24 @@ pub fn actions(
 
 /// Re-enumerate the first target clause in the eight single-target casting fixtures.
 pub fn cast_targets(game: &crate::Game) -> Vec<crate::agent::action::Action> {
-    let Some(crate::flow::game::PendingChoice::ChooseTargets {
-        player,
-        object,
-        cast,
-        mode,
-        requirement_index,
-        ..
-    }) = &game.pending_choice
+    let Some(crate::flow::game::PendingChoice::ChooseTargets { targeting, .. }) =
+        &game.pending_choice
     else {
         panic!("quality-targets must be choosing targets");
     };
-    let spell = cast.spell(&game.state[*object]);
-    let requirements = spell.target_requirements_for_mode(*mode);
-    let requirement = &requirements[*requirement_index];
+    let spell = targeting.cast.spell(&game.state[targeting.object]);
+    let requirements = spell.target_requirements_for_mode(targeting.mode);
+    let requirement = &requirements[targeting.requirement_index];
     assert_eq!(
-        (requirement.min_for(cast.x), requirement.max_for(cast.x)),
+        (
+            requirement.min_for(targeting.cast.x.into()),
+            requirement.max_for(targeting.cast.x.into())
+        ),
         (1, 1)
     );
-    game.legal_spell_targets(*player, *object, spell, requirement)
+    game.legal_spell_targets(targeting.player, targeting.object, spell, requirement)
         .map(|target| crate::agent::action::Action::ChooseTarget {
-            player: *player,
+            player: targeting.player,
             target,
         })
         .collect()

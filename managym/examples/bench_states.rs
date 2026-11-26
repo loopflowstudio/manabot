@@ -74,10 +74,11 @@ const STATES: &[(&str, &str)] = &[
     ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
     ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
     ("unprepared-copies", "prepared-copies' board with the Phytomedics forced onto the battlefield unprepared; the zero-link control"),
-    ("way-grants", "4 different Ways granting loyalty abilities across 6 planeswalkers; measures granted abilities x holders in activation enumeration and layer rebuild"),
-    ("divided-damage", "Chandra, Flameshaper (-4) facing 8 legal targets; measures linear target and sequential division offers"),
-    ("keep-one-each-type", "Liliana, Dreadhorde General (-9) facing 30 mixed and multi-type permanents (artifact creatures, lands, enchantments, planeswalkers); measures linear per-type keep choices"),
+    ("way-grants", "4 granting Ways + N Avatar of Burgeoning Echoes granting loyalty abilities across 6 planeswalkers; measures granted abilities x holders in activation enumeration and layer rebuild"),
+    ("divided-damage", "Chandra, Flameshaper (-4) facing N Gray Ogres; measures linear target and sequential division offers"),
+    ("keep-one-each-type", "Liliana, Dreadhorde General (-9) facing 2N + 4 mixed and multi-type permanents (artifact creatures, creatures, artifacts, lands, enchantments, planeswalkers); measures per-type keep choices"),
     ("attack-planeswalkers", "N Gray Ogres facing 6 distinct opposing planeswalkers; measures per-attacker defender choices, combat preview, observation, and search across attackers x planeswalkers"),
+    ("command-emblems", "Vivien Reid static anthem emblem and Kaito, Cunning Infiltrator cast-trigger emblem in the command zone beside N Gray Ogres per side; measures command-zone layers, triggers, observation and search"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -590,13 +591,14 @@ fn recipe(name: &str, size: usize) -> Recipe {
         "way-grants" => {
             let seat = &mut seats[0];
             for way in [
-                "Way of the Mentor",
-                "Way of the Necromancer",
+                "Way of the Cryomancer",
+                "Way of the Deathbringer",
                 "Way of the Pyromancer",
                 "Way of the Healer",
             ] {
                 seat.add(way, 1);
             }
+            seat.add("Avatar of Burgeoning Echoes", size);
             for walker in [
                 "Ajani, Caller of the Pride",
                 "Chandra, Flameshaper",
@@ -611,15 +613,19 @@ fn recipe(name: &str, size: usize) -> Recipe {
         }
         "divided-damage" => {
             seats[0].add("Chandra, Flameshaper", 1);
-            seats[1].add("Gray Ogre", 8);
+            seats[1].add("Gray Ogre", size);
         }
         "keep-one-each-type" => {
             seats[0].add("Liliana, Dreadhorde General", 1);
-            // 30 mixed and multi-type permanents on seat 1.
-            seats[1].cycle(&["token.ballistic_boulder"], 10);
-            seats[1].add("Gray Ogre", 6);
-            seats[1].add("Prophetic Prism", 5);
-            seats[1].add("Plains", 5);
+            seats[1].cycle(
+                &[
+                    "token.ballistic_boulder",
+                    "Gray Ogre",
+                    "Prophetic Prism",
+                    "Plains",
+                ],
+                size * 2,
+            );
             seats[1].add("Way of the Mentor", 1);
             seats[1].add("Way of the Warlord", 1);
             seats[1].add("Ajani, Caller of the Pride", 1);
@@ -642,6 +648,15 @@ fn recipe(name: &str, size: usize) -> Recipe {
             seats[1].add("Gray Ogre", 2);
             seats[1].add("Forest", 2);
             seats[1].hand.push("Pillar Launch".into());
+        }
+        "command-emblems" => {
+            seats[0].add("Vivien Reid", 1);
+            seats[0].add("Kaito, Cunning Infiltrator", 1);
+            for seat in &mut seats {
+                seat.add("Gray Ogre", size);
+                seat.add("Forest", 2);
+                seat.hand.push("Pillar Launch".into());
+            }
         }
         _ => panic!("unknown state {name}; use --list"),
     }
@@ -836,7 +851,11 @@ fn build(recipe: &Recipe) -> Env {
     }
     if matches!(
         recipe.state.as_str(),
-        "way-grants" | "divided-damage" | "keep-one-each-type" | "attack-planeswalkers"
+        "way-grants"
+            | "divided-damage"
+            | "keep-one-each-type"
+            | "attack-planeswalkers"
+            | "command-emblems"
     ) {
         let game = env.fixture_game_mut();
         let state = &mut *game.state;
@@ -847,10 +866,10 @@ fn build(recipe: &Recipe) -> Env {
             .filter_map(|(idx, slot)| {
                 let perm = slot.as_ref()?;
                 let loyalty = state[perm.object].loyalty?;
-                let target = if recipe.state == "keep-one-each-type" {
-                    9
-                } else {
-                    loyalty.max(6)
+                let target = match recipe.state.as_str() {
+                    "keep-one-each-type" | "command-emblems" => 9,
+                    "way-grants" => 10,
+                    _ => loyalty.max(6),
                 };
                 Some((idx, target))
             })
@@ -1324,6 +1343,53 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             "keep-one-each-type reaches Liliana's type-keep choice"
         );
         result.push(("keep-choice".into(), env));
+    }
+    if recipe.state == "command-emblems" {
+        // Resolve Vivien (-8) and Kaito (-9) ultimates so both static and
+        // triggered emblems live in the command zone at priority.
+        let mut env = root.fork().unwrap();
+        for walker in ["Vivien Reid", "Kaito, Cunning Infiltrator"] {
+            let offered = actions(&mut env);
+            let idx = {
+                let game = env.fixture_game_mut();
+                offered
+                    .iter()
+                    .position(|a| {
+                        matches!(
+                            a,
+                            Action::ActivateAbility {
+                                permanent,
+                                ability_index: 2,
+                                ..
+                            } if game.state.permanents[*permanent]
+                                .as_ref()
+                                .is_some_and(|p| game.state[p.object].name == walker)
+                        )
+                    })
+                    .unwrap_or_else(|| panic!("{walker} ultimate offered"))
+            };
+            env.step(idx as i64).unwrap();
+            while !env.fixture_game_mut().state.stack_objects.is_empty() {
+                let pass = first_action(&mut env, "resolve").unwrap();
+                env.step(pass as i64).unwrap();
+            }
+        }
+        assert_eq!(
+            env.fixture_game_mut()
+                .state
+                .zones
+                .zone_objects(ZoneType::Command, PlayerId(0))
+                .len(),
+            2,
+            "command-emblems creates both emblems"
+        );
+        result = vec![("emblems".into(), env.fork().unwrap())];
+        for (label, block) in [("attack", false), ("block", true)] {
+            if let Some(c) = combat(&env, block) {
+                result.push((label.into(), c));
+            }
+        }
+        return result;
     }
     if recipe.state == "zones" {
         let mut stack = root.fork().unwrap();

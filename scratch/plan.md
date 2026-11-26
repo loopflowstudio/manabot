@@ -179,6 +179,51 @@ batch `DeclareAttackers`.
   `Game::linked_ability_source` naming which frames lack `ability_face`.
   No remaining passes.
 
+## Card performance check (post-R4, `1e79f7a98c` vs base `d9751886b6`)
+
+Apple M4 Max, uninstrumented release builds on the same machine, load-invariant
+retired instructions (`/usr/bin/time -l`) govern; all behavior digests match
+base bit for bit:
+
+| Benchmark | Base `d9751886b6` instr | Candidate `1e79f7a98c` instr | Delta | Digest |
+|---|---:|---:|---:|---|
+| `bench_steps` (512 games, 115,941 steps) | 44,343,164,967 | 44,579,478,316 | +0.53% | `4186394851247720253` |
+| `bench_steps --layers` (16 games, 787 steps) | 311,002,962 | 310,621,663 | −0.12% | `7287147115557952331` |
+| `bench_search` (seeds 1–3, 40 decisions each) | 974,379,707,444 | 965,631,372,319 | −0.90% | `18024496392822331241` / `3384997483956805958` / `13611476192356854111` |
+| `bench_search --layers` (seed 244, 8 decisions) | 14,249,028,082 | 13,897,976,384 | −2.46% | `2354457803237833075` |
+
+Stress states (`bench_states --features benchmark`, sizes 4 / 8 / 16, plus
+deterministic `--allocations` at 4 / 8 / 16 / 32). Fixed a benchmark-only merge
+conflict in `managym/src/benchmark_layers.rs` (`cast_targets` destructuring
+`PendingChoice::ChooseTargets { targeting, .. }`), made `way-grants`,
+`divided-damage` and `keep-one-each-type` scale with `size`, and added
+`command-emblems` (Vivien Reid static anthem + Kaito cast-trigger emblems in
+the command zone):
+
+- `attack-planeswalkers`: retired instr `311.5M → 412.7M (1.32×) → 518.0M (1.26×)`;
+  all layers linear (`calls=0, states=0`).
+- `divided-damage`: retired instr `178.6M → 204.7M (1.15×) → 302.4M (1.48×)`;
+  `target` offers `6 → 10 → 18`, `divide` constant, all layers linear (`calls=0, states=0`).
+- `keep-one-each-type`: retired instr `231.0M → 294.5M (1.27×) → 569.0M (1.93×)`;
+  `keep-choice` offers `4 → 8 → 16`, per-step/layer allocations linear
+  (`step:choice` `135 → 179 → 263 → 427` allocs).
+- `command-emblems`: retired instr `151.8M → 189.7M (1.25×) → 310.4M (1.64×)`;
+  `characteristics` (`66 → 109 → 193 → 360` allocs), `triggers`, `step:cast`
+  and `observe` strictly linear.
+- `way-grants` (4 granting Ways + `N` `Avatar of Burgeoning Echoes` across 6
+  planeswalkers): per-operation layers strictly linear in grantors (`4 + N`):
+  `characteristics` `435 → 583 → 860 → 1417` allocs (`0.025 → 0.038 → 0.056 ms`),
+  `actions` `66 → 90 → 138 → 234` offers (`440 → 732 → 1261 → 2513` allocs),
+  `observe`/`triggers`/`step:activate`/`clone` linear; total retired instr
+  including flat-MC `search` `4.71B → 8.93B (1.90×) → 22.99B (2.57×)` reflects
+  expected `O(actions × board)` rollout count over `O(N)` offered activations.
+- R1–R4-touched shared states (`diverse-statics`, `herald-statics`, `triggers`,
+  `prepared-copies`) also confirmed linear per layer (`boards=1`, linear
+  `trigger_sources` and `observe`).
+
+Route: `clean` — no regression on `bench_steps` (+0.53%) or `bench_search`
+(−0.90%) and all new-card stress shapes scale linearly per operation.
+
 ## Deferred findings
 
 - **G4 (was F7) replacement source order.** `ReplacementSourceOrder::{BySeat,
