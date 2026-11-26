@@ -1512,6 +1512,9 @@
           "power": {
             "kind": "attribute"
           },
+          "put_into_graveyard_this_turn": {
+            "kind": "attribute"
+          },
           "registry_key": {
             "kind": "attribute"
           },
@@ -3036,6 +3039,9 @@
           "characteristics": {
             "kind": "attribute"
           },
+          "chosen": {
+            "kind": "attribute"
+          },
           "colors": {
             "kind": "attribute"
           },
@@ -3386,6 +3392,9 @@
             "kind": "attribute"
           },
           "effect": {
+            "kind": "attribute"
+          },
+          "expiry": {
             "kind": "attribute"
           },
           "mana": {

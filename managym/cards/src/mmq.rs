@@ -30,11 +30,13 @@ fn bribery() -> CardDefinition {
                     zone: ZoneType::Library,
                 },
                 predicate: CardPredicate::creature(),
+                max_mana_value: None,
                 min: 0,
                 max: EffectValue::Fixed(1),
                 effects: vec![
                     Effect::Move {
                         unrevealed: false,
+                        face_down: false,
                         library_end: None,
                         what: ObjectSelector::Selected,
                         to: ZoneType::Battlefield,

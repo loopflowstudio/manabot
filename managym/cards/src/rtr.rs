@@ -2,6 +2,7 @@
 use managym_state::{
     ability::{
         Ability, Actor, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerCondition,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -9,11 +10,13 @@ use managym_state::{
     },
     effect::Modification,
     mana::{Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        desecration_demon(),
         rogues_passage(),
         guttersnipe(),
         azorius_guildgate(),
@@ -23,6 +26,42 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         rakdos_guildgate(),
         selesnya_guildgate(),
     ]
+}
+
+fn desecration_demon() -> CardDefinition {
+    let text_box = "Flying\nAt the beginning of each combat, any opponent may sacrifice a creature of their choice. If a player does, tap this creature and put a +1/+1 counter on it.";
+    CardDefinition {
+        key: "rtr.desecration_demon",
+        scryfall_id: "8242fade-754c-4404-b3fb-f3cccf84b3b6",
+        printed: PrintedCharacteristics {
+            name: "Desecration Demon".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Demon".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::AnyPlayer),
+                intervening_if: None,
+                effects: vec![
+                    Effect::ForPlayer {
+                        player: PlayerSelector::EachOpponent,
+                        effects: vec![Effect::may_sacrifice(CardPredicate::creature(), false)],
+                    },
+                    Effect::if_you_do(vec![
+                        Effect::Tap {
+                            what: ObjectSelector::This,
+                        },
+                        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                    ]),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 /// A Gate of the ten-card cycle: enters tapped and taps for either of its

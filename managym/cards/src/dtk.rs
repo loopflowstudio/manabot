@@ -8,11 +8,12 @@ use managym_state::card::{
     SpellCostReduction, StaticAbility,
 };
 use managym_state::effect::Modification;
-use managym_state::mana::{Color, ManaCost};
+use managym_state::mana::{Color, Mana, ManaCost, ManaExpiry};
 use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        savage_ventmaw(),
         inspiring_call(),
         surrak_the_hunt_caller(),
         clone_legion(),
@@ -21,6 +22,36 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         seismic_rupture(),
         impact_tremors(),
     ]
+}
+
+fn savage_ventmaw() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature attacks, add {R}{R}{R}{G}{G}{G}. Until end of turn, you don't lose this mana as steps and phases end.";
+    CardDefinition {
+        key: "dtk.savage_ventmaw",
+        scryfall_id: "690008d1-d1fe-49ad-810c-84be57cecc6c",
+        printed: PrintedCharacteristics {
+            name: "Savage Ventmaw".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::This,
+                    managym_state::ability::Per::Object,
+                ),
+                effects: vec![Effect::add_mana(
+                    Mana::parse("RRRGGG").with_expiry(ManaExpiry::EndOfTurn),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn clone_legion() -> CardDefinition {

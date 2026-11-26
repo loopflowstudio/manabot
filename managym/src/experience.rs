@@ -492,6 +492,8 @@ pub struct LegacyPermanentView {
     pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -603,6 +605,11 @@ pub struct PooledManaView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restriction: Option<String>,
     pub combat: bool,
+    #[serde(
+        default = "crate::agent::observation::default_mana_expiry",
+        skip_serializing_if = "crate::agent::observation::is_step_mana_expiry"
+    )]
+    pub expiry: String,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

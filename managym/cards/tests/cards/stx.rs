@@ -766,3 +766,121 @@ fn foundations_5f_campus_guide() {
     assert_eq!(known.public.get(&0), Some(&definition));
     assert_eq!(known.own.get(&0), Some(&definition));
 }
+
+#[test]
+fn foundations_stack_copy_teach_waits_for_the_next_instant_or_sorcery() {
+    use crate::support::play::resolve_top;
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Gray Ogre", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut s);
+    assert_eq!((s.life(0), s.life(1)), (17, 17));
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(s.life(1), 14);
+}
+
+#[test]
+fn foundations_stack_copy_retained_ward_target_can_counter_the_copy() {
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Lightning Bolt", "Waterfall Aerialist"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let aerialist = s.force_permanent_on_battlefield(1, "Waterfall Aerialist");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(aerialist)));
+    // Opponent's ward goes above the active player's delayed copy trigger.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(1, "Waterfall Aerialist"),
+        [aerialist]
+    );
+}
+
+#[test]
+fn foundations_stack_copy_teach_and_storm_do_not_count_their_copies_as_casts() {
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Teach by Example", "Thousand-Year Storm", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.force_permanent_on_battlefield(0, "Thousand-Year Storm");
+    cast(&mut s, "Teach by Example");
+    settle(&mut s);
+    // The first Bolt has one copy from each trigger. The second has two
+    // from Storm, counting only Teach and the first Bolt as earlier casts.
+    for life in [11, 2] {
+        cast(&mut s, "Lightning Bolt");
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(&mut s);
+        assert_eq!(s.life(1), life);
+    }
+}
+
+#[test]
+fn deadly_brew_both_players_choose_before_sacrificing_and_only_another_card_returns() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{card_of, offered_cards},
+        play::select_card,
+    };
+    let mut s = five_color_setup(&["Deadly Brew", "Gray Ogre", "Craw Wurm"]);
+    let land = move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let theirs = card_of(&s, theirs);
+    let root = s.snapshot();
+    // Only the opponent sacrifices: a permanent card already in our graveyard stays there.
+    cast(&mut s, "Deadly Brew");
+    crate::support::play::resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(zone_of(&s, theirs), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Graveyard));
+
+    s.restore(&root);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    crate::make_planeswalker(&mut s, ours);
+    crate::support::game::set_counters(
+        &mut s,
+        ours,
+        managym::state::permanent::CounterKind::Loyalty,
+        3,
+    );
+    let ours = card_of(&s, ours);
+    let ours_kept = s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let theirs_kept = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let (ours_kept, theirs_kept) = (card_of(&s, ours_kept), card_of(&s, theirs_kept));
+    cast(&mut s, "Deadly Brew");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert_eq!(offered_cards(&s), [ours, ours_kept]);
+    select_card(&mut s, ours_kept);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert_eq!(zone_of(&s, ours), Some(ZoneType::Battlefield));
+    select_card(&mut s, theirs_kept);
+    assert_eq!(zone_of(&s, ours), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, theirs), Some(ZoneType::Graveyard));
+    assert_eq!(offered_cards(&s), [land]);
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    select_card(&mut s, land);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Hand));
+}
