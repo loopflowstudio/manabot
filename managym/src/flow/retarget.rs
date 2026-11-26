@@ -30,7 +30,7 @@ struct TargetChange {
     /// The targeting clause of each slot.
     clauses: Vec<usize>,
     requirements: Vec<TargetRequirement>,
-    x: u8,
+    x: i32,
     /// The legal objects each slot could change to, other than its own
     /// target and the stack object itself.
     candidates: Vec<Vec<Target>>,

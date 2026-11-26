@@ -400,6 +400,7 @@ impl Game {
             EffectValue::LifeTotal(who)
             | EffectValue::LifeGainedThisTurn(who)
             | EffectValue::LifeLostThisTurn(who)
+            | EffectValue::LoyaltyActivationsThisTurn(who)
             | EffectValue::LifeAboveStarting(who) => self
                 .selected_players(who, frame)
                 .into_iter()
@@ -411,6 +412,9 @@ impl Game {
                     }
                     EffectValue::LifeGainedThisTurn(_) => {
                         self.state.turn.history[player.0].life_gained as i32
+                    }
+                    EffectValue::LoyaltyActivationsThisTurn(_) => {
+                        self.state.turn.history[player.0].loyalty_abilities_activated as i32
                     }
                     _ => self.state.turn.history[player.0].life_lost as i32,
                 })
@@ -435,14 +439,14 @@ impl Game {
                         _ => i32::from(spell.mana_value),
                     })
             }
-            EffectValue::X => i32::from(frame.x),
+            EffectValue::X => frame.x,
             EffectValue::DeathCountersMinus { kind, subtract } => frame
                 .source_ref()
                 .and_then(|object| self.object_lki(object))
                 .map_or(0, |lki| {
                     lki.counters.get(*kind).saturating_sub(*subtract).max(0)
                 }),
-            EffectValue::NegativeX => -i32::from(frame.x),
+            EffectValue::NegativeX => -frame.x,
             EffectValue::TargetShare => slot
                 .or_else(|| frame.active_targets().next())
                 .map_or(0, |slot| i32::from(slot.share)),
@@ -464,6 +468,10 @@ impl Game {
                 .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
             EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
+            EffectValue::TargetDivision => frame
+                .active_targets()
+                .next()
+                .map_or(0, |slot| slot.division),
             EffectValue::SourcePower => frame
                 .source_ref()
                 .and_then(|source| self.permanent_power_or_lki(source))
@@ -621,7 +629,7 @@ impl Game {
         let frame = EffectFrame {
             source_identity: Some(source),
             kicked: spell.kicked,
-            x: spell.x,
+            x: i32::from(spell.x),
             spent: spell.spent,
             targets,
             completion: FrameCompletion::Spell {
@@ -688,17 +696,50 @@ impl Game {
         let Some(spell) = self.spell_on_stack(object) else {
             return false;
         };
-        if self.state[object]
-            .statics
-            .contains(&StaticAbility::CantBeCountered)
+        if self
+            .functioning_object_statics(object)
+            .any(|ability| matches!(ability, StaticAbility::CantBeCountered))
+            || self
+                .state
+                .effects
+                .on(object)
+                .any(|effect| effect.modification == Modification::CantBeCountered)
         {
             return false;
         }
-        !self.static_sources().any(|(id, owner, view)| {
-            owner == spell.controller && !self.is_phased_out(id) && view.static_abilities.iter().any(|ability| {
-                matches!(ability, StaticAbility::SpellsCantBeCountered(predicate) if self.object_matches_predicate(object, predicate))
-            })
+        !self.has_functioning_static(Some(spell.controller), |ability| {
+            matches!(ability, StaticAbility::SpellsCantBeCountered(predicate) if self.object_matches_predicate(object, predicate))
         })
+    }
+
+    /// CR 607.1a, 607.5: exact creating object and ability set for a linked
+    /// exile write or linked read.
+    ///
+    /// Layer-6 granted or inherited abilities carry `acquired: Some(grant_key)`
+    /// (`AbilitySet::Acquired(grant_key)`) so abilities acquired together
+    /// through one effect pair with each other and never with the permanent's
+    /// printed abilities or any other grant; printed and Layer-1 copied
+    /// abilities carry `acquired: None` and derive `AbilitySet::Printed(def)`
+    /// here.
+    pub(crate) fn linked_ability_source(
+        &self,
+        frame: &EffectFrame,
+    ) -> Option<crate::state::ability::LinkedAbilitySource> {
+        let creator = frame.source_ref()?;
+        let set = match frame.acquired {
+            Some(key) => crate::state::ability::AbilitySet::Acquired(key),
+            None => {
+                // Only triggered-ability frames record `ability_face`; spell
+                // and activated-ability frames fall back to the source's face
+                // now (or as it last existed), then its base card.
+                let def = frame
+                    .ability_face
+                    .or_else(|| self.observed_source_definition(creator))
+                    .unwrap_or_else(|| self.state.source_base(creator).0);
+                crate::state::ability::AbilitySet::Printed(def)
+            }
+        };
+        Some(crate::state::ability::LinkedAbilitySource { creator, set })
     }
 
     /// The face an ability on the stack came from: the card as it stands
@@ -756,6 +797,7 @@ impl Game {
             targets,
             attached: ability.attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
+            acquired: ability.acquired,
             ..EffectFrame::new(
                 ability.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -807,6 +849,7 @@ impl Game {
             triggering_player: triggered.player,
             ability,
             ability_face: ability.map(|_| triggered.source_definition_id),
+            acquired: triggered.acquired,
             ..EffectFrame::new(
                 triggered.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -871,6 +914,7 @@ impl Game {
         }
         let requirements = self.stack_target_requirements(stacked);
         let indices = stacked.target_req_indices();
+        let divisions = stacked.target_divisions();
         let targeting = self.targeting_source(stacked.controller(), source.object());
         let mut slots: Vec<_> = stacked
             .targets()
@@ -890,6 +934,7 @@ impl Game {
                     legal: requirements.get(requirement).is_some_and(|req| {
                         self.target_fits_clause(*target, req, &targeting, source)
                     }),
+                    division: divisions.get(index).copied().unwrap_or(0),
                 }
             })
             .collect();
@@ -1164,7 +1209,11 @@ impl Game {
                 modification,
                 duration,
             } => {
-                let mut affected = self.resolve_affected(affected, frame);
+                let mut affected = if *affected == ObjectSelector::NextSpellYouCast {
+                    vec![Affected::NextSpell(frame.controller)]
+                } else {
+                    self.resolve_affected(affected, frame)
+                };
                 let modification = modification.resolve(|value| self.effect_value(value, frame));
                 if modification == Modification::PhasedOut {
                     affected = self.phase_out_set(affected);
@@ -1373,7 +1422,8 @@ impl Game {
                 frame.batch = Some(self.event_batch(
                     EventBinding::Moved {
                         linked: linked.and_then(|linked| {
-                            source.map(|source| (source, linked == LinkedExile::UntilSourceLeaves))
+                            self.linked_ability_source(frame)
+                                .map(|source| (source, linked == LinkedExile::UntilSourceLeaves))
                         }),
                         shuffle: *to == ZoneType::Library && library_end.is_none(),
                         library_end: *library_end,
@@ -2079,8 +2129,10 @@ impl Game {
                 frame.selected_revealed |= *what == ObjectSelector::Selected;
                 None
             }
-            Effect::RevealUntilToHand { predicate } => {
-                self.reveal_until_to_hand(frame.controller, predicate);
+            Effect::RevealUntil { predicate, to } => {
+                if let Some(event) = self.reveal_until(frame.controller, predicate, *to) {
+                    frame.batch = Some(self.event_batch(EventBinding::None, [event]));
+                }
                 None
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
@@ -2154,6 +2206,18 @@ impl Game {
                 ));
                 None
             }
+            Effect::Remember { what } => {
+                for binding in self.capture_bindings(what, frame) {
+                    if !frame
+                        .remembered
+                        .iter()
+                        .any(|existing| existing.object == binding.object)
+                    {
+                        frame.remembered.push(binding);
+                    }
+                }
+                None
+            }
             Effect::ShuffleGraveyardIntoLibrary => {
                 let player = frame.controller;
                 let graveyard = self
@@ -2168,23 +2232,47 @@ impl Game {
                 None
             }
             Effect::DealDamage { amount, what, by } => {
-                let amount = self.effect_value(amount, frame);
                 let source = match by {
                     Some(by) => self.damage_source(by, frame),
                     None => frame.source_ref(),
                 };
-                let events = self
-                    .resolve_affected(what, frame)
-                    .into_iter()
-                    .map(|affected| ProposedEvent::Damage {
-                        source,
-                        target: match affected {
-                            Affected::Player(player) => ProposedDamageTarget::Player(player),
-                            Affected::Object(object) => ProposedDamageTarget::Object(object),
-                        },
-                        amount,
-                        combat: false,
-                    });
+                let events: Vec<ProposedEvent> = if matches!(amount, EffectValue::TargetDivision)
+                    && matches!(what, ObjectSelector::Targets(_))
+                {
+                    frame
+                        .active_targets()
+                        .filter(|slot| self.target_is_present(slot.target))
+                        .filter_map(|slot| {
+                            let target = match slot.target {
+                                Target::Player(player) => ProposedDamageTarget::Player(player),
+                                _ => ProposedDamageTarget::Object(self.target_object(slot.target)?),
+                            };
+                            Some(ProposedEvent::Damage {
+                                source,
+                                target,
+                                amount: slot.division,
+                                combat: false,
+                            })
+                        })
+                        .collect()
+                } else {
+                    let amount = self.effect_value(amount, frame);
+                    self.resolve_affected(what, frame)
+                        .into_iter()
+                        .map(|affected| ProposedEvent::Damage {
+                            source,
+                            target: match affected {
+                                Affected::NextSpell(_) => {
+                                    unreachable!("damage selects only present recipients")
+                                }
+                                Affected::Player(player) => ProposedDamageTarget::Player(player),
+                                Affected::Object(object) => ProposedDamageTarget::Object(object),
+                            },
+                            amount,
+                            combat: false,
+                        })
+                        .collect()
+                };
                 frame.batch = Some(self.event_batch(EventBinding::Damage { result: None }, events));
                 None
             }
@@ -2237,23 +2325,23 @@ impl Game {
                         .then_some((object, id))
                 };
                 let (first_ref, first) = fighter(first)?;
-                let (last_ref, last) = fighter(second)?;
+                let (second_ref, second) = fighter(second)?;
                 // Each deals damage equal to its power at once (CR 701.14a).
                 let first_power = self.characteristics(first).power;
-                let last_power = self.characteristics(last).power;
+                let second_power = self.characteristics(second).power;
                 frame.batch = Some(self.event_batch(
                     EventBinding::Damage { result: Some(0) },
                     [
                         ProposedEvent::Damage {
                             source: Some(first_ref),
-                            target: ProposedDamageTarget::Object(last_ref),
+                            target: ProposedDamageTarget::Object(second_ref),
                             amount: first_power,
                             combat: false,
                         },
                         ProposedEvent::Damage {
-                            source: Some(last_ref),
+                            source: Some(second_ref),
                             target: ProposedDamageTarget::Object(first_ref),
-                            amount: last_power,
+                            amount: second_power,
                             combat: false,
                         },
                     ],
@@ -2342,6 +2430,23 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
+            Effect::MayCastExiled { what, if_declined } => {
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    spends: None,
+                    offer: ResolutionCastOffer::ChooseExiled {
+                        objects: self.select(what, frame),
+                        if_declined: if_declined.clone(),
+                    },
+                };
+                if self.resolution_cast_candidates(&decision).is_empty() {
+                    frame.prepend_effects(if_declined.iter().cloned());
+                    None
+                } else {
+                    Some(decision)
+                }
+            }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
@@ -2356,6 +2461,7 @@ impl Game {
                 trigger.x = frame.x;
                 trigger.spent = frame.spent.clone();
                 trigger.player = frame.triggering_player;
+                trigger.acquired = frame.acquired;
                 None
             }
             Effect::MayOnceEachTurn { effects } => {
@@ -2399,6 +2505,10 @@ impl Game {
                 // loses via state-based actions (CR 704.5c), same as the draw step.
                 let count = self.effect_value(count, frame).max(0) as usize;
                 self.draw_cards(frame.controller, count);
+                None
+            }
+            Effect::CreateEmblem { key } => {
+                self.create_emblem(key, frame.controller);
                 None
             }
             Effect::CreateToken {
@@ -2476,7 +2586,7 @@ impl Game {
                 })
             }
             Effect::ChooseExiledWithSource { predicate } => {
-                let source = frame.source_ref()?;
+                let source = self.linked_ability_source(frame)?;
                 let modes: Vec<Vec<Effect>> = self
                     .state
                     .exiled_with(source)
@@ -2585,6 +2695,9 @@ impl Game {
                         vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())]
                     }
                     DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
+                    DelayedEvent::Whenever(condition) => {
+                        vec![DelayedTriggerEvent::Whenever(condition.clone())]
+                    }
                 };
                 // A death count is already fixed by the departed appearance.
                 // Store its literal in the scheduled return so every viewer and
@@ -2899,11 +3012,12 @@ impl Game {
                 None
             }
             Effect::CastExiledWithSource { predicate } => {
+                let source = self.linked_ability_source(frame)?;
                 let decision = Decision::CastDuringResolution {
                     player: frame.controller,
                     paid: true,
                     offer: ResolutionCastOffer::ExiledWith {
-                        source: frame.source_ref()?,
+                        source,
                         predicate: predicate.clone(),
                     },
                     spends: None,
@@ -3072,8 +3186,17 @@ impl Game {
                 }
                 _ => Vec::new(),
             },
-            ObjectSelector::ExiledWithSource => frame
-                .source_ref()
+            ObjectSelector::LibraryExceptBottom => {
+                let objects = self
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Library, frame.controller);
+                let mut out: Vec<ObjectId> = objects.iter().skip(1).copied().collect();
+                out.reverse();
+                out
+            }
+            ObjectSelector::ExiledWithSource => self
+                .linked_ability_source(frame)
                 .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame
@@ -3130,7 +3253,7 @@ impl Game {
                     .filter_map(|card| self.state.live(self.state.object_of(card)))
                     .collect()
             }
-            ObjectSelector::You => Vec::new(),
+            ObjectSelector::You | ObjectSelector::NextSpellYouCast => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");
                 frame
@@ -3152,7 +3275,7 @@ impl Game {
                     frame.source(),
                     self.present_primary_target(frame),
                 );
-                let excepted = self.excluded_objects(*except, frame);
+                let excepted = self.excluded_objects(except.as_ref(), frame);
                 let source = self.source_permanent_id(frame);
                 let exact = exact_mana_value
                     .as_ref()
@@ -3163,6 +3286,7 @@ impl Game {
                 players
                     .into_iter()
                     .flat_map(|player| self.iter_battlefield_permanents(player))
+                    .filter(|id| !self.permanent_matches_except(*id, except.as_ref(), frame))
                     .filter(|id| self.permanent_matches_with_source(*id, predicate, source))
                     .filter(|id| {
                         exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
@@ -3187,7 +3311,7 @@ impl Game {
                     matches!(zone, ZoneType::Graveyard | ZoneType::Exile),
                     "ZoneMatching reads a public card zone"
                 );
-                let excluded = self.excluded_objects(*except, frame);
+                let excluded = self.excluded_objects(except.as_ref(), frame);
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .filter(|player| owner.includes(frame.controller, *player))
@@ -3225,7 +3349,7 @@ impl Game {
     /// Exact objects excluded by a selector, before the next instruction changes its results.
     fn excluded_objects<'a>(
         &self,
-        except: Option<Except>,
+        except: Option<&Except>,
         frame: &'a EffectFrame,
     ) -> impl Iterator<Item = ObjectId> + Clone + 'a {
         let one = match except {
@@ -3233,14 +3357,40 @@ impl Game {
             Some(Except::Target) => self
                 .present_primary_target(frame)
                 .and_then(|target| self.target_object(target)),
-            Some(Except::Moved | Except::CreatedThisWay) | None => None,
+            _ => None,
         };
         let list = match except {
             Some(Except::Moved) => frame.moved.as_slice(),
             Some(Except::CreatedThisWay) => frame.created.as_slice(),
             _ => &[],
         };
-        one.into_iter().chain(list.iter().copied())
+        let remembered = match except {
+            Some(Except::Remembered) => frame.remembered.as_slice(),
+            _ => &[],
+        };
+        one.into_iter()
+            .chain(list.iter().copied())
+            .chain(remembered.iter().map(|b| b.object))
+    }
+
+    /// Whether `id` is excluded by an `Except::Matching` filter in `frame`.
+    fn permanent_matches_except(
+        &self,
+        id: PermanentId,
+        except: Option<&Except>,
+        frame: &EffectFrame,
+    ) -> bool {
+        let Some(Except::Matching {
+            controlled_by,
+            predicate,
+        }) = except
+        else {
+            return false;
+        };
+        self.state.permanents[id]
+            .as_ref()
+            .is_some_and(|permanent| controlled_by.includes(frame.controller, permanent.controller))
+            && self.permanent_matches_with_source(id, predicate, self.source_permanent_id(frame))
     }
 
     /// A battlefield permanent's mana value (CR 202.3): that of its card;

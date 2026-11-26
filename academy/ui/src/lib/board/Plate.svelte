@@ -42,6 +42,7 @@
     { key: 'Hand', count: hand, cards: shownHand, shown: shownHand?.length },
     { key: 'Library', count: player.library_count, cards: null },
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
+    ...(player.command?.length ? [{ key: 'Emblems', count: player.command.length, cards: player.command }] : []),
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
   ]);
   const knownHand = $derived(Object.entries(player.known_hand ?? {}).flatMap(([id, count]) =>

@@ -122,10 +122,14 @@ pub enum Modification<N = i32> {
     NoMaximumHandSize,
     /// One more land play for the affected player (CR 305.2).
     AdditionalLandPlay,
+    /// CR 606.3 timing permission on the affected player.
+    LoyaltyAtInstantSpeed(Box<super::predicate::CardPredicate>),
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
     NextCreatureCastFlash,
+    /// The affected stack spell can't be countered.
+    CantBeCountered,
     /// Rules effect on a player: they skip every combat phase of their next
     /// turn, additional ones included (CR 500.11). It ends in the cleanup step
     /// of a turn that player takes.
@@ -233,8 +237,10 @@ impl<N> Modification<N> {
             Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::LoyaltyAtInstantSpeed(p) => Modification::LoyaltyAtInstantSpeed(p.clone()),
             Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
+            Self::CantBeCountered => Modification::CantBeCountered,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
             Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
@@ -363,7 +369,9 @@ pub enum EffectDuration {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Affected {
     Player(PlayerId),
-    /// One battlefield incarnation; the record ends when it changes zones
+    /// Waiting to bind to the next spell this player actually casts (CR 601.2i).
+    NextSpell(PlayerId),
+    /// One stack or battlefield incarnation; the record ends when it changes zones
     /// (CR 400.7). An effect affecting a set fixed at resolution (CR 611.2c)
     /// is one record per object, sharing a timestamp.
     Object(#[serde(serialize_with = "crate::game_object::exact")] ObjectId),
@@ -409,6 +417,7 @@ pub struct EffectRecords {
     by_object: BTreeMap<ObjectId, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
+    next_spell: [Vec<usize>; 2],
     /// How many records are `PhasedOut`, so battlefield readers skip the
     /// per-object lookup while nothing is phased out.
     phased_out: usize,
@@ -420,6 +429,7 @@ impl EffectRecords {
         match record.affected {
             Affected::Object(object) => self.by_object.entry(object).or_default().push(index),
             Affected::Player(player) => self.by_player[player.0].push(index),
+            Affected::NextSpell(player) => self.next_spell[player.0].push(index),
         }
         self.phased_out += usize::from(record.modification == Modification::PhasedOut);
         self.records.push(record);
@@ -429,6 +439,22 @@ impl EffectRecords {
         for record in records {
             self.push(record);
         }
+    }
+
+    /// Bind the player's waiting effects to the stack appearance just cast.
+    /// Keep the original timestamps and record order when changing their subject.
+    pub fn bind_next_spell(&mut self, player: PlayerId, spell: ObjectId) {
+        let waiting = std::mem::take(&mut self.next_spell[player.0]);
+        for &index in &waiting {
+            let effect = &mut self.records[index];
+            effect.affected = Affected::Object(spell);
+            effect.duration = EffectDuration::Indefinite;
+        }
+        self.by_object.entry(spell).or_default().extend(waiting);
+    }
+
+    pub fn awaits_spell(&self, player: PlayerId) -> bool {
+        !self.next_spell[player.0].is_empty()
     }
 
     /// Records affecting `object`, in timestamp order.
@@ -471,6 +497,7 @@ impl EffectRecords {
         let records = std::mem::take(&mut self.records);
         self.by_object.clear();
         self.by_player = Default::default();
+        self.next_spell = Default::default();
         self.phased_out = 0;
         self.extend(records.into_iter().filter(|record| keep(record)));
     }

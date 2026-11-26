@@ -225,9 +225,14 @@ export function tell(
     }
     case 'attack_group': {
       const attackers = joinSegments(kind.attackers.map(id => obj(id, 'a creature')));
+      if (kind.defender.kind === 'object') {
+        const defender = obj(kind.defender.id, 'a planeswalker');
+        return form === 'sentence'
+          ? [...attackers, txt(' attacked '), defender]
+          : [txt('Attack '), defender, txt(' with '), ...attackers];
+      }
       if (form === 'sentence') {
-        const attackerSeat = kind.defender.kind === 'player' ? 1 - kind.defender.id : null;
-        const who = attackerSeat === null ? 'Creatures' : subjectName(attackerSeat, players);
+        const who = subjectName(1 - kind.defender.id, players);
         return [txt(`${who} attacked with `), ...attackers];
       }
       return [txt('Attack with '), ...attackers];

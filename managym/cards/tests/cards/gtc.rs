@@ -174,7 +174,11 @@ fn aurelia_that_entered_attacking_still_gets_a_first_declaration() {
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     let token = s
         .game_mut()
-        .create_token("token.soldier", PlayerId(0), true)
+        .create_token_attacking(
+            "token.soldier",
+            PlayerId(0),
+            managym::flow::combat::AttackTarget::Player(PlayerId(1)),
+        )
         .unwrap();
     let object = card_of(&s, token);
     s.game_mut().state[object].become_copy_of(&printed, &[]);

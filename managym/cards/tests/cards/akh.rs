@@ -35,11 +35,11 @@ fn regal_caracal_tokens_keep_their_lifelink_after_the_lord_leaves() {
     let mut s = five_color_setup(&["Regal Caracal"]);
     let ordinary = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(0), false)
+        .create_token("token.cat_1_1_w", PlayerId(0))
         .unwrap();
     let opponent = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(1), false)
+        .create_token("token.cat_1_1_w", PlayerId(1))
         .unwrap();
     let source = enter_and_settle(&mut s, "Regal Caracal");
     let lord = s

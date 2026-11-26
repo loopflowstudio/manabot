@@ -252,6 +252,7 @@ export function recentMarks(
         break;
       case 'attack_group':
         kind.attackers.forEach(o => marks.touched.add(o.entity));
+        if (kind.defender.kind === 'object') marks.touched.add(kind.defender.id.entity);
         break;
       case 'blocked':
         marks.touched.add(kind.attacker.entity);

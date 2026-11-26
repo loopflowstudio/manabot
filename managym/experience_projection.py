@@ -149,6 +149,8 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
             details["cast_permissions"] = permissions
         if card.counters:
             details["counters"] = {kind: int(n) for kind, n in card.counters.items()}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -176,6 +178,10 @@ def _serialize_permanent(
     if include_details:
         types = _serialize_types(characteristics.card_types)
         details = {"types": types, "is_token": bool(permanent.is_token)}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
+    if permanent.loyalty_activated_this_turn:
+        details["loyalty_activated_this_turn"] = True
     return {
         **details,
         "id": int(permanent.id),
@@ -227,6 +233,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
+        "attacked_permanent": permanent.attacked_permanent,
         "hexproof_from": list(permanent.hexproof_from) or None,
         "protection_from": list(permanent.protection_from) or None,
         "abilities_lost": bool(permanent.abilities_lost) or None,
@@ -265,6 +272,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "permanents_left": history.permanents_left,
         "nonland_permanents_left": history.nonland_permanents_left,
         "warped_this_turn": history.warped_this_turn,
+        "loyalty_abilities_activated": history.loyalty_abilities_activated,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -342,6 +350,7 @@ def _serialize_player(
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
+        "COMMAND": [],
         "STACK": [],
     }
     for card in cards:
@@ -463,6 +472,7 @@ def _serialize_player(
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
+        **({"command": grouped_cards["COMMAND"]} if grouped_cards["COMMAND"] else {}),
         "stack": grouped_cards["STACK"],
         "battlefield": serialized_permanents,
     }
@@ -677,7 +687,7 @@ def format_action(
 
     Focus semantics (managym observation.rs action_focus):
       PLAY_LAND / CAST_SPELL: [card_id]
-      DECLARE_ATTACKER:       [attacker_permanent_id]
+      DECLARE_ATTACKER:       [attacker_permanent_id, attacked_permanent_id?]
       DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
                               (one entry means "this creature does not block")
       CHOOSE_TARGET:          [player_id or permanent_id]
@@ -702,6 +712,8 @@ def format_action(
     if action_name == "PRIORITY_CAST_SPELL" and first:
         return f"Cast {first}"
     if action_name == "DECLARE_ATTACKER" and first:
+        if len(focus_names) == 2:
+            return f"Attack {focus_names[1]} with {first}"
         return (
             f"Do not attack with {first}"
             if declared is False

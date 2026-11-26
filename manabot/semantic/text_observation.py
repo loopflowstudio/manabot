@@ -34,6 +34,7 @@ from managym.decision_memory import (
     DecisionReference,
     read_records,
 )
+from managym.enums import ZoneEnum
 
 REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -252,6 +253,7 @@ _OBLIGATIONS = (
     "choose as a permanent enters",
     "partition piles",
     "choose a pile",
+    "choose what an entering attacker attacks",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -270,6 +272,7 @@ _DELAYED_EVENTS = (
     "its controller's matching spell",
     "the upkeep",
     "its controller's end step",
+    "creatures to attack",
 )
 
 
@@ -373,6 +376,8 @@ def _turn_history(player: managym.Player) -> str:
         )
     if history.warped_this_turn:
         parts.append("cast a spell for warp")
+    if count := history.loyalty_abilities_activated:
+        parts.append(f"activated {count} loyalty abilit{'y' if count == 1 else 'ies'}")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
     if amount := history.mana_spent_casting:
@@ -481,6 +486,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBeCountered": "can't be countered",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
         "Saddled": "saddled",
@@ -679,11 +685,13 @@ class _Renderer:
         if simple_choice_tap:
             kind = "tap_for_mana"
         if kind == "declare_attacker":
-            if action.declared is None or len(focus) != 1:
+            if action.declared is None or len(focus) not in (1, 2):
                 raise TextEncodingError("attack declaration missing")
             label = (
                 "Attack with " if action.declared else "Do not attack with "
             ) + first
+            if len(focus) == 2:
+                label = f"Attack {focus[1]} with {first}"
         elif kind == "declare_blocker":
             if len(focus) not in (1, 2):
                 raise TextEncodingError("unsupported blocker focus")
@@ -814,6 +822,8 @@ class _Renderer:
             details.append(
                 "waiting ends at this turn's cleanup"
                 if relation.this_turn
+                else "waiting ends at your next turn"
+                if getattr(relation, "until_next_turn", False)
                 else "no stated expiry"
             )
         if relation.cost is not None:
@@ -834,8 +844,10 @@ class _Renderer:
         for ordinal, target in enumerate(relation.targets, 1):
             legal = target.legal_at_resolution_start
             eligibility = "unknown" if legal is None else _yes(legal)
+            division = getattr(target, "division", 0)
+            share = f"; assigned {division}" if division else ""
             details.append(
-                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}{share}; "
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
@@ -867,6 +879,9 @@ class _Renderer:
             )
         if relation.triggering_amount and not relation.trigger_damage:
             details.append(f"triggering amount {relation.triggering_amount}")
+        division_remaining = getattr(relation, "division_remaining", 0)
+        if division_remaining:
+            details.append(f"remaining division {division_remaining}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
@@ -1018,9 +1033,16 @@ class _Renderer:
         lines: list[str] = []
         for card in state.agent_cards + state.opponent_cards:
             characteristics = card.characteristics
+            if card.zone == ZoneEnum.COMMAND:
+                lines.append(
+                    f"{self.name(card.id)} [command zone], controlled by {self.name(card.owner_id)}. {characteristics.text_box}"
+                )
+                continue
             optional = _type_flags(characteristics.card_types)
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
             if card.face_down:
                 optional += (
                     "; foretold, face down (hidden from other players)"
@@ -1118,6 +1140,10 @@ class _Renderer:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
                 optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
+            if permanent.loyalty_activated_this_turn:
+                optional += "; activated a loyalty ability this turn"
             if permanent.once_each_turn_used:
                 optional += (
                     "; once-each-turn abilities used this turn "
@@ -1162,6 +1188,8 @@ class _Renderer:
             parts.append(f"creature types set to {types}")
         if permanent.is_granted_land:
             parts.append("land through an effect")
+        if permanent.attacked_permanent is not None:
+            parts.append(f"attacking {self.name(permanent.attacked_permanent)}")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
         for ability, qualities in (
@@ -1270,6 +1298,8 @@ class _Renderer:
                 optional += f"; power {definition.power}"
             elif definition.toughness is not None:
                 optional += f"; toughness {definition.toughness}"
+            if definition.printed_loyalty is not None:
+                optional += f"; printed loyalty {definition.printed_loyalty}"
             if definition.subtypes:
                 optional += f"; subtypes {', '.join(definition.subtypes)}"
             if keywords := _keywords(definition.keywords):
@@ -1422,6 +1452,8 @@ class _Renderer:
             spell = ""
             if (card := item.characteristics) is not None:
                 keywords = _keywords(card.keywords)
+                if card.printed_loyalty is not None:
+                    details.append(f"printed loyalty {card.printed_loyalty}")
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "

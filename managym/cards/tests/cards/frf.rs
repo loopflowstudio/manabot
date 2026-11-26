@@ -103,7 +103,7 @@ fn flamewake_phoenix_must_attack_and_returns_from_graveyard_on_ferocious() {
             a,
             Action::DeclareAttacker {
                 permanent,
-                attack: false,
+                attack: None,
                 ..
             } if *permanent == phoenix_perm
         )),

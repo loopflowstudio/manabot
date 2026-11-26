@@ -111,8 +111,11 @@ fn stack(
                 targets,
                 attached: None,
                 target_req_indices: Vec::new(),
+                target_divisions: Vec::new(),
                 x: 0,
+                loyalty_change: None,
                 granted_by: None,
+                acquired: None,
                 paid: Default::default(),
             })
         }
@@ -138,6 +141,7 @@ fn stack(
             player: None,
             chosen_modes: Vec::new(),
             inline_effects: Some(effects),
+            acquired: None,
             x: 0,
             spent: Default::default(),
         }),
@@ -722,6 +726,7 @@ fn counter_spell_cannot_affect_an_ability() {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
         }]),
+        acquired: None,
         x: 0,
         spent: Default::default(),
     }));
@@ -2907,8 +2912,10 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     }];
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3003,7 +3010,14 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
         root.state[object].replacement_effects = vec![effect];
     }
     root.state.combat = Some(Box::new(CombatState {
-        attackers: vec![first, second],
+        attack_targets: [first, second]
+            .map(|id| {
+                (
+                    id,
+                    Some(crate::flow::combat::AttackTarget::Player(defender)),
+                )
+            })
+            .to_vec(),
         ..Default::default()
     }));
     root.resolve_combat_damage();
@@ -3050,8 +3064,10 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let source_ref = game.permanent_object(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
     let returned_ref = game.state.now(returned);
+    let source_def = game.state[source_object].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3473,8 +3489,10 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     let returned_ref = game.state.now(returned);
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
+    let source_def = game.state[source].definition_id;
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        ability_set: crate::state::ability::AbilitySet::Printed(source_def),
         exiled_object: returned_ref,
         returns: true,
     });
@@ -4061,6 +4079,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
+                            division: 0,
                         }]
                         .into(),
                         effects: vec![Effect::Tap {
@@ -4501,7 +4520,7 @@ fn hidden_knowledge_transient_departures_cannot_leave_false_hidden_zone_facts() 
             game.remember_library_objects(owner, &inspected);
             game.remember_hand(owner);
             let expected_hand = game.state.players[owner.0].known_hand.clone();
-            let token = game.create_token("token.ally", owner, false).unwrap();
+            let token = game.create_token("token.ally", owner).unwrap();
             let object = game.permanent_object(token).unwrap();
             game.move_object(object, zone);
             game.finish_state_based_batch();
@@ -4662,7 +4681,7 @@ fn venom_connoisseur_only_resolved_triggers_advance_their_source() {
     let player = PlayerId(0);
     let original = game.permanent_object(source).unwrap();
     let trigger = |game: &mut Game| {
-        game.create_token("token.ally", player, false);
+        game.create_token("token.ally", player);
         game.process_game_events();
         assert!(game.flush_triggers().is_none());
         game.state.stack_objects.last().unwrap().id()
@@ -4722,7 +4741,7 @@ fn separate_printed_abilities_on_one_source_each_resolve_for_the_first_time() {
     let source = game.permanent_object(permanent).unwrap();
     let original = game.state[source].abilities[0].clone();
     game.state[source].abilities.push(original);
-    game.create_token("token.ally", PlayerId(0), false);
+    game.create_token("token.ally", PlayerId(0));
     game.process_game_events();
     let choices = game
         .flush_triggers()
@@ -5588,6 +5607,7 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,
+        division: 0,
     }];
     game.apply_continuous(
         None,
@@ -6182,6 +6202,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                     }
                 }
                 game.emit(GameEvent::AttackersDeclared {
+                    permanent_defenders: None,
                     player,
                     attackers: vec![permanent],
                 });
@@ -6209,6 +6230,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                                 mode: None,
                                 targets: Vec::new(),
                                 target_req_indices: Vec::new(),
+                                target_divisions: Vec::new(),
                                 target_shares: Vec::new(),
                             },
                         ),
@@ -6350,6 +6372,29 @@ fn emeritus_of_truce_resolves_for_the_bound_player_and_source() {
                 );
                 assert_eq!(game.state.players[opponent.0].life, life + 2);
             }
+        }
+    }
+}
+
+#[test]
+fn full_board_with_four_of_each_emblem_per_seat() {
+    let (mut game, _, _) = fixture(PlayerId(0));
+    for seat in [PlayerId(0), PlayerId(1)] {
+        for _ in 0..10 {
+            game.scenario_force_battlefield(seat, "Gray Ogre", true)
+                .unwrap();
+        }
+        for emblem in managym_cards::emblem_catalog() {
+            for _ in 0..4 {
+                game.create_emblem(emblem.key, seat);
+            }
+        }
+    }
+    let _scan = game.board_scan();
+    for seat in [PlayerId(0), PlayerId(1)] {
+        assert_eq!(game.state.zones.size(ZoneType::Command, seat), 16);
+        for id in game.iter_battlefield_permanents(seat) {
+            assert_eq!(game.object_pt(game.permanent_object(id).unwrap()), (18, 18));
         }
     }
 }

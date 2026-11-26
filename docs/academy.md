@@ -796,7 +796,9 @@ sweep and joins the drafted attack on release; dragging a box only adds (click a
 creature or **Clear the draft** to remove one), and box selection starts only
 inside the battlefield rows during an attack draft — never on player plates,
 your hand, the rail or the bars, and never for lands or cards that commit one
-action at a time. Drafted attackers are ringed with a dashed line and lean in,
+action at a time. When a planeswalker can be attacked, choose the defending
+player or a named planeswalker for each attacker; the confirmation lists those
+assignments. Drafted attackers are ringed with a dashed line and lean in,
 and a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
 rail. At a block, drag a declarable blocker onto an attacker it can block, or
 click the blocker and then the attacker. Dragging draws a live blocking line,

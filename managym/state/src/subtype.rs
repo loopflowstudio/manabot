@@ -19,10 +19,11 @@ pub enum SubtypeCategory {
     Creature,
     Enchantment,
     Land,
+    Planeswalker,
     Spell,
 }
 
-use SubtypeCategory::{Artifact, Creature, Enchantment, Land, Spell};
+use SubtypeCategory::{Artifact, Creature, Enchantment, Land, Planeswalker, Spell};
 
 /// Sorted by name for binary search; `subtype_table_is_sorted` checks it.
 const SUBTYPES: &[(&str, SubtypeCategory)] = &[
@@ -30,6 +31,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Advisor", Creature),
     ("Aenar", Creature),
     ("Aetherborn", Creature),
+    ("Ajani", Planeswalker),
     ("Alien", Creature),
     ("Ally", Creature),
     ("Andorian", Creature),
@@ -92,6 +94,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Cat", Creature),
     ("Cave", Land),
     ("Centaur", Creature),
+    ("Chandra", Planeswalker),
     ("Child", Creature),
     ("Chimera", Creature),
     ("Chorus", Spell),
@@ -164,6 +167,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Gamer", Creature),
     ("Gamma", Creature),
     ("Gargoyle", Creature),
+    ("Garruk", Planeswalker),
     ("Gate", Land),
     ("Germ", Creature),
     ("Giant", Creature),
@@ -212,11 +216,13 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Inquisitor", Creature),
     ("Insect", Creature),
     ("Island", Land),
+    ("Jace", Planeswalker),
     ("Jackal", Creature),
     ("Jellyfish", Creature),
     ("Jem'Hadar", Creature),
     ("Juggernaut", Creature),
     ("Junk", Artifact),
+    ("Kaito", Planeswalker),
     ("Kangaroo", Creature),
     ("Kavu", Creature),
     ("Kelpien", Creature),
@@ -240,6 +246,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Leviathan", Creature),
     ("Lhurgoyf", Creature),
     ("Licid", Creature),
+    ("Liliana", Planeswalker),
     ("Lizard", Creature),
     ("Llama", Creature),
     ("Lobster", Creature),
@@ -430,6 +437,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Vedalken", Creature),
     ("Vehicle", Artifact),
     ("Villain", Creature),
+    ("Vivien", Planeswalker),
     ("Volver", Creature),
     ("Vorta", Creature),
     ("Vulcan", Creature),

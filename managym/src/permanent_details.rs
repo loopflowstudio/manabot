@@ -108,6 +108,17 @@ impl Game {
                 source: Some(self.characteristics(id).name.clone()),
                 ..Default::default()
             },
+            AbilityOrigin::Object(id) => AbilityGrantView {
+                source: Some({
+                    let name = &self.state[id].name;
+                    if name.is_empty() {
+                        self.unnamed_label(id).to_owned()
+                    } else {
+                        name.clone()
+                    }
+                }),
+                ..Default::default()
+            },
             AbilityOrigin::Effect(timestamp) => AbilityGrantView {
                 effect_timestamp: Some(timestamp.0),
                 ..Default::default()

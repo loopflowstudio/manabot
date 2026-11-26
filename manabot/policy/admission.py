@@ -735,6 +735,8 @@ def name_vocabulary(candidates: np.ndarray, definitions: np.ndarray) -> None:
 def permanent_links(obs: ObservationBuffers, objects: int) -> None:
     """Validate one-based links into the policy's full object sequence."""
     for index in PERMANENT_LINK_INDEXES:
+        if index >= obs["agent_permanents"].shape[-1]:
+            continue
         links = np.concatenate(
             [
                 obs[key][..., index]

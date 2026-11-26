@@ -47,11 +47,11 @@ fn steel_hellkite_spends_its_own_activation_and_destroys_exact_mana_value() {
     let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
     let own = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     let target = s
         .game_mut()
-        .create_token("token.food", PlayerId(1), false)
+        .create_token("token.food", PlayerId(1))
         .unwrap();
     s.set_player_mana_pool(0, "2");
     let saved = s.game().clone();
@@ -102,7 +102,7 @@ fn steel_hellkite_spends_its_own_activation_and_destroys_exact_mana_value() {
     choose_mode(&mut s, 0);
     let fresh = s
         .game_mut()
-        .create_token("token.food", PlayerId(1), false)
+        .create_token("token.food", PlayerId(1))
         .unwrap();
     settle(&mut s);
     assert!(s.game().state.permanents[fresh].is_some());

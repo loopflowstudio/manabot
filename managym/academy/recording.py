@@ -426,11 +426,16 @@ class Recording:
                 for key in ("phase", "step")
             ):
                 raise ValueError("recording_board_unavailable")
+            required_zones = ("hand", "battlefield", "graveyard", "exile", "stack")
             for side in ("agent", "opponent"):
                 player = observation.get(side)
-                if not isinstance(player, dict) or any(
-                    not isinstance(player.get(zone), list)
-                    for zone in ("hand", "battlefield", "graveyard", "exile", "stack")
+                if (
+                    not isinstance(player, dict)
+                    or not isinstance(player.get("command", []), list)
+                    or any(
+                        not isinstance(player.get(zone), list)
+                        for zone in required_zones
+                    )
                 ):
                     raise ValueError("recording_board_unavailable")
         self.replay: CanonicalReplayV1 | None = (
@@ -715,7 +720,7 @@ class Recording:
                         labels["players"][str(key)] = (
                             f"Seat {seat + 1}" if seat is not None else "Player"
                         )
-                zones = ["battlefield", "graveyard", "exile", "stack"]
+                zones = ["battlefield", "graveyard", "exile", "command", "stack"]
                 if private and seat == viewer:
                     zones.extend(["hand", "inspected"])
                 for zone in zones:
@@ -949,7 +954,7 @@ def narrate_move(
         card["id"]: card["name"]
         for board in (before, after)
         for side_name in ("agent", "opponent")
-        for zone in ("battlefield", "graveyard", "exile", "stack", "hand")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack", "hand")
         for card in board.get(side_name, {}).get(zone, [])
         if isinstance(card, dict) and card.get("name") and "id" in card
     }
@@ -1248,7 +1253,7 @@ def _new_cards(
     old, new = before.get(side, {}), after.get(side, {})
     seen = {
         card.get("id")
-        for zone in ("battlefield", "graveyard", "exile", "stack")
+        for zone in ("battlefield", "graveyard", "exile", "command", "stack")
         for card in old.get(zone, [])
     }
     for zone in ("stack", "battlefield", "graveyard", "exile"):
