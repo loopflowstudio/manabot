@@ -1,67 +1,73 @@
-at: bf6209ae7ce27d4ddc3291978a97928d3be0022f
+at: 5023841f06bd9b0fac2695611a2d6f530925917c
 first:
   - path: docs/academy.md
-    why: User behavior, grouped-decision invariants, and reclassified multi-step audit
+    why: User behavior, grouped invariants, and multi-step decision audit
   - path: managym/README.md
     why: Unified Env.decision/preview/submit contract and 0.3.0 deprecations
   - path: managym/src/flow/group/mod.rs
-    why: Unified ActiveDecision/DecisionChoice/DecisionOutcome types, shared driver, and purity boundary
+    why: Decision types, offer labels/sources, shared driver, purity boundary
+  - path: managym/src/decision_context.rs
+    why: Expose decision_target for shared ChooseTarget offer labeling
   - path: managym/src/flow/group/combat.rs
-    why: DeclareAttackers and DeclareBlockers compiled through the shared driver
+    why: DeclareAttackers and DeclareBlockers compiled via shared driver
   - path: managym/src/flow/group/library.rs
-    why: Scry, Surveil, and OrderLibrary over shared LibraryProgress and GroupCard labels
+    why: Scry, Surveil, OrderLibrary, PartitionPiles over shared LibraryProgress
   - path: managym/src/agent/env.rs
-    why: Env::decision, preview, and submit sharing verify_step and settle logic
+    why: Env::decision, preview, and submit with verify_step settling
   - path: managym/src/python/bindings.rs
     why: PyO3 Env.decision/preview/submit bindings and 0.3.0 deprecation warnings
   - path: managym/group.py
-    why: Typed Pydantic Decision, Choice, DecisionAddress, Offer, and DecisionPreview models
+    why: Typed Pydantic Decision, Choice, Offer, and DecisionPreview models
   - path: managym/__init__.pyi
-    why: Public managym type stubs for Env.decision/preview/submit and 0.3.0 deprecations
+    why: Public managym type stubs for unified decision API
   - path: managym/src/flow/combat_preview.rs
     why: Slim 0.3.0-deprecated wrapper delegating to Game::preview
   - path: managym/combat.py
     why: Python 0.3.0-deprecated combat_preview wrapper
   - path: managym/academy/shared_table_protocol.py
-    why: GroupCommandMessage over GroupChoice added to testing-house-v1 WebSocket envelope
+    why: GroupCommandMessage over GroupChoice in testing-house-v1 WebSocket envelope
   - path: managym/academy/server.py
-    why: Pilot-only live group attachment via Env.decision, /group-preview via Env.preview, and atomic hero_group
+    why: Pilot-only live_group, /group-preview, and atomic hero_group execution
   - path: managym/academy/site.py
-    why: Ensure unknown /api/* paths return 404 instead of 405 when SPA static assets are mounted
+    why: Return 404 instead of 405 for unknown /api paths
   - path: academy/ui/src/lib/group.ts
-    why: Browser grouped-decision types (with GroupCard committed lists), preview client, and storage helper
+    why: Browser group types, preview client, draft storage, sanitizeEntityIds
   - path: academy/ui/src/lib/socket.svelte.ts
     why: One-shot sendGroupCommand and PendingSubmission reconnect reconciliation
   - path: academy/ui/src/lib/game.svelte.ts
-    why: Store tracking liveGroup bound to the active frame_hash
+    why: Store tracking liveGroup and clearing dismissed rejection banners
   - path: academy/ui/src/lib/board/arrange.ts
-    why: Pure draft state and plan builders for Scry, Surveil, and OrderLibrary
+    why: Pure draft state and plan builders for Scry/Surveil/OrderLibrary
   - path: academy/ui/src/lib/board/ArrangePanel.svelte
-    why: Interactive arrangement overlay panel using GroupCard committed labels directly
+    why: Interactive arrangement overlay panel using GroupCard labels
+  - path: academy/ui/src/lib/board/partition.ts
+    why: Pure PartitionPiles draft helpers with browser send-loop deleted
   - path: academy/ui/src/lib/board/combat.ts
-    why: Combat draft helpers stripped of stepOffer and send-loop types
+    why: Combat draft helpers stripped of stepOffer send-loop types
   - path: academy/ui/src/lib/board/Board.svelte
-    why: Unified grouped-draft wiring; deleted browser send loop and Stop sending
+    why: Unified grouped-draft wiring for combat, arrange, and partition
   - path: academy/ui/src/lib/board/Rail.svelte
-    why: Collapsed raw-choice disclosure copy generalized across all group kinds
+    why: Collapsed raw-choice disclosure generalized across all group kinds
   - path: academy/ui/src/routes/+page.svelte
-    why: Table page passing group preview fetcher and sendGroupCommand
+    why: Table page wiring groupPreview, sendGroupCommand, rejection dismissal
   - path: managym/tests/rules/group.rs
-    why: Native single/grouped parity, mixed-policy Env::submit parity, Preordain purity boundary, and refusal tests
+    why: Native offer labels, PartitionPiles, parity, purity, and refusals
   - path: tests/env/test_group.py
-    why: Python Env.decision/preview/submit parity, mixed-policy settling, and 0.3.0 deprecation checks
+    why: Python decision/preview/submit parity, offers, PartitionPiles, deprecations
   - path: tests/academy/test_group_command.py
-    why: Authority replay parity, SPA 404 check, WS recovery, watcher privacy, Pilot transfer
+    why: Authority parity, watcher privacy, PartitionPiles, and Pilot transfer
   - path: academy/ui/e2e/grouped-decisions.spec.ts
-    why: End-to-end combat, Scry, Surveil, OrderLibrary, and raw disclosure flows
+    why: End-to-end combat, Scry, Surveil, OrderLibrary, raw disclosure
+  - path: academy/ui/e2e/partition-piles.spec.ts
+    why: End-to-end atomic PartitionPiles submit, refusal clear, raw disclosure
   - path: academy/ui/e2e/fixtures/combat.ts
-    why: Open per-creature-choices disclosure for all live groups (combat and library)
+    why: Open raw-choices disclosure for all live group kinds
 hide:
   - path: tests/public_api.json
-    why: Recorded public API snapshot updated via scripts/public_api.py record
+    why: Generated public API snapshot via scripts/public_api.py record
   - path: protocol/testing-house-v1.schema.json
     why: Generated JSON schema for shared_table_protocol.py
   - path: protocol/fixtures/testing-house-control-v1.json
     why: Protocol conformance fixture for group_command
   - path: scratch/
-    why: Working plan, concept review, QA report, and ship-review notes
+    why: Working plan, concept review, QA report, ship-review notes
