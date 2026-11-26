@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from managym.academy.recording import narrate_move, own_steps
+from managym.academy.recording import Recording
 from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.payment import preview_payment
@@ -50,11 +50,11 @@ def _setup(
     return session, ExperienceFrame.model_validate(session._wire_message()["frame"])
 
 
-def _submit(
+def _choose(
     session: GameSession,
     frame: ExperienceFrame,
     offer: InteractionOffer,
-) -> tuple[ExperienceFrame, list[dict[str, Any]]]:
+) -> ExperienceFrame:
     assert frame.prompt is not None
     outcome = session.hero_command(
         {
@@ -67,16 +67,7 @@ def _submit(
         }
     )
     assert outcome["status"] == "accepted"
-    update = outcome["update"]
-    return ExperienceFrame.model_validate(update["frame"]), update.get("log", [])
-
-
-def _choose(
-    session: GameSession,
-    frame: ExperienceFrame,
-    offer: InteractionOffer,
-) -> ExperienceFrame:
-    return _submit(session, frame, offer)[0]
+    return ExperienceFrame.model_validate(outcome["update"]["frame"])
 
 
 def test_exact_dual_land_two_drop_skips_payment(tmp_path: Path) -> None:
@@ -156,41 +147,33 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
     assert not any(after.projection.agent.mana)
 
 
-def test_priority_dual_land_float_logs_resolved_color_not_raw_offer(
+def test_priority_dual_land_float_narrates_resolved_color_not_raw_offer(
     tmp_path: Path,
 ) -> None:
     session, frame = _setup(tmp_path, ["Kyoshi Village"], mana_floats="all")
+    assert session.trace is not None
+    tap_index = len(session.trace.events)
     tap = next(
         offer
         for offer in frame.offers
         if offer.label == "Tap Kyoshi Village for {G}/{W}"
     )
-    modal, _ = _submit(session, frame, tap)
+    modal = _choose(session, frame, tap)
     assert modal.action_space == "MODAL"
-    payload = session.attempt_store.load(session.match_id)
-    assert payload is not None
-    events = payload["events"]
-    assert (
-        narrate_move(
-            frame.projection.model_dump(mode="json"),
-            modal.projection.model_dump(mode="json"),
-            [],
-            own_steps(events, len(events) - 1),
-        )
-        is None
-    )
     add_white = next(offer for offer in modal.offers if offer.label == "Add {W}")
-    after, _ = _submit(session, modal, add_white)
-    assert after.projection.agent.mana == (1, 0, 0, 0, 0, 0)
+    after = _choose(session, modal, add_white)
+    assert after.action_space == "PRIORITY"
+    assert after.projection.agent.mana[0] == 1
+
     payload = session.attempt_store.load(session.match_id)
     assert payload is not None
-    events = payload["events"]
-    assert (
-        narrate_move(
-            modal.projection.model_dump(mode="json"),
-            after.projection.model_dump(mode="json"),
-            [],
-            own_steps(events, len(events) - 1),
-        )
-        == "Tap Kyoshi Village for {W}"
-    )
+    recording = Recording(session.match_id, payload)
+    consequences = {
+        position.event_index: position
+        for position in recording.positions
+        if position.kind == "consequences"
+    }
+    assert recording.metadata(consequences[tap_index])["label"] is None
+    resolved = consequences[tap_index + 1]
+    assert recording.metadata(resolved)["label"] == "Tap Kyoshi Village for {W}"
+    assert recording.read(resolved.key)["description"] == "Tap Kyoshi Village for {W}"
