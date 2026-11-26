@@ -380,9 +380,7 @@ def test_partition_piles_round_trip_and_choose_pile_transition() -> None:
     assert env.state_digest() == digest_before
 
     # Full 5-card split matches manual step-by-step execution and hands off to ChoosePile.
-    choice = PartitionPilesChoice(
-        face_up=[active.items[0].item, active.items[2].item]
-    )
+    choice = PartitionPilesChoice(face_up=[active.items[0].item, active.items[2].item])
     preview = env.preview(choice, at=active.address)
     assert preview.complete is True
     assert preview.refused is None

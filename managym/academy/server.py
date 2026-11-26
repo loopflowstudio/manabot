@@ -2014,7 +2014,9 @@ class GameSession:
             "revision": context.revision,
             "prompt_id": context.prompt_id,
             "frame_hash": context.frame["frame_hash"],
-            **active.model_dump(mode="json", exclude={"address", "offers"}),
+            **active.model_dump(
+                mode="json", exclude={"address", "offers"}, exclude_none=True
+            ),
         }
         self._live_group_cache = (cache_key, descriptor)
         return deepcopy(descriptor)
@@ -5952,6 +5954,6 @@ async def get_group_preview(
             "outcome": (
                 None
                 if preview.outcome is None
-                else preview.outcome.model_dump(mode="json")
+                else preview.outcome.model_dump(mode="json", exclude_none=True)
             ),
         }

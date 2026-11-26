@@ -853,12 +853,11 @@ def _advance_session_to_curator_partition(
         live = game.live_group()
         if live is not None and live["kind"] == "partition_piles":
             return frame
-        offer = (
-            next((o for o in frame.offers if "Curator of Destinies" in o.label), None)
-            or next(
-                (o for o in frame.offers if o.verb in {"pay_cost", "pass_priority"}),
-                frame.offers[0],
-            )
+        offer = next(
+            (o for o in frame.offers if "Curator of Destinies" in o.label), None
+        ) or next(
+            (o for o in frame.offers if o.verb in {"pay_cost", "pass_priority"}),
+            frame.offers[0],
         )
         frame = _step_command(game, frame, offer.id, command_id=f"curator-{step}")
     raise AssertionError("did not reach Curator of Destinies PartitionPiles")
