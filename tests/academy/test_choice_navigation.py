@@ -99,7 +99,6 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
         *position.prefix,
         PrefixStep(offer_id=5, label="Take Accumulate Wisdom"),
         PrefixStep(offer_id=0, label="Cast Accumulate Wisdom"),
-        PrefixStep(offer_id=4, label="Pay the cost"),
         PrefixStep(offer_id=0, label="Put Dragonfly Swarm into your hand"),
     ]
     with TestClient(server.app) as client:

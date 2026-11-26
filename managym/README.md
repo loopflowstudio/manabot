@@ -942,24 +942,100 @@ other permanents, then creatures; within those tiers, colorless output is
 preferred. The class search stops after 1024 arithmetic checks and keeps a
 payable candidate. Payments with saved obligations only receive surplus
 pruning. If fixed sources cannot pay, the planner may also select the color
-of a simple tap activation such as Kyoshi Village. The preview shows that
-source and its output. In manual payment mode, sacrifices, life payments and abilities with other
+of a simple tap activation such as Kyoshi Village and removes surplus taps
+(keeping creatures, utility lands and dual lands untapped ahead of basics).
+The preview shows that source and its output. In manual payment mode, sacrifices, life payments and abilities with other
 effects remain explicit payment choices. Native spending choices determine
 the exact mana receipt. Source preference has no setting.
 
 ### Manual mana sources
 
-A pending cast or activation payment offers useful fixed-source taps beside
-`PayCost`, which completes payment automatically from the resources left.
-A tap must make progress and preserve the announced costs and every saved
-payment; funded payments and payments needing every available source retain
-native trivial-decision skipping. These ordinary choices are on by default
-for every consumer. Source taps and direct taps (convoke, improvise, waterbend)
-share the `TapForCost` policy action with the permanent as focus; its
-`pays_directly` flag tells a tap that pays a pip itself from one that makes
-mana. The native Command verb for a source tap is `tap_for_mana`, distinct
-from waterbend. They do not expose undo, or production at priority unless a
-seat [asks for it](#mana-taps-at-priority-and-during-payment).
+Under the default `mana_payment="manual"` (with `mana_floats="off"`), a cast,
+activation or resolution payment opens a prompt only when the player can finish
+it in two distinguishable states. Simple tap-for-mana abilities — dual lands
+such as Kyoshi Village, any-color sources such as Birds of Paradise or Arcane
+Signet, Great Divide Guide grants, and restricted simple taps such as Jasmine
+Dragon Tea Shop or Hermitic Herbalist — follow the same rule as fixed-output
+lands.
+
+With Kyoshi Village and one Plains untapped, casting a `{1}{W}` spell finishes
+at once with no payment prompt. With four identical untapped Mountains for
+`{2}{R}`, or Kyoshi Village and two identical Plains for `{1}{G}`, the game
+likewise pays without prompting — tapping Kyoshi Village and one Plains,
+leaving the other Plains untapped.
+
+With Kyoshi Village and three untapped Plains for `{1}{W}`, choosing between
+the dual land and a Plains is a real difference, so the payment stops and
+offers every useful source beside `PayCost`:
+
+```text
+0  ActivateAbility  Tap Kyoshi Village for {G}/{W}
+1  TapForMana       Tap Plains for {W}
+2  TapForMana       Tap Plains for {W}
+3  TapForMana       Tap Plains for {W}
+4  PayCost          Pay the cost
+```
+
+Selecting action 0 taps Kyoshi Village and skips the `{G}`/`{W}` modal because
+either color finishes identically (one Plains tapped, two Plains untapped).
+Tapping Kyoshi Village toward `{1}{G}` with a Plains and a Forest left keeps
+the color modal, because `{G}` leaves a choice between Plains and Forest while
+`{W}` forces Forest.
+
+- **When a manual payment skips.** A pending mana payment completes
+  automatically when no non-simple mana ability, help action (convoke,
+  improvise, delve, waterbend) or extra float tap is available, automatic
+  payment can fund the cost, no choice source floats unspent mana, spent-color
+  counts cannot differ (converge spells keep the prompt when a source can
+  contribute more than one color), useful modes on each source share one spend
+  effect, and the useful sources produce exactly the mana needed. A payment
+  with spare sources can also skip when each useful tap produces one unit,
+  the number of taps is fixed, and every optional tap comes from a single
+  class of game-indistinguishable, unreferenced permanents. With Sol Ring and
+  two Mountains for Gray Ogre, **Pay the cost** leaves one Mountain untapped.
+  Tapping both Mountains before Sol Ring leaves one colorless mana floating.
+  Any distinguishing state — a land targeted on the stack,
+  enchanted, animated, carrying counters, or referenced by a trigger or
+  continuous effect — places that permanent in its own class and keeps the
+  prompt. Plain non-creature, non-animating lands played this turn are
+  interchangeable with earlier copies, while creatures, non-lands,
+  self-animating lands (such as Soulstone Sanctuary), and permanents with
+  `power_up` abilities stay distinct when summoning sickness or turn of entry
+  differs.
+- **What always stops.** Non-simple mana abilities (sacrifices such as
+  Treasure, life payments such as pain lands, mana fees such as filter lands,
+  counted taps, once-per-turn limits, non-mana side effects, or triggered mana
+  bonuses that alter a choice ability's output), extra taps under
+  `mana_floats="usable"` or `"all"`, and costs needing help taps keep the
+  payment open.
+- **Actions and wording.** When a payment stops, every useful permanent keeps
+  its own offer (identical sources are not merged) and must make progress
+  while leaving the announced costs and saved payments payable. Fixed-source
+  taps stay `TapForMana` (policy action `TapForCost` with
+  `pays_directly=False`, Command verb `tap_for_mana`); simple choice-of-color
+  taps stay one `ActivateAbility` per ability rather than expanding into
+  per-color actions, keeping policy input and protocol shapes unchanged.
+  Native `action.description` labels simple choice taps to match fixed
+  sources — `"Tap <Name> for {G}/{W}"` for 2–4 explicit modes,
+  `"Tap <Name> for any color"` for all five single colors, and unit or
+  restriction detail when needed (such as
+  `"Tap Hermitic Herbalist for 2 mana (Lesson spells only)"`) — while
+  non-simple mana abilities keep `"Activate ability: <Name>"`.
+- **Color modals and resolution payments.** During an announced or resolution
+  payment with `skip_trivial` enabled, `Decision::ManaChoice` skips
+  automatically when every legal mode leaves the same remaining state or the
+  same determined completion with no floating surplus; deliberate floats at
+  priority always keep the color choice. Resolution payments (`TurnFaceUp`,
+  `Ward`, and other `Decision::Payment` prompts) share the same per-source tap
+  and forced/interchangeable skip rules for both basics and simple choice
+  sources: when only one outcome exists, turning a creature face up pays
+  immediately and ward offers only pay or decline; when there is a real source
+  choice, both fixed and simple choice taps are offered alongside pay (and
+  non-simple mana abilities such as Treasure remain explicit).
+
+These choices are on by default for every consumer. They do not expose undo,
+or production at priority unless a seat
+[asks for it](#mana-taps-at-priority-and-during-payment).
 
 ### Mana taps at priority and during payment
 
@@ -1065,7 +1141,7 @@ from another offer set raises `managym.AgentError` and returns no plan.
 | `exact` | `sources` is the plan, in tapping order; empty when the cost is zero or the pool covers it. `pool_after_production` is always present. `pool_after_spending` is present only when every unit spend is forced. |
 | `needs_choice` | X, an optional, alternative or additional cost, or an open target can still change the cost, or mana alone cannot pay a cost that taps or exiled cards may help pay. `explanation` names the choice; there are no sources. |
 | `unavailable` | Automatic payment cannot fund the cost; only activated mana abilities could. |
-| `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability with its own fee. |
+| `not_applicable` | The action has no automatic payment to preview. This includes choosing which floating mana to spend and activating a mana ability (whether it has a color choice or its own fee). |
 
 The preview reads the cost as the payment owes it (`Payment.owed`). While a
 sacrifice, discard, exile or forage is still the payer's to choose, the state
@@ -1084,7 +1160,7 @@ exile.") until the payer's own taps and exiles leave a remainder mana covers.
 
 A cast offer, or the target that completes it, previews the spell's cost; a
 non-mana activated ability previews its fee; `PayCost` previews the pending
-payment. A source-tap offer previews tapping that source and then paying automatically,
+payment. A fixed source-tap offer previews tapping that source and then paying automatically,
 with the chosen source first. Each source carries its object reference, name
 and output; pools carry the six amounts and the restriction, spend-effect and
 combat-expiry classes of the mana in them.

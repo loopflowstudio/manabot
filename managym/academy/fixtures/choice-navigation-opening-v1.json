@@ -45,10 +45,6 @@
           "label": "Cast Wind Drake"
         },
         {
-          "offer_id": 4,
-          "label": "Pay the cost"
-        },
-        {
           "offer_id": 1,
           "label": "Do not attack with Wind Drake"
         },
@@ -57,10 +53,6 @@
           "label": "Cast Wind Drake"
         },
         {
-          "offer_id": 4,
-          "label": "Pay the cost"
-        },
-        {
           "offer_id": 1,
           "label": "Do not attack with Wind Drake"
         },
@@ -71,10 +63,6 @@
         {
           "offer_id": 4,
           "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 4,
-          "label": "Pay the cost"
         },
         {
           "offer_id": 1,
@@ -115,10 +103,6 @@
         {
           "offer_id": 5,
           "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 4,
-          "label": "Pay the cost"
         },
         {
           "offer_id": 1,
@@ -199,10 +183,6 @@
         {
           "offer_id": 6,
           "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 5,
-          "label": "Pay the cost"
         },
         {
           "offer_id": 1,
@@ -514,10 +494,6 @@
         },
         {
           "offer_id": 7,
-          "label": "Pay the cost"
-        },
-        {
-          "offer_id": 7,
           "label": "Pass priority"
         },
         {
@@ -551,31 +527,23 @@
         {
           "offer_id": 7,
           "label": "Cast Wind Drake"
-        },
-        {
-          "offer_id": 7,
-          "label": "Pay the cost"
         },
         {
           "offer_id": 0,
           "label": "Cast Man-o'-War"
-        },
-        {
-          "offer_id": 4,
-          "label": "Pay the cost"
         }
       ],
       "digest": "fac689624c68a787dfcf94b7a49b4a3ad5a1d0533e1e0720238b8bf06e358a6b",
       "frame": {
         "protocol": 1,
-        "match_id": "QZ0D4OY4p_lc1Zc81RV5Bg",
-        "revision": 198,
-        "frame_hash": "e332f3f5a3ecef182e331ab9989d2f60f1acc142351ef9216182c8596f36e439",
+        "match_id": "fhqEWz5DqVRRvezZtVR8Jw",
+        "revision": 190,
+        "frame_hash": "a77adb5438eac38bdbd0b40f35be89c00731c8d7d9fe51fcf3629a65f3b0c471",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 199,
+          "id": 191,
           "actor": 0,
           "kind": "choose_target",
           "title": "Trigger targets",
@@ -3117,9 +3085,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -3247,9 +3219,9 @@
       "digest": "3cdad7b5cdba9d9742824aced5f0ee634495136e96f52ccd001933fe0f4c3176",
       "frame": {
         "protocol": 1,
-        "match_id": "2wlGfvYYtNVgH5DTMQYSBQ",
+        "match_id": "N1WH4382mw03L1-b1qVHcQ",
         "revision": 58,
-        "frame_hash": "bdc7bb57131d4275c222157d486421dcbc152e7aaf652d13fdeb5f612daac57d",
+        "frame_hash": "1d68bf77b2c394944f77552f4e483f911ee0ea31006189c092c3859354d1ef12",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5191,9 +5163,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -5243,9 +5219,9 @@
       "digest": "e19a8802e59de76a8ddb0b5bc1e4aeaca66c14761a3d016983a982dfe17a03b6",
       "frame": {
         "protocol": 1,
-        "match_id": "afN3XhekUcrUJdYR1BVUeA",
+        "match_id": "BOlePU2eZIdZG6IJEYM3tg",
         "revision": 9,
-        "frame_hash": "c1f1fe3deaa00747d26a16e3152c99130c9251d6b26c0c34f0f007664b7579f8",
+        "frame_hash": "991bea919bba7f36ba78cca7a2efb9a3838c997538b79767c87ef1b72cd3f44c",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6968,9 +6944,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -7018,9 +6998,9 @@
       "digest": "436532b89223e3b98dadaf1f0805a51685f9474313f4b1cff807264cde601370",
       "frame": {
         "protocol": 1,
-        "match_id": "dMcn83lgRIXE95UOENrUWg",
+        "match_id": "dcxh_r7xPeyLcaKT1mCOSw",
         "revision": 7,
-        "frame_hash": "5fd669c9fbdbb5c3b82023a5fd6da2dcbf31d26764fe14112b230d24007ce5eb",
+        "frame_hash": "778305a6c9b3bd20570bef632bab673bd8ea88637a5c40ffa4fb26c36977c146",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -8527,9 +8507,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -8891,23 +8875,35 @@
         {
           "offer_id": 3,
           "label": "Cast Savannah Lions"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Appeal to Eirdu"
+        },
+        {
+          "offer_id": 0,
+          "label": "Target Llanowar Elves"
+        },
+        {
+          "offer_id": 0,
+          "label": "Target Savannah Lions"
         }
       ],
-      "digest": "56d8887080ff44a4bd396837e95ba1b5c03b0315396e3862d3068887f30aca2a",
+      "digest": "a98cbee7a0e6b71e67ccfdf5c603c06a4f05a7dd1e1054faa3202920a7fd7cde",
       "frame": {
         "protocol": 1,
-        "match_id": "nwpO9V_UAK0J4_YIRWSs8Q",
-        "revision": 98,
-        "frame_hash": "fb560c1345082d598bf85fc13c09e3722f2dc3b938419d382d10985f1d0de917",
+        "match_id": "Z3bELjoypr1Icv4ijtDWYA",
+        "revision": 101,
+        "frame_hash": "024961a0d61ac8ddbbbbc2bba3c754275d18e49383970a9c9e855197ee073e59",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 99,
+          "id": 102,
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Payment",
-          "instruction": "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."
+          "instruction": "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."
         },
         "projection": {
           "schedule": {
@@ -8915,27 +8911,68 @@
             "additional_combats": []
           },
           "player_controls": [],
-          "stack_objects": [],
+          "stack_objects": [
+            {
+              "mana_spent": 1,
+              "id": 133,
+              "kind": "spell",
+              "controller": 0,
+              "label": "Savannah Lions"
+            }
+          ],
           "decision_context": {
-            "recent_facts": [],
+            "recent_facts": [
+              "Savannah Lions was cast; its announced costs are committed."
+            ],
             "actor": 0,
             "stage": "payment",
-            "instruction": "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed.",
+            "instruction": "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed.",
             "source": {
-              "entity_id": 59,
+              "entity_id": 4,
               "subject": {
                 "kind": "object",
                 "id": {
-                  "entity": 61,
-                  "incarnation": 1
+                  "entity": 6,
+                  "incarnation": 0
                 }
               },
-              "display_id": 61,
-              "label": "Savannah Lions"
+              "display_id": 6,
+              "label": "Appeal to Eirdu"
             },
-            "targets": [],
+            "targets": [
+              {
+                "clause": 0,
+                "object": {
+                  "entity_id": 33,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 124,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 124,
+                  "label": "Llanowar Elves"
+                }
+              },
+              {
+                "clause": 0,
+                "object": {
+                  "entity_id": 58,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 127,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 127,
+                  "label": "Savannah Lions"
+                }
+              }
+            ],
             "reserved_sacrifice": null,
-            "mana_cost": "{W}",
+            "mana_cost": "{3}{W}",
             "chosen_mode": null,
             "announcing": "spell"
           },
@@ -10031,10 +10068,10 @@
             "life": 20,
             "zone_counts": {
               "LIBRARY": 48,
-              "HAND": 4,
+              "HAND": 3,
               "BATTLEFIELD": 8,
               "GRAVEYARD": 0,
-              "STACK": 0,
+              "STACK": 1,
               "EXILE": 0,
               "COMMAND": 0
             },
@@ -10058,8 +10095,10 @@
             "sideboard_counts": {},
             "remaining_sideboard_counts": {},
             "turn_history": {
-              "cards_drawn": 1
+              "cards_drawn": 1,
+              "mana_spent_casting": 1
             },
+            "spells_cast": 1,
             "hand": [
               {
                 "text_box": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nOne or two target creatures each get +2/+1 until end of turn.",
@@ -10120,12 +10159,16 @@
                   "is_planeswalker": false,
                   "is_battle": false
                 }
-              },
+              }
+            ],
+            "graveyard": [],
+            "exile": [],
+            "stack": [
               {
                 "id": 61,
                 "registry_key": 766,
                 "name": "Savannah Lions",
-                "zone": "HAND",
+                "zone": "STACK",
                 "owner_id": 0,
                 "power": 2,
                 "toughness": 1,
@@ -10141,9 +10184,6 @@
                 }
               }
             ],
-            "graveyard": [],
-            "exile": [],
-            "stack": [],
             "battlefield": [
               {
                 "types": {
@@ -10208,7 +10248,7 @@
                 "id": 125,
                 "name": "Plains",
                 "controller_id": 0,
-                "tapped": false,
+                "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -10499,16 +10539,16 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 44,
+                  "entity_id": 21,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 125,
-                      "incarnation": 2
+                      "entity": 122,
+                      "incarnation": 1
                     }
                   },
-                  "display_id": 125,
-                  "label": "Plains"
+                  "display_id": 122,
+                  "label": "Forest"
                 }
               }
             ],
@@ -10516,13 +10556,75 @@
             "actor": 0,
             "verb": "choose",
             "source": null,
-            "label": "Tap Plains for {W}",
+            "label": "Tap Forest for {G}",
             "help": null,
             "choices": [],
-            "confirm_label": "Tap Plains for {W}",
+            "confirm_label": "Tap Forest for {G}",
             "action_type": "TAP_FOR_COST",
             "focus": [
-              125
+              122
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 33,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 124,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 124,
+                  "label": "Llanowar Elves"
+                }
+              }
+            ],
+            "id": 1,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Tap Llanowar Elves for {G}",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tap Llanowar Elves for {G}",
+            "action_type": "TAP_FOR_COST",
+            "focus": [
+              124
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 14,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 128,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 128,
+                  "label": "Forest"
+                }
+              }
+            ],
+            "id": 2,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Tap Forest for {G}",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tap Forest for {G}",
+            "action_type": "TAP_FOR_COST",
+            "focus": [
+              128
             ]
           },
           {
@@ -10543,7 +10645,7 @@
                 }
               }
             ],
-            "id": 1,
+            "id": 3,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -10574,7 +10676,7 @@
                 }
               }
             ],
-            "id": 2,
+            "id": 4,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -10588,7 +10690,100 @@
             ]
           },
           {
-            "id": 3,
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 33,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 124,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 124,
+                  "label": "Llanowar Elves"
+                }
+              }
+            ],
+            "id": 5,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Tap Llanowar Elves to pay {1} (convoke)",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tap Llanowar Elves to pay {1} (convoke)",
+            "action_type": "TAP_FOR_COST",
+            "focus": [
+              124
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 58,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 127,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 127,
+                  "label": "Savannah Lions"
+                }
+              }
+            ],
+            "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Tap Savannah Lions to pay {W} or {1} (convoke)",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tap Savannah Lions to pay {W} or {1} (convoke)",
+            "action_type": "TAP_FOR_COST",
+            "focus": [
+              127
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "choice",
+                "object": {
+                  "entity_id": 24,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 130,
+                      "incarnation": 2
+                    }
+                  },
+                  "display_id": 130,
+                  "label": "Healer's Hawk"
+                }
+              }
+            ],
+            "id": 7,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Tap Healer's Hawk to pay {W} or {1} (convoke)",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tap Healer's Hawk to pay {W} or {1} (convoke)",
+            "action_type": "TAP_FOR_COST",
+            "focus": [
+              130
+            ]
+          },
+          {
+            "id": 8,
             "actor": 0,
             "verb": "pay",
             "source": null,
@@ -10605,9 +10800,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
