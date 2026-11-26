@@ -3,6 +3,7 @@
 
 use crate::{
     cards::content_pack::default_content_pack,
+    experience::PresentationRule,
     flow::{
         decision::Decision,
         event::GameEvent,
@@ -309,7 +310,7 @@ impl Game {
         }
     }
 
-    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) {
+    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) -> ObjectId {
         self.move_object_with_entry(
             object,
             ZoneType::Hand,
@@ -317,10 +318,14 @@ impl Game {
                 library_top_departure: true,
                 ..Default::default()
             },
-        );
+        )
     }
 
     pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
+        self.draw(player, amount, false);
+    }
+
+    pub(super) fn draw(&mut self, player: PlayerId, amount: usize, draw_step: bool) {
         for _ in 0..amount {
             let Some(object) = self.state.zones.top(ZoneType::Library, player) else {
                 self.state.players[player.0].drew_when_empty = true;
@@ -329,13 +334,14 @@ impl Game {
             if self.card_capture.is_some() || self.statistics.is_some() {
                 self.capture_drawing = Some(object);
             }
-            self.put_library_top_in_hand(object);
+            let drawn = self.put_library_top_in_hand(object);
             self.capture_drawing = None;
             self.state.turn.history[player.0].cards_drawn += 1;
             self.emit(GameEvent::CardDrawn {
                 player,
                 nth_this_turn: self.state.turn.history[player.0].cards_drawn,
             });
+            self.presentation_drawn(player, drawn, draw_step);
         }
     }
 
@@ -584,6 +590,7 @@ impl Game {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }
+        self.presentation_event(&event);
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);
@@ -601,6 +608,7 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
+        self.presentation_event(&event);
         self.state.observation_events_mut().push(event);
     }
 
@@ -1067,6 +1075,9 @@ impl Game {
             face_down: entry_face_down,
         };
         self.emit(event);
+        if entry.discard == Some(crate::flow::proposed_event::DiscardCause::Cleanup) {
+            self.presentation_cleanup_discard();
+        }
         if let Some(permanent) = entered_permanent {
             let counters = self.state.permanents[permanent]
                 .as_ref()
@@ -1174,6 +1185,8 @@ impl Game {
         &mut self,
         permanent_id: PermanentId,
         controller: PlayerId,
+        returned: Option<bool>,
+        rule: Option<PresentationRule>,
     ) {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
@@ -1182,6 +1195,7 @@ impl Game {
             return;
         }
         let object_id = permanent.object;
+        let returned = returned.unwrap_or(controller == permanent.entry_controller());
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;
@@ -1189,6 +1203,7 @@ impl Game {
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
         self.remove_permanent_from_combat(permanent_id);
+        self.presentation_control_changed(object_id, controller, returned, rule);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
         }
