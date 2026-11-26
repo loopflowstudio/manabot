@@ -8939,9 +8939,14 @@ fn chandra_flameshaper_loyalty_abilities() {
     activate(&mut s, chandra, 2);
     for (i, &beast) in beasts.iter().enumerate() {
         assert_eq!(
+            crate::support::inspect::offered_targets_with_aliases(&s).len(),
+            9 - i, // 8 Beasts + Chandra herself
+            "linear target pool (with aliases) at step {i}"
+        );
+        assert_eq!(
             s.action_space().actions.len(),
-            (9 - i) + 1, // 8 Beasts + Chandra herself + decline
-            "linear target offers at step {i}"
+            3, // 1 canonical Beast + Chandra herself + decline
+            "canonicalized target offers at step {i}"
         );
         assert!(s.choose_target(Target::Permanent(beast)));
     }
