@@ -307,3 +307,13 @@ publishing.
 
 Update `fdn.jsonl` (`implementation.status`) and `fra.jsonl` rows as changes
 land; pending rows carry their missing authority.
+
+## Ship review (2026-11-25, headless)
+
+`scratch/ship-review.html`. Filed MTG-491 (CR 616.1 replacement order, G4)
+and MTG-492 (fold `granted_by`/`acquired` and the two divided-damage shapes,
+G6). For deliver/gate: `tests/belief/test_belief_agent.py::test_keystone_demo_changes_belief_tokens_and_hides_actual_truth`
+(policy delta exactly 0) and `tests/belief/test_learning.py::test_real_population_learning_is_held_out_and_beats_p0`
+(0.070 vs 0.1) fail on this branch only (CI `Integration (sim)` at
+`095c3a4cdf`, reproduced locally at `bcf0ffc381`); main passes. Diagnose
+cause before touching thresholds.
