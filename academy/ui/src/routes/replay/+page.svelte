@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Replay, Watch and Review: a recorded game on the board, read-only, with a
+   * Replay: any saved game on the board, finished or not, read-only, with a
    * transport bar where live play has its input and the decision strip under
    * it. At a recorded choice the board draws that choice's own frame, every
    * offer on its card and row with the recorded policy beside it; elsewhere
@@ -13,18 +13,14 @@
    *
    * The address is the state: `trace`, `position`, `near` (0, 1 or chooser),
    * `view` (acting or spectator), plus `review` to start from the first
-   * position and `watch` to start a bot game. The read cursor, Watch
-   * production and Study authority are the stores'; this page only binds them
-   * to the board.
+   * position. Without a `trace` there is nothing to replay: History opens.
+   * The read cursor, Watch production and Study authority are the stores';
+   * this page only binds them to the board.
    */
-  import { currentGame, rememberCurrentGame } from '$lib/current-game.svelte';
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { tick, untrack } from 'svelte';
-  import { recordFetch } from '$lib/records';
   import WorkStatus from '$lib/components/WorkStatus.svelte';
-  import WatchSetup from '$lib/components/WatchSetup.svelte';
-  import Feedback from '$lib/components/Feedback.svelte';
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
@@ -43,16 +39,13 @@
   import { mergePresentationLabels, presentationLabelsFromFrame, presentationLabelsFromObservation } from '$lib/presentation';
   import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import type { RestoredReplayDecision } from '$lib/replay-index';
-  import type { ExperienceFrame, InteractionOffer, TraceSummary } from '$lib/types';
+  import type { ExperienceFrame, InteractionOffer } from '$lib/types';
   import type { StudySource, StudyRetryResponse, StudyRevealResponse, StudyPlanKind, StudyPlanPreviewResponse } from '$lib/study-runtime';
 
   const replayStore = createReplayStore();
   const studyStore = createStudyStore();
   const presentation = createPresentationPlayer();
-  let summaries = $state<TraceSummary[]>([]);
-  let listError = $state('');
   let studyButton = $state<HTMLButtonElement | null>(null);
-  let notes = $state<Record<string, string>>({});
   let perspective = $state<Perspective>(0);
   let stripOpen = $state(true);
   let loaded = '';
@@ -90,10 +83,10 @@
       : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: `Seat ${seat + 1}` });
     return opponent ? { ...base, producer: opponent.producer, provenance: index?.opponent_checkpoint ?? undefined } : base;
   }
-  // The person's own Play game names them "You"; two players of one name are told apart by seat.
+  // A played game names its person "You"; two players of one name are told apart by seat.
   const nameOf = (seat: number): string => {
     const player = index?.players.find(candidate => candidate.seat === seat);
-    if (player?.kind === 'human' && index?.can_feedback) return 'You';
+    if (player?.kind === 'human' && !index?.watch) return 'You';
     const name = identity(seat).compact;
     return name === identity(1 - seat).compact ? `${name} · seat ${seat + 1}` : name;
   };
@@ -164,7 +157,7 @@
 
   async function loadNumbers(id: string): Promise<void> {
     numbers = null;
-    if (!played || replayStore.index?.status === 'waiting') return;
+    if (!played) return;
     try {
       const read = await replayStore.api<{ numbers: GameNumbers | null }>(`/api/traces/${encodeURIComponent(id)}/numbers`);
       if (replayStore.index?.id === id) numbers = read.numbers;
@@ -230,9 +223,9 @@
     return winner === null ? 'to a draw' : winner === heroSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
   });
 
-  // Play on from one of your decisions of a finished game you played: a new
-  // Play game whose moves before it are this game's (`played_from`).
-  const playOnHref = $derived(index?.can_feedback && !index.watch && index.status !== 'waiting'
+  // Play on from one of the person's decisions in a played game, finished or
+  // not: a new Play game whose moves before it are this game's (`played_from`).
+  const playOnHref = $derived(played && index
     && current?.kind === 'choice' && current.event !== undefined && current.viewer === heroSeat
     ? `/?played_from=${encodeURIComponent(index.id)}&event=${current.event}` : null);
 
@@ -263,8 +256,8 @@
     : replayStore.busy ? 'Reading saved recording…'
       : index.record_stop?.status === 'diverged' ? `Stopped at decision ${index.record_stop.index} · saved recording only`
         : index.status === 'finished' ? `Finished · ${index.winner === null ? 'Draw' : `${saidOf(index.winner)} wins`}`
-          : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'Live game · saved recording only'
-            : 'Interrupted · saved recording only');
+          : index.status === 'waiting' ? index.watch ? atLiveEdge ? 'Waiting at the live edge' : 'Live Watch · reading saved recording' : 'In progress · the moves so far'
+            : 'Stopped · saved recording only');
   const sourceLabel = $derived(index?.source_kind === 'play' ? 'Recorded Play game' : index?.source_kind === 'training' ? 'Training game'
     : index?.source_kind ? 'Evaluation game' : index?.watch && !index.record_stop ? 'Watch' : 'Recorded game');
   const perspectiveText = $derived(!current ? ''
@@ -276,19 +269,11 @@
 
   $effect(() => {
     const id = page.url.searchParams.get('trace');
-    if (!id || id === loaded) return;
+    if (!id) { untrack(() => { void goto('/games', { replaceState: true }); }); return; }
+    if (id === loaded) return;
     loaded = id;
     untrack(() => { void open(id); });
   });
-  $effect(() => { page.url.searchParams.has('watch'); untrack(() => { void loadList(); }); });
-
-  async function loadList(): Promise<void> {
-    try {
-      const response = await recordFetch('/api/traces');
-      if (!response.ok) throw new Error('Games could not be loaded.');
-      summaries = await response.json(); listError = '';
-    } catch (reason) { listError = reason instanceof Error ? reason.message : String(reason); }
-  }
 
   async function open(id: string): Promise<void> {
     studyStore.resetSelection(); lastHistoryKey = '';
@@ -301,20 +286,18 @@
     // Review starts the game from its first position, whatever was read last.
     const review = params.has('review');
     replayStore.reveal = (params.get('view') ?? (saved.reveal ? 'spectator' : 'acting')) === 'spectator';
-    try { notes = JSON.parse(localStorage.getItem(`etude.score.notes.${id}`) ?? '{}'); } catch { notes = {}; }
     await replayStore.open(id, review ? undefined : params.get('position') ?? saved.key);
     if (review && replayStore.index) await replayStore.seek(0);
     const near = params.get('near') ?? (saved.near === undefined ? null : String(saved.near));
     perspective = perspectiveOf(near, replayStore.index ?? { players: [] });
-    if (!currentGame.href || replayStore.index?.can_produce) rememberCurrentGame(`/replay?trace=${encodeURIComponent(id)}`);
     await Promise.all([loadAnalyses(id, true), loadNumbers(id)]);
   }
 
   /**
    * Reads this game's analyses, following one that is running. Opening reads
    * who may analyse it once (it re-executes the game); following reads only the
-   * saved analyses. Your own game, once nobody is playing it, opens its default
-   * analysis if it has none.
+   * saved analyses. A finished played game with no analysis opens its default
+   * one; an unfinished game is analysed only when asked.
    */
   async function loadAnalyses(id: string, opening = false): Promise<void> {
     clearTimeout(analysisPoll);
@@ -324,7 +307,7 @@
     try {
       const choices = opening ? await replayStore.api<AnalysisChoices>(`${path}/policies`) : analysisChoices;
       let list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
-      if (opening && !list.length && choices?.default && index.can_feedback && index.status !== 'waiting') {
+      if (opening && !list.length && choices?.default && played && index.status === 'finished') {
         await replayStore.api(path, { policy: choices.default });
         list = (await replayStore.api<{ analyses: Analysis[] }>(path)).analyses;
       }
@@ -452,11 +435,6 @@
   function setPerspective(value: string): void {
     perspective = value === 'chooser' ? 'chooser' : value === '1' ? 1 : 0;
   }
-  function saveNote(key: string, value: string): void {
-    notes[key] = value;
-    if (index) localStorage.setItem(`etude.score.notes.${index.id}`, JSON.stringify(notes));
-  }
-
   // ———————————————— Study: try another line on the same board
 
   async function responseError(response: Response, fallback: string): Promise<string> {
@@ -597,7 +575,6 @@
 <svelte:window onkeydown={onKeydown} />
 
 {#snippet notices()}
-  {#if listError}<p role="alert" class="notice error">{listError}</p>{/if}
   {#if index?.mirror_retry && !replayStore.error}<p role="alert" class="notice">{index.mirror_retry.message}</p>{/if}
   {#if replayStore.error}<p role="alert" class="notice error">{replayStore.error}</p>{/if}
   {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
@@ -639,9 +616,9 @@
     {#if studyStore.errorMessage}<p role="alert" class="notice error">{studyStore.errorMessage}</p>{/if}
     {#if current.description}<p class="type-caption text-ink-2" data-testid="position-description">After · {current.description}</p>{/if}
     {#if momentHere}<p class="type-caption text-ink-2" data-testid="key-moment">Key moment · {momentHere.reason}</p>{/if}
-    {#if (analysedHere && index?.can_feedback) || playOnHref || (current.decision && index?.can_study)}
+    {#if analysedHere || playOnHref || (current.decision && index?.can_study)}
       <p class="analysis-actions">
-        {#if analysedHere && index?.can_feedback && analysis}
+        {#if analysedHere && analysis}
           <button class="btn btn-secondary btn-sm" data-testid="see-line" disabled={lineBusy || replayStore.busy} onclick={() => void seeLine()}>{lineBusy ? 'Playing its line…' : 'See its line'}</button>
         {/if}
         {#if playOnHref}
@@ -680,7 +657,7 @@
       <p class="type-label text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
-      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      {#if index?.resumable}<a class="btn btn-secondary btn-sm" data-testid="replay-resume" href={`/?game=${encodeURIComponent(index.id)}`}>Resume this game</a>{/if}
       {#if analyses && analysisChoices && !index?.watch}
         <section class="analysis-menu type-caption" aria-label="Analysis" data-testid="analysis-menu">
           <p class="type-label text-ink-2">Analysis</p>
@@ -692,12 +669,12 @@
             </label>
           {:else if analysis}<p class="text-ink-2">By {analysis.policy.name}</p>{/if}
           {#if analysisChoices.unavailable}<p class="text-ink-3">{analysisChoices.unavailable}</p>
-          {:else if analysisChoices.policies.length && index?.can_feedback}
+          {:else if analysisChoices.policies.length}
             <div class="analyse-with">
               <select aria-label="Policy to analyse with" bind:value={analyseWith} disabled={analyses.some(item => item.status === 'running')}>
                 {#each analysisChoices.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
               </select>
-              <button class="btn btn-secondary btn-sm" data-testid="analyse-with" disabled={!analyseWith || analyses.some(item => item.status === 'running') || index?.status === 'waiting'}
+              <button class="btn btn-secondary btn-sm" data-testid="analyse-with" disabled={!analyseWith || analyses.some(item => item.status === 'running')}
                 onclick={() => void analyse(analyseWith)}>{analysis?.status === 'stopped' && analysis.policy.id === analyseWith ? 'Analyse again' : 'Analyse with…'}</button>
             </div>
           {/if}
@@ -712,9 +689,9 @@
               <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{saidOf(heroSeat)}</th><th scope="col">{saidOf(1 - heroSeat)}</th></tr></thead>
               <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
             </table>
-            {#if numbers && !numbers.complete}<p class="text-ink-3">Counted to where the game stopped.</p>{/if}
+            {#if numbers && !numbers.complete}<p class="text-ink-3">{index.status === 'waiting' ? 'Counted to the moves so far.' : 'Counted to where the game stopped.'}</p>{/if}
             {#if numbers?.analysis_shown}<p class="text-ink-2" data-testid="analysis-shown-count">Chosen with analysis shown: {numbers.analysis_shown} {numbers.analysis_shown === 1 ? 'decision' : 'decisions'}</p>{/if}
-          {:else if index.status !== 'waiting'}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
+          {:else}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
           {#if analysis && agreed}
             <p data-testid="agreement">Decisions with a choice: {agreed.of} · chose as {analysisName} would: {agreed.same} of {agreed.of}</p>
             {#if arc && analysisScale}<p class="text-ink-2" data-testid="estimate-arc">{analysisName}'s {scoreName(analysis.decisions[0]?.semantic ?? null)?.toLowerCase()} from your seat: {arc.start} at the start · {arc.peak} at its highest · {arc.end} at the end</p>{/if}
@@ -743,17 +720,6 @@
         </details>
       {/each}
       <button class="btn btn-secondary btn-sm" disabled={locked} onclick={() => { if (replayStore.headUncertain) void replayStore.refreshHead(); else if (index) void replayStore.open(index.id, selectedKey); }}>Refresh saved head</button>
-      {#if current}
-        <label class="type-caption">Note for this position
-          <textarea class="note" aria-label="Note for this position" value={notes[current.note_key] ?? ''} oninput={event => saveNote(current.note_key, event.currentTarget.value)}></textarea>
-        </label>
-      {/if}
-      {#if index?.watch}
-        <details><summary class="type-label cursor-pointer">Watch another matchup</summary>
-          {#key index.id}<WatchSetup setup={index.private_setup} disabled={locked} onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}`)} />{/key}
-        </details>
-      {/if}
-      {#if index?.can_feedback}<Feedback attemptId={index.id} />{/if}
 {/snippet}
 
 {#snippet result()}
@@ -817,33 +783,9 @@
     historyHref={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}
   />
 {:else}
-  <main class="landing mx-auto w-full max-w-[900px] px-4 py-6">
-    <header class="mb-4 flex flex-wrap items-baseline gap-3">
-      <p class="type-title text-display" aria-hidden="true">Replay</p>
-      <a class="underline type-caption" href="/games">Games</a>
-      <a class="underline type-caption" href="/">Play</a>
-    </header>
-    {#if listError}<p role="alert">{listError}</p>{/if}
-    {#if replayStore.error}<p role="alert">{replayStore.error}</p>{/if}
-    {#if page.url.searchParams.has('watch')}
-      <section class="mb-6 rounded border border-line bg-panel p-4" aria-label="Choose a bot matchup">
-        <h3 class="type-label mb-2">Choose a bot matchup</h3>
-        <WatchSetup disabled={false} onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}`)} />
-      </section>
-    {/if}
-    {#if replayStore.busy}<p role="status">Reading saved recording…</p>
-    {:else if !page.url.searchParams.has('trace')}
-      <section aria-label="Recent recordings">
-        <h3 class="type-label mb-2">Recent recordings</h3>
-        <ol class="recordings" data-testid="recording-list">
-          {#each summaries.slice(0, 30) as summary (summary.id)}
-            <li><a class="underline" data-testid="recording-link" href={`/replay?trace=${encodeURIComponent(summary.id)}`}>{summary.timestamp ? new Date(summary.timestamp).toLocaleString() : summary.id}</a></li>
-          {:else}
-            <li class="type-caption text-ink-2">No recordings yet. Finished games appear here and in Games.</li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
+  <main class="mx-auto w-full max-w-[900px] px-4 py-6">
+    {#if replayStore.error}<p role="alert">{replayStore.error} <a class="underline" href="/games">History</a></p>
+    {:else}<p role="status">Reading saved recording…</p>{/if}
   </main>
 {/if}
 
@@ -854,8 +796,6 @@
   .reveal { display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); white-space: nowrap; }
   .result { display: grid; gap: 6px; justify-items: start; }
   .result h2 { line-height: 1.1; }
-  .note { display: block; width: 100%; margin-top: 4px; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 4px 6px; }
-  .recordings { display: grid; gap: 4px; }
   .analysis-menu { display: grid; gap: 4px; }
   .analysis-menu select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 220px; }
   .analyse-with { display: flex; gap: 6px; align-items: center; }

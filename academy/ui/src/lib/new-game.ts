@@ -1,4 +1,3 @@
-import { rememberCurrentGame } from './current-game.svelte';
 import type { GameStore } from './game.svelte';
 import { watchStart } from './watch-start.svelte';
 
@@ -18,6 +17,5 @@ export async function startConfiguredWatch(setup: GameStore): Promise<string> {
     decklists:setup.decklists,
     seed:setup.dealMode === 'repeat' ? setup.seed : null,
   });
-  rememberCurrentGame(`/replay?trace=${encodeURIComponent(result.id)}`);
   return String(result.id);
 }

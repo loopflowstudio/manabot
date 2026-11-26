@@ -5,10 +5,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   const saved = new Map<string, string>();
   vi.stubGlobal('sessionStorage', {getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => saved.set(key, value), removeItem: (key: string) => saved.delete(key), length: 0});
-  vi.stubGlobal('localStorage', {getItem: () => 'reader'});
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
-const created = {id: 'recording', token: 'producer-capability', finished: false};
+const created = {id: 'recording', finished: false};
 
 it('retains a lost setup reply and checks that attempt instead of loading another pair', async () => {
   let posts = 0;
@@ -23,11 +22,10 @@ it('retains a lost setup reply and checks that attempt instead of loading anothe
   // Even changed form state cannot replace the unresolved attempt.
   expect(await new WatchStart().start({players: ['changed', 'changed']})).toEqual(created);
   expect(posts).toBe(1);
-  expect(sessionStorage.getItem('etude.watch.recording')).toBe('producer-capability');
   expect(sessionStorage.getItem('academy.watch-setup')).toBeNull();
 });
 
-it('shows loading seats, then retains exactly one producer result', async () => {
+it('shows loading seats, then returns exactly one watched game', async () => {
   let finish!: (result: Response) => void;
   const start = new WatchStart();
   const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
@@ -48,7 +46,7 @@ it('shows loading seats, then retains exactly one producer result', async () => 
 });
 
 it('reports missing setup after restart without silently starting it again', async () => {
-  sessionStorage.setItem('academy.watch-setup', JSON.stringify({handle: 'missing-handle', token: 'setup-credential', request: {players: ['a', 'b']}}));
+  sessionStorage.setItem('academy.watch-setup', JSON.stringify({handle: 'missing-handle', request: {players: ['a', 'b']}}));
   const fetcher = vi.fn(async () => Response.json({detail: 'Watch setup unavailable. Start again explicitly.'}, {status: 404}));
   vi.stubGlobal('fetch', fetcher);
   await expect(new WatchStart().start({})).rejects.toThrow('Start again explicitly');

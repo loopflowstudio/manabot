@@ -1,5 +1,3 @@
-import { seedError, type PlaySession } from './play-session';
-import { playerToken } from './records';
 import { parseSearchConfigs, type SearchConfig, type PendingSearch } from './search';
 import {
   loadStoredDeckSelection,
@@ -15,12 +13,6 @@ import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
-import type { RestoredReplayDecision } from './replay-index';
-import type {
-  BranchRetryPayload,
-  TableCapability,
-  TableSnapshot,
-} from './shared-table-protocol';
 import type {
   ActionOption,
   WorkStatus,
@@ -29,6 +21,7 @@ import type {
   DeckNames,
   Decklists,
   ExperienceFrame,
+  GameOpponent,
   StepBoardPatch,
   Observation,
   OpponentConfig,
@@ -70,22 +63,22 @@ export function buildOpponentConfig(choice: PlayerChoice): OpponentConfig {
   return { villain_type: 'search', villain_sims: sims };
 }
 
+/** A repeat-deal seed is a decimal unsigned 64-bit integer, kept as text so it never rounds. */
+export function seedError(value: string): string | null {
+  if (!/^\d+$/.test(value) || BigInt(value) > 18446744073709551615n) return 'Enter a decimal unsigned 64-bit seed (0–18446744073709551615).';
+  return null;
+}
+
+/** What every `/ws/play` reply says about the game it belongs to. */
+export interface GameReply {
+  game?: string;
+  opponent?: GameOpponent | null;
+  opponent_label?: string | null;
+  setup?: Record<string, unknown>;
+}
+
 export class GameStore {
-  constructor(private readonly persistPreferences = true) {}
-
-  /** An isolated editor: nested source/search values must not mutate live setup. */
-  editableSetup(draft: Record<string, unknown> = this.setupConfig()): GameStore {
-    const editor = new GameStore(false);
-    editor.applySetupDraft(JSON.parse(JSON.stringify(draft)));
-    editor.watchMode = this.watchMode;
-    editor.watchPlayerChoice = this.watchPlayerChoice;
-    editor.watchSearchConfig = this.watchSearchConfig ? {...this.watchSearchConfig} : null;
-    return editor;
-  }
-
-  playSession = $state<PlaySession | null>(null);
   storageWarning = $state('');
-  tableUnavailable = $state(false);
   manaPayment = $state<'auto' | 'manual'>('manual');
   manaFloats = $state<'off' | 'usable' | 'all'>('off');
   humanSeat = $state<0 | 1>(0);
@@ -96,14 +89,6 @@ export class GameStore {
   dealMode = $state<'fresh' | 'repeat'>('fresh');
   seed = $state('0');
   seedError = $derived(this.dealMode === 'repeat' ? seedError(this.seed) : null);
-
-  applyPlaySession(session: PlaySession): void {
-    const changed = session.game_number !== this.playSession?.game_number || session.id !== this.playSession?.id;
-    this.playSession = session;
-    if (!changed) return;
-    this.watchMode = false;
-    this.applySetupDraft(session.draft);
-  }
 
   applySetupDraft(draft: Record<string, unknown>): void {
     const payment = draft.mana_payment === undefined ? 'manual' : draft.mana_payment;
@@ -131,15 +116,16 @@ export class GameStore {
     else if (draft.villain_type === 'random' || draft.villain_type === 'passive') this.opponentChoice = draft.villain_type;
   }
 
-  table = $state<TableSnapshot | null>(null);
+  /** The game on the board, named by its id: also its History row and its Replay. */
+  gameId = $state<string | null>(null);
+  opponent = $state.raw<GameOpponent | null>(null);
+  opponentLabel = $state<string | null>(null);
+  /** The setup the game on the board was started with: what Rematch, Swap sides and Play again send back. */
+  setup = $state.raw<Record<string, unknown> | null>(null);
   // Frames and projections are the authority's immutable values, replaced
   // whole on every update: raw state, so reading one is a plain property
   // read rather than a deep proxy's (the board reads them thousands of times
-  // a frame, and the resume record serializes the frame on every update).
-  restoredDecision = $state.raw<RestoredReplayDecision | null>(null);
-  branchAttemptId = $state<string | null>(null);
-  branchProjection = $state.raw<Observation | null>(null);
-  tableAnnouncement = $state('');
+  // a frame, and the tab record serializes the frame on every update).
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
   /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
   keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
@@ -160,10 +146,10 @@ export class GameStore {
   activeSearchConfig = $state<SearchConfig | null>(null);
   connection = $state<ConnectionState>('disconnected');
   focusIds = $state<Set<number>>(new Set());
-  sessionId = $state<string | null>(null);
-  resumeToken = $state<string | null>(null);
-  resumeFailed = $state(false);
-  recordingId = $state<string | null>(null);
+  /** The game broke while a request ran: its last board stays readable and takes no input. */
+  stopped = $state(false);
+  /** A game the server would not take up again, and why; its Replay still opens. */
+  resumeRefused = $state<{ game: string; message: string } | null>(null);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');
@@ -188,7 +174,6 @@ export class GameStore {
   fastForwarding = $state(false);
   commandPending = $state(false);
   work = $state<WorkStatus | null>(null);
-  interruptedIdentity = $state<Pick<TableSnapshot, 'opponent' | 'opponent_label'> | null>(null);
   submissionAccepted = $state(false);
   newGamePending = $state(false);
   // Monotonic count of applied server updates (observation/game_over).
@@ -196,8 +181,7 @@ export class GameStore {
   updateSeq = $state(0);
 
   get decisionStatus(): string {
-    if (this.resumeFailed) return 'Interrupted — the live session is unavailable.';
-    if (this.restoredDecision) return 'Study position — return to live to play.';
+    if (this.stopped) return 'Stopped — this game takes no more decisions.';
     if (this.gameOver) return 'Game over — no next decision.';
     if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
     if (this.work?.state === 'running') return this.submissionAccepted ? 'Your choice was accepted. The game is working.' : 'The game is working.';
@@ -205,56 +189,22 @@ export class GameStore {
     const prompt = this.protocolFrame?.prompt;
     if (!prompt) return 'Waiting for the next decision.';
     const hero = prompt.actor === this.observation?.agent.player_index;
-    const actor = hero
-      ? (this.hasCapability('submit_live_command') ? 'Your decision' : "Pilot's decision")
-      : "Opponent's decision";
-    return `${actor} — ${prompt.instruction || prompt.title}`;
+    return `${hero ? 'Your decision' : "Opponent's decision"} — ${prompt.instruction || prompt.title}`;
   }
 
   private logSequence = 0;
 
-  applyTable(table: TableSnapshot | null | undefined): void {
-    if (!table) return;
-    const previousRole = this.table?.access.role;
-    if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = policyChoice(table.opponent.base_sha256 ?? table.opponent.sha256);
+  /** Take the game a reply names; a new game selects its registered opponent in setup. */
+  applyGame(reply: GameReply): void {
+    if (!reply.game) return;
+    if (reply.opponent && reply.game !== this.gameId) {
+      this.opponentChoice = policyChoice(reply.opponent.base_sha256 ?? reply.opponent.sha256);
     }
-    this.table = table;
-    this.recordingId = table.attempt_id ?? null;
-    if (previousRole && previousRole !== table.access.role) {
-      this.tableAnnouncement = `You are now the ${table.access.role}.`;
-    }
-  }
-
-  hasCapability(capability: TableCapability): boolean {
-    return this.table?.access.capabilities.includes(capability) ?? true;
-  }
-
-  restoreDecision(restored: RestoredReplayDecision): void {
-    this.restoredDecision = restored;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = `Decision ${restored.ordinal + 1} restored for isolated Study.`;
-  }
-
-  applyBranchRetry(payload: BranchRetryPayload): void {
-    this.branchAttemptId = payload.attempt_id;
-    this.branchProjection = payload.retry.projection;
-    this.tableAnnouncement = 'Isolated line updated. The live game was not changed.';
-  }
-
-  returnBranch(restored: RestoredReplayDecision): void {
-    this.restoredDecision = restored;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = `Returned to recorded decision ${restored.ordinal + 1}.`;
-  }
-
-  returnToLive(): void {
-    this.restoredDecision = null;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
-    this.tableAnnouncement = 'Returned to the live game.';
+    this.gameId = reply.game;
+    this.opponent = reply.opponent ?? null;
+    this.opponentLabel = reply.opponent_label ?? null;
+    this.setup = reply.setup ?? null;
+    this.resumeRefused = null;
   }
 
   setConnection(next: ConnectionState): void {
@@ -304,15 +254,9 @@ export class GameStore {
         : this.turnOrder === 'draw'
           ? 1
           : this.humanSeat;
-    return {
-      ...base,
-      human_seat: resolvedSeat,
-      request_id: crypto.randomUUID(),
-      player_token: playerToken(),
-    };
+    return { ...base, human_seat: resolvedSeat };
   }
 
-  /** Setup data has no request identity or participant credential. */
   setupConfig(): Record<string, unknown> {
     let resolvedImport: Record<string, unknown> | null = this.deckImport ? { ...this.deckImport } : null;
     if (!resolvedImport && (isKeptDeckChoice(this.decks.hero) || isKeptDeckChoice(this.decks.villain))) {
@@ -444,8 +388,6 @@ export class GameStore {
   applyObservation(
     observation: Observation,
     actions: ActionOption[],
-    sessionId?: string,
-    resumeToken?: string,
     stops?: StopsConfig,
     deckNames?: DeckNames,
     actionSpaceKind = '',
@@ -457,20 +399,13 @@ export class GameStore {
     this.gameOver = observation.game_over;
     this.winner = null;
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
     this.fastForwarding = false;
     this.commandPending = false;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
-
-    if (sessionId) {
-      this.sessionId = sessionId;
-    }
-    if (resumeToken) {
-      this.resumeToken = resumeToken;
-    }
   }
 
   /**
@@ -493,11 +428,7 @@ export class GameStore {
     this.keptBoards = { matchId: frame.match_id, boards: next };
   }
 
-  applyFrame(
-    frame: ExperienceFrame,
-    sessionId?: string,
-    resumeToken?: string,
-  ): void {
+  applyFrame(frame: ExperienceFrame): void {
     this.lastCommandRejection = null;
     this.protocolFrame = frame;
     const actions = frame.offers.map((offer) => ({
@@ -517,8 +448,6 @@ export class GameStore {
       this.applyObservation(
         frame.projection,
         actions,
-        sessionId,
-        resumeToken,
         frame.stops,
         frame.deck_names,
         frame.action_space,
@@ -539,7 +468,7 @@ export class GameStore {
     this.gameOver = true;
     this.winner = winner;
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
     this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
@@ -550,11 +479,23 @@ export class GameStore {
   prepareForNewGame(): void {
     this.resetMatchState();
     this.errorMessage = null;
-    this.resumeFailed = false;
+    this.stopped = false;
   }
 
-  markResumeFailed(message: string): void {
-    // Keep the last confirmed board readable, but retire every input authority.
+  /** Leave the board for setup: the game it showed stays unfinished in History. */
+  leaveGame(): void {
+    this.resetMatchState();
+    this.gameId = null;
+    this.opponent = null;
+    this.opponentLabel = null;
+    this.setup = null;
+    this.stopped = false;
+    this.errorMessage = null;
+    this.newGamePending = false;
+  }
+
+  markStopped(message: string): void {
+    // Keep the last confirmed board readable, but retire every input.
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;
@@ -562,15 +503,8 @@ export class GameStore {
     this.work = null;
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
-    if (this.table?.opponent || this.table?.opponent_label) this.interruptedIdentity = {opponent: this.table.opponent, opponent_label: this.table.opponent_label};
-    this.table = null;
-    this.restoredDecision = null;
-    this.branchProjection = null;
-    this.branchAttemptId = null;
-    this.resumeFailed = true;
+    this.stopped = true;
     this.errorMessage = message;
-    this.sessionId = null;
-    this.resumeToken = null;
   }
 
   selectTarget(objectId: number): void {
@@ -591,19 +525,19 @@ export class GameStore {
 
   private updateStops(next: StopsConfig, persist = true): void {
     this.stops = next;
-    if (persist && this.persistPreferences) saveStoredStops(next);
+    if (persist) saveStoredStops(next);
     const once = pruneOnce(this.onceStops, next);
     if (once.my.length !== this.onceStops.my.length || once.opponent.length !== this.onceStops.opponent.length) this.updateOnce(once);
   }
 
   private updateOnce(next: OnceStops): void {
     this.onceStops = next;
-    if (this.persistPreferences) saveStoredOnce(next);
+    saveStoredOnce(next);
   }
 
   private updateDecks(next: DeckSelection): void {
     this.decks = next;
-    if (this.persistPreferences) saveStoredDeckSelection(next);
+    saveStoredDeckSelection(next);
   }
 
   private applyDeckNames(deckNames: DeckNames | undefined): void {
@@ -613,7 +547,6 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
-    this.interruptedIdentity = null;
     this.liveAnalysis = LIVE_ANALYSIS_OFF;
     this.searchRetry = null;
     this.work = null;
@@ -632,9 +565,6 @@ export class GameStore {
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;
-    this.restoredDecision = null;
-    this.branchAttemptId = null;
-    this.branchProjection = null;
   }
 }
 

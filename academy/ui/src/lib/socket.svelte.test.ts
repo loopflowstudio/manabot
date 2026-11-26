@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { SharedTableControlEvent } from './shared-table-protocol';
 import { gameStore } from './game.svelte';
 import { LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 import { presentationPlayer } from './presentation.svelte';
@@ -33,7 +32,7 @@ function frameAt(revision: number): ExperienceFrame {
   };
 }
 
-function deliver(controller: GameSocketController, message: ServerMessage | SharedTableControlEvent): void {
+function deliver(controller: GameSocketController, message: ServerMessage): void {
   const testController = controller as unknown as {
     handleRawMessage(raw: string): void;
   };
@@ -84,8 +83,7 @@ describe('parseServerMessage', () => {
         },
       },
       actions: [],
-      session_id: 'session-id',
-      resume_token: 'token',
+      game: 'game-id',
     });
 
     const parsed = parseServerMessage(payload);
@@ -160,21 +158,40 @@ describe('GameSocketController offline gameplay', () => {
       villain_type: 'policy', opponent_sha256: 'exact-id', decklists: 'closed',
     } });
   });
-  it('keeps the reason and does not redeal a launch the server ended', () => {
+  it('keeps the reason and the last board when the server ends a broken game', () => {
     const controller = new GameSocketController();
-    const internals = controller as unknown as { launchId: string | null; outboundQueue: ClientMessage[] };
+    const internals = controller as unknown as { game: string | null; outboundQueue: ClientMessage[] };
     const recovery = structuredClone(boltProtocolFixture.recovery);
     deliver(controller, { type: 'observation', data: recovery.frame.projection,
-      actions: [], recovery } as ServerMessage);
-    internals.launchId = 'launch-1';
-    internals.outboundQueue.length = 0;
+      actions: [], recovery, game: recovery.frame.match_id } as ServerMessage);
+    expect(internals.game).toBe(recovery.frame.match_id);
     const reason = 'The opponent could not continue this game: Policy returned a stale decision binding.';
     deliver(controller, { type: 'error', message: reason, session_ended: true });
     expect(gameStore.errorMessage).toBe(reason);
     expect(gameStore.protocolFrame).toEqual(recovery.frame);
-    expect(gameStore.resumeFailed).toBe(true);
-    expect(internals.launchId).toBeNull();
-    expect(internals.outboundQueue.filter(message => message.type === 'new_game')).toHaveLength(0);
+    expect(gameStore.stopped).toBe(true);
+    // Nothing resumes or redeals it.
+    expect(internals.game).toBeNull();
+    expect(internals.outboundQueue).toEqual([]);
+  });
+  it('reads a refusal as its sentence, without the code it carries', () => {
+    const controller = new GameSocketController();
+    gameStore.newGamePending = false;
+    controller.sendNewGame({ launch: 'gone' });
+    deliver(controller, { type: 'error', message: 'launch_unknown: This launch is unknown; run the launch command again or choose a new game.' });
+    expect(gameStore.errorMessage).toBe('This launch is unknown; run the launch command again or choose a new game.');
+    expect(gameStore.newGamePending).toBe(false);
+  });
+  it('starts a rematch from the game on the board, by its id', () => {
+    const controller = new GameSocketController();
+    const queue = (controller as unknown as { outboundQueue: ClientMessage[] }).outboundQueue;
+    gameStore.leaveGame();
+    controller.sendRematch('swap_sides');
+    expect(queue).toEqual([]);
+    gameStore.applyGame({ game: 'game-a', setup: {} });
+    controller.sendRematch('swap_sides', { seed: null });
+    expect(queue).toEqual([{ type: 'rematch', game: 'game-a', intent: 'swap_sides', config: { seed: null } }]);
+    gameStore.leaveGame();
   });
   it('does not queue offer commands or F6 against a future recovered frame', () => {
     gameStore.prepareForNewGame();
@@ -203,22 +220,20 @@ describe('GameSocketController offline gameplay', () => {
 });
 
 describe('unresolved Command recovery', () => {
-  function pendingController(grant?: number) {
+  function pendingController() {
     const controller = new GameSocketController();
     const sent: string[] = [];
-    const request = { type: 'command' as const,
-      ...(grant === undefined ? {} : { grant_revision: grant }),
-      command: structuredClone(boltProtocolFixture.command) };
+    const request = { type: 'command' as const, command: structuredClone(boltProtocolFixture.command) };
     const state = controller as unknown as {
       pendingCommand: typeof request | null;
       pendingResume: boolean;
+      game: string | null;
       socket: { send(raw: string): void; close(): void };
       reconcileCommand(recovery: RecoveryEnvelope): void;
     };
     state.pendingCommand = request;
     state.socket = { send: raw => sent.push(raw), close: () => {} };
-    gameStore.prepareForNewGame();
-    gameStore.table = null;
+    gameStore.leaveGame();
     gameStore.beginCommand();
     return { controller, state, request, sent };
   }
@@ -245,8 +260,8 @@ describe('unresolved Command recovery', () => {
     expect(gameStore.commandPending).toBe(false);
   });
 
-  it.each(['revision', 'prompt', 'match', 'grant'])('does not replay a stale %s or infer execution from a missing receipt', kind => {
-    const { state, sent } = pendingController(kind === 'grant' ? 99 : undefined);
+  it.each(['revision', 'prompt', 'match'])('does not replay a stale %s or infer execution from a missing receipt', kind => {
+    const { state, sent } = pendingController();
     const recovery = structuredClone(boltProtocolFixture.recovery);
     recovery.accepted_commands = [];
     if (kind === 'revision') recovery.frame.revision += 1;
@@ -259,15 +274,20 @@ describe('unresolved Command recovery', () => {
     expect(gameStore.commandPending).toBe(false);
   });
 
-  it('interrupts an expired launched session without queuing a replacement', () => {
+  it('drops the board of a game the server will not take up, and says why', () => {
     const { controller, state, sent } = pendingController();
     gameStore.applyFrame(boltProtocolFixture.recovery.frame);
+    state.game = 'game-a';
     state.pendingResume = true;
-    deliver(controller, {type: 'error', message: 'Session expired.'});
+    deliver(controller, {type: 'error', message: 'resume_unavailable: That game is not one to resume.'});
     expect(sent).toEqual([]);
-    expect(gameStore.protocolFrame?.match_id).toBe(boltProtocolFixture.command.match_id);
-    expect(gameStore.resumeFailed).toBe(true);
+    expect(gameStore.protocolFrame).toBeNull();
+    expect(gameStore.resumeRefused).toEqual({ game: 'game-a', message: 'That game is not one to resume.' });
+    expect(gameStore.stopped).toBe(false);
     expect(gameStore.commandPending).toBe(false);
+    expect(state.game).toBeNull();
+    expect(state.pendingCommand).toBeNull();
+    gameStore.resumeRefused = null;
   });
 });
 
@@ -462,48 +482,52 @@ it('retains retry and work metadata when first recovery resets match state', () 
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'search', sequence: 1, kind: 'search' as const, started_at: 1,
     match_id: recovery.frame.match_id, revision: recovery.frame.revision, chooser: 1, state: 'failed' as const};
   deliver(controller, {type: 'observation', data: recovery.frame.projection, actions: [], recovery,
-    session_id: 'retry-table', resume_token: 'credential', mirror_retry: retry, work});
+    game: recovery.frame.match_id, mirror_retry: retry, work});
   expect(gameStore.protocolFrame?.match_id).toBe(retry.match_id);
   expect(gameStore.searchRetry).toEqual(retry);
   expect(gameStore.work).toEqual(work);
 });
 
-it('ends a watcher wait when a newer setup stage fails without replacing authority', () => {
+it('ends a wait when a newer setup stage fails without replacing the frame', () => {
   const controller = new GameSocketController();
   gameStore.prepareForNewGame();
-  gameStore.applyFrame(frameAt(43), 'table-1', 'token');
+  gameStore.applyGame({ game: 'game-1' });
+  gameStore.applyFrame(frameAt(43));
   gameStore.newGamePending = false;
   const frame = gameStore.protocolFrame;
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'advance', sequence: 1, kind: 'advance' as const, started_at: 1,
     match_id: frame!.match_id, revision: 43, chooser: null, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   const loading = {scope: 'setup' as const, setup_id: 'next-game', loading_seat: null, operation_id: 'load', sequence: 2, kind: 'load' as const, started_at: 2,
     match_id: null, revision: null, chooser: null, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: loading});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: loading});
   expect(gameStore.work?.operation_id).toBe('advance');
-  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...loading, state: 'failed'}});
+  deliver(controller, {type: 'work_status', game: 'other-game', work: {...loading, state: 'failed'}});
   expect(gameStore.work?.state).toBe('running');
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...loading, state: 'failed'}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...loading, state: 'failed'}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   expect(gameStore.work?.state).toBe('failed');
   expect(gameStore.protocolFrame).toBe(frame);
   expect(gameStore.submissionAccepted).toBe(false);
   gameStore.work = null;
+  gameStore.leaveGame();
 });
 
-it('ignores work from another table, revision or earlier operation', () => {
+it('ignores work from another game, revision or earlier operation', () => {
   gameStore.prepareForNewGame();
-  gameStore.applyFrame(frameAt(43), 'table-1', 'credential');
+  gameStore.applyGame({ game: 'game-1' });
+  gameStore.applyFrame(frameAt(43));
   gameStore.newGamePending = false;
   const controller = new GameSocketController();
   const work = {scope: 'match' as const, setup_id: null, loading_seat: null, operation_id: 'op-3', sequence: 3, kind: 'choose' as const, started_at: 1,
     match_id: gameStore.protocolFrame!.match_id, revision: 43, chooser: 1, state: 'running' as const};
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work});
+  deliver(controller, {type: 'work_status', game: 'game-1', work});
   expect(gameStore.work?.operation_id).toBe('op-3');
-  deliver(controller, {type: 'work_status', session_id: 'other-table', work: {...work, operation_id: 'foreign'}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old', sequence: 2}});
-  deliver(controller, {type: 'work_status', session_id: 'table-1', work: {...work, operation_id: 'old-frame', revision: 42}});
+  deliver(controller, {type: 'work_status', game: 'other-game', work: {...work, operation_id: 'foreign'}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...work, operation_id: 'old', sequence: 2}});
+  deliver(controller, {type: 'work_status', game: 'game-1', work: {...work, operation_id: 'old-frame', revision: 42}});
   expect(gameStore.work?.operation_id).toBe('op-3');
   expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
   gameStore.work = null;
+  gameStore.leaveGame();
 });

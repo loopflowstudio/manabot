@@ -1,7 +1,7 @@
 /**
  * The game in numbers: what each seat of a played game did
- * (`managym/academy/numbers.py`), how it read beside an analysis, and the
- * record of My games. Counts and intervals, never a rating or a grade.
+ * (`managym/academy/numbers.py`) and how it read beside an analysis.
+ * Counts, never a rating or a grade.
  */
 import { firstChoice, formatScore, score, type Analysis } from './analysis';
 
@@ -27,22 +27,6 @@ export interface GameNumbers {
   analysis_shown?: number;
   /** The step a game played on from another starts at; null or absent for an ordinary game. */
   played_from?: number | null;
-}
-
-/** Completed games against one opponent with one pair of decks (`/api/traces/record`). */
-export interface RecordRow {
-  opponent_id: string;
-  opponent_name: string;
-  human_deck: string;
-  opponent_deck: string;
-  games: number;
-  wins: number;
-  draws: number;
-  losses: number;
-  /** Of `games`, those with a decision made while a live analysis was shown. */
-  with_analysis: number;
-  /** 95% Wilson interval on wins / games; draws count as games. */
-  interval: [number, number];
 }
 
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -102,10 +86,4 @@ export function estimateArc(analysis: Analysis): { start: string; peak: string; 
     .filter((value): value is number => value !== null);
   if (!scores.length) return null;
   return { start: formatScore(scores[0]), peak: formatScore(Math.max(...scores)), end: formatScore(scores[scores.length - 1]) };
-}
-
-/** "57% (34–78%)": the win rate and its 95% interval. */
-export function winRate(row: RecordRow): string {
-  const percent = (value: number): number => Math.round(value * 100);
-  return `${percent(row.wins / row.games)}% (${percent(row.interval[0])}–${percent(row.interval[1])}%)`;
 }

@@ -15,7 +15,6 @@
     decklists?: Decklists;
     manaPayment?: 'manual' | 'auto';
     manaFloats?: 'off' | 'usable' | 'all';
-    botRecords?: Record<string, { wins: number; losses: number }>;
     setup?: Record<string, unknown>;
     disabled?: boolean;
     label?: string;
@@ -32,7 +31,6 @@
     decklists = 'open',
     manaPayment = 'manual',
     manaFloats = 'off',
-    botRecords = {},
     disabled = false,
     label = 'Opponent',
     onChange,
@@ -115,20 +113,8 @@
   });
 
   function title(entry: TrainedOpponent): string {
-    const rec = botRecords[entry.sha256];
-    const score = rec && (rec.wins + rec.losses) > 0
-      ? ` · Bot ${rec.wins}W–${rec.losses}L`
-      : '';
-    return `${catalogOpponentName(entry)}${score} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
+    return `${catalogOpponentName(entry)} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
   }
-
-  const selectedRecord = $derived.by(() => {
-    const key = selected ? selected.sha256 : value;
-    const rec = botRecords[key];
-    if (!rec || rec.wins + rec.losses === 0) return null;
-    const total = rec.wins + rec.losses;
-    return `Bot record: ${rec.wins}W–${rec.losses}L (${Math.round((rec.wins / total) * 100)}%)`;
-  });
 </script>
 
 <div class="flex min-w-0 max-w-full flex-wrap items-end gap-3">
@@ -183,15 +169,14 @@
   <p id={`${uid}-details`} data-testid="opponent-details" class="type-caption min-w-0 w-full break-words text-ink-2">
     {#if selected}
       {#if selected.summary}{selected.summary} · {/if}
-      {#if selectedRecord}{selectedRecord} · {/if}
       <span class="text-ink-3">Policy ID: {selected.sha256.length > 16 ? `${selected.sha256.slice(0, 12)}…` : selected.sha256}</span>
       {#if !selected.available}{' · '}{selected.reason}{/if}
       {#if !selected.supports_search}{' · '}Search unavailable: {selected.search_reason ?? 'this policy does not advertise compatible search evaluation.'}{/if}
     {:else if replacement}The runner changed since this was selected. Reselect the policy to use the current runner.
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
-    {:else if value.startsWith('search-')}Built-in: {value.slice(7)} random playouts per legal action, no policy{#if selectedRecord}{' · '}{selectedRecord}{/if}
-    {:else if value === 'random'}Built-in: uniform random legal action{#if selectedRecord}{' · '}{selectedRecord}{/if}
-    {:else if value === 'passive'}Built-in: passes when possible, otherwise takes the first legal action{#if selectedRecord}{' · '}{selectedRecord}{/if}
+    {:else if value.startsWith('search-')}Built-in: {value.slice(7)} random playouts per legal action, no policy
+    {:else if value === 'random'}Built-in: uniform random legal action
+    {:else if value === 'passive'}Built-in: passes when possible, otherwise takes the first legal action
     {/if}
     {#if !selected && catalogError}{' '}{catalogError}
     {:else if !selected && !trained.length && extension !== undefined}{' '}No policies registered on this server. Supply a Python policy or install manabot for hosted policies.{/if}

@@ -1,42 +1,32 @@
 <script lang="ts">
-  import { currentGame } from '$lib/current-game.svelte';
+  /**
+   * History: every game in the traces directory, newest first. Each row opens
+   * in Replay; an unfinished played game also resumes at `/?game=<id>`. The
+   * address holds the search and filters.
+   */
   import GameFileImport from '$lib/components/GameFileImport.svelte';
-  import type { SessionResult } from '$lib/play-session';
-  import { playerIdentity, recordedIdentity, shortHash } from '$lib/player-identity';
   import PlayerName from '$lib/components/PlayerName.svelte';
+  import { recordedIdentity, shortHash } from '$lib/player-identity';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
-  import { recordFetch } from '$lib/records';
   import type { GameSummary } from '$lib/types';
-  import { duration, winRate, type RecordRow } from '$lib/numbers';
+  import { duration } from '$lib/numbers';
 
-  let sessionResults = $state<SessionResult[]>([]);
-  let sessionTotals = $state<{origin:string; status:string; count:number}[]>([]);
-  let nextResultOffset = $state<number | null>(null);
-  let moreResultsPending = $state(false);
   let games = $state<GameSummary[]>([]);
-  let record = $state<RecordRow[] | null>(null);
   let loading = $state(false);
   let error = $state('');
-  let sessionAccessDenied = $state(false);
   let nextCursor = $state<string | null>(null);
   let mounted = $state(false);
-  let name = $state('');
-  let profileStatus = $state('');
   let requestSequence = 0;
-  const fields = ['q', 'scope', 'player', 'other', 'pairing', 'version', 'deck', 'status', 'result', 'after', 'before', 'session'] as const;
-  const labels: Record<string, string> = { session: 'Session', q: 'Search', scope: 'Scope', player: 'Player', other: 'Opponent', pairing: 'Players', version: 'Bot version', deck: 'Deck', status: 'Status', result: 'Result', after: 'From', before: 'Through' };
-  const selected = $derived(fields.filter((key) => page.url.searchParams.has(key) && !(key === 'scope' && page.url.searchParams.get(key) === 'all')));
-  const participantOptions = $derived([...new Map(games.flatMap((game) => game.players).map((p) => [p.player_id, p])).values()]);
+  const fields = ['q', 'pairing', 'status', 'bot', 'deck', 'after', 'before'] as const;
+  const labels: Record<string, string> = { q: 'Search', pairing: 'Players', status: 'Status', bot: 'Bot', deck: 'Deck', after: 'From', before: 'Through' };
+  const selected = $derived(fields.filter(key => page.url.searchParams.has(key)));
+  // The filters offer what this page of games shows; a selection from another page keeps its own option.
+  const bots = $derived([...new Map(games.flatMap(game => game.players).filter(player => player.kind === 'bot').map(player => [player.player_id, player])).values()]);
+  const decks = $derived([...new Set(games.flatMap(game => game.players).map(player => player.deck).filter(deck => deck && deck !== 'closed'))].sort());
 
-  onMount(() => {
-    mounted = true;
-    void recordFetch('/api/player').then(async (response) => {
-      if (!response.ok) throw new Error('Player name could not be loaded.');
-      name = (await response.json()).name;
-    }).catch((e) => { profileStatus = e.message; });
-  });
+  onMount(() => { mounted = true; });
 
   $effect(() => {
     const search = page.url.search;
@@ -47,29 +37,10 @@
     const sequence = ++requestSequence;
     loading = true;
     error = '';
-    sessionAccessDenied = false;
-    sessionResults = [];
-    sessionTotals = [];
-    nextResultOffset = null;
-    moreResultsPending = false;
     try {
-      const params = new URLSearchParams(search);
-      if (!params.has('scope')) params.set('scope', 'all');
-      const session = params.get('session');
-      if (session) {
-        const summary = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}`);
-        checkSessionResponse(summary, sequence);
-        const data = await summary.json();
-        if (sequence === requestSequence) { sessionResults = data.results; sessionTotals = data.totals; nextResultOffset = data.next_result_offset; }
-      }
-      record = null;
-      if (params.get('scope') === 'mine' && !session) {
-        const read = await recordFetch('/api/traces/record');
-        if (read.ok && sequence === requestSequence) record = (await read.json()).rows;
-      }
-      const response = await recordFetch(`/api/traces?${params}`);
+      const response = await fetch(`/api/traces${search}`);
       if (!response.ok) {
-        const payload = await response.json();
+        const payload = await response.json().catch(() => ({}));
         throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Games could not be loaded.');
       }
       const rows = await response.json() as GameSummary[];
@@ -83,31 +54,6 @@
     }
   }
 
-  function checkSessionResponse(response: Response, sequence: number): void {
-    if (response.ok) return;
-    const denied = response.status === 403;
-    if (sequence === requestSequence) sessionAccessDenied = denied;
-    throw new Error(denied
-      ? 'This browser cannot access this session history. Open it in the browser and address (including port) where you played. Copying the link does not copy access; if that browser’s stored credentials were cleared, access cannot be recovered from the link.'
-      : 'Session history could not be loaded.');
-  }
-
-  async function moreResults(): Promise<void> {
-    const session = page.url.searchParams.get('session');
-    if (!session || nextResultOffset === null || moreResultsPending) return;
-    const sequence = requestSequence;
-    moreResultsPending = true;
-    try {
-      const response = await recordFetch(`/api/play-sessions/${encodeURIComponent(session)}?result_offset=${nextResultOffset}`);
-      checkSessionResponse(response, sequence);
-      const data = await response.json();
-      if (sequence !== requestSequence) return;
-      sessionResults = [...sessionResults, ...data.results];
-      nextResultOffset = data.next_result_offset;
-    } catch (e) { if (sequence === requestSequence) error = e instanceof Error ? e.message : 'More results could not be loaded.'; }
-    finally { if (sequence === requestSequence) moreResultsPending = false; }
-  }
-
   function count(amount: number, singular: string, plural = `${singular}s`): string {
     return `${amount} ${amount === 1 ? singular : plural}`;
   }
@@ -116,7 +62,6 @@
     const params = new URLSearchParams(page.url.search);
     params.delete('cursor');
     if (value) params.set(key, value); else params.delete(key);
-    if (key === 'player' && !value) { params.delete('other'); params.delete('result'); }
     return `/games?${params}`;
   }
 
@@ -124,7 +69,6 @@
     event.preventDefault();
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const params = new URLSearchParams();
-    if (page.url.searchParams.has('session')) params.set('session', page.url.searchParams.get('session')!);
     for (const key of fields) {
       const value = String(data.get(key) ?? '').trim();
       if (value) params.set(key, value);
@@ -132,109 +76,59 @@
     void goto(`/games?${params}`, { keepFocus: true, noScroll: true });
   }
 
+  /** In progress covers every unfinished game, however an earlier build labelled it. */
   function resultLabel(game: GameSummary): string {
-    if (game.status !== 'completed') return { active: 'In progress', stopped: 'Stopped', interrupted: 'Interrupted' }[game.status];
+    if (game.resumable || game.status === 'active') return 'In progress';
+    if (game.status !== 'completed') return 'Stopped';
     if (game.winner === null) return 'Draw';
-    const winner = game.players.find((p) => p.seat === game.winner);
+    const winner = game.players.find(player => player.seat === game.winner);
     return `${winner ? recordedIdentity(winner).compact : `Seat ${game.winner + 1}`} won`;
   }
 
-  async function saveName(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
-    profileStatus = '';
-    try {
-      const response = await recordFetch('/api/player', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
-      if (!response.ok) throw new Error('Could not save your name. Try again.');
-      name = (await response.json()).name;
-      profileStatus = 'Saved for your next game. Earlier games keep their recorded names.';
-    } catch (e) { profileStatus = e instanceof Error ? e.message : 'Name could not be saved.'; }
-  }
-
-  function replayUrl(id: string): string {
-    return `/replay?trace=${encodeURIComponent(id)}&from=${encodeURIComponent(page.url.pathname + page.url.search)}`;
-  }
+  const here = $derived(encodeURIComponent(page.url.pathname + page.url.search));
+  const replayUrl = (id: string): string => `/replay?trace=${encodeURIComponent(id)}&from=${here}`;
 </script>
 
-<svelte:head><title>Games · Academy</title></svelte:head>
+<svelte:head><title>History · Academy</title></svelte:head>
 
 <main class="mx-auto max-w-[1400px] px-4 py-8">
-  <header class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
-    <div>
-      <p class="type-label text-ink-2">The game archive</p>
-      <h1 class="type-title text-4xl text-display">Games</h1>
-      <p class="mt-2 text-ink-2">Every matchup has a story. Find a player, follow a bot, revisit a game.</p>
-    </div>
-    <a href="/" class="btn btn-primary">Play a game</a>
+  <header class="mb-6 border-b border-line pb-5">
+    <h1 class="type-title text-4xl text-display">History</h1>
   </header>
 
-  <GameFileImport onOpen={id => void goto(`/replay?trace=${encodeURIComponent(id)}&from=${encodeURIComponent(page.url.pathname + page.url.search)}`)} />
-  {#if page.url.searchParams.has('session') && !(error && !sessionTotals.length && !sessionResults.length)}
-    <section aria-label="Session results" class="mb-5 border-y border-line py-3">
-      <h2 class="type-title text-xl">Session results</h2>
-      <p class="text-sm text-ink-2">Each configuration counts every matching game across history pages. Counts describe recordings, not playing strength. Origins stay separate.</p>
-      <p class="mt-2 text-sm">{sessionTotals.map(row => `${row.origin}: ${row.count} ${row.status}`).join(' · ')}</p>
-      {#each sessionResults as result}
-        <details class="mt-3 border-t border-line pt-2">
-          <summary class="cursor-pointer">vs <PlayerName identity={recordedIdentity({name:result.opponent_name, player_id:result.opponent_id, kind:'bot', version:result.version})} /> · {result.origin} · {result.human_seat === 0 ? 'Play first' : 'Draw first'} · {count(result.wins, 'win')} / {count(result.draws, 'draw')} / {count(result.losses, 'loss', 'losses')} out of {result.completed} completed · {result.active} active · {result.stopped} stopped · {result.interrupted} interrupted</summary>
-          <p>{result.human_deck} vs {result.opponent_deck} · {result.decklists} decklists</p>
-          <p>Wall elapsed: {result.wall_elapsed_seconds == null ? 'unavailable' : `${Math.round(result.wall_elapsed_seconds)} seconds including pauses`} ({result.elapsed_samples} recorded). Response measurements unavailable.</p>
-          <pre class="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs">{result.version}
-{result.inference_json}
-{result.matchup_json}</pre>
-        </details>
-      {/each}
-      {#if nextResultOffset !== null && !sessionAccessDenied}<button class="btn btn-secondary mt-2" disabled={moreResultsPending} onclick={moreResults}>More result configurations</button>{/if}
-      {#if currentGame.href}<a href={currentGame.href} class="mt-2 inline-block underline">Return to current game</a>{/if}
-    </section>
-  {/if}
-  <details class="mb-5 rounded border border-line bg-panel p-3">
-    <summary class="cursor-pointer">Your player name</summary>
-    <form onsubmit={saveName} class="mt-3 flex flex-wrap items-end gap-3">
-      <label class="flex flex-col gap-1">Display name<input class="rounded border border-line bg-field p-2" bind:value={name} maxlength="60" required /></label>
-      <button class="btn btn-secondary" type="submit">Save name</button>
-      <p role="status" class="w-full text-ink-2">{profileStatus}</p>
-    </form>
-    <p class="mt-2 text-sm text-ink-2">Your identity is kept in this browser. New games join shared history; completed replays can be viewed by everyone. Feedback stays private.</p>
-  </details>
+  <GameFileImport onOpen={id => void goto(replayUrl(id))} />
 
   {#key page.url.search}
     <form onsubmit={search} class="rounded border border-line bg-panel p-4">
       <div class="flex flex-wrap items-end gap-3">
         <label class="flex min-w-48 grow flex-col gap-1">Search games
-          <input name="q" value={page.url.searchParams.get('q') ?? ''} placeholder="Player, bot, fingerprint, or game ID" maxlength="200" class="rounded border border-line bg-field p-2" />
-        </label>
-        <label class="flex flex-col gap-1">Show
-          <select name="scope" value={page.url.searchParams.get('scope') ?? 'all'} class="rounded border border-line bg-field p-2"><option value="all">Everyone's games</option><option value="mine">My games</option></select>
+          <input name="q" value={page.url.searchParams.get('q') ?? ''} placeholder="Bot, fingerprint, or game ID" maxlength="200" class="rounded border border-line bg-field p-2" />
         </label>
         <label class="flex flex-col gap-1">Players
-          <select name="pairing" value={page.url.searchParams.get('pairing') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any pairing</option><option value="human-bot">Human vs Bot</option><option value="bot-bot">Bot vs Bot</option><option value="human-human">Human vs Human</option></select>
+          <select name="pairing" value={page.url.searchParams.get('pairing') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any pairing</option><option value="human-bot">Human vs Bot</option><option value="bot-bot">Bot vs Bot</option></select>
         </label>
         <label class="flex flex-col gap-1">Status
-          <select name="status" value={page.url.searchParams.get('status') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any status</option><option value="completed">Completed</option><option value="active">In progress</option><option value="stopped">Stopped</option><option value="interrupted">Interrupted</option></select>
+          <select name="status" value={page.url.searchParams.get('status') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any status</option><option value="active">In progress</option><option value="completed">Completed</option><option value="stopped">Stopped</option></select>
         </label>
         <button class="btn btn-primary" type="submit">Find games</button>
       </div>
-      <details class="mt-4" open={fields.slice(2).some((key) => !['pairing', 'status'].includes(key) && page.url.searchParams.has(key))}>
-        <summary class="cursor-pointer text-ink-2">Player, version, deck and date filters</summary>
+      <details class="mt-4" open={(['bot', 'deck', 'after', 'before'] as const).some(key => page.url.searchParams.has(key))}>
+        <summary class="cursor-pointer text-ink-2">Bot, deck and date filters</summary>
         <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {#each ['player', 'other'] as key}
-            <label class="flex flex-col gap-1">{key === 'player' ? 'Player' : 'Other player'}
-              <select name={key} value={page.url.searchParams.get(key) ?? ''} class="rounded border border-line bg-field p-2">
-                <option value="">Any player</option>
-                {#if page.url.searchParams.get(key) && !participantOptions.some((p) => p.player_id === page.url.searchParams.get(key))}<option value={page.url.searchParams.get(key)!}>Selected player</option>{/if}
-                {#each participantOptions as p}<option value={p.player_id}>{playerIdentity(p).compact} · {p.kind} · {p.player_id.slice(-6)}</option>{/each}
-              </select>
-            </label>
-          {/each}
-          <label class="flex flex-col gap-1">Bot version
-            <select name="version" value={page.url.searchParams.get('version') ?? ''} class="rounded border border-line bg-field p-2">
-              <option value="">All versions</option>
-              {#if page.url.searchParams.get('version') && !games.some((g) => g.players.some((p) => p.version === page.url.searchParams.get('version')))}<option value={page.url.searchParams.get('version')!}>Selected version</option>{/if}
-              {#each [...new Map(games.flatMap((g) => g.players).filter((p) => p.version).map((p) => [p.version!, p])).values()] as p}<option value={p.version!}>{recordedIdentity(p).compact} · {shortHash(p.version!)}</option>{/each}
+          <label class="flex flex-col gap-1">Bot
+            <select name="bot" value={page.url.searchParams.get('bot') ?? ''} class="rounded border border-line bg-field p-2">
+              <option value="">Any bot</option>
+              {#if page.url.searchParams.get('bot') && !bots.some(bot => bot.player_id === page.url.searchParams.get('bot'))}<option value={page.url.searchParams.get('bot')!}>Selected bot</option>{/if}
+              {#each bots as bot (bot.player_id)}<option value={bot.player_id}>{recordedIdentity(bot).compact}{bot.version ? ` · ${shortHash(bot.version)}` : ''}</option>{/each}
             </select>
           </label>
-          <label class="flex flex-col gap-1">Deck<select name="deck" value={page.url.searchParams.get('deck') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any deck</option><option value="ur_lessons">UR Lessons</option><option value="gw_allies">GW Allies</option><option value="interactive">Interactive</option><option value="custom">Custom</option></select></label>
-          <label class="flex flex-col gap-1">Result for selected player<select name="result" value={page.url.searchParams.get('result') ?? ''} class="rounded border border-line bg-field p-2"><option value="">Any result</option><option value="win">Won</option><option value="loss">Lost</option><option value="draw">Draw</option></select></label>
+          <label class="flex flex-col gap-1">Deck
+            <select name="deck" value={page.url.searchParams.get('deck') ?? ''} class="rounded border border-line bg-field p-2">
+              <option value="">Any deck</option>
+              {#if page.url.searchParams.get('deck') && !decks.includes(page.url.searchParams.get('deck')!)}<option value={page.url.searchParams.get('deck')!}>{page.url.searchParams.get('deck')!.replaceAll('_', ' ')}</option>{/if}
+              {#each decks as deck (deck)}<option value={deck}>{deck.replaceAll('_', ' ')}</option>{/each}
+            </select>
+          </label>
           <label class="flex flex-col gap-1">From (UTC)<input type="date" name="after" value={page.url.searchParams.get('after') ?? ''} class="rounded border border-line bg-field p-2" /></label>
           <label class="flex flex-col gap-1">Through (UTC)<input type="date" name="before" value={page.url.searchParams.get('before') ?? ''} class="rounded border border-line bg-field p-2" /></label>
         </div>
@@ -243,67 +137,42 @@
   {/key}
 
   <div class="my-4 flex flex-wrap items-center gap-2" aria-label="Selected filters">
-    {#each selected as key}<a href={filterUrl(key, null)} class="max-w-full truncate rounded-full border border-line px-3 py-1 text-sm" aria-label={`Remove ${labels[key]} filter`}>{labels[key]}: {page.url.searchParams.get(key)} ×</a>{/each}
+    {#each selected as key (key)}<a href={filterUrl(key, null)} class="max-w-full truncate rounded-full border border-line px-3 py-1 text-sm" aria-label={`Remove ${labels[key]} filter`}>{labels[key]}: {page.url.searchParams.get(key)} ×</a>{/each}
     {#if selected.length}<a href="/games" class="px-2 underline">Clear all</a>{/if}
     <button type="button" onclick={() => void load(page.url.search)} disabled={loading} class="btn btn-secondary ml-auto">Refresh</button>
   </div>
 
-  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error}
-    {#if sessionAccessDenied}<a class="underline" href={filterUrl('session', null)}>Browse games outside this session</a>
-    {:else}<button class="underline" onclick={() => void load(page.url.search)}>Try again</button>{/if}
-  </p>{/if}
-  {#if record?.length}
-    <section aria-label="My record" class="mb-5 rounded border border-line bg-panel p-4" data-testid="my-record">
-      <h2 class="type-title text-xl">My record</h2>
-      <p class="text-sm text-ink-2">Completed games across sessions, by opponent and decks. Win rate counts draws as games; the range is a 95% Wilson interval. Counts of recorded games, not a rating. "With analysis" counts games in which you chose at least once with analysis shown; they are included in the other columns. Games played on from another game are left out.</p>
-      <div class="overflow-x-auto">
-        <table class="mt-3 w-full text-left [font-variant-numeric:tabular-nums]">
-          <caption class="sr-only">Wins, losses and draws by opponent and decks</caption>
-          <thead class="border-b border-line text-ink-2"><tr><th class="py-2 pr-4">Opponent</th><th class="py-2 pr-4">Your deck</th><th class="py-2 pr-4">Their deck</th><th class="py-2 pr-4 text-right">Games</th><th class="py-2 pr-4 text-right">W–L–D</th><th class="py-2 pr-4 text-right">Win rate</th><th class="py-2 text-right" title="Games with a decision made while analysis was shown">With analysis</th></tr></thead>
-          <tbody>
-            {#each record as row (`${row.opponent_id}|${row.opponent_name}|${row.human_deck}|${row.opponent_deck}`)}
-              <tr class="border-b border-line" data-testid="my-record-row">
-                <td class="py-2 pr-4"><a class="underline" href={filterUrl('other', row.opponent_id)}>{row.opponent_name}</a></td>
-                <td class="py-2 pr-4">{row.human_deck.replaceAll('_', ' ')}</td>
-                <td class="py-2 pr-4">{row.opponent_deck.replaceAll('_', ' ')}</td>
-                <td class="py-2 pr-4 text-right">{row.games}</td>
-                <td class="py-2 pr-4 text-right">{row.wins}–{row.losses}–{row.draws}</td>
-                <td class="py-2 pr-4 text-right">{winRate(row)}</td>
-                <td class="py-2 text-right" data-testid="my-record-with-analysis">{row.with_analysis}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  {/if}
+  {#if error}<p role="alert" class="rounded border border-mountain p-4">{error} <button class="underline" onclick={() => void load(page.url.search)}>Try again</button></p>{/if}
   <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${count(games.length, 'game')} on this page`}</p>
-  {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
+  {#if !loading && !error && !games.length}
+    <p class="rounded border border-line bg-panel p-8 text-center" data-testid="history-empty">{selected.length ? 'No games match these filters.' : 'No games yet. Play one, or open a recorded game file above.'}</p>
+  {/if}
   {#if games.length}
     <div class="overflow-x-auto rounded border border-line bg-panel" aria-busy={loading}>
       <table class="w-full table-fixed text-left [overflow-wrap:anywhere]">
-        <caption class="sr-only">Recorded games across players</caption>
-        <colgroup><col style="width: 14%" /><col style="width: 30%" /><col style="width: 30%" /><col style="width: 18%" /><col style="width: 8%" /></colgroup>
-        <thead class="border-b border-line text-ink-2"><tr><th class="p-4">Played</th><th class="p-4">Player 1 · on the play</th><th class="p-4">Player 2</th><th class="p-4">Result / status</th><th class="p-4">Review</th></tr></thead>
+        <caption class="sr-only">Recorded games, newest first</caption>
+        <colgroup><col style="width: 14%" /><col style="width: 28%" /><col style="width: 28%" /><col style="width: 18%" /><col style="width: 12%" /></colgroup>
+        <thead class="border-b border-line text-ink-2"><tr><th class="p-4">Played</th><th class="p-4">Player 1 · on the play</th><th class="p-4">Player 2</th><th class="p-4">Result / status</th><th class="p-4">Open</th></tr></thead>
         <tbody>
           {#each games as game (game.id)}
             <tr class="border-b border-line align-top" data-testid="game-history-row">
-              <td class="p-4">{#if game.game_number}<span class="type-label">Game {game.game_number}</span><br />{/if}<time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
-              {#each [0, 1] as seat}
-                {@const player = game.players.find((p) => p.seat === seat)}
+              <td class="p-4"><time datetime={game.timestamp ?? undefined}>{game.timestamp ? new Date(game.timestamp).toLocaleString() : 'Unknown date'}</time><div class="mt-1 text-xs text-ink-2">{game.origin.replaceAll('_', ' ')}</div></td>
+              {#each [0, 1] as seat (seat)}
+                {@const player = game.players.find(candidate => candidate.seat === seat)}
                 <td class="p-4">
                   {#if player}
-                    <a href={filterUrl('player', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={recordedIdentity(player)} chip={false} /></a>
+                    {#if player.kind === 'bot'}
+                      <a href={filterUrl('bot', player.player_id)} class="font-semibold underline decoration-line underline-offset-4"><PlayerName identity={recordedIdentity(player)} chip={false} /></a>
+                    {:else}<span class="font-semibold"><PlayerName identity={recordedIdentity(player)} chip={false} /></span>{/if}
                     <div class="mt-1 text-sm text-ink-2">{player.kind === 'human' ? 'Human' : 'Bot'} · {player.deck.replaceAll('_', ' ')}</div>
-                    {#if player.version}<a href={filterUrl('version', player.version)} title={player.version} class="mt-1 block font-mono text-xs underline">{shortHash(player.version)}</a>{/if}
-                    {#if page.url.searchParams.has('player') && page.url.searchParams.get('player') !== player.player_id}<a class="mt-1 block text-xs underline" href={filterUrl('other', player.player_id)}>Filter this pairing</a>{/if}
+                    {#if player.version}<span title={player.version} class="mt-1 block font-mono text-xs text-ink-2">{shortHash(player.version)}</span>{/if}
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
               {/each}
-              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null, game.numbers?.played_from != null ? 'played on from another game' : null].filter(Boolean).join(' · ')}</div></td>
-              <td class="p-4">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
-                {#if game.feedback_truncated}<p class="text-xs text-ink-2">Showing the latest 100 notes.</p>{/if}
-                {#each game.feedback as note}<blockquote class="mt-2 max-w-64 break-words text-sm italic">{note.note}</blockquote>{/each}
+              <td class="p-4"><span class="font-semibold" data-testid="game-history-status">{resultLabel(game)}</span>{#if game.status === 'stopped' && !game.resumable && game.end_reason}<div class="text-sm text-ink-2">{game.end_reason.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null, game.numbers?.played_from != null ? 'played on from another game' : null].filter(Boolean).join(' · ')}</div></td>
+              <td class="p-4">
+                {#if game.resumable}<a href={`/?game=${encodeURIComponent(game.id)}`} class="mr-3 font-semibold underline" data-testid="game-history-resume" aria-label={`Resume game ${game.id}`}>Resume</a>{/if}
+                <a href={replayUrl(game.id)} class="underline" data-testid="game-history-replay" aria-label={`Replay game ${game.id}`}>Replay</a>
               </td>
             </tr>
           {/each}

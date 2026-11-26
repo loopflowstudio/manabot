@@ -862,18 +862,15 @@ export interface RecordedPlayer {
 }
 
 export interface GameSummary extends TraceSummary {
+  /** `active` is a game in progress; a legacy record may still say `interrupted`. */
   status: 'active' | 'completed' | 'stopped' | 'interrupted';
+  /** An unfinished played game: `/?game=<id>` takes it up again. */
+  resumable: boolean;
   ended_at: string | null;
   players: RecordedPlayer[];
   origin: string;
   record_version: number;
   revision: number | null;
-  mine: boolean;
-  replay_available: boolean;
-  play_session_id?: string | null;
-  game_number?: number | null;
-  feedback_truncated?: boolean;
-  feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
   /** The game's numbers once it is over and has been counted (`$lib/numbers`). */
   numbers?: GameNumbers | null;
 }
@@ -948,8 +945,11 @@ export interface CheckpointProvenance {
   step?: number | null;
 }
 
+/** A registered policy in the opponent's seat; `base_sha256` names it without its search wrapper. */
+export interface GameOpponent { name: string; sha256: string; producer?: string; base_sha256?: string | null }
+
 export interface TraceConfig {
-  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent?: GameOpponent | null;
   opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
   mirror?: import('./search').SearchConfig | null;
@@ -997,8 +997,6 @@ export interface TraceEvent {
 }
 
 export interface Trace {
-  can_feedback?: boolean;
-  read_only?: boolean;
   players?: RecordedPlayer[];
   record_version?: number;
   origin?: string;
@@ -1052,7 +1050,7 @@ export type WorkStatus = {
 });
 
 export type ServerMessage = (
-  | { type: 'work_status'; session_id: string; work: WorkStatus }
+  | { type: 'work_status'; game: string | null; work: WorkStatus }
 
   | {
       type: 'observation';
@@ -1067,8 +1065,6 @@ export type ServerMessage = (
       asset_pack?: AssetPackReference | null;
       auto_passed?: number;
       boards?: StepBoardPatch[];
-      session_id?: string;
-      resume_token?: string;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
       /** Present while a live analysis is shown in this game. */
@@ -1101,16 +1097,19 @@ export type ServerMessage = (
         }
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
+  | { type: 'control_error'; code: string; message: string }
   | import('./analysis').LiveAnalysisState
   | import('./analysis').LiveAnalysisMessage
 ) & {
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;
   mirror?: import('./search').SearchConfig | null;
-  table?: import('./shared-table-protocol').TableSnapshot;
-  session_id?: string;
-  resume_token?: string;
-  participant_id?: string;
+  /** The game this reply belongs to, with its opponent and the setup it was started with. */
+  game?: string;
+  opponent?: GameOpponent | null;
+  opponent_label?: string | null;
+  mode?: 'live' | 'study';
+  setup?: Record<string, unknown>;
   launch?: string;
   launch_setup?: LaunchSetup;
 };
@@ -1126,7 +1125,17 @@ export interface LaunchSetup {
   deck_import?: { hero: { source: string; filename: string; name?: string }; villain: { source: string; filename: string; name?: string } };
 }
 
-export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
+/** What the browser sends on `/ws/play` (`managym/academy/play_protocol.py`). */
+export type ClientMessage =
+  | { type: 'resume'; game: string; presentation_cursor?: number | null }
+  | { type: 'new_game'; config?: Record<string, unknown> }
+  | { type: 'rematch'; game: string; intent: 'rematch' | 'swap_sides'; config?: Record<string, unknown> }
+  | { type: 'command'; command: Command }
+  | { type: 'action'; index: number }
+  | { type: 'pass_turn' }
+  | { type: 'retry_mirror'; match_id: string; expected_revision: number }
+  | { type: 'set_stops'; stops?: Record<string, string[]> | null; stop_on_stack?: boolean | null; auto_pass?: boolean | null }
+  | { type: 'show_analysis'; shown: boolean; policy?: string | null };
 
 export type ConnectionState =
   | 'disconnected'

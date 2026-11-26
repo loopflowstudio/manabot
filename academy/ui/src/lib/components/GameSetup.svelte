@@ -13,18 +13,12 @@
     setup: GameStore;
     onStart: () => void;
     disabled?: boolean;
-    opponentOnly?: boolean;
-    humanActionLabel?: string;
-    showStart?: boolean;
     applySmartDefaults?: boolean;
   }
   let {
     setup,
     onStart,
     disabled = false,
-    opponentOnly = false,
-    humanActionLabel = 'Start game',
-    showStart = true,
     applySmartDefaults = false,
   }: Props = $props();
 
@@ -34,7 +28,6 @@
   let catalogError = $state<string | null>(null);
   let extension = $state<string | null | undefined>(undefined);
   let defaultOpponentId = $state<string | null>(null);
-  let botRecords = $state<Record<string, { wins: number; losses: number }>>({});
 
   function resolveCatalogChoice(id: string | null | undefined, list: TrainedOpponent[]): PlayerChoice | null {
     if (!id) return null;
@@ -69,10 +62,10 @@
     void Promise.all([oppFetch, poolFetch]).then(([catalog, pools]) => {
       const preferred = resolveCatalogChoice(catalog?.default_opponent, catalog?.opponents ?? []);
       const heuristic = resolveCatalogChoice('heuristic', catalog?.opponents ?? []);
-      if (preferred && (applySmartDefaults || (!setup.playSession && setup.opponentChoice === 'random'))) {
+      if (preferred && (applySmartDefaults || setup.opponentChoice === 'random')) {
         setup.setOpponentChoice(preferred);
       }
-      if (!setup.playSession && setup.watchPlayerChoice === 'random') {
+      if (setup.watchPlayerChoice === 'random') {
         const watchSeat1 = heuristic ?? preferred;
         if (watchSeat1) setup.watchPlayerChoice = watchSeat1;
       }
@@ -86,31 +79,6 @@
         }
       }
     });
-
-    // Tally bots' own W-L records from recent recorded games (never personal W-L).
-    void fetch('/api/traces?limit=50').then(async response => {
-      if (!response.ok) return;
-      const data = await response.json() as {
-        games?: {
-          winner: number | null;
-          players?: { seat: number; kind: string; name?: string; policy?: { id?: string } | null }[];
-        }[];
-      };
-      const counts: Record<string, { wins: number; losses: number }> = {};
-      for (const game of data.games ?? []) {
-        if (game.winner !== 0 && game.winner !== 1) continue;
-        for (const player of game.players ?? []) {
-          if (player.kind === 'human') continue;
-          const key = player.policy?.id ?? player.name;
-          if (!key) continue;
-          const slot = counts[key] ?? { wins: 0, losses: 0 };
-          if (player.seat === game.winner) slot.wins += 1;
-          else slot.losses += 1;
-          counts[key] = slot;
-        }
-      }
-      botRecords = counts;
-    }).catch(() => {});
   });
 
   function setMode(watch: boolean): void {
@@ -159,13 +127,12 @@
       ? 'Preparing game…'
       : setup.watchMode
         ? (isPoolSelected ? 'Deal & Watch' : 'Start watching')
-        : (isPoolSelected && humanActionLabel === 'Start game' ? 'Deal & Play' : humanActionLabel),
+        : (isPoolSelected ? 'Deal & Play' : 'Start game'),
   );
 </script>
 
 <section aria-label="Game setup" class="my-4 min-w-0 space-y-4">
-  {#if !opponentOnly}
-    <div class="flex flex-wrap items-center justify-between gap-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="inline-flex overflow-hidden rounded border border-line bg-field" role="group" aria-label="Match mode">
         <button type="button" class={`px-3 py-1.5 text-sm font-medium ${!setup.watchMode ? 'bg-action text-on-action' : 'text-ink-2 hover:text-ink'}`}
           aria-pressed={!setup.watchMode} {disabled} onclick={() => setMode(false)}>Play vs Bot</button>
@@ -179,11 +146,9 @@
           <button type="button" class="btn btn-secondary btn-sm" {disabled} onclick={() => applyPreset('elemental')}>Elemental</button>
         </div>
       {/if}
-    </div>
-  {/if}
+  </div>
 
   <div class="grid gap-3 md:grid-cols-2">
-    {#if !opponentOnly}
       <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
         <legend class="type-label px-2">{setup.watchMode ? 'Seat 1 · Bot 1' : 'Seat 1 · You'}</legend>
         <label class="flex flex-col gap-1">
@@ -214,7 +179,7 @@
         </label>
         {#if setup.watchMode}
           <PlayerPicker label="Seat 1 bot" value={setup.watchPlayerChoice} {trained} {extension} {catalogError} {disabled}
-            decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats} {botRecords}
+            decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
             setup={{ human_seat: 0, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
             onChange={value => { setup.watchPlayerChoice = value; }}
             search={setup.watchSearchConfig}
@@ -239,11 +204,9 @@
           </div>
         {/if}
       </fieldset>
-    {/if}
 
     <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
       <legend class="type-label px-2">{setup.watchMode ? 'Seat 2 · Bot 2' : 'Seat 2 · Opponent'}</legend>
-      {#if !opponentOnly}
         <label class="flex flex-col gap-1">
           <span class="type-label text-ink-2">Deck</span>
           {#if setup.deckImport?.villain}
@@ -270,9 +233,8 @@
             </select>
           {/if}
         </label>
-      {/if}
       <PlayerPicker label="Seat 2 bot" value={setup.opponentChoice} {trained} {extension} {catalogError} {disabled}
-        decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats} {botRecords}
+        decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
         setup={{ human_seat: setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
         onChange={value => { setup.setOpponentChoice(value); }}
         search={setup.searchConfig}
@@ -280,7 +242,6 @@
     </fieldset>
   </div>
 
-  {#if !opponentOnly}
     <div class="flex flex-wrap items-end gap-4 rounded border border-line bg-panel p-3">
       {#if !setup.watchMode}
         <div class="flex flex-col gap-1">
@@ -315,9 +276,7 @@
           <input class="rounded border border-line bg-field p-2" inputmode="numeric" bind:value={setup.seed} />
         </label>
       {/if}
-      {#if showStart}
         <button class="btn btn-primary ml-auto" {disabled} onclick={onStart}>{startLabel}</button>
-      {/if}
     </div>
     {#if !setup.deckImport && !isPoolDeckChoice(setup.decks.hero) && !isPoolDeckChoice(setup.decks.villain) && !isKeptDeckChoice(setup.decks.hero) && !isKeptDeckChoice(setup.decks.villain)}
       <details><summary class="cursor-pointer type-caption text-ink-2">Browse bundled decks and cards</summary>
@@ -326,7 +285,4 @@
     {/if}
     <DeckImport {setup} heroLabel={setup.watchMode ? 'Seat 1 deck' : 'Your deck'} villainLabel={setup.watchMode ? 'Seat 2 deck' : 'Opponent deck'}
       onKeptChange={decks => { keptDecks = decks; }} />
-  {:else if showStart}
-    <button class="btn btn-primary" {disabled} onclick={onStart}>{startLabel}</button>
-  {/if}
 </section>

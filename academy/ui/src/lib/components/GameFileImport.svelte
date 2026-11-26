@@ -1,6 +1,5 @@
 <script lang="ts">
   import {recordedGames} from '$lib/game-file';
-  import {recordFetch} from '$lib/records';
   let {onOpen, disabled = false}: {onOpen:(id:string) => void; disabled?:boolean} = $props();
   let games = $state<string[]>([]);
   let selected = $state(0);
@@ -11,10 +10,9 @@
     busy = true; error = '';
     try {
       // Send the original source span: JSON re-encoding can round u64 identities.
-      const response = await recordFetch('/api/watch/import', {method:'POST', headers:{'content-type':'application/json'}, body:games[selected]});
+      const response = await fetch('/api/watch/import', {method:'POST', headers:{'content-type':'application/json'}, body:games[selected]});
       const result = await response.json();
       if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail.replaceAll('_',' ') : result.detail?.message ?? 'Game could not be imported.');
-      if (result.token) sessionStorage.setItem(`etude.watch.${result.id}`, result.token);
       onOpen(result.id);
     } catch (reason) { error = reason instanceof Error ? reason.message : String(reason); }
     finally { busy = false; }

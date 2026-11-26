@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount, type Snippet } from 'svelte';
-  import { artCredits as getArtCredits, type ArtCredit } from '$lib/card-art';
 
-  import { currentGame, loadCurrentGame } from '$lib/current-game.svelte';
   import { page } from '$app/state';
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
   import { followTheme } from '$lib/theme.svelte';
@@ -11,32 +9,13 @@
 
   let { children }: { children?: Snippet } = $props();
 
-  let artCredits = $state<[string, ArtCredit][]>([]);
-  onMount(() => {
-    loadCurrentGame();
-    const unfollowTheme = followTheme();
-    let active = true;
-    let revision = 0;
-    const update = () => {
-      const current = ++revision;
-      void getArtCredits().then(credits => { if (active && current === revision) artCredits = credits; }).catch(() => {});
-    };
-    update();
-    window.addEventListener('academy-art-loaded', update);
-    return () => { active = false; unfollowTheme(); window.removeEventListener('academy-art-loaded', update); };
-  });
+  onMount(followTheme);
 
-  const NAV = $derived([
-    { href: '/?setup=1', label: 'New game' },
+  const NAV = [
+    { href: '/', label: 'Play' },
     { href: '/games', label: 'History' },
-    ...(currentGame.href ? [{href:currentGame.href, label:'Current game'}] : []),
-  ]);
-  function isActive(href: string): boolean {
-    if (href === '/?setup=1') return page.url.pathname === '/' && page.url.searchParams.has('setup');
-    if (href === '/') return page.url.pathname === '/' && !page.url.searchParams.has('setup');
-    if (href.startsWith('/replay?')) return page.url.pathname === '/replay' && page.url.searchParams.get('trace') === new URL(href, page.url).searchParams.get('trace');
-    return page.url.pathname.startsWith(href);
-  }
+  ];
+  const isActive = (href: string): boolean => (href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href));
 </script>
 
 <svelte:head>
@@ -44,16 +23,12 @@
 </svelte:head>
 
 <div class="flex min-h-screen flex-col text-ink">
-  <!-- One header on every page, the table's bar included: paper, with the
-       color pie as a thin W-U-B-R-G rule beneath it. -->
+  <!-- One bar on every page: paper, with the color pie as a thin W-U-B-R-G rule beneath it. -->
   <header class="chrome-bar">
-    <div class="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-y-2 px-4 py-2">
-      <div class="flex items-baseline gap-3">
-        <div data-testid="brand-name" class="type-brand text-display">Academy</div>
-        <div class="type-label hidden text-ink-3 sm:block">Games and recorded decisions</div>
-      </div>
+    <div class="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-2">
+      <div data-testid="brand-name" class="type-brand text-display">Academy</div>
       <nav class="flex items-center gap-2">
-        {#each NAV as item}
+        {#each NAV as item (item.href)}
           <a
             href={item.href}
             aria-current={isActive(item.href) ? 'page' : undefined}
@@ -74,46 +49,4 @@
   <div class="flex-1">
     {@render children?.()}
   </div>
-
-  <!-- The colophon: the book closes with its imprint — identity, ways in,
-       and the attribution the Fan Content Policy asks us to show. -->
-  <footer class="mt-10 border-t border-line">
-    <div class="mx-auto grid w-full max-w-[1400px] gap-x-12 gap-y-6 px-4 py-8 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,22rem)]">
-      <div>
-        <div class="type-title text-display">Academy</div>
-        <p class="type-caption mt-1 max-w-[48ch] text-ink-2">
-          An étude in studying Magic: play a manabot, replay every decision,
-          and annotate the score.
-        </p>
-      </div>
-      <nav aria-label="Footer" class="type-caption">
-        <div class="type-label text-ink-2">Pages</div>
-        <ul class="mt-1">
-          {#each NAV as item}
-            <li><a class="inline-block py-1 text-ink-2 underline-offset-2 hover:text-ink hover:underline" href={item.href}>{item.label}</a></li>
-          {/each}
-        </ul>
-      </nav>
-      <p class="type-caption text-ink-3">
-        Academy is unofficial Fan Content permitted under the
-        <a
-          class="underline underline-offset-2 hover:text-ink"
-          href="https://company.wizards.com/en/legal/fancontentpolicy"
-          rel="external noopener">Wizards of the Coast Fan Content Policy</a
-        >. Card art and mana symbols are © Wizards of the Coast. Not
-        approved or endorsed by Wizards.
-      </p>
-      {#if artCredits.length}
-        <details class="type-caption text-ink-2 md:col-span-3">
-          <summary class="cursor-pointer">Card art credits</summary>
-          <p class="mt-2">Magic: The Gathering artwork © Wizards of the Coast LLC. Images provided by <a href="https://scryfall.com" class="underline">Scryfall</a>.</p>
-          <ul class="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-            {#each artCredits as [name, credit]}
-              <li><a href={credit.source} class="underline">{name}</a> — {credit.artist}</li>
-            {/each}
-          </ul>
-        </details>
-      {/if}
-    </div>
-  </footer>
 </div>

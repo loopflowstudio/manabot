@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AnalysedDecision, Analysis } from './analysis';
-import { agreement, duration, estimateArc, numberRows, numbersLine, winRate, type GameNumbers, type RecordRow } from './numbers';
+import { agreement, duration, estimateArc, numberRows, numbersLine, type GameNumbers } from './numbers';
 
 const seat = (index: number, spells: number, attacks: number, damage: number | null = 3) => ({
   seat: index, lands_played: 4, spells_cast: spells, attacks, cards_drawn: 5, damage_dealt: damage, damage_taken: damage,
@@ -39,10 +39,5 @@ describe('the game in numbers', () => {
     expect(duration('2026-11-24T10:00:00Z', '2026-11-24T10:12:10Z')).toBe('12 min');
     expect(duration('2026-11-24T10:00:00Z', '2026-11-24T11:05:00Z')).toBe('1 h 05 min');
     expect(duration('2026-11-24T10:00:00Z', null)).toBeNull();
-  });
-
-  it('gives a win rate with its interval', () => {
-    const row = { games: 10, wins: 7, interval: [0.397, 0.892] } as RecordRow;
-    expect(winRate(row)).toBe('70% (40–89%)');
   });
 });

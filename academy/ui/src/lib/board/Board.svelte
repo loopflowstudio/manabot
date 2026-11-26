@@ -20,6 +20,7 @@
    * click goes, so a drag adds no choice a click or key cannot make.
    */
   import { onMount, setContext, untrack, type Snippet } from 'svelte';
+  import ArtCredits from '$lib/components/ArtCredits.svelte';
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
@@ -1457,6 +1458,7 @@
             <label class="setting"><span>Pin the card preview<small>In the left sidebar, instead of beside the card you point at</small></span>
               <input type="checkbox" role="switch" data-testid="inspect-toggle" checked={inspectMode === 'dock'} onchange={toggleInspect} /></label>
             <div class="setting"><span>Theme</span><ThemeSwitch /></div>
+            <ArtCredits />
           </section>
           {#if menu?.game}<section class="group" aria-label="Game"><p class="type-label text-ink-3">Game</p>{@render menu.game()}</section>{/if}
         </div>

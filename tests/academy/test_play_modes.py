@@ -988,7 +988,7 @@ def test_rematch_keeps_imported_sideboards_and_takes_a_named_opponent(
         set_policy_registry(None)
 
 
-def test_watch_setup_admits_imports_and_shows_its_setup(
+def test_watch_setup_admits_imports(
     isolated_traces: Path,
 ) -> None:
     server.LIVE_GAMES.clear()
@@ -1007,11 +1007,7 @@ def test_watch_setup_admits_imports_and_shows_its_setup(
     with TestClient(server.app) as client:
         index = client.get(f"/api/traces/{created['id']}/recording")
         assert index.status_code == 200, index.text
-        setup = index.json()["private_setup"]
-        assert setup["seed"] is None
-        assert setup["deck_import"]["hero"]["source"] == "8 Island"
-        assert setup["decklists"] == "closed"
-        assert setup["watch_players"] == ["passive", "passive"]
+        assert index.json()["watch"]
         # A watched game has no seat to take up again.
         assert not index.json()["resumable"]
     server.end_game(created["id"], "new_game")

@@ -4017,13 +4017,6 @@ def get_recording_index(
             if not recording.watch and offset == 0
             else {}
         ),
-        "private_setup": {
-            **setup_draft(GameConfig(**payload["config"])),
-            "watch_players": payload["config"].get("watch_players"),
-            "watch_mirrors": _recorded_mirrors(players),
-        }
-        if recording.watch
-        else None,
     }
 
 
