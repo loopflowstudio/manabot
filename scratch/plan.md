@@ -121,6 +121,13 @@ Types live in `managym/group.py`; the native layer is `managym/src/flow/group/`
 
 ## Remaining (after Pass 5, in gate / ship-review)
 
+- Pass 5 left no recorded test results in `scratch/`: gate runs debug
+  `cargo nextest` for `managym/tests/rules/group.rs`, `uv run python -m pytest
+  tests/env/test_group.py tests/academy/test_group_command.py`, vitest for
+  `academy/ui/src/lib/{group,game.svelte,board/partition}.test.ts`, Playwright
+  `e2e/partition-piles.spec.ts` and `e2e/grouped-decisions.spec.ts`, and
+  `uv run python scripts/public_api.py check`.
+
 - Full CI on PR #623 and live demo: `./scripts/play`, attack with several
   creatures and Confirm (one `group_command`), Scry 2 and arrange both cards
   before one Confirm, and verify Curator of Destinies pile split submits in one
