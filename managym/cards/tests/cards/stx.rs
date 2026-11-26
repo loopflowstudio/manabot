@@ -10,8 +10,8 @@ use crate::support::{
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
+        decision_surface::PublicCommitment,
         observation::Observation,
-        structured_offer::PublicCommitment,
     },
     decision::Command,
     flow::turn::StepKind,

@@ -40,12 +40,21 @@ import managym
 from managym.academy.card_art import card_art
 from managym.academy.card_faces import CardFace, card_faces
 from managym.bots import BotDecision, BotPolicy, FlatSearchPolicy, choose_bot
-from managym.combat import CombatPlan, preview_combat
 from managym.decision import (
     Command as SemanticCommand,
     DecisionFrame as SemanticDecisionFrame,
     SemanticTransition,
     TransitionReceipt,
+)
+from managym.decision_group import (
+    DecisionAddress,
+    DecisionGroupChoice,
+    DecisionPreview,
+    OrderLibraryChoice,
+    OrderLibraryDecision,
+    ScryChoice,
+    ScryDecision,
+    SingleDecision,
 )
 from managym.enums import (
     ActionSpaceEnum,
@@ -174,6 +183,8 @@ from .shared_table_protocol import (
     BranchPreviewMessage,
     BranchRevealMessage,
     CommandMessage,
+    DecisionGroupCommand,
+    DecisionGroupCommandMessage,
     JoinTableMessage,
     NewGameMessage,
     PassTurnMessage,
@@ -1130,6 +1141,9 @@ class GameSession:
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
+        self._live_decision_group_cache: (
+            tuple[tuple[int, int, str], dict[str, Any] | None] | None
+        ) = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
         self.presentation = (PresentationProjector(), PresentationProjector())
         self.presentation_events: list[dict[str, Any]] = []
@@ -1375,6 +1389,7 @@ class GameSession:
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt = None
+        self._live_decision_group_cache = None
         self.accepted_commands = {}
         self._swap_receipts = {}
         self._live_analysis_publish = None
@@ -1859,14 +1874,10 @@ class GameSession:
         self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
-    def hero_command(
-        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
-    ) -> dict[str, Any]:
-        """Validate and apply one revision-bound protocol-v1 command.
-
-        Offer IDs are lowered through ``PublishedPrompt``. The client never
-        chooses or replays a raw engine action index on this path.
-        """
+    def _validate_submission_header(
+        self, raw: Any
+    ) -> tuple[str, PublishedPrompt] | dict[str, Any]:
+        """Validate session, command_id, duplicate receipt, match, revision and prompt."""
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
         if not isinstance(raw, dict):
@@ -1899,25 +1910,17 @@ class GameSession:
             return self._reject_command(raw, "stale_revision", recover=True)
         if raw.get("prompt_id") != context.prompt_id:
             return self._reject_command(raw, "stale_prompt", recover=True)
+        return command_id, context
 
-        offer_id = raw.get("offer_id")
-        if context.action_by_offer.get(offer_id) is None:
-            return self._reject_command(raw, "unknown_offer", recover=True)
-        if raw.get("answers") != []:
-            return self._reject_command(raw, "invalid_selection", recover=False)
-        if self.obs.game_over:
-            return self._reject_command(raw, "authority_busy", recover=True)
-        if not _is_hero_turn(self.obs, self.human_seat):
-            return self._reject_command(raw, "not_actor", recover=False)
-
-        try:
-            command = Command.model_validate(raw).model_dump(mode="json")
-        except Exception:
-            return self._reject_command(raw, "invalid_command", recover=False)
-
-        base_revision = context.revision
-        batch_cursor = self.presentation[self.human_seat].next_seq
-        self._apply_bound_command(context, command, source="client")
+    def _finish_client_command(
+        self,
+        command_id: str,
+        base_revision: int,
+        batch_cursor: int,
+        *,
+        committed: Callable[[dict[str, Any]], None] | None,
+    ) -> dict[str, Any]:
+        """Record the human-transition receipt, emit early commit, and advance bots."""
         # The receipt names the human transition, before any opponent proposal.
         # A later failure must not make an accepted Command appear unexecuted.
         committed_frame = self._experience_frame()
@@ -1939,6 +1942,169 @@ class GameSession:
         self._advance()
         self._last_presentation_cursor = batch_cursor
         return self._accepted_outcome(base_revision, batch_cursor, receipt)
+
+    def hero_command(
+        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
+        """Validate and apply one revision-bound protocol-v1 command.
+
+        Offer IDs are lowered through ``PublishedPrompt``. The client never
+        chooses or replays a raw engine action index on this path.
+        """
+        validated = self._validate_submission_header(raw)
+        if isinstance(validated, dict):
+            return validated
+        command_id, context = validated
+        assert self.obs is not None
+
+        offer_id = raw.get("offer_id")
+        if context.action_by_offer.get(offer_id) is None:
+            return self._reject_command(raw, "unknown_offer", recover=True)
+        if raw.get("answers") != []:
+            return self._reject_command(raw, "invalid_selection", recover=False)
+        if self.obs.game_over:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if not _is_hero_turn(self.obs, self.human_seat):
+            return self._reject_command(raw, "not_actor", recover=False)
+
+        try:
+            command = Command.model_validate(raw).model_dump(mode="json")
+        except Exception:
+            return self._reject_command(raw, "invalid_command", recover=False)
+
+        base_revision = context.revision
+        batch_cursor = self.presentation[self.human_seat].next_seq
+        self._apply_bound_command(context, command, source="client")
+        return self._finish_client_command(
+            command_id, base_revision, batch_cursor, committed=committed
+        )
+
+    def live_decision_group(self) -> dict[str, Any] | None:
+        """Return the active grouped-decision descriptor for the published prompt."""
+        if (
+            self.watch_mode
+            or self.env is None
+            or self.obs is None
+            or self.obs.game_over
+            or not _is_hero_turn(self.obs, self.human_seat)
+        ):
+            return None
+        context = self.published_prompt
+        if (
+            not isinstance(context, DecisionContext)
+            or context.viewer != self.human_seat
+        ):
+            return None
+        cache_key = (
+            context.revision,
+            context.prompt_id,
+            str(context.frame["frame_hash"]),
+        )
+        if (
+            self._live_decision_group_cache is not None
+            and self._live_decision_group_cache[0] == cache_key
+        ):
+            return deepcopy(self._live_decision_group_cache[1])
+        active = self.env.decision(viewer=self.human_seat)
+        if active is None or isinstance(active, SingleDecision):
+            self._live_decision_group_cache = (cache_key, None)
+            return None
+        descriptor: dict[str, Any] = {
+            "match_id": self.match_id,
+            "revision": context.revision,
+            "prompt_id": context.prompt_id,
+            "frame_hash": context.frame["frame_hash"],
+            **active.model_dump(
+                mode="json", exclude={"address", "offers"}, exclude_none=True
+            ),
+        }
+        self._live_decision_group_cache = (cache_key, descriptor)
+        return deepcopy(descriptor)
+
+    def hero_decision_group(
+        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
+        """Validate a grouped plan on a clone, then execute its sequential steps."""
+        validated = self._validate_submission_header(raw)
+        if isinstance(validated, dict):
+            return validated
+        command_id, context = validated
+        assert self.env is not None and self.obs is not None
+
+        pending = self._pending_decision
+        if pending is None:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if (
+            raw.get("frame_hash") != context.frame["frame_hash"]
+            or pending.frame.frame_hash != context.frame["frame_hash"]
+        ):
+            return self._reject_command(raw, "stale_revision", recover=True)
+        if self.obs.game_over:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if not _is_hero_turn(self.obs, self.human_seat):
+            return self._reject_command(raw, "not_actor", recover=False)
+
+        try:
+            group_command = DecisionGroupCommand.model_validate(raw)
+        except Exception:
+            return self._reject_command(raw, "invalid_command", recover=False)
+
+        address = _pending_decision_address(context, pending)
+        try:
+            preview = self.env.preview(group_command.plan, at=address)
+        except managym.AgentError:
+            return self._reject_command(raw, "stale_revision", recover=True)
+
+        if preview.refused is not None:
+            return self._reject_command(
+                raw,
+                "decision_group_refused",
+                message=preview.refused.reason,
+                refused=preview.refused.model_dump(mode="json"),
+                recover=False,
+            )
+        if not preview.complete or not preview.steps:
+            return self._reject_command(
+                raw,
+                "decision_group_incomplete",
+                message=_incomplete_decision_group_message(preview, group_command.plan),
+                recover=False,
+            )
+
+        base_revision = context.revision
+        batch_cursor = self.presentation[self.human_seat].next_seq
+        for step_index, step in enumerate(preview.steps):
+            step_context = self._publish_current_prompt()
+            step_pending = self._pending_decision
+            if step_context is None or step_pending is None:
+                raise RuntimeError(
+                    f"Grouped step {step_index} lost its live decision prompt."
+                )
+            step_native = SemanticDecisionFrame.from_json(
+                step_pending.root.semantic_decision_frame_json()
+            )
+            if (
+                step_native.revision != step.revision
+                or step_native.fingerprint != step.fingerprint
+                or step_context.action_by_offer.get(step.action_index)
+                != step.action_index
+            ):
+                raise RuntimeError(
+                    f"Grouped step {step_index} diverged from compiled native preview."
+                )
+            step_command = {
+                "command_id": f"authority.decision_group.{command_id}.{step_index}",
+                "match_id": self.match_id,
+                "expected_revision": step_context.revision,
+                "prompt_id": step_context.prompt_id,
+                "offer_id": step.action_index,
+                "answers": [],
+            }
+            self._apply_bound_command(step_context, step_command, source="client")
+
+        return self._finish_client_command(
+            command_id, base_revision, batch_cursor, committed=committed
+        )
 
     def _accepted_outcome(
         self, base_revision: int, cursor: int, receipt: dict[str, Any]
@@ -2541,6 +2707,7 @@ class GameSession:
         if self.mirror_retry is not None:
             self.mirror_retry["expected_revision"] = self.revision
         self.published_prompt = None
+        self._live_decision_group_cache = None
         self._pending_decision = None
 
     def _commit_step_presentation(
@@ -2925,16 +3092,28 @@ class GameSession:
         return payload
 
     def _reject_command(
-        self, raw: dict[str, Any], code: str, *, recover: bool
+        self,
+        raw: dict[str, Any],
+        code: str,
+        *,
+        recover: bool,
+        message: str | None = None,
+        refused: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         prompt = self.published_prompt
-        rejection = {
+        rejection: dict[str, Any] = {
             "command_id": raw.get("command_id"),
             "code": code,
-            "message": code.replace("_", " ").capitalize() + ".",
+            "message": (
+                message
+                if message is not None
+                else code.replace("_", " ").capitalize() + "."
+            ),
             "current_revision": self.revision,
             "current_prompt": None if prompt is None else prompt.prompt_id,
         }
+        if refused is not None:
+            rejection["refused"] = deepcopy(refused)
         payload: dict[str, Any] = {
             "type": "command_outcome",
             "status": "rejected",
@@ -3762,6 +3941,11 @@ def _response_with_participant(
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
+    payload["decision_group"] = (
+        record.game.live_decision_group()
+        if TableCapability.SUBMIT_LIVE_COMMAND in ROLE_CAPABILITIES[participant.role]
+        else None
+    )
     if response.get("type") in {"observation", "game_over", "table_snapshot"}:
         payload["session_id"] = record.session_id
         payload["resume_token"] = participant.resume_token
@@ -3828,6 +4012,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "rematch": TableCapability.CONFIGURE_MATCH,
     "swap_sides": TableCapability.CONFIGURE_MATCH,
     "command": TableCapability.SUBMIT_LIVE_COMMAND,
+    "decision_group_command": TableCapability.SUBMIT_LIVE_COMMAND,
     "action": TableCapability.SUBMIT_LIVE_COMMAND,
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
     "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
@@ -3950,7 +4135,7 @@ def _dispatch_table_request(
 
     `publish_analysis` delivers a live analysis's readings to the pilot
     without waiting (`_send_live_analysis`)."""
-    if isinstance(request, CommandMessage):
+    if isinstance(request, (CommandMessage, DecisionGroupCommandMessage)):
         command_id = request.command.command_id
         if command_id in record.game.accepted_commands:
             submitter = record.accepted_command_submitters.get(command_id)
@@ -3961,9 +4146,10 @@ def _dispatch_table_request(
                 raise TableDispatchError(
                     "forbidden", "Command id belongs to another participant."
                 )
-            return record.game.hero_command(
-                request.command.model_dump(mode="json")
-            ), False
+            raw_command = request.command.model_dump(mode="json")
+            if isinstance(request, DecisionGroupCommandMessage):
+                return record.game.hero_decision_group(raw_command), False
+            return record.game.hero_command(raw_command), False
 
     _authorize_table_request(record, participant, request)
 
@@ -4008,13 +4194,17 @@ def _dispatch_table_request(
         if not bumped:
             record.table_revision += 1
         return response, True
-    if isinstance(request, CommandMessage):
+    if isinstance(request, (CommandMessage, DecisionGroupCommandMessage)):
         command_id = request.command.command_id
         record.accepted_command_submitters[command_id] = participant.viewer_id
         try:
-            response = record.game.hero_command(
-                request.command.model_dump(mode="json"), committed=committed
-            )
+            raw_command = request.command.model_dump(mode="json")
+            if isinstance(request, DecisionGroupCommandMessage):
+                response = record.game.hero_decision_group(
+                    raw_command, committed=committed
+                )
+            else:
+                response = record.game.hero_command(raw_command, committed=committed)
         finally:
             # Keep retry ownership if policy/transport work failed after commit.
             if command_id not in record.game.accepted_commands:
@@ -5656,28 +5846,63 @@ async def get_payment_preview(
         }
 
 
-class CombatPreviewRequest(BaseModel):
-    """A drafted declaration at the current combat prompt's authority address."""
+def _pending_decision_address(
+    context: DecisionContext, pending: PendingCanonicalDecision
+) -> DecisionAddress:
+    native = SemanticDecisionFrame.from_json(
+        pending.root.semantic_decision_frame_json()
+    )
+    return DecisionAddress(
+        viewer=context.viewer,
+        revision=native.revision,
+        fingerprint=native.fingerprint,
+    )
+
+
+def _incomplete_decision_group_message(
+    preview: DecisionPreview, plan: DecisionGroupChoice
+) -> str:
+    """Describe what remains unplaced when a grouped preview is incomplete."""
+    decision = preview.decision
+    if isinstance(decision, ScryDecision) and isinstance(plan, ScryChoice):
+        items, placed_items = decision.items, [*plan.top, *plan.bottom]
+    elif isinstance(decision, OrderLibraryDecision) and isinstance(
+        plan, OrderLibraryChoice
+    ):
+        items, placed_items = decision.items, plan.order
+    else:
+        return "Grouped plan is incomplete."
+    placed = {(item.entity, item.incarnation) for item in placed_items}
+    missing = [
+        card.label
+        for card in items
+        if (card.item.entity, card.item.incarnation) not in placed
+    ]
+    if missing:
+        return f"Place remaining cards before confirming: {', '.join(missing)}."
+    return "Grouped plan is incomplete."
+
+
+class DecisionGroupPreviewRequest(BaseModel):
+    """A drafted grouped choice at the current prompt's authority address."""
 
     model_config = ConfigDict(extra="forbid")
     match_id: str
     revision: int
     prompt_id: int
     frame_hash: str
-    plan: CombatPlan
+    plan: DecisionGroupChoice
 
 
-@app.post("/api/sessions/{session_id}/combat-preview")
-async def get_combat_preview(
+@app.post("/api/sessions/{session_id}/decision-group-preview")
+async def get_decision_group_preview(
     session_id: str,
-    payload: CombatPreviewRequest,
+    payload: DecisionGroupPreviewRequest,
     x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Preview a whole attack or block without committing any of it.
+    """Preview a whole grouped decision without committing any of it.
 
-    Each step names the Academy offer to send at the decision it predicts:
-    Academy offer ids enumerate the native actions in order
-    (`_build_decision_context`), so a step's native action index is its offer.
+    Compiled native steps remain authority-private and are never returned.
     """
     record = SESSION_REGISTRY.get(session_id)
     if record is None:
@@ -5688,15 +5913,15 @@ async def get_combat_preview(
             TableCapability.SUBMIT_LIVE_COMMAND
             not in ROLE_CAPABILITIES[participant.role]
         ):
-            raise HTTPException(403, "combat_preview_forbidden")
+            raise HTTPException(403, "decision_group_preview_forbidden")
         game = record.game
         context = game.published_prompt
         pending = game._pending_decision
         if context is None or pending is None or game.env is None:
-            raise HTTPException(409, "combat_preview_stale")
+            raise HTTPException(409, "decision_group_preview_stale")
         frame = pending.frame
-        if context.viewer != game.human_seat:
-            raise HTTPException(403, "combat_preview_forbidden")
+        if game.watch_mode or context.viewer != game.human_seat:
+            raise HTTPException(403, "decision_group_preview_forbidden")
         if (
             game.match_id != payload.match_id
             or frame.revision != payload.revision
@@ -5705,29 +5930,34 @@ async def get_combat_preview(
             or frame.frame_hash != payload.frame_hash
             or frame.frame_hash != context.frame["frame_hash"]
         ):
-            raise HTTPException(409, "combat_preview_stale")
-        if context.action_space not in {"DECLARE_ATTACKER", "DECLARE_BLOCKER"}:
-            raise HTTPException(409, "combat_preview_not_a_declaration")
-        native = SemanticDecisionFrame.from_json(
-            pending.root.semantic_decision_frame_json()
-        )
+            raise HTTPException(409, "decision_group_preview_stale")
+        if game.live_decision_group() is None:
+            raise HTTPException(409, "decision_group_preview_unavailable")
+        address = _pending_decision_address(context, pending)
         try:
-            preview = preview_combat(
-                game.env,
-                viewer=context.viewer,
-                revision=native.revision,
-                fingerprint=native.fingerprint,
-                plan=payload.plan,
-            )
+            preview = game.env.preview(payload.plan, at=address)
         except managym.AgentError as exc:
-            raise HTTPException(409, "combat_preview_stale") from exc
+            raise HTTPException(409, "decision_group_preview_stale") from exc
         if preview.steps and (
             context.action_by_offer.get(preview.steps[0].action_index)
             != preview.steps[0].action_index
         ):
-            raise RuntimeError("Academy combat offers no longer enumerate actions.")
+            raise RuntimeError("Academy group offers no longer enumerate actions.")
         return {
-            **payload.model_dump(mode="json"),
+            "match_id": payload.match_id,
+            "revision": payload.revision,
+            "prompt_id": payload.prompt_id,
+            "frame_hash": payload.frame_hash,
             "viewer": context.viewer,
-            "preview": preview.model_dump(mode="json"),
+            "complete": preview.complete,
+            "refused": (
+                None
+                if preview.refused is None
+                else preview.refused.model_dump(mode="json")
+            ),
+            "outcome": (
+                None
+                if preview.outcome is None
+                else preview.outcome.model_dump(mode="json", exclude_none=True)
+            ),
         }

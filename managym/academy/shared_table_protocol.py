@@ -14,6 +14,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
+from managym.decision_group import DecisionGroupChoice
 from managym.experience import Command, ProtocolModel, UInt64
 
 from .advice_identity import AdviceIdentity
@@ -197,6 +198,21 @@ class CommandMessage(ProtocolModel):
     command: Command
 
 
+class DecisionGroupCommand(ProtocolModel):
+    command_id: str
+    match_id: str
+    expected_revision: UInt64
+    prompt_id: UInt64
+    frame_hash: str
+    plan: DecisionGroupChoice
+
+
+class DecisionGroupCommandMessage(ProtocolModel):
+    type: Literal["decision_group_command"]
+    grant_revision: UInt64 | None = None
+    command: DecisionGroupCommand
+
+
 class ActionMessage(ProtocolModel):
     type: Literal["action"]
     grant_revision: UInt64 | None = None
@@ -296,6 +312,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | RematchMessage
     | SwapSidesMessage
     | CommandMessage
+    | DecisionGroupCommandMessage
     | ActionMessage
     | PassTurnMessage
     | RetryMirrorMessage
@@ -321,6 +338,7 @@ REQUEST_TYPES = (
     "rematch",
     "swap_sides",
     "command",
+    "decision_group_command",
     "action",
     "pass_turn",
     "retry_mirror",

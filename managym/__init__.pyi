@@ -21,6 +21,12 @@ from typing_extensions import deprecated
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
 from . import format as format
+from .decision_group import (
+    Choice,
+    Decision,
+    DecisionAddress,
+    DecisionPreview,
+)
 from .statistics import GameStatistics
 
 NATIVE_ALLOCATOR: Literal["system", "mimalloc"]
@@ -309,27 +315,43 @@ class Env:
     def step(
         self, action: int | None = None
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
-    def compound_offers(self) -> StructuredOfferSet: ...
+    def decision_surface(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
+    def compound_offers(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
     def compound_commands_json(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> str: ...
-    def structured_offers(self) -> StructuredOfferSet: ...
-    def structured_search_offers(self) -> StructuredOfferSet: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
+    def structured_offers(self) -> DecisionSurface: ...
+    @deprecated("use Env.decision_surface or Env.decision; removed in 0.3.0")
+    def structured_search_offers(self) -> DecisionSurface: ...
     def search_context_json(self, include_witness: bool = True) -> str: ...
     def search_witness_json(self) -> str: ...
+    @deprecated("use Env.decision / Env.preview / Env.submit; removed in 0.3.0")
     def step_structured(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any], int]: ...
+    @deprecated("use Env.submit; removed in 0.3.0")
     def step_legacy_submission(
-        self, offers: StructuredOfferSet, submission_json: str
+        self, offers: DecisionSurface, submission_json: str
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any], int]: ...
     # Read-only automatic payment plan (managym.payment).
     def payment_preview_json(
         self, viewer: int, revision: int, fingerprint: str, action_index: int
     ) -> str: ...
+    @deprecated("use Env.preview; removed in 0.3.0")
     def combat_preview_json(
         self, viewer: int, revision: int, fingerprint: str, plan_json: str
     ) -> str: ...
+    # Unified interactive decision surface over sequential Actions (managym.decision_group).
+    def decision(self, viewer: int | None = None) -> Decision | None: ...
+    def preview(
+        self, choice: Choice, *, at: DecisionAddress | None = None
+    ) -> DecisionPreview: ...
+    def submit(
+        self, choice: Choice, *, at: DecisionAddress | None = None
+    ) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
     # Shared semantic decision contract (managym.decision). JSON mirrors of
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...
@@ -442,8 +464,11 @@ class Env:
     ) -> None:
         """Deprecated alias of `managym.encode_observation_into`; removal in 0.3.0."""
 
-class StructuredOfferSet:
+class DecisionSurface:
     def projection_json(self) -> str: ...
+
+@deprecated("use DecisionSurface; removed in 0.3.0")
+class StructuredOfferSet(DecisionSurface): ...
 
 class SelectedBranchRuntime:
     def __init__(self, match_id: str, audit: bool = False) -> None: ...

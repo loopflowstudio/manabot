@@ -205,7 +205,7 @@ fn attack_triggers_distinguish_you_and_your_planeswalker() {
 fn ten_attackers_choose_independently_among_six_planeswalkers() {
     use crate::support::inspect::card_of;
     use managym::{
-        agent::structured_offer::{ChoiceAnswer, ChoiceStep, OfferSubmission},
+        agent::decision_surface::{ChoiceAnswer, ChoiceStep, DecisionSubmission},
         state::card::{CardType, CardTypes},
     };
     let tomik = "Tomik, Orzhov Lawmage";
@@ -258,7 +258,7 @@ fn ten_attackers_choose_independently_among_six_planeswalkers() {
     s.game_mut()
         .apply_offer_submission(
             &offers,
-            &OfferSubmission {
+            &DecisionSubmission {
                 offer_id: offer.id,
                 answers,
             },

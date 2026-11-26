@@ -14,6 +14,7 @@
    * for the floors the rail itself scrolls.
    */
   import type { Snippet } from 'svelte';
+  import { decisionGroupDisclosureCopy, type DecisionGroupKind } from '$lib/decision-group';
   import type { ExperienceFrame } from '$lib/types';
   import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
   import type { Segment } from './tell';
@@ -85,16 +86,16 @@
     cursorLineIds?: ReadonlySet<string>;
     /** Cast/activation seq marked when a standalone resolution line is selected. */
     cursorSourceSeq?: number | null;
-    /** A combat draft's controls, in place of the per-creature buttons. */
+    /** A live group's or draft's controls, in place of the single-step buttons. */
     draft?: Snippet;
-    /** Why a confirmed combat declaration stopped before all of it was sent. */
-    stopped?: string | null;
+    /** Active group kind, for the collapsed raw-offer disclosure wording. */
+    groupKind?: DecisionGroupKind | null;
   }
 
   let {
     view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recentFacts, resolvedSpells, history, opponentName,
     stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false,
-    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, stopped = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, recording = false, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, groupKind = null,
   }: Props = $props();
 
   const stack = $derived(stackGiven ?? view.stack);
@@ -317,7 +318,6 @@
           {/if}
         </div>
       {/if}
-      {#if stopped}<p class="type-caption text-ink-2" data-testid="combat-stopped" role="status">{stopped}</p>{/if}
       {#if draft}
         {@render draft()}
       {:else if !recording}
@@ -360,11 +360,12 @@
       {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
-    <!-- An open combat draft is the way to declare; each creature's own offer stays one click away for inspection. -->
+    <!-- An open live group folds raw single-step offers under a collapsed disclosure. -->
     {#if draft}
-      <details class="raw" data-testid="per-creature-choices">
-        <summary class="type-caption text-ink-3">Each creature's choice</summary>
-        <p class="type-caption text-ink-3">Confirming the draft sends these one creature at a time.</p>
+      {@const disclosure = decisionGroupDisclosureCopy(groupKind ?? 'declare_attackers')}
+      <details class="raw" data-testid="per-creature-choices" data-group-kind={groupKind ?? undefined}>
+        <summary class="type-caption text-ink-3">{disclosure.summary}</summary>
+        <p class="type-caption text-ink-3">{disclosure.caption}</p>
         {@render choiceList()}
       </details>
     {:else}

@@ -36,6 +36,7 @@
     connect,
     disconnect,
     sendAction,
+    sendDecisionGroupCommand,
     sendNewGame,
     sendContinuation,
     sendPassTurn,
@@ -49,8 +50,9 @@
     sendSwapSides,
     sendTransferPilot,
     fetchPaymentPreview,
-    fetchCombatPreview,
+    fetchDecisionGroupPreview,
   } from '$lib/socket.svelte';
+  import type { DecisionGroupPlan } from '$lib/decision-group';
   import type { ExperienceFrame, InteractionOffer, StopSide } from '$lib/types';
 
   let demoName = $state<string | null>(null);
@@ -394,6 +396,19 @@
     sendAction(action.id);
   }
 
+  function handleGroupSubmit(plan: DecisionGroupPlan): void {
+    if (participantStudying || !canSubmitLive) return;
+    sendDecisionGroupCommand(plan);
+  }
+
+  const groupRejection = $derived(
+    liveTable
+      && (gameStore.lastCommandRejection?.code === 'decision_group_refused'
+        || gameStore.lastCommandRejection?.code === 'decision_group_incomplete')
+      ? gameStore.lastCommandRejection
+      : null,
+  );
+
   const inGame = $derived(gameStore.observation !== null && editor.kind === 'closed' && boardFrame !== null);
 
   // Who is deciding while you wait: the opponent's search or policy, or the board itself.
@@ -622,7 +637,11 @@
       interrupted={gameStore.resumeFailed}
       payment={paymentState}
       onpreview={previewPayment}
-      combatPreview={liveTable ? fetchCombatPreview : undefined}
+      group={liveTable ? gameStore.liveDecisionGroup : null}
+      groupPreview={liveTable ? fetchDecisionGroupPreview : undefined}
+      ongroupact={handleGroupSubmit}
+      {groupRejection}
+      ondismissgrouprejection={rejection => gameStore.dismissCommandRejection(rejection.command_id)}
       onact={handleActionSelect}
       pending={gameStore.commandPending}
       onpassturn={handlePassTurn}
