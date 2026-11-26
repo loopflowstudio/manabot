@@ -627,3 +627,59 @@ describe('grouped decisions in GameSocketController', () => {
     expect(gameStore.commandPending).toBe(false);
   });
 });
+
+describe('live analysis across Swap sides', () => {
+  const point = { event: 3, at: 1, score: 70, semantic: 'signed_outcome' };
+
+  function recoveryAt(revision: number, swapped: boolean): RecoveryEnvelope {
+    const frame = frameAt(revision);
+    if (swapped) {
+      const { agent, opponent } = frame.projection;
+      frame.projection = { ...frame.projection, agent: opponent, opponent: agent };
+    }
+    return { ...structuredClone(boltProtocolFixture.recovery), frame };
+  }
+
+  function showing(): void {
+    gameStore.prepareForNewGame();
+    gameStore.applyFrame(frameAt(42));
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, shown: true, points: [point] };
+  }
+
+  it('starts the line again from the new seat', () => {
+    showing();
+    const recovery = recoveryAt(43, true);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.observation?.agent.player_index).toBe(1);
+    expect(gameStore.liveAnalysis.points).toEqual([]);
+  });
+
+  it('keeps the line while the seat stays', () => {
+    showing();
+    const recovery = recoveryAt(43, false);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.liveAnalysis.points).toEqual([point]);
+  });
+
+  it('drops old-seat automation notes on swap and keeps swap dividers monotonic across a swap back', () => {
+    showing();
+    gameStore.addHistoryNote('you', 1, 905, 'Pass turn');
+    const controller = new GameSocketController();
+    const firstSwap = recoveryAt(43, true);
+    firstSwap.presentation_cursor = 900;
+    firstSwap.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 4); // seq 900..903
+    deliver(controller, { type: 'observation', data: firstSwap.frame.projection, actions: [], recovery: firstSwap });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 903],
+    ]);
+
+    const swapBack = recoveryAt(44, false);
+    swapBack.presentation_cursor = 900;
+    swapBack.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2); // seq 900..901
+    deliver(controller, { type: 'observation', data: swapBack.frame.projection, actions: [], recovery: swapBack });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 901],
+      ['note', 'Swapped sides', 901],
+    ]);
+  });
+});

@@ -1758,6 +1758,10 @@ impl PyObservationCharacteristics {
         self.data.power
     }
     #[getter]
+    fn printed_loyalty(&self) -> Option<i32> {
+        self.data.printed_loyalty
+    }
+    #[getter]
     fn toughness(&self) -> i32 {
         self.data.toughness
     }
@@ -2374,6 +2378,10 @@ impl PyPermanent {
         self.data.exhausted_abilities = value;
     }
     #[getter]
+    fn loyalty_activated_this_turn(&self) -> bool {
+        self.data.loyalty_activated_this_turn
+    }
+    #[getter]
     fn once_each_turn_used(&self) -> i32 {
         self.data.once_each_turn_used
     }
@@ -2456,6 +2464,10 @@ impl PyPermanent {
     #[setter]
     fn set_is_granted_land(&mut self, value: bool) {
         self.data.is_granted_land = value;
+    }
+    #[getter]
+    fn attacked_permanent(&self) -> Option<i32> {
+        self.data.attacked_permanent
     }
     #[getter]
     fn blocking(&self) -> Option<i32> {
@@ -2646,6 +2658,9 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// Announced divided share assigned to the current target during `DivideAmount`.
+    #[pyo3(get)]
+    pub division_amount: Option<i32>,
     /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
     #[pyo3(get)]
     pub spell_profile: u8,
@@ -2772,6 +2787,7 @@ impl From<ActionOption> for PyAction {
             pays_directly: value.pays_directly,
             is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -2797,6 +2813,7 @@ impl From<PyAction> for ActionOption {
             pays_directly: value.pays_directly,
             is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -5474,7 +5491,7 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         "registry_names",
         content
             .definitions()
-            .map(|definition| definition.name.clone())
+            .map(|definition| definition.registry_name().to_owned())
             .collect::<Vec<_>>(),
     )?;
     out.set_item("token_kind", catalog.token_kind)?;

@@ -103,6 +103,8 @@ fn announced_payment_reserves_life_across_nested_callers() {
         source: ActivationSource::Permanent(source),
         ability_index: 0,
         targets: vec![],
+        target_req_indices: vec![],
+        target_divisions: vec![],
         x: 0,
     };
     let payment = Payment {
@@ -2087,6 +2089,7 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
         mode: None,
         targets: vec![],
         target_req_indices: vec![],
+        target_divisions: vec![],
         target_shares: vec![],
     });
     let payment = Payment {
@@ -2172,6 +2175,7 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
         mode: None,
         targets: vec![],
         target_req_indices: vec![],
+        target_divisions: vec![],
         target_shares: vec![],
     });
     let pay = Payment {
@@ -2264,6 +2268,7 @@ fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
         mode: None,
         targets: vec![],
         target_req_indices: vec![],
+        target_divisions: vec![],
         target_shares: vec![],
     });
     let payment = Payment {

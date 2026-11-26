@@ -31,7 +31,10 @@ fn cr_509_1_declared_blocker_is_recorded_on_attacker() {
         .combat
         .as_ref()
         .expect("combat state should exist");
-    let attacker = *combat.attackers.first().expect("one attacker should exist");
+    let attacker = combat
+        .attackers()
+        .next()
+        .expect("one attacker should exist");
     let blockers = combat
         .attacker_to_blockers
         .get(&attacker)
@@ -51,7 +54,10 @@ fn cr_509_negative_decline_block_leaves_attacker_unblocked() {
         .combat
         .as_ref()
         .expect("combat state should exist");
-    let attacker = *combat.attackers.first().expect("one attacker should exist");
+    let attacker = combat
+        .attackers()
+        .next()
+        .expect("one attacker should exist");
     let blockers = combat
         .attacker_to_blockers
         .get(&attacker)

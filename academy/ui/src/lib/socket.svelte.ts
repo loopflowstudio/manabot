@@ -295,6 +295,7 @@ export class GameSocketController {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
+      gameStore.clearPendingStops();
       if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
@@ -308,6 +309,7 @@ export class GameSocketController {
 
   disconnect(): void {
     this.intentionallyClosed = true;
+    gameStore.clearPendingStops();
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -381,6 +383,32 @@ export class GameSocketController {
     this.send(request);
   }
 
+  sendSwapSides(): void {
+    const table = gameStore.table;
+    const frame = gameStore.protocolFrame;
+    if (
+      !table
+      || !frame
+      || gameStore.swapPending
+      || gameStore.newGamePending
+      || gameStore.gameOver
+      || gameStore.resumeFailed
+      || gameStore.restoredDecision
+      || gameStore.searchRetry
+      || !gameStore.hasCapability('configure_match')
+    ) return;
+    gameStore.swapPending = true;
+    gameStore.swapError = null;
+    gameStore.setError(null);
+    this.send({
+      type: 'swap_sides',
+      grant_revision: table.access.grant_revision,
+      request_id: crypto.randomUUID(),
+      match_id: frame.match_id,
+      expected_revision: frame.revision,
+    });
+  }
+
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
@@ -449,7 +477,6 @@ export class GameSocketController {
 
   sendSetStops(): void {
     const stops = gameStore.stops;
-    gameStore.noteStopsSent();
     this.send({
       type: 'set_stops',
       ...(gameStore.table
@@ -544,9 +571,26 @@ export class GameSocketController {
     this.send({ type: 'return_to_live', grant_revision: grantRevision });
   }
 
+  private transmit(message: SharedTableRequest): void {
+    if (
+      message.type === 'set_stops'
+      && message.stops
+      && typeof message.stop_on_stack === 'boolean'
+      && typeof message.auto_pass === 'boolean'
+    ) {
+      gameStore.noteStopsSent({
+        my: message.stops.my,
+        opponent: message.stops.opponent,
+        stop_on_stack: message.stop_on_stack,
+        auto_pass: message.auto_pass,
+      });
+    }
+    this.socket!.send(JSON.stringify(message));
+  }
+
   private send(message: SharedTableRequest): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
       return;
     }
 
@@ -564,7 +608,7 @@ export class GameSocketController {
       if (!message) {
         break;
       }
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
     }
   }
 
@@ -682,7 +726,12 @@ export class GameSocketController {
     if (message.type === 'control_error') {
       writeTabValue('academy.continuation', null);
       gameStore.newGamePending = false;
+      if (gameStore.swapPending) {
+        gameStore.swapPending = false;
+        gameStore.swapError = message.message;
+      }
       gameStore.endFastForward();
+      gameStore.clearPendingStops();
       this.clearPendingCommand();
       gameStore.endCommand();
       gameStore.setError(message.message);
@@ -691,6 +740,8 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       gameStore.tableUnavailable = false;
+      const matchBefore = gameStore.protocolFrame?.match_id ?? null;
+      const seatBefore = gameStore.observation?.agent.player_index ?? null;
       if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
       if (this.pendingResume) {
         try {
@@ -710,20 +761,30 @@ export class GameSocketController {
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
-        const sameMatch = gameStore.protocolFrame?.match_id === message.recovery.frame.match_id;
-        const prevLastSeq = sameMatch ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
+        const sameMatch = matchBefore === message.recovery.frame.match_id;
+        const seatSwapped = sameMatch && seatBefore !== null && seatBefore !== message.recovery.frame.projection.agent.player_index;
+        const prevLastSeq = sameMatch && !seatSwapped ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
         this.applyRecovery(
           message.recovery,
           sessionId,
           resumeToken,
         );
+        if (seatSwapped) {
+          gameStore.keptBoards = null;
+          const lastSeq = presentationPlayer.events.at(-1)?.seq ?? -1;
+          gameStore.historyNotes = gameStore.historyNotes
+            .filter(note => note.actor === 'note')
+            .map(note => (note.afterSeq > lastSeq ? { ...note, afterSeq: lastSeq } : note));
+        }
         const patches = message.boards ?? [];
         // Recovery on reconnect/reload brings presentation_tail with no earlier
         // boards; only span the frame board across freshly delivered non-pass
-        // events (never across missed pre-reconnect events).
-        const freshNonPass = message.recovery.presentation_tail.filter(
-          event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
-        );
+        // events (never across missed pre-reconnect or pre-swap events).
+        const freshNonPass = seatSwapped
+          ? []
+          : message.recovery.presentation_tail.filter(
+              event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
+            );
         const isReconnect = message.recovery.reason === 'reconnect';
         const range = (!isReconnect || patches.length > 0) && freshNonPass.length > 0
           ? {
@@ -760,6 +821,19 @@ export class GameSocketController {
       if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
+      // Live scores are read from one seat's view; after Swap sides the line
+      // starts again from the new seat and live history marks the swap.
+      const matchAfter = gameStore.protocolFrame?.match_id ?? null;
+      const seatAfter = gameStore.observation?.agent.player_index ?? null;
+      if (matchBefore !== null && matchBefore === matchAfter && seatBefore !== null && seatAfter !== null && seatAfter !== seatBefore) {
+        gameStore.liveAnalysis = { ...gameStore.liveAnalysis, points: [], reading: null };
+        gameStore.addHistoryNote(
+          'note',
+          gameStore.observation?.turn.turn_number ?? null,
+          presentationPlayer.events.at(-1)?.seq ?? -1,
+          'Swapped sides',
+        );
+      }
       this.flushQueue();
       return;
     }
@@ -800,8 +874,13 @@ export class GameSocketController {
 
     writeTabValue('academy.continuation', null);
     gameStore.endFastForward();
+    gameStore.clearPendingStops();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (gameStore.swapPending) {
+      gameStore.swapPending = false;
+      gameStore.swapError = message.message;
+    }
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
@@ -960,6 +1039,15 @@ export class GameSocketController {
       && next.revision < current.revision
     ) {
       return;
+    }
+    const seatChanged = Boolean(
+      current
+      && current.match_id === next.match_id
+      && current.projection.agent.player_index !== next.projection.agent.player_index,
+    );
+    if (seatChanged) {
+      this.presentationCursor = null;
+      presentationPlayer.clear();
     }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
@@ -1146,3 +1234,5 @@ export async function fetchGroupPreview(
 }
 
 export function sendContinuation(intent: 'rematch' | 'swap_sides' | 'change_opponent', config: Record<string, unknown> = {}): void { controller.sendContinuation(intent, config); }
+
+export function sendSwapSides(): void { controller.sendSwapSides(); }

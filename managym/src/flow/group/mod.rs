@@ -52,6 +52,25 @@ impl From<StateLibraryEnd> for LibraryEnd {
     }
 }
 
+/// One attacker, with its permanent defender if it attacks one. The creature
+/// identity keeps the established wire shape for attacks on the player.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PlannedAttack {
+    #[serde(flatten)]
+    pub creature: ObjectRenderId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defender: Option<ObjectRenderId>,
+}
+
+impl From<ObjectRenderId> for PlannedAttack {
+    fn from(creature: ObjectRenderId) -> Self {
+        Self {
+            creature,
+            defender: None,
+        }
+    }
+}
+
 /// One proposed block: `blocker` blocks `attacker`.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -72,6 +91,7 @@ pub struct GroupCard {
 pub struct AttackerItem {
     pub item: ObjectRenderId,
     pub label: String,
+    pub can_attack: Vec<ObjectRenderId>,
     pub must_attack: bool,
 }
 
@@ -118,7 +138,7 @@ pub enum DecisionSpec {
     Single,
     DeclareAttackers {
         declarable: Vec<AttackerItem>,
-        committed: Vec<ObjectRenderId>,
+        committed: Vec<PlannedAttack>,
     },
     DeclareBlockers {
         declarable: Vec<BlockerItem>,
@@ -181,7 +201,7 @@ pub enum DecisionChoice {
     },
     DeclareAttackers {
         #[serde(default)]
-        attackers: Vec<ObjectRenderId>,
+        attackers: Vec<PlannedAttack>,
     },
     DeclareBlockers {
         #[serde(default)]
@@ -239,7 +259,7 @@ pub enum DecisionOutcome {
         offer_id: usize,
     },
     DeclareAttackers {
-        attackers: Vec<ObjectRenderId>,
+        attackers: Vec<PlannedAttack>,
     },
     DeclareBlockers {
         blocks: Vec<PlannedBlock>,
@@ -554,10 +574,14 @@ fn format_offer_label(
             permanent, attack, ..
         } => {
             let name = perm_name(*permanent);
-            if *attack {
-                format!("Attack with {name}")
-            } else {
-                format!("Don't attack with {name}")
+            match attack {
+                Some(crate::flow::combat::AttackTarget::Permanent(object)) => {
+                    format!("Attack {} with {name}", game.observed_object_name(*object))
+                }
+                Some(crate::flow::combat::AttackTarget::Player(_)) => {
+                    format!("Attack with {name}")
+                }
+                None => format!("Don't attack with {name}"),
             }
         }
         Action::DeclareBlocker {

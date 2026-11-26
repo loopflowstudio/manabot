@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { groupPlanKey, type DeclareAttackersGroup, type DeclareBlockersGroup } from '$lib/group';
-import type { ExperienceFrame } from '$lib/types';
+import type { ExperienceFrame, ObjectRenderId } from '$lib/types';
 import {
   addAttackers, combatPlanOf, committedFromGroup, drawDraft, draftWords, EMPTY_DRAFT, pileCounts,
-  sanitizeCombatDraft, setBlock, setPileCount, toggleAttacker, toggleBlock,
+  sanitizeCombatDraft, setAttackerDefender, setBlock, setPileCount, toggleAttacker, toggleBlock,
 } from './combat';
 
 const fixture = JSON.parse(readFileSync(new URL('../../../../../managym/academy/fixtures/choice-navigation-w17-smart-payment.json', import.meta.url), 'utf8')) as {
@@ -16,9 +16,9 @@ const fixture = JSON.parse(readFileSync(new URL('../../../../../managym/academy/
 const block = fixture.positions.DECLARE_BLOCKER.frame;
 const [otter, lieutenant] = [110, 105];
 
-const id = (entity: number, incarnation = 2) => ({ entity, incarnation });
-const attackerItem = (entity: number, label: string, must_attack = false) => ({
-  item: id(entity), label, must_attack,
+const id = (entity: number, incarnation = 2): ObjectRenderId => ({ entity, incarnation });
+const attackerItem = (entity: number, label: string, must_attack = false, can_attack: ObjectRenderId[] = []) => ({
+  item: id(entity), label, must_attack, ...(can_attack.length ? { can_attack } : {}),
 });
 const blockerItem = (entity: number, label: string, canBlock: number[] = [], must_block = false) => ({
   item: id(entity), label, can_block: canBlock.map(target => id(target, 3)), must_block,
@@ -130,5 +130,37 @@ describe('drafting', () => {
     expect(drawn.projection.agent.battlefield.find(p => p.id === otter)?.blocking).toBe(lieutenant);
     expect(block.projection.agent.battlefield.find(p => p.id === otter)?.blocking).toBeUndefined();
     expect(drawDraft(block, EMPTY_DRAFT)).toBe(block);
+  });
+
+  it('keeps each chosen defender on its own attacker through preview and confirmation', () => {
+    const jace = { entity: 7, incarnation: 3 };
+    const group = attackersGroup([
+      attackerItem(1, 'Tiger-Seal', false, [jace]),
+      attackerItem(2, 'Otter-Penguin', false, [jace]),
+    ]);
+    // Newly drafted attackers default to the defending player with no defender override.
+    const defaulted = toggleAttacker(toggleAttacker(EMPTY_DRAFT, 1), 2);
+    expect(defaulted.defenders).toBeUndefined();
+    const defaultPlan = combatPlanOf(defaulted, group);
+    if (defaultPlan.kind !== 'declare_attackers') throw new Error('expected declare_attackers plan');
+    expect(defaultPlan.attackers).toEqual([
+      { entity: 1, incarnation: 2 },
+      { entity: 2, incarnation: 2 },
+    ]);
+    const retargeted = setAttackerDefender(defaulted, 1, 7);
+    const retargetedPlan = combatPlanOf(retargeted, group);
+    if (retargetedPlan.kind !== 'declare_attackers') throw new Error('expected declare_attackers plan');
+    expect(retargetedPlan.attackers).toEqual([
+      { entity: 1, incarnation: 2, defender: jace },
+      { entity: 2, incarnation: 2 },
+    ]);
+    expect(groupPlanKey(retargetedPlan)).not.toBe(groupPlanKey(defaultPlan));
+    expect(draftWords(group, retargeted, new Map([...names, [7, 'Jace']])).plan)
+      .toBe('Tiger-Seal attacks Jace · Otter-Penguin attacks the defending player');
+    expect(setAttackerDefender(retargeted, 1, null).defenders).toBeUndefined();
+    const both = setAttackerDefender(retargeted, 2, 7);
+    expect(toggleAttacker(both, 1).defenders).toEqual({ 2: 7 });
+    expect(sanitizeCombatDraft({ attackers: [1, 2], defenders: { 1: 7, 2: 99 }, blocks: [] }, group))
+      .toEqual({ attackers: [1, 2], defenders: { 1: 7 }, blocks: [] });
   });
 });

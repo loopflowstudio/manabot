@@ -11,11 +11,16 @@ commit atomically via ``env.submit(choice, at=...)`` without touching
 import json
 from typing import Annotated, Literal
 
-from pydantic import Field, TypeAdapter
+from pydantic import ConfigDict, Field, TypeAdapter
 
 from managym.experience import ObjectRenderId, ProtocolModel, SubjectRef
 
 LibraryEnd = Literal["top", "bottom"]
+
+
+class PlannedAttack(ObjectRenderId):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+    defender: ObjectRenderId | None = None
 
 
 class PlannedBlock(ProtocolModel):
@@ -31,6 +36,7 @@ class GroupCard(ProtocolModel):
 class AttackerItem(ProtocolModel):
     item: ObjectRenderId
     label: str
+    can_attack: list[ObjectRenderId] = Field(default_factory=list)
     must_attack: bool
 
 
@@ -70,7 +76,7 @@ class SingleDecision(DecisionBase):
 class DeclareAttackersDecision(DecisionBase):
     kind: Literal["declare_attackers"] = "declare_attackers"
     declarable: list[AttackerItem]
-    committed: list[ObjectRenderId]
+    committed: list[PlannedAttack]
 
 
 class DeclareBlockersDecision(DecisionBase):
@@ -120,7 +126,7 @@ type Decision = Annotated[
 
 class DeclareAttackersChoice(ProtocolModel):
     kind: Literal["declare_attackers"] = "declare_attackers"
-    attackers: list[ObjectRenderId] = Field(default_factory=list)
+    attackers: list[PlannedAttack] = Field(default_factory=list)
 
 
 class DeclareBlockersChoice(ProtocolModel):
@@ -192,7 +198,7 @@ class SingleOutcome(ProtocolModel):
 
 class DeclareAttackersOutcome(ProtocolModel):
     kind: Literal["declare_attackers"] = "declare_attackers"
-    attackers: list[ObjectRenderId]
+    attackers: list[PlannedAttack]
 
 
 class DeclareBlockersOutcome(ProtocolModel):

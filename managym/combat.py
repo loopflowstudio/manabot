@@ -12,14 +12,14 @@ from pydantic import BaseModel, ConfigDict
 
 import managym
 from managym.experience import ObjectRenderId
-from managym.group import PlannedBlock
+from managym.group import PlannedAttack, PlannedBlock
 
 
 class CombatPlan(BaseModel):
     """Attackers for an attack, blocks for a block; a creature left out declines."""
 
     model_config = ConfigDict(extra="forbid")
-    attackers: list[ObjectRenderId] = []
+    attackers: list[PlannedAttack] = []
     blocks: list[PlannedBlock] = []
 
 
@@ -27,6 +27,7 @@ class DeclarableCreature(BaseModel):
     model_config = ConfigDict(extra="forbid")
     creature: ObjectRenderId
     label: str
+    can_attack: list[ObjectRenderId] = []
     can_block: list[ObjectRenderId]
     must_block: bool
     must_attack: bool
@@ -40,6 +41,7 @@ class DeclarationStep(BaseModel):
     fingerprint: str
     creature: ObjectRenderId
     action_index: int
+    defender: ObjectRenderId | None = None
     attack: bool
     blocks: ObjectRenderId | None
 
@@ -57,7 +59,7 @@ class CombatPreview(BaseModel):
     declarable: list[DeclarableCreature]
     steps: list[DeclarationStep]
     refused: DeclarationRefusal | None
-    declared_attackers: list[ObjectRenderId]
+    declared_attackers: list[PlannedAttack]
     declared_blocks: list[PlannedBlock]
 
 

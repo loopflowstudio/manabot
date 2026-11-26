@@ -225,6 +225,7 @@ impl Game {
             || permanent.attached_to.is_some()
             || !permanent.spent_abilities.is_empty()
             || !permanent.activated_this_turn.is_empty()
+            || permanent.loyalty_activated_this_turn
         {
             return false;
         }
@@ -239,8 +240,10 @@ impl Game {
                 .chain(turn.ability_resolutions_this_turn.keys())
                 .any(|key| key.0 == object)
             || state.combat.as_ref().is_some_and(|combat| {
-                combat.attackers.contains(&id)
-                    || combat.blockers_to_declare.contains(&id)
+                combat.attack_targets.iter().any(|&(attacker, target)| {
+                    attacker == id
+                        || target == Some(crate::flow::combat::AttackTarget::Permanent(object))
+                }) || combat.blockers_to_declare.contains(&id)
                     || combat.attackers_to_declare.contains(&id)
                     || combat.first_strikers.contains(&id)
                     || combat

@@ -23,9 +23,20 @@
     {
       "type": "rematch",
       "grant_revision": 1,
+      "request_id": "rematch.example",
+      "attempt_id": "attempt.example",
+      "setup_revision": 1,
+      "intent": "rematch",
       "config": {
         "seed": 8
       }
+    },
+    {
+      "type": "swap_sides",
+      "grant_revision": 1,
+      "request_id": "swap.example",
+      "match_id": "match.example",
+      "expected_revision": 12
     },
     {
       "type": "command",

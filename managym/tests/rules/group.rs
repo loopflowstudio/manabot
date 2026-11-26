@@ -235,7 +235,15 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
         .unwrap()
         .actions
         .iter()
-        .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+        .position(|a| {
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(_),
+                    ..
+                }
+            )
+        })
         .unwrap();
     mid_combat
         .submit(
@@ -260,7 +268,7 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
     // Attack with all three so we can test blockers next.
     let all_attackers: Vec<_> = attackers
         .iter()
-        .map(|&id| perm_render(s.game(), id))
+        .map(|&id| perm_render(s.game(), id).into())
         .collect();
     let attack_choice = DecisionChoice::DeclareAttackers {
         attackers: all_attackers.clone(),
@@ -350,7 +358,7 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
         DecisionSpec::DeclareAttackers { ref declarable, .. } if declarable.len() == 1
     ));
     let single_choice = DecisionChoice::DeclareAttackers {
-        attackers: vec![perm_render(single.game(), ogre)],
+        attackers: vec![perm_render(single.game(), ogre).into()],
     };
     let submitted = assert_submit_matches_manual(single.game_mut(), 0, &single_choice);
     assert_eq!(submitted.steps.len(), 1);
@@ -375,7 +383,7 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
     let d = s.game().decision(Some(PlayerId(0))).expect("attackers");
     let before = witness(s.game());
     let omit_jugg = DecisionChoice::DeclareAttackers {
-        attackers: vec![perm_render(s.game(), ogre)],
+        attackers: vec![perm_render(s.game(), ogre).into()],
     };
     let preview = s.game().preview(Some(&d.address), &omit_jugg).unwrap();
     assert!(!preview.complete);
@@ -387,7 +395,10 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
     assert_eq!(witness(s.game()), before);
 
     let both = DecisionChoice::DeclareAttackers {
-        attackers: vec![perm_render(s.game(), jugg), perm_render(s.game(), ogre)],
+        attackers: vec![
+            perm_render(s.game(), jugg).into(),
+            perm_render(s.game(), ogre).into(),
+        ],
     };
     assert_submit_matches_manual(s.game_mut(), 0, &both);
 
@@ -411,7 +422,10 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
     b.game_mut().skip_trivial = false;
     b.advance_to_active_step(0, StepKind::DeclareAttackers);
     let atk_choice = DecisionChoice::DeclareAttackers {
-        attackers: vec![perm_render(b.game(), drake), perm_render(b.game(), ogre2)],
+        attackers: vec![
+            perm_render(b.game(), drake).into(),
+            perm_render(b.game(), ogre2).into(),
+        ],
     };
     assert_submit_matches_manual(b.game_mut(), 0, &atk_choice);
     b.advance_until(
@@ -1071,7 +1085,7 @@ fn env_submit_settles_mixed_policy_identically_to_env_step() {
         if let DecisionSpec::DeclareAttackers { ref declarable, .. } = d.spec {
             assert_eq!(declarable.len(), 2);
             let choice = DecisionChoice::DeclareAttackers {
-                attackers: declarable.iter().map(|c| c.item).collect(),
+                attackers: declarable.iter().map(|c| c.item.into()).collect(),
             };
             let preview = env.preview(None, &choice).unwrap();
             assert!(preview.complete);
@@ -1174,8 +1188,14 @@ fn partition_piles_full_mid_group_threshold_refusal_and_choose_pile_transition()
         vec![Effect::SeparatePiles { look: 5 }],
         true,
     );
-    let ids: Vec<_> = pinned.iter().map(|&obj| card_render(s.game(), obj)).collect();
-    let d = s.game().decision(Some(PlayerId(0))).expect("PartitionPiles 5");
+    let ids: Vec<_> = pinned
+        .iter()
+        .map(|&obj| card_render(s.game(), obj))
+        .collect();
+    let d = s
+        .game()
+        .decision(Some(PlayerId(0)))
+        .expect("PartitionPiles 5");
     assert!(s.game().decision(Some(PlayerId(1))).is_none());
     match &d.spec {
         DecisionSpec::PartitionPiles {

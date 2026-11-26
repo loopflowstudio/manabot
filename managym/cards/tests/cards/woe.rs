@@ -53,7 +53,7 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
         let token = treasure.then(|| {
             let token = s
                 .game_mut()
-                .create_token("token.treasure", PlayerId(0), false)
+                .create_token("token.treasure", PlayerId(0))
                 .unwrap();
             s.game().state.permanents[token].as_ref().unwrap().object
         });
@@ -158,7 +158,7 @@ fn archons_glory_bargain_sacrifice_is_chosen_under_auto_and_forks() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Plains");
     let tokens = ["token.treasure", "token.food"].map(|key| {
-        let token = s.game_mut().create_token(key, PlayerId(0), false).unwrap();
+        let token = s.game_mut().create_token(key, PlayerId(0)).unwrap();
         s.game().state.permanents[token].as_ref().unwrap().object
     });
     s.game_mut().mana_payment[0] = ManaPayment::Auto;

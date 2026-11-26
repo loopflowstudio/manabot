@@ -10,11 +10,11 @@ use crate::{
     state::{
         ability::{
             Ability, AbilityOrigin, Aggregate, Condition, Effect, EffectValue, EffectiveTrigger,
-            Except, GrantClock, ObjectProperty, ObjectSelector, Scope,
+            Except, GrantKey, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
-            LayerCount, LayerValue, StaticAbility, StaticScope,
+            LayerCount, LayerValue, StateBasedAction, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{
@@ -180,6 +180,152 @@ struct LayerObject {
     statics_override: Option<Vec<StaticEntry>>,
     dirty: u8,
 }
+/// Condition-independent generator filter for static-bearing objects across
+/// the battlefield and command zone.
+///
+/// Built during `evaluate_board`; subsequent gathers (`compute_board`,
+/// `for_each_functioning_static`, `activated_cost_reduction`) then scale with
+/// generators rather than the whole battlefield. Over-includes conservatively
+/// (every functioning battlefield permanent and command-zone emblem whose base
+/// definition carries a static ability, plus any functioning permanent granted
+/// a static in layer 6) and never evaluates runtime conditions, so dependency
+/// changes and condition flips cannot hide a generator.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct StaticSources {
+    /// Functioning battlefield permanents carrying static abilities, per seat.
+    ///
+    /// Invariant: buckets use `live_permanent(id).controller` (the controller
+    /// committed by the previous evaluation). That is safe during layer
+    /// evaluation only because layer consumers ignore bucket order and sort by
+    /// timestamp, `compute_board` reads each permanent's newly evaluated
+    /// controller before recording permissions/restrictions, and any committed
+    /// control change invalidates the cached `LayerBoard`.
+    pub(super) battlefield: [Vec<PermanentId>; 2],
+    /// Functioning command-zone objects (CR 114.4 emblems) carrying static
+    /// abilities, per seat.
+    pub(super) command: [Vec<ObjectId>; 2],
+}
+
+impl StaticSources {
+    /// Record a permanent that gained a static ability during layer 6
+    /// (`Modification::GrantStatic`).
+    fn record_battlefield(&mut self, game: &Game, id: PermanentId) {
+        if !game.permanent_abilities_function(id) {
+            return;
+        }
+        let seat = game.live_permanent(id).controller.0;
+        if !self.battlefield[seat].contains(&id) {
+            self.battlefield[seat].push(id);
+        }
+    }
+
+    /// Prune permanents that lost all static abilities during layer evaluation
+    /// and restore battlefield zone order for seats with multiple generators,
+    /// matching `iter_battlefield_permanents(seat)`.
+    pub(super) fn finalize_for_board(
+        &mut self,
+        game: &Game,
+        objects: &[Option<Arc<Characteristics>>],
+    ) {
+        for seat in [PlayerId(0), PlayerId(1)] {
+            let list = &mut self.battlefield[seat.0];
+            list.retain(|id| {
+                objects
+                    .get(id.0)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|view| !view.static_abilities.is_empty())
+            });
+            if list.len() > 1 {
+                let remaining = std::mem::take(list);
+                *list = game
+                    .iter_battlefield_including_phased_out(seat)
+                    .filter(|id| remaining.contains(id))
+                    .collect();
+            }
+        }
+    }
+
+    pub(super) fn battlefield_ids(
+        &self,
+        controller: Option<PlayerId>,
+    ) -> impl Iterator<Item = PermanentId> + '_ {
+        super::functioning_abilities::seats(controller)
+            .iter()
+            .flat_map(|seat| self.battlefield[seat.0].iter().copied())
+    }
+
+    pub(super) fn command_objects(
+        &self,
+        controller: Option<PlayerId>,
+    ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
+        super::functioning_abilities::seats(controller)
+            .iter()
+            .copied()
+            .flat_map(|seat| {
+                self.command[seat.0]
+                    .iter()
+                    .copied()
+                    .map(move |object| (seat, object))
+            })
+    }
+}
+
+/// Non-characteristic state slices a layer board depends on. Changes to a
+/// slice evict `LayerBoard` only when the board reads it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct StateReads {
+    pub mana: bool,
+    pub tapped: bool,
+    pub life: bool,
+    pub counters: bool,
+}
+
+impl StateReads {
+    pub(super) fn merge(&mut self, other: Self) {
+        self.mana |= other.mana;
+        self.tapped |= other.tapped;
+        self.life |= other.life;
+        self.counters |= other.counters;
+    }
+
+    pub(super) fn any(self) -> bool {
+        self.mana || self.tapped || self.life || self.counters
+    }
+
+    pub(super) fn overlaps(self, other: Self) -> bool {
+        (self.mana && other.mana)
+            || (self.tapped && other.tapped)
+            || (self.life && other.life)
+            || (self.counters && other.counters)
+    }
+}
+
+/// A layer node's source object and cached battlefield slot (`None` for a
+/// command-zone emblem), immutable for one evaluation pass.
+#[derive(Clone, Copy)]
+struct NodeSource {
+    object: ObjectId,
+    permanent: Option<PermanentId>,
+}
+
+impl NodeSource {
+    #[inline]
+    fn permanent(object: ObjectId, id: PermanentId) -> Self {
+        Self {
+            object,
+            permanent: Some(id),
+        }
+    }
+
+    #[inline]
+    fn command(object: ObjectId) -> Self {
+        Self {
+            object,
+            permanent: None,
+        }
+    }
+}
+
 /// Borrowed result of one CR 613 pass handed to [`Game::compute_board`] before
 /// the thread-local scratch buffers are cleared.
 pub(super) struct EvaluatedBoard<'a> {
@@ -189,9 +335,8 @@ pub(super) struct EvaluatedBoard<'a> {
     /// Land-type overwrites active in layer 4, including when the battlefield
     /// has no matching land yet. Entry consults them before a land exists.
     pub land_type_overwrites: Vec<CardPredicate>,
-    pub reads_mana: bool,
-    pub reads_tapped: bool,
-    pub reads_life: bool,
+    pub static_sources: StaticSources,
+    pub reads: StateReads,
 }
 
 pub(super) struct EvaluatedSlot<'a> {
@@ -237,16 +382,14 @@ struct Eval<'a, 'b, 's> {
     objects: Vec<Option<LayerObject>>,
     owned_views: Vec<Option<Characteristics>>,
     live: &'b [PermanentId],
-    reads_mana: bool,
-    reads_tapped: bool,
-    reads_life: bool,
+    reads: StateReads,
 }
 
 /// Definition-derived static node owned inline by a [`SourceSeed`].
 #[derive(Clone)]
 struct SeedNode {
     origin: AbilityOrigin,
-    source: PermanentId,
+    source: NodeSource,
     key: NodeKey,
     timestamp: PublicId,
     plan: SourcePlan,
@@ -268,7 +411,7 @@ enum DynamicNodeKind {
 
 struct DynamicNode {
     origin: AbilityOrigin,
-    source: PermanentId,
+    source: NodeSource,
     key: NodeKey,
     timestamp: PublicId,
     kind: DynamicNodeKind,
@@ -311,9 +454,7 @@ pub(super) struct SourceSeed {
     statics: Vec<StaticEntry>,
     nodes: Vec<SeedNode>,
     nodes_layers: u16,
-    nodes_reads_mana: bool,
-    nodes_reads_tapped: bool,
-    nodes_reads_life: bool,
+    nodes_reads: StateReads,
     pub(super) has_dynamic_activations: bool,
     pub(super) has_board_statics: bool,
     pub(super) has_triggered_mana_abilities: bool,
@@ -324,9 +465,7 @@ pub(super) struct SourceSeed {
 #[derive(Clone, Copy, Default)]
 struct ReadSet {
     fields: u16,
-    mana: bool,
-    tapped: bool,
-    life: bool,
+    state: StateReads,
 }
 
 impl ReadSet {
@@ -356,7 +495,8 @@ impl ReadSet {
         if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
             self.fields |= POWER;
         }
-        self.tapped |= p.tapped;
+        self.state.tapped |= p.tapped;
+        self.state.counters |= p.no_counters || p.with_counter;
         for alternative in &p.any_of {
             self.predicate(alternative);
         }
@@ -365,12 +505,20 @@ impl ReadSet {
     fn selector(&mut self, of: &ObjectSelector) {
         if let ObjectSelector::Each {
             predicate,
+            except,
             exact_mana_value,
             max_mana_value,
             ..
         } = of
         {
             self.predicate(predicate);
+            if let Some(Except::Matching {
+                predicate: excluded,
+                ..
+            }) = except
+            {
+                self.predicate(excluded);
+            }
             for bound in [exact_mana_value, max_mana_value].into_iter().flatten() {
                 self.value(bound);
             }
@@ -387,7 +535,10 @@ impl ReadSet {
             }
             EffectValue::SourcePower => self.fields |= POWER,
             EffectValue::GreatestSharedCreatureType => self.fields |= CARD_TYPES | SUBTYPES,
-            EffectValue::CreaturesWithCounters => self.fields |= CARD_TYPES,
+            EffectValue::CreaturesWithCounters => {
+                self.fields |= CARD_TYPES;
+                self.state.counters = true;
+            }
             EffectValue::GreatestPowerYouControl { predicate } => {
                 self.fields |= CARD_TYPES | POWER;
                 self.predicate(predicate);
@@ -395,8 +546,11 @@ impl ReadSet {
             EffectValue::BattlefieldMatching { predicate }
             | EffectValue::AttackingMatching { predicate } => self.predicate(predicate),
             EffectValue::Property { of, property, .. } => {
-                if matches!(property, ObjectProperty::Power | ObjectProperty::Toughness) {
-                    self.fields |= POWER;
+                match property {
+                    ObjectProperty::Power | ObjectProperty::Toughness => self.fields |= POWER,
+                    ObjectProperty::Colors => self.fields |= COLORS,
+                    ObjectProperty::Counters(_) => self.state.counters = true,
+                    ObjectProperty::ManaValue => {}
                 }
                 self.selector(of);
             }
@@ -410,7 +564,7 @@ impl ReadSet {
             EffectValue::LifeTotal(_)
             | EffectValue::LifeAboveStarting(_)
             | EffectValue::LifeGainedThisTurn(_)
-            | EffectValue::LifeLostThisTurn(_) => self.life = true,
+            | EffectValue::LifeLostThisTurn(_) => self.state.life = true,
             _ => {}
         }
     }
@@ -423,10 +577,14 @@ impl ReadSet {
                     self.fields |= COLORS;
                     self.predicate(p);
                 }
-                LayerCount::Graveyard { predicate, .. }
-                | LayerCount::YouControl(predicate)
-                | LayerCount::CountersOn { predicate, .. } => self.predicate(predicate),
-                LayerCount::SourceCounters(_) => {}
+                LayerCount::Graveyard { predicate, .. } | LayerCount::YouControl(predicate) => {
+                    self.predicate(predicate)
+                }
+                LayerCount::CountersOn { predicate, .. } => {
+                    self.predicate(predicate);
+                    self.state.counters = true;
+                }
+                LayerCount::SourceCounters(_) => self.state.counters = true,
             }
         }
     }
@@ -458,9 +616,14 @@ impl ReadSet {
                 }
             }
             Condition::Not(condition) => self.condition(condition),
-            Condition::SourceTapped => self.tapped = true,
-            Condition::UnspentManaAtLeast { .. } => self.mana = true,
-            Condition::LifeAtLeast { .. } => self.life = true,
+            Condition::SourceTapped => self.state.tapped = true,
+            Condition::UnspentManaAtLeast { .. } => self.state.mana = true,
+            Condition::LifeAtLeast { .. }
+            | Condition::AtMostHalfStartingLife
+            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => self.state.life = true,
+            Condition::SourceCountersAtLeast { .. } | Condition::AttachedCountersAtLeast { .. } => {
+                self.state.counters = true
+            }
             _ => {}
         }
     }
@@ -526,7 +689,8 @@ impl DynamicNode {
     /// existence and membership no longer depend on a generating static ability.
     fn resolved(
         origin: AbilityOrigin,
-        source: PermanentId,
+        source: ObjectId,
+        target: PermanentId,
         key: NodeKey,
         timestamp: PublicId,
         layer: Layer,
@@ -534,7 +698,7 @@ impl DynamicNode {
     ) -> Self {
         Self {
             origin,
-            source,
+            source: NodeSource::permanent(source, target),
             key,
             timestamp,
             kind: DynamicNodeKind::Resolved { layer, operation },
@@ -585,10 +749,20 @@ impl EvalNode {
     }
 
     #[inline]
-    fn source(&self) -> PermanentId {
+    fn source(&self, seeds: &[Option<Arc<SourceSeed>>]) -> NodeSource {
         match self {
-            Self::Seed { slot, .. } => PermanentId(*slot as usize),
+            Self::Seed {
+                slot, node_index, ..
+            } => seed_node(seeds, *slot, *node_index).source,
             Self::Dynamic(d) => d.source,
+        }
+    }
+
+    #[inline]
+    fn source_permanent(&self) -> Option<PermanentId> {
+        match self {
+            Self::Seed { slot, .. } => Some(PermanentId(*slot as usize)),
+            Self::Dynamic(d) => d.source.permanent,
         }
     }
 
@@ -720,6 +894,7 @@ enum Operation<N = LayerValue> {
     LandType(String),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
+    ExemptStateBasedAction(StateBasedAction),
 }
 // Intermediate fields that instructions can read or change. State-only reads
 // (zones, counters, mana, printed mana value) cannot change during
@@ -739,7 +914,7 @@ impl<N> Operation<N> {
         match self {
             Self::Control(_) => CONTROL,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
-            Self::Inherit | Self::CatalogTrigger(_) => 0,
+            Self::Inherit | Self::CatalogTrigger(_) | Self::ExemptStateBasedAction(_) => 0,
             Self::Modify(m) => match m {
                 Modification::Control => CONTROL,
                 Modification::SetName(_) => NAME,
@@ -791,9 +966,10 @@ enum ResolvedValue {
 #[derive(Clone, Copy)]
 struct NodeContext<'a> {
     origin: AbilityOrigin,
-    source: PermanentId,
+    source: NodeSource,
     key: &'a NodeKey,
     timestamp: PublicId,
+    is_static: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -924,9 +1100,8 @@ pub(super) fn evaluate_board(
     live.clear();
     nodes.clear();
     let mut land_type_overwrites = Vec::new();
-    let mut reads_mana = false;
-    let mut reads_tapped = false;
-    let mut reads_life = false;
+    let mut reads = StateReads::default();
+    let mut static_sources = StaticSources::default();
     let mut active_layers = 0u16;
     let mut has_pt_counters = false;
     let has_effects = !game.state.effects.is_empty();
@@ -965,17 +1140,18 @@ pub(super) fn evaluate_board(
         live.push(id);
         // A phased-out permanent's static abilities apply to nothing
         // (CR 702.26b); its own view still takes the records on it.
-        if !seed.nodes.is_empty() && !game.is_phased_out(id) {
-            reads_mana |= seed.nodes_reads_mana;
-            reads_tapped |= seed.nodes_reads_tapped;
-            reads_life |= seed.nodes_reads_life;
-            active_layers |= seed.nodes_layers;
-            for node_index in 0..seed.nodes.len() {
-                nodes.push(EvalNode::Seed {
-                    slot: slot as u32,
-                    node_index: node_index as u32,
-                    targets: None,
-                });
+        if !seed.statics.is_empty() && game.permanent_abilities_function(id) {
+            static_sources.battlefield[p.controller.0].push(id);
+            if !seed.nodes.is_empty() {
+                reads.merge(seed.nodes_reads);
+                active_layers |= seed.nodes_layers;
+                for node_index in 0..seed.nodes.len() {
+                    nodes.push(EvalNode::Seed {
+                        slot: slot as u32,
+                        node_index: node_index as u32,
+                        targets: None,
+                    });
+                }
             }
         }
         if !p.counters.is_empty() {
@@ -988,6 +1164,7 @@ pub(super) fn evaluate_board(
                         if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
                             let node = DynamicNode::resolved(
                                 AbilityOrigin::Counter,
+                                p.object,
                                 id,
                                 NodeKey::from_3(slot, usize::MAX - 1, kind as usize),
                                 p.keyword_counter_timestamps
@@ -1007,11 +1184,19 @@ pub(super) fn evaluate_board(
             }
         }
         if has_effects {
+            let latest_inherit = game
+                .effects_on(id)
+                .filter(|record| record.modification == Modification::HasAbilitiesOfSource)
+                .map(|record| record.timestamp)
+                .last();
             for (i, record) in game.effects_on(id).enumerate() {
                 let Some(layer) = layer(&record.modification) else {
                     continue;
                 };
                 let operation = if record.modification == Modification::HasAbilitiesOfSource {
+                    if Some(record.timestamp) != latest_inherit {
+                        continue;
+                    }
                     Operation::Inherit
                 } else if record.modification == Modification::Control {
                     Operation::Control(record.controller)
@@ -1020,6 +1205,7 @@ pub(super) fn evaluate_board(
                 };
                 let node = DynamicNode::resolved(
                     AbilityOrigin::Effect(record.timestamp),
+                    p.object,
                     id,
                     NodeKey::from_3(slot, usize::MAX, i),
                     record.timestamp,
@@ -1031,6 +1217,31 @@ pub(super) fn evaluate_board(
             }
         }
     }
+    if game.state.zones.size(ZoneType::Command, PlayerId(0)) > 0
+        || game.state.zones.size(ZoneType::Command, PlayerId(1)) > 0
+    {
+        for (seat, source) in game.functioning_command_objects(None) {
+            let mut has_static = false;
+            let emblem_id = game.state[source].id;
+            for (index, ability) in game.functioning_object_statics_indexed(source) {
+                has_static = true;
+                let entry = StaticEntry {
+                    origin: AbilityOrigin::Object(source),
+                    key: NodeKey::from_3(usize::MAX, index, source.slot()),
+                    timestamp: emblem_id,
+                    ability: ability.clone(),
+                };
+                if let Some(node) = build_dynamic_node(game, NodeSource::command(source), &entry) {
+                    reads.merge(node.reads().state);
+                    active_layers |= node.layers();
+                    nodes.push(EvalNode::Dynamic(node));
+                }
+            }
+            if has_static {
+                static_sources.command[seat.0].push(source);
+            }
+        }
+    }
     let seeds_slice: &[Option<Arc<SourceSeed>>] = seeds.as_slice();
     let mut eval = Eval {
         game,
@@ -1038,9 +1249,7 @@ pub(super) fn evaluate_board(
         objects: std::mem::take(objects),
         owned_views: std::mem::take(owned_views),
         live: live.as_slice(),
-        reads_mana,
-        reads_tapped,
-        reads_life,
+        reads,
     };
     if active_layers != 0 || has_pt_counters {
         for layer in Layer::ALL {
@@ -1077,7 +1286,7 @@ pub(super) fn evaluate_board(
                             if let Some(plan) = nodes[index].plan(seeds_slice) {
                                 // A layer-6 ability loss can remove the printed static
                                 // after its type effect has already applied (CR 613.6).
-                                let source = nodes[index].source();
+                                let source = nodes[index].source(seeds_slice);
                                 if matches!(plan.parts.as_slice(), [(_, Operation::LandType(_))])
                                     && plan
                                         .condition
@@ -1092,7 +1301,12 @@ pub(super) fn evaluate_board(
                         }
                         let slice = &pass.instructions[pass.ranges[slot].clone()];
                         nodes[index].bind_targets(seeds_slice, after_mask, slice);
-                        eval.apply(&nodes[index], slice, Some(&mut pass.granted));
+                        eval.apply(
+                            &nodes[index],
+                            slice,
+                            Some(&mut pass.granted),
+                            Some(&mut static_sources),
+                        );
                         for granted_node in pass.granted.drain(..) {
                             let added = eval.push_node(nodes, &mut active_layers, granted_node);
                             discovered_this_layer |= added & layer_bit != 0;
@@ -1187,9 +1401,7 @@ pub(super) fn evaluate_board(
     let Eval {
         objects: eval_objects,
         owned_views: eval_owned_views,
-        reads_mana,
-        reads_tapped,
-        reads_life,
+        reads,
         ..
     } = eval;
     *objects = eval_objects;
@@ -1199,9 +1411,8 @@ pub(super) fn evaluate_board(
         owned_views: owned_views.as_mut_slice(),
         seeds: seeds_slice,
         land_type_overwrites,
-        reads_mana,
-        reads_tapped,
-        reads_life,
+        static_sources,
+        reads,
     })
 }
 
@@ -1240,9 +1451,11 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
                 .abilities
                 .iter()
                 .cloned()
-                .map(|ability| EffectiveTrigger {
+                .enumerate()
+                .map(|(ability_index, ability)| EffectiveTrigger {
                     origin: AbilityOrigin::Own,
-                    clock: None,
+                    acquired: None,
+                    ability_index,
                     ability,
                     program: false,
                 })
@@ -1259,19 +1472,16 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         permanent.chosen.as_deref(),
     );
     let view = view.into_owned();
+    let node_source = NodeSource::permanent(permanent.object, id);
     let nodes: Vec<SeedNode> = statics
         .iter()
-        .filter_map(|entry| build_seed_node(game, id, entry))
+        .filter_map(|entry| build_seed_node(game, node_source, entry))
         .collect();
     let mut nodes_layers = 0u16;
-    let mut nodes_reads_mana = false;
-    let mut nodes_reads_tapped = false;
-    let mut nodes_reads_life = false;
+    let mut nodes_reads = StateReads::default();
     for node in &nodes {
         nodes_layers |= node.plan.layers;
-        nodes_reads_mana |= node.plan.reads.mana;
-        nodes_reads_tapped |= node.plan.reads.tapped;
-        nodes_reads_life |= node.plan.reads.life;
+        nodes_reads.merge(node.plan.reads.state);
     }
     let has_dynamic_activations = view.has_dynamic_activations();
     let has_board_statics = has_board_statics(&view.static_abilities);
@@ -1286,9 +1496,7 @@ fn build_seed(game: &Game, id: PermanentId, permanent: &Permanent, source: &Obje
         statics,
         nodes,
         nodes_layers,
-        nodes_reads_mana,
-        nodes_reads_tapped,
-        nodes_reads_life,
+        nodes_reads,
         has_dynamic_activations,
         has_board_statics,
         has_triggered_mana_abilities,
@@ -1506,10 +1714,7 @@ impl Eval<'_, '_, '_> {
         active_layers: &mut u16,
         node: DynamicNode,
     ) -> u16 {
-        let reads = node.reads();
-        self.reads_mana |= reads.mana;
-        self.reads_tapped |= reads.tapped;
-        self.reads_life |= reads.life;
+        self.reads.merge(node.reads().state);
         let layers = node.layers();
         *active_layers |= layers;
         nodes.push(EvalNode::Dynamic(node));
@@ -1565,7 +1770,7 @@ impl Eval<'_, '_, '_> {
                 && node.is_unconditional_attached_or_self(seeds)
                 && !instructions[ranges[b].clone()]
                     .iter()
-                    .any(|i| i.target == node.source())
+                    .any(|i| Some(i.target) == node.source_permanent())
             {
                 return false;
             }
@@ -1603,11 +1808,9 @@ impl Eval<'_, '_, '_> {
                 objects: std::mem::take(probe_objects),
                 owned_views: std::mem::take(probe_views),
                 live: self.live,
-                reads_mana: self.reads_mana,
-                reads_tapped: self.reads_tapped,
-                reads_life: self.reads_life,
+                reads: self.reads,
             };
-            after.apply(&nodes[index], &instructions[ranges[b].clone()], None);
+            after.apply(&nodes[index], &instructions[ranges[b].clone()], None, None);
             let b_cda = nodes[index].cda(seeds);
             for (a, &other) in pending.iter().enumerate() {
                 if a != b && nodes[other].cda(seeds) == b_cda {
@@ -1697,16 +1900,25 @@ impl Eval<'_, '_, '_> {
             }
             EvalNode::Dynamic(d) => {
                 d.is_bound()
-                    || self
-                        .get(d.source)
-                        .is_some_and(|_| self.statics(d.source).iter().any(|s| s.key == d.key))
+                    || match d.source.permanent {
+                        Some(id) => self
+                            .get(id)
+                            .is_some_and(|_| self.statics(id).iter().any(|s| s.key == d.key)),
+                        None => {
+                            debug_assert_eq!(
+                                self.game.state.zones.zone_of(d.source.object),
+                                Some(ZoneType::Command)
+                            );
+                            true
+                        }
+                    }
             }
         }
     }
 
     fn push_target_instructions(
         &self,
-        source: PermanentId,
+        source: NodeSource,
         controller: PlayerId,
         plan: &SourcePlan,
         layer: Layer,
@@ -1718,7 +1930,7 @@ impl Eval<'_, '_, '_> {
                 n,
                 || self.game.live_permanent(target).object,
                 controller,
-                Some(source),
+                source.permanent,
                 Some(target),
             )
         };
@@ -1787,7 +1999,10 @@ impl Eval<'_, '_, '_> {
                             _ => ResolvedValue::None,
                         };
                         out.push(Instruction {
-                            target: d.source,
+                            target: d
+                                .source
+                                .permanent
+                                .expect("resolved layer node has permanent"),
                             part: 0,
                             value,
                         });
@@ -1803,7 +2018,7 @@ impl Eval<'_, '_, '_> {
             if targets.is_empty() {
                 return;
             }
-            let controller = self.controller(source);
+            let controller = self.controller_of(source);
             for &id in targets {
                 self.push_target_instructions(source, controller, plan, layer, id, out);
             }
@@ -1818,19 +2033,19 @@ impl Eval<'_, '_, '_> {
         }
         let (predicate, only_other, only_controlled) = match &plan.scope {
             StaticScope::This => {
-                if self.get(source).is_some() {
-                    let controller = self.controller(source);
-                    self.push_target_instructions(source, controller, plan, layer, source, out);
+                if let Some(id) = source.permanent.filter(|&id| self.get(id).is_some()) {
+                    let controller = self.controller(id);
+                    self.push_target_instructions(source, controller, plan, layer, id, out);
                 }
                 return;
             }
             StaticScope::Attached => {
-                if let Some(id) = self
-                    .game
-                    .attached_permanent(source)
+                if let Some(id) = source
+                    .permanent
+                    .and_then(|src| self.game.attached_permanent(src))
                     .filter(|&id| self.get(id).is_some())
                 {
-                    let controller = self.controller(source);
+                    let controller = self.controller_of(source);
                     self.push_target_instructions(source, controller, plan, layer, id, out);
                 }
                 return;
@@ -1841,10 +2056,10 @@ impl Eval<'_, '_, '_> {
             StaticScope::Other(p) => (p, true, false),
             StaticScope::All(p) => (p, false, false),
         };
-        let controller = self.controller(source);
+        let controller = self.controller_of(source);
         let pred_source = self.predicate_source(predicate, Some(source));
         for &id in self.live {
-            if (!only_other || id != source)
+            if (!only_other || Some(id) != source.permanent)
                 && (!only_controlled || self.controller(id) == controller)
                 && matches_view(self.game, id, predicate, self.view(id), pred_source)
             {
@@ -1857,6 +2072,26 @@ impl Eval<'_, '_, '_> {
         self.live.iter().copied().filter(move |&id| {
             self.object(id).controller == controller && !self.game.is_phased_out(id)
         })
+    }
+
+    fn controller_of(&self, source: NodeSource) -> PlayerId {
+        source.permanent.map_or_else(
+            || {
+                self.game
+                    .state
+                    .zones
+                    .holder_in(source.object, ZoneType::Command)
+                    .expect("live command-zone source")
+            },
+            |id| self.controller(id),
+        )
+    }
+
+    fn source_name(&self, source: NodeSource) -> &str {
+        source.permanent.map_or_else(
+            || self.game.state[source.object].name.as_str(),
+            |id| self.view(id).name.as_str(),
+        )
     }
 
     fn controller(&self, id: PermanentId) -> PlayerId {
@@ -1886,9 +2121,11 @@ impl Eval<'_, '_, '_> {
         source: Option<PermanentId>,
         affected: Option<PermanentId>,
     ) -> i32 {
+        let source_node =
+            source.map(|s| NodeSource::permanent(self.game.live_permanent(s).object, s));
         let controlled = |p| {
             self.controlled(controller)
-                .filter(move |&id| self.matches(id, p, source))
+                .filter(move |&id| self.matches(id, p, source_node))
         };
         match count {
             LayerCount::CreatureTypes { max } => {
@@ -1960,12 +2197,16 @@ impl Eval<'_, '_, '_> {
     fn for_each_selected_permanent(
         &self,
         selector: &ObjectSelector,
-        source: PermanentId,
+        source: NodeSource,
         mut visit: impl FnMut(PermanentId),
     ) {
-        let controller = self.controller(source);
+        let controller = self.controller_of(source);
         match selector {
-            ObjectSelector::This => visit(source),
+            ObjectSelector::This => {
+                if let Some(id) = source.permanent {
+                    visit(id);
+                }
+            }
             ObjectSelector::Each {
                 of,
                 predicate,
@@ -1987,7 +2228,15 @@ impl Eval<'_, '_, '_> {
                             Scope::Battlefield => true,
                             _ => false,
                         }
-                        && !(id == source && *except == Some(Except::This))
+                        && !(source.permanent == Some(id) && matches!(except, Some(Except::This)))
+                        && !matches!(
+                            except,
+                            Some(Except::Matching {
+                                controlled_by,
+                                predicate: excluded,
+                            }) if controlled_by.includes(controller, self.controller(id))
+                                && self.matches(id, excluded, Some(source))
+                        )
                         && self.matches(id, predicate, Some(source))
                         && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
                         && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
@@ -2001,15 +2250,15 @@ impl Eval<'_, '_, '_> {
     }
 
     /// Static comparisons see the characteristics at this point in the layer system.
-    fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
-        let controller = self.controller(source);
+    fn comparison_value(&self, value: &EffectValue, source: NodeSource) -> i32 {
+        let controller = self.controller_of(source);
         let controlled = || self.controlled(controller);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
                 factor.saturating_mul(self.comparison_value(value, source))
             }
-            EffectValue::SourcePower => self.view(source).power,
+            EffectValue::SourcePower => source.permanent.map_or(0, |id| self.view(id).power),
             EffectValue::Property {
                 of,
                 property,
@@ -2096,14 +2345,14 @@ impl Eval<'_, '_, '_> {
         }
     }
 
-    fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
+    fn condition(&self, condition: &Condition, source: NodeSource) -> bool {
         match condition {
             Condition::Compare { left, op, right } => op.test(
                 self.comparison_value(left, source),
                 self.comparison_value(right, source),
             ),
             Condition::OpponentControlsMoreCreatures => {
-                let controller = self.controller(source);
+                let controller = self.controller_of(source);
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
@@ -2119,7 +2368,7 @@ impl Eval<'_, '_, '_> {
                 predicate,
                 distinct_names,
             } => {
-                let controller = self.controller(source);
+                let controller = self.controller_of(source);
                 let matching = self.live.iter().copied().filter(|&id| {
                     self.controller(id) == controller && self.matches(id, predicate, Some(source))
                 });
@@ -2127,26 +2376,36 @@ impl Eval<'_, '_, '_> {
                     self.view(id).name.as_str()
                 })
             }
-            Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
+            Condition::SourceMatches(predicate) => source.permanent.map_or_else(
+                || {
+                    self.game
+                        .off_battlefield_matches(source.object, predicate, || 0)
+                },
+                |id| self.matches(id, predicate, Some(source)),
+            ),
             Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
             Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),
             Condition::Not(condition) => !self.condition(condition, source),
             // All other static conditions read state, not characteristics.
-            _ => self
-                .game
-                .layer_state_condition(condition, self.controller(source), source),
+            _ => self.game.layer_state_condition(
+                condition,
+                self.controller_of(source),
+                source.object,
+            ),
         }
     }
     fn predicate_source(
         &self,
         predicate: &CardPredicate,
-        source: Option<PermanentId>,
+        source: Option<NodeSource>,
     ) -> Option<PredicateSource<'_>> {
         source
             .filter(|_| predicate.reads_source())
             .map(|s| PredicateSource {
-                name: self.view(s).name.as_str(),
-                chosen: self.game.live_permanent(s).chosen.as_deref(),
+                name: self.source_name(s),
+                chosen: s
+                    .permanent
+                    .and_then(|p| self.game.live_permanent(p).chosen.as_deref()),
             })
     }
 
@@ -2154,7 +2413,7 @@ impl Eval<'_, '_, '_> {
         &self,
         id: PermanentId,
         predicate: &CardPredicate,
-        source: Option<PermanentId>,
+        source: Option<NodeSource>,
     ) -> bool {
         matches_view(
             self.game,
@@ -2169,6 +2428,7 @@ impl Eval<'_, '_, '_> {
         node: &EvalNode,
         instructions: &[Instruction],
         mut granted: Option<&mut Vec<DynamicNode>>,
+        mut static_sources: Option<&mut StaticSources>,
     ) {
         #[derive(Clone, Copy)]
         enum NodeParts<'a> {
@@ -2187,14 +2447,17 @@ impl Eval<'_, '_, '_> {
                         source: s.source,
                         key: &s.key,
                         timestamp: s.timestamp,
+                        is_static: true,
                     },
                     NodeParts::Plan(&s.plan.parts),
                 )
             }
             EvalNode::Dynamic(d) => {
-                let parts = match &d.kind {
-                    DynamicNodeKind::Granted { plan, .. } => NodeParts::Plan(&plan.parts),
-                    DynamicNodeKind::Resolved { operation, .. } => NodeParts::Resolved(operation),
+                let (is_static, parts) = match &d.kind {
+                    DynamicNodeKind::Granted { plan, .. } => (true, NodeParts::Plan(&plan.parts)),
+                    DynamicNodeKind::Resolved { operation, .. } => {
+                        (false, NodeParts::Resolved(operation))
+                    }
                 };
                 (
                     NodeContext {
@@ -2202,6 +2465,7 @@ impl Eval<'_, '_, '_> {
                         source: d.source,
                         key: &d.key,
                         timestamp: d.timestamp,
+                        is_static,
                     },
                     parts,
                 )
@@ -2222,6 +2486,7 @@ impl Eval<'_, '_, '_> {
                     ordinal,
                     &parts[instruction.part].1,
                     granted.as_deref_mut(),
+                    static_sources.as_deref_mut(),
                 ),
                 NodeParts::Resolved(operation) => self.apply_operation(
                     ctx,
@@ -2229,6 +2494,7 @@ impl Eval<'_, '_, '_> {
                     ordinal,
                     operation,
                     granted.as_deref_mut(),
+                    static_sources.as_deref_mut(),
                 ),
             }
         }
@@ -2241,24 +2507,23 @@ impl Eval<'_, '_, '_> {
         ordinal: usize,
         operation: &Operation<N>,
         granted: Option<&mut Vec<DynamicNode>>,
+        static_sources: Option<&mut StaticSources>,
     ) {
         let id = instruction.target;
         let value = instruction.value;
-        let origin = if id == ctx.source {
+        let origin = if Some(id) == ctx.source.permanent {
             ctx.origin
+        } else if let Some(permanent) = ctx.source.permanent {
+            AbilityOrigin::Permanent(permanent)
         } else {
-            AbilityOrigin::Permanent(ctx.source)
+            AbilityOrigin::Object(ctx.source.object)
         };
-        let clock = |ability: &Ability, index| {
-            let Ability::Triggered { condition, .. } = ability;
-            let static_slot = ctx.key.as_slice()[1];
-            condition.once_each_turn().then(|| GrantClock {
-                timestamp: ctx.timestamp,
-                grantor: ctx.source,
-                static_slot: (static_slot != usize::MAX).then_some(static_slot),
-                ability_index: index,
-            })
-        };
+        let grantor = ctx.source.permanent;
+        let static_slot = ctx
+            .is_static
+            .then_some(ctx.key.as_slice()[1])
+            .filter(|&slot| slot != usize::MAX);
+        let acquired = Some(GrantKey::new(grantor, ctx.timestamp, static_slot));
         match operation {
             Operation::LandType(subtype) => {
                 if !self.view(id).is_land() {
@@ -2273,10 +2538,12 @@ impl Eval<'_, '_, '_> {
                     details.added_subtypes.push(subtype.clone());
                 }
                 self.lose_all_abilities(id);
-                self.view_mut(id)
-                    .details_mut()
-                    .activated_abilities
-                    .extend(intrinsic_mana_ability(|name| name == subtype));
+                self.view_mut(id).details_mut().activated_abilities.extend(
+                    intrinsic_mana_ability(|name| name == subtype).map(|mut ability| {
+                        ability.acquired = acquired;
+                        ability
+                    }),
+                );
                 self.object_mut(id).dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
             }
             Operation::Inherit => {
@@ -2284,22 +2551,27 @@ impl Eval<'_, '_, '_> {
                     let has_activated = !definition.activated_abilities.is_empty();
                     let details = self.view_mut(id).details_mut();
                     if has_activated {
-                        details
-                            .activated_abilities
-                            .extend(definition.activated_abilities.clone());
+                        details.activated_abilities.extend(
+                            definition
+                                .activated_abilities
+                                .iter()
+                                .cloned()
+                                .map(|mut ability| {
+                                    ability.acquired = acquired;
+                                    ability
+                                }),
+                        );
                     }
                     details.triggered_abilities.extend(
-                        definition
-                            .abilities
-                            .iter()
-                            .cloned()
-                            .enumerate()
-                            .map(|(index, ability)| EffectiveTrigger {
+                        definition.abilities.iter().cloned().enumerate().map(
+                            |(ability_index, ability)| EffectiveTrigger {
                                 origin,
-                                clock: clock(&ability, index),
+                                acquired,
+                                ability_index,
                                 ability,
                                 program: false,
-                            }),
+                            },
+                        ),
                     );
                     if has_activated {
                         self.object_mut(id).dirty |= DIRTY_ACTIVATIONS;
@@ -2312,10 +2584,16 @@ impl Eval<'_, '_, '_> {
                     .triggered_abilities
                     .push(EffectiveTrigger {
                         origin,
-                        clock: clock(ability, 0),
+                        acquired,
+                        ability_index: 0,
                         ability: (**ability).clone(),
                         program: false,
                     });
+            }
+            Operation::ExemptStateBasedAction(action) => {
+                if !self.view(id).exempt_sbas.contains(*action) {
+                    self.view_mut(id).exempt_sbas.insert(*action);
+                }
             }
             Operation::Modify(modification) => match modification {
                 Modification::SetName(name) => {
@@ -2353,6 +2631,10 @@ impl Eval<'_, '_, '_> {
                         intrinsic_mana_ability(|name| {
                             types.iter().any(|subtype| subtype == name)
                                 && !view.subtypes.iter().any(|subtype| subtype == name)
+                        })
+                        .map(|mut ability| {
+                            ability.acquired = acquired;
+                            ability
                         })
                     } else {
                         None
@@ -2501,16 +2783,19 @@ impl Eval<'_, '_, '_> {
                         .triggered_abilities
                         .push(EffectiveTrigger {
                             origin,
-                            clock: None,
+                            acquired,
+                            ability_index: 0,
                             ability: Ability::firebending(*n),
                             program: true,
                         });
                 }
                 Modification::GrantActivated(ability) => {
+                    let mut granted = (**ability).clone();
+                    granted.acquired = acquired;
                     self.view_mut(id)
                         .details_mut()
                         .activated_abilities
-                        .push((**ability).clone());
+                        .push(granted);
                     self.object_mut(id).dirty |= DIRTY_ACTIVATIONS;
                 }
                 Modification::GrantTriggered(ability) => {
@@ -2519,7 +2804,8 @@ impl Eval<'_, '_, '_> {
                         .triggered_abilities
                         .push(EffectiveTrigger {
                             origin,
-                            clock: clock(ability, 0),
+                            acquired,
+                            ability_index: 0,
                             ability: (**ability).clone(),
                             program: true,
                         });
@@ -2531,7 +2817,8 @@ impl Eval<'_, '_, '_> {
                         details.ward = Some(cost.clone());
                         details.triggered_abilities.push(EffectiveTrigger {
                             origin,
-                            clock: None,
+                            acquired,
+                            ability_index: 0,
                             ability: Ability::ward(cost.clone()),
                             program: true,
                         });
@@ -2543,9 +2830,16 @@ impl Eval<'_, '_, '_> {
                         timestamp: ctx.timestamp.max(self.game.live_permanent(id).timestamp),
                         ability: (**ability).clone(),
                     };
+                    if let Some(static_sources) = static_sources {
+                        static_sources.record_battlefield(self.game, id);
+                    }
                     if let Some(granted) = granted {
-                        if !self.game.is_phased_out(id) {
-                            if let Some(granted_node) = build_dynamic_node(self.game, id, &entry) {
+                        if self.game.permanent_abilities_function(id) {
+                            let source =
+                                NodeSource::permanent(self.game.live_permanent(id).object, id);
+                            if let Some(granted_node) =
+                                build_dynamic_node(self.game, source, &entry)
+                            {
                                 granted.push(granted_node);
                             }
                         }
@@ -2634,7 +2928,7 @@ impl Eval<'_, '_, '_> {
     }
 }
 
-fn build_source_plan(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<SourcePlan> {
+fn build_source_plan(game: &Game, source: NodeSource, entry: &StaticEntry) -> Option<SourcePlan> {
     let mut plan = SourcePlan::new();
     let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
     match &entry.ability {
@@ -2661,8 +2955,9 @@ fn build_source_plan(game: &Game, source: PermanentId, entry: &StaticEntry) -> O
             }
         }
         StaticAbility::HasChosenCreatureType => {
-            let Some(crate::state::permanent::EntryChoice::CreatureType(name)) =
-                game.live_permanent(source).chosen.as_deref()
+            let Some(crate::state::permanent::EntryChoice::CreatureType(name)) = source
+                .permanent
+                .and_then(|p| game.live_permanent(p).chosen.as_deref())
             else {
                 return None;
             };
@@ -2711,15 +3006,16 @@ fn build_source_plan(game: &Game, source: PermanentId, entry: &StaticEntry) -> O
         }
         StaticAbility::AttachedHas(ability) => {
             plan.scope = StaticScope::Attached;
-            let object = &game.state[game.live_permanent(source).object];
+            let object = &game.state[source.object];
             let index = object
                 .attached_grants()
                 .position(|a| a == ability)
                 .unwrap_or(0);
             let mut granted = ability.clone();
-            granted.granted_by = game
-                .permanent_object(source)
-                .map(|grantor| AbilityGrant { grantor, index });
+            granted.granted_by = Some(AbilityGrant {
+                grantor: source.object,
+                index,
+            });
             add(
                 Layer::Ability,
                 Modification::GrantActivated(Box::new(granted)),
@@ -2739,12 +3035,17 @@ fn build_source_plan(game: &Game, source: PermanentId, entry: &StaticEntry) -> O
                 Modification::GrantActivated(Box::new(tap_for_mana(Effect::any_color_mana()))),
             );
         }
+        StaticAbility::StateBasedActionDoesntApply { action, scope } => {
+            plan.scope = scope.clone();
+            plan.parts
+                .push((Layer::Ability, Operation::ExemptStateBasedAction(*action)));
+        }
         _ => return None,
     }
     Some(plan.summarize())
 }
 
-fn build_seed_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Option<SeedNode> {
+fn build_seed_node(game: &Game, source: NodeSource, entry: &StaticEntry) -> Option<SeedNode> {
     let plan = build_source_plan(game, source, entry)?;
     Some(SeedNode {
         origin: entry.origin,
@@ -2755,11 +3056,7 @@ fn build_seed_node(game: &Game, source: PermanentId, entry: &StaticEntry) -> Opt
     })
 }
 
-fn build_dynamic_node(
-    game: &Game,
-    source: PermanentId,
-    entry: &StaticEntry,
-) -> Option<DynamicNode> {
+fn build_dynamic_node(game: &Game, source: NodeSource, entry: &StaticEntry) -> Option<DynamicNode> {
     let plan = build_source_plan(game, source, entry)?;
     Some(DynamicNode {
         origin: entry.origin,
@@ -2806,7 +3103,7 @@ fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbil
 
 pub(super) fn matches_static_scope(
     scope: &StaticScope,
-    source: PermanentId,
+    source: Option<PermanentId>,
     source_controller: PlayerId,
     attached: Option<PermanentId>,
     target: PermanentId,
@@ -2814,16 +3111,16 @@ pub(super) fn matches_static_scope(
     matches: impl FnOnce(&CardPredicate) -> bool,
 ) -> bool {
     let predicate = match scope {
-        StaticScope::This => return source == target,
+        StaticScope::This => return source == Some(target),
         StaticScope::Attached => return attached == Some(target),
         StaticScope::SpellsYouControl(_) => return false,
         StaticScope::OtherYouControl(p)
-            if source != target && source_controller == target_controller =>
+            if source != Some(target) && source_controller == target_controller =>
         {
             p
         }
         StaticScope::YouControl(p) if source_controller == target_controller => p,
-        StaticScope::Other(p) if source != target => p,
+        StaticScope::Other(p) if source != Some(target) => p,
         StaticScope::All(p) => p,
         _ => return false,
     };

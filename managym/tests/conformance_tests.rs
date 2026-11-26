@@ -57,6 +57,7 @@ struct FixtureCard {
     type_line: String,
     power: Option<String>,
     toughness: Option<String>,
+    loyalty: Option<String>,
     keywords: Vec<String>,
     oracle_text: Option<String>,
     colors: Vec<String>,
@@ -202,7 +203,7 @@ fn every_registered_real_card_matches_scryfall() {
 
     for def in registry.definitions() {
         let name = def.name.as_str();
-        if def.is_token {
+        if def.kind != managym::state::game_object::ObjectKind::Card {
             continue;
         }
         if NOT_REAL_CARDS.contains(&name) {
@@ -282,6 +283,14 @@ fn every_registered_real_card_matches_scryfall() {
             failures.push(format!(
                 "{name}: toughness {toughness:?} != Scryfall {:?}",
                 fx.toughness
+            ));
+        }
+
+        let loyalty = def.loyalty.map(|n| n.to_string());
+        if loyalty != fx.loyalty {
+            failures.push(format!(
+                "{name}: loyalty {loyalty:?} != Scryfall {:?}",
+                fx.loyalty
             ));
         }
 

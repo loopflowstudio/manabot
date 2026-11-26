@@ -142,6 +142,7 @@ export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks
     p.blocking !== undefined && `blocking ${blocks ?? 'an attacker'}`,
     p.entered_this_turn && 'entered this turn',
     p.attacked_this_turn && 'attacked this turn',
+    p.loyalty_activated_this_turn && 'loyalty ability activated this turn',
     p.is_token && 'token',
     ...(p.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
   ];

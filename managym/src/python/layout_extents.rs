@@ -310,7 +310,7 @@ pub(super) fn axis_extents(
             &shape,
             axis,
             dim,
-            joins(key, layout.config.policy_history),
+            joins(key, layout.config.policy_history, layout.config.layout),
             &numpy,
         )?;
         if key == "actions_valid" {

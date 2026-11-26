@@ -1237,8 +1237,8 @@ Supported `Decision` kinds and grouped activation thresholds:
 | `kind` | Active when | Descriptor fields (besides `address`, `offers`) | `Choice` model and fields | `Outcome` fields |
 | --- | --- | --- | --- | --- |
 | `single` | any other decision, or below threshold | — | `int` (raw offer id) | `offer_id` |
-| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `must_attack`), `committed` | `DeclareAttackersChoice(attackers)` | `attackers` |
-| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
+| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `can_attack`, `must_attack`), `committed` (`PlannedAttack`) | `DeclareAttackersChoice(attackers)` (`PlannedAttack`: `entity`, `incarnation`, optional `defender`) | `attackers` (`PlannedAttack`) |
+| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` (`PlannedBlock`) | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
 | `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top` (`GroupCard`), `committed_bottom` (`GroupCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
 | `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` (`GroupCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
 | `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` (`GroupCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
@@ -1260,8 +1260,11 @@ Supported `Decision` kinds and grouped activation thresholds:
   either a single `int` offer id or a grouped `Choice`; `at` defaults to the
   current decision's address and accepts an explicit `DecisionAddress` for
   optimistic concurrency (raising `managym.AgentError` on stale/non-actor
-  address or mismatched choice kind). A structurally incomplete choice (for
-  example, unplaced cards in `scry` or `order_library`) returns
+  address or mismatched choice kind). For attackers, each `AttackerItem.can_attack`
+  lists permanent defenders (planeswalkers); supply a
+  `PlannedAttack(entity=..., incarnation=..., defender=...)` to attack one, or
+  omit `defender` to attack the defending player. A structurally incomplete
+  choice (for example, unplaced cards in `scry` or `order_library`) returns
   `complete=False, refused=None, steps=[], outcome=None` without cloning.
   Otherwise it clones the game with its `skip_trivial` setting, compiles each
   step from the clone's own legal action space, and returns `DecisionPreview`

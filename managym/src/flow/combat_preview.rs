@@ -11,7 +11,7 @@ use crate::flow::game::Game;
 use crate::flow::group::{DecisionAddress, DecisionChoice, DecisionOutcome, DecisionSpec};
 use crate::state::game_object::PlayerId;
 
-pub use crate::flow::group::PlannedBlock;
+pub use crate::flow::group::{PlannedAttack, PlannedBlock};
 
 /// The whole declaration a person drafts. An attack plan lists attackers;
 /// a block plan lists blocks. A creature left out declines.
@@ -19,7 +19,7 @@ pub use crate::flow::group::PlannedBlock;
 #[serde(deny_unknown_fields)]
 pub struct CombatPlan {
     #[serde(default)]
-    pub attackers: Vec<ObjectRenderId>,
+    pub attackers: Vec<PlannedAttack>,
     #[serde(default)]
     pub blocks: Vec<PlannedBlock>,
 }
@@ -38,6 +38,8 @@ pub struct DeclarableCreature {
     pub label: String,
     /// Blockers only: the attackers it may block from here.
     pub can_block: Vec<ObjectRenderId>,
+    /// Attackers only: permanent defenders (planeswalkers) it may attack.
+    pub can_attack: Vec<ObjectRenderId>,
     /// Blockers only: a requirement (CR 509.1c) removes the option to not block.
     pub must_block: bool,
     /// Attackers only: a requirement (CR 508.1d) removes the option to stay home.
@@ -55,6 +57,7 @@ pub struct DeclarationStep {
     pub action_index: usize,
     /// Attackers: whether it attacks. Blockers: the attacker it blocks.
     pub attack: bool,
+    pub defender: Option<ObjectRenderId>,
     pub blocks: Option<ObjectRenderId>,
 }
 
@@ -75,7 +78,7 @@ pub struct CombatPreview {
     pub steps: Vec<DeclarationStep>,
     pub refused: Option<DeclarationRefusal>,
     /// What the engine declared once the sequence ended.
-    pub declared_attackers: Vec<ObjectRenderId>,
+    pub declared_attackers: Vec<PlannedAttack>,
     pub declared_blocks: Vec<PlannedBlock>,
 }
 
@@ -87,6 +90,7 @@ fn declarable_from_spec(spec: &DecisionSpec) -> Vec<DeclarableCreature> {
                 creature: item.item,
                 label: item.label.clone(),
                 can_block: Vec::new(),
+                can_attack: item.can_attack.clone(),
                 must_block: false,
                 must_attack: item.must_attack,
             })
@@ -97,6 +101,7 @@ fn declarable_from_spec(spec: &DecisionSpec) -> Vec<DeclarableCreature> {
                 creature: item.item,
                 label: item.label.clone(),
                 can_block: item.can_block.clone(),
+                can_attack: Vec::new(),
                 must_block: item.must_block,
                 must_attack: false,
             })
@@ -141,7 +146,7 @@ impl Game {
             DeclarationKind::Blockers => plan
                 .attackers
                 .first()
-                .map(|&id| (id, "is not attacking now: this is a block.")),
+                .map(|attack| (attack.creature, "is not attacking now: this is a block.")),
         };
         if let Some((id, suffix)) = wrong_field {
             let decision = self
@@ -182,13 +187,16 @@ impl Game {
             .into_iter()
             .map(|step| {
                 let creature = step.item.expect("combat step names a creature");
+                let planned_attack = (kind == DeclarationKind::Attackers)
+                    .then(|| plan.attackers.iter().find(|a| a.creature == creature))
+                    .flatten();
                 DeclarationStep {
                     revision: step.revision,
                     fingerprint: step.fingerprint,
                     creature,
                     action_index: step.action_index,
-                    attack: kind == DeclarationKind::Attackers
-                        && plan.attackers.contains(&creature),
+                    attack: planned_attack.is_some(),
+                    defender: planned_attack.and_then(|a| a.defender),
                     blocks: (kind == DeclarationKind::Blockers)
                         .then(|| {
                             plan.blocks

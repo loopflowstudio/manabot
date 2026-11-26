@@ -622,10 +622,13 @@
   .recording .turn { min-width: 0; }
   .recording .turn ol { gap: 0; }
   .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; }
+  /* Dense rows: a 24 px target (WCAG 2.5.8) rather than the 32 px control height. */
+  .recording .move.jump button { min-width: 0; min-height: 24px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 2px 4px; }
   .recording .move.jump .who { flex: none; width: 44px; margin-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recording .move.jump .who.repeat { visibility: hidden; }
-  .recording .move.jump .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recording .move.jump .what { flex: 1 1 5em; min-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Marks never squeeze the move away: in a narrow rail they wrap under it, kept to the right. */
+  .recording .move.jump .reading, .recording .move.jump .shown { margin-left: auto; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }

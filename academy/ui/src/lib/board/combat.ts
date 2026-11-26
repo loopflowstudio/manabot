@@ -24,9 +24,10 @@ import { PRIMARY_CHARS } from './prompt';
 
 // ———————————————————————————————————————— Drafts
 
-/** Attackers in the attack, or blocker → attacker; display ids. */
+/** Attackers in the attack (optional non-player defender per attacker), or blocker → attacker; display ids. */
 export interface Draft {
   attackers: number[];
+  defenders?: Record<number, number>;
   blocks: [number, number][];
 }
 
@@ -53,7 +54,23 @@ export function toggleAttacker(draft: Draft, id: number): Draft {
   const attackers = draft.attackers.includes(id)
     ? draft.attackers.filter(other => other !== id)
     : [...draft.attackers, id];
-  return { ...draft, attackers };
+  return withAttackers(draft, attackers);
+}
+
+/** Assign a drafted attacker to a planeswalker (entity id) or the defending player (null). */
+export function setAttackerDefender(draft: Draft, attacker: number, defender: number | null): Draft {
+  if (!draft.attackers.includes(attacker)) return draft;
+  const defenders = { ...draft.defenders };
+  if (defender === null) delete defenders[attacker];
+  else defenders[attacker] = defender;
+  return { attackers: draft.attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
+}
+
+function withAttackers(draft: Draft, attackers: number[]): Draft {
+  const defenders = Object.fromEntries(
+    Object.entries(draft.defenders ?? {}).filter(([id]) => attackers.includes(Number(id))),
+  );
+  return { attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
 }
 
 /** Place or remove one blocker, leaving every other assignment intact. */
@@ -72,7 +89,7 @@ export function toggleBlock(draft: Draft, blocker: number, attacker: number): Dr
 /** Draft the first `count` of a pile's identical creatures into the attack. */
 export function setPileCount(draft: Draft, pile: number[], count: number): Draft {
   const rest = draft.attackers.filter(id => !pile.includes(id));
-  return { ...draft, attackers: [...rest, ...pile.slice(0, Math.max(0, Math.min(pile.length, count)))] };
+  return withAttackers(draft, [...rest, ...pile.slice(0, Math.max(0, Math.min(pile.length, count)))]);
 }
 
 /** Filter a restored draft so it names only creatures currently declarable in `group`. */
@@ -81,7 +98,23 @@ export function sanitizeCombatDraft(saved: unknown, group: CombatGroup): Draft {
   const candidate = saved as Partial<Draft>;
   if (group.kind === 'declare_attackers') {
     const allowed = new Set(group.declarable.map(creature => creature.item.entity));
-    return { attackers: sanitizeEntityIds(candidate.attackers, allowed), blocks: [] };
+    const attackers = sanitizeEntityIds(candidate.attackers, allowed);
+    const canAttack = new Map(
+      group.declarable.map(creature => [
+        creature.item.entity,
+        new Set((creature.can_attack ?? []).map(target => target.entity)),
+      ]),
+    );
+    const defenders: Record<number, number> = {};
+    if (candidate.defenders && typeof candidate.defenders === 'object') {
+      for (const attacker of attackers) {
+        const chosen = candidate.defenders[attacker];
+        if (typeof chosen === 'number' && canAttack.get(attacker)?.has(chosen)) {
+          defenders[attacker] = chosen;
+        }
+      }
+    }
+    return { attackers, blocks: [], ...(Object.keys(defenders).length && { defenders }) };
   }
   const canBlock = new Map(
     group.declarable.map(creature => [
@@ -115,8 +148,17 @@ export function combatPlanOf(
   const ids = new Map<number, ObjectRenderId>();
   const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
   if (group.kind === 'declare_attackers') {
-    for (const creature of group.declarable) ids.set(creature.item.entity, creature.item);
-    return { kind: 'declare_attackers', attackers: draft.attackers.map(id) };
+    for (const creature of group.declarable) {
+      ids.set(creature.item.entity, creature.item);
+      for (const target of creature.can_attack ?? []) ids.set(target.entity, target);
+    }
+    return {
+      kind: 'declare_attackers',
+      attackers: draft.attackers.map(attacker => {
+        const defender = draft.defenders?.[attacker];
+        return defender == null ? id(attacker) : { ...id(attacker), defender: id(defender) };
+      }),
+    };
   }
   for (const creature of group.declarable) {
     ids.set(creature.item.entity, creature.item);
@@ -131,7 +173,14 @@ export function combatPlanOf(
 /** What the engine already committed before this step (must-attack, skip_trivial, or raw single-step). */
 export function committedFromGroup(group: CombatGroup): Draft {
   if (group.kind === 'declare_attackers') {
-    return { attackers: group.committed.map(item => item.entity), blocks: [] };
+    const defenders = Object.fromEntries(
+      group.committed.flatMap(item => (item.defender == null ? [] : [[item.entity, item.defender.entity]])),
+    );
+    return {
+      attackers: group.committed.map(item => item.entity),
+      ...(Object.keys(defenders).length && { defenders }),
+      blocks: [],
+    };
   }
   return {
     attackers: [],
@@ -144,12 +193,13 @@ export function drawDraft(frame: ExperienceFrame, draft: Draft): ExperienceFrame
   if (!draft.attackers.length && !draft.blocks.length) return frame;
   const attacking = new Set(draft.attackers);
   const blocking = new Map(draft.blocks);
-  const draw = (permanent: ExperienceFrame['projection']['agent']['battlefield'][number]) =>
-    attacking.has(permanent.id)
-      ? { ...permanent, attacking: true }
-      : blocking.has(permanent.id)
-        ? { ...permanent, blocking: blocking.get(permanent.id) }
-        : permanent;
+  const draw = (permanent: ExperienceFrame['projection']['agent']['battlefield'][number]) => {
+    if (attacking.has(permanent.id)) {
+      const defender = draft.defenders?.[permanent.id];
+      return { ...permanent, attacking: true, ...(defender !== undefined && { attacked_permanent: defender }) };
+    }
+    return blocking.has(permanent.id) ? { ...permanent, blocking: blocking.get(permanent.id) } : permanent;
+  };
   const { agent, opponent } = frame.projection;
   return {
     ...frame,
@@ -207,6 +257,13 @@ export function draftWords(
       .map(creature => creature.label);
     const one = `Attack with ${name(draft.attackers[0])}`;
     const text = count === 1 && one.length <= PRIMARY_CHARS ? one : `Attack with ${count}`;
+    const defenders = { ...committed.defenders, ...drafted.defenders };
+    if (Object.keys(defenders).length) {
+      const assignments = draft.attackers.map(
+        id => `${name(id)} attacks ${defenders[id] === undefined ? 'the defending player' : name(defenders[id])}`,
+      );
+      return { text, plan: assignments.join(' · ') };
+    }
     if (!out.length) {
       return {
         text,

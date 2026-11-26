@@ -10,6 +10,10 @@ import type { ObjectRenderId } from './types';
 
 export type LibraryEnd = 'top' | 'bottom';
 
+export interface PlannedAttack extends ObjectRenderId {
+  defender?: ObjectRenderId | null;
+}
+
 export interface PlannedBlock {
   blocker: ObjectRenderId;
   attacker: ObjectRenderId;
@@ -23,6 +27,7 @@ export interface GroupCard {
 export interface AttackerItem {
   item: ObjectRenderId;
   label: string;
+  can_attack?: ObjectRenderId[];
   must_attack: boolean;
 }
 
@@ -43,7 +48,7 @@ export interface GroupAddress {
 export interface DeclareAttackersGroup extends GroupAddress {
   kind: 'declare_attackers';
   declarable: AttackerItem[];
-  committed: ObjectRenderId[];
+  committed: PlannedAttack[];
 }
 
 export interface DeclareBlockersGroup extends GroupAddress {
@@ -86,7 +91,7 @@ export type GroupKind = LiveGroup['kind'];
 
 export interface DeclareAttackersPlan {
   kind: 'declare_attackers';
-  attackers: ObjectRenderId[];
+  attackers: PlannedAttack[];
 }
 
 export interface DeclareBlockersPlan {
@@ -130,7 +135,7 @@ export interface GroupRefusal {
 }
 
 export type GroupOutcome =
-  | { kind: 'declare_attackers'; attackers: ObjectRenderId[] }
+  | { kind: 'declare_attackers'; attackers: PlannedAttack[] }
   | { kind: 'declare_blockers'; blocks: PlannedBlock[] }
   | { kind: 'scry'; top: ObjectRenderId[]; bottom: ObjectRenderId[] }
   | { kind: 'surveil'; graveyard: ObjectRenderId[]; kept: ObjectRenderId[] }
@@ -182,7 +187,12 @@ function renderIdKey(id: ObjectRenderId): string {
 export function groupPlanKey(plan: GroupPlan): string {
   switch (plan.kind) {
     case 'declare_attackers':
-      return JSON.stringify([plan.kind, plan.attackers.map(renderIdKey).sort()]);
+      return JSON.stringify([
+        plan.kind,
+        plan.attackers
+          .map(attack => (attack.defender ? `${renderIdKey(attack)}>${renderIdKey(attack.defender)}` : renderIdKey(attack)))
+          .sort(),
+      ]);
     case 'declare_blockers':
       return JSON.stringify([
         plan.kind,
@@ -214,7 +224,12 @@ export function validGroupPlan(value: unknown): value is GroupPlan {
   const plan = value as Record<string, unknown>;
   switch (plan.kind) {
     case 'declare_attackers':
-      return validRenderIdList(plan.attackers);
+      return Array.isArray(plan.attackers) && plan.attackers.every(
+        entry => validRenderId(entry)
+          && ((entry as Partial<PlannedAttack>).defender === undefined
+            || (entry as Partial<PlannedAttack>).defender === null
+            || validRenderId((entry as Partial<PlannedAttack>).defender)),
+      );
     case 'declare_blockers':
       return Array.isArray(plan.blocks) && plan.blocks.every(
         entry => !!entry && typeof entry === 'object'

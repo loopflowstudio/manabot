@@ -7,13 +7,13 @@
           "title": "Name",
           "type": "string"
         },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
         "sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Sha256",
-          "type": "string"
-        },
-        "version": {
-          "title": "Version",
           "type": "string"
         }
       },
@@ -28,6 +28,11 @@
     "ActionMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "action",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "anyOf": [
             {
@@ -45,11 +50,6 @@
         "index": {
           "title": "Index",
           "type": "integer"
-        },
-        "type": {
-          "const": "action",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -63,20 +63,20 @@
       "additionalProperties": false,
       "description": "Legacy GAM-6 replay/advisor/compute identity.\n\nIt is intentionally unchanged so checked testing-house fixtures and\nexisting imports continue to round-trip while callers migrate to\n:class:`AdvisorIdentity`.",
       "properties": {
-        "advisor_id": {
-          "title": "Advisor Id",
-          "type": "string"
-        },
-        "compute_id": {
-          "title": "Compute Id",
+        "source_replay_id": {
+          "title": "Source Replay Id",
           "type": "string"
         },
         "match_id": {
           "title": "Match Id",
           "type": "string"
         },
-        "source_replay_id": {
-          "title": "Source Replay Id",
+        "advisor_id": {
+          "title": "Advisor Id",
+          "type": "string"
+        },
+        "compute_id": {
+          "title": "Compute Id",
           "type": "string"
         }
       },
@@ -92,24 +92,14 @@
     "AdvisorComputeIdentity": {
       "additionalProperties": false,
       "properties": {
-        "branch_driver_id": {
-          "title": "Branch Driver Id",
-          "type": "string"
-        },
-        "c_puct": {
-          "exclusiveMinimum": 0.0,
-          "title": "C Puct",
-          "type": "number"
-        },
         "id": {
           "title": "Id",
           "type": "string"
         },
-        "max_steps": {
-          "exclusiveMinimum": 0,
-          "maximum": 4294967295,
+        "simulations_per_scenario": {
+          "maximum": 18446744073709551615,
           "minimum": 0,
-          "title": "Max Steps",
+          "title": "Simulations Per Scenario",
           "type": "integer"
         },
         "sampled_worlds": {
@@ -118,11 +108,21 @@
           "title": "Sampled Worlds",
           "type": "integer"
         },
-        "simulations_per_scenario": {
-          "maximum": 18446744073709551615,
+        "c_puct": {
+          "exclusiveMinimum": 0.0,
+          "title": "C Puct",
+          "type": "number"
+        },
+        "max_steps": {
+          "exclusiveMinimum": 0,
+          "maximum": 4294967295,
           "minimum": 0,
-          "title": "Simulations Per Scenario",
+          "title": "Max Steps",
           "type": "integer"
+        },
+        "branch_driver_id": {
+          "title": "Branch Driver Id",
+          "type": "string"
         }
       },
       "required": [
@@ -140,8 +140,60 @@
       "additionalProperties": false,
       "description": "Fully pinned identity for one versioned advice computation.",
       "properties": {
+        "kind": {
+          "const": "advisor_identity_v1",
+          "default": "advisor_identity_v1",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_replay_id": {
+          "title": "Source Replay Id",
+          "type": "string"
+        },
+        "source_replay_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Replay Sha256",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "world_id": {
+          "title": "World Id",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "observation_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
         "action_abi": {
           "$ref": "#/$defs/AbiIdentity"
+        },
+        "possible_world_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "information_boundary": {
+          "const": "historical_viewer",
+          "title": "Information Boundary",
+          "type": "string"
+        },
+        "planner_id": {
+          "const": "determinized_puct",
+          "title": "Planner Id",
+          "type": "string"
+        },
+        "evaluator_id": {
+          "enum": [
+            "uniform_random_terminal",
+            "checkpoint_policy_neutral_value"
+          ],
+          "title": "Evaluator Id",
+          "type": "string"
         },
         "artifact": {
           "discriminator": {
@@ -164,60 +216,8 @@
         "compute": {
           "$ref": "#/$defs/AdvisorComputeIdentity"
         },
-        "content_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Content Sha256",
-          "type": "string"
-        },
-        "evaluator_id": {
-          "enum": [
-            "uniform_random_terminal",
-            "checkpoint_policy_neutral_value"
-          ],
-          "title": "Evaluator Id",
-          "type": "string"
-        },
-        "information_boundary": {
-          "const": "historical_viewer",
-          "title": "Information Boundary",
-          "type": "string"
-        },
-        "kind": {
-          "const": "advisor_identity_v1",
-          "default": "advisor_identity_v1",
-          "title": "Kind",
-          "type": "string"
-        },
-        "match_id": {
-          "title": "Match Id",
-          "type": "string"
-        },
-        "observation_abi": {
-          "$ref": "#/$defs/AbiIdentity"
-        },
-        "planner_id": {
-          "const": "determinized_puct",
-          "title": "Planner Id",
-          "type": "string"
-        },
-        "possible_world_abi": {
-          "$ref": "#/$defs/AbiIdentity"
-        },
         "seed": {
           "$ref": "#/$defs/AdvisorSeedIdentity"
-        },
-        "source_replay_id": {
-          "title": "Source Replay Id",
-          "type": "string"
-        },
-        "source_replay_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Source Replay Sha256",
-          "type": "string"
-        },
-        "world_id": {
-          "title": "World Id",
-          "type": "string"
         }
       },
       "required": [
@@ -242,10 +242,6 @@
     "AdvisorSeedIdentity": {
       "additionalProperties": false,
       "properties": {
-        "derivation_id": {
-          "title": "Derivation Id",
-          "type": "string"
-        },
         "plan_id": {
           "title": "Plan Id",
           "type": "string"
@@ -255,6 +251,10 @@
           "minimum": 0,
           "title": "Root Seed",
           "type": "integer"
+        },
+        "derivation_id": {
+          "title": "Derivation Id",
+          "type": "string"
         }
       },
       "required": [
@@ -272,6 +272,12 @@
           "const": "assignments",
           "title": "Kind",
           "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
         },
         "pairs": {
           "items": {
@@ -293,12 +299,6 @@
           },
           "title": "Pairs",
           "type": "array"
-        },
-        "role": {
-          "maximum": 65535,
-          "minimum": 0,
-          "title": "Role",
-          "type": "integer"
         }
       },
       "required": [
@@ -312,6 +312,11 @@
     "AuthorBeliefMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "author_belief",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "maximum": 18446744073709551615,
           "minimum": 0,
@@ -320,11 +325,6 @@
         },
         "scenario_id": {
           "title": "Scenario Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "author_belief",
-          "title": "Type",
           "type": "string"
         }
       },
@@ -339,16 +339,16 @@
     "BeliefChangedEvent": {
       "additionalProperties": false,
       "properties": {
-        "belief": {
-          "$ref": "#/$defs/BeliefScenario"
-        },
-        "table": {
-          "$ref": "#/$defs/TableSnapshot"
-        },
         "type": {
           "const": "belief_changed",
           "title": "Type",
           "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
+        },
+        "belief": {
+          "$ref": "#/$defs/BeliefScenario"
         }
       },
       "required": [
@@ -362,6 +362,17 @@
     "BeliefScenario": {
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "author_viewer_id": {
+          "title": "Author Viewer Id",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/BeliefSource"
+        },
         "audience": {
           "discriminator": {
             "mapping": {
@@ -380,14 +391,6 @@
           ],
           "title": "Audience"
         },
-        "author_viewer_id": {
-          "title": "Author Viewer Id",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
         "provenance": {
           "discriminator": {
             "mapping": {
@@ -405,9 +408,6 @@
             }
           ],
           "title": "Provenance"
-        },
-        "source": {
-          "$ref": "#/$defs/BeliefSource"
         }
       },
       "required": [
@@ -423,6 +423,14 @@
     "BeliefSource": {
       "additionalProperties": false,
       "properties": {
+        "decision_address": {
+          "title": "Decision Address",
+          "type": "string"
+        },
+        "gam6_scenario_id": {
+          "title": "Gam6 Scenario Id",
+          "type": "string"
+        },
         "advice_identity": {
           "anyOf": [
             {
@@ -433,14 +441,6 @@
             }
           ],
           "title": "Advice Identity"
-        },
-        "decision_address": {
-          "title": "Decision Address",
-          "type": "string"
-        },
-        "gam6_scenario_id": {
-          "title": "Gam6 Scenario Id",
-          "type": "string"
         }
       },
       "required": [
@@ -454,8 +454,9 @@
     "BranchPreviewMessage": {
       "additionalProperties": false,
       "properties": {
-        "attempt_id": {
-          "title": "Attempt Id",
+        "type": {
+          "const": "branch_preview",
+          "title": "Type",
           "type": "string"
         },
         "grant_revision": {
@@ -464,6 +465,10 @@
           "title": "Grant Revision",
           "type": "integer"
         },
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
         "plan": {
           "enum": [
             "played",
@@ -471,11 +476,6 @@
             "search"
           ],
           "title": "Plan",
-          "type": "string"
-        },
-        "type": {
-          "const": "branch_preview",
-          "title": "Type",
           "type": "string"
         }
       },
@@ -491,6 +491,11 @@
     "BranchReturnedEvent": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "branch_returned",
+          "title": "Type",
+          "type": "string"
+        },
         "restored": {
           "additionalProperties": true,
           "title": "Restored",
@@ -506,11 +511,6 @@
             }
           ],
           "default": null
-        },
-        "type": {
-          "const": "branch_returned",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -523,8 +523,9 @@
     "BranchRevealMessage": {
       "additionalProperties": false,
       "properties": {
-        "attempt_id": {
-          "title": "Attempt Id",
+        "type": {
+          "const": "branch_reveal",
+          "title": "Type",
           "type": "string"
         },
         "grant_revision": {
@@ -533,9 +534,8 @@
           "title": "Grant Revision",
           "type": "integer"
         },
-        "type": {
-          "const": "branch_reveal",
-          "title": "Type",
+        "attempt_id": {
+          "title": "Attempt Id",
           "type": "string"
         }
       },
@@ -550,14 +550,14 @@
     "BranchUpdatedEvent": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "branch_updated",
+          "title": "Type",
+          "type": "string"
+        },
         "attempt_id": {
           "title": "Attempt Id",
           "type": "string"
-        },
-        "payload": {
-          "additionalProperties": true,
-          "title": "Payload",
-          "type": "object"
         },
         "phase": {
           "enum": [
@@ -567,6 +567,11 @@
           ],
           "title": "Phase",
           "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
         },
         "table": {
           "anyOf": [
@@ -578,11 +583,6 @@
             }
           ],
           "default": null
-        },
-        "type": {
-          "const": "branch_updated",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -597,15 +597,6 @@
     "CandidatesChoiceAnswer": {
       "additionalProperties": false,
       "properties": {
-        "candidates": {
-          "items": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Candidates",
-          "type": "array"
-        },
         "kind": {
           "const": "candidates",
           "title": "Kind",
@@ -616,6 +607,15 @@
           "minimum": 0,
           "title": "Role",
           "type": "integer"
+        },
+        "candidates": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Candidates",
+          "type": "array"
         }
       },
       "required": [
@@ -629,14 +629,10 @@
     "CheckpointArtifact": {
       "additionalProperties": false,
       "properties": {
-        "action_abi": {
-          "$ref": "#/$defs/AbiIdentity"
-        },
-        "checkpoint_bytes": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Checkpoint Bytes",
-          "type": "integer"
+        "kind": {
+          "const": "checkpoint",
+          "title": "Kind",
+          "type": "string"
         },
         "checkpoint_id": {
           "title": "Checkpoint Id",
@@ -647,24 +643,28 @@
           "title": "Checkpoint Sha256",
           "type": "string"
         },
-        "kind": {
-          "const": "checkpoint",
-          "title": "Kind",
-          "type": "string"
+        "checkpoint_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Checkpoint Bytes",
+          "type": "integer"
         },
         "manifest_sha256": {
           "pattern": "^[0-9a-f]{64}$",
           "title": "Manifest Sha256",
           "type": "string"
         },
-        "observation_abi": {
-          "$ref": "#/$defs/AbiIdentity"
-        },
         "training_seed": {
           "maximum": 18446744073709551615,
           "minimum": 0,
           "title": "Training Seed",
           "type": "integer"
+        },
+        "observation_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "action_abi": {
+          "$ref": "#/$defs/AbiIdentity"
         },
         "value_mode": {
           "enum": [
@@ -713,6 +713,32 @@
     "Command": {
       "additionalProperties": false,
       "properties": {
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        },
+        "offer_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Offer Id",
+          "type": "integer"
+        },
         "answers": {
           "items": {
             "discriminator": {
@@ -745,32 +771,6 @@
           },
           "title": "Answers",
           "type": "array"
-        },
-        "command_id": {
-          "title": "Command Id",
-          "type": "string"
-        },
-        "expected_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Expected Revision",
-          "type": "integer"
-        },
-        "match_id": {
-          "title": "Match Id",
-          "type": "string"
-        },
-        "offer_id": {
-          "maximum": 4294967295,
-          "minimum": 0,
-          "title": "Offer Id",
-          "type": "integer"
-        },
-        "prompt_id": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Prompt Id",
-          "type": "integer"
         }
       },
       "required": [
@@ -787,8 +787,10 @@
     "CommandMessage": {
       "additionalProperties": false,
       "properties": {
-        "command": {
-          "$ref": "#/$defs/Command"
+        "type": {
+          "const": "command",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "anyOf": [
@@ -804,10 +806,8 @@
           "default": null,
           "title": "Grant Revision"
         },
-        "type": {
-          "const": "command",
-          "title": "Type",
-          "type": "string"
+        "command": {
+          "$ref": "#/$defs/Command"
         }
       },
       "required": [
@@ -820,6 +820,11 @@
     "ControlErrorEvent": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "control_error",
+          "title": "Type",
+          "type": "string"
+        },
         "code": {
           "enum": [
             "invalid_message",
@@ -846,11 +851,6 @@
             }
           ],
           "default": null
-        },
-        "type": {
-          "const": "control_error",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -864,6 +864,11 @@
     "DecisionRestoredEvent": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "decision_restored",
+          "title": "Type",
+          "type": "string"
+        },
         "address": {
           "title": "Address",
           "type": "string"
@@ -883,11 +888,6 @@
             }
           ],
           "default": null
-        },
-        "type": {
-          "const": "decision_restored",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -901,18 +901,18 @@
     "DeclareAttackersChoice": {
       "additionalProperties": false,
       "properties": {
-        "attackers": {
-          "items": {
-            "$ref": "#/$defs/ObjectRenderId"
-          },
-          "title": "Attackers",
-          "type": "array"
-        },
         "kind": {
           "const": "declare_attackers",
           "default": "declare_attackers",
           "title": "Kind",
           "type": "string"
+        },
+        "attackers": {
+          "items": {
+            "$ref": "#/$defs/PlannedAttack"
+          },
+          "title": "Attackers",
+          "type": "array"
         }
       },
       "title": "DeclareAttackersChoice",
@@ -921,18 +921,18 @@
     "DeclareBlockersChoice": {
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "const": "declare_blockers",
+          "default": "declare_blockers",
+          "title": "Kind",
+          "type": "string"
+        },
         "blocks": {
           "items": {
             "$ref": "#/$defs/PlannedBlock"
           },
           "title": "Blocks",
           "type": "array"
-        },
-        "kind": {
-          "const": "declare_blockers",
-          "default": "declare_blockers",
-          "title": "Kind",
-          "type": "string"
         }
       },
       "title": "DeclareBlockersChoice",
@@ -978,28 +978,28 @@
           "title": "Command Id",
           "type": "string"
         },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
         "expected_revision": {
           "maximum": 18446744073709551615,
           "minimum": 0,
           "title": "Expected Revision",
           "type": "integer"
         },
-        "frame_hash": {
-          "title": "Frame Hash",
-          "type": "string"
-        },
-        "match_id": {
-          "title": "Match Id",
-          "type": "string"
-        },
-        "plan": {
-          "$ref": "#/$defs/GroupChoice"
-        },
         "prompt_id": {
           "maximum": 18446744073709551615,
           "minimum": 0,
           "title": "Prompt Id",
           "type": "integer"
+        },
+        "frame_hash": {
+          "title": "Frame Hash",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/GroupChoice"
         }
       },
       "required": [
@@ -1016,8 +1016,10 @@
     "GroupCommandMessage": {
       "additionalProperties": false,
       "properties": {
-        "command": {
-          "$ref": "#/$defs/GroupCommand"
+        "type": {
+          "const": "group_command",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "anyOf": [
@@ -1033,10 +1035,8 @@
           "default": null,
           "title": "Grant Revision"
         },
-        "type": {
-          "const": "group_command",
-          "title": "Type",
-          "type": "string"
+        "command": {
+          "$ref": "#/$defs/GroupCommand"
         }
       },
       "required": [
@@ -1049,6 +1049,15 @@
     "JoinTableMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "join_table",
+          "title": "Type",
+          "type": "string"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
         "invite_token": {
           "title": "Invite Token",
           "type": "string"
@@ -1066,15 +1075,6 @@
           ],
           "default": null,
           "title": "Presentation Cursor"
-        },
-        "table_id": {
-          "title": "Table Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "join_table",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -1088,9 +1088,10 @@
     "ModelInferredBeliefProvenance": {
       "additionalProperties": false,
       "properties": {
-        "artifact_manifest_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Artifact Manifest Sha256",
+        "kind": {
+          "const": "model_inferred",
+          "default": "model_inferred",
+          "title": "Kind",
           "type": "string"
         },
         "belief_model_id": {
@@ -1102,10 +1103,9 @@
           "title": "Checkpoint Sha256",
           "type": "string"
         },
-        "kind": {
-          "const": "model_inferred",
-          "default": "model_inferred",
-          "title": "Kind",
+        "artifact_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Manifest Sha256",
           "type": "string"
         },
         "viewer_history_sha256": {
@@ -1126,10 +1126,10 @@
     "NewGameMessage": {
       "additionalProperties": false,
       "properties": {
-        "config": {
-          "additionalProperties": true,
-          "title": "Config",
-          "type": "object"
+        "type": {
+          "const": "new_game",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "anyOf": [
@@ -1145,10 +1145,10 @@
           "default": null,
           "title": "Grant Revision"
         },
-        "type": {
-          "const": "new_game",
-          "title": "Type",
-          "type": "string"
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
         }
       },
       "required": [
@@ -1212,19 +1212,6 @@
     "OpponentIdentity": {
       "additionalProperties": false,
       "properties": {
-        "base_sha256": {
-          "anyOf": [
-            {
-              "pattern": "^[a-f0-9]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Base Sha256"
-        },
         "bot_id": {
           "anyOf": [
             {
@@ -1251,6 +1238,19 @@
           "pattern": "^[a-f0-9]{64}$",
           "title": "Sha256",
           "type": "string"
+        },
+        "base_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Sha256"
         }
       },
       "required": [
@@ -1264,15 +1264,6 @@
     "OrderChoiceAnswer": {
       "additionalProperties": false,
       "properties": {
-        "candidates": {
-          "items": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Candidates",
-          "type": "array"
-        },
         "kind": {
           "const": "order",
           "title": "Kind",
@@ -1283,6 +1274,15 @@
           "minimum": 0,
           "title": "Role",
           "type": "integer"
+        },
+        "candidates": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Candidates",
+          "type": "array"
         }
       },
       "required": [
@@ -1317,16 +1317,16 @@
     "ParticipantPresence": {
       "additionalProperties": false,
       "properties": {
-        "connected": {
-          "title": "Connected",
-          "type": "boolean"
+        "viewer_id": {
+          "title": "Viewer Id",
+          "type": "string"
         },
         "role": {
           "$ref": "#/$defs/ViewerRole"
         },
-        "viewer_id": {
-          "title": "Viewer Id",
-          "type": "string"
+        "connected": {
+          "title": "Connected",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1341,18 +1341,18 @@
       "additionalProperties": false,
       "description": "Cards to put in the face-up pile; all remaining looked-at cards go face-down.",
       "properties": {
+        "kind": {
+          "const": "partition_piles",
+          "default": "partition_piles",
+          "title": "Kind",
+          "type": "string"
+        },
         "face_up": {
           "items": {
             "$ref": "#/$defs/ObjectRenderId"
           },
           "title": "Face Up",
           "type": "array"
-        },
-        "kind": {
-          "const": "partition_piles",
-          "default": "partition_piles",
-          "title": "Kind",
-          "type": "string"
         }
       },
       "title": "PartitionPilesChoice",
@@ -1361,6 +1361,11 @@
     "PassTurnMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "pass_turn",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "anyOf": [
             {
@@ -1374,11 +1379,6 @@
           ],
           "default": null,
           "title": "Grant Revision"
-        },
-        "type": {
-          "const": "pass_turn",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -1395,15 +1395,15 @@
           "title": "Kind",
           "type": "string"
         },
-        "plan": {
-          "title": "Plan",
-          "type": "string"
-        },
         "role": {
           "maximum": 65535,
           "minimum": 0,
           "title": "Role",
           "type": "integer"
+        },
+        "plan": {
+          "title": "Plan",
+          "type": "string"
         }
       },
       "required": [
@@ -1429,13 +1429,47 @@
       "title": "PersonalAudience",
       "type": "object"
     },
+    "PlannedAttack": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Entity",
+          "type": "integer"
+        },
+        "incarnation": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Incarnation",
+          "type": "integer"
+        },
+        "defender": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "entity",
+        "incarnation"
+      ],
+      "title": "PlannedAttack",
+      "type": "object"
+    },
     "PlannedBlock": {
       "additionalProperties": false,
       "properties": {
-        "attacker": {
+        "blocker": {
           "$ref": "#/$defs/ObjectRenderId"
         },
-        "blocker": {
+        "attacker": {
           "$ref": "#/$defs/ObjectRenderId"
         }
       },
@@ -1449,17 +1483,17 @@
     "PlayerAuthoredBeliefProvenance": {
       "additionalProperties": false,
       "properties": {
-        "created_at_table_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Created At Table Revision",
-          "type": "integer"
-        },
         "kind": {
           "const": "player_authored",
           "default": "player_authored",
           "title": "Kind",
           "type": "string"
+        },
+        "created_at_table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Created At Table Revision",
+          "type": "integer"
         },
         "shared_at_table_revision": {
           "anyOf": [
@@ -1485,38 +1519,16 @@
     "RematchMessage": {
       "additionalProperties": false,
       "properties": {
-        "attempt_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Attempt Id"
-        },
-        "config": {
-          "additionalProperties": true,
-          "title": "Config",
-          "type": "object"
+        "type": {
+          "const": "rematch",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "maximum": 18446744073709551615,
           "minimum": 0,
           "title": "Grant Revision",
           "type": "integer"
-        },
-        "intent": {
-          "default": "rematch",
-          "enum": [
-            "rematch",
-            "swap_sides",
-            "change_opponent"
-          ],
-          "title": "Intent",
-          "type": "string"
         },
         "request_id": {
           "anyOf": [
@@ -1532,6 +1544,18 @@
           "default": null,
           "title": "Request Id"
         },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "setup_revision": {
           "anyOf": [
             {
@@ -1546,10 +1570,20 @@
           "default": null,
           "title": "Setup Revision"
         },
-        "type": {
-          "const": "rematch",
-          "title": "Type",
+        "intent": {
+          "default": "rematch",
+          "enum": [
+            "rematch",
+            "swap_sides",
+            "change_opponent"
+          ],
+          "title": "Intent",
           "type": "string"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
         }
       },
       "required": [
@@ -1562,8 +1596,9 @@
     "RestoreDecisionMessage": {
       "additionalProperties": false,
       "properties": {
-        "address": {
-          "title": "Address",
+        "type": {
+          "const": "restore_decision",
+          "title": "Type",
           "type": "string"
         },
         "grant_revision": {
@@ -1572,9 +1607,8 @@
           "title": "Grant Revision",
           "type": "integer"
         },
-        "type": {
-          "const": "restore_decision",
-          "title": "Type",
+        "address": {
+          "title": "Address",
           "type": "string"
         }
       },
@@ -1589,6 +1623,11 @@
     "ResumeMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "resume",
+          "title": "Type",
+          "type": "string"
+        },
         "play_session_id": {
           "anyOf": [
             {
@@ -1600,6 +1639,14 @@
           ],
           "default": null,
           "title": "Play Session Id"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "resume_token": {
+          "title": "Resume Token",
+          "type": "string"
         },
         "presentation_cursor": {
           "anyOf": [
@@ -1614,19 +1661,6 @@
           ],
           "default": null,
           "title": "Presentation Cursor"
-        },
-        "resume_token": {
-          "title": "Resume Token",
-          "type": "string"
-        },
-        "session_id": {
-          "title": "Session Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "resume",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -1640,12 +1674,10 @@
     "RetryDecisionMessage": {
       "additionalProperties": false,
       "properties": {
-        "address": {
-          "title": "Address",
+        "type": {
+          "const": "retry_decision",
+          "title": "Type",
           "type": "string"
-        },
-        "command": {
-          "$ref": "#/$defs/Command"
         },
         "grant_revision": {
           "maximum": 18446744073709551615,
@@ -1653,10 +1685,12 @@
           "title": "Grant Revision",
           "type": "integer"
         },
-        "type": {
-          "const": "retry_decision",
-          "title": "Type",
+        "address": {
+          "title": "Address",
           "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/Command"
         }
       },
       "required": [
@@ -1671,11 +1705,10 @@
     "RetryMirrorMessage": {
       "additionalProperties": false,
       "properties": {
-        "expected_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Expected Revision",
-          "type": "integer"
+        "type": {
+          "const": "retry_mirror",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "anyOf": [
@@ -1695,10 +1728,11 @@
           "title": "Match Id",
           "type": "string"
         },
-        "type": {
-          "const": "retry_mirror",
-          "title": "Type",
-          "type": "string"
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
         }
       },
       "required": [
@@ -1712,8 +1746,9 @@
     "ReturnFromBranchMessage": {
       "additionalProperties": false,
       "properties": {
-        "attempt_id": {
-          "title": "Attempt Id",
+        "type": {
+          "const": "return_from_branch",
+          "title": "Type",
           "type": "string"
         },
         "grant_revision": {
@@ -1722,9 +1757,8 @@
           "title": "Grant Revision",
           "type": "integer"
         },
-        "type": {
-          "const": "return_from_branch",
-          "title": "Type",
+        "attempt_id": {
+          "title": "Attempt Id",
           "type": "string"
         }
       },
@@ -1739,16 +1773,16 @@
     "ReturnToLiveMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "return_to_live",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "maximum": 18446744073709551615,
           "minimum": 0,
           "title": "Grant Revision",
           "type": "integer"
-        },
-        "type": {
-          "const": "return_to_live",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -1761,13 +1795,13 @@
     "RoleChangedEvent": {
       "additionalProperties": false,
       "properties": {
-        "table": {
-          "$ref": "#/$defs/TableSnapshot"
-        },
         "type": {
           "const": "role_changed",
           "title": "Type",
           "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
         }
       },
       "required": [
@@ -1781,13 +1815,6 @@
       "additionalProperties": false,
       "description": "`top` is drawn-first; `bottom` is top-to-bottom of the bottom group.",
       "properties": {
-        "bottom": {
-          "items": {
-            "$ref": "#/$defs/ObjectRenderId"
-          },
-          "title": "Bottom",
-          "type": "array"
-        },
         "kind": {
           "const": "scry",
           "default": "scry",
@@ -1800,6 +1827,13 @@
           },
           "title": "Top",
           "type": "array"
+        },
+        "bottom": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Bottom",
+          "type": "array"
         }
       },
       "title": "ScryChoice",
@@ -1808,17 +1842,10 @@
     "SetStopsMessage": {
       "additionalProperties": false,
       "properties": {
-        "auto_pass": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Auto Pass"
+        "type": {
+          "const": "set_stops",
+          "title": "Type",
+          "type": "string"
         },
         "grant_revision": {
           "anyOf": [
@@ -1833,18 +1860,6 @@
           ],
           "default": null,
           "title": "Grant Revision"
-        },
-        "stop_on_stack": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Stop On Stack"
         },
         "stops": {
           "anyOf": [
@@ -1864,10 +1879,29 @@
           "default": null,
           "title": "Stops"
         },
-        "type": {
-          "const": "set_stops",
-          "title": "Type",
-          "type": "string"
+        "stop_on_stack": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop On Stack"
+        },
+        "auto_pass": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Pass"
         }
       },
       "required": [
@@ -1879,8 +1913,9 @@
     "ShareBeliefMessage": {
       "additionalProperties": false,
       "properties": {
-        "belief_id": {
-          "title": "Belief Id",
+        "type": {
+          "const": "share_belief",
+          "title": "Type",
           "type": "string"
         },
         "grant_revision": {
@@ -1889,9 +1924,8 @@
           "title": "Grant Revision",
           "type": "integer"
         },
-        "type": {
-          "const": "share_belief",
-          "title": "Type",
+        "belief_id": {
+          "title": "Belief Id",
           "type": "string"
         }
       },
@@ -1907,6 +1941,11 @@
       "additionalProperties": false,
       "description": "Show or hide a policy's reading of the pilot's decisions in this game.\n`policy` names a registered policy; omitted, the opponent's own or the\nfirst that can read the game.",
       "properties": {
+        "type": {
+          "const": "show_analysis",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "anyOf": [
             {
@@ -1921,6 +1960,10 @@
           "default": null,
           "title": "Grant Revision"
         },
+        "shown": {
+          "title": "Shown",
+          "type": "boolean"
+        },
         "policy": {
           "anyOf": [
             {
@@ -1932,15 +1975,6 @@
           ],
           "default": null,
           "title": "Policy"
-        },
-        "shown": {
-          "title": "Shown",
-          "type": "boolean"
-        },
-        "type": {
-          "const": "show_analysis",
-          "title": "Type",
-          "type": "string"
         }
       },
       "required": [
@@ -1954,21 +1988,62 @@
       "additionalProperties": false,
       "description": "Cards to put into the graveyard; all remaining looked-at cards stay on top.",
       "properties": {
+        "kind": {
+          "const": "surveil",
+          "default": "surveil",
+          "title": "Kind",
+          "type": "string"
+        },
         "graveyard": {
           "items": {
             "$ref": "#/$defs/ObjectRenderId"
           },
           "title": "Graveyard",
           "type": "array"
-        },
-        "kind": {
-          "const": "surveil",
-          "default": "surveil",
-          "title": "Kind",
-          "type": "string"
         }
       },
       "title": "SurveilChoice",
+      "type": "object"
+    },
+    "SwapSidesMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "swap_sides",
+          "title": "Type",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Request Id",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "request_id",
+        "match_id",
+        "expected_revision"
+      ],
+      "title": "SwapSidesMessage",
       "type": "object"
     },
     "TableAudience": {
@@ -2012,6 +2087,24 @@
           "title": "Address",
           "type": "string"
         },
+        "ordinal": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        },
         "offer_id": {
           "anyOf": [
             {
@@ -2022,24 +2115,6 @@
             }
           ],
           "title": "Offer Id"
-        },
-        "ordinal": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Ordinal",
-          "type": "integer"
-        },
-        "prompt_id": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Prompt Id",
-          "type": "integer"
-        },
-        "revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Revision",
-          "type": "integer"
         }
       },
       "required": [
@@ -2055,40 +2130,21 @@
     "TableSnapshot": {
       "additionalProperties": false,
       "properties": {
-        "access": {
-          "$ref": "#/$defs/ViewerAccess"
-        },
-        "attempt_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Attempt Id"
-        },
-        "beliefs": {
-          "items": {
-            "$ref": "#/$defs/BeliefScenario"
-          },
-          "title": "Beliefs",
-          "type": "array"
-        },
         "contract": {
           "const": "testing-house-v1",
           "default": "testing-house-v1",
           "title": "Contract",
           "type": "string"
         },
-        "decisions": {
-          "items": {
-            "$ref": "#/$defs/TableDecisionSummary"
-          },
-          "title": "Decisions",
-          "type": "array"
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
+        "table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Table Revision",
+          "type": "integer"
         },
         "mode": {
           "enum": [
@@ -2098,16 +2154,29 @@
           "title": "Mode",
           "type": "string"
         },
-        "opponent": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/OpponentIdentity"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+        "access": {
+          "$ref": "#/$defs/ViewerAccess"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/ParticipantPresence"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
+        "beliefs": {
+          "items": {
+            "$ref": "#/$defs/BeliefScenario"
+          },
+          "title": "Beliefs",
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/TableDecisionSummary"
+          },
+          "title": "Decisions",
+          "type": "array"
         },
         "opponent_label": {
           "anyOf": [
@@ -2121,22 +2190,28 @@
           "default": null,
           "title": "Opponent Label"
         },
-        "participants": {
-          "items": {
-            "$ref": "#/$defs/ParticipantPresence"
-          },
-          "title": "Participants",
-          "type": "array"
+        "opponent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpponentIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
-        "table_id": {
-          "title": "Table Id",
-          "type": "string"
-        },
-        "table_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Table Revision",
-          "type": "integer"
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
         },
         "watcher_invite": {
           "anyOf": [
@@ -2166,13 +2241,13 @@
     "TableSnapshotEvent": {
       "additionalProperties": false,
       "properties": {
-        "table": {
-          "$ref": "#/$defs/TableSnapshot"
-        },
         "type": {
           "const": "table_snapshot",
           "title": "Type",
           "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
         }
       },
       "required": [
@@ -2185,6 +2260,11 @@
     "TransferPilotMessage": {
       "additionalProperties": false,
       "properties": {
+        "type": {
+          "const": "transfer_pilot",
+          "title": "Type",
+          "type": "string"
+        },
         "grant_revision": {
           "maximum": 18446744073709551615,
           "minimum": 0,
@@ -2193,11 +2273,6 @@
         },
         "target_viewer_id": {
           "title": "Target Viewer Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "transfer_pilot",
-          "title": "Type",
           "type": "string"
         }
       },
@@ -2212,6 +2287,12 @@
     "ViewerAccess": {
       "additionalProperties": false,
       "properties": {
+        "identity": {
+          "$ref": "#/$defs/ViewerIdentity"
+        },
+        "role": {
+          "$ref": "#/$defs/ViewerRole"
+        },
         "capabilities": {
           "items": {
             "$ref": "#/$defs/TableCapability"
@@ -2224,12 +2305,6 @@
           "minimum": 0,
           "title": "Grant Revision",
           "type": "integer"
-        },
-        "identity": {
-          "$ref": "#/$defs/ViewerIdentity"
-        },
-        "role": {
-          "$ref": "#/$defs/ViewerRole"
         }
       },
       "required": [
@@ -2244,6 +2319,14 @@
     "ViewerIdentity": {
       "additionalProperties": false,
       "properties": {
+        "viewer_id": {
+          "title": "Viewer Id",
+          "type": "string"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
         "rules_viewer": {
           "default": 0,
           "enum": [
@@ -2252,14 +2335,6 @@
           ],
           "title": "Rules Viewer",
           "type": "integer"
-        },
-        "table_id": {
-          "title": "Table Id",
-          "type": "string"
-        },
-        "viewer_id": {
-          "title": "Viewer Id",
-          "type": "string"
         }
       },
       "required": [
@@ -2286,47 +2361,6 @@
       "title": "Contract",
       "type": "string"
     },
-    "events": {
-      "items": {
-        "discriminator": {
-          "mapping": {
-            "belief_changed": "#/$defs/BeliefChangedEvent",
-            "branch_returned": "#/$defs/BranchReturnedEvent",
-            "branch_updated": "#/$defs/BranchUpdatedEvent",
-            "control_error": "#/$defs/ControlErrorEvent",
-            "decision_restored": "#/$defs/DecisionRestoredEvent",
-            "role_changed": "#/$defs/RoleChangedEvent",
-            "table_snapshot": "#/$defs/TableSnapshotEvent"
-          },
-          "propertyName": "type"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/$defs/TableSnapshotEvent"
-          },
-          {
-            "$ref": "#/$defs/BeliefChangedEvent"
-          },
-          {
-            "$ref": "#/$defs/RoleChangedEvent"
-          },
-          {
-            "$ref": "#/$defs/DecisionRestoredEvent"
-          },
-          {
-            "$ref": "#/$defs/BranchUpdatedEvent"
-          },
-          {
-            "$ref": "#/$defs/BranchReturnedEvent"
-          },
-          {
-            "$ref": "#/$defs/ControlErrorEvent"
-          }
-        ]
-      },
-      "title": "Events",
-      "type": "array"
-    },
     "requests": {
       "items": {
         "discriminator": {
@@ -2350,6 +2384,7 @@
             "set_stops": "#/$defs/SetStopsMessage",
             "share_belief": "#/$defs/ShareBeliefMessage",
             "show_analysis": "#/$defs/ShowAnalysisMessage",
+            "swap_sides": "#/$defs/SwapSidesMessage",
             "transfer_pilot": "#/$defs/TransferPilotMessage"
           },
           "propertyName": "type"
@@ -2366,6 +2401,9 @@
           },
           {
             "$ref": "#/$defs/RematchMessage"
+          },
+          {
+            "$ref": "#/$defs/SwapSidesMessage"
           },
           {
             "$ref": "#/$defs/CommandMessage"
@@ -2418,6 +2456,47 @@
         ]
       },
       "title": "Requests",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "belief_changed": "#/$defs/BeliefChangedEvent",
+            "branch_returned": "#/$defs/BranchReturnedEvent",
+            "branch_updated": "#/$defs/BranchUpdatedEvent",
+            "control_error": "#/$defs/ControlErrorEvent",
+            "decision_restored": "#/$defs/DecisionRestoredEvent",
+            "role_changed": "#/$defs/RoleChangedEvent",
+            "table_snapshot": "#/$defs/TableSnapshotEvent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TableSnapshotEvent"
+          },
+          {
+            "$ref": "#/$defs/BeliefChangedEvent"
+          },
+          {
+            "$ref": "#/$defs/RoleChangedEvent"
+          },
+          {
+            "$ref": "#/$defs/DecisionRestoredEvent"
+          },
+          {
+            "$ref": "#/$defs/BranchUpdatedEvent"
+          },
+          {
+            "$ref": "#/$defs/BranchReturnedEvent"
+          },
+          {
+            "$ref": "#/$defs/ControlErrorEvent"
+          }
+        ]
+      },
+      "title": "Events",
       "type": "array"
     }
   },

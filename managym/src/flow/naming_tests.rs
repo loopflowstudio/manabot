@@ -41,6 +41,7 @@ fn naming_game() -> Game {
     game.run_frame(EffectFrame {
         targets: vec![ResolutionTarget {
             share: 0,
+            division: 0,
             target: Target::Player(PlayerId(1)),
             requirement: 0,
             legal: true,
@@ -290,7 +291,7 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
     let old: std::collections::BTreeSet<_> = pack
         .definition_entries()
         .filter(|(id, definition)| {
-            !definition.is_token
+            definition.kind == crate::state::game_object::ObjectKind::Card
                 && (definition.scryfall_id.is_some()
                     || !definition.key.is_empty()
                     || pack.front_face(*id).is_some())

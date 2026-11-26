@@ -326,7 +326,9 @@ impl Env {
                 let valid = content
                     .definition_id(name)
                     .and_then(|id| content.definition(id))
-                    .is_some_and(|definition| !definition.is_token);
+                    .is_some_and(|definition| {
+                        definition.kind == crate::state::game_object::ObjectKind::Card
+                    });
                 if *count == 0 || !valid {
                     return Err(AgentError(format!("invalid sideboard card: {name}")));
                 }
@@ -2292,7 +2294,7 @@ mod content_pack_contract_tests {
             let definition = admitted
                 .definition(entry.card_def_id)
                 .expect("manifest definition");
-            assert_eq!(definition.name, entry.registry_name);
+            assert_eq!(definition.registry_name(), entry.registry_name);
             assert_eq!(definition.key, entry.key.as_deref().unwrap_or(""));
         }
 

@@ -381,11 +381,32 @@ impl Game {
     /// `GameState::objects`, never a card; state-based actions remove it once it
     /// leaves the battlefield (CR 704.5d).
     /// Returns the token's permanent, absent if it did not stay on the battlefield.
-    pub fn create_token(
+    pub fn create_token(&mut self, key: &str, controller: PlayerId) -> Option<PermanentId> {
+        self.create_token_with_entry(key, controller, ZoneEntry::default())
+    }
+
+    pub fn create_token_attacking(
         &mut self,
         key: &str,
         controller: PlayerId,
-        tapped_and_attacking: bool,
+        target: crate::flow::combat::AttackTarget,
+    ) -> Option<PermanentId> {
+        self.create_token_with_entry(
+            key,
+            controller,
+            ZoneEntry {
+                tapped: true,
+                attack_target: Some(target),
+                ..Default::default()
+            },
+        )
+    }
+
+    fn create_token_with_entry(
+        &mut self,
+        key: &str,
+        controller: PlayerId,
+        entry: ZoneEntry,
     ) -> Option<PermanentId> {
         let batch = self.event_batch(
             EventBinding::None,
@@ -395,20 +416,30 @@ impl Game {
                 )),
                 controller,
                 count: 1,
-                entry: ZoneEntry {
-                    tapped: tapped_and_attacking,
-                    ..Default::default()
-                },
+                entry,
             }],
         );
-        let results = self.complete_immediate_batch(batch);
-        for object in results.iter().flat_map(|result| result.arrivals()) {
-            self.finish_created_token(object, tapped_and_attacking);
-        }
-        results
+        self.complete_immediate_batch(batch)
             .iter()
             .flat_map(|result| result.arrivals())
             .find_map(|object| self.lookup_current_permanent(object).ok())
+    }
+
+    pub(crate) fn create_emblem(&mut self, key: &str, controller: PlayerId) -> ObjectId {
+        let id = self.state.id_gen_mut().next_id();
+        let emblem = default_content_pack()
+            .instantiate_emblem(key, controller, id)
+            .expect("registered emblem");
+        let object = self.add_object(emblem);
+        self.state
+            .place_object(object, controller, ZoneType::Command);
+        self.capture_object_move(object, None, Some(ZoneType::Command), controller);
+        object
+    }
+
+    /// CR 114.4. Only emblems in the command zone contribute these abilities.
+    pub(crate) fn emblems(&self) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
+        self.functioning_command_objects(None)
     }
 
     pub(crate) fn prepare_token(&mut self, key: &str, controller: PlayerId) -> Option<ObjectId> {
@@ -420,18 +451,6 @@ impl Game {
         };
 
         Some(self.add_object(object))
-    }
-
-    pub(crate) fn finish_created_token(&mut self, object: ObjectId, attacking: bool) {
-        if let Some(id) = self.state.permanent_of(object) {
-            if attacking {
-                self.state.permanents[id].as_mut().expect("token").attacking = true;
-                if let Some(combat) = self.state.combat.as_mut() {
-                    combat.attackers.push(id);
-                    combat.attacker_to_blockers.entry(id).or_default();
-                }
-            }
-        }
     }
 
     /// Create a token that's a copy of `source` under `controller` (CR 707.2,
@@ -455,7 +474,7 @@ impl Game {
 
     /// Allocate a newly created token or spell copy outside every zone.
     /// All companion stores grow here, in the same creation order.
-    fn add_object(&mut self, object: Object) -> ObjectId {
+    pub(super) fn add_object(&mut self, object: Object) -> ObjectId {
         self.state.objects.push(object);
         self.state.object_to_permanent.push(None);
         self.state.zones.allocate()
@@ -521,7 +540,7 @@ impl Game {
             controller,
             self.state[source].definition_id,
             program,
-            false,
+            crate::state::game_object::ObjectKind::Card,
         );
         let copy = Object::spell_copy(copy, id, controller);
         let object = self.add_object(copy);
@@ -571,14 +590,12 @@ impl Game {
             gain_ordinal,
         } = &mut event
         {
-            if new > old {
-                let history = &mut self.state.turn.history[player.0];
-                history.life_gained += old.abs_diff(*new);
-                history.life_gains += 1;
-                *gain_ordinal = history.life_gains;
-            } else if new < old {
-                self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
+            if let Some(ordinal) = self.state.record_life_change(*player, *old, *new) {
+                *gain_ordinal = ordinal;
             }
+        }
+        if let GameEvent::LoyaltyAbilityActivated { player, .. } = &event {
+            self.state.turn.history[player.0].loyalty_abilities_activated += 1;
         }
         self.presentation_event(&event);
         self.state.pending_events_mut().push(event.clone());
@@ -639,6 +656,7 @@ impl Game {
                 targets,
                 target_shares: Vec::new(),
                 target_req_indices,
+                target_divisions: Vec::new(),
                 kicked: cast.kicked,
                 x: cast.x,
                 mode: None,
@@ -1055,6 +1073,12 @@ impl Game {
             permanent.entry_turn = self.state.turn.turn_number;
             permanent.spell_entry = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
             permanent.tapped = entry.tapped;
+            if let (Some(target), Some(combat)) = (entry.attack_target, self.state.combat.as_mut())
+            {
+                permanent.attacking = true;
+                combat.attack_targets.push((permanent_id, Some(target)));
+                combat.attacker_to_blockers.entry(permanent_id).or_default();
+            }
             permanent.counters = entry.counters;
             permanent.attached_to = entry.attached_to;
             self.state.permanents.push(Some(permanent));
@@ -1100,6 +1124,10 @@ impl Game {
         }
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(prior_object, to_zone, followups);
+        } else if old_zone == Some(ZoneType::Stack)
+            && self.state.effects.on(prior_object).next().is_some()
+        {
+            self.end_effects_on(prior_object);
         }
         let second = second.map(|second| {
             let arrival = self.state.mint_appearance(second, owner, to_zone, false);
@@ -1202,6 +1230,9 @@ impl Game {
         }
         let object_id = permanent.object;
         let returned = returned.unwrap_or(controller == permanent.entry_controller());
+        if let Some(combat) = &mut self.state.combat {
+            combat.remove_defender(object_id);
+        }
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;

@@ -36,7 +36,7 @@
     type GroupRefusal,
     type LiveGroup,
   } from '$lib/group';
-  import type { CardState, CommandRejection, ConnectionState, ExperienceFrame, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
+  import type { CardState, CommandRejection, ConnectionState, ExperienceFrame, InteractionOffer, ObjectRenderId, StopsConfig, StopSide } from '$lib/types';
   import ArrangePanel from './ArrangePanel.svelte';
   import {
     arrangePlanOf,
@@ -61,7 +61,7 @@
   import { paymentPlan, previewable } from './payment';
   import {
     addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, combatPlanOf, drawDraft, draftWords,
-    EMPTY_DRAFT, pileCounts as draftPiles, sanitizeCombatDraft, setBlock, setPileCount, toggleAttacker, toggleBlock,
+    EMPTY_DRAFT, pileCounts as draftPiles, sanitizeCombatDraft, setAttackerDefender, setBlock, setPileCount, toggleAttacker, toggleBlock,
     type Draft,
   } from './combat';
   import {
@@ -245,7 +245,7 @@
   // to `(match_id, frame_hash)`. Draft edits preview through `/group-preview`
   // (read-only), and Confirm submits one atomic `group_command`.
   let draft = $state.raw<Draft>(EMPTY_DRAFT);
-  /** The blocker a person is placing: the next attacker clicked is the one it blocks. */
+  /** The blocker being placed (blockers), or the drafted attacker last touched (attackers). */
   let armed = $state<number | null>(null);
   let arrangeDraft = $state.raw<ArrangeDraft | null>(null);
   let partitionFaceUp = $state.raw<number[]>([]);
@@ -356,6 +356,16 @@
   const blockerItems = $derived(
     new Map(combatGroup?.kind === 'declare_blockers' ? combatGroup.declarable.map(c => [c.item.entity, c]) : []),
   );
+  /** The drafted attacker that clicking an opposing planeswalker retargets. */
+  const activeAttacker = $derived.by(() => {
+    if (combatGroup?.kind !== 'declare_attackers') return null;
+    if (armed !== null && draft.attackers.includes(armed) && (attackerItems.get(armed)?.can_attack?.length ?? 0) > 0) return armed;
+    for (let i = draft.attackers.length - 1; i >= 0; i -= 1) {
+      const id = draft.attackers[i];
+      if ((attackerItems.get(id)?.can_attack?.length ?? 0) > 0) return id;
+    }
+    return null;
+  });
   const draggedBlocker = $derived(connect?.blocker);
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
@@ -367,6 +377,7 @@
     const withRefusal = (id: number, base: string): string =>
       refusedId === id && activeRefusal ? `${base}. ${activeRefusal.reason}` : base;
     if (combatGroup.kind === 'declare_attackers') {
+      const retarget = activeAttacker;
       for (const [id, creature] of attackerItems) {
         const inDraft = draft.attackers.includes(id);
         places.set(id, inDraft ? 'in' : 'can');
@@ -376,6 +387,17 @@
             ? 'must attack; press to add it to the attack'
             : 'can attack; press to add it to the attack';
         notes.set(id, withRefusal(id, base));
+      }
+      if (retarget !== null) {
+        const currentTarget = draft.defenders?.[retarget] ?? null;
+        for (const defender of attackerItems.get(retarget)?.can_attack ?? []) {
+          const id = defender.entity;
+          const targetedByActive = currentTarget === id;
+          places.set(id, targetedByActive ? 'in' : 'can');
+          notes.set(id, targetedByActive
+            ? `retarget ${names.get(retarget) ?? 'attacker'} to ${said}`
+            : `attack ${names.get(id) ?? 'planeswalker'} with ${names.get(retarget) ?? 'attacker'}`);
+        }
       }
     } else {
       const blocks = new Map(draft.blocks);
@@ -410,13 +432,30 @@
     return draftPiles(combatGroup.declarable, draft, id => pileOf.get(id) ?? null);
   });
 
+  function defenderOptionLabel(entity: number, targets: ObjectRenderId[]): string {
+    const label = names.get(entity) ?? `permanent #${entity}`;
+    const duplicates = targets.filter(target => (names.get(target.entity) ?? `permanent #${target.entity}`) === label).length;
+    return duplicates > 1 ? `${label} (#${entity})` : label;
+  }
+
   function onDraft(id: number): boolean {
     if (!live || !combatGroup) return false;
     if (combatGroup.kind === 'declare_attackers') {
-      if (!attackerItems.has(id)) return false;
-      dismissRejection();
-      draft = toggleAttacker(draft, id);
-      return true;
+      if (attackerItems.has(id)) {
+        dismissRejection();
+        const adding = !draft.attackers.includes(id);
+        draft = toggleAttacker(draft, id);
+        armed = adding ? id : (armed === id ? null : armed);
+        return true;
+      }
+      const attacker = activeAttacker;
+      if (attacker !== null && attackerItems.get(attacker)?.can_attack?.some(target => target.entity === id)) {
+        dismissRejection();
+        const current = draft.defenders?.[attacker] ?? null;
+        draft = setAttackerDefender(draft, attacker, current === id ? null : id);
+        return true;
+      }
+      return false;
     }
     const blocker = blockerItems.get(id);
     if (blocker) {
@@ -617,6 +656,7 @@
   // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
   let shownMatch = untrack(() => frame.match_id);
+  let shownSeat = untrack(() => frame.projection.agent.player_index);
   let shownRevision = untrack(() => frame.revision);
   let wasConnected = untrack(() => connection === 'connected');
   let selection = $state<CursorSelection | null>(null);
@@ -697,11 +737,12 @@
     const currentStops = stopsAll;
     const lastSeq = presentation.events.at(-1)?.seq ?? -1;
     const { match_id, revision } = frame;
+    const seat = frame.projection.agent.player_index;
     const connected = connection === 'connected';
     const ms = activePaceMs;
     if (connection === null) return;
     untrack(() => {
-      if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
+      if (!connected || !wasConnected || match_id !== shownMatch || seat !== shownSeat || revision < shownRevision) {
         returnToNow();
         shownSeq = lastSeq;
       } else if (revision === shownRevision) {
@@ -722,6 +763,7 @@
         shownSeq = Math.max(shownSeq, lastSeq);
       }
       shownMatch = match_id;
+      shownSeat = seat;
       shownRevision = revision;
       wasConnected = connected;
     });
@@ -1843,6 +1885,29 @@
           disabled={!live || pending || !groupReady} onclick={confirmGroup}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
+        {#each draft.attackers as attacker (attacker)}
+          {@const targets = attackerItems.get(attacker)?.can_attack ?? []}
+          {#if targets.length}
+            <div class="attack-target" data-testid="attack-target">
+              <span class="type-caption attack-who">{names.get(attacker)}</span>
+              <span class="type-caption text-ink-3" aria-hidden="true">→</span>
+              <select class="type-caption" aria-label={`Defender for ${names.get(attacker)}`}
+                value={draft.defenders?.[attacker] === undefined ? 'player' : String(draft.defenders[attacker])}
+                onfocus={() => { armed = attacker; }}
+                onchange={event => {
+                  armed = attacker;
+                  dismissRejection();
+                  const chosen = event.currentTarget.value === 'player' ? null : Number(event.currentTarget.value);
+                  draft = setAttackerDefender(draft, attacker, chosen);
+                }}>
+                <option value="player">{said}</option>
+                {#each targets as target (target.entity)}
+                  <option value={String(target.entity)}>{defenderOptionLabel(target.entity, targets)}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
+        {/each}
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
@@ -2222,6 +2287,9 @@
   .pile-count span { flex: 1; }
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
+  .attack-target { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .attack-target .attack-who { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attack-target select { max-width: 55%; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-field); color: var(--text); }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
   .game.with-sidebar .rail-slot { grid-column: 3; }
   .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
