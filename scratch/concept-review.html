@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-487 Concept Review — Canonicalizing Indistinguishable Game Objects (Post-Pass 6 / PR #623 Alignment)</title>
+<title>MTG-487 Concept Review — Canonicalizing Indistinguishable Game Objects (Post-Pass 7)</title>
 <style>
   :root {
     --bg: #faf8f4;
@@ -229,23 +229,23 @@
 <header>
   <h1>MTG-487 Concept Review — Canonicalizing Indistinguishable Game Objects</h1>
   <p class="subtitle">
-    Area reviewed: <strong>the complete object-equivalence, decision-publication, <code>decision_group</code> (<code>Game::decision</code>/<code>preview</code>/<code>submit</code>), combat-declaration, <code>decision_surface</code> lowering, state-hashing, and Academy aliasing contract</strong> — spanning <code>managym/src/flow/{interchangeable,mana/interchangeable,tick,game,search,scenario,combat,combat_actions,block_requirements,decision_group/mod,decision_group/combat,combat_preview,presentation}.rs</code>, <code>managym/src/state/hash.rs</code>, <code>managym/src/agent/{decision_surface,env,env/snapshot}.rs</code>, <code>managym/src/{decision_context,experience,python/bindings}.rs</code>, <code>managym/decision_group.py</code>, <code>managym/academy/server.py</code>, <code>academy/ui/src/lib/board/{view.ts,Board.svelte}</code>, and engine/Academy docs — widened across the whole shared decision surface because Pass 6 merged PR #623 (<code>decision_group</code>) and planeswalkers (<code>8904bf12a5</code>) and moved offer aliases onto <code>managym.decision_group.Offer</code>.
+    Area reviewed: <strong>the complete object-equivalence, decision-publication, <code>decision_group</code> (<code>Game::decision</code>/<code>preview</code>/<code>submit</code>), combat-declaration, <code>decision_surface</code> lowering, state-hashing, and Academy aliasing/recording contract</strong> — spanning <code>managym/src/flow/{interchangeable,mana/interchangeable,tick,game,search,scenario,combat,combat_actions,block_requirements,decision_group/mod,decision_group/combat,combat_preview,presentation}.rs</code>, <code>managym/src/state/hash.rs</code>, <code>managym/src/agent/{decision_surface,env,env/snapshot,observation}.rs</code>, <code>managym/src/{decision_context,experience}.rs</code>, <code>managym/decision_group.py</code>, <code>managym/experience.py</code>, <code>managym/academy/{server,watch,recording,replay_index}.py</code>, <code>academy/ui/src/lib/board/view.ts</code>, all six <code>protocol/*.schema.json</code> copies, and engine/Academy docs — reviewed in full because Pass 7 changed the <code>DecisionOffer</code> / <code>InteractionOffer</code> alias schema, <code>primary_subject</code>, <code>CombatGroup::describe</code>, and <code>server.py</code>'s <code>include_decision</code> gating.
   </p>
   <div class="meta">
-    <span>Stage: <strong>Post-Pass 6 review</strong> at <code>HEAD</code> <code>7c6955b74e</code> vs <code>origin/main</code> <code>2004f9a430</code></span>
+    <span>Stage: <strong>Post-Pass 7 review</strong> at <code>HEAD</code> <code>12202d4bf5</code> vs <code>origin/main</code> <code>2004f9a430</code></span>
     <span>Legend: <span class="badge existing">Built in HEAD</span> <span class="badge proposed">Proposed</span> <span class="badge scope-this">This work</span> <span class="badge scope-sep">Separate outcome</span> <span class="badge irrev">Irreversible</span></span>
   </div>
 </header>
 
-<section class="callout bad">
-  <strong class="title">Headline verdict: Core equivalence and folding hold cleanly across the planeswalker and <code>decision_group</code> merges, but Pass 6 opened two real conceptual mismatches at the new <code>decision_group</code> boundary.</strong>
+<section class="callout warn">
+  <strong class="title">Headline verdict: Pass 7 landed the right <code>SubjectRef</code> alias contract and fixed mid-declaration <code>CombatGroup::describe</code>, but introduced two narrow conceptual mismatches that are cheap to fix before merge.</strong>
   <p style="margin:0.35rem 0 0">
-    The engine foundation (<code>ReferenceCensus</code>, <code>PublishedDecision</code>, coupled <code>block_requirements</code>, planeswalker-aware <code>same_combat_role</code> and <code>AttackPlanNormalizer</code>, and Academy board anchoring) is solid.
-    However, syncing onto PR #623 and moving aliases onto <code>managym.decision_group.Offer</code> introduced:
+    Core equivalence (<code>ReferenceCensus</code>, <code>PublishedDecision</code>, coupled <code>block_requirements</code>, shared combat normalizers), uniform <code>SubjectRef</code> aliases across <code>decision_group</code> and all six wire schemas, mid-declaration <code>CombatGroup::describe</code>, and Academy's board anchoring all line up cleanly.
+    Walking concrete interactions at <code>HEAD</code> uncovered two regressions left behind by Pass 7's edits:
   </p>
   <ol style="margin:0.45rem 0 0; padding-left:1.3rem">
-    <li><strong>Biggest mismatch (<span class="badge irrev">Irreversible API/wire</span>):</strong> <code>DecisionOffer</code> (<code>managym.decision_group.Offer</code>) mixes minimal <code>SubjectRef</code> for <code>source</code> with legacy Academy <code>DecisionObjectView</code> for <code>aliases</code>, misbinds <code>source</code> (blocker) vs <code>aliases</code> (folded attackers) on <code>DeclareBlocker</code>, and makes <code>server.py</code> call <code>env.decision()</code> + <code>decision_offer_subjects_json()</code> redundantly on every step (including villain autoplay).</li>
-    <li><strong>Second mismatch (correctness bug):</strong> Mid-declaration <code>CombatGroup::describe</code> ignores already-committed <code>combat.declined_attackers</code> / <code>declined_blockers</code>, so after a raw single-step decline the exact same <code>ActiveDecision</code> contradicts itself between <code>spec.declarable</code> and <code>offers</code>.</li>
+    <li><strong>Biggest mismatch (<span class="badge scope-this">This work</span>):</strong> Making <code>primary_subject</code> globally prefer <code>"target"</code> before <code>"source"</code> fixed <code>DeclareBlocker</code>, but silently regressed <code>DeclareAttacker</code> against a planeswalker — flipping <code>Offer.source</code> from the attacking creature to the defending planeswalker (while attacking the opponent player still puts the attacking creature in <code>Offer.source</code>).</li>
+    <li><strong>Second mismatch (<span class="badge scope-this">This work</span>):</strong> Gating <code>env.decision()</code> behind <code>include_decision=False</code> in <code>server.py::_auto_play_villain</code> omits <code>aliases</code> from villain <code>ReplayDecision</code> rows persisted in Play's <code>canonical_decisions</code>, so Play and Watch/Import produce different <code>ExperienceFrame</code>s, <code>frame_hash</code>es, and <code>DecisionAddressV2</code>s for the exact same villain position (and split villain piles in Replay/completed-mirror views).</li>
   </ol>
 </section>
 
@@ -257,7 +257,7 @@
       <th style="width:19%">Domain / engine concept</th>
       <th style="width:27%">Code concept (<span class="badge existing">Built in HEAD</span>)</th>
       <th style="width:11%">Lines up?</th>
-      <th style="width:43%">Diagnosis at <code>7c6955b74e</code></th>
+      <th style="width:43%">Diagnosis at <code>12202d4bf5</code></th>
     </tr>
   </thead>
   <tbody>
@@ -265,13 +265,13 @@
       <td><strong>Viewer-safe object indistinguishability</strong><br><span class="muted">Two objects fold iff rules-equivalent and folding leaks no private state.</span></td>
       <td><code>Object::same_object_identity</code>, <code>same_permanent_record_cheap</code>, <code>same_combat_role</code>, <code>foldable_permanent_view</code>, <code>post_census_permanents_equivalent</code> (<code>flow/interchangeable.rs</code>).</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
-      <td>Handles planeswalkers cleanly after merge: <code>loyalty_activated_this_turn</code> compared cheaply, <code>AttackTarget::Permanent</code> marked by census, and <code>same_combat_role</code> compares <code>Option&lt;AttackTarget&gt;</code> so attackers targeting a player vs a planeswalker never fold. Face-down objects, layered statics, and keyword counters never fold.</td>
+      <td>Handles battlefield permanents, hand/graveyard/exile cards, sideboard Lessons, and planeswalkers cleanly. Face-down objects, layered statics, and keyword counters never fold; attackers targeting a player vs a planeswalker stay separate.</td>
     </tr>
     <tr>
       <td><strong>Fail-closed reference census &amp; <code>SelectCard</code> gate</strong><br><span class="muted">Any new id-bearing field or <code>Decision</code> variant fails to compile until classified.</span></td>
       <td><code>ReferenceCensus</code> (<code>flow/interchangeable.rs:68-1753</code>), <code>select_card_decision_allows_fold</code> (<code>:2457-2515</code>).</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
-      <td>Exhaustive destructuring with zero <code>..</code> wildcards across <code>GameState</code>, <code>TurnState</code>, <code>CombatState</code>, <code>Permanent</code>, <code>PendingChoice</code>, and <code>Decision</code> (including <code>Decision::EnterAttacking</code>). Stack-first <code>u64</code> bitmask keeps ≤ 64-object walks zero-alloc.</td>
+      <td>Exhaustive destructuring with zero <code>..</code> wildcards across <code>GameState</code>, <code>TurnState</code>, <code>CombatState</code>, <code>Permanent</code>, <code>PendingChoice</code>, and <code>Decision</code>. Stack-first <code>u64</code> bitmask keeps &le; 64-object walks zero-alloc.</td>
     </tr>
     <tr>
       <td><strong>Single equivalence &amp; bucketing pipeline</strong><br><span class="muted">One shared equivalence engine; cheap checks precede census and layer scans.</span></td>
@@ -283,151 +283,163 @@
       <td><strong>Published decision &amp; alias lifecycle</strong><br><span class="muted">Aliases belong to the published decision and cannot drift from it.</span></td>
       <td><code>PublishedDecision { space, aliases }</code> on <code>Game</code> and <code>GameSnapshot</code> (<code>flow/game.rs</code>, <code>agent/env/snapshot.rs</code>).</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
-      <td>Atomic take/restore/clear across <code>step()</code> rollback, <code>apply_search_action</code>, <code>presentation_cut</code>, <code>determinize()</code>, and <code>GameSnapshot</code>. <code>ActionSpace</code> stays untouched so digests and <code>SearchStateWitness</code> are preserved.</td>
+      <td>Atomic take/restore/clear across <code>step()</code> rollback, <code>apply_search_action</code>, <code>presentation_cut</code>, <code>determinize()</code>, and <code>GameSnapshot</code>. <code>ActionSpace</code> stays unchanged so digests and <code>SearchStateWitness</code> hold.</td>
     </tr>
     <tr>
       <td><strong>Coupled combat symmetry &amp; plan normalization</strong><br><span class="muted">One combat-symmetry contract for live steps, grouped previews, and legacy lowering.</span></td>
-      <td><code>block_options_with_declines</code> (<code>block_requirements.rs:91-217</code>), shared <code>AttackPlanNormalizer</code> / <code>BlockPlanNormalizer</code> (<code>decision_group/combat.rs:820-1004</code>), deprecated <code>combat_preview.rs</code> wrapper.</td>
+      <td><code>block_options_with_declines</code> (<code>block_requirements.rs:91-217</code>), shared <code>AttackPlanNormalizer</code> / <code>BlockPlanNormalizer</code> (<code>decision_group/combat.rs:839-1023</code>), thin deprecated <code>combat_preview.rs</code>.</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
-      <td>Cleanly unified into <code>flow/decision_group/combat.rs</code>; <code>combat_preview.rs</code> is back to a thin 0.3.0-deprecated wrapper. <code>AttackPlanNormalizer</code> preserves planeswalker <code>AttackTarget</code> on donor re-homing; <code>BlockPlanNormalizer</code> transposes <code>want ↔ canon</code> across split/double blocks.</td>
+      <td>Live sequential steps, grouped previews/submits, and deprecated compound lowering all share the same normalizers and coupled <code>MustBeBlocked</code> / <code>Menace</code> decline-pruning solver.</td>
     </tr>
     <tr>
       <td><strong>Mid-declaration grouped combat descriptor</strong><br><span class="muted"><code>env.decision()</code> halfway through raw combat steps describes what can still be declared.</span></td>
-      <td><code>CombatGroup::describe</code> (<code>flow/decision_group/combat.rs:70-125</code>) calls <code>declaration_order</code> + <code>game.block_options(creature, &amp;others)</code> (<code>respect_declines = false</code>).</td>
-      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span></td>
-      <td><strong>Self-contradictory <code>ActiveDecision</code>.</strong> <code>describe()</code> ignores already-committed <code>combat.declined_attackers</code> and <code>combat.declined_blockers</code>. After a raw single-step decline, permanently suppressed copies stay in <code>declarable</code> with non-empty <code>can_attack</code>/<code>can_block</code>, and <code>block_options</code> counts them as free capacity — reporting wrong <code>must_block</code> and illegal <code>can_block</code> right beside <code>offers</code> that forbid them.</td>
+      <td><code>CombatGroup::describe</code> (<code>flow/decision_group/combat.rs:70-144</code>) filters committed <code>declined_{attackers,blockers}</code> into <code>active_order</code>.</td>
+      <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
+      <td><strong>Fixed in Pass 7.</strong> Committed declines permanently remove suppressed copies from <code>declarable</code> and <code>block_options</code>'s <code>others</code> slice (keeping <code>must_attack</code> attackers, dropping to <code>Single</code> when empty). Uncommitted copies stay symmetrically declarable; <code>start()</code> still tracks the full <code>declaration_order</code> so even <code>skip_trivial=false</code> steps through suppressed slots cleanly.</td>
     </tr>
     <tr>
-      <td><strong>Canonical offer subject &amp; alias surface</strong><br><span class="muted">One clean offer shape where <code>aliases</code> names copies interchangeable with the offer's acted-on object.</span></td>
-      <td><code>DecisionOffer { source: Option&lt;SubjectRef&gt;, aliases: Vec&lt;DecisionObjectView&gt; }</code> (<code>decision_group/mod.rs:120</code>, <code>decision_group.py:63</code>), <code>InteractionOffer.aliases</code> (<code>experience.rs:216</code>), <code>server.py:2851-2868</code>.</td>
+      <td><strong>Offer alias vocabulary &amp; live-zone boundary</strong><br><span class="muted">One uniform reference type across <code>decision_group</code> and Academy wire; sideboard boundary explicit.</span></td>
+      <td><code>DecisionOffer.aliases: Vec&lt;SubjectRef&gt;</code> (<code>decision_group/mod.rs:129</code>), <code>Offer.aliases: list[SubjectRef]</code> (<code>decision_group.py:74</code>), <code>InteractionOffer.aliases: list[SubjectRef]</code> (<code>experience.rs:218</code>, 6 JSON schemas).</td>
+      <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span><br><span class="badge irrev">Wire schema</span></td>
+      <td><strong>Fixed in Pass 7.</strong> Legacy <code>DecisionObjectView</code> removed from aliases everywhere; omitted when empty; live-in-zone-only boundary (sideboard <code>LearnTakeLesson</code> aliases stay internal to <code>Game::action_aliases</code>) documented on both contracts, all 6 schemas, and <code>managym/README.md</code>; <code>tests/public_api.json</code> clean.</td>
+    </tr>
+    <tr>
+      <td><strong>Canonical offer subject (<code>Offer.source</code>)</strong><br><span class="muted"><code>Offer.source</code> names the offer's acted-on object consistently across all actions.</span></td>
+      <td><code>primary_subject(offer_subjects)</code> (<code>flow/decision_group/mod.rs:551-557</code>) with global <code>["target", "source", "choice"]</code> order; <code>InteractionOffer.source</code> (<code>server.py:2879</code>) uses <code>role == "source"</code> only.</td>
       <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span><br><span class="badge irrev">Biggest mismatch</span></td>
-      <td><strong>Three-way conceptual mismatch:</strong> (1) <code>DecisionOffer</code> leaks Academy-legacy <code>DecisionObjectView</code> (with redundant <code>entity_id</code>, <code>display_id</code>, <code>label</code>) into <code>decision_group</code> while every other field uses <code>SubjectRef</code>/<code>ObjectRenderId</code>; (2) on <code>DeclareBlocker</code>, <code>source</code> is the <em>blocker</em> while <code>aliases</code> holds folded <em>attackers</em> (the canonical attacker isn't even named on <code>Offer</code>); (3) <code>server.py</code> calls both <code>decision_offer_subjects_json</code> and <code>env.decision()</code> (which runs full state hashing, builds <code>Observation</code> a second time, and computes <code>active_spec</code>) on every step, including villain autoplay, then calls <code>env.decision()</code> again for hero groups.</td>
+      <td><strong>One name for two ideas / planeswalker regression.</strong> Global <code>target &rarr; source &rarr; choice</code> borrowed Academy's UI click-anchor order (<code>view.ts:112</code>). For <code>DeclareBlocker</code> it correctly picks the canonical attacker (matching <code>aliases</code>), but for <code>DeclareAttacker</code> against a planeswalker it flips <code>Offer.source</code> from the attacking creature (as on <code>origin/main</code>) to the defending planeswalker — while attacking the opponent player still sets <code>Offer.source</code> to the attacking creature.</td>
     </tr>
     <tr>
-      <td><strong>Sideboard (<code>LearnTakeLesson</code>) aliases</strong><br><span class="muted">Folded outside-game Lessons vs live in-zone aliases.</span></td>
-      <td><code>Game::action_aliases()</code> stores sideboard <code>ObjectId</code>s; <code>Game::decision_offer_aliases()</code> filters via <code>visible_reference</code> (requires <code>state.live(obj)</code>).</td>
-      <td><span class="badge no">No (minor)</span><br><span class="badge scope-this">This work</span></td>
-      <td><strong>Silent drop vs contract.</strong> Duplicate sideboard Lessons fold in <code>ActionSpace</code> and resolve via <code>resolve_action_index</code>, but <code>decision_offer_aliases</code> silently omits them because sideboard objects have no live zone appearance (<code>SideboardCardView</code> uses <code>candidate_id</code>). Harmless for Academy (tray is 1-per-offer), but undocumented on <code>Offer.aliases</code>.</td>
+      <td><strong>Academy canonical recording parity (Play vs Watch/Import)</strong><br><span class="muted">Every recorded <code>ReplayDecision</code> carries the same <code>ExperienceFrame</code>, <code>frame_hash</code>, and <code>aliases</code> regardless of mode.</span></td>
+      <td><code>server.py::_build_decision_context(..., include_decision=False)</code> called by <code>_auto_play_villain</code> (<code>:2559</code>), vs <code>include_decision=True</code> in <code>_publish_current_prompt</code> (<code>:2814</code>) and <code>watch.py</code> (<code>:292,471,570</code>).</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span></td>
+      <td><strong>Split-brain persisted frames.</strong> <code>_auto_play_villain</code> records its <code>context.frame</code> into <code>canonical_decisions</code> without <code>aliases</code>, whereas <code>watch.py</code> records seat 1 with <code>aliases</code>. The exact same villain position therefore gets different <code>frame_hash</code> / <code>DecisionAddressV2</code> values between Play and Watch/Import, and Replay / <code>completed_mirror</code> views split villain's folded permanents into two piles in <code>boardView</code>.</td>
     </tr>
     <tr>
       <td><strong>Academy board aliasing &amp; direct manipulation</strong><br><span class="muted">One row in list/tray; every drawn copy clicks, drags, hovers, and piles cleanly.</span></td>
-      <td><code>boardView</code> (<code>academy/ui/src/lib/board/view.ts:397-403</code>), <code>Board.svelte:472</code>, <code>Rail.svelte</code>.</td>
+      <td><code>boardView</code> (<code>academy/ui/src/lib/board/view.ts:397-403</code>), <code>Board.svelte</code>, <code>Rail.svelte</code>.</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
-      <td>Drawn aliases receive the canonical <code>PlacedOffer</code> (piles stay whole); rail and tray stay 1-per-offer; clicking any copy sends the canonical Command; hover previews the canonical copy. Note: <code>view.ts</code> only reads <code>alias.subject.kind === 'object'</code> and <code>alias.display_id</code> (<code>=== alias.subject.id.entity</code>) — it never uses <code>entity_id</code> or <code>label</code>.</td>
+      <td>Reads <code>alias.kind === 'object' &amp;&amp; drawn.has(alias.id.entity)</code> directly from <code>SubjectRef</code>. Drawn aliases receive the canonical <code>PlacedOffer</code> (piles stay whole); rail and tray stay 1-per-offer; clicking any copy sends the canonical Command.</td>
     </tr>
     <tr>
       <td><strong>Canonical match-state hash contract</strong><br><span class="muted">Every rules-relevant field that changes legal continuations is hashed.</span></td>
       <td><code>MATCH_STATE_HASH_VERSION = 34</code> (<code>state/hash.rs:29</code>; <code>origin/main</code> is <code>33</code>); adds <code>declined_{attackers,blockers}</code> and <code>graveyard_arrivals</code>.</td>
       <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span><br><span class="badge irrev">Hash v34</span></td>
-      <td>Matches <code>origin/main</code>'s v33 baseline cleanly. (Note: <code>scratch/plan.md</code> still says "31 → 32" and "<code>graveyard_from_battlefield</code>" from before the planeswalker/main merges; the code at <code>HEAD</code> is 33 → 34 with <code>graveyard_arrivals</code>.)</td>
+      <td>Matches <code>origin/main</code>'s v33 baseline cleanly; conformance evidence and pinned pilot fixtures updated.</td>
     </tr>
     <tr>
       <td><strong><code>autotapper</code> permutation invariance</strong><br><span class="muted">Tapping interchangeable basics yields identical later auto-tap plans.</span></td>
       <td><code>flow/mana/autotapper.rs</code> tie-breaks equal-reluctance lands by battlefield <code>PermanentId</code> order.</td>
       <td><span class="badge warn">Deferred</span><br><span class="badge scope-sep">Separate outcome</span></td>
-      <td>Filed at ship-review as <strong>MTG-495</strong> (<code>task_62704c2f24884e28ab710e8d4c907316</code>). Separate Task: tie-break by color/output class before <code>PermanentId</code>, then extend the behavioral oracle through autotapper shortcuts.</td>
-    </tr>
-    <tr>
-      <td><strong><code>compound_offers()</code> candidate deduplication</strong><br><span class="muted">Legacy compound candidate lists vs folded single-step offers.</span></td>
-      <td><code>agent/decision_surface.rs:727</code> (deprecated on <code>origin/main</code> for 0.3.0 removal in favor of <code>Env.decision/preview/submit</code>).</td>
-      <td><span class="badge warn">Dropped</span><br><span class="badge scope-sep">Deprecated 0.3.0</span></td>
-      <td>Correctly dropped at ship-review. Lowering still resolves folded aliases via <code>resolve_action_index</code> and shared combat normalizers, so legacy callers stay sound until 0.3.0 removal.</td>
+      <td>Tracked as <strong>MTG-495</strong> (<code>task_62704c2f24884e28ab710e8d4c907316</code>). Separate Task: tie-break by color/output class before <code>PermanentId</code>, then extend the behavioral oracle through autotapper shortcuts.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>2. Biggest Mismatch — <code>DecisionOffer</code> / <code>InteractionOffer</code> Subject &amp; Alias Contract</h2>
+<h2>2. Biggest Mismatch — <code>DecisionOffer.source</code> Regresses <code>DeclareAttacker</code> Against Planeswalkers</h2>
 
 <p>
-  When Pass 6 removed <code>Env.decision_offer_aliases_json</code> to align with PR #623 (<code>decision_group</code>), it grafted Academy's legacy <code>DecisionObjectView</code> onto <code>managym.decision_group.Offer</code> and had <code>server.py</code> call <code>env.decision()</code> purely to harvest <code>.aliases</code>. Walking one concrete interaction — <strong>blocking one of two identical attacking 1/1 Ally tokens (<code>Att1</code>, <code>Att2</code>) with <code>Blocker</code> (<code>B1</code>)</strong> — exposes all three parts of the mismatch at once:
+  Walk one concrete interaction: <strong>declaring attacks with <code>Gray Ogre</code> (<code>O1</code>) when the opponent controls a planeswalker <code>Liliana</code> (<code>PW1</code>)</strong>, beside <strong>blocking two identical <code>Ally</code> tokens (<code>Att1</code>, <code>Att2</code>) with <code>Blocker</code> (<code>B1</code>)</strong>.
+  <code>Offer.source</code> is already published on <code>origin/main</code> (PR #623), where <code>DeclareAttacker(PW1)</code> put the attacking creature <code>O1</code> in <code>source</code>. Pass 7 changed <code>primary_subject</code> globally to <code>["target", "source", "choice"]</code> to fix <code>DeclareBlocker</code>, accidentally flipping <code>DeclareAttacker(PW1)</code> onto the defending planeswalker because <code>decision_offer_subjects</code> assigns <code>O1</code> role <code>"source"</code> and <code>PW1</code> role <code>"target"</code> (<code>decision_context.rs:139-144</code>).
 </p>
 
 <div class="grid-2">
   <div class="card">
-    <h3><span class="badge existing">Built in HEAD</span> Asymmetric types, broken <code>DeclareBlocker</code> binding &amp; double work</h3>
-    <pre>// managym/src/flow/decision_group/mod.rs:120
-pub struct DecisionOffer {
-  id: usize,              // 0
-  verb: DecisionVerb,     // DeclareBlocker
-  label: String,          // "Block Ally with B1"
-  source: Option&lt;SubjectRef&gt;,        // Some(B1)  ← BLOCKER!
-  aliases: Vec&lt;DecisionObjectView&gt;,  // [Att2]    ← ATTACKER!
-}
-// Att1 (canonical attacker) is NOT named on DecisionOffer!
-// DecisionObjectView drags legacy {entity_id, display_id, label}
-// into decision_group even though every other field is SubjectRef /
-// ObjectRenderId and display_id == subject.id.entity.</pre>
+    <h3><span class="badge existing">Built in HEAD</span> Global UI anchor order breaks <code>DeclareAttacker(PW)</code></h3>
+    <pre>// managym/src/flow/decision_group/mod.rs:551
+fn primary_subject(subjects: &amp;[OfferSubjectView]) -&gt; Option&lt;SubjectRef&gt; {
+  ["target", "source", "choice"]
+    .into_iter()
+    .find_map(|role| subjects.iter().find(|v| v.role == role))
+    .or_else(|| subjects.first())
+    .map(|v| v.object.subject)
+}</pre>
     <div class="box bad">
-      <div class="flow-row"><span><code>server.py::_build_decision_context</code> (every step, incl. villain)</span><span class="tag bad">2× Observation + BLAKE3 hash</span></div>
-      <div class="flow-row"><span>1. <code>env.decision_offer_subjects_json(viewer)</code></span><span class="tag warn">builds Observation #1</span></div>
-      <div class="flow-row"><span>2. <code>env.decision(viewer=viewer)</code></span><span class="tag bad">hashes state + Obs #2 + active_spec, discards all but .aliases</span></div>
-      <div class="flow-row"><span>3. <code>_live_decision_group</code> → <code>env.decision(human_seat)</code></span><span class="tag bad">hashes state + Obs #3 + active_spec AGAIN</span></div>
+      <div class="flow-row"><span><code>Attack with Gray Ogre</code> (player)</span><span class="tag good">source = O1</span></div>
+      <div class="flow-row"><span><code>Attack Liliana with Gray Ogre</code> (PW)</span><span class="tag bad">source = PW1 (defending PW!)</span></div>
+      <div class="flow-row"><span><code>Don't attack with Gray Ogre</code></span><span class="tag good">source = O1</span></div>
+      <div class="flow-row"><span><code>Block Ally with B1</code> (folded Att1/Att2)</span><span class="tag good">source = Att1, aliases = [Att2]</span></div>
     </div>
   </div>
 
   <div class="card">
-    <h3><span class="badge proposed">Proposed (1a)</span> One vocabulary, one acted-on subject, one projection</h3>
+    <h3><span class="badge proposed">Proposed (1a)</span> Action-aware subject selection</h3>
     <pre>// managym/src/flow/decision_group/mod.rs
-pub struct DecisionOffer {
-  id: usize,                // 0
-  verb: DecisionVerb,       // DeclareBlocker
-  label: String,            // "Block Ally with B1"
-  source: Option&lt;SubjectRef&gt;,  // Some(Att1) ← target &gt; source &gt; choice
-  aliases: Vec&lt;SubjectRef&gt;,    // [Att2]     ← same class as source!
-}
-// Or Vec&lt;ObjectRenderId&gt; (aliases are always objects).
-// InteractionOffer.aliases also uses SubjectRef (or ObjectRenderId):
-// view.ts already only reads `subject.kind === 'object'` &amp; `id.entity`!</pre>
+fn primary_subject(
+  action: Option&lt;&amp;Action&gt;,
+  subjects: &amp;[OfferSubjectView],
+) -&gt; Option&lt;SubjectRef&gt; {
+  // DeclareBlocker folds over attackers ("target"); every other
+  // multi-subject action (including DeclareAttacker vs PW) owns
+  // its "source" creature/card first.
+  let order = match action {
+    Some(Action::DeclareBlocker { .. }) =&gt; ["target", "source", "choice"],
+    _ =&gt; ["source", "target", "choice"],
+  };
+  order.into_iter()
+    .find_map(|role| subjects.iter().find(|v| v.role == role))
+    .or_else(|| subjects.first())
+    .map(|v| v.object.subject)
+}</pre>
     <div class="box good">
-      <div class="flow-row"><span><code>DecisionOffer</code> &amp; <code>InteractionOffer</code></span><span class="tag good">zero legacy DecisionObjectView in aliases</span></div>
-      <div class="flow-row"><span><code>DeclareBlocker</code> subject precedence</span><span class="tag good"><code>source = Att1</code>, <code>aliases = [Att2]</code> (same class)</span></div>
-      <div class="flow-row"><span><code>server.py</code> hero prompt</span><span class="tag good">cache <code>ActiveDecision</code> once; reuse for group descriptor</span></div>
-      <div class="flow-row"><span><code>server.py</code> villain autoplay</span><span class="tag good">skip <code>env.decision()</code> when no aliases / bot chooses by index</span></div>
+      <div class="flow-row"><span><code>Attack with Gray Ogre</code> (player)</span><span class="tag good">source = O1 (matches main)</span></div>
+      <div class="flow-row"><span><code>Attack Liliana with Gray Ogre</code> (PW)</span><span class="tag good">source = O1 (matches main)</span></div>
+      <div class="flow-row"><span><code>Don't attack with Gray Ogre</code></span><span class="tag good">source = O1</span></div>
+      <div class="flow-row"><span><code>Block Ally with B1</code> (folded Att1/Att2)</span><span class="tag good">source = Att1, aliases = [Att2]</span></div>
+      <div class="flow-row"><span><code>Target Ally</code> / <code>Tap Plains</code> / <code>Cast Knight</code></span><span class="tag good">source &amp; aliases always share class</span></div>
     </div>
   </div>
 </div>
 
 <div class="callout">
-  <strong class="title">Why this choice matters now (<span class="badge irrev">Irreversible once shipped</span>)</strong>
+  <strong class="title">Why this choice is cleaner and patch-clean</strong>
   <p style="margin:0.35rem 0 0">
-    <code>managym.decision_group.Offer.aliases</code> and Academy's <code>InteractionOffer.aliases</code> (6 JSON schemas) have not shipped to main yet.
-    Once MTG-487 merges, changing <code>aliases</code> from <code>list[DecisionObjectView]</code> to <code>list[SubjectRef]</code> (or <code>list[ObjectRenderId]</code>) is a breaking schema and public-API change.
-    <strong>Alternative passed over (1b):</strong> keep <code>DecisionObjectView</code> on <code>InteractionOffer.aliases</code> so the 6 schema copies don't churn, and only fix <code>DeclareBlocker</code>'s subject precedence plus <code>server.py</code>'s redundant calls. That avoids touching schema snapshots now, at the cost of permanently baking three unused/duplicated fields (<code>entity_id</code>, <code>display_id</code>, <code>label</code>) into the new <code>decision_group</code> and experience wire contracts.
+    <code>Offer.source</code> is already on <code>origin/main</code>, so changing its field name would break <code>0.2.x</code> callers.
+    Passing <code>action</code> to <code>primary_subject</code> restores <code>origin/main</code>'s exact behavior for <code>DeclareAttacker</code> (including planeswalkers) while keeping <code>DeclareBlocker</code>'s <code>source</code> aligned with its folded attacker <code>aliases</code>, and keeping Academy's board-anchor rule (<code>view.ts</code> clicking Liliana to attack Liliana) completely separate where it belongs — in the UI.
+    <strong>Alternative passed over (1b):</strong> keep global <code>["target", "source", "choice"]</code> and document <code>Offer.source</code> as a UI click anchor; that makes <code>source</code> contradict its own name and flip mid-prompt across two offers for the same attacking creature.
   </p>
 </div>
 
-<h2>3. Second Mismatch — Mid-Declaration <code>CombatGroup::describe</code> Contradicts <code>offers</code></h2>
+<h2>3. Second Mismatch — Play vs Watch/Import Split-Brain Villain <code>ReplayDecision</code> Frames</h2>
 
 <p>
-  <code>managym/README.md:1332</code> promises that halfway through raw-stepping a grouped decision, <code>env.decision()</code> returns the remaining undecided items plus immutable <code>committed*</code> state.
-  Because <code>block_options_with_declines</code> conflated <em>already-committed declines</em> (<code>combat.declined_blockers</code>, permanent for this declaration) with <em>hypothetical future declines</em> (<code>decline_edges</code>, symmetric under normalizer re-homing) into one <code>respect_declines</code> boolean, passing <code>false</code> in <code>CombatGroup::describe</code> makes <code>ActiveDecision</code> contradict itself — even under default <code>skip_trivial = true</code>:
+  Walk one concrete interaction: <strong>seat 1 (the bot / villain) taps one of three identical untapped Plains or plays one of two identical Forests in hand.</strong>
+  Pass 7 added <code>include_decision: bool = False</code> to <code>GameSession._build_decision_context</code> so villain autoplay would not call <code>env.decision()</code>.
+  That works for unrecorded hero auto-passes (<code>auto=True</code>, <code>server.py:2305</code>), which are never appended to <code>canonical_decisions</code> —
+  but <code>_auto_play_villain</code> (<code>server.py:2559</code>) calls <code>_apply_bound_command(..., source="policy")</code> (<code>auto=False</code>), which <strong>persists</strong> <code>context.frame</code> (and its <code>frame_hash</code> computed over <code>offers</code>) directly into <code>self.canonical_decisions</code>:
 </p>
 
 <div class="grid-2">
   <div class="card">
-    <h3><span class="badge existing">Built in HEAD</span> Contradictory <code>ActiveDecision</code> after raw <code>Decline(Token1)</code></h3>
-    <p class="small muted">Position: Attackers <code>A1 (MustBeBlocked)</code>, <code>A2 (MustBeBlocked)</code>, <code>A3 (ordinary)</code>. Blockers in asking order: <code>[Token1, Ogre1, Ogre2, Token2]</code> (<code>Token1</code> ≡ <code>Token2</code>). Player steps raw <code>Don't block with Token1</code> → <code>combat.declined_blockers = [Token1]</code>. Now <code>Ogre1</code> is asked and caller invokes <code>env.decision()</code>:</p>
+    <h3><span class="badge existing">Built in HEAD</span> Different persisted <code>ExperienceFrame</code>s for the same villain move</h3>
     <div class="box bad">
-      <div class="flow-row"><span><code>decision.offers</code> (via <code>block_actions</code>, <code>respect_declines=true</code>)</span><span class="tag bad">[Block A1 with Ogre1, Block A2 with Ogre1]</span></div>
-      <div class="flow-row"><span><code>declarable[Ogre1]</code> (via <code>block_options</code>, <code>respect_declines=false</code>)</span><span class="tag bad">must_block=false, can_block=[A1, A2, A3]</span></div>
-      <div class="flow-row"><span><code>declarable[Token2]</code> (already permanently suppressed!)</span><span class="tag bad">must_block=false, can_block=[A1, A2, A3]</span></div>
-      <div class="flow-row"><span>Same bug on <code>DeclareAttackers</code> after raw <code>Decline(Token1)</code></span><span class="tag bad">suppressed Token2 still listed in declarable</span></div>
+      <div class="flow-row"><span>Play: <code>_auto_play_villain</code> (<code>server.py:2559</code>)</span><span class="tag bad">include_decision=False &rarr; aliases omitted</span></div>
+      <div class="flow-row"><span>Play: <code>_step_and_record</code> (<code>server.py:2332-2375</code>)</span><span class="tag bad">persists alias-less frame into canonical_decisions</span></div>
+      <div class="flow-row"><span>Watch / Import: <code>watch.py:292,471,570</code></span><span class="tag good">include_decision=True &rarr; aliases present</span></div>
+      <div class="flow-row"><span><code>frame_hash</code> &amp; <code>DecisionAddressV2</code> (same state!)</span><span class="tag bad">diverge between Play and Watch/Import</span></div>
+      <div class="flow-row"><span>Replay / <code>completed_mirror</code> villain choice view</span><span class="tag bad"><code>pileKey</code> splits villain's identical Plains</span></div>
     </div>
+    <p class="small muted" style="margin:0.5rem 0 0">
+      Meanwhile, <code>_step_and_record</code> already calls <code>decision_surface_view</code>, <code>decision_offer_subjects_json</code>, and <code>semantic_decision_frame_json</code> (full BLAKE3 hash) on every deliberate villain step — so skipping <code>include_decision=True</code> there saves negligible time while breaking frame identity parity.
+    </p>
   </div>
 
   <div class="card">
-    <h3><span class="badge proposed">Proposed (2a)</span> Respect committed declines in <code>CombatGroup::describe</code></h3>
-    <p class="small muted">Split the two concepts cleanly: <strong>committed declines</strong> permanently filter suppressed creatures out of <code>declarable</code> and <code>others</code>; <strong>uncommitted copies</strong> remain symmetrically declarable because the normalizers re-home marks onto earlier uncommitted copies.</p>
+    <h3><span class="badge proposed">Proposed (2a)</span> Uniform <code>aliases</code> on every recorded decision; skip only unrecorded auto-pass</h3>
     <div class="box good">
-      <div class="flow-row"><span><code>decision.offers</code></span><span class="tag good">[Block A1 with Ogre1, Block A2 with Ogre1]</span></div>
-      <div class="flow-row"><span><code>declarable[Ogre1]</code> (<code>others = [Ogre2]</code>, <code>Token2</code> excluded)</span><span class="tag good">must_block=true, can_block=[A1, A2]</span></div>
-      <div class="flow-row"><span><code>declarable[Token2]</code></span><span class="tag good">omitted (already suppressed)</span></div>
-      <div class="flow-row"><span>All remaining creatures already suppressed (<code>skip_trivial=false</code>)</span><span class="tag good"><code>describe() → None</code> (drops to <code>Single</code>)</span></div>
+      <div class="flow-row"><span>Play: <code>_auto_play_villain</code> (recorded)</span><span class="tag good">include_decision=True &rarr; aliases present</span></div>
+      <div class="flow-row"><span>Play: <code>_publish_current_prompt</code> (recorded)</span><span class="tag good">include_decision=True &rarr; cached for group</span></div>
+      <div class="flow-row"><span>Play: hero <code>auto=True</code> pass (<code>server.py:2305</code>, unrecorded)</span><span class="tag good">include_decision=False &rarr; zero overhead</span></div>
+      <div class="flow-row"><span>Watch / Import: seat 0 &amp; seat 1 (recorded)</span><span class="tag good">include_decision=True &rarr; identical frames</span></div>
+      <div class="flow-row"><span><code>frame_hash</code>, <code>DecisionAddressV2</code> &amp; Replay piles</span><span class="tag good">100% identical across Play, Watch &amp; Import</span></div>
     </div>
+    <p class="small muted" style="margin:0.5rem 0 0">
+      Zero new <code>Env</code> methods (<code>tests/public_api.json</code> stays untouched) and one clear invariant: <em>every persisted <code>ReplayDecision</code> carries viewer-safe <code>aliases</code></em>.
+    </p>
   </div>
 </div>
 
-<h2>4. Counterexample, Failure &amp; Recovery Audit (Verified at <code>HEAD</code> <code>7c6955b74e</code>)</h2>
+<h2>4. Counterexample, Failure &amp; Recovery Audit (Verified at <code>HEAD</code> <code>12202d4bf5</code>)</h2>
 
 <table>
   <thead>
@@ -439,44 +451,39 @@ pub struct DecisionOffer {
   </thead>
   <tbody>
     <tr>
-      <td><strong><code>DeclareBlocker</code> with two identical attackers in <code>env.decision()</code></strong><br><span class="muted"><code>decision_group/mod.rs:548-554,652-689</code>, <code>observation.rs:2625-2638</code></span></td>
-      <td><code>action_focus</code> returns <code>[blocker, attacker]</code>; <code>decision_offer_subjects</code> labels them <code>["choice", "target"]</code>. <code>primary_subject</code> checks <code>role == "source"</code> else <code>.first()</code>, returning <code>blocker</code> as <code>Offer.source</code> while <code>Offer.aliases</code> holds the folded <em>attacker</em>.</td>
-      <td><span class="badge no">Mismatch (Q1)</span> Fix subject precedence to <code>target → source → choice</code> (matching <code>view.ts</code>) or separate target from source.</td>
+      <td><strong><code>DeclareAttacker</code> vs Planeswalker in <code>env.decision()</code></strong><br><span class="muted"><code>decision_group/mod.rs:551-557</code>, <code>decision_context.rs:139-144</code>, <code>observation.rs:2604-2616</code></span></td>
+      <td><code>action_focus</code> returns <code>[attacker, planeswalker]</code>; <code>decision_offer_subjects</code> labels them <code>["source", "target"]</code>. Global <code>["target", "source", "choice"]</code> makes <code>Offer.source</code> return <code>planeswalker</code> instead of <code>attacker</code>, regressing <code>origin/main</code>.</td>
+      <td><span class="badge no">Regression (Q1)</span> Scope <code>"target"</code>-first to <code>Action::DeclareBlocker</code> only; keep <code>"source"</code>-first for <code>DeclareAttacker</code> and all other actions.</td>
     </tr>
     <tr>
-      <td><strong>Mid-declaration <code>env.decision()</code> after raw <code>Decline</code></strong><br><span class="muted"><code>decision_group/combat.rs:70-125</code>, <code>block_requirements.rs:77-174</code></span></td>
-      <td><code>CombatGroup::describe</code> does not filter permanents already suppressed by <code>combat.declined_{attackers,blockers}</code>. Under <code>MustBeBlocked</code> (2× <code>MustBeBlocked</code> + 1 ordinary vs <code>[Token1, Ogre1, Ogre2, Token2]</code>), <code>declarable</code> reports <code>must_block=false</code> and illegal <code>A3</code> right beside <code>offers</code> forbidding both.</td>
-      <td><span class="badge no">Bug (Q2)</span> Filter committed-suppressed creatures in <code>CombatGroup::describe</code> before computing <code>declarable</code> / <code>block_options</code>.</td>
+      <td><strong>Recorded villain decision in Play vs Watch/Import</strong><br><span class="muted"><code>server.py:2332-2375,2559,2859,2973</code>, <code>watch.py:292,471,570</code>, <code>recording.py:473</code></span></td>
+      <td><code>_auto_play_villain</code> calls <code>_build_decision_context(..., include_decision=False)</code> and records the alias-less <code>frame</code> into <code>canonical_decisions</code>, producing a different <code>frame_hash</code> / <code>DecisionAddressV2</code> than Watch/Import and splitting villain piles in Replay / <code>completed_mirror</code>.</td>
+      <td><span class="badge no">Parity bug (Q2)</span> Pass <code>include_decision=True</code> in <code>_auto_play_villain</code>; keep <code>False</code> only for unrecorded <code>auto=True</code> hero auto-passes.</td>
     </tr>
     <tr>
-      <td><strong>Academy server projection cost per step</strong><br><span class="muted"><code>managym/academy/server.py:2008,2555,2851-2868</code></span></td>
-      <td><code>_build_decision_context</code> calls both <code>decision_offer_subjects_json</code> and <code>env.decision()</code> (running full BLAKE3 state hash + a second <code>Observation::for_player</code> + <code>active_spec</code>) on every step including villain autoplay, discarding everything but <code>.aliases</code>; hero turns then call <code>env.decision()</code> again in <code>_live_decision_group</code>.</td>
-      <td><span class="badge no">Throughput defect (Q1)</span> Cache one <code>ActiveDecision</code> on hero prompt publication; avoid <code>env.decision()</code> during villain autoplay.</td>
+      <td><strong><code>DeclareBlocker</code> with folded attackers in <code>env.decision()</code></strong><br><span class="muted"><code>tests/interchangeable.rs:2663-2715</code>, <code>tests/env/test_decision_group.py</code></span></td>
+      <td><code>Offer.source</code> names the canonical attacker (<code>SubjectRef::Object</code>) and <code>Offer.aliases</code> names the folded attacker copy (<code>SubjectRef::Object</code>), both in the same equivalence class.</td>
+      <td><span class="badge yes">Holds cleanly</span> Verified in Pass 7; preserved by 1a.</td>
     </tr>
     <tr>
-      <td><strong>Planeswalker attacker targets + combat symmetry</strong><br><span class="muted"><code>flow/interchangeable.rs:469,1790,2295</code>, <code>decision_group/combat.rs:843-875</code>, <code>combat_actions.rs:81-97</code></span></td>
-      <td>Identical attackers targeting <code>Player</code> vs <code>PW</code> have distinct <code>same_combat_role</code> (stay separate for blockers); attacked <code>PW</code> is marked in census; <code>loyalty_activated_this_turn</code> separates PWs cheaply; <code>AttackPlanNormalizer</code> preserves <code>defender: Some(PW)</code> on donor re-homing; <code>CantBeAttackedByMoreThanOne</code> refuses double-attack cleanly; two non-legendary PW copies stay unfolded in <code>DeclareAttacker</code> (fail-closed).</td>
+      <td><strong>Mid-declaration <code>CombatGroup::describe</code> after raw <code>Decline</code></strong><br><span class="muted"><code>decision_group/combat.rs:70-144,222-318</code>, <code>tests/interchangeable.rs:2718-2930</code></span></td>
+      <td>Committed <code>declined_{attackers,blockers}</code> filter suppressed copies out of <code>active_order</code>, <code>declarable</code>, and <code>block_options</code>'s <code>others</code> slice (dropping to <code>Single</code> when none remain). Under <code>skip_trivial=false</code>, if the currently asked creature is suppressed while a distinct later creature remains, <code>start()</code> retains full <code>declaration_order</code> so <code>next_step()</code> cleanly steps <code>None</code> for the suppressed slot before declaring the remaining creature.</td>
+      <td><span class="badge yes">Holds cleanly</span> Verified for both <code>MustBeBlocked</code> blockers and attackers, both <code>skip_trivial</code> modes.</td>
+    </tr>
+    <tr>
+      <td><strong>Planeswalker attacker targets + combat symmetry</strong><br><span class="muted"><code>flow/interchangeable.rs:469,1790,2295</code>, <code>decision_group/combat.rs:845-894</code>, <code>combat_actions.rs:81-97</code></span></td>
+      <td>Identical attackers targeting <code>Player</code> vs <code>PW</code> have distinct <code>same_combat_role</code>; attacked <code>PW</code> is marked in census; <code>loyalty_activated_this_turn</code> separates PWs cheaply; <code>AttackPlanNormalizer</code> preserves <code>defender: Some(PW)</code> on donor re-homing; <code>CantBeAttackedByMoreThanOne</code> refuses double-attack cleanly.</td>
       <td><span class="badge yes">Holds cleanly</span> Verified across planeswalker merge.</td>
     </tr>
     <tr>
-      <td><strong><code>MustBeBlocked</code> / <code>Menace</code> coupled blocker pruning</strong><br><span class="muted"><code>block_requirements.rs:91-217</code>, <code>tests/interchangeable.rs</code></span></td>
-      <td><code>block_options_with_declines</code> removes already-suppressed blockers into <code>active_remaining</code> and evaluates <code>None</code> against <code>decline_edges</code> in both residual and general solvers (verified across 512 3×3 graphs and mixed <code>[Token A, Ogre, Token B]</code>). Fast path at <code>:104</code> keeps ordinary combats O(1).</td>
-      <td><span class="badge yes">Holds cleanly</span> Live stepping and full grouped preview/submit are exact.</td>
-    </tr>
-    <tr>
-      <td><strong>London mulligan bottom-putting &amp; <code>skip_trivial</code> lockstep</strong><br><span class="muted"><code>tests/interchangeable.rs:2440-2543</code></span></td>
-      <td>7-card hand with duplicates folds to distinct names with <code>sum(1 + len(aliases)) == 7</code>; 7 identical Mountains fold to 1 offer and auto-skip under <code>skip_trivial=true</code> (or show 1 offer + 6 aliases under <code>skip_trivial=false</code>).</td>
-      <td><span class="badge yes">Holds cleanly</span> Verified in Pass 6.</td>
-    </tr>
-    <tr>
-      <td><strong>Sideboard <code>LearnTakeLesson</code> aliases</strong><br><span class="muted"><code>flow/interchangeable.rs:2556</code>, <code>decision_context.rs:177</code>, <code>continuation.rs:328</code></span></td>
-      <td><code>fold_action_space</code> folds identical sideboard Lessons into <code>Game::action_aliases()</code> (so <code>resolve_action_index</code> works), but <code>decision_offer_aliases</code> filters via <code>visible_reference</code> (which returns empty when <code>state.live(obj).is_none()</code>), so <code>Offer.aliases</code> is always empty for <code>LearnTakeLesson</code>.</td>
-      <td><span class="badge warn">Undocumented split (Q3)</span> Harmless for Academy (tray is 1-per-offer); state the live-zone boundary explicitly in docs/docstrings.</td>
+      <td><strong>Sideboard <code>LearnTakeLesson</code> aliases</strong><br><span class="muted"><code>flow/interchangeable.rs:2556</code>, <code>decision_context.rs:159-196</code>, <code>managym/README.md:1014-1019</code></span></td>
+      <td>Duplicate sideboard Lessons fold in <code>ActionSpace</code> and resolve via <code>Game::action_aliases</code> / <code>resolve_action_index</code>; <code>decision_offer_aliases</code> filters to live in-zone objects only, and every schema, docstring, and README now states this boundary explicitly.</td>
+      <td><span class="badge yes">Holds cleanly</span> Contract matches behavior everywhere.</td>
     </tr>
     <tr>
       <td><strong><code>PublishedDecision</code> rollback, snapshots, determinization &amp; Academy replay</strong><br><span class="muted"><code>flow/game.rs</code>, <code>agent/env/snapshot.rs</code>, <code>view.ts:397-403</code>, <code>test_interchangeable_offers.py</code></span></td>
-      <td><code>PublishedDecision</code> moves atomically on every clear/take/restore; <code>refresh_sampled_decision</code> updates aliases without bumping <code>decision_epoch</code> when the folded space is unchanged; removed offer ids return <code>unknown_offer</code>; stale revisions reject cleanly; replays match digest.</td>
-      <td><span class="badge yes">Holds cleanly</span> Verified across Rust, Python, Vitest, and Playwright.</td>
+      <td><code>PublishedDecision</code> moves atomically on clear/take/restore; <code>refresh_sampled_decision</code> updates aliases without bumping <code>decision_epoch</code> when the folded space is unchanged; removed offer ids return <code>unknown_offer</code>; stale revisions reject cleanly; hero replays match digest.</td>
+      <td><span class="badge yes">Holds cleanly</span> Verified across Rust, Python, Vitest (321/321), and Playwright.</td>
     </tr>
   </tbody>
 </table>
@@ -486,8 +493,8 @@ pub struct DecisionOffer {
 <div class="callout warn">
   <strong class="title">Irreversible boundaries frozen at merge (confirm before finalizing)</strong>
   <ul style="margin:0.35rem 0 0; padding-left:1.25rem">
-    <li style="margin-bottom:0.45rem"><span class="badge irrev">API &amp; wire schema</span> <strong><code>DecisionOffer.aliases</code> (<code>managym.decision_group.Offer</code>) &amp; <code>InteractionOffer.aliases</code> (6 <code>protocol/*.schema.json</code> files):</strong> currently <code>list[DecisionObjectView]</code> (omitted when empty), keeping <code>SEMANTIC_DECISION_VERSION = 8</code> and zero new <code>Env.*_json</code> methods in <code>tests/public_api.json</code>. Switching to <code>list[SubjectRef]</code> (or <code>list[ObjectRenderId]</code>) is cheap only before merge.</li>
-    <li style="margin-bottom:0.45rem"><span class="badge irrev">Hash contract</span> <strong><code>MATCH_STATE_HASH_VERSION</code> 33 → 34:</strong> adds <code>CombatState.declined_attackers</code>, <code>declined_blockers</code>, and <code>TurnState.graveyard_arrivals</code> over <code>origin/main</code>'s v33. Conformance evidence and pinned pilot games updated.</li>
+    <li style="margin-bottom:0.45rem"><span class="badge irrev">API &amp; wire schema</span> <strong><code>DecisionOffer.aliases</code> (<code>managym.decision_group.Offer</code>) &amp; <code>InteractionOffer.aliases</code> (6 <code>protocol/*.schema.json</code> files):</strong> <code>list[SubjectRef]</code> (omitted when empty, live in-zone copies only), keeping <code>SEMANTIC_DECISION_VERSION = 8</code> and zero new <code>Env.*</code> methods in <code>tests/public_api.json</code>.</li>
+    <li style="margin-bottom:0.45rem"><span class="badge irrev">Hash contract</span> <strong><code>MATCH_STATE_HASH_VERSION</code> 33 &rarr; 34:</strong> adds <code>CombatState.declined_attackers</code>, <code>declined_blockers</code>, and <code>TurnState.graveyard_arrivals</code> over <code>origin/main</code>'s v33. Conformance evidence and pinned pilot games updated.</li>
     <li><strong>Remaining gate item:</strong> adopt <code>managym/perf/baseline.json</code> from a green CI <code>Engine Budget</code> run (<code>scripts/engine_budget.py record --reason</code>).</li>
   </ul>
 </div>
@@ -496,28 +503,28 @@ pub struct DecisionOffer {
   <h2>6. Questions</h2>
   <p class="muted">Reply with question number + option letter (for example, <code>1a 2a 3a 4a</code>).</p>
   <ol>
-    <li><strong>How should we resolve the <code>DecisionOffer</code> / <code>InteractionOffer</code> alias contract &amp; <code>server.py</code> double projection (Biggest mismatch, <span class="badge irrev">Irreversible</span>)?</strong>
+    <li><strong>Restore <code>DecisionOffer.source</code> for <code>DeclareAttacker</code> against planeswalkers while keeping <code>DeclareBlocker</code> aligned with its folded attacker <code>aliases</code> (Biggest mismatch)?</strong>
       <ul class="options">
-        <li><strong>1a (recommended):</strong> Make <code>aliases</code> a clean <code>list[SubjectRef]</code> (or <code>list[ObjectRenderId]</code>) on both <code>DecisionOffer</code> and <code>InteractionOffer</code> (updating the 6 schema copies and <code>view.ts</code> before merge, removing legacy <code>DecisionObjectView</code> from <code>decision_group</code>), align <code>DecisionOffer</code>'s primary subject precedence (<code>target → source → choice</code>) so <code>source</code> and <code>aliases</code> always name the same equivalence class (including <code>DeclareBlocker</code>), and cache one <code>env.decision()</code> per hero prompt in <code>server.py</code> while skipping it during villain autoplay.</li>
-        <li><strong>1b:</strong> Keep <code>DecisionObjectView</code> on <code>InteractionOffer.aliases</code> and <code>DecisionOffer.aliases</code> as built (preserving schema copies), and only fix <code>DeclareBlocker</code>'s <code>primary_subject</code> precedence plus <code>server.py</code>'s redundant <code>env.decision()</code> calls.</li>
-        <li><strong>1c:</strong> Ship <code>HEAD</code>'s <code>Offer.aliases</code>, <code>primary_subject</code>, and <code>server.py</code> wiring unchanged.</li>
+        <li><strong>1a (recommended):</strong> Pass the <code>Action</code> into <code>primary_subject</code> (<code>managym/src/flow/decision_group/mod.rs:551</code>) so <code>Action::DeclareBlocker</code> uses <code>["target", "source", "choice"]</code> (naming the canonical attacker alongside its <code>aliases</code>) and all other actions — including <code>Action::DeclareAttacker</code> vs a planeswalker — use <code>["source", "target", "choice"]</code> (matching <code>origin/main</code>). Add a regression test for attacking a planeswalker.</li>
+        <li><strong>1b:</strong> Keep global <code>["target", "source", "choice"]</code> and document <code>Offer.source</code> as the board click-anchor subject (accepting that attacking a planeswalker puts the planeswalker in <code>Offer.source</code> while attacking a player puts the creature there).</li>
       </ul>
     </li>
-    <li><strong>Fix mid-declaration <code>CombatGroup::describe</code> contradicting <code>offers</code> after a committed raw decline?</strong>
+    <li><strong>Keep recorded <code>ReplayDecision</code> frames identical between Play and Watch/Import for villain decisions?</strong>
       <ul class="options">
-        <li><strong>2a (recommended):</strong> Filter creatures already suppressed by committed <code>combat.declined_attackers</code> / <code>combat.declined_blockers</code> out of <code>CombatGroup::describe</code>'s <code>declarable</code> list and <code>block_options</code> <code>others</code> slice (dropping to <code>Single</code> when none remain unsuppressed), while keeping uncommitted identical copies symmetrically declarable for the normalizers.</li>
-        <li><strong>2b:</strong> Leave <code>CombatGroup::describe</code> unchanged and document that mid-declaration grouped descriptors ignore committed declines.</li>
+        <li><strong>2a (recommended):</strong> Pass <code>include_decision=True</code> in <code>server.py::_auto_play_villain</code> (<code>server.py:2559</code>), keeping <code>include_decision=False</code> only for unrecorded <code>auto=True</code> hero auto-passes (<code>server.py:2305</code>). Every persisted <code>ReplayDecision</code> across Play, Watch, and Import then carries viewer-safe <code>aliases</code> and produces identical <code>frame_hash</code> / <code>DecisionAddressV2</code> values with zero new <code>Env</code> methods.</li>
+        <li><strong>2b:</strong> Add a combined internal subjects+aliases projection so neither hero nor villain builds <code>Observation::for_player</code> twice or computes <code>active_spec</code> when only <code>aliases</code> are needed (more surface churn; touches <code>Env</code> or <code>decision_offer_subjects_json</code>).</li>
+        <li><strong>2c:</strong> Leave <code>_auto_play_villain</code> with <code>include_decision=False</code> and accept that Play's recorded villain frames omit <code>aliases</code> and hash differently from Watch/Import.</li>
       </ul>
     </li>
-    <li><strong>Confirm <code>MATCH_STATE_HASH_VERSION = 34</code> and the live-zone boundary for <code>LearnTakeLesson</code> aliases?</strong>
+    <li><strong>Confirm the irreversible boundaries frozen at merge (<span class="badge irrev">Irreversible</span>)?</strong>
       <ul class="options">
-        <li><strong>3a (recommended):</strong> Ship <code>MATCH_STATE_HASH_VERSION = 34</code> (33 → 34 over <code>origin/main</code>) and explicitly document that <code>Offer.aliases</code> / <code>InteractionOffer.aliases</code> report live in-zone aliases only (sideboard <code>LearnTakeLesson</code> aliases stay internal to <code>Game::action_aliases</code> for lowering).</li>
-        <li><strong>3b:</strong> Also project outside-game sideboard aliases onto <code>Offer.aliases</code> (requires a sideboard candidate reference shape).</li>
+        <li><strong>3a (recommended):</strong> Ship <code>DecisionOffer.aliases</code> and <code>InteractionOffer.aliases</code> as <code>list[SubjectRef]</code> (live in-zone copies only, omitted when empty, <code>SEMANTIC_DECISION_VERSION = 8</code>) and <code>MATCH_STATE_HASH_VERSION = 34</code> (33 &rarr; 34 over <code>origin/main</code>).</li>
+        <li><strong>3b:</strong> Hold merge to revisit the alias schema or hash contract.</li>
       </ul>
     </li>
-    <li><strong>Confirm carried-forward kickoff rulings on object equivalence (<code>scratch/questions.md</code>):</strong>
+    <li><strong>Confirm carried-forward kickoff rulings on object equivalence (<code>scratch/questions.md</code>)?</strong>
       <ul class="options">
-        <li><strong>4a (recommended):</strong> Keep current rulings — ignore hand-card <code>incarnation</code> and hand/graveyard order; exclude face-down objects and permanents with layered static abilities or keyword counters; keep folded labels plain (no <code>×3</code>); keep <code>autotapper</code> tie-breaking in MTG-495.</li>
+        <li><strong>4a (recommended):</strong> Keep current rulings — ignore hand-card <code>incarnation</code> and hand/graveyard order; exclude face-down objects and permanents with layered static abilities or keyword counters; keep folded labels plain (no <code>&times;3</code>); keep <code>autotapper</code> tie-breaking in MTG-495.</li>
         <li><strong>4b:</strong> Compare hand-card <code>incarnation</code> (prevents a bounced copy from folding with a fresh draw of the same card).</li>
         <li><strong>4c:</strong> Relax timestamp exclusion when no other effect's timestamp lies between two static-bearing copies.</li>
       </ul>
