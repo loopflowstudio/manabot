@@ -279,15 +279,18 @@ impl Game {
             None
         };
         if let Some(space) = space {
-            // Republishing advances the epoch. Keep an unchanged decision's
-            // Commands valid. Publication resolves the chooser from its actions.
+            // Fold before comparing so identical decisions don't spuriously
+            // advance `decision_epoch` and invalidate live Commands.
+            let (space, aliases) = self.fold_action_space(space);
             let unchanged = self.current_action_space.as_ref().is_some_and(|current| {
                 current.kind == space.kind
                     && current.actions == space.actions
                     && current.focus == space.focus
             });
             if !unchanged {
-                self.publish_action_space(space);
+                self.publish_folded_action_space(space, aliases);
+            } else {
+                self.action_aliases = aliases;
             }
         }
     }

@@ -10,6 +10,7 @@ pub mod effects;
 pub mod event;
 pub mod game;
 pub mod identity;
+pub mod interchangeable;
 mod knowledge;
 mod layers;
 pub mod mana;

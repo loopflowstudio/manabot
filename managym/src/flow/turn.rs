@@ -213,6 +213,18 @@ impl DamageHistory {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Visit every `ObjectId` (source or permanent recipient) recorded in this
+    /// turn's damage history.
+    pub(crate) fn visit_objects(&self, mut visit: impl FnMut(ObjectId)) {
+        for DamagePair(source, recipient) in &self.0 {
+            visit(*source);
+            match recipient {
+                DamageRecipient::Permanent(object) => visit(*object),
+                DamageRecipient::CombatPlayer(_) => {}
+            }
+        }
+    }
 }
 
 /// Used once-per-turn grants, ordered by recipient so a viewer can read the
@@ -237,6 +249,11 @@ impl UsedTriggerGrants {
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+    pub(crate) fn visit_objects(&self, mut visit: impl FnMut(ObjectId)) {
+        for (source, _) in &self.0 {
+            visit(*source);
+        }
     }
 }
 

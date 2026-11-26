@@ -791,6 +791,39 @@ impl Object {
         self.form.as_deref().is_some_and(|form| form.face_down)
     }
 
+    /// Whether two objects are identical in everything except their unique `id`
+    /// and neither is face down. Exhaustive destructuring ensures any new field
+    /// on `Object` is explicitly classified.
+    pub fn same_object_identity(&self, other: &Self) -> bool {
+        let Self {
+            id: _, // unique per object
+            kind,
+            definition_id,
+            registry_key,
+            owner,
+            definition,
+            form,
+        } = self;
+        let Self {
+            id: _,
+            kind: other_kind,
+            definition_id: other_def,
+            registry_key: other_reg,
+            owner: other_owner,
+            definition: other_printed,
+            form: other_form,
+        } = other;
+        if self.is_face_down() || other.is_face_down() {
+            return false;
+        }
+        kind == other_kind
+            && definition_id == other_def
+            && registry_key == other_reg
+            && owner == other_owner
+            && form == other_form
+            && (Arc::ptr_eq(definition, other_printed) || definition == other_printed)
+    }
+
     /// The base that a zone move restores, including fixture edits. It never
     /// follows an entry-copy or transformed face installed on a later appearance.
     pub fn retained_base(&self) -> (CardDefId, &PrintedCharacteristics) {

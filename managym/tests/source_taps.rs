@@ -110,13 +110,13 @@ fn untapped(game: &Game) -> Vec<String> {
 
 #[test]
 fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
-    // {2}{R} from three Mountains and a Forest: every land can pay a pip and
-    // one will be left, so all four are offered beside PayCost.
+    // {2}{R} from three Mountains and a Forest: three identical Mountains fold
+    // to one offer beside Forest and PayCost.
     let lands = ["Mountain", "Mountain", "Mountain", "Forest"];
     let mut by_hand = game(&lands);
     cast(&mut by_hand);
     let offers = taps(&by_hand);
-    assert_eq!(offers.len(), 4);
+    assert_eq!(offers.len(), 2);
     let space = by_hand.action_space().unwrap();
     assert_eq!(space.player, Some(PlayerId(0)));
     assert!(space
@@ -142,7 +142,7 @@ fn per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes() {
         .0;
     multi_step.step(forest).unwrap();
     let offers = taps(&multi_step);
-    assert_eq!(offers.len(), 3);
+    assert_eq!(offers.len(), 2);
     let mountain = offers
         .iter()
         .find(|(_, land)| land == "Mountain")
@@ -217,9 +217,9 @@ fn a_spare_source_keeps_every_payment_offer_including_the_dual() {
     );
     cast(&mut game);
     let labels = payment_labels(&game);
-    assert_eq!(labels.len(), 5, "{labels:?}");
+    assert_eq!(labels.len(), 4, "{labels:?}");
     assert_eq!(labels[0], "Tap Gruul Guildgate for {R}/{G}");
-    assert_eq!(taps(&game).len(), 3);
+    assert_eq!(taps(&game).len(), 2);
     game.step(0).unwrap();
     // Red leaves two generic pips, green leaves a red pip and a generic.
     assert_eq!(payment_labels(&game), ["Add {R}", "Add {G}"]);
@@ -268,8 +268,6 @@ fn choosing_village_keeps_two_plains_and_skips_the_color_choice() {
         payment_labels(&game),
         [
             "Tap Kyoshi Village for {G}/{W}",
-            "Tap Plains for {W}",
-            "Tap Plains for {W}",
             "Tap Plains for {W}",
             "PayCost",
         ]
@@ -330,8 +328,6 @@ fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
         payment_labels(&village_three),
         [
             "Tap Kyoshi Village for {G}/{W}",
-            "Tap Plains for {W}",
-            "Tap Plains for {W}",
             "Tap Plains for {W}",
             "PayCost",
         ]
@@ -395,7 +391,8 @@ fn a_targeted_plains_keeps_its_tap_offer_in_response() {
     );
     game.skip_trivial = true;
     cast(&mut game);
-    assert_eq!(taps(&game).len(), 4);
+    // The targeted Plains stays distinct from the three identical untargeted Plains.
+    assert_eq!(taps(&game).len(), 2);
 }
 
 #[test]
@@ -419,7 +416,7 @@ fn enchanted_and_animated_plains_keep_the_source_choice() {
         .attached_to = Some(plains.object);
     enchanted.scenario_refresh_priority().unwrap();
     cast(&mut enchanted);
-    assert_eq!(payment_labels(&enchanted).len(), 4);
+    assert_eq!(payment_labels(&enchanted).len(), 3);
     assert!(payment_labels(&enchanted).contains(&"Tap Plains for {C}".into()));
 
     let mut animated = base.clone();
@@ -442,7 +439,7 @@ fn enchanted_and_animated_plains_keep_the_source_choice() {
     }
     animated.scenario_refresh_priority().unwrap();
     cast(&mut animated);
-    assert_eq!(taps(&animated).len(), 3);
+    assert_eq!(taps(&animated).len(), 2);
 }
 
 #[test]
@@ -557,7 +554,7 @@ fn turning_a_manifest_face_up_skips_when_forced_and_offers_taps_on_real_choice()
         labels.contains(&"Tap Kyoshi Village for {G}/{W}".into()),
         "{labels:?}"
     );
-    assert_eq!(taps(&choice_dual).len(), 3);
+    assert_eq!(taps(&choice_dual).len(), 1);
     let dual = labels
         .iter()
         .position(|label| label == "Tap Kyoshi Village for {G}/{W}")
@@ -571,10 +568,10 @@ fn turning_a_manifest_face_up_skips_when_forced_and_offers_taps_on_real_choice()
         .collect();
     assert_eq!(remaining, ["Plains", "Plains"]);
 
-    // Mixed basics offer per-source taps and PayCost finishes.
+    // Mixed basics offer per-source taps (one per class) and PayCost finishes.
     let (mut choice_basics, face_down) = turn_face_up(&["Plains", "Plains", "Forest"]);
     assert!(choice_basics.state[face_down].is_face_down());
-    assert_eq!(taps(&choice_basics).len(), 3);
+    assert_eq!(taps(&choice_basics).len(), 2);
     pay_cost(&mut choice_basics);
     assert!(!choice_basics.state[face_down].is_face_down());
     assert_eq!(choice_basics.state.players[0].mana_pool.total(), 0);
@@ -923,15 +920,16 @@ fn fourteen_lands_with_granted_color_choices_stay_under_the_policy_action_capaci
     game.scenario_refresh_priority().unwrap();
     cast(&mut game);
     let labels = payment_labels(&game);
+    // One counter-bearing Forest plus one representative for the 13 plain Forests.
     assert_eq!(
         labels
             .iter()
             .filter(|s| s.as_str() == "Tap Forest for any color")
             .count(),
-        14
+        2
     );
-    assert_eq!(taps(&game).len(), 14);
-    assert_eq!(labels.len(), 29);
+    assert_eq!(taps(&game).len(), 2);
+    assert_eq!(labels.len(), 5);
 }
 
 #[test]
@@ -1021,7 +1019,6 @@ fn priority_taps_append_each_source_and_float_mana_for_a_cast() {
         [
             (ordinary.len(), "Mountain".into()),
             (ordinary.len() + 1, "Forest".into()),
-            (ordinary.len() + 2, "Forest".into())
         ]
     );
     game.step(offers[1].0).unwrap();
@@ -1143,7 +1140,7 @@ fn mana_made_while_paying_commits_to_the_cost() {
 fn required_sol_ring_can_leave_a_mountain_or_floating_mana() {
     let mut game = payment_position("Gray Ogre", &["Sol Ring", "Mountain", "Mountain"]);
     cast(&mut game);
-    assert_eq!(taps(&game).len(), 3);
+    assert_eq!(taps(&game).len(), 2);
     game.skip_trivial = false; // Inspect priority before the floating mana empties.
 
     let mut exact = game.clone();
@@ -1300,7 +1297,7 @@ fn surplus_sources_follow_the_existing_payment_actions() {
         usable.action_space().unwrap().actions
     );
     let ordinary = &off.action_space().unwrap().actions;
-    assert_eq!(taps(&off).len(), 2);
+    assert_eq!(taps(&off).len(), 1);
     assert_eq!(
         &on.action_space().unwrap().actions[..ordinary.len()],
         ordinary
@@ -1315,7 +1312,7 @@ fn usable_priority_requires_a_spend_or_a_trigger_on_that_source() {
     let mut game = game(&["Mountain", "Forest", "Forest"]);
     game.mana_floats = [ManaFloats::Usable, ManaFloats::Off];
     game.scenario_refresh_priority().unwrap();
-    assert_eq!(taps(&game).len(), 3); // Ogre costs {2}{R}.
+    assert_eq!(taps(&game).len(), 2); // Ogre costs {2}{R}; two Forests fold.
     game.scenario_clear_hand(PlayerId(0));
     game.scenario_refresh_priority().unwrap();
     assert!(taps(&game).is_empty());

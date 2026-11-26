@@ -870,6 +870,10 @@ pub struct Game {
     pub mana_floats: [ManaFloats; 2],
     pub mana_payment: [ManaPayment; 2],
     pub current_action_space: Option<ActionSpace>,
+    /// Folded copies for the currently published action space, as
+    /// `(surviving_action_index, folded_object)` pairs. Outside the
+    /// rules-state witness; overwritten on every publish and cleared at game over.
+    pub(crate) action_aliases: crate::flow::interchangeable::ActionAliases,
     /// Monotonic identity for the currently published external decision.
     ///
     /// This is deliberately narrower than the Game protocol's match revision
@@ -922,6 +926,7 @@ impl Clone for Game {
             mana_floats: self.mana_floats,
             mana_payment: self.mana_payment,
             current_action_space: self.current_action_space.clone(),
+            action_aliases: self.action_aliases.clone(),
             decision_epoch: self.decision_epoch,
             semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),

@@ -182,6 +182,7 @@ impl Game {
             mana_floats: player_configs.mana_floats,
             mana_payment: player_configs.mana_payment,
             current_action_space: None,
+            action_aliases: None,
             decision_epoch: 0,
             semantic_object_candidates: Default::default(),
             pending_choice: None,

@@ -1294,6 +1294,27 @@ impl ManaPool {
             .map(|unit| unit.origin)
     }
 
+    /// Every `ObjectId` named as the origin of a pooled mana unit. Exhaustive
+    /// destructuring ensures any new id-bearing field on `PooledUnit` or
+    /// `ManaOrigin` is accounted for.
+    pub fn visit_referenced_objects(&self, mut visit: impl FnMut(crate::game_object::ObjectId)) {
+        let Self { mana: _, units } = self;
+        for PooledUnit {
+            class: _,
+            color: _,
+            origin,
+        } in units
+        {
+            if let Some(ManaOrigin {
+                object,
+                definition: _,
+            }) = origin
+            {
+                visit(*object);
+            }
+        }
+    }
+
     /// Amounts saturate at 255 per class and color, so joining or recoloring
     /// can leave more units than the mana counts. The newest go: the mana
     /// they stood for no longer exists.
