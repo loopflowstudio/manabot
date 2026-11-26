@@ -200,11 +200,9 @@ class AttemptStore:
                     PRIMARY KEY(analysis_id, event)
                 );
             """)
-            self._migrate(db)
+            columns = self._migrate(db)
             # A database an earlier build created requires an owner on every row.
-            self._owner_column = "participant_id" in {
-                row[1] for row in db.execute("PRAGMA table_info(attempts)")
-            }
+            self._owner_column = "participant_id" in columns
             # A watched game cannot be rebuilt from its record, so one another
             # process left active is over. A played game stays unfinished.
             db.execute(
@@ -215,7 +213,7 @@ class AttemptStore:
                 (PROCESS_ID,),
             )
 
-    def _migrate(self, db):
+    def _migrate(self, db: sqlite3.Connection) -> set[str]:
         columns = {row[1] for row in db.execute("PRAGMA table_info(attempts)")}
         if "record_version" not in columns:
             for column in (
@@ -243,13 +241,12 @@ class AttemptStore:
                 )
             for column in ("bot_sha256", "hero_deck", "villain_deck"):
                 db.execute(f"ALTER TABLE attempts DROP COLUMN {column}")
-        if "numbers_json" not in {
-            row[1] for row in db.execute("PRAGMA table_info(attempts)")
-        }:
+                columns.discard(column)
+            columns.update(("record_version", "origin", "num_events"))
+        if "numbers_json" not in columns:
             db.execute("ALTER TABLE attempts ADD COLUMN numbers_json TEXT")
-        if "decklists" not in {
-            row[1] for row in db.execute("PRAGMA table_info(attempts)")
-        }:
+            columns.add("numbers_json")
+        if "decklists" not in columns:
             db.execute(
                 "ALTER TABLE attempts ADD COLUMN decklists TEXT NOT NULL DEFAULT 'open'"
             )
@@ -258,6 +255,8 @@ class AttemptStore:
                 """UPDATE attempts SET decklists='closed'
                 WHERE json_extract(trace_json, '$.config.decklists')='closed'"""
             )
+            columns.add("decklists")
+        return columns
 
     @contextmanager
     def connect(self):

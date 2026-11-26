@@ -17,6 +17,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import random
 import secrets
 import sqlite3
 import threading
@@ -97,6 +98,7 @@ from .analysis import (
 )
 from .append_json import encode_list, splice
 from .attempts import (
+    CLOSED_DECK,
     AttemptStore,
     RecordedPlayer,
     RetainedAttempt,
@@ -113,6 +115,7 @@ from .curated_pack import (
 )
 from .deck_import import DeckImportInput
 from .deck_pools import (
+    DeckPool,
     deck_file_payload,
     deck_pool_catalog,
     deck_pools,
@@ -694,6 +697,24 @@ def _bundled_deck_file(name: str, seat: str) -> dict[str, str]:
     }
 
 
+def _pool_for_side(raw: Any) -> DeckPool | None:
+    if not is_pool_key(raw):
+        return None
+    pool = resolve_deck_pool(raw)
+    if pool is None:
+        raise ValueError(f"Unknown deck pool {raw!r}.")
+    return pool
+
+
+def _resolve_deck_side(
+    raw: Any, seat: str, pool: DeckPool | None, rng: random.Random
+) -> dict[str, str]:
+    if pool is not None:
+        sampled = pool.sample(rng)
+        return deck_file_payload(sampled.deck, name=sampled.name)
+    return _bundled_deck_file(str(raw), seat)
+
+
 def resolve_pool_decks(data: dict[str, Any], *, seed: int | None) -> dict[str, Any]:
     """Expand ``pool:<id>`` selections and one-sided ``deck_import`` payloads."""
     raw_import = data.get("deck_import")
@@ -705,68 +726,24 @@ def resolve_pool_decks(data: dict[str, Any], *, seed: int | None) -> dict[str, A
         if defaults:
             set_deck_pools(defaults)
 
+    hero_payload: Any = None
+    villain_payload: Any = None
     if isinstance(raw_import, dict):
-        has_hero = raw_import.get("hero") is not None
-        has_villain = raw_import.get("villain") is not None
-        if has_hero and has_villain:
+        hero_payload = raw_import.get("hero")
+        villain_payload = raw_import.get("villain")
+        if (hero_payload is None) == (villain_payload is None):
             return data
-        if has_hero or has_villain:
-            import random as _random
 
-            rng = (
-                _random.Random(seed)
-                if isinstance(seed, int)
-                else _random.SystemRandom()
-            )
-            hero_payload = raw_import.get("hero")
-            villain_payload = raw_import.get("villain")
-            hero_pool = resolve_deck_pool(raw_hero) if is_pool_key(raw_hero) else None
-            villain_pool = (
-                resolve_deck_pool(raw_villain) if is_pool_key(raw_villain) else None
-            )
-            if hero_payload is None:
-                if hero_pool is not None:
-                    sampled = hero_pool.sample(rng)
-                    hero_payload = deck_file_payload(sampled.deck, name=sampled.name)
-                elif is_pool_key(raw_hero):
-                    raise ValueError(f"Unknown deck pool {raw_hero!r}.")
-                else:
-                    hero_payload = _bundled_deck_file(str(raw_hero), "hero")
-            if villain_payload is None:
-                if villain_pool is not None:
-                    sampled = villain_pool.sample(rng)
-                    villain_payload = deck_file_payload(sampled.deck, name=sampled.name)
-                elif is_pool_key(raw_villain):
-                    raise ValueError(f"Unknown deck pool {raw_villain!r}.")
-                else:
-                    villain_payload = _bundled_deck_file(str(raw_villain), "villain")
-            resolved_partial = dict(data)
-            resolved_partial["deck_import"] = {
-                "hero": hero_payload,
-                "villain": villain_payload,
-            }
-            if hero_pool is not None:
-                resolved_partial["hero_deck_pool"] = hero_pool.key
-            if villain_pool is not None:
-                resolved_partial["villain_deck_pool"] = villain_pool.key
-            return resolved_partial
+    partial = hero_payload is not None or villain_payload is not None
+    hero_pool = _pool_for_side(raw_hero) if hero_payload is None else None
+    villain_pool = _pool_for_side(raw_villain) if villain_payload is None else None
+    if not partial and hero_pool is None and villain_pool is None:
         return data
 
-    hero_pool = resolve_deck_pool(raw_hero) if is_pool_key(raw_hero) else None
-    villain_pool = resolve_deck_pool(raw_villain) if is_pool_key(raw_villain) else None
-    if is_pool_key(raw_hero) and hero_pool is None:
-        raise ValueError(f"Unknown deck pool {raw_hero!r}.")
-    if is_pool_key(raw_villain) and villain_pool is None:
-        raise ValueError(f"Unknown deck pool {raw_villain!r}.")
-    if hero_pool is None and villain_pool is None:
-        return data
-
-    import random as _random
-
-    rng: _random.Random = (
-        _random.Random(seed ^ 0x517CC1B727220A95)
-        if seed is not None
-        else _random.SystemRandom()
+    rng: random.Random = (
+        random.Random(seed if partial else seed ^ 0x517CC1B727220A95)
+        if isinstance(seed, int)
+        else random.SystemRandom()
     )
     if (
         hero_pool is not None
@@ -777,25 +754,26 @@ def resolve_pool_decks(data: dict[str, Any], *, seed: int | None) -> dict[str, A
         hero_payload = deck_file_payload(hero_named.deck, name=hero_named.name)
         villain_payload = deck_file_payload(villain_named.deck, name=villain_named.name)
     else:
-        if hero_pool is not None:
-            hero_named = hero_pool.sample(rng)
-            hero_payload = deck_file_payload(hero_named.deck, name=hero_named.name)
-        else:
-            hero_payload = _bundled_deck_file(str(raw_hero), "hero")
-        if villain_pool is not None:
-            villain_named = villain_pool.sample(rng)
-            villain_payload = deck_file_payload(
-                villain_named.deck, name=villain_named.name
+        if hero_payload is None:
+            hero_payload = _resolve_deck_side(raw_hero, "hero", hero_pool, rng)
+        if villain_payload is None:
+            villain_payload = _resolve_deck_side(
+                raw_villain, "villain", villain_pool, rng
             )
-        else:
-            villain_payload = _bundled_deck_file(str(raw_villain), "villain")
 
-    return {
+    resolved: dict[str, Any] = {
         **data,
         "deck_import": {"hero": hero_payload, "villain": villain_payload},
-        "hero_deck_pool": hero_pool.key if hero_pool is not None else None,
-        "villain_deck_pool": villain_pool.key if villain_pool is not None else None,
     }
+    for key, pool in (
+        ("hero_deck_pool", hero_pool),
+        ("villain_deck_pool", villain_pool),
+    ):
+        if pool is not None:
+            resolved[key] = pool.key
+        elif not partial:
+            resolved[key] = None
+    return resolved
 
 
 def _parse_game_config(config: Any) -> GameConfig:
@@ -3178,11 +3156,6 @@ def _control_error(error: PlayRequestError) -> dict[str, str]:
     return {"type": "control_error", "code": error.code, "message": str(error)}
 
 
-def _new_game_session() -> GameSession:
-    """Construct the normal runtime authority with unavailable Study evidence."""
-    return GameSession()
-
-
 def end_game(game_id: str, end_reason: str) -> None:
     """End a live game with `end_reason` and drop it from memory."""
     live = LIVE_GAMES.pop(game_id, None)
@@ -3234,7 +3207,7 @@ _REBUILDS: dict[str, asyncio.Task[LiveGame]] = {}
 
 
 async def _rebuild_game(game_id: str) -> LiveGame:
-    game = _new_game_session()
+    game = GameSession()
     try:
         await asyncio.to_thread(game.resume, game_id)
     finally:
@@ -3288,7 +3261,11 @@ def _reply(live: LiveGame, response: dict[str, Any]) -> dict[str, Any]:
     payload["work"] = game.work.payload()
     payload["mirror_retry"] = game.mirror_retry
     trace = game.trace
-    payload["mirror"] = asdict(trace.config).get("mirror") if trace else None
+    payload["mirror"] = (
+        asdict(trace.config.mirror)
+        if trace is not None and trace.config.mirror is not None
+        else None
+    )
     if trace is not None:
         payload["game"] = game.match_id
         payload["opponent"] = trace.config.opponent
@@ -3478,6 +3455,16 @@ async def _send_reply(live: LiveGame, response: dict[str, Any], **extra: Any) ->
             live.websocket = None
 
 
+def _work_publisher(
+    live: LiveGame, loop: asyncio.AbstractEventLoop
+) -> Callable[[WorkStatus], None]:
+    def publish_work(status: WorkStatus) -> None:
+        # Called while the worker is paused at a safe boundary.
+        asyncio.run_coroutine_threadsafe(_publish_work(live, status), loop).result()
+
+    return publish_work
+
+
 async def _start_game(
     request: NewGameMessage | RematchMessage, websocket: WebSocket
 ) -> LiveGame:
@@ -3504,15 +3491,9 @@ async def _start_game(
             )
         return live
 
-    game = _new_game_session()
+    game = GameSession()
     live = LiveGame(game, websocket)
-    loop = asyncio.get_running_loop()
-
-    def publish_work(status: WorkStatus) -> None:
-        # Called while the worker is paused at a safe boundary.
-        asyncio.run_coroutine_threadsafe(_publish_work(live, status), loop).result()
-
-    game.work.publish = publish_work
+    game.work.publish = _work_publisher(live, asyncio.get_running_loop())
     started_ok = False
     try:
         response = await asyncio.to_thread(game.new_game, config)
@@ -3638,12 +3619,6 @@ async def play_socket(websocket: WebSocket) -> None:
                             _send_live_analysis(live, message), loop
                         )
 
-                    def publish_work(status: WorkStatus, live: LiveGame = live) -> None:
-                        # Called while the worker is paused at a safe boundary.
-                        asyncio.run_coroutine_threadsafe(
-                            _publish_work(live, status), loop
-                        ).result()
-
                     game.work.stage(
                         "advance",
                         game.match_id if game.obs is not None else None,
@@ -3653,7 +3628,7 @@ async def play_socket(websocket: WebSocket) -> None:
                     assert status is not None
                     _cache_recovery(live)
                     await _publish_work(live, status)
-                    game.work.publish = publish_work
+                    game.work.publish = _work_publisher(live, loop)
                     failed = True
                     dispatched = False
                     try:
@@ -4013,7 +3988,7 @@ def get_recording_index(
         if isinstance(deck, str):
             player["deck_name"] = (
                 CLOSED_DECK_NAME
-                if deck == "closed"
+                if deck == CLOSED_DECK
                 else DECK_DISPLAY_NAMES.get(deck, deck)
             )
     return {
@@ -4032,7 +4007,9 @@ def get_recording_index(
         # The stored status: a game dropped from memory is still in progress.
         "status": "completed"
         if finished
-        else shown_status(str(metadata.get("status")), bool(metadata.get("resumable"))),
+        else shown_status(
+            metadata.get("status") or "", bool(metadata.get("resumable"))
+        ),
         "resumable": bool(metadata.get("resumable")),
         "can_produce": available,
         "mirror": _recorded_mirrors(players),
@@ -4500,15 +4477,53 @@ def _previewed_game(game_id: str, stale: str) -> LiveGame:
     return live
 
 
-class PaymentPreviewRequest(BaseModel):
-    """One current offer, with every Academy authority coordinate."""
+class PreviewAddress(BaseModel):
+    """Authority coordinates for a read-only preview at the current decision."""
 
     model_config = ConfigDict(extra="forbid")
     match_id: str
     revision: int
     prompt_id: int
     frame_hash: str
+
+
+class PaymentPreviewRequest(PreviewAddress):
+    """One current offer, with every Academy authority coordinate."""
+
     offer_id: int
+
+
+class CombatPreviewRequest(PreviewAddress):
+    """A drafted declaration at the current combat prompt's authority address."""
+
+    plan: CombatPlan
+
+
+def _preview_decision(
+    game: GameSession, payload: PreviewAddress, stale: str
+) -> tuple[DecisionContext, SemanticDecisionFrame]:
+    """Validate the person's current decision coordinates and load its native
+    semantic frame. Raises 409 `stale` on any mismatch or opponent prompt."""
+    context = game.published_prompt
+    pending = game._pending_decision
+    if context is None or pending is None or game.env is None:
+        raise HTTPException(409, stale)
+    # Only the person's own decision is previewed, never the opponent's.
+    if context.viewer != game.human_seat:
+        raise HTTPException(409, stale)
+    frame = pending.frame
+    if (
+        game.match_id != payload.match_id
+        or frame.revision != payload.revision
+        or frame.prompt is None
+        or frame.prompt.id != payload.prompt_id
+        or frame.frame_hash != payload.frame_hash
+        or frame.frame_hash != context.frame["frame_hash"]
+    ):
+        raise HTTPException(409, stale)
+    return context, SemanticDecisionFrame.from_json(
+        pending.root.semantic_decision_frame_json()
+    )
 
 
 @app.post("/api/games/{game_id}/payment-preview")
@@ -4519,27 +4534,10 @@ async def get_payment_preview(
     live = _previewed_game(game_id, "payment_preview_stale")
     async with live.lock:
         game = live.game
-        context = game.published_prompt
-        pending = game._pending_decision
-        if context is None or pending is None or game.env is None:
+        context, native = _preview_decision(game, payload, "payment_preview_stale")
+        if payload.offer_id not in context.action_by_offer:
             raise HTTPException(409, "payment_preview_stale")
-        frame = pending.frame
-        # Only the person's own decision is previewed, never the opponent's.
-        if context.viewer != game.human_seat:
-            raise HTTPException(409, "payment_preview_stale")
-        if (
-            game.match_id != payload.match_id
-            or frame.revision != payload.revision
-            or frame.prompt is None
-            or frame.prompt.id != payload.prompt_id
-            or frame.frame_hash != payload.frame_hash
-            or frame.frame_hash != context.frame["frame_hash"]
-            or payload.offer_id not in context.action_by_offer
-        ):
-            raise HTTPException(409, "payment_preview_stale")
-        native = SemanticDecisionFrame.from_json(
-            pending.root.semantic_decision_frame_json()
-        )
+        assert game.env is not None
         try:
             preview = preview_payment(
                 game.env,
@@ -4557,17 +4555,6 @@ async def get_payment_preview(
         }
 
 
-class CombatPreviewRequest(BaseModel):
-    """A drafted declaration at the current combat prompt's authority address."""
-
-    model_config = ConfigDict(extra="forbid")
-    match_id: str
-    revision: int
-    prompt_id: int
-    frame_hash: str
-    plan: CombatPlan
-
-
 @app.post("/api/games/{game_id}/combat-preview")
 async def get_combat_preview(
     game_id: str,
@@ -4582,28 +4569,10 @@ async def get_combat_preview(
     live = _previewed_game(game_id, "combat_preview_stale")
     async with live.lock:
         game = live.game
-        context = game.published_prompt
-        pending = game._pending_decision
-        if context is None or pending is None or game.env is None:
-            raise HTTPException(409, "combat_preview_stale")
-        frame = pending.frame
-        # Only the person's own decision is previewed, never the opponent's.
-        if context.viewer != game.human_seat:
-            raise HTTPException(409, "combat_preview_stale")
-        if (
-            game.match_id != payload.match_id
-            or frame.revision != payload.revision
-            or frame.prompt is None
-            or frame.prompt.id != payload.prompt_id
-            or frame.frame_hash != payload.frame_hash
-            or frame.frame_hash != context.frame["frame_hash"]
-        ):
-            raise HTTPException(409, "combat_preview_stale")
+        context, native = _preview_decision(game, payload, "combat_preview_stale")
         if context.action_space not in {"DECLARE_ATTACKER", "DECLARE_BLOCKER"}:
             raise HTTPException(409, "combat_preview_not_a_declaration")
-        native = SemanticDecisionFrame.from_json(
-            pending.root.semantic_decision_frame_json()
-        )
+        assert game.env is not None
         try:
             preview = preview_combat(
                 game.env,

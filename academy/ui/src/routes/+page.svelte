@@ -23,7 +23,7 @@
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import { policyChoice, gameStore, type PlayerChoice } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
-  import { sanitizeDeckSelection, DECK_CHOICES, deckChoiceLabel, matchupDeckLabel } from '$lib/decks';
+  import { sanitizeDeckSelection, deckChoiceLabel, matchupDeckLabel } from '$lib/decks';
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { scoreName } from '$lib/analysis';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';

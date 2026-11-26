@@ -199,7 +199,7 @@ test('Replay keeps playing through a live producer save and resumes at its saved
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/positions/')[1]);
     const position = [choice, consequences, latest].find(position => position.key === key)!;
     return route.fulfill({json: {...position, observation, decision: null, outputs: null,
-      description: position.kind === 'choice' ? 'Saved producer choice' : null, note_key: key, viewer: 0, revealed: false, history: [], history_labels: [], history_before: null,
+      description: position.kind === 'choice' ? 'Saved producer choice' : null, viewer: 0, revealed: false, history: [], history_labels: [], history_before: null,
       cursor: 0, transition_start: 0, consequences_recorded: true,
     }});
   });

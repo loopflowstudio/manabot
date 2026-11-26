@@ -1,24 +1,16 @@
 /**
- * The last matchup this browser started, so the home page can start it again
- * in one click: the setup the server echoed for that game (opponent, decks,
- * seat, deal mode, stops) and how to name it. A preference, kept in
- * `localStorage` under `academy.last-matchup`; it holds no table credential,
- * request identity or participant token, so "Play again" always starts a new
- * session, never resumes another tab's game.
+ * The last matchup this browser started, so Play can start it again in one
+ * click: the setup the server echoed for that game (opponent, decks, seat,
+ * deal mode, stops) and how to name it. Stored in `localStorage` under
+ * `academy.last-matchup`.
  */
 export const LAST_MATCHUP_KEY = 'academy.last-matchup';
 
 export interface LastMatchup {
-  /** The setup config to send with `new_game`, without request or participant identity. */
+  /** The setup config to send with `new_game`. */
   config: Record<string, unknown>;
   opponent: string;
   decks: { hero: string; villain: string } | null;
-}
-
-const IDENTITY_KEYS = new Set(['request_id', 'player_token']);
-
-export function matchupConfig(config: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(config).filter(([key]) => !IDENTITY_KEYS.has(key)));
 }
 
 export function loadLastMatchup(): LastMatchup | null {
@@ -28,7 +20,7 @@ export function loadLastMatchup(): LastMatchup | null {
     const record = value as Partial<LastMatchup>;
     if (!record.config || typeof record.config !== 'object' || typeof record.opponent !== 'string') return null;
     const decks = record.decks && typeof record.decks.hero === 'string' && typeof record.decks.villain === 'string' ? record.decks : null;
-    return { config: matchupConfig(record.config), opponent: record.opponent, decks };
+    return { config: record.config, opponent: record.opponent, decks };
   } catch {
     return null;
   }
@@ -36,7 +28,7 @@ export function loadLastMatchup(): LastMatchup | null {
 
 export function saveLastMatchup(matchup: LastMatchup): void {
   try {
-    localStorage.setItem(LAST_MATCHUP_KEY, JSON.stringify({ ...matchup, config: matchupConfig(matchup.config) }));
+    localStorage.setItem(LAST_MATCHUP_KEY, JSON.stringify(matchup));
   } catch { /* Play again falls back to the default setup. */ }
 }
 

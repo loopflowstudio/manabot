@@ -34,6 +34,12 @@
   let decklistsEdited = false;
   // What Start sends as `deck_import`, so the policy check admits kept decks too.
   const resolvedImport = $derived(setup.resolveDeckImport());
+  const pickerSetup = (humanSeat: 0 | 1): Record<string, unknown> => ({
+    human_seat: humanSeat,
+    hero_deck: setup.decks.hero,
+    villain_deck: setup.decks.villain,
+    ...(resolvedImport ? { deck_import: resolvedImport } : {}),
+  });
 
   function resolveCatalogChoice(id: string | null | undefined, list: TrainedOpponent[]): PlayerChoice | null {
     if (!id) return null;
@@ -149,6 +155,37 @@
   );
 </script>
 
+{#snippet deckField(side: 'hero' | 'villain', label: string, onSelect: (next: DeckChoice) => void)}
+  {@const imported = setup.deckImport?.[side]}
+  {@const current = setup.decks[side]}
+  <label class="flex flex-col gap-1">
+    <span class="type-label text-ink-2">Deck</span>
+    {#if imported}
+      <span class="text-sm">Imported · {imported.name ?? imported.filename}</span>
+    {:else}
+      <select aria-label={label} class="rounded border border-line bg-panel p-2" value={current}
+        onchange={e => { deckEdited = true; onSelect(e.currentTarget.value as DeckChoice); }}>
+        {#if deckPools.length > 0}
+          <optgroup label="Deck pools">
+            {#each deckPools as pool}<option value={pool.key}>{pool.label} ({pool.count} decks)</option>{/each}
+          </optgroup>
+        {/if}
+        <optgroup label="Elemental decks">
+          {#each ELEMENTAL_DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
+        </optgroup>
+        {#if legacyDeckLabel(current)}
+          <option value={current}>{legacyDeckLabel(current)}</option>
+        {/if}
+        {#if keptDecks.length > 0}
+          <optgroup label="Kept lists (this browser)">
+            {#each keptDecks as kept (kept.id)}<option value={keptDeckChoice(kept.id)}>{kept.name}</option>{/each}
+          </optgroup>
+        {/if}
+      </select>
+    {/if}
+  </label>
+{/snippet}
+
 <section aria-label="Game setup" class="my-4 min-w-0 space-y-4">
   <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="inline-flex overflow-hidden rounded border border-line bg-field" role="group" aria-label="Match mode">
@@ -169,36 +206,11 @@
   <div class="grid gap-3 md:grid-cols-2">
       <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
         <legend class="type-label px-2">{setup.watchMode ? 'Seat 1 · Bot 1' : 'Seat 1 · You'}</legend>
-        <label class="flex flex-col gap-1">
-          <span class="type-label text-ink-2">Deck</span>
-          {#if setup.deckImport?.hero}
-            <span class="text-sm">Imported · {setup.deckImport.hero.name ?? setup.deckImport.hero.filename}</span>
-          {:else}
-            <select aria-label="Seat 1 deck" class="rounded border border-line bg-panel p-2" value={setup.decks.hero}
-              onchange={e => { deckEdited = true; setup.setHeroDeck(e.currentTarget.value as DeckChoice); }}>
-              {#if deckPools.length > 0}
-                <optgroup label="Deck pools">
-                  {#each deckPools as pool}<option value={pool.key}>{pool.label} ({pool.count} decks)</option>{/each}
-                </optgroup>
-              {/if}
-              <optgroup label="Elemental decks">
-                {#each ELEMENTAL_DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
-              </optgroup>
-              {#if legacyDeckLabel(setup.decks.hero)}
-                <option value={setup.decks.hero}>{legacyDeckLabel(setup.decks.hero)}</option>
-              {/if}
-              {#if keptDecks.length > 0}
-                <optgroup label="Kept lists (this browser)">
-                  {#each keptDecks as kept (kept.id)}<option value={keptDeckChoice(kept.id)}>{kept.name}</option>{/each}
-                </optgroup>
-              {/if}
-            </select>
-          {/if}
-        </label>
+        {@render deckField('hero', 'Seat 1 deck', value => setup.setHeroDeck(value))}
         {#if setup.watchMode}
           <PlayerPicker label="Seat 1 bot" value={setup.watchPlayerChoice} {trained} {extension} {catalogError} {disabled}
             decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
-            setup={{ human_seat: 0, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(resolvedImport ? { deck_import: resolvedImport } : {}) }}
+            setup={pickerSetup(0)}
             onChange={value => { watchSeat1Edited = true; setup.watchPlayerChoice = value; }}
             search={setup.watchSearchConfig}
             onSearchChange={value => { setup.watchSearchConfig = value; }} />
@@ -225,35 +237,10 @@
 
     <fieldset {disabled} class="min-w-0 space-y-2.5 rounded border border-line bg-field p-3">
       <legend class="type-label px-2">{setup.watchMode ? 'Seat 2 · Bot 2' : 'Seat 2 · Opponent'}</legend>
-        <label class="flex flex-col gap-1">
-          <span class="type-label text-ink-2">Deck</span>
-          {#if setup.deckImport?.villain}
-            <span class="text-sm">Imported · {setup.deckImport.villain.name ?? setup.deckImport.villain.filename}</span>
-          {:else}
-            <select aria-label="Seat 2 deck" class="rounded border border-line bg-panel p-2" value={setup.decks.villain}
-              onchange={e => { deckEdited = true; setup.setVillainDeck(e.currentTarget.value as DeckChoice); }}>
-              {#if deckPools.length > 0}
-                <optgroup label="Deck pools">
-                  {#each deckPools as pool}<option value={pool.key}>{pool.label} ({pool.count} decks)</option>{/each}
-                </optgroup>
-              {/if}
-              <optgroup label="Elemental decks">
-                {#each ELEMENTAL_DECK_CHOICES as deck}<option value={deck.key}>{deck.label}</option>{/each}
-              </optgroup>
-              {#if legacyDeckLabel(setup.decks.villain)}
-                <option value={setup.decks.villain}>{legacyDeckLabel(setup.decks.villain)}</option>
-              {/if}
-              {#if keptDecks.length > 0}
-                <optgroup label="Kept lists (this browser)">
-                  {#each keptDecks as kept (kept.id)}<option value={keptDeckChoice(kept.id)}>{kept.name}</option>{/each}
-                </optgroup>
-              {/if}
-            </select>
-          {/if}
-        </label>
+      {@render deckField('villain', 'Seat 2 deck', value => setup.setVillainDeck(value))}
       <PlayerPicker label="Seat 2 bot" value={setup.opponentChoice} {trained} {extension} {catalogError} {disabled}
         decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
-        setup={{ human_seat: setup.watchMode ? 0 : setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(resolvedImport ? { deck_import: resolvedImport } : {}) }}
+        setup={pickerSetup(setup.watchMode ? 0 : setup.humanSeat)}
         onChange={value => { opponentEdited = true; setup.setOpponentChoice(value); }}
         search={setup.searchConfig}
         onSearchChange={value => { setup.searchConfig = value; }} />

@@ -85,7 +85,6 @@ export interface RecordingIndex {
 }
 export interface RecordedPosition extends Position {
   description: string | null;
-  note_key: string;
   observation: Observation;
   decision: AddressedReplayDecision | null;
   outputs: BotDecision | null;

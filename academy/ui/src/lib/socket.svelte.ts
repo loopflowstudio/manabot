@@ -295,19 +295,9 @@ export class GameSocketController {
    * and so does `/` unless `forget` drops this browser's pointer to it.
    */
   leave(forget = true): void {
-    const game = this.game;
     // Closing the socket releases the game, so no late frame redraws its board.
     this.disconnect();
-    if (game && forget) forgetGame(game);
-    if (game) writeTabValue(tabStorageKey(game), null);
-    this.game = null;
-    this.starting = null;
-    this.pendingResume = false;
-    this.pendingCommand = null;
-    this.outboundQueue = [];
-    this.presentationCursor = null;
-    presentationPlayer.clear();
-    gameStore.leaveGame();
+    this.resetGame(forget);
     this.connect();
   }
 
@@ -575,24 +565,30 @@ export class GameSocketController {
     this.game = game;
   }
 
+  /** Drop this tab's game state and per-tab storage; returns the game id cleared. */
+  private resetGame(forget: boolean): string | null {
+    const game = this.game;
+    if (game && forget) forgetGame(game);
+    if (game) writeTabValue(tabStorageKey(game), null);
+    this.game = null;
+    this.starting = null;
+    this.pendingResume = false;
+    this.pendingCommand = null;
+    this.outboundQueue = [];
+    this.presentationCursor = null;
+    this.takeOver = true;
+    presentationPlayer.clear();
+    gameStore.leaveGame();
+    return game;
+  }
+
   /**
    * The server will not take the game up: no board, and the refusal for the
    * page to act on. A game another tab holds is still this browser's game.
    */
   private refuseResume(code: string | null, reason: string): void {
-    const game = this.game;
-    this.pendingResume = false;
-    this.pendingCommand = null;
-    this.outboundQueue = [];
-    this.presentationCursor = null;
-    this.game = null;
-    presentationPlayer.clear();
-    gameStore.leaveGame();
-    this.takeOver = true;
-    if (!game) return;
-    if (code !== 'game_open_elsewhere') forgetGame(game);
-    writeTabValue(tabStorageKey(game), null);
-    gameStore.resumeRefused = { game, code, message: reason };
+    const game = this.resetGame(code !== 'game_open_elsewhere');
+    if (game) gameStore.resumeRefused = { game, code, message: reason };
   }
 
   /** The game broke while a request ran. Its last board stays readable; nothing resumes it. */

@@ -4,8 +4,7 @@ Recording joins retained decisions and presentation tracks into positions. A
 played game also re-executes (`record_of`, `ReplayedViews`), so Review shows
 the person's own view at every position, and both hands once the game is
 complete; the stored track stays the fallback wherever re-execution stops.
-ReadCache validates once per persisted revision; access is checked separately
-on every request, including cache hits.
+ReadCache validates once per persisted revision.
 """
 
 from bisect import bisect_right
@@ -765,11 +764,6 @@ class Recording:
                 transition_start = bisect_right(
                     self.track_revisions.get(viewer, []), revision
                 )
-        note_key = (
-            f"replay-{position.event_index}"
-            if position.kind == "consequences"
-            else position.key
-        )
         boards = (
             deepcopy(event.get("boards", []))
             if position.kind == "consequences" and not self.watch
@@ -778,7 +772,6 @@ class Recording:
         return {
             **self.metadata(position),
             "description": self._description(position),
-            "note_key": note_key,
             "observation": deepcopy(analysis) if reveal else observation,
             "decision": decision,
             "outputs": deepcopy(event.get("bot_decision")) if row else None,

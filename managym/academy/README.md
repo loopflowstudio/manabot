@@ -417,26 +417,29 @@ saved. Key moments are derived in the client from the analysis
 
 ### Resuming and playing on from a decision
 
-Resuming an unfinished game (`resume {"game": <id>}`) and starting a fork from
-a recorded decision (`new_game {"played_from": {"trace_id", "event"}}`) share
-one engine-stepping prefix player. It drives `env.step` through the stored
-events (checks each step's actor, action and description, feeds the opponent's
-recurrent memory, and clones a Study root at each recorded decision) without
-re-recording frames or presentation. On resume, the server installs the stored
-events, canonical decisions, presentation and revision unchanged, advances
-`_next_prompt_id` past every stored prompt id, and calls `_advance()` (so a
-game stopped during the bot's turn receives its reply now), keeping the same
-game id and a byte-identical stored prefix. Missing policy load refuses without
-marking divergence (leaving the game unfinished); engine divergence refuses
-with `"no longer plays as recorded at step N"` and marks `record_diverged`.
+Resuming an unfinished game (`resume {"game": <id>}`) uses
+`replay_stored_steps` to drive `env.step` through the stored events (checking
+each step's actor, action and description, feeding a recurrent opponent's
+memory, and cloning a Study root at each recorded decision) without
+re-recording frames or presentation. The server installs the stored events,
+canonical decisions and presentation unchanged, reopens the row with
+`AttemptStore.reopen` (advancing `revision` by 1 so any Command held from
+before the rebuild is stale), advances `_next_prompt_id` past every stored
+prompt id, and calls `_advance()` (so a game stopped during the bot's turn
+receives its reply now), keeping the same game id and a byte-identical stored
+prefix. Missing policy load refuses without marking divergence (leaving the
+game unfinished); engine divergence refuses with
+`"no longer plays as recorded at step N"` and marks `record_diverged`.
 
 `new_game {"played_from": {"trace_id", "event"}}` starts a new Play game from
 any of the person's deliberate decisions (`actor` hero, not `auto`) of any
 saved played game, finished or unfinished. It takes the source's setup and seed
-(`setup_draft` plus the seed), persists the prefix once, and continues as a new
-recorded game against a fresh opponent policy. `Trace.played_from` names the
-source and step (written only when set); `GameNumbers.played_from` copies the
-step and the recording index returns it with the turn it starts on.
+(`setup_draft` plus the seed), replays the opening steps through the Command
+path (`_play_recorded_prefix`) so the new game has its own frames and Command
+ids, persists the prefix once, and continues against a fresh opponent policy.
+`Trace.played_from` names the source and step (written only when set);
+`GameNumbers.played_from` copies the step and the recording index returns it
+with the turn it starts on.
 
 ### Analysis while you play
 

@@ -9,7 +9,7 @@ import {
 import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
 import type { ResumeRefusal } from './resume-refusal';
-import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
+import { findKeptDeck } from './kept-decks';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';

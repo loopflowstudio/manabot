@@ -217,7 +217,7 @@ test('recorded Watch badges leave the policy percentage visible', async ({ page 
   await page.route('**/api/traces/badges/positions/**', route => route.fulfill({ json: {
     ...choice, observation: frame.projection, decision: { frame, viewer: 0, offer_id: frame.offers[0].id },
     outputs: { probabilities: [1], search_scores: [] }, viewer: 0, revealed: false, description: 'Activate Mai',
-    note_key: 'mai', history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true,
+    history: [], history_labels: [], history_before: null, cursor: 0, transition_start: 0, consequences_recorded: true,
   } }));
   await page.goto('/replay?trace=badges&position=mai');
   await page.evaluate(() => document.fonts.ready);
