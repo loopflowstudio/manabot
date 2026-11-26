@@ -696,6 +696,9 @@ impl Game {
         let controller = (self.state[object].owner != player).then_some(player);
         self.spend_play_route(player, cast.route);
         self.state.turn.lands_played += 1;
+        if let Some(sink) = self.presentation.as_deref_mut() {
+            sink.land_play = Some(object);
+        }
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(
             EventBinding::None,

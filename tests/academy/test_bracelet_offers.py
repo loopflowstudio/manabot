@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-import managym
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
+import managym
 from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame
 
@@ -65,7 +65,6 @@ def test_bracelet_cost_labels_bind_the_selected_permanent(
         }
     )
     session.published_prompt = None
-    session.presentation.reset()
     session.env = env.clone_env()
     session.obs = session.env.observation_for_player(0)
     prompt = session._publish_current_prompt()

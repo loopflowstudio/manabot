@@ -88,29 +88,29 @@ Academy makes the acting agent's viewer-safe observations and complete legal
 action space understandable to a human. Navigation, grouping and labels may
 clarify that shared contract; they must not hide strategic choices, silently
 select actions, reveal unavailable information or introduce human-only game
-semantics. Evaluate awkward decisions at the shared authority rather than
-disguising them in the browser. Preserve Command binding, stale rejection,
-actual pending decisions on reconnect, replay/fork identity and accessibility.
-Cancellation or undo requires an explicit shared action and cannot erase
-committed costs or revealed information. Priority-stop automation must stay
-identifiable as automation, separate from deliberate human decisions.
-Live combat is one joint board draft (click or drag) sent via the existing
-sequential per-creature Commands with no engine change: fold raw per-creature
-offers under a collapsed disclosure while drafting (not beside the draft), and
-keep them listed in Replay and Study where recorded policy probabilities attach.
-Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
-`GameConfig.human_seat` orders them at the native boundary. Record and project
-actual native seats; Watch keeps its two-seat acting-view contract.
-Scope Academy resume credentials and the started-launch marker together in
-`sessionStorage` so a launch never resumes another tab's or launch's game.
+semantics. Fix awkward decisions at the shared authority rather than disguising
+them in the browser. Preserve Command binding, stale rejection, actual pending
+decisions on reconnect, replay/fork identity and accessibility. Cancellation or
+undo requires an explicit shared action and cannot erase committed costs or
+revealed information. Keep priority-stop automation distinct from deliberate
+human decisions. Live combat drafts jointly on the board over sequential
+per-creature Commands: fold raw per-creature offers into a collapsed disclosure
+while drafting, and keep them listed in Replay and Study for recorded policy
+probabilities. Play's retained `hero_*`/`villain_*` setup fields name
+human/opponent roles; `GameConfig.human_seat` orders them at the native
+boundary. Record and project actual native seats; Watch keeps its two-seat
+acting-view contract. Scope resume credentials and the started-launch marker
+together in `sessionStorage` so a launch never resumes another tab's game.
 Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's
 `presentation_cursor`; spectator reveal never supplies history labels. Event
-emphasis stays separate from choice focus and lane navigation. Frame policy
-comparisons neutrally to explain the agent—never grade disagreements as
-mistakes. Default trained policies to `PolicyDescriptor.recommended` before the
-first eligible one. Reserve preview space so hover never shifts layout.
+emphasis stays separate from choice focus and lane navigation; board marks at
+now must be true now—show transient deltas (damage, life changes, touched
+outlines) on the stop and turn they happen, then clear them at now and across
+turn boundaries. Frame policy comparisons neutrally—never grade disagreements
+as mistakes. Default trained policies to `PolicyDescriptor.recommended` before
+the first eligible one. Reserve preview space so hover never shifts layout.
 
 ## Style
 

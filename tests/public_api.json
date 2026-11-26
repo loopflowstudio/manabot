@@ -2150,6 +2150,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "enable_presentation": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "enable_profiler": {
             "kind": "method",
             "signature": "(self)"
@@ -2243,6 +2247,10 @@
           "prepare_possible_world_materializer": {
             "kind": "method",
             "signature": "(self, viewer, expected_space_identity, max_batch_size)"
+          },
+          "presentation_facts_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
           },
           "presentation_subjects_json": {
             "kind": "method",
@@ -2353,6 +2361,10 @@
             "signature": "(self)"
           },
           "structured_search_offers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "take_presentation_positions": {
             "kind": "method",
             "signature": "(self)"
           },

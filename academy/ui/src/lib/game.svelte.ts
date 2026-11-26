@@ -8,10 +8,10 @@ import {
   type DeckChoice,
   type DeckSelection,
 } from './decks';
+import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
+import type { HistoryNote } from './board/history';
 import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
-import { deriveObservationNotes } from './log';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
-import { stepBoards, type StepBoard } from './board/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -29,9 +29,7 @@ import type {
   DeckNames,
   Decklists,
   ExperienceFrame,
-  GameLogEntry,
   StepBoardPatch,
-  LogLine,
   Observation,
   OpponentConfig,
   StopsConfig,
@@ -143,16 +141,17 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
+  keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
   /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
   liveAnalysis = $state.raw<LiveAnalysis>(LIVE_ANALYSIS_OFF);
-  /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
-  stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
   actionSpaceKind = $state<string>('');
-  actionLog = $state<GameLogEntry[]>([]);
+  /** Client-local automation/yield notes anchored to `(turn, afterSeq)` on the track. */
+  historyNotes = $state<HistoryNote[]>([]);
   gameOver = $state(false);
   winner = $state<number | null>(null);
   errorMessage = $state<string | null>(null);
@@ -356,18 +355,37 @@ export class GameStore {
     this.updateStops(next.stops);
   }
 
-  /** The person left a window a once stop held: clear it, and say so as automation. */
-  spendOnce(side: StopSide, step: string): void {
+  /** The person left a window a once stop held: clear it, and anchor a client-local automation note. */
+  spendOnce(side: StopSide, step: string, afterSeq = -1): void {
     const next = withStopState(this.stops, this.onceStops, side, step, 'off');
     this.updateOnce(next.once);
     this.updateStops(next.stops);
     const whose = side === 'my' ? 'your turn' : "the opponent's turn";
-    this.actionLog = [...this.actionLog, this.createEntry('auto', this.observation?.turn.turn_number ?? null, `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`)];
+    this.addHistoryNote(
+      'auto',
+      this.observation?.turn.turn_number ?? null,
+      afterSeq,
+      `Stopped once at ${stopLabel(step)} on ${whose}; that stop is now off`,
+    );
+  }
+
+  /** Record a client-local history note (a spent once stop or F6 yield). */
+  addHistoryNote(actor: 'you' | 'auto', turn: number | null, afterSeq: number, text: string): void {
+    this.logSequence += 1;
+    this.historyNotes = [
+      ...this.historyNotes,
+      { id: `note-${this.logSequence}`, actor, turn, afterSeq, text },
+    ];
   }
 
   /** Record client-side automation (e.g. Auto-tap) distinctly from deliberate moves. */
-  appendAutoNote(text: string): void {
-    this.actionLog = [...this.actionLog, this.createEntry('auto', this.observation?.turn.turn_number ?? null, text)];
+  appendAutoNote(text: string, afterSeq = -1): void {
+    this.addHistoryNote(
+      'auto',
+      this.observation?.turn.turn_number ?? null,
+      afterSeq,
+      text,
+    );
   }
 
   setStopOnStack(value: boolean): void {
@@ -428,14 +446,10 @@ export class GameStore {
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
-    log: LogLine[] = [],
     stops?: StopsConfig,
     deckNames?: DeckNames,
     actionSpaceKind = '',
-    deriveNotes = true,
   ): void {
-    const previous = this.observation;
-
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
@@ -457,22 +471,26 @@ export class GameStore {
     if (resumeToken) {
       this.resumeToken = resumeToken;
     }
-
-    this.appendServerLog(log);
-    if (deriveNotes) {
-      this.appendNotes(deriveObservationNotes(previous, observation));
-    }
   }
 
-  /** Keep the step boards that came with `frame`; boards that do not rebuild are dropped (beats then show the frame). */
-  applyStepBoards(frame: ExperienceFrame, patches: readonly StepBoardPatch[]): void {
-    let boards: StepBoard[] = [];
+  /**
+   * Merge the step boards (and frame board for `range`) that came with `frame`
+   * into the session's kept boards (capped at 512). Malformed patches are
+   * dropped without disturbing previously kept boards.
+   */
+  applyStepBoards(
+    frame: ExperienceFrame,
+    patches: readonly StepBoardPatch[],
+    range: SeqRange | null = null,
+  ): void {
+    const existing = this.keptBoards?.matchId === frame.match_id ? this.keptBoards.boards : [];
+    let next = existing;
     try {
-      boards = patches.length ? stepBoards(frame.projection, patches) : [];
+      next = mergeBoards(existing, frame.projection, patches, range);
     } catch {
-      boards = [];
+      next = existing;
     }
-    this.stepBoards = { frameHash: frame.frame_hash, boards };
+    this.keptBoards = { matchId: frame.match_id, boards: next };
   }
 
   applyFrame(
@@ -492,10 +510,8 @@ export class GameStore {
       this.applyGameOver(
         frame.projection,
         frame.winner,
-        frame.log ?? [],
         frame.stops,
         frame.deck_names,
-        false,
       );
     } else {
       this.applyObservation(
@@ -503,11 +519,9 @@ export class GameStore {
         actions,
         sessionId,
         resumeToken,
-        frame.log ?? [],
         frame.stops,
         frame.deck_names,
         frame.action_space,
-        false,
       );
     }
   }
@@ -515,13 +529,9 @@ export class GameStore {
   applyGameOver(
     observation: Observation,
     winner: number | null,
-    log: LogLine[] = [],
     stops?: StopsConfig,
     deckNames?: DeckNames,
-    deriveNotes = true,
   ): void {
-    const previous = this.observation;
-
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
@@ -535,11 +545,6 @@ export class GameStore {
     this.clearSelectedTarget();
     this.applyServerStops(stops);
     this.applyDeckNames(deckNames);
-
-    this.appendServerLog(log);
-    if (deriveNotes) {
-      this.appendNotes(deriveObservationNotes(previous, observation));
-    }
   }
 
   prepareForNewGame(): void {
@@ -566,14 +571,6 @@ export class GameStore {
     this.errorMessage = message;
     this.sessionId = null;
     this.resumeToken = null;
-  }
-
-  /** The person's own move, in the turn of the decision it answered. */
-  appendHeroAction(description: string): void {
-    this.actionLog = [
-      ...this.actionLog,
-      this.createEntry('hero', this.observation?.turn.turn_number ?? null, description),
-    ];
   }
 
   selectTarget(objectId: number): void {
@@ -623,13 +620,13 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
-    this.stepBoards = null;
+    this.keptBoards = null;
     this.observation = null;
     this.actions = [];
     this.actionSpaceKind = '';
     this.gameOver = false;
     this.winner = null;
-    this.actionLog = [];
+    this.historyNotes = [];
     this.fastForwarding = false;
     this.commandPending = false;
     this.clearFocus();
@@ -638,23 +635,6 @@ export class GameStore {
     this.restoredDecision = null;
     this.branchAttemptId = null;
     this.branchProjection = null;
-  }
-
-  /** Opponent and automated moves, each in the turn the server says it was taken. */
-  private appendServerLog(lines: LogLine[]): void {
-    if (lines.length === 0) return;
-    this.actionLog = [...this.actionLog, ...lines.map(line => this.createEntry(line.actor, line.turn, line.text))];
-  }
-
-  private appendNotes(notes: string[]): void {
-    if (notes.length === 0) return;
-    const turn = this.observation?.turn.turn_number ?? null;
-    this.actionLog = [...this.actionLog, ...notes.map(note => this.createEntry('system', turn, note))];
-  }
-
-  private createEntry(actor: GameLogEntry['actor'], turn: number | null, text: string): GameLogEntry {
-    this.logSequence += 1;
-    return { id: `log-${this.logSequence}`, actor, turn, text };
   }
 }
 
