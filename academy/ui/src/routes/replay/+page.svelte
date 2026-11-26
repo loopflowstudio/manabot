@@ -740,6 +740,7 @@
             </table>
             {#if numbers && !numbers.complete}<p class="text-ink-3">{index.status === 'active' ? 'Counted to the moves so far.' : 'Counted to where the game stopped.'}</p>{/if}
             {#if numbers?.analysis_shown}<p class="text-ink-2" data-testid="analysis-shown-count">Chosen with analysis shown: {numbers.analysis_shown} {numbers.analysis_shown === 1 ? 'decision' : 'decisions'}</p>{/if}
+            {#if numbers?.open_hands}<p class="text-ink-2" data-testid="open-hands-count">Played with open hands: {numbers.open_hands} {numbers.open_hands === 1 ? 'decision' : 'decisions'}</p>{/if}
           {:else}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
           {#if analysis && agreed}
             <p data-testid="agreement">Decisions with a choice: {agreed.of} · chose as {analysisName} would: {agreed.same} of {agreed.of}</p>

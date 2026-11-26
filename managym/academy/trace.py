@@ -78,6 +78,10 @@ class GameConfig:
     # Registered deck pool keys ("pool:<id>") when decks were sampled from a pool.
     hero_deck_pool: str | None = None
     villain_deck_pool: str | None = None
+    # The person sees the bot's hand in Play, as last set in the game
+    # (`set_open_hands`). It changes what the play socket sends beside a
+    # frame, never a frame, a recording or what the bot observes.
+    open_hands: bool = False
 
     # The human controller owns this mode, independent of the chosen seat.
     mana_payment: managym.ManaPayment = "manual"
@@ -97,7 +101,8 @@ class GameConfig:
             raise ValueError("Search requires open decklists.")
 
     def to_record(self) -> dict[str, Any]:
-        """Omit default-off mana offers and absent pool keys from retained config."""
+        """Omit default-off mana offers, absent pool keys and closed hands from
+        retained config."""
         config = asdict(self)
         if self.mana_payment == "manual":
             del config["mana_payment"]
@@ -107,6 +112,8 @@ class GameConfig:
             del config["hero_deck_pool"]
         if self.villain_deck_pool is None:
             del config["villain_deck_pool"]
+        if not self.open_hands:
+            del config["open_hands"]
         return config
 
     def to_rust(self) -> managym.GameSetup:
@@ -220,6 +227,9 @@ class TraceEvent:
     # The person committed this decision with a policy's live reading of it
     # shown (`LiveAnalysis`). Stored only when true; absent reads as false.
     analysis_shown: bool = False
+    # The person committed this decision while seeing the bot's hand
+    # (`GameConfig.open_hands`). Stored only when true; absent reads as false.
+    open_hands: bool = False
     # How an imported record re-dealt the position before this step
     # (`BRANCHING_INTERVENTIONS` kinds, in order); never its seeds or viewers.
     branched: list[str] | None = None
@@ -342,8 +352,8 @@ class Trace:
 
 def event_record(event: TraceEvent) -> dict[str, Any]:
     """One event as its stored record (borrowed, like `Trace.to_record`).
-    `analysis_shown` is written only when true, so a game played without
-    analysis keeps its row."""
+    `analysis_shown` and `open_hands` are written only when true, so a game
+    played without them keeps its row."""
     record = {
         **{item.name: getattr(event, item.name) for item in fields(event)},
         "bot_decision": (
@@ -354,6 +364,8 @@ def event_record(event: TraceEvent) -> dict[str, Any]:
         record.pop("boards", None)
     if not event.analysis_shown:
         del record["analysis_shown"]
+    if not event.open_hands:
+        del record["open_hands"]
     return record
 
 

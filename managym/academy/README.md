@@ -520,10 +520,12 @@ closed-decklist Play games). After game over, `set_open_hands` still answers
 with the bot's remaining hand as a peek without modifying the saved trace
 config.
 
-Every frame-bearing `/ws/play` reply (including cached reconnect recovery) and
-the toggle's own `{"type": "open_hands_state"}` reply carry the side-channel
-field `open_hand: {"revision": int, "hand": CardState[]} | null` attached in
-`_reply`, computed directly from `env.observation_for_player(villain_seat)`. The
+Every frame-bearing `/ws/play` reply (`observation`, `game_over` and
+`command_outcome`, including cached reconnect recovery) and the toggle's own
+`{"type": "open_hands_state"}` reply carry the side-channel field
+`open_hand: {"revision": int, "hand": CardState[]} | null` attached in
+`_reply` (`OPEN_HAND_REPLIES`), computed directly from the bot seat's
+`env.observation_for_player`. The
 client draws `open_hand` in place of top-ribbon card backs only at now
 (`activeCursor === null`) when `open_hand.revision` matches the current frame
 revision; beat playback and history lookback draw that historical board's own

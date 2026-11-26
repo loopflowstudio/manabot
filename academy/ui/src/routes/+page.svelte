@@ -48,6 +48,7 @@
     sendPassTurn,
     sendRetrySearch,
     sendSetStops,
+    sendOpenHands,
     sendShowAnalysis,
     sendSwapSides,
     storedGame,
@@ -444,6 +445,12 @@
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} (%) from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
   const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver);
+  // Open hands: the bot's hand beside the frame it belongs to. A hand from
+  // another revision is not drawn; the ribbon keeps its backs until they agree.
+  const openHandsOn = $derived(gameStore.openHand !== null);
+  const openHand = $derived(gameStore.openHand && decisionFrame && gameStore.openHand.revision === decisionFrame.revision
+    ? gameStore.openHand.hand : null);
+  const canOpenHands = $derived(inGame && !demoName && !gameStore.stopped && gameStore.connection === 'connected');
   const baseMarks = $derived(trackMarks(
     presentationPlayer.events,
     index => presentationPlayer.labelsAt(index),
@@ -566,6 +573,11 @@
 {/snippet}
 
 {#snippet analysisSettings()}
+  <label class="setting"><span>Open hands<small>{gameStore.gameOver ? "See the cards left in the opponent's hand." : `See the opponent's hand, face-up along the top edge. ${shortName(opponentName)} still sees only its own cards. A choice you make while it is on is counted in Review.`}</small></span>
+    <!-- Controlled by the server's answer: a refused change leaves the switch where it was. -->
+    <input type="checkbox" role="switch" data-testid="open-hands" checked={openHandsOn} disabled={!canOpenHands}
+      onchange={event => { sendOpenHands(event.currentTarget.checked); event.currentTarget.checked = openHandsOn; event.currentTarget.closest('details')?.removeAttribute('open'); }} /></label>
+  {#if analysisOffered}
   <div class="live-analysis" data-testid="live-analysis">
     <label class="setting"><span>Show analysis<small>What {liveAnalysis.policy ? shortName(liveAnalysis.policy.name) : 'a policy'} would choose here, and its estimate of the game. A choice you make while it is shown is marked "analysis shown" in Review.</small></span>
       <!-- The sheet closes on the change: it covers the choices the analysis is about. -->
@@ -582,6 +594,7 @@
     {#if liveAnalysis.unavailable}<p class="type-caption text-ink-3" data-testid="live-analysis-unavailable">{liveAnalysis.unavailable} Install a policy provider (managym.bots) to analyse.</p>{/if}
     {#if liveAnalysis.stopped}<p class="type-caption text-ink-3" role="status">{liveAnalysis.stopped}</p>{/if}
   </div>
+  {/if}
 {/snippet}
 
 {#snippet gameSettings()}
@@ -626,6 +639,7 @@
       presentation={presentationPlayer}
       {thinking}
       choosingSeat={opponentChoosing && heroSeat !== null ? (heroSeat === 0 ? 1 : 0) : null}
+      {openHand}
       evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.stopped}
@@ -643,8 +657,11 @@
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
         note: gameStore.gameOver || liveScale ? null : 'Review the game once it ends to step back through these', scale: liveScale }}
       result={gameStore.gameOver ? result : undefined}
-      menu={{ play: playSettings, analysis: analysisOffered ? analysisSettings : undefined, game: gameSettings }}
-      chips={liveAnalysis.shown ? [{ key: 'analysis', label: 'Analysis on', clear: () => sendShowAnalysis(false) }] : []}
+      menu={{ play: playSettings, analysis: inGame && !demoName ? analysisSettings : undefined, game: gameSettings }}
+      chips={[
+        ...(liveAnalysis.shown ? [{ key: 'analysis', label: 'Analysis on', clear: () => sendShowAnalysis(false) }] : []),
+        ...(openHandsOn ? [{ key: 'open-hands', label: 'Open hands', clear: () => sendOpenHands(false) }] : []),
+      ]}
       {stepBoards}
       {autoTap}
       {fullControl}

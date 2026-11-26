@@ -21,7 +21,9 @@
    * recording) has no hand row: the battlefield is two equal halves and both
    * hands are ribbons over its top and bottom edges. The opponent's hand is
    * the top ribbon in either layout: its hidden cards as backs, the cards
-   * this viewer may see face-up. A ribbon is tucked to its cards' name bars
+   * this viewer may see face-up. Live play with open hands on passes the
+   * bot's hand (`openHand`), drawn face-up and out in place of the backs at
+   * the position being played, never on a past board. A ribbon is tucked to its cards' name bars
    * or out in full, and moves only by `translateY`, so the battlefield never
    * shifts under it.
    *
@@ -121,6 +123,8 @@
     choosingSeat: 0 | 1 | null;
     /** A recording's seat whose hand ribbon is out; the other stays tucked. */
     ribbonSeat?: 0 | 1 | null;
+    /** The opponent's hand at this frame, while live play has open hands on; null otherwise. */
+    openHand?: readonly CardState[] | null;
     /** When the work the game waits on started, epoch seconds; null when nothing runs. */
     workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
@@ -195,7 +199,7 @@
 
   let {
     frame, interaction, handLayout, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
-    presentation, thinking, choosingSeat, ribbonSeat = null, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
+    presentation, thinking, choosingSeat, ribbonSeat = null, openHand = null, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, moveMarks, shownMoves, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
     group = null, groupPreview, ongroupact, groupRejection = null, ondismissgrouprejection, stepBoards = [],
@@ -1220,12 +1224,33 @@
   /** Show hand on a plate brings both ribbons out, to compare the hands. */
   let bothOut = $state(false);
   const ribbonSide = $derived(ribbonSeat === null ? null : ribbonSeat === boardProjection.agent.player_index ? 'you' : 'opponent');
-  /** A ribbon is out for the seat acting, when asked, and whenever an offer sits on one of its cards. */
+  /**
+   * The top ribbon's side. With open hands on, at the position being played,
+   * the bot's whole hand in its own order: a card the rules already revealed
+   * keeps its offers, and the rest take the place of the backs. A past board
+   * (beat playback, lookback) draws only what it held.
+   */
+  const openShown = $derived(openHand !== null && activeCursor === null);
+  const topSide = $derived.by<SideView>(() => {
+    const theirs = board.opponent;
+    if (!openHand || !openShown) return theirs;
+    const revealed = new Map(theirs.hand.map(item => [item.card.id, item]));
+    const held = new Set(openHand.map(card => card.id));
+    const hand = [
+      ...openHand.map(card => revealed.get(card.id) ?? { card, offers: [] }),
+      ...theirs.hand.filter(item => !held.has(item.card.id)),
+    ];
+    return { ...theirs, hand, hiddenHand: Math.max(0, theirs.hand.length + theirs.hiddenHand - hand.length) };
+  });
+  /** Tuck hand on the opponent's plate: the open hand goes back to its name bars, clear of the lands under it. */
+  let openTucked = $state(false);
+  /** A ribbon is out for the seat acting, when asked, while open hands shows it, and whenever an offer sits on one of its cards. */
   function ribbonOut(side: 'you' | 'opponent', hand: HandItem[]): boolean {
-    return (ribbons && (bothOut || ribbonSide === side)) || hand.some(item => item.offers.length > 0);
+    return (ribbons && (bothOut || ribbonSide === side)) || (side === 'opponent' && openShown && !openTucked) || hand.some(item => item.offers.length > 0);
   }
-  /** The plate's Show hand / Tuck hand: on a recording, for a hand that is not already out by itself. */
+  /** The plate's Show hand / Tuck hand: on a recording, for a hand that is not already out by itself; in play, for the open hand. */
   function handToggle(side: 'you' | 'opponent', sideView: SideView): { out: boolean; ontoggle: () => void } | null {
+    if (side === 'opponent' && openShown && sideView.hand.length > 0) return { out: !openTucked, ontoggle: () => { openTucked = !openTucked; } };
     if (!ribbons || sideView.hand.length === 0 || (!bothOut && ribbonOut(side, sideView.hand))) return null;
     return { out: bothOut, ontoggle: () => { bothOut = !bothOut; } };
   }
@@ -1678,7 +1703,7 @@
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} definitionNames={boardProjection.definition_names} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         stopLifeDelta={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
-        choosing={opponentChoosing} handToggle={handToggle('opponent', board.opponent)} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
+        choosing={opponentChoosing} handToggle={handToggle('opponent', topSide)} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
         ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={boardAsked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} {touched} beat={activeSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -1719,7 +1744,7 @@
       </section>
     {/if}
     <!-- After the halves, so a ribbon is drawn over the rows it covers when it is out. -->
-    {@render ribbon('top', 'opponent', board.opponent, `${possessive(said)} hand`)}
+    {@render ribbon('top', 'opponent', topSide, `${possessive(said)} hand`)}
     {#if ribbons}
       {@render ribbon('bottom', 'you', board.you, you.name === 'You' ? 'Your hand' : `${possessive(players.you)} hand`)}
       {#if trayShown}
@@ -1925,7 +1950,7 @@
     {@const height = footprint(lay.card, true)}
     {@const out = ribbonOut(side, sideView.hand)}
     {#if count}
-      <div class={`ribbon at-${edge}`} class:out data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
+      <div class={`ribbon at-${edge}`} class:out class:open={side === 'opponent' && openShown} data-testid="hand-ribbon" data-ribbon={edge} data-out={out}
         style:height={`${height + 16}px`} style:--card-height={`${height}px`} style:--peek-face={`${PEEK_FACE}px`} style:--peek-back={`${PEEK_BACK}px`}>
         <div class="ribbon-cards" style:width={`${lay.card + (count - 1) * lay.step}px`}>
           {#if sideView.hand.length}
@@ -2252,6 +2277,8 @@
     background: repeating-linear-gradient(45deg, var(--bg-field) 0 6px, var(--bg-muted) 6px 12px);
   }
   .ribbon.out .ribbon-card.face, .ribbon .ribbon-card.face:hover, .ribbon .ribbon-card.face:focus-within { transform: none; }
+  /* Open hands: a card turned face-up glides out from where its back was. */
+  @starting-style { .ribbon.open .ribbon-card.face { transform: translateY(calc(var(--peek-back) - var(--card-height))); } }
   /* The card brought out orders over its neighbours, inside the ribbon's own stacking, as a card in the hand row does. */
   .ribbon-card.face:hover, .ribbon-card.face:focus-within { z-index: 30; }
   .ribbon.out .ribbon-card.face :global(.tcard:not(.offered, .chosen, .legal, .asked)) { box-shadow: var(--lift); }

@@ -157,6 +157,7 @@ from .play_protocol import (
     RematchMessage,
     ResumeMessage,
     RetryMirrorMessage,
+    SetOpenHandsMessage,
     SetStopsMessage,
     ShowAnalysisMessage,
     SwapSidesMessage,
@@ -954,6 +955,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
         decklists=decklists,
+        open_hands=_parse_flag(data, "open_hands", False),
         mirror=mirror,
     )
     if opponent is not None:
@@ -1096,6 +1098,10 @@ class GameSession:
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
         self.decklists_closed = False
+        # Whether the person sees the bot's hand. The game's config holds it
+        # while the game is in play; after game over it is a peek the saved
+        # game does not record.
+        self.open_hands = False
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
@@ -1299,6 +1305,7 @@ class GameSession:
         self._demo_name = None
         self.human_seat = config.human_seat
         self.decklists_closed = config.decklists == "closed"
+        self.open_hands = config.open_hands and config.watch_players is None
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
             config.villain_deck_name,
@@ -1825,6 +1832,7 @@ class GameSession:
             if self.published_prompt is not None:
                 live.decide(len(self.trace.events), self.revision)
         return self._wire_message(reason="explicit_resync")
+
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
@@ -2416,6 +2424,7 @@ class GameSession:
                     and self._live_analysis is not None
                     and self._live_analysis.shown(len(self.trace.events))
                 ),
+                open_hands=actor == "hero" and not auto and self.open_hands,
             )
         )
         if self._live_analysis is not None:
@@ -3552,6 +3561,36 @@ class GameSession:
             live.decide(len(self.trace.events), self.revision)
         return {**state, "shown": True, "policy": chosen}
 
+    def set_open_hands(self, shown: bool) -> dict[str, Any]:
+        """Show or hide the bot's hand to the person playing.
+
+        The game's config records the setting, so a resumed game or a rematch
+        starts with it; decisions committed while it is on are marked
+        `open_hands`. After game over it only peeks: the saved game keeps the
+        setting it ended with. The hand itself travels beside the reply
+        (`open_hand`), never in a frame.
+        """
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+        if self.watch_mode:
+            raise PlayRequestError("conflict", "A watched game has no seat of yours.")
+        self.open_hands = shown
+        if not self.obs.game_over:
+            self.trace.config = replace(self.trace.config, open_hands=shown)
+            self._persist_attempt(config_changed=True)
+        return {"type": "open_hands_state"}
+
+    def open_hand(self) -> dict[str, Any] | None:
+        """The bot's hand as it holds it now, with the revision it belongs to,
+        while open hands is on. Read from the game, so no frame, recording or
+        bot observation carries it."""
+        if not self.open_hands or self.env is None or self.watch_mode:
+            return None
+        hand = serialize_observation(
+            self.env.observation_for_player(1 - self.human_seat)
+        )["agent"]["hand"]
+        return {"revision": self.revision, "hand": hand}
+
     def close(self, end_reason: str) -> None:
         """End the game with `end_reason` and release it."""
         try:
@@ -3713,6 +3752,14 @@ def _opponent_label(config: GameConfig) -> str:
     return config.villain_type.capitalize()
 
 
+# Replies that carry a frame, and the open-hands switch's own. The bot's hand
+# travels beside the frame it belongs to (`GameSession.open_hand`), so it never
+# lags one or misses a reconnect.
+OPEN_HAND_REPLIES = frozenset(
+    {"observation", "game_over", "command_outcome", "open_hands_state"}
+)
+
+
 def _reply(live: LiveGame, response: dict[str, Any]) -> dict[str, Any]:
     """A response as the browser reads it: with the game's id, opponent and
     setup, and the work in progress."""
@@ -3735,6 +3782,8 @@ def _reply(live: LiveGame, response: dict[str, Any]) -> dict[str, Any]:
             trace.config, game.obs is not None and game.obs.game_over
         )
     payload["decision_group"] = game.live_decision_group()
+    if payload.get("type") in OPEN_HAND_REPLIES:
+        payload["open_hand"] = game.open_hand()
     return payload
 
 
@@ -3808,6 +3857,8 @@ def _dispatch_request(
         return game.set_stops(request.stops, request.stop_on_stack, request.auto_pass)
     if isinstance(request, ShowAnalysisMessage):
         return game.show_analysis(request.shown, request.policy, publish_analysis)
+    if isinstance(request, SetOpenHandsMessage):
+        return game.set_open_hands(request.open)
     raise RuntimeError(f"closed dispatch missing handler for {request.type}")
 
 
