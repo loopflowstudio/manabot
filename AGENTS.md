@@ -490,6 +490,11 @@ the semantic executor. Recording preserves the original native Command and
 its object preconditions; Academy's presentation Command has a separate
 revision scope.
 
+Native snapshot v1 cold replay reads action indices or Commands. Issued object
+candidates bind the entire action-aligned offer projection, and the final state
+digest includes the current action space. When changing declaration offers,
+exercise a recorded object-bound Command through cold restore.
+
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
 JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent
@@ -628,8 +633,9 @@ a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
-shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged).
+shifts the name-ordered definition ids. Refresh Academy fixtures with
+`uv run --extra dev python scripts/refresh_academy_fixtures.py`. The script
+replays each recorded offer and checks its label before writing the new digests.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -783,6 +789,11 @@ live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Stacked abilities keep an exact source object across zone changes.
+Live trigger and layer sources use the exact object. Battlefield triggers retain
+their source’s battlefield LKI. Command-zone emblems get their controller from
+their zone and their abilities from the emblem definition. Their display label
+is separate from their rules name.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

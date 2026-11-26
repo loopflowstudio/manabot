@@ -186,7 +186,7 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
                         permanent,
                         attack: offered,
                         ..
-                    } if *permanent == permanent_id && *offered == attack
+                    } if *permanent == permanent_id && offered.is_some() == attack
                 )
             })
             .expect("legacy ABI should represent attack and decline");
@@ -358,7 +358,7 @@ fn structured_attacker_offer_is_prompt_bound_and_rejects_bad_selections() {
         .expect("legacy prompt")
         .actions
         .iter()
-        .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+        .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
         .expect("legacy decline");
     root.step(legacy_decline)
         .expect("advance to a later attacker prompt");
@@ -612,7 +612,7 @@ fn compound_decline_stops_before_a_later_attacker_declaration() {
             .unwrap()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
             .unwrap();
         expected.step(decline).unwrap();
         let expected_actor = PlayerId(usize::from(opponent_has_attacker));

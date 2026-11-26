@@ -17,9 +17,29 @@ use serde::{Deserialize, Serialize};
 
 use crate::agent::action::{Action, ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
+use crate::flow::combat::AttackTarget;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
 use crate::state::game_object::{PermanentId, PlayerId};
+
+/// One attacker, with its permanent defender if it attacks one. The creature
+/// identity keeps the established wire shape for attacks on the player.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PlannedAttack {
+    #[serde(flatten)]
+    pub creature: ObjectRenderId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub defender: Option<ObjectRenderId>,
+}
+
+impl From<ObjectRenderId> for PlannedAttack {
+    fn from(creature: ObjectRenderId) -> Self {
+        Self {
+            creature,
+            defender: None,
+        }
+    }
+}
 
 /// One proposed block: `blocker` blocks `attacker`.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -35,7 +55,7 @@ pub struct PlannedBlock {
 #[serde(deny_unknown_fields)]
 pub struct CombatPlan {
     #[serde(default)]
-    pub attackers: Vec<ObjectRenderId>,
+    pub attackers: Vec<PlannedAttack>,
     #[serde(default)]
     pub blocks: Vec<PlannedBlock>,
 }
@@ -54,6 +74,7 @@ pub struct DeclarableCreature {
     pub label: String,
     /// Blockers only: the attackers it may block from here.
     pub can_block: Vec<ObjectRenderId>,
+    pub can_attack: Vec<ObjectRenderId>,
     /// Blockers only: a requirement (CR 509.1c) removes the option to not block.
     pub must_block: bool,
     /// Attackers only: a requirement (CR 508.1d) removes the option to stay home.
@@ -71,6 +92,7 @@ pub struct DeclarationStep {
     pub action_index: usize,
     /// Attackers: whether it attacks. Blockers: the attacker it blocks.
     pub attack: bool,
+    pub defender: Option<ObjectRenderId>,
     pub blocks: Option<ObjectRenderId>,
 }
 
@@ -91,7 +113,7 @@ pub struct CombatPreview {
     pub steps: Vec<DeclarationStep>,
     pub refused: Option<DeclarationRefusal>,
     /// What the engine declared once the sequence ended.
-    pub declared_attackers: Vec<ObjectRenderId>,
+    pub declared_attackers: Vec<PlannedAttack>,
     pub declared_blocks: Vec<PlannedBlock>,
 }
 
@@ -179,7 +201,13 @@ impl Game {
                 fingerprint: frame.fingerprint,
                 creature: self.render_id(asked),
                 action_index: index,
-                attack: matches!(wanted, Answer::Attack(true)),
+                attack: matches!(wanted, Answer::Attack(Some(_))),
+                defender: match wanted {
+                    Answer::Attack(Some(AttackTarget::Permanent(object))) => {
+                        self.object_event_ref(object).map(Into::into)
+                    }
+                    _ => None,
+                },
                 blocks: match wanted {
                     Answer::Block(Some(attacker)) => Some(self.render_id(attacker)),
                     _ => None,
@@ -268,6 +296,18 @@ impl Game {
         DeclarableCreature {
             creature: self.render_id(creature),
             label: self.label(creature),
+            can_attack: if kind == DeclarationKind::Attackers {
+                self.declaration_targets(self.active_player())
+                    .filter_map(|target| match target {
+                        AttackTarget::Permanent(object) => {
+                            self.object_event_ref(object).map(Into::into)
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
             can_block: can_block.into_iter().map(|id| self.render_id(id)).collect(),
             must_block,
             must_attack: kind == DeclarationKind::Attackers && self.must_attack(creature),
@@ -276,12 +316,20 @@ impl Game {
 
     /// Attackers already declared in this combat, before the current
     /// decision (a creature that must attack and was offered no choice).
-    fn declared_attackers(&self) -> Vec<ObjectRenderId> {
+    fn declared_attackers(&self) -> Vec<PlannedAttack> {
         self.state
             .combat
             .iter()
-            .flat_map(|combat| &combat.attackers)
-            .map(|attacker| self.render_id(*attacker))
+            .flat_map(|combat| &combat.attack_targets[combat.already_attacking..])
+            .map(|&(attacker, target)| PlannedAttack {
+                creature: self.render_id(attacker),
+                defender: match target {
+                    Some(AttackTarget::Permanent(object)) => {
+                        self.object_event_ref(object).map(Into::into)
+                    }
+                    _ => None,
+                },
+            })
             .collect()
     }
 
@@ -351,14 +399,34 @@ impl Game {
                     );
                 }
                 let declared = self.declared_attackers();
-                plan.attackers
-                    .iter()
-                    .find(|id| !asked(**id) && !declared.contains(id))
-                    .and_then(|id| refuse(*id, "can't attack now."))
+                for (index, attack) in plan.attackers.iter().enumerate() {
+                    if attack
+                        .defender
+                        .is_some_and(|id| self.permanent_by_render_id(id).is_none())
+                    {
+                        return refuse(attack.creature, "can't attack a defender that has left.");
+                    }
+                    if !asked(attack.creature) && !declared.contains(attack) {
+                        let reason = match attack.defender {
+                            Some(defender) => {
+                                format!("can't attack {}.", self.render_label(defender))
+                            }
+                            None => "can't attack now.".to_string(),
+                        };
+                        return refuse(attack.creature, &reason);
+                    }
+                    if plan.attackers[..index]
+                        .iter()
+                        .any(|a| a.creature == attack.creature)
+                    {
+                        return refuse(attack.creature, "can attack only one defender.");
+                    }
+                }
+                None
             }
             DeclarationKind::Blockers => {
                 if let Some(id) = plan.attackers.first() {
-                    return refuse(*id, "is not attacking now: this is a block.");
+                    return refuse(id.creature, "is not attacking now: this is a block.");
                 }
                 let declared = self.declared_blocks();
                 for (index, block) in plan.blocks.iter().enumerate() {
@@ -392,7 +460,17 @@ impl Game {
     ) -> Answer {
         let id = self.render_id(creature);
         match kind {
-            DeclarationKind::Attackers => Answer::Attack(plan.attackers.contains(&id)),
+            DeclarationKind::Attackers => {
+                Answer::Attack(plan.attackers.iter().find(|a| a.creature == id).map(|a| {
+                    match a.defender {
+                        Some(object) => AttackTarget::Permanent(
+                            self.permanent_object(self.permanent_by_render_id(object).unwrap())
+                                .unwrap(),
+                        ),
+                        None => AttackTarget::Player(self.non_active_player()),
+                    }
+                }))
+            }
             DeclarationKind::Blockers => Answer::Block(
                 plan.blocks
                     .iter()
@@ -428,8 +506,29 @@ impl Game {
             Answer::Block(Some(attacker)) => {
                 format!("{label} can't block {}.", self.label(attacker))
             }
-            Answer::Attack(false) => format!("{label} must attack."),
-            Answer::Attack(true) => format!("{label} can't attack now."),
+            Answer::Attack(None) => format!("{label} must attack."),
+            Answer::Attack(Some(AttackTarget::Permanent(object))) => {
+                format!(
+                    "{label} can't attack {}.",
+                    self.observed_object_name(object)
+                )
+            }
+            Answer::Attack(Some(AttackTarget::Player(_))) => {
+                let can_attack_other = space.actions.iter().any(|action| {
+                    matches!(
+                        action,
+                        Action::DeclareAttacker {
+                            attack: Some(_),
+                            ..
+                        }
+                    )
+                });
+                if can_attack_other {
+                    format!("{label} can't attack the defending player.")
+                } else {
+                    format!("{label} can't attack now.")
+                }
+            }
         };
         DeclarationRefusal {
             creature: self.render_id(creature),
@@ -444,12 +543,22 @@ impl Game {
         for event in &position.state.observation_events[from..] {
             match event {
                 GameEvent::TurnStarted { .. } => return,
-                GameEvent::CombatAttackersDeclared { attackers, .. }
-                    if preview.kind == DeclarationKind::Attackers =>
-                {
+                GameEvent::CombatAttackersDeclared {
+                    attackers,
+                    permanent_defenders,
+                    ..
+                } if preview.kind == DeclarationKind::Attackers => {
                     preview.declared_attackers = attackers
                         .iter()
-                        .map(|event| ObjectRenderId::from(*event))
+                        .map(|event| PlannedAttack {
+                            creature: (*event).into(),
+                            defender: permanent_defenders
+                                .as_deref()
+                                .into_iter()
+                                .flatten()
+                                .find(|(a, _)| a == event)
+                                .map(|(_, d)| (*d).into()),
+                        })
                         .collect();
                     return;
                 }
@@ -492,8 +601,8 @@ impl Game {
                         .filter(|id| !plan.attackers.contains(id)),
                 );
                 let mut declared = preview.declared_attackers.clone();
-                planned.sort_by_key(|id| (id.entity, id.incarnation));
-                declared.sort_by_key(|id| (id.entity, id.incarnation));
+                planned.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
+                declared.sort_by_key(|a| (a.creature.entity, a.creature.incarnation));
                 (planned != declared).then(|| {
                     let creature = planned
                         .iter()
@@ -506,9 +615,9 @@ impl Game {
                         })
                         .copied()
                         .expect("differing attacker sets");
-                    let label = named(creature);
+                    let label = named(creature.creature);
                     let must_attack = self
-                        .permanent_by_render_id(creature)
+                        .permanent_by_render_id(creature.creature)
                         .is_some_and(|attacker| self.must_attack(attacker));
                     let reason = if must_attack && !planned.contains(&creature) {
                         format!("{label} must attack.")
@@ -516,7 +625,7 @@ impl Game {
                         format!("The engine would not declare {label} as planned.")
                     };
                     DeclarationRefusal {
-                        creature,
+                        creature: creature.creature,
                         reason,
                         label,
                     }
@@ -563,6 +672,6 @@ impl Game {
 
 #[derive(Clone, Copy, Debug)]
 enum Answer {
-    Attack(bool),
+    Attack(Option<AttackTarget>),
     Block(Option<PermanentId>),
 }

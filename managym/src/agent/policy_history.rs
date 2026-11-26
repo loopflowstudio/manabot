@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn observations_share_bounded_suffix_and_forks_isolate_it() {
         let mut game = game();
-        game.create_token("token.ally", PlayerId(0), false);
+        game.create_token("token.ally", PlayerId(0));
         let token = game.state.zones.latest().last().unwrap();
         let permanent = game.state.permanent_of(token).unwrap();
         game.emit(GameEvent::DamageDealt {

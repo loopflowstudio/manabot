@@ -399,6 +399,38 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
   themselves as a restriction source), Tiger-Dillo (own conditional
   restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).
+- Swap sides (Play → Settings → This game, `[data-testid=swap-sides]`): a
+  policy launched from `etude train manabot/recipes/local.py` needs
+  `--deck ur_lessons --opponent-deck gw_allies` (otherwise `setup.invalid`).
+  Each fresh browser launch of the same `?launch=` URL starts a new game as a
+  new player, so drive the whole game, swaps and reloads in one script. The
+  flipped board publishes immediately after policy build (with `work.state`
+  `running`) before the bot plays the seat you left; the settled turn can
+  still take seconds (at load ~110 policy build was 1.2 s and the new
+  runner's first decision 4.3 s, which a fresh game's first bot move also
+  costs). To time the server path, start the CLI from a small script that
+  wraps `GameSession.swap_sides`, `_build_swap_policy` and `_advance` with
+  `perf_counter` and then calls `managym.cli.main()`. The live line's caption
+  (`/decisions? read/`) shows how many readings it holds; after a swap it must
+  restart from the new seat. In browser scripts, read optional elements with
+  `count()`: `innerText().catch()` on an absent one waits the full 30 s
+  timeout and looks like a slow server. For a dark screenshot, pass
+  `colorScheme: 'dark'` when launching the context; `emulateMedia` after load
+  can capture the theme's transition with unreadable text.
+  A driver that clicks offers must filter with
+  `[data-testid=action-option]:enabled:not([aria-disabled]) >> visible=true`:
+  during a live combat draft the per-creature offers sit hidden under a
+  collapsed disclosure and the decision commits with the `No attack`/confirm
+  button, whose `kbd` reads `Space` (press Space when no offer is visible).
+  `/api/traces/{id}`, `/recording` and `/decisions` refuse an unfinished game
+  with `participant_credential_required`; fetch them inside the player's
+  browser profile with headers `x-etude-participant-tokens` (localStorage
+  `etude.play.record-credentials` plus `etude.play.player-credential`).
+  `--decklists closed` works with swaps; restart the server to interrupt a
+  game rather than waiting for it to end.
+  `play-session.spec.ts` (release and default configs) fails six tests on
+  this branch's base, looking for a "Seat 1 controller" select no GameSetup
+  renders; compare against a revert before reading it as a regression.
 - Priority stops in a real combat (MTG-475): `managym academy play --deck
   <f> --opponent-deck <f> --opponent heuristic --order play --seed 3 --no-open
   --port <unused> --traces-dir .runs/<dir>` with `24 Plains / 18 Savannah

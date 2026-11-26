@@ -299,24 +299,29 @@ class AttemptStore:
         ]
 
     @staticmethod
-    def _save_players(db, attempt, players):
+    def _player_row(
+        player: RecordedPlayer,
+    ) -> tuple[int, str, str, str, str, str | None, str | None]:
+        return (
+            player.seat,
+            player.player_id,
+            player.kind,
+            player.name,
+            player.deck,
+            player.version,
+            json.dumps(player.inference) if player.inference is not None else None,
+        )
+
+    @staticmethod
+    def _save_players(
+        db: sqlite3.Connection, attempt: str, players: list[RecordedPlayer]
+    ) -> None:
         if len(players) != 2 or {p.seat for p in players} != {0, 1}:
             raise ValueError("A game must identify exactly two seats.")
         for player in players:
             db.execute(
                 "INSERT INTO attempt_players VALUES(?,?,?,?,?,?,?,?)",
-                (
-                    attempt,
-                    player.seat,
-                    player.player_id,
-                    player.kind,
-                    player.name,
-                    player.deck,
-                    player.version,
-                    json.dumps(player.inference)
-                    if player.inference is not None
-                    else None,
-                ),
+                (attempt, *AttemptStore._player_row(player)),
             )
 
     def save(
@@ -352,7 +357,7 @@ class AttemptStore:
             exists = db.execute(
                 "SELECT 1 FROM attempts WHERE id=?", (attempt,)
             ).fetchone()
-            db.execute(
+            cursor = db.execute(
                 """INSERT INTO attempts
                 (id,participant_id,process_id,started_at,ended_at,status,ending_reason,deal_seed,winner,
                  revision,world_json,trace_json,record_version,visibility,origin,num_events)
@@ -383,8 +388,43 @@ class AttemptStore:
                 self._save_players(db, attempt, players)
                 if session_start is not None:
                     self._start_session_game(
-                        db, attempt, trace["timestamp"], session_start, config
+                        db, attempt, trace["timestamp"], session_start, trace
                     )
+            elif cursor.rowcount == 1:
+                stored = db.execute(
+                    "SELECT seat,player_id,kind,name,deck,version,inference_json "
+                    "FROM attempt_players WHERE attempt_id=? ORDER BY seat",
+                    (attempt,),
+                ).fetchall()
+                expected = sorted(
+                    (self._player_row(player) for player in players),
+                    key=lambda row: row[0],
+                )
+                if [tuple(row) for row in stored] != expected:
+                    db.execute(
+                        "DELETE FROM attempt_players WHERE attempt_id=?", (attempt,)
+                    )
+                    self._save_players(db, attempt, players)
+                    db.execute(
+                        "UPDATE session_games SET matchup_json=? WHERE attempt_id=?",
+                        (self._matchup_json(trace), attempt),
+                    )
+
+    @staticmethod
+    def _matchup_json(trace: dict[str, Any]) -> str:
+        config = trace["config"]
+        swapped = bool(len(trace.get("seat_swaps") or ()) & 1)
+        hero, villain = ("villain", "hero") if swapped else ("hero", "villain")
+        return json.dumps(
+            {
+                "hero_deck": config.get(f"{hero}_deck"),
+                "villain_deck": config.get(f"{villain}_deck"),
+                "hero_sideboard": config.get(f"{hero}_sideboard"),
+                "villain_sideboard": config.get(f"{villain}_sideboard"),
+                "decklists": config.get("decklists"),
+            },
+            sort_keys=True,
+        )
 
     @staticmethod
     def _start_session_game(
@@ -392,7 +432,7 @@ class AttemptStore:
         attempt: str,
         timestamp: str,
         start: SessionStart,
-        config: dict[str, Any],
+        trace: dict[str, Any],
     ) -> None:
         if start.revision == 0:
             db.execute(
@@ -422,19 +462,7 @@ class AttemptStore:
             (
                 attempt,
                 start.session_id,
-                json.dumps(
-                    {
-                        key: config.get(key)
-                        for key in (
-                            "hero_deck",
-                            "villain_deck",
-                            "hero_sideboard",
-                            "villain_sideboard",
-                            "decklists",
-                        )
-                    },
-                    sort_keys=True,
-                ),
+                AttemptStore._matchup_json(trace),
                 start.session_id,
             ),
         )

@@ -58,6 +58,7 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
             player,
             defender,
             attackers,
+            ..
         }
             if player.0 == 0
                 && defender.0 == 1
@@ -584,14 +585,14 @@ fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
         let actions = scenario.action_space().actions.clone();
         if let Some(attack_musicians) = actions
             .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == musicians))
+            .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == musicians))
         {
             scenario.step_action(attack_musicians);
             break;
         }
         if let Some(decline) = actions
             .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: false, .. }))
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: None, .. }))
         {
             scenario.step_action(decline);
         } else {
@@ -662,7 +663,7 @@ fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
         .action_space()
         .actions
         .iter()
-        .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker))
+        .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(_), .. } if *permanent == attacker))
         .expect("attack with Gray Ogre");
     destroy_s.step_action(attack_ogre);
     destroy_s.set_player_mana_pool(0, "20WWWW");

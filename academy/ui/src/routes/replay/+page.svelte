@@ -32,16 +32,16 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, moveAt, moveMarks, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
-  import { agreement, duration, estimateArc, numberRows, playOrDraw, type GameNumbers } from '$lib/numbers';
+  import { agreement, duration, estimateArc, numberRows, playOrDraw, seatColumnLabel, type GameNumbers } from '$lib/numbers';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
   import { mergePresentationLabels, presentationLabelsFromFrame, presentationLabelsFromObservation } from '$lib/presentation';
-  import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
+  import type { PlayerIdentity } from '$lib/player-identity';
   import type { RestoredReplayDecision } from '$lib/replay-index';
   import type { ExperienceFrame, InteractionOffer, TraceSummary } from '$lib/types';
   import type { StudySource, StudyRetryResponse, StudyRevealResponse, StudyPlanKind, StudyPlanPreviewResponse } from '$lib/study-runtime';
@@ -78,18 +78,12 @@
 
   // "You" in the move list is the person in a Play game, else seat 1.
   const heroSeat = $derived<0 | 1>(index?.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0);
+  const seatSwaps = $derived(index?.seat_swaps ?? []);
+  const startingHeroSeat = $derived<0 | 1>(index?.starting_human_seat ?? heroSeat);
+  const played = $derived(!!index?.players.some(player => player.kind === 'human') && !index?.watch);
+  const currentHero = $derived<0 | 1>(played ? humanSeatAt(startingHeroSeat, seatSwaps, current?.event ?? null) : heroSeat);
   const bottom = $derived(bottomSeat(perspective, positions, replayStore.selected));
-  /**
-   * A seat's recorded identity; a record that predates recorded players falls back to
-   * its configured opponent. Seat 2 carries the checkpoint's producer and provenance.
-   */
-  function identity(seat: number): PlayerIdentity {
-    const opponent = seat === 1 ? index?.opponent : null;
-    const recorded = index?.players.find(player => player.seat === seat);
-    const base = recorded ? recordedIdentity(recorded)
-      : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: `Seat ${seat + 1}` });
-    return opponent ? { ...base, producer: opponent.producer, provenance: index?.opponent_checkpoint ?? undefined } : base;
-  }
+  const identity = (seat: number): PlayerIdentity => seatIdentity(index, seat);
   // The person's own Play game names them "You"; two players of one name are told apart by seat.
   const nameOf = (seat: number): string => {
     const player = index?.players.find(candidate => candidate.seat === seat);
@@ -104,6 +98,9 @@
     const said = shortName(name);
     return said === shortName(nameOf(1 - seat)) ? `${said} (seat ${seat + 1})` : said;
   };
+  const otherSeat = (seat: 0 | 1): 0 | 1 => (seat === 0 ? 1 : 0);
+  const pilotAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): 0 | 1 => pilotSeatAt(seat, heroSeat, hero);
+  const saidAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): string => saidOf(pilotAt(seat, hero));
   const deckOf = (seat: number): string | null => {
     const player = index?.players.find(candidate => candidate.seat === seat);
     return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
@@ -131,7 +128,7 @@
   const frame = $derived(studyFrame ?? lineFrame ?? recorded);
   const studying = $derived(studyFrame !== null);
   const branched = $derived(studying || lineFrame !== null);
-  const viewerSeat = $derived(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
+  const viewerSeat = $derived<0 | 1>(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);
@@ -157,10 +154,10 @@
   // ———————————————— The game in numbers
 
   let numbers = $state.raw<GameNumbers | null>(null);
-  const numbersRows = $derived(numbers ? numberRows(numbers, heroSeat) : []);
+  const numbersFirstSeat = $derived<0 | 1>(seatSwaps.length ? 0 : heroSeat);
+  const numbersRows = $derived(numbers ? numberRows(numbers, numbersFirstSeat) : []);
   const agreed = $derived(analysis ? agreement(analysis) : null);
-  const arc = $derived(analysis ? estimateArc(analysis) : null);
-  const played = $derived(!!index?.players.some(player => player.kind === 'human') && !index?.watch);
+  const arc = $derived(analysis ? estimateArc(analysis, seatSwaps) : null);
 
   async function loadNumbers(id: string): Promise<void> {
     numbers = null;
@@ -179,14 +176,14 @@
         : hasTrackHistory(index?.history ?? []))
     ),
   );
-  const entries = $derived(useTrack ? [] : replayLog(positions, heroSeat, saidOf));
+  const entries = $derived(useTrack ? [] : replayLog(positions, startingHeroSeat, saidAt, seatSwaps));
   const history = $derived.by<HistoryTurn[]>(() => {
     const players = { youSeat: heroSeat, you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) };
     if (studying) {
       return buildHistory(presentation.events, i => presentation.labelsAt(i), {
         youSeat: viewerSeat,
-        you: saidOf(viewerSeat),
-        opponent: saidOf(1 - viewerSeat),
+        you: saidAt(viewerSeat),
+        opponent: saidAt(otherSeat(viewerSeat)),
       });
     }
     if (useTrack) {
@@ -194,8 +191,42 @@
       const labelsFor = index?.watch
         ? (i: number) => presentation.labelsAt(i)
         : () => EMPTY_LABELS;
+      const swapOptions = seatSwaps.length > 0 && played
+        ? (() => {
+            const byRevision = new Map<number, { event: number | null; automatic: boolean }>();
+            for (const position of positions) {
+              if (position.revision == null) continue;
+              const prev = byRevision.get(position.revision);
+              byRevision.set(position.revision, {
+                event: position.event ?? prev?.event ?? null,
+                automatic: position.kind === 'consequences' ? position.automatic : (prev?.automatic ?? false),
+              });
+            }
+            const eventAtRevision = (revision: number): number | null => {
+              const exact = byRevision.get(revision);
+              if (exact) return exact.event;
+              for (const position of positions) {
+                if (position.revision != null && position.revision >= revision) return position.event ?? null;
+              }
+              return null;
+            };
+            return {
+              notes: swapHistoryNotes(seatSwaps, positions, trackEvents),
+              playersFor: (event: (typeof trackEvents)[number]) => ({
+                youSeat: humanSeatAt(startingHeroSeat, seatSwaps, eventAtRevision(event.from_revision)),
+                you: players.you,
+                opponent: players.opponent,
+              }),
+              isAutomatic: (event: (typeof trackEvents)[number]) => {
+                const info = byRevision.get(event.from_revision);
+                return info ? info.automatic : (event.caused_by === null || event.caused_by.startsWith('authority.auto.'));
+              },
+            };
+          })()
+        : {};
       return buildHistory(trackEvents, labelsFor, players, {
         jumpKeyFor: (event, isMove) => positionKeyForEvent(positions, event, isMove),
+        ...swapOptions,
       });
     }
     return legacyMoveHistory(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []);
@@ -211,14 +242,15 @@
     }
     return historyKeyAt(keys, positions, replayStore.selected);
   });
-  const marks = $derived(analysis ? analysedMarks(stripMarks(positions, heroSeat), positions, analysed) : stripMarks(positions, heroSeat));
-  const marksByMove = $derived(useTrack ? historyMoveMarks(history, positions, heroSeat, analysed) : moveMarks(entries, positions, analysed));
-  const shownMoves = $derived(useTrack ? historyAnalysisShown(history, positions, heroSeat) : analysisShownMoves(entries, positions));
+  const baseMarks = $derived(stripMarks(positions, startingHeroSeat, seatSwaps));
+  const marks = $derived(analysis ? analysedMarks(baseMarks, positions, analysed) : baseMarks);
+  const marksByMove = $derived(useTrack ? historyMoveMarks(history, positions, startingHeroSeat, analysed, seatSwaps) : moveMarks(entries, positions, analysed));
+  const shownMoves = $derived(useTrack ? historyAnalysisShown(history, positions, startingHeroSeat, seatSwaps) : analysisShownMoves(entries, positions));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
 
   // ———————————————— Key moments and its line
 
-  const moments = $derived(analysis ? keyMoments(analysis) : []);
+  const moments = $derived(analysis ? keyMoments(analysis, seatSwaps) : []);
   const positionOf = (event: number): number => positions.findIndex(position => position.kind === 'choice' && position.event === event);
   const momentHere = $derived(current?.kind === 'choice' ? moments.find(moment => moment.event === current.event) ?? null : null);
   const nextMoment = $derived(moments.map(moment => positionOf(moment.event)).find(at => at > replayStore.selected) ?? null);
@@ -227,13 +259,15 @@
     const { end, winner } = line.line;
     if (end === 'turn') return 'to the end of the next turn';
     if (end === 'limit') return 'until its length limit';
-    return winner === null ? 'to a draw' : winner === heroSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
+    const lineSeat = humanSeatAt(startingHeroSeat, seatSwaps, line.line.event);
+    return winner === null ? 'to a draw' : winner === lineSeat ? 'to a win for your seat' : `to a win for ${saidOf(1 - heroSeat)}`;
   });
 
   // Play on from one of your decisions of a finished game you played: a new
   // Play game whose moves before it are this game's (`played_from`).
   const playOnHref = $derived(index?.can_feedback && !index.watch && index.status !== 'waiting'
-    && current?.kind === 'choice' && current.event !== undefined && current.viewer === heroSeat
+    && current?.kind === 'choice' && current.event !== undefined
+    && current.viewer === humanSeatAt(startingHeroSeat, seatSwaps, current.event)
     ? `/?played_from=${encodeURIComponent(index.id)}&event=${current.event}` : null);
 
   async function seeLine(): Promise<void> {
@@ -256,7 +290,7 @@
   }
 
   const ending = $derived(frame && !branched && frame.projection.game_over && index
-    ? gameResult(frame, { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
+    ? gameResult(frame, { you: saidAt(viewerSeat), opponent: saidAt(otherSeat(viewerSeat)) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''
@@ -604,6 +638,9 @@
   {#if index?.played_from}
     <p class="type-caption text-ink-2" data-testid="played-from">Played on from <a href={`/replay?trace=${encodeURIComponent(index.played_from.trace_id)}&review=1`}>an earlier game</a>{index.played_from.turn === null ? '' : ` at turn ${index.played_from.turn}`}: the moves before it are that game's.</p>
   {/if}
+  {#if seatSwaps.length}
+    <p class="type-caption text-ink-2" data-testid="seat-swaps">Swapped sides at {seatSwaps.map(swap => swap.turn == null ? 'start' : `turn ${swap.turn}`).join(', ')}.</p>
+  {/if}
   {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
   {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}
   {#if analyses && analysisChoices && !analysis && !index?.watch}
@@ -666,8 +703,8 @@
     <span class="sr-only">Perspective</span>
     <select aria-label="Perspective" data-testid="perspective" value={String(perspective)} disabled={locked} onchange={event => setPerspective(event.currentTarget.value)}>
       <option value="chooser">Follow the chooser</option>
-      <option value="0">Seat 1 at the bottom · {nameOf(0)}</option>
-      <option value="1">Seat 2 at the bottom · {nameOf(1)}</option>
+      <option value="0">{perspectiveLabel(0, nameOf(0), deckOf(0), seatSwaps.length > 0)}</option>
+      <option value="1">{perspectiveLabel(1, nameOf(1), deckOf(1), seatSwaps.length > 0)}</option>
     </select>
   </label>
   {#if current?.can_reveal}
@@ -706,10 +743,10 @@
       {#if played && index}
         <section class="numbers type-caption" aria-label="This game in numbers" data-testid="game-numbers">
           <p class="type-label text-ink-2">This game</p>
-          <p class="text-ink-2">{[numbers ? `${numbers.turns} ${numbers.turns === 1 ? 'turn' : 'turns'}` : null, playOrDraw(heroSeat), duration(index.started_at, index.ended_at)].filter(Boolean).join(' · ')}</p>
+          <p class="text-ink-2">{[numbers ? `${numbers.turns} ${numbers.turns === 1 ? 'turn' : 'turns'}` : null, playOrDraw(heroSeat, startingHeroSeat), duration(index.started_at, index.ended_at)].filter(Boolean).join(' · ')}</p>
           {#if numbersRows.length}
             <table>
-              <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{saidOf(heroSeat)}</th><th scope="col">{saidOf(1 - heroSeat)}</th></tr></thead>
+              <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{seatColumnLabel(numbersFirstSeat, saidOf(numbersFirstSeat), deckOf(numbersFirstSeat), seatSwaps.length > 0)}</th><th scope="col">{seatColumnLabel(otherSeat(numbersFirstSeat), saidOf(otherSeat(numbersFirstSeat)), deckOf(otherSeat(numbersFirstSeat)), seatSwaps.length > 0)}</th></tr></thead>
               <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
             </table>
             {#if numbers && !numbers.complete}<p class="text-ink-3">Counted to where the game stopped.</p>{/if}
@@ -784,8 +821,8 @@
     {frame}
     interaction={studying && canRetry ? 'study' : 'read-only'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
-    you={{ name: nameOf(viewerSeat), deck: deckOf(viewerSeat) }}
-    opponent={{ name: nameOf(1 - viewerSeat), deck: deckOf(1 - viewerSeat), description: identity(1 - viewerSeat).description }}
+    you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
+    opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}
     stops={frame.stops}
     canPassTurn={false}
     {presentation}
@@ -796,7 +833,7 @@
     onact={offer => void retryStudyOffer(offer)}
     {since}
     recapTitle={studying ? 'This line' : line ? 'Its line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
-    heading={branched || !current ? null : positionHeading(current, saidOf, frame.projection.game_over, index?.winner ?? null)}
+    heading={branched || !current ? null : positionHeading(current, saidAt, frame.projection.game_over, index?.winner ?? null)}
     {history}
     onjump={locked ? undefined : jump}
     readOnly={!studying}

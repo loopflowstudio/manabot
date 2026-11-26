@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
 import {
-  addAttackers, committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock,
+  addAttackers, committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setAttackerDefender, setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock,
   type CombatPreview, type DeclarableCreature, type DeclarationStep,
 } from './combat';
 
@@ -131,4 +131,26 @@ describe('a saved draft', () => {
     expect(loadDraft(block)?.blocks).toEqual([[otter, lieutenant]]);
     expect(loadDraft({ ...block, frame_hash: 'another' })).toBeNull();
   });
+});
+
+it('keeps each chosen defender on its own attacker through preview and confirmation', () => {
+  const jace = { entity: 7, incarnation: 3 };
+  const declarable = [1, 2].map(id => ({ ...creature(id, names.get(id)!), can_attack: [jace] }));
+  // Newly drafted attackers default to the defending player with no defender override.
+  const defaulted = toggleAttacker(toggleAttacker(EMPTY_DRAFT, 1), 2);
+  expect(defaulted.defenders).toBeUndefined();
+  expect(planOf(defaulted, { declarable } as CombatPreview).attackers).toEqual([
+    { entity: 1, incarnation: 2 },
+    { entity: 2, incarnation: 2 },
+  ]);
+  const retargeted = setAttackerDefender(defaulted, 1, 7);
+  expect(planOf(retargeted, { declarable } as CombatPreview).attackers).toEqual([
+    { entity: 1, incarnation: 2, defender: jace },
+    { entity: 2, incarnation: 2 },
+  ]);
+  expect(draftWords('attackers', retargeted, declarable, new Map([...names, [7, 'Jace']]), EMPTY_DRAFT).plan)
+    .toBe('Tiger-Seal attacks Jace · Otter-Penguin attacks the defending player');
+  expect(setAttackerDefender(retargeted, 1, null).defenders).toBeUndefined();
+  const both = setAttackerDefender(retargeted, 2, 7);
+  expect(toggleAttacker(both, 1).defenders).toEqual({ 2: 7 });
 });
