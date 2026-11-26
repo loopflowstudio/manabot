@@ -5,6 +5,8 @@
 //! abilities, or replacement effects routes through this module instead of
 //! re-checking phasing, command-zone emblem status, or zone-of-function rules.
 
+use std::ops::ControlFlow;
+
 use crate::{
     flow::game::Game,
     state::{
@@ -14,6 +16,25 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+/// Seat slice for an optional controller filter (`None` visits both seats).
+pub(super) const fn seats(controller: Option<PlayerId>) -> &'static [PlayerId] {
+    match controller {
+        Some(PlayerId(0)) => &[PlayerId(0)],
+        Some(PlayerId(1)) => &[PlayerId(1)],
+        _ => &[PlayerId(0), PlayerId(1)],
+    }
+}
+
+/// Metadata identifying the source of a functioning static ability visited by
+/// `Game::for_each_functioning_static`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StaticSource {
+    pub object: ObjectId,
+    pub permanent: Option<PermanentId>,
+    pub controller: PlayerId,
+    pub index: usize,
+}
 
 /// Where an ability functions under CR 113.6 and CR 114.4.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,7 +73,7 @@ pub(crate) enum ReplacementSourceOrder {
 }
 
 /// Single CR 113.6 / CR 114.4 / CR 702.26b admission predicate.
-pub(crate) fn ability_functions_in(
+fn ability_functions_in(
     kind: ObjectKind,
     zone: Option<ZoneType>,
     phased_out: bool,
@@ -91,7 +112,7 @@ pub(crate) fn ability_functions_in(
 }
 
 /// Exhaustive CR 113.6 zone-of-function classification for static abilities.
-pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
+fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
     match ability {
         StaticAbility::Continuous(effect) if effect.characteristic_defining => {
             FunctionZones::AllZones
@@ -154,7 +175,7 @@ pub(crate) fn static_ability_zones(ability: &StaticAbility) -> FunctionZones {
 }
 
 /// Exhaustive CR 113.6 zone-of-function classification for triggered abilities.
-pub(crate) fn trigger_condition_zones(condition: &TriggerCondition) -> FunctionZones {
+fn trigger_condition_zones(condition: &TriggerCondition) -> FunctionZones {
     match condition {
         TriggerCondition::InGraveyard { .. } => FunctionZones::Graveyard,
         TriggerCondition::YouCastThis => FunctionZones::Stack,
@@ -199,7 +220,7 @@ pub(crate) fn trigger_condition_zones(condition: &TriggerCondition) -> FunctionZ
 }
 
 /// Exhaustive CR 113.6 / CR 614.12 zone-of-function classification for replacement effects.
-pub(crate) fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZones {
+fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZones {
     match effect {
         ReplacementEffect::AdventureExile => FunctionZones::Stack,
         ReplacementEffect::GraveyardInstead {
@@ -235,21 +256,29 @@ pub(crate) fn replacement_effect_zones(effect: &ReplacementEffect) -> FunctionZo
 }
 
 impl Game {
-    /// Whether an ability with `zones` on `object` functions right now.
-    pub(crate) fn object_ability_functions(&self, object: ObjectId, zones: FunctionZones) -> bool {
+    fn object_function_context(
+        &self,
+        object: ObjectId,
+    ) -> Option<(ObjectKind, Option<ZoneType>, bool)> {
         if !self.state.zones.is_latest(object) {
-            return false;
+            return None;
         }
-        let Some(record) = self.state.objects.get(object.slot()) else {
-            return false;
-        };
+        let record = self.state.objects.get(object.slot())?;
         let zone = self.state.zones.zone_of(object);
         let phased_out = zone == Some(ZoneType::Battlefield)
             && self
                 .state
                 .permanent_of(object)
                 .is_some_and(|id| self.is_phased_out(id));
-        ability_functions_in(record.kind(), zone, phased_out, zones)
+        Some((record.kind(), zone, phased_out))
+    }
+
+    /// Whether an ability with `zones` on `object` functions right now.
+    pub(crate) fn object_ability_functions(&self, object: ObjectId, zones: FunctionZones) -> bool {
+        self.object_function_context(object)
+            .is_some_and(|(kind, zone, phased_out)| {
+                ability_functions_in(kind, zone, phased_out, zones)
+            })
     }
 
     /// Whether a live battlefield permanent's abilities function (CR 702.26b).
@@ -264,7 +293,7 @@ impl Game {
     }
 
     /// Whether an object in the command zone functions under CR 114.4 (emblems only by default).
-    pub(crate) fn command_object_functions(&self, object: ObjectId) -> bool {
+    fn command_object_functions(&self, object: ObjectId) -> bool {
         self.state.zones.zone_of(object) == Some(ZoneType::Command)
             && self.object_ability_functions(object, FunctionZones::Default)
     }
@@ -282,10 +311,8 @@ impl Game {
         &self,
         object: ObjectId,
     ) -> impl Iterator<Item = &StaticAbility> + '_ {
-        self.state[object]
-            .statics
-            .iter()
-            .filter(move |ability| self.static_ability_functions(object, ability))
+        self.functioning_object_statics_indexed(object)
+            .map(|(_, ability)| ability)
     }
 
     /// Functioning printed static abilities on `object` paired with their printed slot.
@@ -293,11 +320,16 @@ impl Game {
         &self,
         object: ObjectId,
     ) -> impl Iterator<Item = (usize, &StaticAbility)> + '_ {
+        let ctx = self.object_function_context(object);
         self.state[object]
             .statics
             .iter()
             .enumerate()
-            .filter(move |(_, ability)| self.static_ability_functions(object, ability))
+            .filter(move |(_, ability)| {
+                ctx.is_some_and(|(kind, zone, phased_out)| {
+                    ability_functions_in(kind, zone, phased_out, static_ability_zones(ability))
+                })
+            })
     }
 
     pub(crate) fn trigger_condition_functions(
@@ -308,14 +340,6 @@ impl Game {
         self.object_ability_functions(object, trigger_condition_zones(condition))
     }
 
-    pub(crate) fn replacement_effect_functions(
-        &self,
-        object: ObjectId,
-        effect: &ReplacementEffect,
-    ) -> bool {
-        self.object_ability_functions(object, replacement_effect_zones(effect))
-    }
-
     /// Every live battlefield permanent whose abilities currently function, in slot order.
     pub(crate) fn functioning_permanents(&self) -> impl Iterator<Item = PermanentId> + '_ {
         (0..self.state.permanents.len())
@@ -323,29 +347,63 @@ impl Game {
             .filter(|&id| self.permanent_abilities_function(id))
     }
 
-    /// Functioning command-zone objects controlled by `controller` (CR 114.4).
-    pub(super) fn functioning_command_objects_for(
-        &self,
-        controller: PlayerId,
-    ) -> impl Iterator<Item = ObjectId> + '_ {
-        self.state
-            .zones
-            .zone_objects(ZoneType::Command, controller)
-            .iter()
-            .copied()
-            .filter(|&object| self.command_object_functions(object))
-    }
-
-    /// Every functioning command-zone object across both players (CR 114.4).
+    /// Functioning command-zone objects (CR 114.4), scoped to `controller` or across both seats.
     pub(super) fn functioning_command_objects(
         &self,
+        controller: Option<PlayerId>,
     ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|controller| {
-                self.functioning_command_objects_for(controller)
-                    .map(move |object| (controller, object))
-            })
+        seats(controller).iter().copied().flat_map(|seat| {
+            self.state
+                .zones
+                .zone_objects(ZoneType::Command, seat)
+                .iter()
+                .copied()
+                .filter(|&object| self.command_object_functions(object))
+                .map(move |object| (seat, object))
+        })
+    }
+
+    fn try_for_each_functioning_static(
+        &self,
+        controller: Option<PlayerId>,
+        mut visit: impl FnMut(StaticSource, &StaticAbility) -> ControlFlow<()>,
+    ) -> ControlFlow<()> {
+        let board = self.layer_board();
+        for id in board.static_sources.battlefield_ids(controller) {
+            let Some(permanent) = self.state.permanents[id].as_ref() else {
+                continue;
+            };
+            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
+                continue;
+            };
+            let Some((kind, zone, phased_out)) = self.object_function_context(permanent.object)
+            else {
+                continue;
+            };
+            for (index, ability) in view.static_abilities.iter().enumerate() {
+                if ability_functions_in(kind, zone, phased_out, static_ability_zones(ability)) {
+                    let source = StaticSource {
+                        object: permanent.object,
+                        permanent: Some(id),
+                        controller: permanent.controller,
+                        index,
+                    };
+                    visit(source, ability)?;
+                }
+            }
+        }
+        for (seat, object) in board.static_sources.command_objects(controller) {
+            for (index, ability) in self.functioning_object_statics_indexed(object) {
+                let source = StaticSource {
+                    object,
+                    permanent: None,
+                    controller: seat,
+                    index,
+                };
+                visit(source, ability)?;
+            }
+        }
+        ControlFlow::Continue(())
     }
 
     /// Visit every functioning static ability on the battlefield and command
@@ -355,29 +413,12 @@ impl Game {
     pub(crate) fn for_each_functioning_static(
         &self,
         controller: Option<PlayerId>,
-        mut visit: impl FnMut(ObjectId, Option<PermanentId>, PlayerId, usize, &StaticAbility),
+        mut visit: impl FnMut(StaticSource, &StaticAbility),
     ) {
-        let board = self.layer_board();
-        for id in board.static_sources.battlefield_ids(controller) {
-            let Some(permanent) = self.state.permanents[id].as_ref() else {
-                continue;
-            };
-            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
-                continue;
-            };
-            let source = permanent.object;
-            let owner = permanent.controller;
-            for (index, ability) in view.static_abilities.iter().enumerate() {
-                if self.static_ability_functions(source, ability) {
-                    visit(source, Some(id), owner, index, ability);
-                }
-            }
-        }
-        for (seat, object) in board.static_sources.command_objects(controller) {
-            for (index, ability) in self.functioning_object_statics_indexed(object) {
-                visit(object, None, seat, index, ability);
-            }
-        }
+        let _ = self.try_for_each_functioning_static(controller, |source, ability| {
+            visit(source, ability);
+            ControlFlow::Continue(())
+        });
     }
 
     /// Whether any functioning static ability (battlefield or command zone,
@@ -387,26 +428,14 @@ impl Game {
         controller: Option<PlayerId>,
         predicate: impl Fn(&StaticAbility) -> bool,
     ) -> bool {
-        let board = self.layer_board();
-        for id in board.static_sources.battlefield_ids(controller) {
-            let Some(permanent) = self.state.permanents[id].as_ref() else {
-                continue;
-            };
-            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
-                continue;
-            };
-            for ability in &view.static_abilities {
-                if self.static_ability_functions(permanent.object, ability) && predicate(ability) {
-                    return true;
-                }
+        self.try_for_each_functioning_static(controller, |_, ability| {
+            if predicate(ability) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
             }
-        }
-        for (_, object) in board.static_sources.command_objects(controller) {
-            if self.functioning_object_statics(object).any(&predicate) {
-                return true;
-            }
-        }
-        false
+        })
+        .is_break()
     }
 
     /// Visit every functioning ambient replacement effect on the battlefield
@@ -418,52 +447,46 @@ impl Game {
         mut visit: impl FnMut(ObjectId, PlayerId, usize, &ReplacementEffect),
     ) {
         let mut visit_object = |source: ObjectId, controller: PlayerId| {
+            let Some((kind, zone, phased_out)) = self.object_function_context(source) else {
+                return;
+            };
             for (index, effect) in self.state[source].replacement_effects.iter().enumerate() {
-                if self.replacement_effect_functions(source, effect) {
+                if ability_functions_in(kind, zone, phased_out, replacement_effect_zones(effect)) {
                     visit(source, controller, index, effect);
                 }
             }
         };
-        match order {
+        let mut visit_battlefield = |ids: &mut dyn Iterator<Item = PermanentId>| {
+            for (id, view) in self.layer_views(ids) {
+                if view.abilities_lost {
+                    continue;
+                }
+                let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                visit_object(permanent.object, permanent.controller);
+            }
+        };
+        let command_controller = match order {
             ReplacementSourceOrder::BySeat => {
-                let ids = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
+                let mut ids = seats(None)
+                    .iter()
+                    .copied()
                     .flat_map(|seat| self.iter_battlefield_permanents(seat));
-                for (id, view) in self.layer_views(ids) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    visit_object(permanent.object, permanent.controller);
-                }
-                for (controller, object) in self.functioning_command_objects() {
-                    visit_object(object, controller);
-                }
+                visit_battlefield(&mut ids);
+                None
             }
             ReplacementSourceOrder::SlotOrder => {
-                for (id, view) in self.layer_views(self.functioning_permanents()) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    visit_object(permanent.object, permanent.controller);
-                }
-                for (controller, object) in self.functioning_command_objects() {
-                    visit_object(object, controller);
-                }
+                let mut ids = self.functioning_permanents();
+                visit_battlefield(&mut ids);
+                None
             }
             ReplacementSourceOrder::ControlledBy(seat) => {
-                for (id, view) in self.layer_views(self.iter_battlefield_permanents(seat)) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    visit_object(permanent.object, permanent.controller);
-                }
-                for object in self.functioning_command_objects_for(seat) {
-                    visit_object(object, seat);
-                }
+                let mut ids = self.iter_battlefield_permanents(seat);
+                visit_battlefield(&mut ids);
+                Some(seat)
             }
+        };
+        for (controller, object) in self.functioning_command_objects(command_controller) {
+            visit_object(object, controller);
         }
     }
 }
@@ -526,6 +549,40 @@ mod tests {
         );
     }
 
+    fn install_test_abilities(
+        game: &mut Game,
+        object: ObjectId,
+        pt_bonus: i32,
+        block_life_gain: bool,
+    ) {
+        let mut statics = vec![StaticAbility::continuous(
+            StaticScope::YouControl(CardPredicate::creature()),
+            None,
+            vec![Modification::ModifyPt {
+                power: LayerValue::Fixed(pt_bonus),
+                toughness: LayerValue::Fixed(pt_bonus),
+            }],
+        )];
+        if block_life_gain {
+            statics.push(StaticAbility::PlayersCantGainLife);
+        }
+        game.state[object].statics = statics;
+        game.state[object].abilities = vec![Ability::Triggered {
+            condition: TriggerCondition::Draws {
+                who: Actor::You,
+                nth: None,
+            },
+            intervening_if: None,
+            effects: vec![Effect::gain_life(1)],
+        }];
+        game.state[object].replacement_effects = vec![ReplacementEffect::ModifyDamage {
+            source: DamageSource::any(Actor::You),
+            recipient: DamageRecipient::any(Actor::AnyPlayer),
+            combat: None,
+            transform: DamageTransform::Double,
+        }];
+    }
+
     #[test]
     fn phased_out_permanent_suppresses_statics_triggers_and_replacements() {
         let mut game = test_game();
@@ -537,34 +594,7 @@ mod tests {
             .unwrap();
         let source_obj = game.permanent_object(source).unwrap();
 
-        // Install a layer static (+1/+1), a non-layer static (PlayersCantGainLife),
-        // a triggered ability (whenever you draw a card, gain 1 life), and a
-        // damage-doubling replacement effect on `source`.
-        game.state[source_obj].statics = vec![
-            StaticAbility::continuous(
-                StaticScope::YouControl(CardPredicate::creature()),
-                None,
-                vec![Modification::ModifyPt {
-                    power: LayerValue::Fixed(1),
-                    toughness: LayerValue::Fixed(1),
-                }],
-            ),
-            StaticAbility::PlayersCantGainLife,
-        ];
-        game.state[source_obj].abilities = vec![Ability::Triggered {
-            condition: TriggerCondition::Draws {
-                who: Actor::You,
-                nth: None,
-            },
-            intervening_if: None,
-            effects: vec![Effect::gain_life(1)],
-        }];
-        game.state[source_obj].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            source: DamageSource::any(Actor::You),
-            recipient: DamageRecipient::any(Actor::AnyPlayer),
-            combat: None,
-            transform: DamageTransform::Double,
-        }];
+        install_test_abilities(&mut game, source_obj, 1, true);
 
         // Baseline: while phased in, every ability functions.
         assert_eq!(game.characteristics(peer).pt(), (3, 3));
@@ -633,32 +663,11 @@ mod tests {
             .unwrap();
         game.state
             .place_object(card_in_cmd, PlayerId(0), ZoneType::Command);
-        game.state[card_in_cmd].statics = vec![StaticAbility::continuous(
-            StaticScope::YouControl(CardPredicate::creature()),
-            None,
-            vec![Modification::ModifyPt {
-                power: LayerValue::Fixed(2),
-                toughness: LayerValue::Fixed(2),
-            }],
-        )];
-        game.state[card_in_cmd].abilities = vec![Ability::Triggered {
-            condition: TriggerCondition::Draws {
-                who: Actor::You,
-                nth: None,
-            },
-            intervening_if: None,
-            effects: vec![Effect::gain_life(1)],
-        }];
-        game.state[card_in_cmd].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            source: DamageSource::any(Actor::You),
-            recipient: DamageRecipient::any(Actor::AnyPlayer),
-            combat: None,
-            transform: DamageTransform::Double,
-        }];
+        install_test_abilities(&mut game, card_in_cmd, 2, false);
 
         // CR 114.4: non-emblem in Command zone does not function under Default.
         assert!(!game.command_object_functions(card_in_cmd));
-        assert!(game.functioning_command_objects().next().is_none());
+        assert!(game.functioning_command_objects(None).next().is_none());
         assert!(game.emblems().next().is_none());
         assert!(!game.object_ability_functions(card_in_cmd, FunctionZones::Default));
         assert_eq!(game.characteristics(peer).pt(), (2, 2));
@@ -677,32 +686,11 @@ mod tests {
 
         // Now create a real emblem in the command zone and give it the same abilities.
         let emblem = game.create_emblem("emblem.chandra_torch_of_defiance", PlayerId(0));
-        game.state[emblem].statics = vec![StaticAbility::continuous(
-            StaticScope::YouControl(CardPredicate::creature()),
-            None,
-            vec![Modification::ModifyPt {
-                power: LayerValue::Fixed(2),
-                toughness: LayerValue::Fixed(2),
-            }],
-        )];
-        game.state[emblem].abilities = vec![Ability::Triggered {
-            condition: TriggerCondition::Draws {
-                who: Actor::You,
-                nth: None,
-            },
-            intervening_if: None,
-            effects: vec![Effect::gain_life(1)],
-        }];
-        game.state[emblem].replacement_effects = vec![ReplacementEffect::ModifyDamage {
-            source: DamageSource::any(Actor::You),
-            recipient: DamageRecipient::any(Actor::AnyPlayer),
-            combat: None,
-            transform: DamageTransform::Double,
-        }];
+        install_test_abilities(&mut game, emblem, 2, false);
 
         assert!(game.command_object_functions(emblem));
         assert_eq!(
-            game.functioning_command_objects().collect::<Vec<_>>(),
+            game.functioning_command_objects(None).collect::<Vec<_>>(),
             vec![(PlayerId(0), emblem)]
         );
         assert_eq!(game.characteristics(peer).pt(), (4, 4));
@@ -841,24 +829,25 @@ mod tests {
             .scenario_force_battlefield(PlayerId(1), "Gray Ogre", false)
             .unwrap();
 
-        let exile_with_grant = |game: &mut Game, target: PermanentId, acquired: Option<GrantKey>| {
-            let mut frame = EffectFrame::new(
-                PlayerId(0),
-                vec![Effect::exile_linked(
-                    ObjectSelector::Target(crate::state::ability::TargetSpec::Creature),
-                    LinkedExile::WithSource,
-                )],
-            );
-            frame.bind_source(Some(koh_obj), Some(koh_obj));
-            frame.acquired = acquired;
-            frame.targets = vec![crate::flow::decision::ResolutionTarget {
-                target: crate::state::game_object::Target::Permanent(target),
-                requirement: 0,
-                legal: true,
-                division: 0,
-            }];
-            game.run_frame(frame);
-        };
+        let exile_with_grant =
+            |game: &mut Game, target: PermanentId, acquired: Option<GrantKey>| {
+                let mut frame = EffectFrame::new(
+                    PlayerId(0),
+                    vec![Effect::exile_linked(
+                        ObjectSelector::Target(crate::state::ability::TargetSpec::Creature),
+                        LinkedExile::WithSource,
+                    )],
+                );
+                frame.bind_source(Some(koh_obj), Some(koh_obj));
+                frame.acquired = acquired;
+                frame.targets = vec![crate::flow::decision::ResolutionTarget {
+                    target: crate::state::game_object::Target::Permanent(target),
+                    requirement: 0,
+                    legal: true,
+                    division: 0,
+                }];
+                game.run_frame(frame);
+            };
         let linked_exiles = |game: &Game, acquired: Option<GrantKey>| -> Vec<ObjectId> {
             let mut frame = EffectFrame::new(PlayerId(0), vec![]);
             frame.bind_source(Some(koh_obj), Some(koh_obj));

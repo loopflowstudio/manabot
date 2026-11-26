@@ -116,28 +116,24 @@ impl StaticSources {
                 sources.battlefield[seat].push(id);
             }
         }
-        for seat in [PlayerId(0), PlayerId(1)] {
-            for object in game.functioning_command_objects_for(seat) {
-                if game.functioning_object_statics(object).next().is_some() {
-                    sources.command[seat.0].push(object);
-                }
+        for (seat, object) in game.functioning_command_objects(None) {
+            if game.functioning_object_statics(object).next().is_some() {
+                sources.command[seat.0].push(object);
             }
         }
         sources
     }
 
     /// Record a permanent that gained a static ability during layer 6
-    /// (`Modification::GrantStatic`). Returns `true` when newly inserted.
-    fn record_battlefield(&mut self, game: &Game, id: PermanentId) -> bool {
+    /// (`Modification::GrantStatic`).
+    fn record_battlefield(&mut self, game: &Game, id: PermanentId) {
         if !game.permanent_abilities_function(id) {
-            return false;
+            return;
         }
         let seat = game.live_permanent(id).controller.0;
-        if self.battlefield[seat].contains(&id) {
-            return false;
+        if !self.battlefield[seat].contains(&id) {
+            self.battlefield[seat].push(id);
         }
-        self.battlefield[seat].push(id);
-        true
     }
 
     /// Prune permanents that lost all static abilities during layer evaluation
@@ -170,31 +166,24 @@ impl StaticSources {
         &self,
         controller: Option<PlayerId>,
     ) -> impl Iterator<Item = PermanentId> + '_ {
-        let seats: &[usize] = match controller {
-            Some(PlayerId(0)) => &[0],
-            Some(PlayerId(1)) => &[1],
-            _ => &[0, 1],
-        };
-        seats
+        super::functioning_abilities::seats(controller)
             .iter()
-            .flat_map(|&seat| self.battlefield[seat].iter().copied())
+            .flat_map(|seat| self.battlefield[seat.0].iter().copied())
     }
 
     pub(super) fn command_objects(
         &self,
         controller: Option<PlayerId>,
     ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
-        let seats: &[usize] = match controller {
-            Some(PlayerId(0)) => &[0],
-            Some(PlayerId(1)) => &[1],
-            _ => &[0, 1],
-        };
-        seats.iter().flat_map(|&seat| {
-            self.command[seat]
-                .iter()
-                .copied()
-                .map(move |object| (PlayerId(seat), object))
-        })
+        super::functioning_abilities::seats(controller)
+            .iter()
+            .copied()
+            .flat_map(|seat| {
+                self.command[seat.0]
+                    .iter()
+                    .copied()
+                    .map(move |object| (seat, object))
+            })
     }
 }
 

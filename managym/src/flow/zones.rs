@@ -439,7 +439,7 @@ impl Game {
 
     /// CR 114.4. Only emblems in the command zone contribute these abilities.
     pub(crate) fn emblems(&self) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
-        self.functioning_command_objects()
+        self.functioning_command_objects(None)
     }
 
     pub(crate) fn prepare_token(&mut self, key: &str, controller: PlayerId) -> Option<ObjectId> {

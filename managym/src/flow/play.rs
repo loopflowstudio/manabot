@@ -589,7 +589,7 @@ impl Game {
         // stash, an exact grant's permission, or a static ability.
         let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)))
             || cast.grant(self, object).is_some_and(|grant| grant.any_mana);
-        self.for_each_functioning_static(Some(player), |_, source, _, _, ability| {
+        self.for_each_functioning_static(Some(player), |source, ability| {
             if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
                 any_mana |= cast.matches_spell(self, object, predicate);
                 return;
@@ -618,9 +618,9 @@ impl Game {
             if cast.matches_spell(self, object, &reduction.predicate)
                 && self.check_static_condition(&reduction.condition, player)
             {
-                let generic = source.map_or_else(
+                let generic = source.permanent.map_or_else(
                     || self.controller_value(&reduction.generic, player),
-                    |source| self.static_value(&reduction.generic, source, player),
+                    |permanent| self.static_value(&reduction.generic, permanent, player),
                 );
                 cost = cost.reduced_generic(u8::try_from(generic.max(0)).unwrap_or(u8::MAX));
             }
@@ -1043,7 +1043,7 @@ impl Game {
             .additional_costs
             .iter()
             .for_each(&mut grant);
-        self.for_each_functioning_static(Some(player), |_, _, _, _, ability| {
+        self.for_each_functioning_static(Some(player), |_, ability| {
             if let StaticAbility::SpellsHave { predicate, cost } = ability {
                 if cast.matches_spell(self, object, predicate) {
                     grant(cost);

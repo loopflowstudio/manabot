@@ -3454,24 +3454,14 @@ pub enum AbilitySet {
 }
 
 /// CR 607.1a, 607.5: the exact creating object and ability set latched onto a
-/// linked exile record and matched by linked reads.
+/// linked exile record and matched by linked reads. Two linked abilities pair
+/// iff their sources are equal (same object and same printed face or acquiring
+/// effect).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct LinkedAbilitySource {
     #[serde(serialize_with = "crate::game_object::exact")]
     pub creator: ObjectId,
     pub set: AbilitySet,
-}
-
-impl LinkedAbilitySource {
-    pub const fn new(creator: ObjectId, set: AbilitySet) -> Self {
-        Self { creator, set }
-    }
-
-    /// CR 607.1a, 607.5: two linked abilities pair iff they belong to the same
-    /// object and the same ability set (printed face or acquiring effect).
-    pub fn pairs_with(self, other: Self) -> bool {
-        self == other
-    }
 }
 
 /// Effective triggered ability with the identity needed after its source leaves.

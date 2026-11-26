@@ -702,9 +702,7 @@ impl Game {
                 crate::state::ability::AbilitySet::Printed(def)
             }
         };
-        Some(crate::state::ability::LinkedAbilitySource::new(
-            creator, set,
-        ))
+        Some(crate::state::ability::LinkedAbilitySource { creator, set })
     }
 
     /// The face an ability on the stack came from: the card as it stands

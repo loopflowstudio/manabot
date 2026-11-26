@@ -429,7 +429,7 @@ impl Game {
                     );
                 }
             }
-            for (seat, object) in self.functioning_command_objects() {
+            for (seat, object) in self.functioning_command_objects(None) {
                 if self.functioning_object_statics(object).next().is_some() {
                     debug_assert!(
                         static_sources.command[seat.0].contains(&object),
@@ -666,7 +666,7 @@ impl Game {
         view: &Characteristics,
     ) -> u8 {
         let mut total = 0u8;
-        self.for_each_functioning_static(Some(controller), |_, _, _, _, ability| {
+        self.for_each_functioning_static(Some(controller), |_, ability| {
             if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
                 if matches_view(self, id, predicate, view, None, None) {
                     total = total.saturating_add(*generic);
@@ -1010,7 +1010,7 @@ impl Game {
         if let Some(spell) = self.spell_on_stack(object) {
             keywords = keywords.union(spell.spent.keywords_gained());
         }
-        self.for_each_functioning_static(Some(controller), |_, _, _, _, ability| {
+        self.for_each_functioning_static(Some(controller), |_, ability| {
             if let StaticAbility::KeywordGrant(grant) = ability {
                 if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
                     if self.object_matches_predicate(object, predicate)

@@ -218,7 +218,7 @@ impl GameState {
         self.exile_links
             .iter()
             .filter(move |link| {
-                link.linked_source().pairs_with(source)
+                link.linked_source() == source
                     && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
             })
             .map(|link| link.exiled_object)

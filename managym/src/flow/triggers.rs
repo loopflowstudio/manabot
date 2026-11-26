@@ -1486,7 +1486,7 @@ impl Game {
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
         let mut extra = 0usize;
-        self.for_each_functioning_static(Some(source.controller), |_, _, _, _, ability| {
+        self.for_each_functioning_static(Some(source.controller), |_, ability| {
             if let crate::state::card::StaticAbility::TriggersAdditionalTime(predicate) = ability {
                 let matches = source.lki.as_ref().map_or_else(
                     || self.object_matches_predicate(source.object, predicate),
@@ -1972,7 +1972,7 @@ impl Game {
             })
             .collect();
         sources.extend(
-            self.functioning_command_objects()
+            self.functioning_command_objects(None)
                 .map(|(controller, object)| {
                     let kinds = self.state[object].abilities.iter().fold(
                         EventKinds::NONE,

@@ -1917,27 +1917,24 @@ impl Game {
                         }
                     },
                 );
-                self.for_each_functioning_static(
-                    None,
-                    |source, _, controller, definition_index, ability| {
-                        let predicate = match ability {
-                            StaticAbility::EntersTapped(predicate) => predicate,
-                            StaticAbility::OpponentsEnterTapped(predicate)
-                                if controller != entering_controller =>
-                            {
-                                predicate
-                            }
-                            _ => return,
-                        };
-                        if self.entry_matches_predicate(*object_id, entry, predicate) {
-                            entries.push(ReplacementCandidate::printed_static(
-                                source,
-                                definition_index,
-                                ReplacementEffect::EntersTapped,
-                            ));
+                self.for_each_functioning_static(None, |source, ability| {
+                    let predicate = match ability {
+                        StaticAbility::EntersTapped(predicate) => predicate,
+                        StaticAbility::OpponentsEnterTapped(predicate)
+                            if source.controller != entering_controller =>
+                        {
+                            predicate
                         }
-                    },
-                );
+                        _ => return,
+                    };
+                    if self.entry_matches_predicate(*object_id, entry, predicate) {
+                        entries.push(ReplacementCandidate::printed_static(
+                            source.object,
+                            source.index,
+                            ReplacementEffect::EntersTapped,
+                        ));
+                    }
+                });
                 entries
             }
             _ => Vec::new(),
