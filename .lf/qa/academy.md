@@ -92,9 +92,24 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   scope it with `ACADEMY_RELEASE_API_PORT`, `ACADEMY_RELEASE_FRONTEND_PORT`
   and `ACADEMY_RELEASE_PROOF_DIR`. `opponent-beats.spec.ts` took 2.3–3.1 min
   per run at load ~200.
-- The landing card of a fresh dev-server visit reads "Ready to play" with one
-  **Play** button (no "Start game" there); "Set up a different game" opens the
-  New game page.
+- A fresh browser context on `/` of the dev table opens setup directly
+  (Play vs Bot / Watch Bot vs Bot, **Deal & Play**); there is no "Set up a
+  different game" link to press first.
+- Hand ribbons and open hands: Watch starts at `/?watch=1` → **Start watching**;
+  **Continue** advances one decision, **Next**/**Previous** step positions.
+  Read the halves with `[data-plate-side="opponent"]`'s `data-player-index`,
+  `[data-testid=hand-ribbon][data-ribbon=top|bottom]` (`data-out`),
+  `card-back`, `plate-choosing` and `hand-toggle`. In Play, the
+  `setup-open-hands` switch can be `check()`ed, but the live
+  `open-hands` switch in Settings reverts until the server replies: `click()`
+  it and wait, never `check()`. Opening the same `?game=` in a second context
+  takes the game, so the first tab's switch goes disabled. To see what a
+  frame change animates, hook `Element.prototype.animate` in
+  `addInitScript` and log calls inside `[data-testid=hand-ribbon]`; polling
+  rects misses the 180 ms travels. Passing every offer against the default
+  bot ends a game in seconds, which reaches the result card (**Rematch**,
+  **Swap play/draw**, **Deal new decks**) quickly. Review's open-hands count is
+  under Settings → This game (`open-hands-count`).
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Deal & Play (the landing's start button;

@@ -1981,9 +1981,10 @@
             <!-- The cards this viewer sees are a keyboard region; backs alone are only the plate's count. -->
             <section use:region={{ across: connection !== null }} class="ribbon-faces"
               aria-label={`${label}, ${count} ${count === 1 ? 'card' : 'cards'}${sideView.hiddenHand ? `, ${sideView.hand.length} shown` : ''}`}>
+              <!-- The ribbon is the hand itself, so a card new to it fades in where it sits rather than flying from the plate. -->
               {#each sideView.hand as item, index (item.card.id)}
                 <div class="ribbon-card face" style:left={`${index * lay.step}px`}>
-                  <BoardCard name={item.card.name} width={lay.card} slice={lay.covered && index < count - 1 ? lay.step : null} card={item.card} offers={item.offers} {live} {side}
+                  <BoardCard name={item.card.name} width={lay.card} slice={lay.covered && index < count - 1 ? lay.step : null} card={item.card} offers={item.offers} {live}
                     bar={edge === 'bottom' ? 'head' : 'foot'} asked={board.asked.has(item.card.id)}
                     onactivate={element => activate(item.card.name, item.offers, element)}
                     onpreview={element => previewCard(element ? item.card : null, element)} />
