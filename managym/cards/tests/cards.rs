@@ -73,6 +73,8 @@ mod clb;
 mod cmd;
 #[path = "cards/cmr.rs"]
 mod cmr;
+#[path = "cards/con.rs"]
+mod con;
 #[path = "cards/csp.rs"]
 mod csp;
 #[path = "cards/definitions.rs"]
@@ -93,6 +95,8 @@ mod dom;
 mod drk;
 #[path = "cards/dsk.rs"]
 mod dsk;
+#[path = "cards/dst.rs"]
+mod dst;
 #[path = "cards/dtk.rs"]
 mod dtk;
 #[path = "cards/ecl.rs"]
@@ -207,14 +211,20 @@ mod ons;
 mod ori;
 #[path = "cards/p02.rs"]
 mod p02;
+#[path = "cards/pjou.rs"]
+mod pjou;
 #[path = "cards/pls.rs"]
 mod pls;
 #[path = "cards/pm15.rs"]
 mod pm15;
 #[path = "cards/por.rs"]
 mod por;
+#[path = "cards/prtr.rs"]
+mod prtr;
 #[path = "cards/psal.rs"]
 mod psal;
+#[path = "cards/psnc.rs"]
+mod psnc;
 #[path = "cards/ptk.rs"]
 mod ptk;
 #[path = "cards/rav.rs"]
@@ -271,6 +281,8 @@ mod ulg;
 mod usg;
 #[path = "cards/vis.rs"]
 mod vis;
+#[path = "cards/voc.rs"]
+mod voc;
 #[path = "cards/war.rs"]
 mod war;
 #[path = "cards/woe.rs"]

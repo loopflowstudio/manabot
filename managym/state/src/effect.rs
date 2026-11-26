@@ -102,6 +102,8 @@ pub enum Modification<N = i32> {
     CantActivateAbilities,
     /// Rules effect: every creature able to block it does so (CR 509.1c).
     MustBeBlockedByAllAble,
+    /// At least one creature must block this attacker if able (CR 509.1c).
+    MustBeBlocked,
     /// Layer 6: loses these keywords, whatever grants them.
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
@@ -135,6 +137,8 @@ pub enum Modification<N = i32> {
     /// Rules effect on a player: protection from everything (CR 702.16j).
     /// Nothing can target them, and all damage to them is prevented.
     ProtectionFromEverything,
+    /// The affected player has hexproof.
+    Hexproof,
     /// Rules effect: the permanent is phased out (CR 702.26). It stays on
     /// the battlefield with its counters and attachments, but the game
     /// treats it as though it doesn't exist; `Game::is_phased_out` is the
@@ -142,12 +146,9 @@ pub enum Modification<N = i32> {
     /// untap step before they untap (CR 702.26a); a permanent phased out
     /// indirectly with the one it is attached to phases in with it.
     PhasedOut,
-    /// Layer 2 (CR 613.1b): the record's controller controls the object;
-    /// when the record ends with the object still theirs, control returns
-    /// to `previous`. Only resolutions create it (`Effect::GainControl`).
-    ControlChanged {
-        previous: PlayerId,
-    },
+    /// Layer 2 (CR 613.1b): the source's controller (static ability) or
+    /// the player specified at resolution controls the affected permanent.
+    Control,
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
     ModeChosen {
@@ -214,6 +215,7 @@ impl<N> Modification<N> {
             Self::DoesntUntap => Modification::DoesntUntap,
             Self::Saddled => Modification::Saddled,
             Self::CantActivateAbilities => Modification::CantActivateAbilities,
+            Self::MustBeBlocked => Modification::MustBeBlocked,
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
@@ -225,11 +227,10 @@ impl<N> Modification<N> {
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
             Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
+            Self::Hexproof => Modification::Hexproof,
             Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
             Self::PhasedOut => Modification::PhasedOut,
-            Self::ControlChanged { previous } => Modification::ControlChanged {
-                previous: *previous,
-            },
+            Self::Control => Modification::Control,
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
             Self::AllCreatureTypes => Modification::AllCreatureTypes,

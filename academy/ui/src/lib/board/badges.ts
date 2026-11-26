@@ -2,7 +2,7 @@
  * Inspect and the card's accessible name keep every fact and its provenance. */
 import type { CardFace } from '$lib/card-faces.svelte';
 import type { PermanentRestriction, PermanentState } from '$lib/types';
-import { counterTerm, effectLabel, labelText } from './inspect';
+import { counterTerm, effectLabel, labelText, sourceQuality } from './inspect';
 
 export interface Badge {
   label: string;
@@ -92,7 +92,7 @@ function abilitiesOf(p: PermanentState, face: CardFace | null): Badge[] {
   return abilities;
 }
 
-export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks?: string | null): Badge[] {
+export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks?: string | null, enteredUnder?: string | null): Badge[] {
   const badges: Badge[] = [];
   const abilities = abilitiesOf(p, face);
   if (p.damage) badges.push({ kind: 'damage', label: `${p.damage} damage`, detail: `${p.damage} damage marked` });
@@ -132,6 +132,11 @@ export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks
   badges.push(...abilities);
   const states = [
     p.tapped ? 'Tapped' : 'Untapped',
+    ...(p.hexproof_from ?? []).map(quality => `hexproof from ${sourceQuality(quality)}`),
+    ...(p.protection_from ?? []).map(quality => `protection from ${sourceQuality(quality)}`),
+    p.blocked && 'blocked',
+    p.entry_controller_id !== undefined && p.entry_controller_id !== p.controller_id
+      && `entered under ${enteredUnder ?? `player #${p.entry_controller_id}'s`} control`,
     p.attacking && 'attacking',
     p.chosen && `chosen ${p.chosen}`,
     p.blocking !== undefined && `blocking ${blocks ?? 'an attacker'}`,

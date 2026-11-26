@@ -12,7 +12,9 @@ use crate::{
         cast_permission::PlayRoute,
         decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion},
         game::{ActivationSource, CastChoices, Game, PendingChoice},
-        proposed_event::{CounterProvenance, EventBinding, EventCause, ProposedEvent},
+        proposed_event::{
+            CounterProvenance, DiscardCause, EventBinding, EventCause, ProposedEvent,
+        },
         turn::OnceEachTurnKey,
     },
     state::{
@@ -1018,16 +1020,23 @@ impl Game {
     pub(crate) fn pay_discard_cost(
         &mut self,
         player: PlayerId,
-        casting: Option<ObjectId>,
         object: ObjectId,
-        receipt: &mut PaymentReceipt,
+        completion: FrameCompletion,
     ) -> Result<(), AgentError> {
-        if !self.discard_candidates(player, casting).contains(&object) {
-            return Err(AgentError("discard cost must be a card in hand".into()));
-        }
-        let discarded = self.move_object(object, ZoneType::Graveyard);
-        receipt.contribute(discarded, How::Discarded, Toward::Printed);
-        Ok(())
+        self.run_payment_frame(EffectFrame {
+            batch: Some(self.discard_batch(
+                EventBinding::ThisWay,
+                match &completion {
+                    FrameCompletion::DiscardDuringResolution(caller) => {
+                        DiscardCause::effect(&caller.frame)
+                    }
+                    _ => DiscardCause::Cost(player),
+                },
+                [object],
+            )),
+            completion,
+            ..EffectFrame::new(player, Vec::new())
+        })
     }
 
     /// Pay the component being paid with `object`: tap it, discard it, exile
@@ -1093,14 +1102,19 @@ impl Game {
                 }
             }
             CostComponent::Discard => {
-                self.pay_discard_cost(
-                    player,
-                    payment.operation.spell(),
-                    object,
-                    &mut payment.receipt,
-                )?;
+                if !self
+                    .discard_candidates(player, payment.operation.spell())
+                    .contains(&object)
+                {
+                    return Err(AgentError("discard cost must be a card in hand".into()));
+                }
                 self.pending_choice = None;
                 payment.owed.remove(0);
+                return self.pay_discard_cost(
+                    player,
+                    object,
+                    FrameCompletion::DiscardPayment(Box::new(payment)),
+                );
             }
             CostComponent::ExileFromHand => {
                 if !self
@@ -1385,17 +1399,23 @@ impl Game {
                             payment
                                 .receipt
                                 .contribute(source_object, how, Toward::Printed);
-                            let to = match how {
+                            let event = match how {
                                 How::Tapped | How::Sacrificed => continue,
-                                How::Discarded => ZoneType::Graveyard,
-                                How::Exiled => ZoneType::Exile,
-                                How::Returned => ZoneType::Hand,
+                                How::Discarded => {
+                                    self.discard_proposal(source_object, DiscardCause::Cost(player))
+                                }
+                                How::Exiled => self.zone_move_proposal(
+                                    source_object,
+                                    ZoneType::Exile,
+                                    Default::default(),
+                                ),
+                                How::Returned => self.zone_move_proposal(
+                                    source_object,
+                                    ZoneType::Hand,
+                                    Default::default(),
+                                ),
                             };
-                            source_costs.push(self.zone_move_proposal(
-                                source_object,
-                                to,
-                                Default::default(),
-                            ));
+                            source_costs.push(event);
                         }
                         CostComponent::ExileGrantor(object) => {
                             payment
@@ -1578,6 +1598,7 @@ impl Game {
         if payer != player {
             return Vec::new();
         }
+        let _scan = self.board_scan();
         let permissions = payment
             .mana_permissions()
             .with_reserved_tap(self.payment_tapped_source(&payment.operation));

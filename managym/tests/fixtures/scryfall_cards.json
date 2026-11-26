@@ -542,6 +542,20 @@
       "W"
     ]
   },
+  "Angel of Vitality": {
+    "name": "Angel of Vitality",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Angel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nIf you would gain life, you gain that much life plus 1 instead.\nThis creature gets +2/+2 as long as you have 25 or more life.",
+    "colors": [
+      "W"
+    ]
+  },
   "Angelic Destiny": {
     "name": "Angelic Destiny",
     "mana_cost": "{2}{W}{W}",
@@ -1104,6 +1118,16 @@
       "W"
     ]
   },
+  "Banner of Kinship": {
+    "name": "Banner of Kinship",
+    "mana_cost": "{5}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, choose a creature type. This artifact enters with a fellowship counter on it for each creature you control of the chosen type.\nCreatures you control of the chosen type get +1/+1 for each fellowship counter on this artifact.",
+    "colors": []
+  },
   "Barrels of Blasting Jelly": {
     "name": "Barrels of Blasting Jelly",
     "mana_cost": "{1}",
@@ -1412,6 +1436,20 @@
     "oracle_text": "Put X -1/-1 counters on each creature. Shuffle Black Sun's Zenith into its owner's library.",
     "colors": [
       "B"
+    ]
+  },
+  "Blanchwood Armor": {
+    "name": "Blanchwood Armor",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature gets +1/+1 for each Forest you control.",
+    "colors": [
+      "G"
     ]
   },
   "Blasphemous Act": {
@@ -2340,6 +2378,20 @@
       "W"
     ]
   },
+  "Confiscate": {
+    "name": "Confiscate",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant permanent\nYou control enchanted permanent.",
+    "colors": [
+      "U"
+    ]
+  },
   "Consider": {
     "name": "Consider",
     "mana_cost": "{U}",
@@ -2501,6 +2553,18 @@
       "R"
     ]
   },
+  "Crossway Troublemakers": {
+    "name": "Crossway Troublemakers",
+    "mana_cost": "{5}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "Attacking Vampires you control have deathtouch and lifelink. (Any amount of damage they deal to a creature is enough to destroy it. Damage dealt by those creatures also causes their controller to gain that much life.)\nWhenever a Vampire you control dies, you may pay 2 life. If you do, draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
   "Crow of Dark Tidings": {
     "name": "Crow of Dark Tidings",
     "mana_cost": "{2}{B}",
@@ -2577,6 +2641,20 @@
     "keywords": [],
     "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Draw a card. Activate only if you control five or more lands.",
     "colors": []
+  },
+  "Crystal Barricade": {
+    "name": "Crystal Barricade",
+    "mana_cost": "{1}{W}",
+    "type_line": "Artifact Creature — Wall",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender (This creature can't attack.)\nYou have hexproof. (You can't be the target of spells or abilities your opponents control.)\nPrevent all noncombat damage that would be dealt to other creatures you control.",
+    "colors": [
+      "W"
+    ]
   },
   "Cultivator's Caravan": {
     "name": "Cultivator's Caravan",
@@ -2677,6 +2755,19 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Dark Depths enters with ten ice counters on it.\n{3}: Remove an ice counter from Dark Depths.\nWhen Dark Depths has no ice counters on it, sacrifice it. If you do, create Marit Lage, a legendary 20/20 black Avatar creature token with flying and indestructible.",
+    "colors": []
+  },
+  "Darksteel Colossus": {
+    "name": "Darksteel Colossus",
+    "mana_cost": "{11}",
+    "type_line": "Artifact Creature — Golem",
+    "power": "11",
+    "toughness": "11",
+    "keywords": [
+      "Indestructible",
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nIndestructible (Damage and effects that say \"destroy\" don't destroy this creature.)\nIf Darksteel Colossus would be put into a graveyard from anywhere, reveal Darksteel Colossus and shuffle it into its owner's library instead.",
     "colors": []
   },
   "Dauntless Veteran": {
@@ -3293,6 +3384,22 @@
       "B"
     ]
   },
+  "Dreadwing Scavenger": {
+    "name": "Dreadwing Scavenger",
+    "mana_cost": "{1}{U}{B}",
+    "type_line": "Creature — Nightmare Bird",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Threshold"
+    ],
+    "oracle_text": "Flying\nWhenever this creature enters or attacks, draw a card, then discard a card.\nThreshold — This creature gets +1/+1 and has deathtouch as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
   "Driver of the Dead": {
     "name": "Driver of the Dead",
     "mana_cost": "{3}{B}",
@@ -3346,6 +3453,19 @@
       "G"
     ]
   },
+  "Dryad Militant": {
+    "name": "Dryad Militant",
+    "mana_cost": "{G/W}",
+    "type_line": "Creature — Dryad Soldier",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "({G/W} can be paid with either {G} or {W}.)\nIf an instant or sorcery card would be put into a graveyard from anywhere, exile it instead.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
   "Duress": {
     "name": "Duress",
     "mana_cost": "{B}",
@@ -3366,6 +3486,20 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "When this creature enters, if you control another Elf, create a 1/1 green Elf Warrior creature token.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dwynen, Gilt-Leaf Daen": {
+    "name": "Dwynen, Gilt-Leaf Daen",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.",
     "colors": [
       "G"
     ]
@@ -3634,6 +3768,23 @@
     "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
     "colors": [
       "U"
+    ]
+  },
+  "Elenda, Saint of Dusk": {
+    "name": "Elenda, Saint of Dusk",
+    "mana_cost": "{2}{W}{B}",
+    "type_line": "Legendary Creature — Vampire Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Lifelink",
+      "Hexproof from",
+      "Hexproof"
+    ],
+    "oracle_text": "Lifelink, hexproof from instants\nAs long as your life total is greater than your starting life total, Elenda gets +1/+1 and has menace. Elenda gets an additional +5/+5 as long as your life total is at least 10 greater than your starting life total.",
+    "colors": [
+      "B",
+      "W"
     ]
   },
   "Elephant-Rat": {
@@ -4977,6 +5128,18 @@
       "R"
     ]
   },
+  "Garruk's Uprising": {
+    "name": "Garruk's Uprising",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, if you control a creature with power 4 or greater, draw a card.\nCreatures you control have trample. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever a creature you control with power 4 or greater enters, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
   "Gate Colossus": {
     "name": "Gate Colossus",
     "mana_cost": "{8}",
@@ -5078,6 +5241,21 @@
     "oracle_text": "As long as there are two or more instant and/or sorcery cards in your graveyard, this creature gets +1/+0 and has haste. (It can attack and {T} as soon as it comes under your control.)",
     "colors": [
       "R"
+    ]
+  },
+  "Giada, Font of Hope": {
+    "name": "Giada, Font of Hope",
+    "mana_cost": "{1}{W}",
+    "type_line": "Legendary Creature — Angel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying, vigilance\nEach other Angel you control enters with an additional +1/+1 counter on it for each Angel you already control.\n{T}: Add {W}. Spend this mana only to cast an Angel spell.",
+    "colors": [
+      "W"
     ]
   },
   "Giant Cindermaw": {
@@ -5694,6 +5872,18 @@
       "W"
     ]
   },
+  "Harmless Offering": {
+    "name": "Harmless Offering",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent gains control of target permanent you control.",
+    "colors": [
+      "R"
+    ]
+  },
   "Harmonized Trio": {
     "name": "Harmonized Trio",
     "mana_cost": "{U}",
@@ -5886,6 +6076,18 @@
     "oracle_text": "Destroy target creature or planeswalker.",
     "colors": [
       "B"
+    ]
+  },
+  "Heroes' Bane": {
+    "name": "Heroes' Bane",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [],
+    "oracle_text": "This creature enters with four +1/+1 counters on it.\n{2}{G}{G}: Put X +1/+1 counters on this creature, where X is its power.",
+    "colors": [
+      "G"
     ]
   },
   "Heroic Intervention": {
@@ -6665,6 +6867,18 @@
       "B"
     ]
   },
+  "Joraga Invocation": {
+    "name": "Joraga Invocation",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each creature you control gets +3/+3 until end of turn and must be blocked this turn if able.",
+    "colors": [
+      "G"
+    ]
+  },
   "Joust Through": {
     "name": "Joust Through",
     "mana_cost": "{W}",
@@ -6851,6 +7065,38 @@
     "oracle_text": "This creature has flying as long as it's attacking.",
     "colors": [
       "U"
+    ]
+  },
+  "Knight of Grace": {
+    "name": "Knight of Grace",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Knight",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Hexproof from",
+      "Hexproof",
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nHexproof from black (This creature can't be the target of black spells or abilities your opponents control.)\nThis creature gets +1/+0 as long as any player controls a black permanent.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Knight of Malice": {
+    "name": "Knight of Malice",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Human Knight",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Hexproof from",
+      "Hexproof",
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nHexproof from white (This creature can't be the target of white spells or abilities your opponents control.)\nThis creature gets +1/+0 as long as any player controls a white permanent.",
+    "colors": [
+      "B"
     ]
   },
   "Knowledge Seeker": {
@@ -7954,6 +8200,22 @@
       "W"
     ]
   },
+  "Mossborn Hydra": {
+    "name": "Mossborn Hydra",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elemental Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [
+      "Trample",
+      "Double",
+      "Landfall"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nThis creature enters with a +1/+1 counter on it.\nLandfall — Whenever a land you control enters, double the number of +1/+1 counters on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
   "Most Decrepit Old Bird": {
     "name": "Most Decrepit Old Bird",
     "mana_cost": "{U}",
@@ -8005,6 +8267,18 @@
     ],
     "oracle_text": "Equipped creature has hexproof and can't be blocked.\nEquip—{2}, Pay 2 life.",
     "colors": []
+  },
+  "Myojin of Night's Reach": {
+    "name": "Myojin of Night's Reach",
+    "mana_cost": "{5}{B}{B}{B}",
+    "type_line": "Legendary Creature — Spirit",
+    "power": "5",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Myojin of Night's Reach enters with a divinity counter on it if you cast it from your hand.\nMyojin of Night's Reach has indestructible as long as it has a divinity counter on it.\nRemove a divinity counter from Myojin of Night's Reach: Each opponent discards their hand.",
+    "colors": [
+      "B"
+    ]
   },
   "Mystic Archaeologist": {
     "name": "Mystic Archaeologist",
@@ -8080,6 +8354,20 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "At the beginning of combat on your turn, if you control another creature with power 4 or greater, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "New Horizons": {
+    "name": "New Horizons",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant land\nWhen this Aura enters, put a +1/+1 counter on target creature you control.\nEnchanted land has \"{T}: Add two mana of any one color.\"",
     "colors": [
       "G"
     ]
@@ -8759,6 +9047,19 @@
       "G"
     ]
   },
+  "Prime Speaker Zegana": {
+    "name": "Prime Speaker Zegana",
+    "mana_cost": "{2}{G}{G}{U}{U}",
+    "type_line": "Legendary Creature — Merfolk Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Prime Speaker Zegana enters with X +1/+1 counters on it, where X is the greatest power among other creatures you control.\nWhen Prime Speaker Zegana enters, draw cards equal to its power.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
   "Primeval Bounty": {
     "name": "Primeval Bounty",
     "mana_cost": "{5}{G}",
@@ -8820,6 +9121,24 @@
     "oracle_text": "When Proft's Eidetic Memory enters, draw a card.\nYou have no maximum hand size.\nAt the beginning of combat on your turn, if you've drawn more than one card this turn, put X +1/+1 counters on target creature you control, where X is the number of cards you've drawn this turn minus one.",
     "colors": [
       "U"
+    ]
+  },
+  "Progenitus": {
+    "name": "Progenitus",
+    "mana_cost": "{W}{W}{U}{U}{B}{B}{R}{R}{G}{G}",
+    "type_line": "Legendary Creature — Hydra Avatar",
+    "power": "10",
+    "toughness": "10",
+    "keywords": [
+      "Protection"
+    ],
+    "oracle_text": "Protection from everything\nIf Progenitus would be put into a graveyard from anywhere, reveal Progenitus and shuffle it into its owner's library instead.",
+    "colors": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
     ]
   },
   "Prophetic Prism": {
@@ -10615,6 +10934,21 @@
       "U"
     ]
   },
+  "Sphinx of the Final Word": {
+    "name": "Sphinx of the Final Word",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Creature — Sphinx",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Hexproof"
+    ],
+    "oracle_text": "This spell can't be countered.\nFlying\nHexproof (This creature can't be the target of spells or abilities your opponents control.)\nInstant and sorcery spells you control can't be countered.",
+    "colors": [
+      "U"
+    ]
+  },
   "Spinner of Souls": {
     "name": "Spinner of Souls",
     "mana_cost": "{2}{G}",
@@ -11199,6 +11533,20 @@
       "G"
     ]
   },
+  "Taurean Mauler": {
+    "name": "Taurean Mauler",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Shapeshifter",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Changeling"
+    ],
+    "oracle_text": "Changeling (This card is every creature type.)\nWhenever an opponent casts a spell, you may put a +1/+1 counter on this creature.",
+    "colors": [
+      "R"
+    ]
+  },
   "Teach by Example": {
     "name": "Teach by Example",
     "mana_cost": "{U/R}{U/R}",
@@ -11234,6 +11582,20 @@
     "oracle_text": "Until your next turn, your life total can't change and you gain protection from everything. All permanents you control phase out. (While they're phased out, they're treated as though they don't exist. They phase in before you untap during your untap step.)\nExile Teferi's Protection.",
     "colors": [
       "W"
+    ]
+  },
+  "Tempest Djinn": {
+    "name": "Tempest Djinn",
+    "mana_cost": "{U}{U}{U}",
+    "type_line": "Creature — Djinn",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nThis creature gets +1/+0 for each basic Island you control.",
+    "colors": [
+      "U"
     ]
   },
   "Temple of Abandon": {
@@ -12507,6 +12869,20 @@
       "B"
     ]
   },
+  "Vampire Soulcaller": {
+    "name": "Vampire Soulcaller",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Vampire Warlock",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nThis creature can't block.\nWhen this creature enters, return target creature card from your graveyard to your hand.",
+    "colors": [
+      "B"
+    ]
+  },
   "Vampire Spawn": {
     "name": "Vampire Spawn",
     "mana_cost": "{2}{B}",
@@ -13113,6 +13489,31 @@
     "oracle_text": "{8}: Target creature gets +5/+5 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "G"
+    ]
+  },
+  "Wildwood Scourge": {
+    "name": "Wildwood Scourge",
+    "mana_cost": "{X}{G}",
+    "type_line": "Creature — Hydra",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [],
+    "oracle_text": "This creature enters with X +1/+1 counters on it.\nWhenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Wilt-Leaf Liege": {
+    "name": "Wilt-Leaf Liege",
+    "mana_cost": "{1}{G/W}{G/W}{G/W}",
+    "type_line": "Creature — Elf Knight",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "({G/W} can be paid with either {G} or {W}.)\nOther green creatures you control get +1/+1.\nOther white creatures you control get +1/+1.\nIf a spell or ability an opponent controls causes you to discard this card, put it onto the battlefield instead of putting it into your graveyard.",
+    "colors": [
+      "G",
+      "W"
     ]
   },
   "Wind Drake": {

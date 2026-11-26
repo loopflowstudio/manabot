@@ -6,8 +6,8 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticPtBuff,
-        StaticScope, TapCost,
+        PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope,
+        TapCost,
     },
     effect::Modification,
     mana::{Mana, ManaCost, SpendEffect},
@@ -776,15 +776,11 @@ fn fire_nation_s_conquest() -> CardDefinition {
             name: "Fire Nation's Conquest".into(),
             mana_cost: Some(ManaCost::parse("{2}{R}")),
             types: CardTypes::new([CardType::Enchantment]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate::creature()),
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -808,15 +804,11 @@ fn allied_teamwork() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens("token.ally", 1)],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate::subtype("Ally")),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::subtype("Ally")),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

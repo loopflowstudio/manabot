@@ -273,7 +273,9 @@ fn nullpriest_of_oblivion() -> CardDefinition {
 }
 
 fn gnarlid_colony() -> CardDefinition {
-    use managym_state::card::{ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope};
+    use managym_state::card::{
+        EntryScope, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope,
+    };
     CardDefinition {
 key: "znr.gnarlid_colony",
 scryfall_id: "7327289d-eed8-44b1-8495-7172e2b49d5f",
@@ -285,7 +287,7 @@ subtypes: vec!["Beast".into()],
 power: Some(2),
 toughness: Some(2),
 additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}{G}"))],
-replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters { count: 2, condition: Some(Condition::Kicked) }],
+replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::PlusOnePlusOne, count: 2.into(), condition: Some(Condition::Kicked) }],
 statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
 scope: StaticScope::YouControl(CardPredicate { with_counter: true, ..CardPredicate::creature() }),
 keywords: Keywords::of(&[Keyword::Trample]), condition: None,

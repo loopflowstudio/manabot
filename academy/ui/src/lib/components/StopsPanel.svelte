@@ -30,12 +30,12 @@
   <summary class="type-title cursor-pointer select-none py-1 text-display">
     Stops
     <span class="type-label ml-2 rounded-full bg-panel-muted px-2 py-1 text-ink-2">
-      {stops.auto_pass ? `${activeCount} set` : 'off'}
+      {stops.auto_pass ? `${activeCount} set` : 'full control'}
     </span>
   </summary>
 
   <div class="space-y-3 pt-3">
-    <p class="type-caption text-ink-2">Checked steps hold priority when you have a choice. Unchecked steps pass automatically unless a stack response requires a stop. Changes may advance play immediately. Target, payment and combat choices still appear.</p>
+    <p class="type-caption text-ink-2">Checked steps hold priority when you have a non-mana play. Declare attackers and Declare blockers stops hold only during active combat (while creatures are attacking). Unchecked steps pass automatically unless a stack response requires a stop. Changes may advance play immediately. Target, payment, attack and block choices still appear.</p>
     <label class="flex items-center gap-2 text-ink-2">
       <input
         type="checkbox"
@@ -43,7 +43,7 @@
         checked={stops.auto_pass}
         onchange={(event) => onAutoPassChange?.(event.currentTarget.checked)}
       />
-      Use priority stops
+      Auto-pass outside stops
     </label>
 
     <div class={stops.auto_pass ? '' : 'pointer-events-none opacity-50'}>
@@ -80,7 +80,7 @@
       </label>
     </div>
 
-    <p class="type-caption text-ink-2">Pass Turn (F6) yields through checked stops and stack responses until the turn ends or a non-priority choice needs you. With priority stops off, every priority choice still appears.</p>
+    <p class="type-caption text-ink-2">Pass Turn (F6) yields through checked stops and stack responses until the turn ends or a non-priority choice needs you. With Auto-pass outside stops off (Full control), every priority choice pauses.</p>
     <button
       class="type-label inline-block py-1 text-ink-2 underline underline-offset-2 hover:text-ink"
       data-testid="stops-reset"

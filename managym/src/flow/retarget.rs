@@ -71,6 +71,7 @@ impl Game {
             candidates,
             originally_legal: Vec::new(),
         };
+        let targeting = self.targeting_source(controller, source.object());
         change.originally_legal = (0..change.original.len())
             .map(|slot| {
                 change
@@ -80,7 +81,7 @@ impl Game {
                         self.target_fits_clause(
                             change.original[slot],
                             requirement,
-                            controller,
+                            &targeting,
                             source,
                         )
                     })

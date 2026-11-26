@@ -160,12 +160,17 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  blocked?: boolean;
+  /** Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged. */
+  entry_controller_id?: number;
   first_strike_participant?: boolean;
   attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  protection_from?: string[];
+  hexproof_from?: string[];
   /** Face down (CR 708.2). */
   face_down?: boolean;
   /** Keywords it has after continuous effects; absent when it has none. */
@@ -227,6 +232,7 @@ export interface PlayerState {
   /** Player id whose next turn ends this player's hand-only casting. */
   spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
+  hexproof?: boolean;
   no_maximum_hand_size?: boolean;
   counters?: Record<string, number>;
   combat_mana?: number;

@@ -2821,6 +2821,11 @@
           ],
           "title": "Base Toughness"
         },
+        "blocked": {
+          "default": false,
+          "title": "Blocked",
+          "type": "boolean"
+        },
         "blocking": {
           "anyOf": [
             {
@@ -2929,6 +2934,20 @@
           "title": "Entered This Turn",
           "type": "boolean"
         },
+        "entry_controller_id": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entry Controller Id"
+        },
         "exhausted_abilities": {
           "default": 0,
           "maximum": 4294967295,
@@ -2957,6 +2976,13 @@
           "minimum": 0,
           "title": "Granted Firebending",
           "type": "integer"
+        },
+        "hexproof_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hexproof From",
+          "type": "array"
         },
         "id": {
           "maximum": 4294967295,
@@ -3046,6 +3072,13 @@
             }
           ],
           "title": "Power"
+        },
+        "protection_from": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Protection From",
+          "type": "array"
         },
         "restrictions": {
           "items": {
@@ -3233,6 +3266,11 @@
           ],
           "default": null,
           "title": "Hand Only Until"
+        },
+        "hexproof": {
+          "default": false,
+          "title": "Hexproof",
+          "type": "boolean"
         },
         "id": {
           "maximum": 4294967295,
@@ -4628,11 +4666,29 @@
           "title": "Source Permanent"
         },
         "targets": {
-          "description": "What the spell or ability targets, in the order chosen. A target the\nviewer cannot name as a public object, stack entry or player is left out.",
-          "type": "array",
           "items": {
-            "$ref": "#/$defs/SubjectRef"
-          }
+            "discriminator": {
+              "mapping": {
+                "object": "#/$defs/ObjectSubject",
+                "player": "#/$defs/PlayerSubject",
+                "stack": "#/$defs/StackSubject"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ObjectSubject"
+              },
+              {
+                "$ref": "#/$defs/StackSubject"
+              },
+              {
+                "$ref": "#/$defs/PlayerSubject"
+              }
+            ]
+          },
+          "title": "Targets",
+          "type": "array"
         },
         "x": {
           "anyOf": [

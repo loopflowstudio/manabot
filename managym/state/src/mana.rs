@@ -39,6 +39,16 @@ impl Color {
     ];
 
     #[inline]
+    pub const fn bit(self) -> u8 {
+        1u8 << (self as u8)
+    }
+
+    #[inline]
+    pub fn bits(colors: &Colors) -> u8 {
+        colors.iter().fold(0u8, |mask, &color| mask | color.bit())
+    }
+
+    #[inline]
     pub const fn from_index(index: u8) -> Self {
         match index {
             0 => Self::White,
@@ -643,12 +653,16 @@ impl std::hash::Hash for SpellSnapshot {
 impl serde::Serialize for SpellSnapshot {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut out = serializer.serialize_struct("SpellSnapshot", 2)?;
+        let all = self.0.has_all_creature_types();
+        let mut out = serializer.serialize_struct("SpellSnapshot", 2 + usize::from(all))?;
         out.serialize_field("subtypes", &self.0.subtypes)?;
         if self.0.keywords.has(Keyword::Changeling) {
             out.serialize_field("all_creature_types", &true)?;
         }
         out.serialize_field("types", &self.0.types)?;
+        if all {
+            out.serialize_field("all_creature_types", &true)?;
+        }
         out.end()
     }
 }
@@ -955,20 +969,36 @@ impl ManaCost {
             .saturating_add(self.hybrid.len() as u8);
     }
 
+    /// Bitmask of `Color::bit` for every color in this mana cost (CR 202.2).
+    #[inline]
+    pub fn color_bits(&self) -> u8 {
+        let mut mask = self
+            .hybrid
+            .iter()
+            .flatten()
+            .fold(0u8, |mask, &color| mask | color.bit());
+        for color in Color::COLORS {
+            if self.cost[color as usize] > 0 {
+                mask |= color.bit();
+            }
+        }
+        mask
+    }
+
     pub fn colors(&self) -> Colors {
-        let mut out = self.hybrid.iter().flatten().copied().collect::<Colors>();
-        for color in [
+        let bits = self.color_bits();
+        [
             Color::White,
             Color::Blue,
             Color::Black,
             Color::Red,
             Color::Green,
-        ] {
-            if self.cost[color as usize] > 0 {
-                out.insert(color);
-            }
-        }
-        out
+            Color::Colorless,
+            Color::Generic,
+        ]
+        .into_iter()
+        .filter(|color| bits & color.bit() != 0)
+        .collect()
     }
 }
 

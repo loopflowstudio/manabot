@@ -335,7 +335,7 @@ def test_permanent_details_in_recovery_after_a_lesson_resolves(tmp_path: Path) -
         blob = json.dumps(historical, separators=(",", ":"), sort_keys=True).encode()
         assert (
             sha256(blob).hexdigest()
-            == "0c4bd6fa85670fb237252a5c48f4ec5cbb1b84654cbb07b9bdae7f12ba5ba7ae"
+            == "1eef4759fde4452b9d7ff508b69f8c97dfabcba2bc60b276fae73303af05ddcd"
         )
 
         details = env.permanent_details_json(0)

@@ -6,10 +6,11 @@ use managym_state::ability::{
     TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
-    CardTypes, DamageTransform, Keyword, Keywords, ManaAbility, PrintedCharacteristics,
-    ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction, StaticAbility,
-    StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
+    ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
+    CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform, EntryChoiceKind,
+    EntryScope, Keyword, Keywords, LayerCount, LayerValue, ManaAbility, PrintedCharacteristics,
+    ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
+    StaticAbility, StaticKeywordGrant, StaticRestriction, StaticScope, TargetCostReduction,
 };
 use managym_state::effect::{CopyException, Modification};
 use managym_state::mana::{Color, Mana, ManaCost};
@@ -36,6 +37,12 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fiery_annihilation(),
         divine_resilience(),
         curator_of_destinies(),
+        banner_of_kinship(),
+        mossborn_hydra(),
+        dreadwing_scavenger(),
+        crystal_barricade(),
+        elenda_saint_of_dusk(),
+        vampire_soulcaller(),
         fishing_pole(),
         ravenous_amulet(),
         hare_apparent(),
@@ -969,7 +976,6 @@ fn high_society_hunter() -> CardDefinition {
 }
 
 fn leyline_axe() -> CardDefinition {
-    use managym_state::card::{StaticKeywordGrant, StaticPtBuff, StaticScope};
     CardDefinition {
         key: "fdn.leyline_axe",
         scryfall_id: "b9c03336-a321-4c06-94d1-809f328fabd8",
@@ -979,16 +985,13 @@ fn leyline_axe() -> CardDefinition {
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
-            statics: vec![StaticAbility::BeginOnBattlefield,
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+            statics: vec![
+                StaticAbility::BeginOnBattlefield,
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -1326,9 +1329,11 @@ fn goblin_boarders() -> CardDefinition {
             subtypes: vec!["Goblin".into(), "Pirate".into()],
             power: Some(3),
             toughness: Some(2),
-            replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
-                count: 1,
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                count: 1.into(),
                 condition: Some(Condition::AttackedThisTurn),
+                kind: CounterKind::PlusOnePlusOne,
             }],
             text_box: text_box.into(),
             ..Default::default()
@@ -2041,9 +2046,9 @@ fn twinflame_tyrant() -> CardDefinition {
             toughness: Some(5),
             keywords: Keywords::of(&[Keyword::Flying]),
             replacement_effects: vec![ReplacementEffect::ModifyDamage {
-                creature_source: false,
-                source_by: Actor::You,
-                recipient_by: Actor::Opponent,
+                source: DamageSource::any(Actor::You),
+                recipient: DamageRecipient::any(Actor::Opponent),
+                combat: None,
                 transform: DamageTransform::Double,
             }],
             text_box: "Flying\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals double that damage instead.".into(),
@@ -3551,17 +3556,29 @@ fn tinybones_bauble_burglar() -> CardDefinition {
                     who: Actor::Opponent,
                     any_of: vec![KeywordAction::Discard],
                 },
-                effects: vec![Effect::Move {
-                    unrevealed: false,
-                    face_down: false,
-                    library_end: None,
-                    what: ObjectSelector::Triggering,
-                    to: ZoneType::Exile,
-                    tapped: false,
-                    transformed: false,
-                    under: None,
-                    with_counter: Some(CounterKind::Stash.into()),
-                    linked: None,
+                effects: vec![Effect::If {
+                    condition: Condition::compare(
+                        EffectValue::Objects {
+                            of: Box::new(ObjectSelector::Triggering),
+                            predicate: None,
+                            in_zone: Some(ZoneType::Graveyard),
+                        },
+                        CompareOp::Gt,
+                        0,
+                    ),
+                    then: vec![Effect::Move {
+                        unrevealed: false,
+                        face_down: false,
+                        library_end: None,
+                        what: ObjectSelector::Triggering,
+                        to: ZoneType::Exile,
+                        tapped: false,
+                        transformed: false,
+                        under: None,
+                        with_counter: Some(CounterKind::Stash.into()),
+                        linked: None,
+                    }],
+                    otherwise: vec![],
                 }],
             }],
             statics: vec![StaticAbility::PlayUnownedExiledWithCounter(
@@ -3659,15 +3676,11 @@ fn celestial_armor() -> CardDefinition {
                 ..Default::default()
             }],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 2,
-                    toughness: 0,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(2, 0)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -3696,15 +3709,11 @@ fn dropkick_bomber() -> CardDefinition {
             subtypes: vec!["Goblin".into(), "Warrior".into()],
             power: Some(2),
             toughness: Some(3),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Goblin")),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Goblin")),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{R}"),
                 effects: vec![Effect::TargetClause {
@@ -3847,9 +3856,13 @@ fn nine_lives_familiar() -> CardDefinition {
             power: Some(1),
             toughness: Some(1),
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
                 kind: CounterKind::Revival,
-                count: 8,
-                if_cast: true,
+                count: 8.into(),
+                condition: Some(Condition::CastFrom {
+                    zone: None,
+                    owner: None,
+                }),
             }],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Dies {
@@ -4104,6 +4117,37 @@ fn divine_resilience() -> CardDefinition {
     }
 }
 
+fn vampire_soulcaller() -> CardDefinition {
+    let text_box = "Flying\nThis creature can't block.\nWhen this creature enters, return target creature card from your graveyard to your hand.";
+    CardDefinition {
+        key: "fdn.vampire_soulcaller",
+        scryfall_id: "2d076293-3b45-4878-8f67-978927cc1f68",
+        printed: PrintedCharacteristics {
+            name: "Vampire Soulcaller".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Warlock".into()],
+            power: Some(3),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::BlockRestriction(
+                BlockRestriction::CantBlock(CardPredicate::default()),
+            )],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate::creature(),
+                    },
+                ))],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn fiery_annihilation() -> CardDefinition {
     let text_box = "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.";
     CardDefinition {
@@ -4134,6 +4178,51 @@ fn fiery_annihilation() -> CardDefinition {
                 Effect::until_end_of_turn(
                     ObjectSelector::ClauseTarget(0),
                     Modification::ExileIfWouldDie,
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elenda_saint_of_dusk() -> CardDefinition {
+    let text_box = "Lifelink, hexproof from instants\nAs long as your life total is greater than your starting life total, Elenda gets +1/+1 and has menace. Elenda gets an additional +5/+5 as long as your life total is at least 10 greater than your starting life total.";
+    CardDefinition {
+        key: "fdn.elenda_saint_of_dusk",
+        scryfall_id: "24955f5f-093c-4d33-b0c1-911cd36032ce",
+        printed: PrintedCharacteristics {
+            name: "Elenda, Saint of Dusk".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vampire".into(), "Knight".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            statics: vec![
+                StaticAbility::HexproofFrom(SourceQuality::CardType(CardType::Instant)),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::compare(
+                        EffectValue::LifeAboveStarting(PlayerSelector::You),
+                        CompareOp::Gt,
+                        0,
+                    )),
+                    vec![
+                        Modification::pump(1, 1),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    ],
+                ),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::compare(
+                        EffectValue::LifeAboveStarting(PlayerSelector::You),
+                        CompareOp::Ge,
+                        10,
+                    )),
+                    vec![Modification::pump(5, 5)],
                 ),
             ],
             text_box: text_box.into(),
@@ -4505,6 +4594,78 @@ fn arbiter_of_woe() -> CardDefinition {
     }
 }
 
+fn crystal_barricade() -> CardDefinition {
+    let text_box = "Defender (This creature can't attack.)\nYou have hexproof. (You can't be the target of spells or abilities your opponents control.)\nPrevent all noncombat damage that would be dealt to other creatures you control.";
+    CardDefinition {
+        key: "fdn.crystal_barricade",
+        scryfall_id: "905d3e02-ea06-45e7-9adb-c8e7583323a2",
+        printed: PrintedCharacteristics {
+            name: "Crystal Barricade".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            replacement_effects: vec![ReplacementEffect::ModifyDamage {
+                source: DamageSource::any(Actor::AnyPlayer),
+                combat: Some(false),
+                recipient: DamageRecipient {
+                    by: Actor::You,
+                    players: false,
+                    permanents: Some(CardPredicate::creature()),
+                    this: false,
+                    except_source: true,
+                },
+                transform: DamageTransform::PreventAll,
+            }],
+            statics: vec![StaticAbility::ControllerHas(Box::new(
+                Modification::Hexproof,
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dreadwing_scavenger() -> CardDefinition {
+    let loot = vec![Effect::DrawCards { count: 1.into() }, Effect::discard()];
+    let text_box = "Flying\nWhenever this creature enters or attacks, draw a card, then discard a card.\nThreshold — This creature gets +1/+1 and has deathtouch as long as there are seven or more cards in your graveyard.";
+    CardDefinition {
+        key: "fdn.dreadwing_scavenger",
+        scryfall_id: "e24d838b-ab48-410a-9a50-dbfea5da089b",
+        printed: PrintedCharacteristics {
+            name: "Dreadwing Scavenger".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Nightmare".into(), "Bird".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::when_enters(TriggerSubject::This, loot.clone()),
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: loot,
+                },
+            ],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(threshold()),
+                vec![
+                    Modification::pump(1, 1),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Deathtouch])),
+                ],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn vampire_gourmand() -> CardDefinition {
     let text_box = "Whenever this creature attacks, you may sacrifice another creature. If you do, draw a card and this creature can't be blocked this turn.";
     CardDefinition {
@@ -4643,6 +4804,47 @@ fn koma_world_eater() -> CardDefinition {
     }
 }
 
+fn mossborn_hydra() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nThis creature enters with a +1/+1 counter on it.\nLandfall — Whenever a land you control enters, double the number of +1/+1 counters on this creature.";
+    CardDefinition {
+        key: "fdn.mossborn_hydra",
+        scryfall_id: "7054a0d7-396f-40b4-ab24-db591c3b08f0",
+        printed: PrintedCharacteristics {
+            name: "Mossborn Hydra".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into(), "Hydra".into()],
+            power: Some(0),
+            toughness: Some(0),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                kind: CounterKind::PlusOnePlusOne,
+                count: 1.into(),
+                condition: None,
+            }],
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::Property {
+                        of: Box::new(ObjectSelector::This),
+                        property: ObjectProperty::Counters(CounterKind::PlusOnePlusOne),
+                        aggregate: Aggregate::Sum,
+                    },
+                )],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn abyssal_harvester() -> CardDefinition {
     let text_box = "{T}: Exile target creature card from a graveyard that was put there this turn. Create a token that's a copy of it, except it's a Nightmare in addition to its other types. Then exile all other Nightmare tokens you control.";
     let target = TargetSpec::GraveyardCard {
@@ -4684,6 +4886,49 @@ fn abyssal_harvester() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn banner_of_kinship() -> CardDefinition {
+    let text_box = "As this artifact enters, choose a creature type. This artifact enters with a fellowship counter on it for each creature you control of the chosen type.\nCreatures you control of the chosen type get +1/+1 for each fellowship counter on this artifact.";
+    let chosen = CardPredicate {
+        chosen_subtype: true,
+        ..CardPredicate::creature()
+    };
+    let bonus = LayerValue::count(LayerCount::SourceCounters(CounterKind::Fellowship));
+    CardDefinition {
+        key: "fdn.banner_of_kinship",
+        scryfall_id: "a14c16c0-4053-46b0-8fa6-be8b4a7a1c8a",
+        printed: PrintedCharacteristics {
+            name: "Banner of Kinship".into(),
+            mana_cost: Some(ManaCost::parse("{5}")),
+            types: CardTypes::new([CardType::Artifact]),
+            replacement_effects: vec![
+                ReplacementEffect::AsEntersChoose {
+                    kind: EntryChoiceKind::CreatureType,
+                    look_at_opponent_hand: false,
+                },
+                ReplacementEffect::EntersWithCounters {
+                    on: EntryScope::This,
+                    kind: CounterKind::Fellowship,
+                    count: EffectValue::BattlefieldMatching {
+                        predicate: chosen.clone(),
+                    },
+                    condition: None,
+                },
+            ],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(chosen),
+                None,
+                vec![Modification::ModifyPt {
+                    power: bonus.clone(),
+                    toughness: bonus,
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -174,6 +174,7 @@ impl Game {
         permissions: CostPermissionContext,
         candidates: &[PermanentId],
     ) -> Vec<(PermanentId, Vec<TapPayment>)> {
+        let _scan = self.board_scan();
         let model_for = |tapped: Option<PermanentId>| {
             let mut model = self.payment_model(player, None);
             for permanent in permissions.reserved_tap.into_iter().chain(tapped) {

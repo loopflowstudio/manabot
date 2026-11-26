@@ -481,7 +481,9 @@ def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
     decision = capture_text_decision(env)
     assert "granted keywords" not in decision.text
     payload = json.loads(decision.capture_json)
-    keywords = {name: name == "lifelink" for name in _KEYWORDS}
+    keywords = {
+        name: name == "lifelink" for name in _KEYWORDS if name != "changeling"
+    }
     payload["observation"]["viewer_state"]["stack_objects"][0]["granted_keywords"] = (
         keywords
     )
@@ -996,6 +998,7 @@ _KEYWORDS = (
     "menace",
     "hexproof",
     "indestructible",
+    "changeling",
 )
 
 # Every observed field and the LLM text that states it, or why none is needed.
@@ -1027,6 +1030,9 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "id": "the permanent's alias",
         "registry_key": "[definition]",
         "controller_id": "controller",
+        "hexproof_from": "hexproof from the observed source quality",
+        "protection_from": "protection from the observed source quality",
+        "entry_controller_id": "entered under the entry controller's control",
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
@@ -1052,6 +1058,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "creature_types": "creature types set to",
         "is_granted_land": "land through an effect",
         "attacking": "attacking",
+        "blocked": "blocked",
         "first_strike_participant": "participated in the first-strike damage step",
         "exhausted_abilities": "exhaust abilities used",
         "once_each_turn_used": "once-each-turn abilities used this turn",
@@ -1158,6 +1165,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "sideboard_counts": "Initial sideboard",
         "remaining_sideboard_counts": "Remaining sideboard",
         "keeps_red_mana": "Keeps unspent red mana",
+        "hexproof": "Has hexproof",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
         "spells_cast": "cast N spells",
@@ -1433,6 +1441,59 @@ def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
     assert "; colors colorless" in text
     assert "keyword counter timestamps {'flying': 77}" in text
     assert "It is blue and black." in text
+
+
+def test_protection_and_hexproof_reach_both_viewer_presentations() -> None:
+    env = priority_root(
+        ("Lightning Bolt",),
+        ("Mountain", "Knight of Grace", "Progenitus", "Crystal Barricade"),
+        opponent=("Crystal Barricade",),
+    )
+    decision = capture_text_decision(env)
+    assert "hexproof from black" in decision.text
+    assert "protection from everything" in decision.text
+    assert "Has hexproof." in decision.text
+    board = serialize_observation(_viewer_observation(decision))["agent"]
+    assert board["hexproof"]
+    assert any(p.get("hexproof_from") == ["black"] for p in board["battlefield"])
+    assert any(
+        p.get("protection_from") == ["everything"] for p in board["battlefield"]
+    )
+    _choose(env, "Cast ")
+    choices = [action.description for action in capture_text_decision(env).actions]
+    assert "Target You" in choices
+    assert len(choices) == 4
+    assert any("Knight of Grace" in choice for choice in choices)
+    assert sum("Crystal Barricade" in choice for choice in choices) == 2
+    assert all("Progenitus" not in choice for choice in choices)
+
+
+def test_changeling_reaches_the_elf_anthem_and_viewer_text() -> None:
+    env = priority_root((), ("Taurean Mauler", "Dwynen, Gilt-Leaf Daen"))
+    decision = capture_text_decision(env)
+    assert "effective keywords changeling" in decision.text
+    board = serialize_observation(_viewer_observation(decision))["agent"]["battlefield"]
+    mauler = next(permanent for permanent in board if permanent["name"] == "Taurean Mauler")
+    assert mauler["keywords"] == ["changeling"]
+    assert (mauler["power"], mauler["toughness"]) == (3, 3)
+
+
+def test_permanent_control_and_blocked_status_are_visible() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"), opponent=("Gray Ogre",))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    state = payload["observation"]["viewer_state"]
+    agent_id = state["agent"]["id"]
+    opponent_id = state["opponent"]["id"]
+    _, my_ogre = state["agent_permanents"]
+    my_ogre.update(entry_controller_id=opponent_id, attacking=True, blocked=True)
+    opp_ogre = state["opponent_permanents"][0]
+    opp_ogre.update(entry_controller_id=agent_id)
+    lines = render_decision(_redigest(payload)).text.splitlines()
+    my_line = next(
+        line for line in lines if "entered under Opponent's control" in line
+    )
+    assert "; blocked;" in my_line and "; attacking;" in my_line
+    assert any("entered under your control" in line for line in lines)
 
 
 @pytest.mark.parametrize("historical", (False, True))
@@ -2887,3 +2948,121 @@ def test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy() -> None:
             "expiry": "end_of_turn",
         }
     ]
+
+
+def _pending_militant_discard() -> managym.Env:
+    env = priority_root(
+        ("Seize the Spoils", "Lightning Bolt"),
+        ("Mountain",) * 3 + ("Dryad Militant",),
+        opponent=("Dryad Militant",),
+    )
+    _choose(env, "Seize the Spoils")
+    _choose(env, "Lightning Bolt")
+    return env
+
+
+def test_discard_payment_replays_both_militant_replacement_commands() -> None:
+    env = _pending_militant_discard()
+    decision = capture_text_decision(env)
+    _assert_policy_input_holds_the_decision(env, decision)
+    assert len(decision.actions) == 2
+    for action in decision.actions:
+        assert "Dryad Militant" in action.description
+        assert "Exile instead" in action.description
+        branch = _replay_text_choice(env, action.reference)
+        cards = branch.observation_for_player(0).agent_cards
+        assert any(
+            card.characteristics.name == "Lightning Bolt"
+            and card.zone == managym.ZoneEnum.EXILE
+            for card in cards
+        )
+
+
+def test_sampled_opponent_can_finish_a_discard_payment_with_either_spell_type() -> None:
+    env = _pending_militant_discard()
+    sample = env.clone_env()
+    sample.determinize(0, 1)
+    space = json.loads(env.possible_world_space_json(1))
+    assert len(space["worlds"]) == 2
+    branches = [sample] + [
+        env.materialize_possible_world(1, space["identity"], index, 0, True)
+        for index in range(len(space["worlds"]))
+    ]
+    discarded = set()
+    for index, sample in enumerate(branches):
+        decision = capture_text_decision(sample)
+        assert len(decision.actions) == 2
+        submit_response(sample, decision, decision.actions[index % 2].reference)
+        observation = sample.observation_for_player(0)
+        [spell] = observation.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Seize the Spoils"
+        [exiled] = [
+            card
+            for card in observation.agent_cards
+            if card.zone == managym.ZoneEnum.EXILE
+        ]
+        discarded.add(exiled.characteristics.name)
+    assert discarded == {"Lightning Bolt", "Seize the Spoils"}
+
+
+def test_banner_replays_the_type_group_and_leaf_before_entry() -> None:
+    env = priority_root(("Banner of Kinship",), ("Forest",) * 5 + ("Taurean Mauler",))
+    _choose(env, "Banner of Kinship")
+    for _ in range(4):
+        groups = capture_text_decision(env)
+        if any("Types " in action.description for action in groups.actions):
+            break
+        _choose(env, "Pass priority")
+    _assert_policy_input_holds_the_decision(env, groups)
+    for action in groups.actions:
+        leaf = _replay_text_choice(env, action.reference)
+        names = capture_text_decision(leaf)
+        _assert_policy_input_holds_the_decision(leaf, names)
+        for name in names.actions:
+            if name.description.split()[-1] == "Elf":
+                resolved = _replay_text_choice(leaf, name.reference)
+                for viewer in (0, 1):
+                    assert (
+                        '"chosen":{"CreatureType":"Elf"}'
+                        in resolved.observation_for_player(viewer).toJSON()
+                    )
+                return
+    pytest.fail("Elf was absent from the creature-type choices")
+
+
+def test_tinybones_stashes_a_card_discarded_to_activate_landcycling() -> None:
+    env = priority_root(
+        ("Giant Koi",), ("Island", "Island"), opponent=("Tinybones, Bauble Burglar",)
+    )
+    _choose(env, "Giant Koi")
+    for _ in range(8):
+        cards = env.observation_for_player(0).agent_cards
+        if any(
+            card.characteristics.name == "Giant Koi"
+            and card.zone == managym.ZoneEnum.EXILE
+            for card in cards
+        ):
+            return
+        _choose(env, "Pass priority")
+    pytest.fail("Tinybones did not exile the discarded landcycler")
+
+
+def test_angel_replaces_a_one_life_gain_and_updates_its_power_at_25() -> None:
+    env = priority_root((), ("Vampire Neonate", "Angel of Vitality", "Swamp", "Swamp"))
+    env.scenario_set_life(0, 24)
+    env.scenario_refresh()
+    _choose(env, "Vampire Neonate")
+    for _ in range(4):
+        obs = env.observation_for_player(0)
+        if obs.agent.life == 26:
+            assert obs.opponent.life == 19
+            [angel] = [
+                p.characteristics
+                for p in obs.agent_permanents
+                if p.characteristics.name == "Angel of Vitality"
+            ]
+            assert (angel.power, angel.toughness) == (4, 4)
+            return
+        _choose(env, "Pass priority")
+    pytest.fail("Angel of Vitality did not replace the gain from 24 life")

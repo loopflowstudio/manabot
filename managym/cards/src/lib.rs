@@ -33,6 +33,7 @@ mod chk;
 mod clb;
 mod cmd;
 mod cmr;
+mod con;
 mod csp;
 mod dft;
 mod dgm;
@@ -50,6 +51,7 @@ mod fdn;
 mod fin;
 pub use fin::ragnarok;
 mod dsk;
+mod dst;
 mod fra;
 mod frf;
 mod fut;
@@ -102,10 +104,13 @@ mod one;
 mod ons;
 mod ori;
 mod p02;
+mod pjou;
 mod pls;
 mod pm15;
 mod por;
+mod prtr;
 mod psal;
+mod psnc;
 mod ptk;
 mod rav;
 mod rix;
@@ -134,6 +139,7 @@ mod tsp;
 mod ulg;
 mod usg;
 mod vis;
+mod voc;
 mod vow;
 mod war;
 mod woe;
@@ -205,6 +211,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     clb::cards,
     cmd::cards,
     cmr::cards,
+    con::cards,
     csp::cards,
     dft::cards,
     dis::cards,
@@ -214,6 +221,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     dom::cards,
     drk::cards,
     dsk::cards,
+    dst::cards,
     dtk::cards,
     ecl::cards,
     eld::cards,
@@ -275,6 +283,9 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     p02::cards,
     pls::cards,
     pm15::cards,
+    pjou::cards,
+    prtr::cards,
+    psnc::cards,
     por::cards,
     psal::cards,
     ptk::cards,
@@ -304,6 +315,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ulg::cards,
     usg::cards,
     vis::cards,
+    voc::cards,
     vow::cards,
     war::cards,
     woe::cards,

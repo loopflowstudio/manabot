@@ -216,7 +216,7 @@ fn stack_target_mana_value_boundaries_have_explicit_expected_choices() {
             land,
         ] {
             assert_eq!(
-                game.target_is_legal(target, &spec, PlayerId(0)),
+                game.test_target_is_legal(target, &spec, PlayerId(0)),
                 expected.contains(&target)
             );
         }
@@ -472,12 +472,12 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     // CR 702.11b applies regardless of the wording used to target the object.
     // A creature-only restriction and a spell-or-permanent restriction must
     // both exclude this opposing Ogre; changing spec cannot bypass hexproof.
-    assert!(!game.target_is_legal(permanent, &TargetSpec::Creature, PlayerId(1)));
+    assert!(!game.test_target_is_legal(permanent, &TargetSpec::Creature, PlayerId(1)));
     let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
     assert!(!game
         .legal_targets_for_spec(&spec, PlayerId(1))
         .contains(&permanent));
-    assert!(!game.target_is_legal(permanent, &spec, PlayerId(1)));
+    assert!(!game.test_target_is_legal(permanent, &spec, PlayerId(1)));
 }
 
 #[test]
@@ -526,7 +526,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             ];
             for (spec, expected) in cases {
                 assert_eq!(
-                    game.target_is_legal(target, &spec, controller),
+                    game.test_target_is_legal(target, &spec, controller),
                     expected,
                     "{owner:?} {controller:?} {spec:?}"
                 );
@@ -541,8 +541,12 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             .scenario_force_battlefield(owner, "Mountain", true)
             .unwrap();
         grant_hexproof(&mut game, land);
-        assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
-        assert!(!game.target_is_legal(
+        assert!(game.test_target_is_legal(
+            Target::Permanent(land),
+            &TargetSpec::LandYouControl,
+            owner
+        ));
+        assert!(!game.test_target_is_legal(
             Target::Permanent(land),
             &TargetSpec::SpellOrPermanent { min_mana_value: 0 },
             PlayerId(1 - owner.0)
@@ -641,8 +645,8 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let replacement = game.state.permanent_of(game.state.now(object)).unwrap();
         assert_ne!(game.state.now(object), before);
         assert_ne!(replacement, id);
-        assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
-        assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));
+        assert!(!game.test_target_is_legal(Target::Permanent(id), &spec, controller));
+        assert!(game.test_target_is_legal(Target::Permanent(replacement), &spec, controller));
         game.resolve_top_of_stack();
         assert_eq!(
             game.state.zones.zone_of(game.state.now(object)),
@@ -1402,6 +1406,9 @@ fn exude_toxin_target_threshold_uses_the_announced_x() {
                 .contains(&target),
             x == 1
         );
-        assert_eq!(game.target_is_legal(target, &spec, PlayerId(1)), x == 1);
+        assert_eq!(
+            game.test_target_is_legal(target, &spec, PlayerId(1)),
+            x == 1
+        );
     }
 }

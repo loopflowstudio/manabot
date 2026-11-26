@@ -437,3 +437,61 @@ fn drakuseth_target_relation_keeps_its_secondary_targets_distinct() {
     assert!(s.game().state.permanents[ogres[1]].is_none());
     assert!(s.game().state.permanents[ogres[3]].is_some());
 }
+
+#[test]
+fn angel_of_vitality_replaces_lifelink_before_damage_commits() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, choose_mode, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
+    let mut s = five_color_setup(&["Healer's Hawk", "Angel of Vitality"]);
+    let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+    let angel = s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.force_permanent_on_battlefield(0, "Angel of Vitality");
+    s.game_mut().state.players[0].life = 24;
+    clear_summoning_sickness(&mut s, hawk);
+    assert_eq!(s.game().characteristics(angel).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, hawk);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    s.assert_life(1, 20);
+    for mode in 0..2 {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        branch.assert_life(1, 19);
+        branch.assert_life(0, 27);
+        assert_eq!(branch.game().characteristics(angel).pt(), (4, 4));
+    }
+}
+
+#[test]
+fn angel_of_vitality_moves_elenda_across_each_life_threshold() {
+    use crate::support::{game::clear_summoning_sickness, play::attack_with};
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+
+    for (life, before, after, had_menace) in [(19, 4, 5, false), (28, 5, 10, true)] {
+        let mut s = five_color_setup(&[
+            "Elenda, Saint of Dusk",
+            "Angel of Vitality",
+            "Healer's Hawk",
+        ]);
+        let elenda = s.force_permanent_on_battlefield(0, "Elenda, Saint of Dusk");
+        s.force_permanent_on_battlefield(0, "Angel of Vitality");
+        let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+        clear_summoning_sickness(&mut s, hawk);
+        s.game_mut().state.players[0].life = life;
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (before, before));
+        assert_eq!(view.keywords.has(Keyword::Menace), had_menace);
+
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, hawk);
+        s.advance_to_active_step(0, StepKind::PostcombatMain);
+        s.assert_life(0, life + 2);
+        s.assert_life(1, 19);
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (after, after));
+        assert!(view.keywords.has(Keyword::Menace));
+    }
+}

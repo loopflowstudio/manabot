@@ -200,3 +200,38 @@ fn entry_choice_simultaneous_spyglass_and_banner() {
         }
     }
 }
+
+#[test]
+fn new_horizons_grants_the_land_two_mana_of_one_color() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::{counters, permanent_named, tapped},
+        play::{activate, cast, choose_mode, pass_until, settle},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::game_object::Target};
+    let mut s = five_color_setup(&["New Horizons", "Gray Ogre", "Leonin Skyhunter"]);
+    s.allow_priority_floats();
+    let land = s.force_permanent_on_battlefield(0, "Forest");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2G");
+    cast(&mut s, "New Horizons");
+    assert!(s.choose_target(Target::Permanent(land)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 1);
+    s.set_player_mana_pool(0, "0");
+    activate(&mut s, land, 0);
+    choose_mode(&mut s, 0);
+    assert!(tapped(&s, land));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+    cast(&mut s, "Leonin Skyhunter");
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(
+        s.game()
+            .characteristics(permanent_named(&s, "Leonin Skyhunter"))
+            .pt(),
+        (2, 2)
+    );
+}

@@ -10,8 +10,11 @@ use std::sync::Arc;
 
 use super::decision::Decision;
 use crate::state::{
-    ability::Actor,
-    card::{DamageTransform, SpellProfile},
+    ability::{Actor, EffectValue},
+    card::{
+        DamageRecipient, DamageSource, DamageTransform, EntryScope, GraveyardMover, Redirect,
+        SpellProfile,
+    },
 };
 use crate::{
     flow::{event::GameEvent, game::Game},
@@ -24,11 +27,37 @@ use crate::{
     },
 };
 
+/// The instruction that made a hand departure a discard, retained when its
+/// destination changes. A resolving cost is caused by the resolving ability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub(crate) enum DiscardCause {
+    Effect {
+        controller: PlayerId,
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        source: Option<ObjectId>,
+    },
+    Cost(PlayerId),
+    Cleanup,
+}
+
+impl DiscardCause {
+    pub(crate) fn effect(frame: &super::decision::EffectFrame) -> Self {
+        Self::Effect {
+            controller: frame.resolving_controller.unwrap_or(frame.controller),
+            source: frame.source_ref(),
+        }
+    }
+}
+
 /// How a card enters its new zone.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct ZoneEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chosen: Option<crate::state::permanent::EntryChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discard: Option<DiscardCause>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cast_from: Option<ZoneType>,
     /// The resolving Adventure proposes a graveyard move. Only its own
     /// replacement transfers the right to cast to the exile successor.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,6 +71,10 @@ pub(crate) struct ZoneEntry {
     pub profile: SpellProfile,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
+    /// Shuffle the owner's library after the batch, revealing this card first
+    /// when requested. A replaced mill can shuffle without a zone change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shuffle_library: Option<bool>,
     /// Battlefield: enters tapped.
     pub tapped: bool,
     /// Battlefield or exile: enters with these counters ("exile it with a
@@ -196,6 +229,8 @@ impl ZoneEntry {
             },
             _ => Self::default(),
         };
+        entry.shuffle_library = self.shuffle_library;
+        entry.discard = self.discard;
         entry.inspected_library_departure = self.inspected_library_departure;
         entry.library_top_departure = self.library_top_departure;
         entry
@@ -454,42 +489,62 @@ impl ReplacementCandidate {
         }
     }
 
+    /// A card's own replacement identifies that printing in an offer. Other
+    /// sources keep their exact battlefield identity when hands are sampled.
+    pub(super) fn names_card(&self, object: ObjectId) -> bool {
+        self.identity.source == object
+    }
+
     pub(crate) fn source(&self) -> ObjectId {
         self.identity.source
     }
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
-            ReplacementEffect::ExileInsteadOfGraveyard => {
-                "Exile without Adventure permission".into()
+            ReplacementEffect::GraveyardInstead {
+                to: Redirect::Exile,
+                ..
+            } => "Exile instead".into(),
+            ReplacementEffect::GraveyardInstead {
+                to: Redirect::OwnerLibraryShuffled { reveal },
+                ..
+            } => if *reveal {
+                "Reveal and shuffle into owner's library"
+            } else {
+                "Shuffle into owner's library"
+            }
+            .into(),
+            ReplacementEffect::ModifyLifeGain { additional, .. } => {
+                format!("Gain {additional} additional life")
+            }
+            ReplacementEffect::DiscardedInstead { to, .. } => {
+                format!("Discard into {to:?} instead")
             }
             ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::EntersPrepared => "Enter prepared".into(),
-            ReplacementEffect::PreventCombatDamageToOrFromSelf
-            | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
+            ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::Prevent(amount),
-                ..
-            } => {
-                format!("Prevent {amount} damage")
-            }
-            ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::Double,
-                ..
-            } => "Double the damage".into(),
+                combat, transform, ..
+            } => match transform {
+                DamageTransform::PreventAll if *combat == Some(true) => {
+                    "Prevent all combat damage".into()
+                }
+                DamageTransform::PreventAll => "Prevent all damage".into(),
+                DamageTransform::Prevent(amount) => format!("Prevent {amount} damage"),
+                DamageTransform::Double => "Double the damage".into(),
+                DamageTransform::Add(_) => "Increase the damage".into(),
+            },
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
-            ReplacementEffect::EntersWithPlusOneCounters { count, .. } => {
-                format!("Enter with {count} +1/+1 counters")
-            }
-            ReplacementEffect::EntersWithXCounters { kind } => {
-                format!("Enter with X {kind:?} counters")
-            }
             ReplacementEffect::EntersWithCounters { kind, count, .. } => {
-                format!("Enter with {count} {kind:?} counters")
-            }
-            ReplacementEffect::OpponentDamagePlusCounters { kind } => {
-                format!("Increase damage by this source's {kind:?} counters")
+                let count = match count {
+                    EffectValue::Fixed(n) => n.to_string(),
+                    EffectValue::X => "X".into(),
+                    EffectValue::GreatestPowerYouControl { .. } => "greatest power".into(),
+                    EffectValue::BattlefieldMatching { .. } => "number already controlled".into(),
+                    _ => "computed".into(),
+                };
+                format!("Enter with {count} {} counters", kind.name())
             }
             ReplacementEffect::UnspentManaBecomesRed => "Unspent mana becomes red".into(),
             ReplacementEffect::MultiplyTokens { multiplier } => {
@@ -530,6 +585,8 @@ pub(crate) struct PendingEvent {
 /// known information are read as the batch commits rather than retained.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct EventBatch {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub lifelink_proposed: bool,
     pub events: Vec<PendingEvent>,
     pub cursor: usize,
     pub binding: EventBinding,
@@ -597,6 +654,14 @@ pub(crate) enum EventBinding {
         reveal: bool,
     },
     ThisWay,
+    Discard {
+        player: PlayerId,
+        remaining: usize,
+    },
+    Countered {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        by: Option<ObjectId>,
+    },
     /// A Destroy instruction, including when its zone moves end in exile.
     Destroyed,
     /// Only sacrifices made by the resolving player bind the following instruction.
@@ -654,8 +719,6 @@ pub(crate) struct EventResult {
     pub excess_damage: Option<i32>,
     pub combat_damage: Option<(ObjectId, u32)>,
     pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
-    /// Life this damage member gains through lifelink; its batch commits it.
-    pub lifelink: Option<crate::flow::damage::LifelinkGain>,
 }
 
 impl EventResult {
@@ -676,12 +739,51 @@ pub(crate) enum BatchProgress {
 }
 
 impl Game {
+    pub(super) fn discard_proposal(&self, object: ObjectId, cause: DiscardCause) -> ProposedEvent {
+        self.zone_move_proposal(
+            object,
+            ZoneType::Graveyard,
+            ZoneEntry {
+                discard: Some(cause),
+                ..Default::default()
+            },
+        )
+    }
+
+    pub(crate) fn discard_batch(
+        &self,
+        binding: EventBinding,
+        cause: DiscardCause,
+        objects: impl IntoIterator<Item = ObjectId>,
+    ) -> EventBatch {
+        self.event_batch(
+            binding,
+            objects
+                .into_iter()
+                .map(|object| self.discard_proposal(object, cause)),
+        )
+    }
+
+    pub(crate) fn graveyard_batch(
+        &self,
+        binding: EventBinding,
+        objects: impl IntoIterator<Item = ObjectId>,
+    ) -> EventBatch {
+        self.event_batch(
+            binding,
+            objects.into_iter().map(|object| {
+                self.zone_move_proposal(object, ZoneType::Graveyard, ZoneEntry::default())
+            }),
+        )
+    }
+
     pub(crate) fn event_batch(
         &self,
         binding: EventBinding,
         events: impl IntoIterator<Item = ProposedEvent>,
     ) -> EventBatch {
         EventBatch {
+            lifelink_proposed: false,
             events: events
                 .into_iter()
                 .enumerate()
@@ -694,7 +796,7 @@ impl Game {
 
     /// A current proposal ready for replacement. Destruction and sacrifice
     /// become the graveyard move they cause (an indestructible permanent is
-    /// not destroyed), and a death the rules redirect is proposed as exile.
+    /// not destroyed). Their destination is still open to replacement.
     fn pending_event(&self, ordinal: usize, mut event: ProposedEvent) -> Option<PendingEvent> {
         if !self.proposal_is_current(&event) {
             return None;
@@ -721,7 +823,6 @@ impl Game {
                 entry: ZoneEntry::default(),
             };
         }
-        self.normalize_proposal(&mut event);
         Some(PendingEvent {
             event,
             ordinal,
@@ -730,44 +831,6 @@ impl Game {
             copy_chosen: false,
             second_card_first: None,
         })
-    }
-
-    fn normalize_proposal(&self, event: &mut ProposedEvent) {
-        // CR 614.1a: replace any death of the exact affected incarnation,
-        // including sacrifice and zero toughness, not only lethal damage.
-        if let ProposedEvent::ZoneMove {
-            object_id: object,
-            from: Some(ZoneType::Battlefield),
-            to,
-            ..
-        } = event
-        {
-            // CR 702.84a: an unearthed permanent leaving for anywhere but
-            // exile is exiled instead.
-            if *to != ZoneType::Exile
-                && *to != ZoneType::Battlefield
-                && self
-                    .lookup_current_permanent(*object)
-                    .is_ok_and(|id| self.exiled_if_it_would_leave(id))
-            {
-                *to = ZoneType::Exile;
-                return;
-            }
-            if *to == ZoneType::Graveyard
-                && self
-                    .lookup_current_permanent(*object)
-                    .ok()
-                    .is_some_and(|id| {
-                        // A finality counter (CR 122.1h) or an effect.
-                        self.exiled_if_it_would_die(id)
-                            || self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                                permanent.counter_count(CounterKind::Finality) > 0
-                            })
-                    })
-            {
-                *to = ZoneType::Exile;
-            }
-        }
     }
 
     pub(crate) fn advance_event_batch(
@@ -796,6 +859,11 @@ impl Game {
                     decision,
                     look_at_opponent_hand: false,
                 });
+                batch.cursor += 1;
+                continue;
+            }
+            if let Some(question) = self.entry_value_question(member, pending) {
+                questions.push(question);
                 batch.cursor += 1;
                 continue;
             }
@@ -834,10 +902,20 @@ impl Game {
                     if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
                         return BatchProgress::Decision(Box::new(decision));
                     }
-                    if let Some(question) = self.entry_value_question(member, pending) {
-                        questions.push(question);
-                    }
                     batch.cursor += 1;
+                    if batch.cursor == batch.events.len() && !batch.lifelink_proposed {
+                        let gains = self.lifelink_gains(&batch.events);
+                        batch.lifelink_proposed = !gains.is_empty();
+                        for gain in gains {
+                            let event = ProposedEvent::LifeChange {
+                                player: gain.controller,
+                                delta: gain.amount,
+                            };
+                            if let Some(pending) = self.pending_event(batch.events.len(), event) {
+                                batch.events.push(pending);
+                            }
+                        }
+                    }
                 }
                 [candidate] => self.apply_replacement(pending, candidate),
                 _ => {
@@ -925,6 +1003,7 @@ impl Game {
         let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
+        let mut shuffles = Vec::new();
         let mut hits = Vec::new();
         let mut totals: Vec<(ObjectId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
@@ -1005,6 +1084,26 @@ impl Game {
                 }
                 _ => None,
             };
+            if let ProposedEvent::ZoneMove {
+                object_id,
+                from,
+                to,
+                entry,
+            } = event
+            {
+                if let Some(reveal) = entry.shuffle_library {
+                    let card = self.state.entry_object(*object_id);
+                    let revealed_in_library =
+                        reveal && *from == Some(ZoneType::Library) && *to == ZoneType::Library;
+                    shuffles.push((card.owner, revealed_in_library.then_some(*object_id)));
+                    if reveal {
+                        self.emit(GameEvent::CardRevealed {
+                            owner: card.owner,
+                            definition: card.definition_id,
+                        });
+                    }
+                }
+            }
             let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
             if let Some(second_first) = pending.second_card_first {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
@@ -1035,7 +1134,20 @@ impl Game {
             }
             results.push(result);
         }
-        self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
+        // CR 701.20d: a revealed library card becomes a new object when
+        // shuffled. Renew it after all simultaneous moves have used the
+        // pre-shuffle ordering. No zone-change event or arrival is produced.
+        for (owner, revealed) in shuffles {
+            if let Some(object) = revealed {
+                self.state
+                    .mint_appearance(object, owner, ZoneType::Library, false);
+            }
+            self.shuffle_library(owner);
+        }
+        // Derive control once all simultaneous moves are visible. An Aura
+        // departing with its host cannot transfer the departing host back.
+        self.refresh_control();
+
         if let EventBinding::Moved {
             linked: Some((source, returns)),
             ..
@@ -1177,6 +1289,12 @@ impl Game {
         entries
     }
 
+    fn entry_controller(&self, object: ObjectId, entry: &ZoneEntry) -> PlayerId {
+        entry
+            .controller
+            .unwrap_or(self.state.entry_object(object).owner)
+    }
+
     /// The pending entry's "enter as a copy" question, once: `None` when it
     /// has none, was answered, or has nothing to copy.
     fn entry_copy_choice(&self, pending: &mut PendingEvent) -> Option<Decision> {
@@ -1193,9 +1311,7 @@ impl Game {
             return None;
         }
         let (scope, predicate, _) = self.entry_copy_terms(*object, entry)?;
-        let player = entry
-            .controller
-            .unwrap_or(self.state.entry_object(*object).owner);
+        let player = self.entry_controller(*object, entry);
         let controllers = self.scope_players(&scope, player, Some(*object), None);
         let candidates: Vec<PermanentId> = controllers
             .into_iter()
@@ -1317,9 +1433,12 @@ impl Game {
                 object_id: object,
                 entry,
                 ..
-            } => entry
-                .controller
-                .unwrap_or(self.state.entry_object(*object).owner),
+            } => self
+                .state
+                .permanent_of(*object)
+                .and_then(|id| self.state.permanents[id].as_ref().map(|p| p.controller))
+                .or_else(|| self.spell_on_stack(*object).map(|s| s.controller))
+                .unwrap_or_else(|| self.entry_controller(*object, entry)),
         }
     }
 
@@ -1402,7 +1521,8 @@ impl Game {
             } => {
                 if self.state.objects.get(object_id.slot()).is_none()
                     || self.state.zones.zone_of(*object_id) != *from
-                    || *from == Some(*to)
+                    || (*from == Some(*to)
+                        && !(*to == ZoneType::Library && entry.shuffle_library.is_some()))
                     || *entry != entry.for_zone(*to)
                 {
                     return false;
@@ -1428,31 +1548,188 @@ impl Game {
                 .is_some_and(|current| source.generation() < current)
     }
 
+    /// Replacements on a discard from hand. Sampling asks this same question
+    /// about a printing provisionally assigned to that hand (including a
+    /// printing currently hidden under a manifest).
+    pub(super) fn hand_replacements(
+        &self,
+        object: ObjectId,
+        discard: Option<DiscardCause>,
+    ) -> Vec<ReplacementCandidate> {
+        let face = &self.state[object];
+        let mut out = Vec::new();
+        for (index, effect) in face
+            .retained_base()
+            .1
+            .replacement_effects
+            .iter()
+            .enumerate()
+        {
+            let applies = match effect {
+                ReplacementEffect::GraveyardInstead {
+                    what: GraveyardMover::This,
+                    ..
+                } => true,
+                ReplacementEffect::DiscardedInstead { by, .. } => {
+                    matches!(discard, Some(DiscardCause::Effect { controller, .. }) if by.includes(face.owner, controller))
+                }
+                _ => false,
+            };
+            if applies {
+                out.push(ReplacementCandidate::printed(object, index, effect.clone()));
+            }
+        }
+        out.extend(self.battlefield_graveyard_replacements(object, true));
+        out
+    }
+
+    /// CR 614.1, 616.1: start with the proposed destination. An effect on
+    /// the departing object competes with printed battlefield replacements.
+    fn departure_replacements(
+        &self,
+        object: ObjectId,
+        from: Option<ZoneType>,
+        to: ZoneType,
+        entry: &ZoneEntry,
+    ) -> Vec<ReplacementCandidate> {
+        let mut out = Vec::new();
+        let graveyard = to == ZoneType::Graveyard;
+        if graveyard && from == Some(ZoneType::Hand) {
+            return self.hand_replacements(object, entry.discard);
+        }
+        let face = self.state.entry_object(object);
+        let first_rule = face.replacement_effects.len();
+        let exile = ReplacementEffect::GraveyardInstead {
+            what: GraveyardMover::This,
+            to: Redirect::Exile,
+        };
+        if from == Some(ZoneType::Stack) {
+            let spell = self.spell_on_stack(object);
+            if graveyard && entry.resolving_adventure.is_some() {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule,
+                    ReplacementEffect::AdventureExile,
+                ));
+            }
+            if spell.is_some_and(|s| s.flashback || graveyard && s.exile_instead_of_graveyard) {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule + 1,
+                    exile.clone(),
+                ));
+            }
+        }
+        if let Some(id) = self.state.permanent_of(object) {
+            if graveyard
+                && self.state.permanents[id]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::Finality)
+                    > 0
+            {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule,
+                    exile.clone(),
+                ));
+            }
+            for record in self.effects_on(id).filter(|r| {
+                r.modification == Modification::ExileIfWouldLeave
+                    || graveyard && r.modification == Modification::ExileIfWouldDie
+            }) {
+                let mut candidate = ReplacementCandidate::printed(object, 0, exile.clone());
+                candidate.identity.effect = Some(record.timestamp);
+                candidate.source_definition = record.source;
+                out.push(candidate);
+            }
+        }
+        if !graveyard || self.is_face_down_in_exile(object) {
+            return out;
+        }
+        // An object's own text can function outside the battlefield. On the
+        // battlefield both scopes read the active face and ability layer.
+        if from != Some(ZoneType::Battlefield) {
+            for (index, effect) in face.replacement_effects.iter().enumerate() {
+                if matches!(
+                    effect,
+                    ReplacementEffect::GraveyardInstead {
+                        what: GraveyardMover::This,
+                        ..
+                    }
+                ) {
+                    out.push(ReplacementCandidate::printed(object, index, effect.clone()));
+                }
+            }
+        }
+        out.extend(self.battlefield_graveyard_replacements(object, false));
+        out
+    }
+
+    fn battlefield_graveyard_replacements(
+        &self,
+        object: ObjectId,
+        in_hand: bool,
+    ) -> Vec<ReplacementCandidate> {
+        let face = self.state.entry_object(object);
+        let mut out = Vec::new();
+        for id in [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|p| self.iter_battlefield_permanents(p))
+        {
+            let source = self.permanent_object(id).expect("battlefield");
+            for (index, effect) in self.state[source].replacement_effects.iter().enumerate() {
+                let ReplacementEffect::GraveyardInstead { what, .. } = effect else {
+                    continue;
+                };
+                let applies = match what {
+                    GraveyardMover::This => !in_hand && source == object,
+                    GraveyardMover::Matching(predicate) => {
+                        face.is_card()
+                            && if in_hand {
+                                self.printing_matches_predicate(object, predicate)
+                            } else {
+                                self.object_matches_predicate(object, predicate)
+                            }
+                    }
+                };
+                if applies && !self.layer_view(id).abilities_lost {
+                    out.push(ReplacementCandidate::printed(source, index, effect.clone()));
+                }
+            }
+        }
+        out
+    }
+
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
+        let _scan = self.board_scan();
         let mut candidates = match event {
-            ProposedEvent::ZoneMove {
-                object_id,
-                from: Some(ZoneType::Stack),
-                to: ZoneType::Graveyard,
-                entry,
-            } => {
-                let mut choices = Vec::new();
-                for (index, replacement) in [
-                    entry
-                        .resolving_adventure
-                        .map(|_| ReplacementEffect::AdventureExile),
-                    self.spell_on_stack(*object_id)
-                        .is_some_and(|spell| spell.exile_instead_of_graveyard)
-                        .then_some(ReplacementEffect::ExileInsteadOfGraveyard),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if let Some(effect) = replacement {
-                        choices.push(ReplacementCandidate::printed(*object_id, index, effect));
+            ProposedEvent::LifeChange { player, delta }
+                if *delta > 0 && self.can_gain_life(*player) =>
+            {
+                let mut out = Vec::new();
+                for controller in [PlayerId(0), PlayerId(1)] {
+                    for (id, view) in self.layer_views(self.iter_battlefield_permanents(controller))
+                    {
+                        if view.abilities_lost {
+                            continue;
+                        }
+                        let source = self.permanent_object(id).expect("battlefield");
+                        for (index, effect) in
+                            self.state[source].replacement_effects.iter().enumerate()
+                        {
+                            if matches!(effect, ReplacementEffect::ModifyLifeGain { who, .. } if who.includes(controller, *player))
+                            {
+                                out.push(ReplacementCandidate::printed(
+                                    source,
+                                    index,
+                                    effect.clone(),
+                                ));
+                            }
+                        }
                     }
                 }
-                choices
+                out
             }
             ProposedEvent::CreateTokens {
                 controller, count, ..
@@ -1489,8 +1766,7 @@ impl Game {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
-                let source_facts = damage_source.and_then(|id| self.damage_source_facts(id));
-                let source_controller = source_facts.map(|(controller, _)| controller);
+                let source_controller = damage_source.and_then(|id| self.source_controller(id));
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
                 // board read across the replacement scan.
@@ -1510,36 +1786,34 @@ impl Game {
                         continue;
                     };
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-
-                    let source_side = source_controller == Some(permanent.controller)
-                        && permanent.controller != affected_controller;
                     for (definition_index, effect) in self.state[permanent.object]
                         .replacement_effects
                         .iter()
                         .enumerate()
                     {
                         let applies = match effect {
-                            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
-                                *combat
-                                    && (*damage_source == Some(source)
-                                        || *target == ProposedDamageTarget::Object(source))
-                            }
                             ReplacementEffect::ModifyDamage {
-                                creature_source,
-                                source_by,
-                                recipient_by,
+                                source: dmg_source,
+                                recipient,
+                                combat: kind,
                                 ..
                             } => {
-                                (!*creature_source
-                                    || source_facts.is_some_and(|(_, creature)| creature))
-                                    && recipient_by
-                                        .includes(permanent.controller, affected_controller)
-                                    && (*source_by == Actor::AnyPlayer
-                                        || source_controller.is_some_and(|p| {
-                                            source_by.includes(permanent.controller, p)
-                                        }))
+                                kind.is_none_or(|c| c == *combat)
+                                    && self.damage_source_matches(
+                                        dmg_source,
+                                        permanent.controller,
+                                        source,
+                                        *damage_source,
+                                        source_controller,
+                                    )
+                                    && self.damage_recipient_matches(
+                                        recipient,
+                                        permanent.controller,
+                                        source,
+                                        *target,
+                                        affected_controller,
+                                    )
                             }
-                            ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
                             _ => false,
                         };
                         if applies {
@@ -1547,6 +1821,35 @@ impl Game {
                                 source,
                                 definition_index,
                                 effect.clone(),
+                            ));
+                        }
+                    }
+                }
+                // Protection is a prevention effect. The affected player may
+                // order it with other replacements before the damage commits.
+                if let ProposedDamageTarget::Object(object) = target {
+                    let id = self
+                        .state
+                        .permanent_of(*object)
+                        .expect("live damage target");
+                    let view = self.layer_view(id);
+                    for (index, ability) in view.static_abilities.iter().enumerate() {
+                        if ability.protects_from(|quality| {
+                            damage_source.zip(source_controller).is_some_and(
+                                |(source, controller)| {
+                                    self.targeting_source(controller, source).matches(quality)
+                                },
+                            )
+                        }) {
+                            out.push(ReplacementCandidate::printed_static(
+                                *object,
+                                index,
+                                ReplacementEffect::ModifyDamage {
+                                    source: DamageSource::any(Actor::AnyPlayer),
+                                    recipient: DamageRecipient::any(Actor::AnyPlayer),
+                                    combat: None,
+                                    transform: DamageTransform::PreventAll,
+                                },
                             ));
                         }
                     }
@@ -1577,43 +1880,26 @@ impl Game {
                 let source = *object_id;
                 // Entry conditions read the prospective controller, including
                 // a spell or reanimation controlled by someone other than its owner.
-                let entering_controller = entry
-                    .controller
-                    .unwrap_or(self.state.entry_object(*object_id).owner);
+                let entering_controller = self.entry_controller(*object_id, entry);
                 let mut entries: Vec<_> = self
                     .entry_replacements(*object_id, entry)
                     .iter()
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
-                            ReplacementEffect::EntersPrepared
-                            | ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
-                            ReplacementEffect::EntersWithCounters { if_cast, .. }
-                                if !if_cast
-                                    || entry
-                                        .spell
-                                        .as_ref()
-                                        .is_some_and(|spell| spell.payment.is_some()) =>
-                            {
+                            ReplacementEffect::EntersPrepared | ReplacementEffect::EntersTapped => {
                                 effect.clone()
                             }
-                            ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
-                                if condition.as_ref().is_none_or(|condition| {
-                                    let mut frame = crate::flow::decision::EffectFrame::new(
-                                        entering_controller,
-                                        Vec::new(),
-                                    );
-                                    frame.kicked = entry.spell.as_ref().is_some_and(|s| s.kicked);
-                                    frame.x = entry.spell.as_ref().map_or(0, |s| s.x);
-                                    self.condition_holds(
-                                        condition,
-                                        entering_controller,
-                                        Some(&frame),
-                                        Some(source),
-                                        None,
-                                    )
-                                }) =>
+                            ReplacementEffect::EntersWithCounters {
+                                on: EntryScope::This,
+                                condition,
+                                ..
+                            } if self.entry_condition(
+                                condition.as_ref(),
+                                *object_id,
+                                entry,
+                                entering_controller,
+                            ) =>
                             {
                                 effect.clone()
                             }
@@ -1644,6 +1930,37 @@ impl Game {
                     let Some(source) = self.permanent_object(id) else {
                         continue;
                     };
+                    if !view.abilities_lost
+                        && self.state.permanents[id].as_ref().unwrap().controller
+                            == entering_controller
+                    {
+                        for (index, effect) in
+                            self.state[source].replacement_effects.iter().enumerate()
+                        {
+                            if let ReplacementEffect::EntersWithCounters {
+                                on: EntryScope::OtherYouControl(predicate),
+                                condition,
+                                ..
+                            } = effect
+                            {
+                                if source != *object_id
+                                    && self.entry_matches_predicate(*object_id, entry, predicate)
+                                    && self.entry_condition(
+                                        condition.as_ref(),
+                                        *object_id,
+                                        entry,
+                                        entering_controller,
+                                    )
+                                {
+                                    entries.push(ReplacementCandidate::printed(
+                                        source,
+                                        index,
+                                        effect.clone(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
                     for (definition_index, ability) in view.static_abilities.iter().enumerate() {
                         let predicate = match ability {
                             StaticAbility::EntersTapped(predicate) => predicate,
@@ -1668,6 +1985,17 @@ impl Game {
             }
             _ => Vec::new(),
         };
+        if let ProposedEvent::ZoneMove {
+            object_id,
+            from,
+            to,
+            entry,
+        } = event
+        {
+            if *to != ZoneType::Exile {
+                candidates.extend(self.departure_replacements(*object_id, *from, *to, entry));
+            }
+        }
         // Positive placements, including prospective entry counters. This is
         // deliberately recomputed after each transformation: an own-entry
         // replacement may create the first counters another effect can modify.
@@ -1683,12 +2011,9 @@ impl Game {
                 to: ZoneType::Battlefield,
                 entry,
                 ..
-            } if !entry.counters.is_empty() => Some((
-                *object_id,
-                entry
-                    .controller
-                    .unwrap_or(self.state.entry_object(*object_id).owner),
-            )),
+            } if !entry.counters.is_empty() => {
+                Some((*object_id, self.entry_controller(*object_id, entry)))
+            }
             _ => None,
         };
         if let Some((object_id, controller)) = recipient {
@@ -1766,6 +2091,70 @@ impl Game {
         }
     }
 
+    fn entry_condition(
+        &self,
+        condition: Option<&crate::state::ability::Condition>,
+        object: ObjectId,
+        entry: &ZoneEntry,
+        controller: PlayerId,
+    ) -> bool {
+        match condition {
+            Some(crate::state::ability::Condition::CastFrom { zone, owner }) => {
+                entry.cast_from.is_some_and(|from| {
+                    self.cast_from_matches(object, controller, from, *zone, *owner)
+                })
+            }
+            Some(condition) => {
+                let mut frame = crate::flow::decision::EffectFrame::new(controller, Vec::new());
+                frame.kicked = entry.spell.as_ref().is_some_and(|s| s.kicked);
+                frame.x = entry.spell.as_ref().map_or(0, |s| s.x);
+                self.condition_holds(condition, controller, Some(&frame), Some(object), None)
+            }
+            None => true,
+        }
+    }
+
+    fn damage_source_matches(
+        &self,
+        filter: &DamageSource,
+        controller: PlayerId,
+        replacement_source: ObjectId,
+        damage_source: Option<ObjectId>,
+        source_controller: Option<PlayerId>,
+    ) -> bool {
+        if filter.this {
+            return damage_source == Some(replacement_source);
+        }
+        (filter.by == Actor::AnyPlayer
+            || source_controller.is_some_and(|p| filter.by.includes(controller, p)))
+            && filter.predicate.as_ref().is_none_or(|predicate| {
+                damage_source.is_some_and(|dmg| self.spell_matches_predicate(dmg, predicate))
+            })
+    }
+
+    fn damage_recipient_matches(
+        &self,
+        recipient: &DamageRecipient,
+        controller: PlayerId,
+        replacement_source: ObjectId,
+        target: ProposedDamageTarget,
+        affected_controller: PlayerId,
+    ) -> bool {
+        if recipient.this {
+            return target == ProposedDamageTarget::Object(replacement_source);
+        }
+        recipient.by.includes(controller, affected_controller)
+            && match target {
+                ProposedDamageTarget::Player(_) => recipient.players,
+                ProposedDamageTarget::Object(object) => {
+                    (!recipient.except_source || object != replacement_source)
+                        && recipient.permanents.as_ref().is_some_and(|predicate| {
+                            self.object_matches_predicate(object, predicate)
+                        })
+                }
+            }
+    }
+
     /// Automatic and player-chosen replacements consume their identity together
     /// with the transformation, so neither path can offer it a second time.
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
@@ -1773,20 +2162,63 @@ impl Game {
         match (&mut pending.event, &candidate.effect) {
             (
                 ProposedEvent::ZoneMove { to, entry, .. },
-                ReplacementEffect::ExileInsteadOfGraveyard,
+                ReplacementEffect::GraveyardInstead { to: redirect, .. },
             ) => {
-                *to = ZoneType::Exile;
-                *entry = ZoneEntry::default();
+                *to = match *redirect {
+                    Redirect::Exile => ZoneType::Exile,
+                    Redirect::OwnerLibraryShuffled { reveal } => {
+                        entry.shuffle_library = Some(reveal);
+                        ZoneType::Library
+                    }
+                };
+                *entry = entry.for_zone(*to);
+            }
+            (
+                ProposedEvent::LifeChange { delta, .. },
+                ReplacementEffect::ModifyLifeGain { additional, .. },
+            ) => {
+                *delta = delta.saturating_add(*additional);
+            }
+            (
+                ProposedEvent::ZoneMove {
+                    object_id, entry, ..
+                },
+                ReplacementEffect::DiscardedInstead { to, .. },
+            ) => {
+                pending.event = self.zone_move_proposal(*object_id, *to, entry.clone());
             }
             (ProposedEvent::ZoneMove { to, entry, .. }, ReplacementEffect::AdventureExile) => {
                 *to = ZoneType::Exile;
                 entry.adventure_player = entry.resolving_adventure.take();
             }
+            (ProposedEvent::Damage { amount, .. }, ReplacementEffect::PreventCombatDamage) => {
+                *amount = 0
+            }
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventCombatDamageToOrFromSelf
-                | ReplacementEffect::PreventCombatDamage,
-            ) => *amount = 0,
+                ReplacementEffect::ModifyDamage { transform, .. },
+            ) => match transform {
+                DamageTransform::PreventAll => *amount = 0,
+                DamageTransform::Prevent(prevented) => {
+                    *amount = amount.saturating_sub_unsigned(*prevented).max(0);
+                }
+                DamageTransform::Double => *amount = amount.saturating_mul(2),
+                // Damage reduced to zero is no longer dealt (release notes).
+                DamageTransform::Add(additional) if *amount > 0 => {
+                    let mut frame = super::decision::EffectFrame::new(
+                        self.source_controller(candidate.identity.source)
+                            .unwrap_or(PlayerId(0)),
+                        Vec::new(),
+                    );
+                    frame.bind_source(
+                        Some(candidate.identity.source),
+                        Some(candidate.identity.source),
+                    );
+                    let added = self.effect_value(additional, &frame).max(0);
+                    *amount = amount.saturating_add(added);
+                }
+                DamageTransform::Add(_) => {}
+            },
             (
                 ProposedEvent::CreateTokens { count, .. },
                 ReplacementEffect::MultiplyTokens { multiplier },
@@ -1831,25 +2263,6 @@ impl Game {
                     entry.counters.change(kind, replaced - count);
                 }
             }
-
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::Prevent(prevented),
-                    ..
-                },
-            ) => {
-                *amount = amount.saturating_sub_unsigned(*prevented).max(0);
-            }
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::Double,
-                    ..
-                },
-            ) => {
-                *amount = amount.saturating_mul(2);
-            }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersPrepared) => {
                 entry.prepared = true;
             }
@@ -1857,40 +2270,18 @@ impl Game {
                 entry.tapped = true;
             }
             (
-                ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithPlusOneCounters { count, .. },
-            ) => {
-                debug_assert!(*count >= 0, "entry counter count must be nonnegative");
-                entry
-                    .counters
-                    .change(CounterKind::PlusOnePlusOne, (*count).max(0));
-            }
-            (
-                ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithXCounters { kind },
-            ) => {
-                entry.counters.change(
-                    *kind,
-                    entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),
-                );
-            }
-            (
-                ProposedEvent::ZoneMove { entry, .. },
+                ProposedEvent::ZoneMove {
+                    object_id, entry, ..
+                },
                 ReplacementEffect::EntersWithCounters { kind, count, .. },
             ) => {
-                entry.counters.change(*kind, (*count).max(0));
-            }
-            // Damage reduced to zero is no longer dealt (release notes).
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::OpponentDamagePlusCounters { kind },
-            ) if *amount > 0 => {
-                let counters = self
-                    .lookup_current_permanent(candidate.identity.source)
-                    .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(0, |permanent| permanent.counter_count(*kind));
-                *amount = amount.saturating_add(counters);
+                let mut frame = super::decision::EffectFrame::new(
+                    self.entry_controller(*object_id, entry),
+                    Vec::new(),
+                );
+                frame.x = entry.spell.as_ref().map_or(0, |spell| spell.x);
+                let amount = self.effect_value_with_chosen(count, &frame, entry.chosen.as_ref());
+                entry.counters.change(*kind, amount.max(0));
             }
             _ => {}
         }
@@ -1933,6 +2324,13 @@ impl Game {
                 to,
                 ref entry,
             } => {
+                if from == Some(to) {
+                    debug_assert!(to == ZoneType::Library && entry.shuffle_library.is_some());
+                    return EventResult {
+                        committed: true,
+                        ..Default::default()
+                    };
+                }
                 return self.commit_zone_move(
                     object_id,
                     from,
@@ -1940,7 +2338,7 @@ impl Game {
                     entry.for_zone(to),
                     lki,
                     followups,
-                )
+                );
             }
         };
         result

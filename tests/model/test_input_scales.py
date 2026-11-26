@@ -167,7 +167,7 @@ def test_player_mana_is_scalar_and_combat_stats_keep_their_thresholds() -> None:
     space = ObservationSpace()
     readings = fresh_readings(space)
     columns = published_columns(space)
-    for key, width, pools in (("agent_player", 100, 31), ("player_turn_state", 23, 6)):
+    for key, width, pools in (("agent_player", 101, 31), ("player_turn_state", 23, 6)):
         mana = [
             r
             for col, r in zip(columns[key], readings[key], strict=True)

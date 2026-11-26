@@ -64,17 +64,20 @@ pub enum FactKind {
     /// A rules program in learning tokens (detail: token value, values:
     /// token kind and ordinal): a copy exception's payload under its
     /// `Modification` id, a player's pooled mana with a spend effect or combat expiry
-    /// under `POOLED_MANA`, or a permanent's ward price that is not a mana
-    /// value under `WARD`.
+    /// under `POOLED_MANA`, a permanent's ward price that is not a mana
+    /// value under `WARD`, or a permanent's `StaticAbility::HexproofFrom` /
+    /// `StaticAbility::Protection` source quality.
     EffectProgram = 11,
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
     ContinuationProgram = 14,
     AbilityResolution = 15,
     TriggeringAmount = 16,
-    ChosenColor = 17,
-    ChosenSubtype = 18,
-    ChosenName = 19,
+    /// A keyword outside the fixed evergreen columns, joined to its object.
+    Keyword = 17,
+    ChosenColor = 18,
+    ChosenSubtype = 19,
+    ChosenName = 20,
 }
 
 impl FactKind {
@@ -86,7 +89,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 18] = [
+    pub const ALL: [FactKind; 19] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -102,6 +105,7 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::TriggeringAmount,
+        FactKind::Keyword,
         FactKind::ChosenColor,
         FactKind::ChosenSubtype,
         FactKind::ChosenName,
@@ -1494,6 +1498,7 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
         }
     }
     out[player::HAND_ONLY] = flag(player.hand_only_until.is_some());
+    out[player::HEXPROOF] = flag(player.hexproof);
     out[player::NO_MAXIMUM_HAND_SIZE] = flag(player.no_maximum_hand_size);
     out[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE] =
         flag(turn.step == StepKind::FirstStrikeCombatDamage);
@@ -1661,6 +1666,12 @@ fn encode_permanent_features(
             flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
+        out[permanent::BLOCKED] = flag(permanent.blocked);
+        out[permanent::CONTROL_DIFFERS_FROM_ENTRY] = flag(
+            permanent
+                .entry_controller_id
+                .is_some_and(|id| id != permanent.controller_id),
+        );
         out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
         out[permanent::FACE_DOWN] = flag(permanent.face_down);
     } else {
@@ -1776,9 +1787,29 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             );
         }
     }
-    // Counters on a visible card off the battlefield ("with a stash counter").
     if layout == InputLayout::OneToken {
+        for item in &obs.stack_objects {
+            if item
+                .spell
+                .as_ref()
+                .is_some_and(|spell| spell.keywords.changeling)
+                || item
+                    .granted_keywords
+                    .as_ref()
+                    .is_some_and(|keywords| keywords.changeling)
+            {
+                push(
+                    item.stack_object_id,
+                    FactKind::Keyword,
+                    name_value("changeling"),
+                    1,
+                );
+            }
+        }
         for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+            if card.keywords.changeling {
+                push(card.id, FactKind::Keyword, name_value("changeling"), 1);
+            }
             for (kind, count) in &card.counters {
                 push(
                     card.id,
@@ -1792,6 +1823,9 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
+        if layout == InputLayout::OneToken && permanent.keywords.changeling {
+            push(object, FactKind::Keyword, name_value("changeling"), 1);
+        }
         if permanent.plus1_counters > 0 {
             push(
                 object,
@@ -1965,6 +1999,29 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     if layout == InputLayout::OneToken {
+        for permanent in permanents() {
+            for (ability, qualities) in [
+                ("StaticAbility::HexproofFrom", &permanent.hexproof_from),
+                ("StaticAbility::Protection", &permanent.protection_from),
+            ] {
+                for (ordinal, quality) in qualities.iter().enumerate() {
+                    let token = crate::state::card::SourceQuality::from_wire_name(quality)
+                        .map(crate::state::card::SourceQuality::token_name);
+                    let detail = token.as_deref().unwrap_or(quality.as_str());
+                    out.push(Fact {
+                        object: permanent.id,
+                        kind: FactKind::EffectProgram,
+                        id: name_value(ability),
+                        detail: name_value(detail),
+                        values: [
+                            crate::cards::tokens::TokenKind::Variant as i64,
+                            ordinal as i64,
+                        ],
+                        effect: None,
+                    });
+                }
+            }
+        }
         permission_facts(obs, &mut out);
     }
     // Spend effects and combat expiry: one program per pooled class on its player.
@@ -2554,6 +2611,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
                         spell_profile: 0,
                         route_mana_value: None,
@@ -2572,6 +2630,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
                         spell_profile: 0,
                         route_mana_value: None,
@@ -2590,6 +2649,7 @@ mod tests {
                         ability_index: None,
                         continuation_index: None,
                         pays_directly: false,
+                        is_mana_ability: false,
                         announces_x: false,
                         spell_profile: 0,
                         route_mana_value: None,
@@ -2626,6 +2686,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2666,6 +2727,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2741,6 +2803,7 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                is_mana_ability: false,
                 announces_x: false,
                 spell_profile: 0,
                 route_mana_value: None,
@@ -3066,6 +3129,7 @@ mod tests {
                 ability_index: None,
                 continuation_index: None,
                 pays_directly: false,
+                is_mana_ability: false,
                 announces_x: false,
                 spell_profile: 0,
                 route_mana_value: None,

@@ -90,8 +90,7 @@ pub struct CombatPreview {
     /// `refused` is absent; otherwise the steps before the refusal.
     pub steps: Vec<DeclarationStep>,
     pub refused: Option<DeclarationRefusal>,
-    /// What the engine declared once the sequence ended (after, for
-    /// example, removing a lone block of a creature with menace).
+    /// What the engine declared once the sequence ended.
     pub declared_attackers: Vec<ObjectRenderId>,
     pub declared_blocks: Vec<PlannedBlock>,
 }
@@ -128,7 +127,7 @@ impl Game {
         let order = self.declaration_order(kind, viewer)?;
         let declarable = order
             .iter()
-            .map(|creature| self.declarable(kind, *creature))
+            .map(|creature| self.declarable(kind, *creature, &order))
             .collect::<Vec<_>>();
         let mut preview = CombatPreview {
             kind,
@@ -251,34 +250,20 @@ impl Game {
             .map_or_else(String::new, |object| self.observed_object_name(object))
     }
 
-    /// The attackers `blocker` may block now, and whether it must block.
-    fn block_options(&self, blocker: PermanentId) -> (Vec<PermanentId>, bool) {
-        let attackers = self
-            .state
-            .combat
-            .as_ref()
-            .map(|combat| combat.attackers.clone())
-            .unwrap_or_default();
-        let options: Vec<_> = attackers
-            .into_iter()
-            .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
-            .collect();
-        let required: Vec<_> = options
-            .iter()
-            .copied()
-            .filter(|attacker| self.must_be_blocked_by_all_able(*attacker))
-            .collect();
-        if required.is_empty() {
-            (options, false)
-        } else {
-            (required, true)
-        }
-    }
-
-    fn declarable(&self, kind: DeclarationKind, creature: PermanentId) -> DeclarableCreature {
+    fn declarable(
+        &self,
+        kind: DeclarationKind,
+        creature: PermanentId,
+        order: &[PermanentId],
+    ) -> DeclarableCreature {
         let (can_block, must_block) = match kind {
             DeclarationKind::Attackers => (Vec::new(), false),
-            DeclarationKind::Blockers => self.block_options(creature),
+            DeclarationKind::Blockers => {
+                let others: Vec<_> = order.iter().copied().filter(|id| *id != creature).collect();
+                let options = self.block_options(creature, &others);
+                let must_block = !options.contains(&None);
+                (options.into_iter().flatten().collect(), must_block)
+            }
         };
         DeclarableCreature {
             creature: self.render_id(creature),
@@ -488,8 +473,7 @@ impl Game {
     }
 
     /// The engine finished the declaration but did not declare the plan:
-    /// a requirement answered a skipped creature, or a restriction such as
-    /// menace (CR 702.110b) removed a block once every blocker was declared.
+    /// the engine answered a forced declaration for a skipped creature.
     fn undeclared(
         &self,
         kind: DeclarationKind,
@@ -556,9 +540,7 @@ impl Game {
                     let attacker = named(block.attacker);
                     return Some(DeclarationRefusal {
                         creature: block.blocker,
-                        reason: format!(
-                            "{attacker} can't be blocked that way (menace or a blocking limit), so the engine removes {label}'s block."
-                        ),
+                        reason: format!("{label} can't block {attacker} in this declaration."),
                         label,
                     });
                 }

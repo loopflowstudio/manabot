@@ -8,9 +8,9 @@
 //! excluding a partial list of other categories.
 //!
 //! The table holds every subtype the catalog authors (the cards crate's
-//! definition checks fail on an unlisted name) and the complete CR 205.3m
-//! creature list (2026-11-06),
-//! with straight apostrophes as used in card definitions.
+//! definition checks fail on an unlisted name) and the CR lists
+//! of creature, land, artifact, enchantment and spell types. Creature types
+//! follow CR 205.3m (2026-11-06), with Oracle's ASCII apostrophes.
 
 /// The card type whose subtype list contains a name (CR 205.3g–m).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -454,20 +454,20 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Zubera", Creature),
 ];
 
-/// Indexed by the grouped creature-type prompt in the same sorted order.
+/// Every subtype in the table, in name order.
+pub fn subtypes() -> impl Iterator<Item = &'static str> {
+    SUBTYPES.iter().map(|(name, _)| *name)
+}
+
+/// Sorted CR 205.3m names for "choose a creature type" (CR 205.3e).
 pub fn creature_type_names() -> &'static [&'static str] {
     static NAMES: std::sync::LazyLock<Vec<&str>> = std::sync::LazyLock::new(|| {
         SUBTYPES
             .iter()
-            .filter_map(|(name, category)| (*category == Creature).then_some(*name))
+            .filter_map(|&(name, kind)| (kind == Creature).then_some(name))
             .collect()
     });
     &NAMES
-}
-
-/// Every subtype in the table, in name order.
-pub fn subtypes() -> impl Iterator<Item = &'static str> {
-    SUBTYPES.iter().map(|(name, _)| *name)
 }
 
 /// The list `subtype` is on, or `None` for a name outside the table.
@@ -534,6 +534,7 @@ impl CreatureTypes {
     }
 
     /// The listed creature types; none for all creature types.
+    #[inline]
     pub fn listed(&self) -> &[String] {
         match self {
             Self::Listed(listed) => listed,
@@ -541,10 +542,12 @@ impl CreatureTypes {
         }
     }
 
+    #[inline]
     pub fn is_all(&self) -> bool {
         matches!(self, Self::All)
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Listed(listed) if listed.is_empty())
     }

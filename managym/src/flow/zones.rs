@@ -594,10 +594,6 @@ impl Game {
         self.state.observation_events_mut().push(event);
     }
 
-    pub(crate) fn was_cast_from_graveyard(&self, spell: &SpellOnStack) -> bool {
-        spell.cast_from == ZoneType::Graveyard && self.state[spell.object].is_card()
-    }
-
     pub(crate) fn push_spell_to_stack(
         &mut self,
         object: ObjectId,
@@ -811,16 +807,6 @@ impl Game {
         mut entry: ZoneEntry,
     ) -> ProposedEvent {
         let from = self.state.zones.zone_of(object_id);
-        let to_zone = if from == Some(ZoneType::Stack)
-            && to_zone != ZoneType::Exile
-            && self
-                .spell_on_stack(object_id)
-                .is_some_and(|spell| spell.flashback)
-        {
-            ZoneType::Exile
-        } else {
-            to_zone
-        };
         entry = entry.for_zone(to_zone);
         if to_zone == ZoneType::Battlefield
             && self
@@ -913,8 +899,9 @@ impl Game {
             None
         };
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen =
-                (to_zone != ZoneType::Library && !entry.is_face_down()).then_some(definition);
+            let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
+                && !entry.is_face_down())
+            .then_some(definition);
             self.forget_hand_card(owner, seen);
         }
 
@@ -1080,6 +1067,7 @@ impl Game {
             from: old_zone,
             to: to_zone,
             controller: event_controller,
+            discarded: entry.discard.is_some(),
             face_down: entry_face_down,
         };
         self.emit(event);
@@ -1188,7 +1176,11 @@ impl Game {
     /// moves to their battlefield without changing zones, and has not been
     /// under their control continuously since their turn began (CR 302.6).
     /// "For as long as you control" effects of its previous controller end.
-    pub(crate) fn change_control(&mut self, permanent_id: PermanentId, controller: PlayerId) {
+    pub(super) fn commit_control_change(
+        &mut self,
+        permanent_id: PermanentId,
+        controller: PlayerId,
+    ) {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
         };
@@ -1197,13 +1189,25 @@ impl Game {
         }
         let object_id = permanent.object;
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
+        permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;
         permanent.summoning_sick = true;
-        permanent.attacking = false;
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
+        self.remove_permanent_from_combat(permanent_id);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
+        }
+    }
+
+    /// Remove a permanent from combat (CR 506.4), keeping its attacking flag
+    /// aligned with `CombatState`.
+    pub(crate) fn remove_permanent_from_combat(&mut self, permanent_id: PermanentId) {
+        if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+            permanent.attacking = false;
+        }
+        if let Some(combat) = self.state.combat.as_mut() {
+            combat.remove_from_combat(permanent_id);
         }
     }
 

@@ -97,6 +97,9 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "enters transformed",
     "entry X",
     "entry controller",
+    "entry cast from",
+    "creature type choice",
+    "chosen creature type",
     "entry counters",
     "entry choice",
     "chosen on entry",
@@ -163,6 +166,13 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "resume discard payment",
+    "discard cause",
+    "discard controller",
+    "resolving controller",
+    "discard source",
+    "shuffle library after move",
+    "countered by",
     "paid by",
     "paid source",
     "turn face up",
@@ -526,6 +536,14 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
+            FrameCompletion::DiscardDuringResolution(_) => {
+                self.field("return", &"resume discard payment")
+            }
+            FrameCompletion::DiscardPayment(payment) => {
+                self.field("return", &"resume discard payment");
+                self.receipt(&payment.receipt, None);
+                self.payment(payment);
+            }
             FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
                 // Unfinished: the source's own printed cost is paid last.
@@ -842,6 +860,29 @@ impl<'a> Projection<'a> {
             self.field("chosen on entry", choice);
             self.note(|| format!("Chosen on entry: {choice:?}"));
         }
+        if let Some(cause) = entry.discard {
+            use crate::flow::proposed_event::{DiscardCause, EventCause};
+            let (kind, controller) = match cause {
+                DiscardCause::Effect { controller, source } => {
+                    if let Some(source) = source {
+                        self.object("discard source", source);
+                    }
+                    (EventCause::Effect, Some(controller))
+                }
+                DiscardCause::Cost(player) => (EventCause::Cost, Some(player)),
+                DiscardCause::Cleanup => (EventCause::TurnAction, None),
+            };
+            self.field("discard cause", &kind);
+            if let Some(player) = controller {
+                self.field("discard controller", &player);
+            }
+        }
+        if let Some(reveal) = entry.shuffle_library {
+            self.field("shuffle library after move", &reveal);
+        }
+        if let Some(zone) = entry.cast_from {
+            self.field("entry cast from", &zone);
+        }
         if entry.tapped {
             self.field("enters tapped", &true);
         }
@@ -1045,6 +1086,12 @@ impl<'a> Projection<'a> {
             }
         }
         match &batch.binding {
+            EventBinding::Countered { by } => {
+                self.field("bind result", &EventBinding::Countered { by: None });
+                if let Some(source) = by {
+                    self.object("countered by", *source);
+                }
+            }
             EventBinding::Moved {
                 linked,
                 shuffle,
@@ -1386,6 +1433,9 @@ pub(crate) fn project_frame(
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
+    if let Some(controller) = effect.resolving_controller {
+        out.field("resolving controller", &controller);
+    }
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
     if let Some(source) = effect.source_ref() {

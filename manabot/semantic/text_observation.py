@@ -37,6 +37,19 @@ from managym.decision_memory import (
 
 REPRESENTATION_VERSION = "manabot-text-10"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
+_SOURCE_CARD_TYPES = frozenset(
+    (
+        "artifact",
+        "battle",
+        "creature",
+        "enchantment",
+        "instant",
+        "kindred",
+        "land",
+        "planeswalker",
+        "sorcery",
+    )
+)
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
     "untap",
@@ -115,6 +128,7 @@ _STAGES = frozenset(
         "resolution_payment",
         "resolution_mode",
         "name_card",
+        "choose_creature_type",
         "discard",
         "select_milled",
         "select_cards",
@@ -471,6 +485,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "DoesntUntap": "doesn't untap during its controller's untap step",
         "Saddled": "saddled",
         "CantActivateAbilities": "its activated abilities can't be activated",
+        "MustBeBlocked": "must be blocked if able",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
         "PreventCombatDamage": "combat damage dealt to it is prevented",
@@ -482,8 +497,10 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         ),
         "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
         "LifeTotalCantChange": "life total can't change",
+        "Hexproof": "has hexproof",
         "ProtectionFromEverything": "protection from everything",
         "PhasedOut": "phased out (treated as though it doesn't exist)",
+        "Control": "controlled by the effect’s controller",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -930,6 +947,8 @@ class _Renderer:
                     f"from elsewhere, until {self.name(player.hand_only_until)} "
                     "begins a turn."
                 )
+            if player.hexproof:
+                lines.append("Has hexproof.")
             if player.no_maximum_hand_size:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
@@ -1060,6 +1079,18 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.blocked:
+                optional += "; blocked"
+            if (
+                permanent.entry_controller_id is not None
+                and permanent.entry_controller_id != permanent.controller_id
+            ):
+                entered_under = (
+                    "your"
+                    if permanent.entry_controller_id == state.agent.id
+                    else f"{self.name(permanent.entry_controller_id)}'s"
+                )
+                optional += f"; entered under {entered_under} control"
             if permanent.first_strike_participant:
                 optional += "; participated in the first-strike damage step"
             if permanent.attacking:
@@ -1120,6 +1151,15 @@ class _Renderer:
             parts.append("land through an effect")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
+        for ability, qualities in (
+            ("hexproof", permanent.hexproof_from),
+            ("protection", permanent.protection_from),
+        ):
+            for quality in qualities:
+                label = (
+                    f"{quality} sources" if quality in _SOURCE_CARD_TYPES else quality
+                )
+                parts.append(f"{ability} from {label}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")
         if permanent.transforms:

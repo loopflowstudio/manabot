@@ -6,6 +6,7 @@ import {
   sanitizeStops,
   saveStoredStops,
   STOP_STEPS,
+  STOPS_DEFAULTS_VERSION_KEY,
   STOPS_STORAGE_KEY,
 } from './stops';
 
@@ -28,10 +29,10 @@ afterEach(() => {
 });
 
 describe('stops config', () => {
-  it('defaults to main phases plus opponent end step with stack stops on', () => {
+  it('defaults to main phases, active combat steps, and opponent end step with stack stops on', () => {
     expect(defaultStops()).toEqual({
-      my: ['main1', 'main2'],
-      opponent: ['end_step'],
+      my: ['main1', 'declare_attackers', 'declare_blockers', 'main2'],
+      opponent: ['declare_attackers', 'declare_blockers', 'end_step'],
       stop_on_stack: true,
       auto_pass: true,
     });
@@ -79,5 +80,49 @@ describe('stops config', () => {
 
   it('falls back to defaults without localStorage', () => {
     expect(loadStoredStops()).toEqual(defaultStops());
+  });
+
+  it('migrates exact legacy v1 default stops once while preserving customized and post-v2 configs', () => {
+    const backing = stubLocalStorage();
+
+    // Unversioned exact legacy defaults upgrade to include active combat stops,
+    // keeping explicit flags such as stop_on_stack/auto_pass intact.
+    backing.set(
+      STOPS_STORAGE_KEY,
+      JSON.stringify({
+        my: ['main1', 'main2'],
+        opponent: ['end_step'],
+        stop_on_stack: false,
+        auto_pass: true,
+      }),
+    );
+    expect(loadStoredStops()).toEqual({
+      my: ['main1', 'declare_attackers', 'declare_blockers', 'main2'],
+      opponent: ['declare_attackers', 'declare_blockers', 'end_step'],
+      stop_on_stack: false,
+      auto_pass: true,
+    });
+    expect(backing.get(STOPS_DEFAULTS_VERSION_KEY)).toBe('2');
+
+    // A post-v2 player who explicitly removes combat stops keeps their choice.
+    const noCombat = {
+      my: ['main1', 'main2'],
+      opponent: ['end_step'],
+      stop_on_stack: true,
+      auto_pass: true,
+    };
+    saveStoredStops(noCombat);
+    expect(loadStoredStops()).toEqual(noCombat);
+
+    // An unversioned customized stop set is never overwritten.
+    backing.clear();
+    const customV1 = {
+      my: ['main1'],
+      opponent: ['upkeep', 'end_step'],
+      stop_on_stack: true,
+      auto_pass: true,
+    };
+    backing.set(STOPS_STORAGE_KEY, JSON.stringify(customV1));
+    expect(loadStoredStops()).toEqual(customV1);
   });
 });

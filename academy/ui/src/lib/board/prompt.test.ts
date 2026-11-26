@@ -67,6 +67,7 @@ describe('promptLine', () => {
     expect(line(modal('payment'))).toBe('Choose what the tap pays for Appeal to Eirdu');
     expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
     expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
+    expect(line(modal('choose_creature_type'))).toBe('Choose a creature type');
     expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');
     expect(line(modal('target_shares'))).toBe('Divide among targets for Appeal to Eirdu');
     expect(line(modal('entry_choice'))).toBe('Choose as Appeal to Eirdu enters');
