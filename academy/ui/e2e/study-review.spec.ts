@@ -9,7 +9,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const proof = new URL('../test-results/policy/addresses.json', import.meta.url);
-const study = (): string => (JSON.parse(readFileSync(proof, 'utf8')) as { study: string }).study;
+/** A launch address from the fixture server. Each starts one game, so a test that finishes one uses its own. */
+const launch = (name: 'study' | 'study_shown'): string => (JSON.parse(readFileSync(proof, 'utf8')) as Record<string, string>)[name];
+const study = (): string => launch('study');
 const shot = (name: string): string => fileURLToPath(new URL(`../test-results/policy/${name}.png`, import.meta.url));
 
 /** Every socket message the page receives, parsed. */
@@ -160,7 +162,7 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
 test('a decision made with analysis shown says so in Review and Games', async ({ page }) => {
   test.setTimeout(240_000);
   const messages = received(page);
-  await page.goto(study());
+  await page.goto(launch('study_shown'));
   const toggle = page.getByTestId('show-analysis');
   let shown = false;
   await playToEnd(page, async decision => {

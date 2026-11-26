@@ -106,6 +106,11 @@ def main() -> None:
                     "study": short_game(
                         academy.new_game(opponent="reader", seed=5).url
                     ),
+                    # A launch starts one game, so each test that plays one
+                    # to its end has its own.
+                    "study_shown": short_game(
+                        academy.new_game(opponent="reader", seed=5).url
+                    ),
                     "watch": academy.watch(players=("independent", "baseline")).url,
                     "ids": {
                         name: policy_registry().descriptor(name).id

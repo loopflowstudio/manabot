@@ -3216,7 +3216,12 @@ async def take_up_game(game_id: str) -> LiveGame:
         live = LIVE_GAMES.get(game_id)
         if live is None:
             game = _new_game_session()
-            await asyncio.to_thread(game.resume, game_id)
+            try:
+                await asyncio.to_thread(game.resume, game_id)
+            finally:
+                # The rebuild loaded an opponent and advanced the game; once it
+                # returns, no reply may describe that as work still running.
+                game.work.finish()
             live = LIVE_GAMES[game_id] = LiveGame(game)
     if live.game.watch_mode:
         raise ValueError("resume_unavailable: A watched game has no seat of yours.")

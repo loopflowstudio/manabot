@@ -496,6 +496,28 @@ def test_launch_setup_stays_with_initiator_and_shutdown_keeps_history(
     assert retained["winner"] is None
 
 
+def test_a_game_rebuilt_from_its_record_answers_with_no_work_running(
+    academy: Academy,
+) -> None:
+    launch = _launch_id(academy.new_game(opponent="passive", seed=7).url)
+    with _play_socket(academy) as pilot:
+        initial = _start_launch(pilot, launch)
+    # As idle eviction and a restart leave it: recorded, and not in memory.
+    server.LIVE_GAMES.pop(initial["game"]).game.release()
+    with _play_socket(academy) as returned:
+        returned.send(json.dumps({"type": "resume", "game": initial["game"]}))
+        resumed = _settled_reply(returned)
+    assert resumed["type"] == "observation", resumed
+    assert resumed["game"] == initial["game"]
+    assert (
+        resumed["recovery"]["frame"]["revision"]
+        == (initial["recovery"]["frame"]["revision"])
+    )
+    # The rebuild is finished when its reply is sent: a board that read it as
+    # work in progress would wait for a completion that never comes.
+    assert (resumed["work"] or {}).get("state") != "running", resumed["work"]
+
+
 def test_exported_game_source_label_and_import_rejection_messages(
     academy: Academy, tmp_path: Path
 ) -> None:

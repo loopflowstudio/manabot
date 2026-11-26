@@ -153,7 +153,7 @@ async function decide(page: Page): Promise<void> {
 }
 
 /** Start a game against the scripted passive opponent from the setup screen; returns its id. */
-async function startPassive(page: Page, origin: string, address = '/'): Promise<string> {
+async function startPassive(page: Page, origin: string, address = '/?hero=ur_lessons&villain=gw_allies'): Promise<string> {
   await page.goto(`${origin}${address}`);
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
@@ -176,6 +176,8 @@ test('a game survives closing the tab and restarting the server, and resumes fro
     // The address names the game, so a reload or a bookmark returns to it.
     expect(new URL(page.url()).searchParams.get('game')).toBe(game);
     const frame = (await tabState(page))!.last_frame!;
+    const history = await page.getByTestId('game-log').getByTestId('log-entry').allInnerTexts();
+    expect(history.length).toBeGreaterThanOrEqual(3);
     const opponent = await page.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent();
     expect(opponent).toContain('Independent');
     await page.close();
@@ -195,7 +197,7 @@ test('a game survives closing the tab and restarting the server, and resumes fro
     const resumed = (await tabState(returned))!.last_frame!;
     expect(resumed.match_id).toBe(frame.match_id);
     expect(resumed.offers.map(offer => offer.label)).toEqual(frame.offers.map(offer => offer.label));
-    expect(await returned.getByTestId('game-log').locator('button[data-move]').count()).toBeGreaterThanOrEqual(3);
+    expect(await returned.getByTestId('game-log').getByTestId('log-entry').allInnerTexts()).toEqual(history);
     expect(await returned.locator('[data-testid=player-plate][data-plate-side=opponent] [data-testid=player-target]').textContent()).toBe(opponent);
     await returned.screenshot({ path: fileURLToPath(new URL('../test-results/policy/resumed.png', import.meta.url)) });
     await decide(returned);
