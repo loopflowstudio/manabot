@@ -270,6 +270,41 @@ fn heartfire_immolator_deals_its_sacrificed_appearances_pumped_power() {
 }
 
 #[test]
+fn primal_might_pumps_and_optionally_fights() {
+    use crate::support::play::{choose, choose_mode};
+    use managym::agent::action::Action;
+
+    // With fight target: +X/+X applies before the fight.
+    let mut s = five_color_setup(&["Primal Might", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let giant_card = card_of(&s, giant);
+    cast(&mut s, "Primal Might");
+    choose_mode(&mut s, 3);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(giant)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (5, 5));
+    assert_eq!(permanent(&s, ogre).damage, 3);
+    assert_eq!(zone_of(&s, giant_card), Some(ZoneType::Graveyard));
+
+    // Declining the optional opposing creature still pumps +X/+X.
+    let mut s = five_color_setup(&["Primal Might", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    cast(&mut s, "Primal Might");
+    choose_mode(&mut s, 2);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert_eq!(permanent(&s, ogre).damage, 0);
+    assert_eq!(permanent(&s, giant).damage, 0);
+}
+
+#[test]
 fn garruks_uprising_checks_power_on_entry_and_on_resolution() {
     use crate::support::play::enter_and_settle;
     use managym::state::card::Keyword;

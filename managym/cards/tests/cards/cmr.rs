@@ -292,3 +292,35 @@ fn countering_the_cascade_hit_keeps_the_bottom_order_and_rng() {
     assert_eq!(bottom(&s, 2), order);
     assert_eq!(s.game().state.rng.get_word_pos(), rng);
 }
+
+#[test]
+fn cascade_uses_last_known_mana_value_when_its_spell_is_countered() {
+    use crate::support::game::move_from_library;
+    let mut s = five_color_setup(&["Volcanic Torrent", "Hill Giant", "Counterspell"]);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    let torrent = move_to_hand(&mut s, "Volcanic Torrent");
+    let pinned = pin_top(&mut s, &["Forest", "Volcanic Torrent", "Hill Giant"]);
+    cast_card(&mut s, torrent);
+    spend_colorless(&mut s);
+    let torrent_on_stack = now(&s, torrent);
+    s.pass_priority();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == counter),
+    );
+    assert!(s.choose_target(Target::StackSpell(torrent_on_stack)));
+    // Resolve Counterspell so Volcanic Torrent leaves the stack before cascade resolves.
+    while s.action_space().kind == ActionSpaceKind::Priority
+        && !s.game().state.stack_objects.is_empty()
+    {
+        s.pass_priority();
+    }
+    assert_eq!(zone_of(&s, torrent), Some(ZoneType::Graveyard));
+    let hit = now(&s, pinned[2]);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == hit),
+    );
+    settle(&mut s);
+    assert!(permanent_of(&s, hit).is_some());
+}

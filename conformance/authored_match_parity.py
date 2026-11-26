@@ -33,10 +33,10 @@ RECEIPT_PATH = (
     ROOT
     / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json"
 )
-AUTHORITY_SHA256 = "d19b3d9f9cd58e55f1f3f51aa5d8bb0fb65a4614ef6fcab3f397ccf01b951045"
-TERMINAL_STATE = "e66017eba0a088666cfe1171f470e9fcddc82f65686eb02aac5f4af4c191ea1d"
+AUTHORITY_SHA256 = "fbb3926dfe50af21a787697ab12780cc9162c1cf966799fe6dc6345cbd31efed"
+TERMINAL_STATE = "71222db7e94cc0ab6a10deed7c5700aa57b655d144ef0cf2ee0c915e4563b78f"
 
-COMMAND_COUNT = 174
+COMMAND_COUNT = 170
 
 
 def _json_bytes(value: object) -> bytes:
@@ -580,6 +580,16 @@ def _run_live(
                 row["presentation_events"],
                 transition.presentation_events,
             )
+            _equal(
+                "live",
+                revision,
+                "ordered_presentation_events_by_viewer",
+                row["presentation_events_by_viewer"],
+                {
+                    "0": transition.viewer_presentation_events[0],
+                    "1": transition.viewer_presentation_events[1],
+                },
+            )
             if ordinal == 0:
                 root = session._study_roots[0]
                 checkpoints.append(_checkpoint(root, "live", 0, []))
@@ -601,11 +611,9 @@ def _run_live(
         expected_presentation: dict[int, list[dict[str, Any]]] = {0: [], 1: []}
         for row in decisions:
             for viewer in (0, 1):
-                for event in row["presentation_events"]:
-                    projected = deepcopy(event)
-                    if viewer != int(row["actor"]):
-                        projected["caused_by"] = None
-                    expected_presentation[viewer].append(projected)
+                expected_presentation[viewer].extend(
+                    deepcopy(row["presentation_events_by_viewer"][str(viewer)])
+                )
         actual_tracks = {
             track.viewer: track.events for track in replay.presentation_tracks
         }

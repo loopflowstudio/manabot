@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: './e2e', testMatch: ['policy-runtime.spec.ts', 'input-recovery.spec.ts', 'study-review.spec.ts'],
   outputDir: './test-results/policy/browser', timeout: 60_000, workers: 1,
   expect: { timeout: 15_000 },
-  use: { actionTimeout: 15_000, baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', reducedMotion: 'reduce',
+  use: { actionTimeout: 15_000, baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', contextOptions: { reducedMotion: 'reduce' },
     viewport: { width: 1280, height: 800 } },
   webServer: {
     command: 'uv run --active --no-sync python -m tests.fixtures.policy_runtime_server', cwd: root,

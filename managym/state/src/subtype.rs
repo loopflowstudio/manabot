@@ -600,6 +600,25 @@ mod tests {
     }
 
     #[test]
+    fn creature_types_include_choices_outside_the_catalog() {
+        assert_eq!(
+            subtypes().filter(|name| is_creature_type(name)).count(),
+            367
+        );
+        assert_eq!(subtype_category("Automaton"), None);
+        for name in [
+            "Atog",
+            "Servo",
+            "Kithkin",
+            "Nightmare",
+            "Time Lord",
+            "C'tan",
+        ] {
+            assert!(is_creature_type(name), "{name}");
+        }
+    }
+
+    #[test]
     fn non_creature_subtypes_are_not_creature_types() {
         for name in ["Cave", "Shrine", "Lesson", "Saga", "Equipment", "Forest"] {
             assert!(!is_creature_type(name), "{name}");

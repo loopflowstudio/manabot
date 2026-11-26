@@ -73,7 +73,6 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
     )
     [ogre] = [action for action in targets.actions if target in action.description]
     submit_response(env, targets, ogre.reference)
-    choose(env, "Pay the offered cost")
     choose(env, "Pass priority")
     for viewer in (0, 1):
         [stack] = decision_surface_view(env, viewer)["stack_objects"]

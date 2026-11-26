@@ -367,6 +367,10 @@ def _ledger(
                 },
                 "semantic_events": semantic_events,
                 "presentation_events": transition.presentation_events,
+                "presentation_events_by_viewer": {
+                    "0": transition.viewer_presentation_events[0],
+                    "1": transition.viewer_presentation_events[1],
+                },
                 "encountered_definition_ids": transition.encountered_definition_ids,
                 "encountered_programs": encountered_programs,
             }

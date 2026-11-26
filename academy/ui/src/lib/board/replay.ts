@@ -24,7 +24,9 @@
  */
 import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
 import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark, type LivePoint } from '$lib/analysis';
-import type { ExperienceFrame, GameLogEntry } from '$lib/types';
+import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
+import { mergeBoards, type StepBoard } from './boards';
+import type { HistoryTurn } from './history';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
@@ -265,11 +267,125 @@ export function nameSeats(text: string, seatName: (seat: 0 | 1) => string, yours
   });
 }
 
+/** Walk back past announcing steps (`label === null` consequences of the same actor, turn and step) to the choice where a move began. */
+function moveStartKey(positions: readonly Position[], choiceIndex: number): string {
+  let at = choiceIndex;
+  const anchor = positions[at];
+  while (at >= 2) {
+    const prevAfter = positions[at - 1];
+    const prevChoice = positions[at - 2];
+    if (
+      prevAfter.kind === 'consequences'
+      && prevAfter.label === null
+      && prevAfter.actor === anchor.actor
+      && prevAfter.turn === anchor.turn
+      && prevAfter.step === anchor.step
+      && prevChoice.kind === 'choice'
+      && prevChoice.actor === anchor.actor
+      && prevChoice.turn === anchor.turn
+      && prevChoice.step === anchor.step
+    ) {
+      at -= 2;
+    } else {
+      break;
+    }
+  }
+  return positions[at].key;
+}
+
+/** The position key a track event jumps to in Review. */
+export function positionKeyForEvent(
+  positions: readonly Position[],
+  event: Pick<PresentationEvent, 'from_revision'>,
+  isMove: boolean,
+): string | null {
+  let fallback: string | null = null;
+  const preferred = isMove ? 'choice' : 'consequences';
+  for (let i = 0; i < positions.length; i++) {
+    const position = positions[i];
+    if (position.revision !== event.from_revision) continue;
+    if (position.kind === preferred) {
+      return preferred === 'choice' ? moveStartKey(positions, i) : position.key;
+    }
+    if (fallback === null) fallback = position.key;
+  }
+  return fallback;
+}
+
+export type ReviewJump =
+  | { kind: 'subcursor'; seq: number }
+  | { kind: 'seek'; index: number; pendingSubCursor: number | null };
+
+/**
+ * Decide how clicking a history line in Review moves: only stay on the current
+ * `consequences` transition when `targetKey` names that exact transition; a
+ * player move's `choice` key always seeks to `choice`.
+ */
+export function planReviewJump(
+  positions: readonly Pick<Position, 'key' | 'kind'>[],
+  selected: number,
+  currentKey: string | null,
+  targetKey: string,
+  boardSeq: number | null,
+): ReviewJump | null {
+  const at = positions.findIndex(position => position.key === targetKey);
+  if (at < 0) return null;
+  if (positions[at].kind === 'consequences' && boardSeq !== null) {
+    if (at === selected && currentKey === targetKey) {
+      return { kind: 'subcursor', seq: boardSeq };
+    }
+    return { kind: 'seek', index: at, pendingSubCursor: boardSeq };
+  }
+  return { kind: 'seek', index: at, pendingSubCursor: null };
+}
+
+/**
+ * Rebuild a Review `consequences` transition's per-line boards via `mergeBoards`
+ * before orienting each board to `nearSeat`, preserving capped-prefix fallbacks
+ * and surfacing patch reconstruction errors explicitly.
+ */
+export function reviewTransitionBoards(
+  position: Pick<RecordedPosition, 'kind' | 'revision' | 'observation' | 'history' | 'boards'>,
+  nearSeat: 0 | 1,
+  winner: number | null,
+): { boards: StepBoard[]; error: string | null } {
+  if (position.kind !== 'consequences') return { boards: [], error: null };
+  const nonPass = position.history.filter(
+    event => event.from_revision === position.revision && event.kind.kind !== 'passed',
+  );
+  const range = nonPass.length > 0
+    ? { first: nonPass[0].seq, last: nonPass.at(-1)!.seq }
+    : null;
+  const patches = position.boards ?? [];
+  if (patches.length === 0 && range === null) return { boards: [], error: null };
+  try {
+    const raw = mergeBoards([], position.observation, patches, range);
+    const boards = raw.map(board => ({
+      ...board,
+      projection: orientBoard(board.projection, nearSeat, winner),
+      ...(patches.length === 0 && board.first < board.last ? { fallback: true } : {}),
+    }));
+    return { boards, error: null };
+  } catch (reason) {
+    return { boards: [], error: reason instanceof Error ? reason.message : 'Board patch failed' };
+  }
+}
+
+/** The history jump key matching the shown Review position, or the latest before it. */
+export function historyKeyAt(
+  jumpKeys: ReadonlySet<string>,
+  positions: readonly Position[],
+  selected: number,
+): string | null {
+  for (let i = Math.min(selected, positions.length - 1); i >= 0; i--) {
+    if (jumpKeys.has(positions[i].key)) return positions[i].key;
+  }
+  return null;
+}
+
 /** The move a position belongs to: the latest move at or before it. */
 export function moveAt(entries: readonly GameLogEntry[], positions: readonly Position[], selected: number): string | null {
-  const keys = new Set(entries.map(entry => entry.id));
-  for (let i = Math.min(selected, positions.length - 1); i >= 0; i--) if (keys.has(positions[i].key)) return positions[i].key;
-  return null;
+  return historyKeyAt(new Set(entries.map(entry => entry.id)), positions, selected);
 }
 
 export interface StripMark {
@@ -333,14 +449,12 @@ export function analysedMarks(marks: readonly StripMark[], positions: readonly P
   });
 }
 
-/**
- * Each of your analysed moves' mark, by move id: every analysed decision from
- * the position a move jumps to up to the next move counts toward it, so a
- * cast's target and payment choices are marked with the cast.
- */
-export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+function aggregateMoveMarks(
+  choices: readonly [string, Position][],
+  decisions: ReadonlyMap<number, AnalysedDecision>,
+): Map<string, DecisionMark> {
   const marks = new Map<string, DecisionMark>();
-  for (const [move, choice] of yourMoveChoices(entries, positions)) {
+  for (const [move, choice] of choices) {
     const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
     const mark = decision ? decisionMark(decision) : null;
     if (!mark) continue;
@@ -348,6 +462,15 @@ export function moveMarks(entries: readonly GameLogEntry[], positions: readonly 
     marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
   }
   return marks;
+}
+
+/**
+ * Each of your analysed moves' mark, by move id: every analysed decision from
+ * the position a move jumps to up to the next move counts toward it, so a
+ * cast's target and payment choices are marked with the cast.
+ */
+export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+  return aggregateMoveMarks(yourMoveChoices(entries, positions), decisions);
 }
 
 /**
@@ -385,42 +508,77 @@ export function labelledTurns(marks: readonly StripMark[], minGap: number): Stri
   return shown;
 }
 
-/**
- * A live game's moves as strip marks, from its log: the person's and the
- * opponent's decisions, automation as plain positions. Live marks carry no
- * value and no position to jump to.
- */
-export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
-  return entries.map((entry, at) => ({
-    at,
-    key: entry.id,
-    turn: entry.turn,
-    turnStart: at === 0 || entry.turn !== entries[at - 1].turn,
-    decision: entry.actor === 'hero' || entry.actor === 'villain',
-    side: entry.actor === 'hero' ? 'you' : entry.actor === 'villain' ? 'opponent' : null,
-    value: null,
-    label: `Turn ${entry.turn ?? '?'} · ${entry.text}`,
-  }));
+function historyYourMoveChoices(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+): [string, Position][] {
+  const indexByKey = new Map(positions.map((position, index) => [position.key, index]));
+  const lineAt = new Map<number, { id: string; actor: HistoryTurn['lines'][number]['actor'] }>();
+  let firstHero: string | null = null;
+  for (const turn of turns) {
+    for (const line of turn.lines) {
+      if (line.passes !== null || !line.jumpKey) continue;
+      const at = indexByKey.get(line.jumpKey);
+      if (at === undefined) continue;
+      if (line.actor === 'you' && firstHero === null) firstHero = line.id;
+      const existing = lineAt.get(at);
+      if (!existing || (existing.actor !== 'you' && line.actor === 'you')) {
+        lineAt.set(at, { id: line.id, actor: line.actor });
+      }
+    }
+  }
+  const choices: [string, Position][] = [];
+  let lastHero: string | null = null;
+  positions.forEach((position, at) => {
+    const line = lineAt.get(at);
+    if (line?.actor === 'you') lastHero = line.id;
+    if (position.kind !== 'choice' || position.actor !== heroSeat) return;
+    const owner = lastHero ?? firstHero;
+    if (owner !== null) choices.push([owner, position]);
+  });
+  return choices;
+}
+
+/** Each of your analysed moves' mark, keyed by top-level `HistoryLine.id`. */
+export function historyMoveMarks(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+  decisions: ReadonlyMap<number, AnalysedDecision>,
+): Map<string, DecisionMark> {
+  return aggregateMoveMarks(historyYourMoveChoices(turns, positions, heroSeat), decisions);
+}
+
+/** Your moves chosen with a live analysis shown, keyed by top-level `HistoryLine.id`. */
+export function historyAnalysisShown(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+): Set<string> {
+  return new Set(
+    historyYourMoveChoices(turns, positions, heroSeat)
+      .filter(([, choice]) => choice.analysis_shown)
+      .map(([move]) => move),
+  );
 }
 
 /**
- * Live play's strip with the policy's line on it: each reading is a point of
- * its own, so a decision that logs nothing (a priority pass) still has one.
- * A decision read as you faced it sits where the action log stood then and is
- * named by the move before it; one read after the fact sits at the start of
- * its turn and is named by the move you chose. Logged moves carry no value.
+ * Overlay a policy's live readings onto live strip marks (`trackMarks`). Each
+ * reading becomes a point of its own, so a decision that emits no move still
+ * carries its score.
  */
-export function liveAnalysedMarks(entries: readonly GameLogEntry[], points: readonly LivePoint[]): StripMark[] {
-  const marks = logMarks(entries);
+export function withLiveAnalysisPoints(marks: readonly StripMark[], points: readonly LivePoint[]): StripMark[] {
+  const moveText = (mark: StripMark): string => mark.label.replace(/^Turn [^·]+ · /, '');
   const placed = points.map(live => {
     if (live.at !== null) return { live, at: live.at };
-    const turnStart = entries.findIndex(entry => entry.turn !== null && entry.turn >= (live.turn ?? 0));
-    return { live, at: turnStart === -1 ? entries.length : turnStart };
+    const turnStart = marks.findIndex(mark => mark.turn !== null && mark.turn >= (live.turn ?? 0));
+    return { live, at: turnStart === -1 ? marks.length : turnStart };
   }).sort((a, b) => a.at - b.at || a.live.event - b.live.event);
   const point = ({ live, at }: (typeof placed)[number]): StripMark => {
-    const last = entries[at - 1];
-    const turn = live.turn ?? last?.turn ?? entries[0]?.turn ?? null;
-    const where = live.label ?? (last ? `after ${last.text}` : 'before the first move');
+    const last = marks[at - 1];
+    const turn = live.turn ?? last?.turn ?? marks[0]?.turn ?? null;
+    const where = live.label ?? (last ? `after ${moveText(last)}` : 'before the first move');
     return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score, label: `Turn ${turn ?? '?'} · ${where}` };
   };
   const out: StripMark[] = [];

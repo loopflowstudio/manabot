@@ -24,7 +24,6 @@
     draft: ArrangeDraft;
     live: boolean;
     pending: boolean;
-    readingOut: boolean;
     ready: boolean;
     refused: GroupRefusal | null;
     onchange: (next: ArrangeDraft) => void;
@@ -37,7 +36,6 @@
     draft,
     live,
     pending,
-    readingOut,
     ready,
     refused,
     onchange,
@@ -211,7 +209,6 @@
                   type="button"
                   class="btn btn-secondary btn-xs"
                   disabled={disabled}
-                  aria-disabled={readingOut || undefined}
                   aria-label={`Put ${card.label} on top`}
                   onclick={() => onchange(scryPlace(draft, card.item.entity, 'top'))}
                 >Top</button>
@@ -219,7 +216,6 @@
                   type="button"
                   class="btn btn-secondary btn-xs"
                   disabled={disabled}
-                  aria-disabled={readingOut || undefined}
                   aria-label={`Put ${card.label} on bottom`}
                   onclick={() => onchange(scryPlace(draft, card.item.entity, 'bottom'))}
                 >Bottom</button>
@@ -228,7 +224,6 @@
                   type="button"
                   class="btn btn-secondary btn-xs"
                   disabled={disabled}
-                  aria-disabled={readingOut || undefined}
                   aria-label={`Add ${card.label} to order`}
                   onclick={() => onchange(orderPlace(draft, card.item.entity, true))}
                 >Place next</button>
@@ -368,7 +363,6 @@
       data-testid="arrange-confirm"
       data-draft-ready={ready}
       disabled={disabled || !ready || refused !== null}
-      aria-disabled={readingOut || undefined}
       onclick={onconfirm}
     >
       <span>{words.confirmLabel}</span>{#if ready && !disabled}<kbd>Space</kbd>{/if}
@@ -379,7 +373,6 @@
         class="btn btn-secondary btn-sm"
         data-testid="arrange-reset"
         disabled={disabled}
-        aria-disabled={readingOut || undefined}
         onclick={() => onchange(emptyArrangeDraft(group))}
       >Reset</button>
     {/if}

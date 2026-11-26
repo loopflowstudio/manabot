@@ -613,7 +613,7 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
     assert trace_payload["end_reason"] == server.SESSION_EXPIRED_END_REASON
 
 
-def test_wire_message_includes_pending_action_log_on_observation(monkeypatch):
+def test_wire_message_omits_legacy_action_log(monkeypatch):
     session = server.GameSession()
     session.obs = SimpleNamespace(
         game_over=False,
@@ -629,10 +629,6 @@ def test_wire_message_includes_pending_action_log_on_observation(monkeypatch):
         end_reason="disconnect",
         timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_action_log = [
-        {"actor": "villain", "turn": 3, "text": "Pass priority"}
-    ]
-
     session.published_prompt = SimpleNamespace(actions=[])
     monkeypatch.setattr(
         session,
@@ -648,43 +644,4 @@ def test_wire_message_includes_pending_action_log_on_observation(monkeypatch):
     payload = session._wire_message()
 
     assert payload["type"] == "observation"
-    assert payload["log"] == [{"actor": "villain", "turn": 3, "text": "Pass priority"}]
-    assert session._pending_action_log == []
-
-
-def test_wire_message_includes_pending_action_log_on_game_over(monkeypatch):
-    session = server.GameSession()
-    session.obs = SimpleNamespace(game_over=True)
-    session.trace = trace_store.Trace(
-        config=trace_store.GameConfig(
-            hero_deck={}, villain_deck={}, villain_type="passive"
-        ),
-        events=[],
-        final_observation={},
-        winner=None,
-        end_reason="disconnect",
-        timestamp="2026-03-06T00:00:00+00:00",
-    )
-    session._pending_action_log = [
-        {"actor": "villain", "turn": 3, "text": "Attack with Gray Ogre"}
-    ]
-
-    monkeypatch.setattr(
-        session,
-        "_experience_frame",
-        lambda: {
-            "projection": {"game_over": True},
-            "winner": 1,
-            "action_space": "",
-            "stops": {},
-        },
-    )
-
-    payload = session._wire_message()
-
-    assert payload["type"] == "game_over"
-    assert payload["winner"] == 1
-    assert payload["log"] == [
-        {"actor": "villain", "turn": 3, "text": "Attack with Gray Ogre"}
-    ]
-    assert session._pending_action_log == []
+    assert "log" not in payload

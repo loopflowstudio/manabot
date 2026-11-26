@@ -476,7 +476,7 @@ impl Game {
         let events = self.take_observation_events();
         let event_identities = events
             .iter()
-            .flat_map(|event| AgentObservation::event_data(self, event))
+            .flat_map(|event| AgentObservation::event_data(self, event, actor))
             .map(|event| event_identity(&event))
             .collect();
 

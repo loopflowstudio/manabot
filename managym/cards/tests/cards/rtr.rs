@@ -59,3 +59,43 @@ fn foundations_permanent_rogues_passage() {
     s.advance_to_active_step(1, StepKind::Main);
     assert!(!s.game().cant_be_blocked(ogre));
 }
+
+#[test]
+fn desecration_demon_combat_trigger_taps_and_grows_only_if_opponent_sacrifices() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::{card_of, counters, tapped, zone_of},
+        play::{choose, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, zone::ZoneType},
+    };
+
+    for sacrifice in [true, false] {
+        let mut s = five_color_setup(&["Desecration Demon", "Gray Ogre"]);
+        let demon = s.force_permanent_on_battlefield(0, "Desecration Demon");
+        let fodder = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let fodder_card = card_of(&s, fodder);
+        s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        if sacrifice {
+            select_card(&mut s, fodder_card);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+        assert_eq!(tapped(&s, demon), sacrifice);
+        assert_eq!(counters(&s, demon), i32::from(sacrifice));
+        assert_eq!(
+            zone_of(&s, fodder_card),
+            Some(if sacrifice {
+                ZoneType::Graveyard
+            } else {
+                ZoneType::Battlefield
+            })
+        );
+    }
+}

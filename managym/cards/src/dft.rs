@@ -46,6 +46,7 @@ fn caradora_heart_of_alacria() -> CardDefinition {
                                     subtypes_any: vec!["Mount".into(), "Vehicle".into()],
                                     ..Default::default()
                                 },
+                                max_mana_value: None,
                                 min: 0,
                                 max: EffectValue::Fixed(1),
                                 effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

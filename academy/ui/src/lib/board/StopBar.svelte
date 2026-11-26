@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
    * The turn's steps along the bottom of the board, and the stops set on
-   * them, laid out as MTGO does: one cell per step, your turn's stop above
-   * the step's name and the opponent's below, a rule between phases, the
+   * them, laid out as MTGO does: one cell per step, the opponent's turn's
+   * stop above the step's name and your turn's below (matching opponent on
+   * top, you on the bottom), a rule between phases, the
    * current step marked. Pressing a stop cycles it off → every time → once
    * (`nextStopState`); the Game popover's checkboxes edit the same `StopsConfig` and
    * stay the full-size control. The stops are one toolbar: Tab reaches it
@@ -22,11 +23,13 @@
     aside?: Snippet;
     /** The turn shown, named at the head of the bar and coloured by whose it is. */
     turn?: number;
+    /** True while the top bar carries the cursor reading as `[data-testid=turn-number]`. */
+    cursorActive?: boolean;
   }
 
-  let { track, oncycle, aside, turn }: Props = $props();
+  let { track, oncycle, aside, turn, cursorActive = false }: Props = $props();
 
-  const sides: StopSide[] = ['my', 'opponent'];
+  const sides: StopSide[] = ['opponent', 'my'];
   const SIDE_WORDS: Record<StopSide, string> = { my: 'your turn', opponent: "the opponent's turn" };
   const playing = $derived(oncycle !== undefined);
   const editable = $derived(playing && !track.every);
@@ -59,9 +62,9 @@
     bind:this={toolbar} onkeydown={editable ? onkeydown : undefined}>
     <!-- Whose turn it is, in that side's colour; the current step's cell carries the same colour on that side's edge. -->
     <div class="key">
-      {#if turn !== undefined}<p class="turn" data-testid="turn-number">Turn {turn} · {track.active === 'my' ? 'yours' : 'theirs'}</p>{/if}
-      <span aria-hidden="true" class:active={track.active === 'my'}>▲ Your turn</span>
-      <span aria-hidden="true" class:active={track.active === 'opponent'}>▼ Their turn</span>
+      {#if turn !== undefined}<p class="turn" data-testid={cursorActive ? undefined : 'turn-number'}>Turn {turn} · {track.active === 'my' ? 'yours' : 'theirs'}</p>{/if}
+      <span aria-hidden="true" class:active={track.active === 'opponent'}>▲ Their turn</span>
+      <span aria-hidden="true" class:active={track.active === 'my'}>▼ Your turn</span>
     </div>
     {#each track.marks as mark, step (mark.key)}
       <div class="cell" class:rule={mark.phaseStart} class:current={mark.current} role={editable ? 'group' : 'listitem'}
@@ -102,7 +105,7 @@
 </div>
 
 <style>
-  /* 64 px tall. A cell is three rows: your stop, the step's name, the opponent's
+  /* 64 px tall. A cell is three rows: the opponent's stop, the step's name, your
      stop. Each stop's button fills its row to the bar's edge, a large target,
      and draws its 12 px marker against the name (1 px away), so at least 8 px
      stays between a marker and the bar's top and bottom edges. */

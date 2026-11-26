@@ -25,8 +25,8 @@ def _root(game: server.GameSession) -> ExperienceFrame:
     game.obs = _keep_hands(game.env, game.obs)
     game.env.scenario_clear_hand(0)
     game.env.scenario_force_card_in_hand(0, "Ancestral Recall")
-    for _ in range(2):
-        game.env.scenario_force_battlefield(0, "Island", ready=True)
+    game.env.scenario_force_battlefield(0, "Island", ready=True)
+    game.env.scenario_force_battlefield(0, "Tranquil Cove", ready=True)
     game.obs = game.env.scenario_refresh()
     game.published_prompt = None
     return ExperienceFrame.model_validate(game._wire_message()["frame"])
@@ -45,7 +45,8 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                     "type": "new_game",
                     "config": {
                         "hero_deck": {
-                            "Island": 24,
+                            "Island": 20,
+                            "Tranquil Cove": 4,
                             "Ancestral Recall": 8,
                             "Prophetic Prism": 8,
                         },

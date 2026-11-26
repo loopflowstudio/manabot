@@ -218,6 +218,7 @@ impl GameSnapshot {
             payment_cache: Default::default(),
             payment_sources: Default::default(),
             statistics: None,
+            presentation: None,
             card_capture: None,
             capture_originals: Default::default(),
             capture_drawing: None,

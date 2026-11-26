@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "7d3ac1eb1c30488e4a54b9bb1b0213e44c5f6d55",
-    "date": "2026-11-25",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45532634475",
+    "commit": "09b3737f5c97acc252a45a2ed2f8c2288c5aacf0",
+    "date": "2026-11-26",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45754619140",
     "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Battlefield forms, copiable snapshots and persistent ability sources (MTG-420): one effective characteristics projection per permanent costs 4-12% headless step throughput depending on runner CPU; digests unchanged"
+    "reason": "Eliminate layer-evaluation CoW cloning and per-read Arc churn (MTG-484): digests unchanged; keep the speedup. Same-runner search total 150.773s -> 116.880s (-22.5%), worst reply 3.859s -> 2.909s (-24.6%), steps 15,877.6 -> 18,551.8/s (+16.8%)"
   },
   "bench_search": {
-    "worst_s": 3.9820356529999996,
-    "total_s": 163.988,
+    "worst_s": 2.9086568415,
+    "total_s": 116.88,
     "seeds": {
       "1": {
-        "worst_s": 3.9820356529999996,
-        "total_s": 52.033968216500014,
-        "digest": 13638875039089371439
+        "worst_s": 2.9086568415,
+        "total_s": 53.15507039100001,
+        "digest": 18024496392822331241
       },
       "2": {
-        "worst_s": 3.8323289794999997,
-        "total_s": 63.374016876000006,
-        "digest": 5466143068363283977
+        "worst_s": 1.8174924575,
+        "total_s": 34.118013759,
+        "digest": 3384997483956805958
       },
       "3": {
-        "worst_s": 3.554504098,
-        "total_s": 48.580169143000006,
-        "digest": 9998925852575961750
+        "worst_s": 2.592518525,
+        "total_s": 29.606667264000002,
+        "digest": 13611476192356854111
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 15227.727781353018,
-    "steps": 118559,
+    "steps_per_s": 18551.801724240155,
+    "steps": 115941,
     "games": 512,
-    "digest": 10601622128491155944
+    "digest": 4186394851247720253
   }
 }

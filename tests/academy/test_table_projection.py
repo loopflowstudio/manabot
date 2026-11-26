@@ -56,7 +56,7 @@ def test_the_spell_being_paid_for_is_announced_with_its_target(
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     config = {
-        "hero_deck": {"Mountain": 30, "Lightning Bolt": 10},
+        "hero_deck": {"Mountain": 20, "Gruul Guildgate": 10, "Lightning Bolt": 10},
         "villain_deck": {"Plains": 40},
         "villain_type": "passive",
         "seed": 11,
@@ -69,7 +69,23 @@ def test_the_spell_being_paid_for_is_announced_with_its_target(
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             seen: list[ExperienceFrame] = []
             for ordinal in range(120):
-                prefixes = ("Play Mountain", "Cast Lightning Bolt", "Target Villain")
+                has_choice = any(
+                    p.name == "Mountain" and not p.tapped
+                    for p in frame.projection.agent.battlefield
+                ) and any(
+                    p.name == "Gruul Guildgate" and not p.tapped
+                    for p in frame.projection.agent.battlefield
+                )
+                prefixes = (
+                    (
+                        "Play Gruul Guildgate",
+                        "Play Mountain",
+                        "Cast Lightning Bolt",
+                        "Target Villain",
+                    )
+                    if has_choice
+                    else ("Play Gruul Guildgate", "Play Mountain", "Target Villain")
+                )
                 offer = next(
                     (
                         o

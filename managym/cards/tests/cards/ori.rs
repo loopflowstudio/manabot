@@ -23,7 +23,7 @@ fn pyromancers_goggles_copies_a_red_instant_its_mana_paid_for() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
         inspect::card_of,
-        play::{cast_card, pay_rest, settle, tap_for_mana, target_opponent},
+        play::{cast_card, settle, tap_for_mana, target_opponent},
     };
     use managym::state::{
         game_object::PlayerId, mana::SpendEffect, player::ManaPayment, stack_object::StackObject,
@@ -42,12 +42,6 @@ fn pyromancers_goggles_copies_a_red_instant_its_mana_paid_for() {
         }
         cast_card(&mut s, bolt);
         target_opponent(&mut s);
-        if !auto && !floated {
-            tap_for_mana(&mut s, goggles);
-        }
-        if s.game().state.stack_objects.is_empty() {
-            pay_rest(&mut s);
-        }
         let case = format!("auto={auto} floated={floated}");
         // The trigger is the Goggles's, above the spell it will copy.
         let [StackObject::Spell(spell), StackObject::TriggeredAbility(trigger)] =
@@ -100,7 +94,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         }
         let reversal = force_new_card_in_hand(&mut s, 0, "Dramatic Reversal");
         cast_card(&mut s, reversal);
-        if !auto {
+        if !auto && s.game().state.stack_objects.is_empty() {
             tap_for_mana(&mut s, goggles);
             if s.game().state.stack_objects.is_empty() {
                 pay_rest(&mut s);

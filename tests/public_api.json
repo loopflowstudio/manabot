@@ -1512,6 +1512,9 @@
           "power": {
             "kind": "attribute"
           },
+          "put_into_graveyard_this_turn": {
+            "kind": "attribute"
+          },
           "registry_key": {
             "kind": "attribute"
           },
@@ -2154,6 +2157,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "enable_presentation": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "enable_profiler": {
             "kind": "method",
             "signature": "(self)"
@@ -2247,6 +2254,10 @@
           "prepare_possible_world_materializer": {
             "kind": "method",
             "signature": "(self, viewer, expected_space_identity, max_batch_size)"
+          },
+          "presentation_facts_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
           },
           "presentation_subjects_json": {
             "kind": "method",
@@ -2369,6 +2380,10 @@
           "submit": {
             "kind": "method",
             "signature": "(self, choice, *, at=...)"
+          },
+          "take_presentation_positions": {
+            "kind": "method",
+            "signature": "(self)"
           },
           "take_statistics": {
             "kind": "method",
@@ -3041,6 +3056,9 @@
           "characteristics": {
             "kind": "attribute"
           },
+          "chosen": {
+            "kind": "attribute"
+          },
           "colors": {
             "kind": "attribute"
           },
@@ -3391,6 +3409,9 @@
             "kind": "attribute"
           },
           "effect": {
+            "kind": "attribute"
+          },
+          "expiry": {
             "kind": "attribute"
           },
           "mana": {

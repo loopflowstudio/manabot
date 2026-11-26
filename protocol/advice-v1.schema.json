@@ -2840,6 +2840,18 @@
           "default": null,
           "title": "Blocking"
         },
+        "chosen": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chosen"
+        },
         "combat_damage_to_players": {
           "items": {
             "maximum": 255,
@@ -4221,6 +4233,16 @@
           ],
           "default": null,
           "title": "Effect"
+        },
+        "expiry": {
+          "default": "step",
+          "enum": [
+            "step",
+            "end_of_combat",
+            "end_of_turn"
+          ],
+          "title": "Expiry",
+          "type": "string"
         },
         "mana": {
           "maxItems": 6,

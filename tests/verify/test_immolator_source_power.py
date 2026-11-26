@@ -43,7 +43,6 @@ def test_pending_immolator_power_matches_damage(power: int) -> None:
     if power == 3:
         choose(env, "Lightning Bolt")
         choose(env, "Target Opponent")
-        choose(env, "Pay the offered cost")
         # Resolve prowess, then Lightning Bolt.
         for _ in range(4):
             choose(env, "Pass priority")

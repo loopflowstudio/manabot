@@ -131,6 +131,15 @@ impl PaymentReceipt {
         self.0.as_deref().unwrap_or(&NOTHING)
     }
 
+    /// Whether this exact appearance contributed an object or produced spent mana.
+    pub fn names_object(&self, object: ObjectId) -> bool {
+        self.contributions().iter().any(|c| c.object == object)
+            || self
+                .mana()
+                .iter()
+                .any(|u| u.source.is_some_and(|s| s.object == object))
+    }
+
     /// Nothing was paid: no mana, no contributing object and no life.
     pub fn is_empty(&self) -> bool {
         self.0.is_none()

@@ -1,89 +1,304 @@
 /**
- * The opponent's turn as it happens, one beat at a time.
+ * Moves on the table, one kept board stop at a time.
  *
- * Between two of the person's decisions the authority may play several moves
- * of the opponent's and deliver only the board after the last one. The board
- * draws that board at once (it is the authority's), then reads out what
- * happened on the way, one fact per beat, long enough to read, with what each
- * fact is about raised on the board. `beatsFor(facts, shown, names)` picks the
- * facts a person has not been shown yet that are not their own moves, when the
- * opponent made at least one of them (the consequences of the person's own
- * move alone are already on the board they are looking at). A busy turn of
- * more than `GROUP_ABOVE` facts reads as sentences instead: one player's
- * consecutive moves become one ("Heuristic played Plains and attacked with
- * Ally"), as do consecutive consequences of one kind. The board plays them one
- * pace apart (`BEAT_MS`) and drops them all at the first input or a new
- * frame. Reduced motion plays none:
- * the recap already lists every fact.
- *
- * A beat is presentation only: it never reorders, hides or chooses a decision.
- * The read-out comes before the decision, though: while a beat plays, the
- * decision's controls wait, and the first input ends the read-out and does
- * nothing else, so a person never answers a board they have not been shown.
+ * The walk is the history's one cursor advancing on a timer (`PACE_MS`) across
+ * unread board stops: lines that happened at once in the rules (sharing one
+ * kept `StepBoard`) form one stop, passes are never a stop, and the caption
+ * reads the stop's sentence(s) from `tell` (carried on `HistoryLine.sentence`).
+ * Clicking a scrubber tick or selecting a history line moves that same cursor
+ * and holds; reduced motion never auto-walks, while the scrubber, captions and
+ * "Replay turn" still work by hand.
  */
-import type { PresentationEvent } from '$lib/types';
-import type { RecentFact, Side } from './recent';
+import type { Observation, PresentationEvent } from '$lib/types';
+import { findBoard, type StepBoard } from './boards';
+import {
+  flattenHistory,
+  lineAtCursor,
+  type CursorSelection,
+  type FlatHistoryLine,
+  type HistoryTurn,
+} from './history';
+import { playerIndex } from './recent';
+import { tellCounter, tellPtDelta } from './tell';
 
-export interface Beat {
-  seq: number;
-  by: RecentFact['by'];
+export interface CursorView {
+  stop: WalkStop | null;
+  line: FlatHistoryLine | null;
+  lineIds: ReadonlySet<string>;
+  sourceSeq: number | null;
+  subjects: Set<number>;
+  seqs: ReadonlySet<number>;
+  caption: string;
+}
+
+const EMPTY_CURSOR_VIEW: CursorView = {
+  stop: null,
+  line: null,
+  lineIds: new Set(),
+  sourceSeq: null,
+  subjects: new Set(),
+  seqs: new Set(),
+  caption: '',
+};
+
+/**
+ * Resolve what the board, rail and caption focus for `selection`.
+ * `scope: 'stop'` (walk, scrubber tick, "Replay turn") keeps every
+ * line, subject, seq and caption phrase of the kept board stop intact even
+ * when the walk is paused; `scope: 'line'` (clicking a history line, ← →, or
+ * a Review sub-step) focuses that exact line.
+ */
+export function cursorView(
+  turns: readonly HistoryTurn[],
+  stops: readonly WalkStop[],
+  selection: CursorSelection | null,
+): CursorView {
+  if (selection === null) return EMPTY_CURSOR_VIEW;
+  const stop = stops.find(candidate => stopHasSeq(candidate, selection.seq)) ?? null;
+  const line = lineAtCursor(turns, selection.seq);
+  const useStop = selection.scope === 'stop' && stop !== null;
+  const lineIds = useStop
+    ? new Set(stop.lineIds)
+    : line
+      ? new Set([line.line.id])
+      : new Set(stop?.lineIds ?? []);
+  const subjects = new Set(
+    useStop ? stop.subjects : (line?.line.subjects ?? stop?.subjects ?? []),
+  );
+  const seqs = useStop
+    ? new Set(stop.seqs)
+    : new Set(line?.line.seqs ?? stop?.seqs ?? [selection.seq]);
+  const caption = (useStop ? stop.caption : line?.line.sentence) ?? stop?.caption ?? '';
+  return {
+    stop,
+    line,
+    lineIds,
+    sourceSeq: line?.line.sourceSeq ?? null,
+    subjects,
+    seqs,
+    caption,
+  };
+}
+
+export interface StopDelta {
+  kind: 'damage' | 'counters' | 'pump';
   text: string;
-  /** Objects on the board the beat raises, by id. */
-  subjects: number[];
 }
 
-/** At most this many beats in a row; earlier facts stay in the recap and the move list. */
-export const BEAT_LIMIT = 8;
-
-/** More facts than this read as grouped sentences. */
-export const GROUP_ABOVE = 4;
-
-function list(parts: string[]): string {
-  return parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+export interface StopDeltas {
+  objects: Map<number, StopDelta[]>;
+  /** Signed net life delta per player index (`< 0` damage/life loss, `> 0` life gain). */
+  players: Map<number, number>;
 }
 
-/** Consecutive moves of one player, or consecutive consequences of one kind, as one sentence each. */
-function grouped(facts: readonly RecentFact[], names: Record<Side, string>): Beat[] {
-  const runs: RecentFact[][] = [];
-  for (const fact of facts) {
-    const run = runs.at(-1);
-    const joins = run && (fact.by !== null ? run[0].by === fact.by : run[0].by === null && run[0].kind === fact.kind);
-    if (joins) run.push(fact);
-    else runs.push([fact]);
+/** Whether `stop` owns cursor `seq` (as its representative seq or a folded event seq). */
+export function stopHasSeq(stop: Pick<WalkStop, 'seq' | 'seqs'>, seq: number): boolean {
+  return stop.seq === seq || stop.seqs.includes(seq);
+}
+
+/** Per-stop damage, life, P/T and counter badges drawn on cards and player plates while walking or looking back. */
+export function computeStopDeltas(
+  events: readonly PresentationEvent[],
+  activeSeqs: ReadonlySet<number>,
+  projection: Pick<Observation, 'agent' | 'opponent'>,
+): StopDeltas {
+  const objects = new Map<number, StopDelta[]>();
+  const players = new Map<number, number>();
+  if (activeSeqs.size === 0) return { objects, players };
+  const objectDamage = new Map<number, number>();
+  const addObjectDelta = (id: number, delta: StopDelta, prepend = false): void => {
+    const list = objects.get(id) ?? [];
+    if (prepend) list.unshift(delta);
+    else list.push(delta);
+    objects.set(id, list);
+  };
+  for (const event of events) {
+    if (!activeSeqs.has(event.seq)) continue;
+    if (event.kind.kind === 'damage') {
+      if (event.kind.target.kind === 'object') {
+        const id = event.kind.target.id.entity;
+        objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
+      } else if (event.kind.target.kind === 'player') {
+        const idx = playerIndex(projection, event.kind.target.id);
+        if (idx !== null) players.set(idx, (players.get(idx) ?? 0) - event.kind.amount);
+      }
+    } else if (event.kind.kind === 'life') {
+      const idx = playerIndex(projection, event.kind.player);
+      if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
+    } else if (event.kind.kind === 'counters') {
+      addObjectDelta(event.kind.object.entity, { kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
+    } else if (event.kind.kind === 'pt_changed') {
+      const text = tellPtDelta(event.kind.power, event.kind.toughness);
+      const kind = event.kind.power <= 0 && event.kind.toughness <= 0 ? 'damage' : 'pump';
+      for (const obj of event.kind.objects) addObjectDelta(obj.entity, { kind, text });
+    }
   }
-  return runs.map(run => {
-    const by = run[0].by;
-    const prefix = by !== null ? `${names[by]} ` : '';
-    const parts = run.map((fact, i) => (i > 0 && prefix && fact.text.startsWith(prefix) ? fact.text.slice(prefix.length) : fact.text));
-    return { seq: run.at(-1)!.seq, by, text: list(parts), subjects: run.flatMap(fact => fact.subjects) };
-  });
+  for (const [id, amount] of objectDamage) addObjectDelta(id, { kind: 'damage', text: `−${amount}` }, true);
+  for (const [idx, delta] of players) {
+    if (delta === 0) players.delete(idx);
+  }
+  return { objects, players };
 }
 
-/** The facts after `shown` (an event seq) that were not the person's own, newest `BEAT_LIMIT` beats of them. */
-export function beatsFor(facts: readonly RecentFact[], shown: number, names: Record<Side, string>): Beat[] {
-  const unseen = facts.filter(fact => fact.seq > shown && fact.by !== 'you');
-  if (!unseen.some(fact => fact.by === 'opponent')) return [];
-  const beats = unseen.length > GROUP_ABOVE ? grouped(unseen, names)
-    : unseen.map(fact => ({ seq: fact.seq, by: fact.by, text: fact.text, subjects: fact.subjects }));
-  return beats.slice(-BEAT_LIMIT);
+export interface WalkStop {
+  /** Representative cursor seq for this stop (its first line's `boardSeq`). */
+  seq: number;
+  /** All event seqs folded into lines of this stop. */
+  seqs: number[];
+  /** `HistoryLine.id` values belonging to this stop (highlighted in the rail). */
+  lineIds: string[];
+  /** Turn number this stop belongs to. */
+  turn: number | null;
+  /** True when this stop starts a player move (drawn as a heavier scrubber tick). */
+  moveStart: boolean;
+  /** Sentence caption for this stop's line(s), including any rule. */
+  caption: string;
+  /** Board objects raised while the cursor rests on this stop. */
+  subjects: number[];
+  /** True when this stop belongs solely to the person's own move or draw step. */
+  yoursOnly: boolean;
+  /** True when every line in this stop is only a turn-based draw step. */
+  drawStepOnly: boolean;
+  /** Kept board range key (`first:last`) when kept without fallback; null otherwise. */
+  boardKey: string | null;
 }
 
 /**
- * The turn the event `seq` happened in: the last turn start at or before it,
- * or null when none is retained. A beat can be drawn on a later turn's board,
- * since one engine step may run from an attack through damage into the next
- * turn, and the authority keeps a board only after each step.
+ * Group selectable history lines into board stops: consecutive lines in the
+ * same turn that share one exact kept `StepBoard` merge into a single stop.
  */
-export function turnAt(events: readonly PresentationEvent[], seq: number): number | null {
-  let turn: number | null = null;
-  for (const event of events) {
-    if (event.seq > seq) break;
-    if (event.kind.kind === 'turn_started') turn = event.kind.turn_number;
+export function walkStops(
+  turns: readonly HistoryTurn[],
+  boards: readonly StepBoard[],
+): WalkStop[] {
+  const flat = flattenHistory(turns);
+  const stops: WalkStop[] = [];
+  for (const item of flat) {
+    const { line, turn, ownerSide, parent, cursor } = item;
+    const hit = findBoard(boards, cursor);
+    const boardKey = hit && !hit.fallback ? `${hit.first}:${hit.last}` : null;
+    const isDrawStep = line.rule === 'draw_step';
+    const yoursOnly = line.actor === 'you' || parent?.actor === 'you' || (ownerSide === 'you' && isDrawStep);
+    const prev = stops.at(-1);
+    if (prev && boardKey !== null && prev.boardKey === boardKey && prev.turn === turn) {
+      for (const s of line.seqs) {
+        if (!prev.seqs.includes(s)) prev.seqs.push(s);
+      }
+      if (!prev.lineIds.includes(line.id)) prev.lineIds.push(line.id);
+      if (line.isMove) prev.moveStart = true;
+      // Each line is its own fact: two creatures dealing the same damage read twice.
+      // Only a consequence its own parent's sentence already states is left out.
+      const statedByParent = parent !== null && prev.lineIds.includes(parent.id) && parent.sentence.includes(line.sentence);
+      if (line.sentence && !statedByParent) {
+        prev.caption = prev.caption ? `${prev.caption} · ${line.sentence}` : line.sentence;
+      }
+      for (const subject of line.subjects) {
+        if (!prev.subjects.includes(subject)) prev.subjects.push(subject);
+      }
+      prev.yoursOnly = prev.yoursOnly && yoursOnly;
+      prev.drawStepOnly = prev.drawStepOnly && isDrawStep;
+      continue;
+    }
+    stops.push({
+      seq: cursor,
+      seqs: [...line.seqs],
+      lineIds: [line.id],
+      turn,
+      moveStart: line.isMove,
+      caption: line.sentence,
+      subjects: [...new Set(line.subjects)],
+      yoursOnly,
+      drawStepOnly: isDrawStep,
+      boardKey,
+    });
   }
-  return turn;
+  return stops;
+}
+
+/** Whether the track has at least one non-draw-step stop worth scrubbing or replaying. */
+export function hasWalkableTurn(stops: readonly WalkStop[]): boolean {
+  return stops.some(stop => !stop.drawStepOnly);
+}
+
+/**
+ * Unread stops after `shownSeq` to walk automatically (both the person's own
+ * moves and the opponent's moves, in order). A bare turn-start draw step with
+ * no other moves or consequences does not trigger an automatic walk.
+ */
+export function unreadWalkStops(stops: readonly WalkStop[], shownSeq: number): WalkStop[] {
+  const unseen = stops.filter(stop => stop.seqs.some(s => s > shownSeq));
+  if (unseen.every(stop => stop.drawStepOnly)) return [];
+  return unseen;
+}
+
+/**
+ * The turn's stops shown on the bottom scrubber: the cursor's own turn while
+ * looking back, else the latest turn with a non-draw-step move or consequence.
+ */
+export function scrubberStops(
+  stops: readonly WalkStop[],
+  cursor: number | null,
+): { turn: number | null; stops: WalkStop[] } {
+  let targetTurn: number | null = null;
+  if (cursor !== null) {
+    const active = stops.find(stop => stopHasSeq(stop, cursor));
+    targetTurn = active?.turn ?? null;
+  }
+  if (targetTurn === null) {
+    for (let i = stops.length - 1; i >= 0; i -= 1) {
+      if (!stops[i].drawStepOnly) {
+        targetTurn = stops[i].turn;
+        break;
+      }
+    }
+  }
+  if (targetTurn === null) return { turn: null, stops: [] };
+  return {
+    turn: targetTurn,
+    stops: stops.filter(stop => stop.turn === targetTurn),
+  };
+}
+
+/**
+ * When a line shares a fallback board (dropped past one Command's position cap
+ * or a recording without per-line `boards`), count how many later selectable
+ * lines share that same board.
+ */
+export function sharedLaterCount(
+  turns: readonly HistoryTurn[],
+  cursor: number,
+  lastSeq: number,
+): number {
+  const flat = flattenHistory(turns);
+  let count = 0;
+  for (const item of flat) {
+    if (item.cursor > cursor && item.cursor <= lastSeq) count += 1;
+  }
+  return count;
 }
 
 // ———————————————————————————————————————— Pace
 
-/** How long each beat stays, in milliseconds: one short sentence, read once. */
-export const BEAT_MS = 700;
+export type WalkPace = 'study' | 'quick' | 'off';
+
+export const PACE_MS: Record<WalkPace, number | null> = {
+  study: 1400,
+  quick: 700,
+  off: null,
+};
+
+const PACE_STORAGE_KEY = 'academy.table.pace';
+
+export function loadWalkPace(): WalkPace {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PACE_STORAGE_KEY) : null;
+    if (raw === 'study' || raw === 'quick' || raw === 'off') return raw;
+  } catch { /* Default to Study pace when storage is unavailable. */ }
+  return 'study';
+}
+
+export function saveWalkPace(pace: WalkPace): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(PACE_STORAGE_KEY, pace);
+  } catch { /* Preference persistence is best-effort. */ }
+}

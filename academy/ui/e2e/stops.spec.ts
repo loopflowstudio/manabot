@@ -202,10 +202,12 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
     const edge = bar.getBoundingClientRect();
     const cell = bar.querySelector('[data-step=upkeep]')!.parentElement!;
     const [above, below] = [...cell.querySelectorAll('.stop i')].map(marker => marker.getBoundingClientRect());
+    const sides = [...cell.querySelectorAll('.stop')].map(node => node.getAttribute('data-side'));
     const name = cell.querySelector('.name')!.getBoundingClientRect();
     return { height: edge.height, marker: above.height, top: above.top - edge.top, bottom: edge.bottom - below.bottom,
-      toName: [name.top - above.bottom, below.top - name.bottom] };
+      toName: [name.top - above.bottom, below.top - name.bottom], sides };
   });
+  expect(room.sides).toEqual(['opponent', 'my']);
   expect(room.height).toBeGreaterThanOrEqual(60);
   expect(room.marker).toBe(12);
   expect(Math.min(room.top, room.bottom)).toBeGreaterThanOrEqual(8);
@@ -241,7 +243,7 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await page.getByTestId('stop-my-main2').first().click();
   await expect(stop('my', 'main2')).toHaveAttribute('data-state', 'off');
   await stop('opponent', 'upkeep').focus();
-  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowDown');
   await expect(stop('my', 'upkeep')).toBeFocused();
   await page.keyboard.press('Space');
   await expect(stop('my', 'upkeep')).toHaveAttribute('data-state', 'every');

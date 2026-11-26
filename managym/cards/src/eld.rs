@@ -1,12 +1,13 @@
 //! Throne of Eldraine.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetRelation,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, StaticAbility,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
+        EntryChoiceKind, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
+        StaticAbility, StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -17,6 +18,10 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        wishclaw_talisman(),
+        run_away_together(),
+        charming_prince(),
+        heraldic_banner(),
         syr_alin_the_lions_claw(),
         bake_into_a_pie(),
         raging_redcap(),
@@ -71,6 +76,7 @@ fn fabled_passage() -> CardDefinition {
                 effects: vec![Effect::SelectCards {
                     from: ObjectSelector::Zone(ZoneType::Library),
                     predicate: CardPredicate::basic_land(),
+                    max_mana_value: None,
                     min: 0,
                     max: EffectValue::Fixed(1),
                     effects: vec![
@@ -336,4 +342,145 @@ fn scorching_dragonfire() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn heraldic_banner() -> CardDefinition {
+    let text_box = "As this artifact enters, choose a color.\nCreatures you control of the chosen color get +1/+0.\n{T}: Add one mana of the chosen color.";
+    CardDefinition {
+        key: "eld.heraldic_banner",
+        scryfall_id: "2e349af5-3f25-46d3-908e-83b2f6028b95",
+        printed: PrintedCharacteristics {
+            name: "Heraldic Banner".into(),
+            types: CardTypes::new([CardType::Artifact]),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::Color,
+                look_at_opponent_hand: false,
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::AddOneColorManaValue {
+                    amount: 1.into(),
+                    chosen_color: true,
+                    creature_purposes: vec![],
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::YouControl(CardPredicate {
+                    chosen_color: true,
+                    ..CardPredicate::creature()
+                }),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: 1.into(),
+                    toughness: 0.into(),
+                }],
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn charming_prince() -> CardDefinition {
+    let text_box = "When this creature enters, choose one —\n• Scry 2.\n• You gain 3 life.\n• Exile another target creature you own. Return it to the battlefield under your control at the beginning of the next end step.";
+    CardDefinition {
+        key: "eld.charming_prince",
+        scryfall_id: "dcb94950-3f3e-4876-84f8-d5e4d9cfecee",
+        printed: PrintedCharacteristics {
+            name: "Charming Prince".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    unchosen: false,
+                    up_to: None,
+                    modes: vec![
+                        vec![Effect::Scry { count: 2 }],
+                        vec![Effect::gain_life(3)],
+                        vec![Effect::another_target(
+                            TargetSpec::PermanentYouOwn {
+                                predicate: CardPredicate::creature(),
+                            },
+                            |spec| {
+                                vec![
+                                    Effect::exile(ObjectSelector::Target(spec)),
+                                    Effect::at_next_end_step(
+                                        ObjectSelector::Moved,
+                                        vec![Effect::return_to_battlefield(
+                                            ObjectSelector::Remembered,
+                                            false,
+                                        )],
+                                    ),
+                                ]
+                            },
+                        )],
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn run_away_together() -> CardDefinition {
+    let text_box = "Choose two target creatures controlled by different players. Return those creatures to their owners' hands.";
+    CardDefinition {
+        key: "eld.run_away_together",
+        scryfall_id: "aeffc3c0-567c-442f-ba06-b7d9617c5789",
+        printed: PrintedCharacteristics {
+            name: "Run Away Together".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::Creature),
+                TargetRequirement {
+                    relation: Some(TargetRelation::DifferentControllerFrom(0)),
+                    ..TargetRequirement::one(TargetSpec::Creature)
+                },
+            ],
+            spell_effects: vec![Effect::Simultaneously {
+                effects: vec![
+                    Effect::return_to_hand(ObjectSelector::ClauseTarget(0)),
+                    Effect::return_to_hand(ObjectSelector::ClauseTarget(1)),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wishclaw_talisman() -> CardDefinition {
+    use managym_state::{ability::PlayerSelector, card::EntryScope, effect::EffectDuration};
+    CardDefinition {
+key: "eld.wishclaw_talisman",
+scryfall_id: "07c17b01-ee5d-491a-8403-b3f819b778c4",
+printed: PrintedCharacteristics {
+name: "Wishclaw Talisman".into(),
+mana_cost: Some(ManaCost::parse("{1}{B}")),
+types: CardTypes::new([CardType::Artifact]),
+replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::Wish, count: 3.into(), condition: None }],
+activated_abilities: vec![ActivatedAbilityDefinition {
+own_turn_only: true, mana_cost: ManaCost::parse("{1}"), tap_source: true, remove_counters: Some((CounterKind::Wish, 1)),
+effects: vec![Effect::search_for_card(ZoneType::Hand), Effect::GainControl {what: ObjectSelector::This, player: PlayerSelector::EachOpponent, duration: EffectDuration::Indefinite}], ..Default::default()
+}],
+text_box: "This artifact enters with three wish counters on it.\n{1}, {T}, Remove a wish counter from this artifact: Search your library for a card, put it into your hand, then shuffle. An opponent gains control of this artifact. Activate only during your turn.".into(),
+..Default::default()
+},
+..Default::default()
+}
 }

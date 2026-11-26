@@ -4,7 +4,8 @@
   "labels": {
     "objects": {
       "88:0": "Otter-Penguin",
-      "89:0": "Badgermole Cub"
+      "89:0": "Badgermole Cub",
+      "18:1": "Island"
     },
     "players": {
       "0": "Hero",
@@ -14,11 +15,16 @@
   },
   "events": [
     {
-      "seq": 1,
+      "labels": {
+        "objects": {
+          "89:0": "Badgermole Cub"
+        }
+      },
+      "seq": 3,
       "from_revision": 2,
       "to_revision": 3,
       "caused_by": null,
-      "group": 1,
+      "group": 3,
       "importance": "emphasized",
       "suggested_ms": 500,
       "sound": "combat.attack",
@@ -37,11 +43,17 @@
       }
     },
     {
-      "seq": 2,
+      "labels": {
+        "objects": {
+          "88:0": "Otter-Penguin",
+          "89:0": "Badgermole Cub"
+        }
+      },
+      "seq": 4,
       "from_revision": 3,
       "to_revision": 4,
       "caused_by": "curated-combat-2",
-      "group": 2,
+      "group": 4,
       "importance": "normal",
       "suggested_ms": 450,
       "sound": "combat.block",
@@ -60,67 +72,85 @@
       }
     },
     {
-      "seq": 3,
-      "from_revision": 3,
-      "to_revision": 4,
-      "caused_by": "curated-combat-2",
-      "group": 3,
-      "importance": "critical",
-      "suggested_ms": 500,
-      "sound": "combat.damage",
-      "kind": {
-        "kind": "damage",
-        "source": {
-          "kind": "object",
-          "id": {
-            "entity": 88,
-            "incarnation": 0
-          }
-        },
-        "target": {
-          "kind": "object",
-          "id": {
-            "entity": 89,
-            "incarnation": 0
-          }
-        },
-        "amount": 2
-      }
-    },
-    {
-      "seq": 4,
-      "from_revision": 3,
-      "to_revision": 4,
-      "caused_by": "curated-combat-2",
-      "group": 4,
-      "importance": "critical",
-      "suggested_ms": 500,
-      "sound": "combat.damage",
-      "kind": {
-        "kind": "damage",
-        "source": {
-          "kind": "object",
-          "id": {
-            "entity": 89,
-            "incarnation": 0
-          }
-        },
-        "target": {
-          "kind": "object",
-          "id": {
-            "entity": 88,
-            "incarnation": 0
-          }
-        },
-        "amount": 2
-      }
-    },
-    {
+      "labels": {
+        "objects": {
+          "88:0": "Otter-Penguin",
+          "89:0": "Badgermole Cub"
+        }
+      },
       "seq": 5,
       "from_revision": 3,
       "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 5,
+      "importance": "critical",
+      "suggested_ms": 500,
+      "sound": "combat.damage",
+      "kind": {
+        "kind": "damage",
+        "source": {
+          "kind": "object",
+          "id": {
+            "entity": 88,
+            "incarnation": 0
+          }
+        },
+        "target": {
+          "kind": "object",
+          "id": {
+            "entity": 89,
+            "incarnation": 0
+          }
+        },
+        "amount": 2
+      }
+    },
+    {
+      "labels": {
+        "objects": {
+          "88:0": "Otter-Penguin",
+          "89:0": "Badgermole Cub"
+        }
+      },
+      "seq": 6,
+      "from_revision": 3,
+      "to_revision": 4,
+      "caused_by": "curated-combat-2",
+      "group": 6,
+      "importance": "critical",
+      "suggested_ms": 500,
+      "sound": "combat.damage",
+      "kind": {
+        "kind": "damage",
+        "source": {
+          "kind": "object",
+          "id": {
+            "entity": 89,
+            "incarnation": 0
+          }
+        },
+        "target": {
+          "kind": "object",
+          "id": {
+            "entity": 88,
+            "incarnation": 0
+          }
+        },
+        "amount": 2
+      }
+    },
+    {
+      "labels": {
+        "objects": {
+          "88:0": "Otter-Penguin",
+          "89:0": "Badgermole Cub"
+        }
+      },
+      "seq": 7,
+      "from_revision": 3,
+      "to_revision": 4,
+      "caused_by": "curated-combat-2",
+      "group": 6,
       "importance": "critical",
       "suggested_ms": 650,
       "sound": "creature.died",
@@ -136,14 +166,16 @@
             "incarnation": 0
           }
         ]
-      }
+      },
+      "cause": 6,
+      "rule": "lethal_damage"
     },
     {
-      "seq": 6,
+      "seq": 8,
       "from_revision": 3,
       "to_revision": 4,
       "caused_by": "curated-combat-2",
-      "group": 6,
+      "group": 8,
       "importance": "emphasized",
       "suggested_ms": 350,
       "sound": "turn.start",
@@ -152,6 +184,30 @@
         "player": 0,
         "turn_number": 3
       }
+    },
+    {
+      "labels": {
+        "objects": {
+          "18:1": "Island"
+        }
+      },
+      "seq": 9,
+      "from_revision": 3,
+      "to_revision": 4,
+      "caused_by": "curated-combat-2",
+      "group": 9,
+      "importance": "normal",
+      "suggested_ms": 450,
+      "sound": null,
+      "kind": {
+        "kind": "drew",
+        "player": 0,
+        "object": {
+          "entity": 18,
+          "incarnation": 1
+        }
+      },
+      "rule": "draw_step"
     }
   ]
 }

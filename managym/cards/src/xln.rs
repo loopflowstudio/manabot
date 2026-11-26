@@ -4,8 +4,9 @@ use managym_state::ability::{
     TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    PrintedCharacteristics, StaticAbility, StaticScope,
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryChoiceKind, Keyword,
+    Keywords, PrintedCharacteristics, ReplacementEffect, Restriction, StaticAbility,
+    StaticRestriction, StaticScope,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -14,6 +15,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        sorcerous_spyglass(),
         new_horizons(),
         storm_fleet_spy(),
         pirate_s_cutlass(),
@@ -149,6 +151,34 @@ fn pirate_s_cutlass() -> CardDefinition {
     }
 }
 
+fn sorcerous_spyglass() -> CardDefinition {
+    let text_box = "As this artifact enters, look at an opponent's hand, then choose any card name.\nActivated abilities of sources with the chosen name can't be activated unless they're mana abilities.";
+    CardDefinition {
+        key: "xln.sorcerous_spyglass",
+        scryfall_id: "85506a24-8d60-475c-9f43-65994caca7d4",
+        printed: PrintedCharacteristics {
+            name: "Sorcerous Spyglass".into(),
+            types: CardTypes::new([CardType::Artifact]),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::CardName,
+                look_at_opponent_hand: true,
+            }],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::All(CardPredicate {
+                    chosen_name: true,
+                    ..Default::default()
+                }),
+                kind: Restriction::CantActivateNonmanaAbilities,
+                unless: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 fn new_horizons() -> CardDefinition {
     let land = TargetSpec::Permanent {
         predicate: CardPredicate {
@@ -177,7 +207,11 @@ fn new_horizons() -> CardDefinition {
             )],
             statics: vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::AddOneColorManaValue { amount: 2.into() }],
+                effects: vec![Effect::AddOneColorManaValue {
+                    amount: 2.into(),
+                    chosen_color: false,
+                    creature_purposes: vec![],
+                }],
                 ..Default::default()
             })],
             text_box: text_box.into(),

@@ -11,7 +11,7 @@ export default defineConfig({
   timeout: 120_000,
   workers: 1,
   expect: { timeout: 30_000 },
-  use: { actionTimeout: 20_000, baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', reducedMotion: 'reduce' },
+  use: { actionTimeout: 20_000, baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', contextOptions: { reducedMotion: 'reduce' } },
   webServer: {
     command: 'uv run --active --no-sync python -m tests.fixtures.configured_launch_server',
     cwd: root,

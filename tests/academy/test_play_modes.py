@@ -410,6 +410,7 @@ def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
         "damage",
         "died",
         "turn_started",
+        "drew",
     ]
     assert curated_tape == CURATED_COMBAT_FIXTURE["events"]
     recovery = session.current_recovery("explicit_resync")

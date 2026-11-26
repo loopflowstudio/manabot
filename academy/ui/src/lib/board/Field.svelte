@@ -5,7 +5,9 @@
    * spilling under its neighbours. A tapped card lies on its side in the
    * width its pile reserves for it, centred on the upright cards' line.
    */
+  import type { StopDelta } from './beats';
   import BoardCard from './BoardCard.svelte';
+  import type { DeathMark } from './motion';
   import type { PlannedSource } from './payment';
   import { fitRow, footprint, pileShapes, pileWidth, unpilePlanned, type PermanentItem, type Pile, type RowLimits } from './view';
 
@@ -20,10 +22,12 @@
     asked: Set<number>;
     /** Permanents that acted or were acted on since your last move. */
     touched: Set<number>;
-    /** Objects the opponent's move being read out is about. */
+    /** Objects the active stop or history line is about. */
     beat?: Set<number>;
     /** Damage dealt to each permanent since your last move. */
     damage: Map<number, number>;
+    /** Damage, counter or P/T deltas at the active cursor stop. */
+    stopDeltas?: ReadonlyMap<number, readonly StopDelta[]>;
     /** Sources the automatic payer would tap, by permanent id. */
     planned: Map<number, PlannedSource> | null;
     /** Copies to take out of their piles: the pending payment's own plan. */
@@ -37,6 +41,8 @@
     targeted?: Set<number>;
     /** A combat draft's place for each creature it concerns, and what pressing it does. */
     draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
+    /** Departed creatures shown as dashed ghost slots on a death stop so no surviving card slides under their rule tag. */
+    deaths?: readonly DeathMark[];
     sources?: ReadonlySet<number>;
     connectTargets?: ReadonlySet<number>;
     drop?: ReadonlySet<number>;
@@ -44,7 +50,7 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { sources, connectTargets, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
+  let { sources, connectTargets, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, stopDeltas, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, deaths = [], onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -111,6 +117,7 @@
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}
               dealt={damage.get(item.permanent.id) ?? 0}
+              stopDeltas={stopDeltas?.get(item.permanent.id) ?? []}
               planned={planned?.get(item.permanent.id) ?? null}
               paid={item.paid}
               side={toward === 'up' ? 'you' : 'opponent'}
@@ -127,6 +134,21 @@
         {/each}
       </div>
     {/each}
+    {#each deaths as mark (mark.key)}
+      <div
+        class="death-ghost"
+        class:delayed={mark.animate}
+        data-testid="death-chip"
+        data-death-object={mark.entity}
+        data-death-rule={mark.rule ?? ''}
+        style:width={`${Math.max(76, Math.min(116, fit.card))}px`}
+        style:height={`${Math.max(44, Math.min(112, cardHeight, Math.max(44, height - 4)))}px`}
+        aria-label={mark.rule === 'destroyed' ? `${mark.name} was destroyed` : `${mark.name} died${mark.rule ? `: ${mark.rule}` : ''}`}
+      >
+        <span class="death-ghost-name">{mark.name}</span>
+        <span class="death-ghost-rule">{mark.rule ?? 'died'}</span>
+      </div>
+    {/each}
   {/if}
 </div>
 
@@ -140,4 +162,25 @@
   .pile { position: relative; flex: none; }
   .member { position: absolute; top: 0; }
   .member:hover, .member:focus-within { z-index: 50 !important; }
+  .death-ghost {
+    flex: none; display: flex; flex-direction: column; justify-content: space-between; gap: 4px;
+    padding: 5px 6px; border-radius: var(--radius-card);
+    border: 1.5px dashed color-mix(in srgb, var(--damage) 75%, var(--border-strong));
+    background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+    color: var(--text-secondary); pointer-events: none; overflow: hidden;
+  }
+  .death-ghost.delayed { animation: ghost-in var(--motion-move) ease-out; }
+  @keyframes ghost-in { from { opacity: 0; } to { opacity: 1; } }
+  .death-ghost-name {
+    font: 600 12px/16px var(--font-serif); color: var(--text);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  }
+  .death-ghost-rule {
+    align-self: flex-start; padding: 1px 5px; border-radius: var(--radius-sm);
+    font: 600 12px/16px var(--font-sans); color: var(--bg); background: var(--damage);
+    max-width: 100%; overflow-wrap: anywhere;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .death-ghost.delayed { animation: none; }
+  }
 </style>

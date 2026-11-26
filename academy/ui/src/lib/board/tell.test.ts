@@ -1,0 +1,345 @@
+import { describe, expect, it } from 'vitest';
+
+import type { PresentationEvent, PresentationLabels, PresentationRule } from '$lib/types';
+import { segmentsFromText, segmentText, tell, tellRule, type TellPlayers } from './tell';
+
+const EMPTY: PresentationLabels = { objects: {}, players: {}, stacks: {} };
+const PLAYERS: TellPlayers = { youSeat: 0, you: 'You', opponent: 'Heuristic' };
+
+function event(
+  seq: number,
+  kind: PresentationEvent['kind'],
+  extra: Partial<PresentationEvent> = {},
+): PresentationEvent {
+  return {
+    seq,
+    from_revision: 1,
+    to_revision: 2,
+    caused_by: null,
+    group: seq,
+    importance: 'normal',
+    suggested_ms: 400,
+    sound: null,
+    kind,
+    ...extra,
+  };
+}
+
+describe('tell', () => {
+  it('words moves in move form and sentence form, emitting card names as inspectable segments', () => {
+    const cast = event(
+      1,
+      { kind: 'cast', object: { entity: 10, incarnation: 1 }, controller: 1, stack: 10 },
+      { labels: { objects: { '10:1': 'Lightning Strike' }, stacks: { '10': 'Lightning Strike' } } },
+    );
+    const targetRef = { kind: 'object' as const, id: { entity: 20, incarnation: 1 } };
+    const target = event(
+      2,
+      { kind: 'targeted', source: { kind: 'stack', id: 10 }, target: targetRef },
+      { cause: 1, labels: { objects: { '20:1': 'Earth Kingdom Jailer' }, stacks: { '10': 'Lightning Strike' } } },
+    );
+    const targets = [{ target: targetRef, labels: EMPTY, event: target }];
+
+    const moveSegments = tell(cast, EMPTY, PLAYERS, { form: 'move', targets });
+    expect(segmentText(moveSegments)).toBe('Cast Lightning Strike, targeting Earth Kingdom Jailer');
+    expect(moveSegments.filter(s => s.card !== null).map(s => s.card)).toEqual([
+      'Lightning Strike',
+      'Earth Kingdom Jailer',
+    ]);
+
+    const sentenceSegments = tell(cast, EMPTY, PLAYERS, { form: 'sentence', targets });
+    expect(segmentText(sentenceSegments)).toBe('Heuristic cast Lightning Strike, targeting Earth Kingdom Jailer');
+  });
+
+  it('words triggers, resolutions, activations, counters, draws and rules in plain words', () => {
+    const damage = event(
+      4,
+      { kind: 'damage', source: { kind: 'stack', id: 10 }, target: { kind: 'object', id: { entity: 20, incarnation: 1 } }, amount: 3 },
+      { cause: 3, labels: { objects: { '20:1': 'Earth Kingdom Jailer' }, stacks: { '10': 'Lightning Strike' } } },
+    );
+    expect(segmentText(tell(damage, EMPTY, PLAYERS, { indented: true }))).toBe('3 damage to Earth Kingdom Jailer');
+    expect(segmentText(tell(damage, EMPTY, PLAYERS, { indented: false }))).toBe('Lightning Strike dealt 3 to Earth Kingdom Jailer');
+
+    const died = event(
+      5,
+      { kind: 'died', objects: [{ entity: 20, incarnation: 1 }] },
+      { cause: 3, rule: 'lethal_damage', labels: { objects: { '20:1': 'Earth Kingdom Jailer' } } },
+    );
+    expect(segmentText(tell(died, EMPTY, PLAYERS))).toBe('Earth Kingdom Jailer died · lethal damage');
+
+    const triggered = event(
+      6,
+      { kind: 'triggered', source: { entity: 30, incarnation: 1 }, controller: 1, stack: 90 },
+      { cause: 5, labels: { objects: { '30:1': 'Tiger-Seal' }, stacks: { '90': 'Tiger-Seal' } } },
+    );
+    expect(segmentText(tell(triggered, EMPTY, PLAYERS))).toBe('Trigger · Tiger-Seal');
+
+    const resolvedTrigger = event(
+      7,
+      { kind: 'ability_resolved', source: { entity: 30, incarnation: 1 }, stack: 90 },
+      { labels: { objects: { '30:1': 'Tiger-Seal' }, stacks: { '90': 'Tiger-Seal' } } },
+    );
+    expect(segmentText(tell(resolvedTrigger, EMPTY, PLAYERS, { trigger: true }))).toBe("Tiger-Seal's trigger resolved");
+    expect(segmentText(tell(resolvedTrigger, EMPTY, PLAYERS, { trigger: false }))).toBe("Tiger-Seal's ability resolved");
+
+    const hiddenDraw = event(8, { kind: 'drew', player: 1 }, { cause: 7 });
+    expect(segmentText(tell(hiddenDraw, EMPTY, PLAYERS))).toBe('Heuristic drew a card');
+
+    const ownDraw = event(
+      9,
+      { kind: 'drew', player: 0, object: { entity: 40, incarnation: 1 } },
+      { rule: 'draw_step', labels: { objects: { '40:1': 'Island' } } },
+    );
+    expect(segmentText(tell(ownDraw, EMPTY, PLAYERS))).toBe('You drew Island · draw step');
+
+    const counter = event(
+      10,
+      { kind: 'counters', object: { entity: 50, incarnation: 1 }, counter: 'plus_one_plus_one', count: 1, total: 2 },
+      { labels: { objects: { '50:1': 'South Pole Voyager' } } },
+    );
+    expect(segmentText(tell(counter, EMPTY, PLAYERS))).toBe('+1/+1 counter on South Pole Voyager (now 2)');
+
+    const counters = event(
+      11,
+      { kind: 'counters', object: { entity: 50, incarnation: 1 }, counter: 'plus_one_plus_one', count: 2, total: 4 },
+      { labels: { objects: { '50:1': 'South Pole Voyager' } } },
+    );
+    expect(segmentText(tell(counters, EMPTY, PLAYERS))).toBe('2 +1/+1 counters on South Pole Voyager (now 4)');
+
+    const stun = event(
+      12,
+      { kind: 'counters', object: { entity: 50, incarnation: 1 }, counter: 'double_strike', count: 1, total: 1 },
+      { labels: { objects: { '50:1': 'South Pole Voyager' } } },
+    );
+    expect(segmentText(tell(stun, EMPTY, PLAYERS))).toBe('double strike counter on South Pole Voyager (now 1)');
+  });
+
+  it('prefers event.labels over fallback labels and names unknown objects by role', () => {
+    const fallback: PresentationLabels = {
+      objects: { '10:1': 'Old Name' },
+      players: {},
+      stacks: {},
+    };
+    const withOwn = event(
+      1,
+      { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 },
+      { labels: { objects: { '10:1': 'Mountain' } } },
+    );
+    expect(segmentText(tell(withOwn, fallback, PLAYERS))).toBe('Play Mountain');
+
+    const unnamed = event(2, { kind: 'land_played', object: { entity: 99, incarnation: 1 }, player: 1 });
+    expect(segmentText(tell(unnamed, EMPTY, PLAYERS))).toBe('Play a land');
+  });
+
+  it('words every presentation rule in plain English', () => {
+    const rules: [PresentationRule, string][] = [
+      ['draw_step', 'draw step'],
+      ['lethal_damage', 'lethal damage'],
+      ['zero_toughness', 'toughness 0'],
+      ['zero_loyalty', 'loyalty 0'],
+      ['zero_defense', 'defense 0'],
+      ['legend_rule', 'legend rule'],
+      ['unattached_aura', 'Aura had nothing to enchant'],
+      ['cleanup', 'cleanup'],
+      ['zero_life', '0 life'],
+      ['empty_library', 'drew from an empty library'],
+      ['poison', '10 poison counters'],
+      ['illegal_targets', 'illegal targets'],
+    ];
+    for (const [rule, words] of rules) {
+      expect(tellRule(rule)).toBe(words);
+    }
+  });
+
+  it('distinguishes counterspells from illegal-target fizzles for spells, triggers and abilities', () => {
+    const counteredSpell = tell(
+      event(1, { kind: 'countered', stack: 10 }, { labels: { stacks: { '10': 'Lightning Bolt' } } }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(counteredSpell)).toBe('Lightning Bolt was countered');
+    expect(counteredSpell.find(s => s.card === 'Lightning Bolt')).toBeDefined();
+
+    const fizzledSpell = tell(
+      event(2, { kind: 'countered', stack: 10 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '10': 'Lightning Bolt' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(fizzledSpell)).toBe('Lightning Bolt did not resolve · illegal targets');
+    expect(fizzledSpell.find(s => s.card === 'Lightning Bolt')).toBeDefined();
+
+    const fizzledTrigger = tell(
+      event(3, { kind: 'countered', stack: 90 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      EMPTY,
+      PLAYERS,
+      { trigger: true },
+    );
+    expect(segmentText(fizzledTrigger)).toBe("Vengeful Bloodwitch's trigger did not resolve · illegal targets");
+
+    const fizzledAbility = tell(
+      event(4, { kind: 'countered', stack: 91 }, {
+        rule: 'illegal_targets',
+        labels: { stacks: { '91': 'Prodigal Pyromancer' } },
+      }),
+      EMPTY,
+      PLAYERS,
+      { ability: true },
+    );
+    expect(segmentText(fizzledAbility)).toBe("Prodigal Pyromancer's ability did not resolve · illegal targets");
+
+    expect(segmentText(tell(event(5, { kind: 'countered', stack: 92 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS)))
+      .toBe('A spell did not resolve · illegal targets');
+    expect(segmentText(tell(event(6, { kind: 'countered', stack: 93 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS, { trigger: true })))
+      .toBe('A trigger did not resolve · illegal targets');
+    expect(segmentText(tell(event(7, { kind: 'countered', stack: 94 }, { rule: 'illegal_targets' }), EMPTY, PLAYERS, { ability: true })))
+      .toBe('An ability did not resolve · illegal targets');
+  });
+
+  it('words searched, looked (scry/surveil), sacrificed and lost with rules', () => {
+    expect(segmentText(tell(event(1, { kind: 'searched', player: 0 }), EMPTY, PLAYERS)))
+      .toBe('You searched your library');
+    expect(segmentText(tell(event(2, { kind: 'searched', player: 1 }), EMPTY, PLAYERS)))
+      .toBe('Heuristic searched their library');
+    expect(segmentText(tell(event(3, { kind: 'looked', player: 0, action: 'scry' }), EMPTY, PLAYERS)))
+      .toBe('You scried');
+    expect(segmentText(tell(event(4, { kind: 'looked', player: 1, action: 'surveil' }), EMPTY, PLAYERS)))
+      .toBe('Heuristic surveilled');
+    const sac = tell(
+      event(5, { kind: 'sacrificed', player: 0, objects: [{ entity: 7, incarnation: 0 }] }, {
+        labels: { objects: { '7:0': 'Evolving Wilds' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(sac)).toBe('You sacrificed Evolving Wilds');
+    expect(sac.find(s => s.card === 'Evolving Wilds')).toBeDefined();
+    expect(segmentText(tell(event(6, { kind: 'lost', player: 1 }, { rule: 'zero_life' }), EMPTY, PLAYERS)))
+      .toBe('Heuristic lost the game · 0 life');
+    expect(segmentText(tell(event(7, { kind: 'lost', player: 0 }, { rule: 'empty_library' }), EMPTY, PLAYERS)))
+      .toBe('You lost the game · drew from an empty library');
+  });
+
+  it('words life gained and lost with the total after', () => {
+    expect(segmentText(tell(event(1, { kind: 'life', player: 0, amount: -1, total: 19 }), EMPTY, PLAYERS)))
+      .toBe('You lost 1 life (now 19)');
+    expect(segmentText(tell(event(2, { kind: 'life', player: 1, amount: 3, total: 23 }), EMPTY, PLAYERS)))
+      .toBe('Heuristic gained 3 life (now 23)');
+  });
+
+  it('words exiled, token_created, pt_changed and control_changed with inspectable card segments', () => {
+    const exiled = tell(
+      event(1, { kind: 'exiled', objects: [{ entity: 12, incarnation: 0 }] }, {
+        labels: { objects: { '12:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(exiled)).toBe('Gray Ogre was exiled');
+    expect(exiled.find(s => s.card === 'Gray Ogre')).toBeDefined();
+
+    const exiledTwo = tell(
+      event(2, { kind: 'exiled', objects: [{ entity: 12, incarnation: 0 }, { entity: 13, incarnation: 0 }] }, {
+        labels: { objects: { '12:0': 'Gray Ogre', '13:0': 'Hill Giant' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(exiledTwo)).toBe('Gray Ogre and Hill Giant were exiled');
+
+    const ally = tell(
+      event(3, { kind: 'token_created', player: 0, objects: [{ entity: 40, incarnation: 0 }] }, {
+        labels: { objects: { '40:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(ally)).toBe('You created an Ally token');
+    expect(ally.find(s => s.card === 'Ally')).toBeDefined();
+
+    const clue = tell(
+      event(4, { kind: 'token_created', player: 1, objects: [{ entity: 41, incarnation: 0 }] }, {
+        labels: { objects: { '41:0': 'Clue' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(clue)).toBe('Heuristic created a Clue token');
+
+    const twoAllies = tell(
+      event(5, { kind: 'token_created', player: 0, objects: [{ entity: 42, incarnation: 0 }, { entity: 43, incarnation: 0 }] }, {
+        labels: { objects: { '42:0': 'Ally', '43:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(twoAllies)).toBe('You created 2 Ally tokens');
+
+    const pump = tell(
+      event(6, { kind: 'pt_changed', objects: [{ entity: 50, incarnation: 0 }, { entity: 51, incarnation: 0 }], power: 1, toughness: 0 }, {
+        labels: { objects: { '50:0': 'Wandering Musicians', '51:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(pump)).toBe('Wandering Musicians and Ally got +1/+0');
+
+    const shrink = tell(
+      event(7, { kind: 'pt_changed', objects: [{ entity: 50, incarnation: 0 }], power: -2, toughness: -2 }, {
+        labels: { objects: { '50:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(shrink)).toBe('Gray Ogre got −2/−2');
+
+    const gain = tell(
+      event(8, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 0, returned: false }, {
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(gain)).toBe('You gained control of Gray Ogre');
+
+    const ret = tell(
+      event(9, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 1, returned: true }, {
+        rule: 'cleanup',
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(ret)).toBe('Gray Ogre returned to Heuristic · cleanup');
+
+    const retToYou = tell(
+      event(10, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 0, returned: true }, {
+        rule: 'cleanup',
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(retToYou)).toBe('Gray Ogre returned to you · cleanup');
+  });
+});
+
+describe('segmentsFromText', () => {
+  it('keeps mana symbols outside card-name segments so history renders them as pips', () => {
+    expect(segmentsFromText('Tap Kyoshi Village for {W}', ['Kyoshi Village'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Kyoshi Village', card: 'Kyoshi Village' },
+      { text: ' for {W}', card: null },
+    ]);
+    expect(segmentsFromText('Tap Plains for {W}', ['Plains'])).toEqual([
+      { text: 'Tap ', card: null },
+      { text: 'Plains', card: 'Plains' },
+      { text: ' for {W}', card: null },
+    ]);
+  });
+});
