@@ -78,6 +78,12 @@ export interface GameReply {
   setup?: Record<string, unknown>;
 }
 
+/** Both players' imported lists, as setup sends them. */
+type DeckImportSelection = {
+  hero: { source: string; filename: string; name?: string };
+  villain: { source: string; filename: string; name?: string };
+};
+
 export class GameStore {
   storageWarning = $state('');
   manaPayment = $state<'auto' | 'manual'>('manual');
@@ -102,10 +108,11 @@ export class GameStore {
     this.turnOrder = draft.human_seat === 1 ? 'draw' : 'play';
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
-    // A game with closed decklists names no opponent deck or imported list
-    // until it is over: the opponent deck chosen here stays as it is.
-    const imported = draft.deck_import as { villain?: unknown } | undefined;
-    if (!imported || imported.villain) this.deckImport = (imported as typeof this.deckImport) ?? null;
+    // A draft carries both imported lists or none to select: a side dealt
+    // from a pool is its pool, and a closed opponent's list is not sent until
+    // the game is over (the opponent deck chosen here then stays as it is).
+    const imported = draft.deck_import as { hero?: unknown; villain?: unknown } | undefined;
+    this.deckImport = imported?.hero && imported.villain ? (imported as DeckImportSelection) : null;
     const named = sanitizeDeckSelection({
       hero: draft.hero_deck_pool ?? draft.hero_deck,
       villain: draft.villain_deck_pool ?? draft.villain_deck ?? this.decks.villain,
@@ -160,10 +167,7 @@ export class GameStore {
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
-  deckImport = $state<{
-    hero: { source: string; filename: string; name?: string };
-    villain: { source: string; filename: string; name?: string };
-  } | null>(null);
+  deckImport = $state<DeckImportSelection | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
   deckNames = $state<DeckNames | null>(null);

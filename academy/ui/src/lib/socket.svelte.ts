@@ -207,7 +207,8 @@ export class GameSocketController {
         gameStore.newGamePending = false;
         gameStore.setError('The connection dropped while the game was starting. If it started, it is in History.');
       }
-      if (this.game) this.sendResume();
+      // A finished game is never taken up again: its result card stands as drawn.
+      if (this.game && !(gameStore.gameOver && gameStore.gameId === this.game)) this.sendResume();
       else this.flushQueue();
     };
 
@@ -560,7 +561,7 @@ export class GameSocketController {
     gameStore.endCommand();
     gameStore.newGamePending = false;
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
-    if (message.type === 'error' && message.session_ended) {
+    if (message.type === 'error' && message.game_stopped) {
       this.stop(text);
       return;
     }

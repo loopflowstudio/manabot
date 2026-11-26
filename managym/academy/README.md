@@ -49,6 +49,11 @@ pending choice with the same legal offers and permitted information.
   New records have one SQLite authority; legacy JSON remains readable.
   `attempt_players` identifies both seats with public IDs, types, recorded
   names, decks and bot versions (the human seat is `"You"`, `human:local`).
+  A closed opponent's deck reads `closed` in those rows until the game is
+  `completed` (`CLOSED_DECK_SQL`), the rule the live frame and setup echo also
+  follow. Games in memory are a cache: played games with no connection leave it
+  after 15 idle minutes or beyond `IDLE_GAMES_KEPT`, payment and combat
+  previews never rebuild one, and a finished game is never taken up again.
   Every saved game in `traces_dir` is readable and every unfinished played game
   stays resumable across idle eviction and server restarts, with no credentials
   or privacy gates. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated

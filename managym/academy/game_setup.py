@@ -63,15 +63,27 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
 
 
 def shown_setup(config: GameConfig, game_over: bool) -> dict[str, Any]:
-    """The setup as the browser gets it. While decklists are closed and the
-    game is not over, the opponent's deck and imported list are left out (a
-    deck pool it was drawn from stays); a rematch reads them from the stored
-    game."""
+    """The setup as the browser gets it: what to select to start this matchup
+    again, never the cards a selection resolved to.
+
+    A side dealt from a deck pool is its pool key, without the dealt list, so
+    starting it again deals again; a rematch reads the dealt decks from the
+    stored game. While decklists are closed and the game is not over, the
+    opponent's deck and imported list are left out (a pool it was dealt from
+    stays)."""
     draft = setup_draft(config)
+    imported = dict(draft.pop("deck_import", {}))
+    for side in ("hero", "villain"):
+        pool = draft.get(f"{side}_deck_pool")
+        if pool is not None:
+            draft[f"{side}_deck"] = pool
+            imported.pop(side, None)
     if config.decklists == "closed" and not game_over:
-        del draft["villain_deck"]
-        if "deck_import" in draft:
-            draft["deck_import"] = {"hero": draft["deck_import"]["hero"]}
+        imported.pop("villain", None)
+        if config.villain_deck_pool is None:
+            del draft["villain_deck"]
+    if imported:
+        draft["deck_import"] = imported
     return draft
 
 

@@ -1096,7 +1096,7 @@ export type ServerMessage = (
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string; session_ended?: boolean }
+  | { type: 'error'; message: string; game_stopped?: boolean }
   | { type: 'control_error'; code: string; message: string }
   | import('./analysis').LiveAnalysisState
   | import('./analysis').LiveAnalysisMessage

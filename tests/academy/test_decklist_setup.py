@@ -143,7 +143,7 @@ def test_rematch_keeps_closed_decklists(
             websocket.send_json({"type": "rematch", "game": first_game})
             payload = settled_message(websocket)
             assert payload["type"] == "observation"
-            (record,) = server.LIVE_GAMES.values()
+            record = server.LIVE_GAMES[payload["game"]]
             assert record.game.trace is not None
             assert record.game.trace.config.decklists == "closed"
     assert "main_counts" not in payload["frame"]["projection"]["opponent"]
@@ -163,8 +163,7 @@ def test_rematch_re_admits_retained_sources(
             assert record.game.trace is not None
             first = record.game.trace.config
             websocket.send_json({"type": "rematch", "game": first_game})
-            assert settled_message(websocket)["type"] == "observation"
-            (record,) = server.LIVE_GAMES.values()
+            record = server.LIVE_GAMES[settled_message(websocket)["game"]]
             assert record.game.trace is not None
             second = record.game.trace.config
     assert second is not first

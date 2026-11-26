@@ -103,7 +103,7 @@ test('an unfinished game stays in History, replays without a credential and resu
   expect(errors).toEqual([]);
 });
 
-test('a finished game offers Rematch and Swap sides, and its address returns to its result', async ({ page }, testInfo) => {
+test('a finished game offers Rematch and Swap sides, and its address opens its Replay', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -141,16 +141,45 @@ test('a finished game offers Rematch and Swap sides, and its address returns to 
   await expect(historyRow(page, first).getByTestId('game-history-status')).not.toHaveText('In progress');
   await expect(historyRow(page, third).getByTestId('game-history-resume')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('history.png') });
-  // A rematch left the finished game in memory: its address still shows its result.
-  // (Once it idles out, the address opens its Replay: `game_finished`.)
+  // A finished game's address is its Replay, though the server still holds the game.
   await page.goto(`/?game=${encodeURIComponent(first)}`);
-  await expect(page.locator('main')).toHaveAttribute('data-game', first, { timeout: 30_000 });
-  await expect(page.getByTestId('game-result')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/replay\\?trace=${first}`), { timeout: 30_000 });
   // An unknown game opens setup, silently.
   await page.goto('/?game=no-such-game');
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByTestId('resume-refused')).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('a stopped game named by the address keeps its reason beside another game in progress', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto(SETUP);
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('passive');
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  await decide(page);
+  const playing = await gameOnBoard(page);
+  expect(await page.evaluate(() => localStorage.getItem('academy.game'))).toBe(playing);
+
+  // The server refuses one game as stopped; every other message is its own.
+  await page.routeWebSocket('**/ws/play', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      const request = JSON.parse(String(message)) as { type?: string; game?: string };
+      if (request.type === 'resume' && request.game === 'stopped-game') {
+        socket.send(JSON.stringify({ type: 'error', message: 'game_stopped: That game stopped and cannot be resumed.' }));
+      } else server.send(message);
+    });
+  });
+  await page.goto('/?game=stopped-game');
+  await expect(page.getByTestId('resume-refused')).toContainText('That game stopped and cannot be resumed.');
+  await expect(page).toHaveURL(/\/$/);
+  // Tidying the address did not open the remembered game over the refusal.
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await expect(page.getByTestId('resume-refused')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.locator('main')).toHaveAttribute('data-game', '');
+  expect(await page.evaluate(() => localStorage.getItem('academy.game'))).toBe(playing);
 });
 
 test('History sends its filters and says when nothing matches', async ({ page }) => {

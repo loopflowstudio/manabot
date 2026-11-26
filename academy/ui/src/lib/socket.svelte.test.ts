@@ -166,7 +166,7 @@ describe('GameSocketController offline gameplay', () => {
       actions: [], recovery, game: recovery.frame.match_id } as ServerMessage);
     expect(internals.game).toBe(recovery.frame.match_id);
     const reason = 'The opponent could not continue this game: Policy returned a stale decision binding.';
-    deliver(controller, { type: 'error', message: reason, session_ended: true });
+    deliver(controller, { type: 'error', message: reason, game_stopped: true });
     expect(gameStore.errorMessage).toBe(reason);
     expect(gameStore.protocolFrame).toEqual(recovery.frame);
     expect(gameStore.stopped).toBe(true);

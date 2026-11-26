@@ -122,6 +122,12 @@
     connect();
   }
 
+  /** Tidy the address without routing it: what it names is already on the page. */
+  function setAddress(address: string): void {
+    routed = new URL(address, window.location.href).search;
+    replaceState(address, {});
+  }
+
   onMount(() => disconnect);
   $effect(() => {
     const search = page.url.search;
@@ -138,14 +144,14 @@
     launching = false;
     untrack(() => {
       const address = `${demoAddress()}${demoName ? '&' : '?'}game=${encodeURIComponent(game)}`;
-      if (window.location.pathname + window.location.search !== address) replaceState(address, {});
+      if (window.location.pathname + window.location.search !== address) setAddress(address);
     });
   });
   // A launch that was refused starts nothing: ordinary setup, at the ordinary address.
   $effect(() => {
     if (!launching || gameStore.newGamePending || gameStore.gameId) return;
     launching = false;
-    untrack(() => replaceState('/', {}));
+    untrack(() => setAddress('/'));
   });
 
   /** A game the server would not take up, where setup opens with something to say about it (`refusalAction`). */
@@ -156,7 +162,7 @@
     untrack(() => {
       const action = refusalAction(refusal.code, askedGame === refusal.game);
       if (action === 'replay') { void goto(`/replay?trace=${encodeURIComponent(refusal.game)}`, { replaceState: true }); return; }
-      replaceState(demoAddress(), {});
+      setAddress(demoAddress());
       if (action === 'setup') gameStore.resumeRefused = null;
       else refused = refusal;
     });
@@ -169,7 +175,7 @@
       gameStore.applySetupDraft(gameStore.setup);
     }
     leaveGame();
-    replaceState(demoAddress(), {});
+    setAddress(demoAddress());
   }
 
   let stopsPending = $state<number | null>(null);

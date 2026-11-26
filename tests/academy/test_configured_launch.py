@@ -509,9 +509,10 @@ def test_a_game_rebuilt_from_its_record_answers_with_no_work_running(
         resumed = _settled_reply(returned)
     assert resumed["type"] == "observation", resumed
     assert resumed["game"] == initial["game"]
+    # Taking it up advanced its revision, so a Command held from before is stale.
     assert (
         resumed["recovery"]["frame"]["revision"]
-        == (initial["recovery"]["frame"]["revision"])
+        > initial["recovery"]["frame"]["revision"]
     )
     # The rebuild is finished when its reply is sent: a board that read it as
     # work in progress would wait for a completion that never comes.

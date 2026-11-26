@@ -260,7 +260,8 @@ def test_closed_game_plays_through_and_keeps_its_setup_in_the_stored_trace(
             {"villain_type": "random", "seed": 11, "decklists": "closed"},
             hero_seed=11,
         )
-    assert payload["deck_names"]["villain"] == "Closed decklist"
+    # The game is over, so the closed deck is named.
+    assert payload["deck_names"]["villain"] == "GW Allies"
     assert "asset_pack" not in payload
     assert "main_counts" not in payload["frame"]["projection"]["opponent"]
     trace = _recorded_traces(isolated_traces)[-1][1]

@@ -461,6 +461,12 @@ Before a first matchup, setup proposes the default opponent and, where a deck
 pool is installed, a dealt held-out deck for each seat. A matchup named by the
 address, or the one just played, is never replaced by those defaults.
 
+With closed decklists, the opponent's deck reads **Closed decklist** on the
+board, in **History** (where the Deck filter does not find it) and in Replay
+until the rules end the game; a finished game names both decks everywhere. A
+side dealt from a deck pool is remembered as its pool, so **Play again** and
+**New game** deal fresh decks, while **Rematch** keeps the decks just played.
+
 From a live board, clicking **New game** opens setup in place, with the matchup
 just played selected and no confirmation dialog; the game you left stays
 unfinished in **History** with a **Resume** link. Until it is resumed, `/`
@@ -557,10 +563,9 @@ completion (`game_over`) or a replay error (`record_diverged`) does.
 - **A game with nothing to resume.** The server refuses a resume with a code:
   `game_finished`, `game_is_watch`, `game_stopped` or `game_not_found`.
   Opening `/?game=<id>` for a finished or watched game redirects to its Replay
-  (`/replay?trace=<id>`), except that a game just finished shows its result
-  card, with **Rematch**, until it idles out of server memory; for a stopped
-  one it shows setup with the reason and
-  a link to its Replay. An unknown game id, or a game `/` remembered that is
+  (`/replay?trace=<id>`), always: reloading a result card opens the game's
+  Replay, and the next game starts from setup's **Play again** or **History**.
+  For a stopped one it shows setup with the reason and a link to its Replay. An unknown game id, or a game `/` remembered that is
   finished or stopped, clears `academy.game` and opens setup without comment.
 - **Two tabs on the same game.** Opening `/` while another tab holds the game
   in progress opens setup with a **Play it here instead** link and leaves the

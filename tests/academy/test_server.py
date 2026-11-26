@@ -600,7 +600,7 @@ def test_websocket_resumes_a_game_dropped_from_memory(monkeypatch, tmp_path):
 
         server._cleanup_expired_games()
         assert payload["game"] not in server.LIVE_GAMES
-        # A preview finds the game again; the prompt it names is gone.
+        # A preview does not bring the game back; the prompt it names is gone.
         preview = client.post(
             f"/api/games/{payload['game']}/payment-preview",
             json={
@@ -615,7 +615,7 @@ def test_websocket_resumes_a_game_dropped_from_memory(monkeypatch, tmp_path):
             409,
             "payment_preview_stale",
         )
-        assert payload["game"] in server.LIVE_GAMES
+        assert payload["game"] not in server.LIVE_GAMES
 
         with client.websocket_connect("/ws/play") as resumed:
             resumed.send_json({"type": "resume", "game": payload["game"]})

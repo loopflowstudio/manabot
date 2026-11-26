@@ -101,6 +101,29 @@ describe('taking up a game by its id', () => {
     expect(latest().sent).toEqual([{ type: 'resume', game: GAME, presentation_cursor: fixture.recovery.presentation_tail.at(-1)!.seq + 1 }]);
   });
 
+  it('leaves a finished game on its result card when the connection returns', () => {
+    const controller = new GameSocketController();
+    controller.resume(GAME);
+    latest().open();
+    const recovery = structuredClone(fixture.recovery);
+    recovery.accepted_commands = [];
+    recovery.frame.status = 'game_over';
+    recovery.frame.prompt = null;
+    recovery.frame.offers = [];
+    recovery.frame.winner = 0;
+    recovery.frame.projection.game_over = true;
+    latest().receive({ type: 'game_over', data: recovery.frame.projection, winner: 0, recovery, game: GAME, opponent_label: 'Random', setup: { villain_type: 'random' } });
+    expect(gameStore.gameOver).toBe(true);
+    latest().drop();
+
+    vi.advanceTimersByTime(1000);
+    latest().open();
+    // The server takes up no finished game; asking would trade the result for a refusal.
+    expect(latest().sent).toEqual([]);
+    expect(gameStore.gameId).toBe(GAME);
+    expect(gameStore.gameOver).toBe(true);
+  });
+
   it('gives the game up to another tab without fighting for it', () => {
     const controller = new GameSocketController();
     controller.resume(GAME);

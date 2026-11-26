@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -16,7 +17,7 @@ from managym.academy.deck_pools import (
     NamedDeck,
     set_deck_pools,
 )
-from managym.academy.game_setup import continuation_config, setup_draft
+from managym.academy.game_setup import continuation_config, setup_draft, shown_setup
 from managym.academy.launch import AcademyLaunchError, serve
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from tests.academy.socket_messages import settled_message
@@ -175,6 +176,19 @@ def test_deck_pool_samples_fresh_matchups_and_rematch_vs_deal_new_decks(
         assert rematch_cfg.hero_deck_name == cfg1.hero_deck_name
         assert rematch_cfg.villain_deck_name == cfg1.villain_deck_name
         assert rematch_cfg.hero_deck_pool == "pool:tla_trophies"
+
+        # The browser's echo names the pools, never the dealt lists: starting
+        # it again deals again, with no imported list to carry along.
+        shown = shown_setup(cfg1, game_over=True)
+        assert "deck_import" not in shown
+        assert shown["hero_deck"] == shown["villain_deck"] == "pool:tla_trophies"
+        assert cfg1.hero_deck_name not in json.dumps(shown)
+        again = server._parse_game_config({**shown, "seed": 999})
+        assert again.hero_deck_pool == "pool:tla_trophies"
+        assert again.hero_deck_name in {d.name for d in decks}
+        closed = shown_setup(cfg1, game_over=False)
+        assert closed["villain_deck"] == "pool:tla_trophies"
+        assert "deck_import" not in closed
 
         redeal_overrides = {
             "hero_deck": draft["hero_deck_pool"],

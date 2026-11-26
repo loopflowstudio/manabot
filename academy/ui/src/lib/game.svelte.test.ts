@@ -224,6 +224,20 @@ describe('GameStore', () => {
     expect(store.decklists).toBe('closed');
   });
 
+  it('selects a pool game as its pools and drops an import left from an earlier game', () => {
+    const store = createGameStore();
+    store.deckImport = {hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}};
+    store.applySetupDraft({hero_deck:'pool:tla_trophies', villain_deck:'pool:tla_trophies', hero_deck_pool:'pool:tla_trophies', villain_deck_pool:'pool:tla_trophies', villain_type:'random'});
+    expect(store.deckImport).toBeNull();
+    expect(store.decks).toEqual({hero:'pool:tla_trophies', villain:'pool:tla_trophies'});
+    expect(store.newGameConfig()).not.toHaveProperty('deck_import');
+
+    // One side's list alone (a closed opponent's is not sent) is no import to select.
+    store.deckImport = {hero:{source:'8 Island',filename:'a.txt'},villain:{source:'8 Mountain',filename:'b.txt'}};
+    store.applySetupDraft({decklists:'closed', villain_type:'random', deck_import:{hero:{source:'8 Island',filename:'a.txt'}}});
+    expect(store.deckImport).toBeNull();
+  });
+
   it('does not invite a decision while waiting, disconnected or finished', () => {
     const store = createGameStore();
     store.connection = 'connected';

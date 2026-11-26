@@ -45,6 +45,19 @@ UNFINISHED_SQL = """(
         ('server_restart', 'server_shutdown', 'session_expired', 'new_game'))))"""
 
 
+# The seat whose deck nobody is told yet: the opponent of the person playing
+# (`p`) in a game (`a`) with closed decklists, until the rules end it. One
+# rule for History, its Deck filter and a game's Replay; the live frame and
+# setup echo apply the same rule from the game in memory.
+CLOSED_DECK_SQL = """(
+    a.decklists='closed' AND a.status<>'completed' AND p.kind='bot'
+    AND EXISTS(SELECT 1 FROM attempt_players h
+        WHERE h.attempt_id=a.id AND h.kind='human')
+)"""
+# What such a seat's deck reads as.
+CLOSED_DECK = "closed"
+
+
 def shown_status(status: str, resumable: bool) -> str:
     """A game's status as History and Replay name it: `active` (in progress),
     `completed` (the rules ended it) or `stopped`. The stored value keeps an
@@ -151,7 +164,9 @@ class AttemptStore:
                     num_events INTEGER NOT NULL DEFAULT 0,
                     -- The game's numbers so far (`numbers.GameNumbers`); NULL
                     -- until first computed and again whenever a step is added.
-                    numbers_json TEXT
+                    numbers_json TEXT,
+                    -- The game's decklist disclosure (`CLOSED_DECK_SQL`).
+                    decklists TEXT NOT NULL DEFAULT 'open'
                 );
                 CREATE TABLE IF NOT EXISTS attempt_players (
                     attempt_id TEXT NOT NULL REFERENCES attempts(id),
@@ -232,6 +247,17 @@ class AttemptStore:
             row[1] for row in db.execute("PRAGMA table_info(attempts)")
         }:
             db.execute("ALTER TABLE attempts ADD COLUMN numbers_json TEXT")
+        if "decklists" not in {
+            row[1] for row in db.execute("PRAGMA table_info(attempts)")
+        }:
+            db.execute(
+                "ALTER TABLE attempts ADD COLUMN decklists TEXT NOT NULL DEFAULT 'open'"
+            )
+            # Once per database: reads every stored trace.
+            db.execute(
+                """UPDATE attempts SET decklists='closed'
+                WHERE json_extract(trace_json, '$.config.decklists')='closed'"""
+            )
 
     @contextmanager
     def connect(self):
@@ -308,8 +334,9 @@ class AttemptStore:
             db.execute(
                 f"""INSERT INTO attempts
                 (id,process_id,started_at,ended_at,status,ending_reason,deal_seed,winner,
-                 revision,world_json,trace_json,record_version,origin,num_events{owner[0]})
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?{owner[1]})
+                 revision,world_json,trace_json,record_version,origin,num_events,
+                 decklists{owner[0]})
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?{owner[1]})
                 ON CONFLICT(id) DO UPDATE SET
                 ended_at=excluded.ended_at, status=excluded.status, ending_reason=excluded.ending_reason,
                 winner=excluded.winner, revision=excluded.revision, trace_json=excluded.trace_json,
@@ -332,6 +359,7 @@ class AttemptStore:
                     RECORD_VERSION,
                     origin,
                     len(trace["events"]),
+                    config.get("decklists", "open"),
                 ),
             )
             if not exists:
@@ -444,7 +472,11 @@ class AttemptStore:
         placeholders = ",".join("?" for _ in attempts)
         result: dict[str, list[dict[str, Any]]] = {}
         for row in db.execute(
-            f"SELECT attempt_id,seat,player_id,kind,name,deck,version,inference_json FROM attempt_players WHERE attempt_id IN ({placeholders}) ORDER BY attempt_id,seat",
+            f"""SELECT p.attempt_id,p.seat,p.player_id,p.kind,p.name,
+                CASE WHEN {CLOSED_DECK_SQL} THEN '{CLOSED_DECK}' ELSE p.deck END AS deck,
+                p.version,p.inference_json
+            FROM attempt_players p JOIN attempts a ON a.id=p.attempt_id
+            WHERE p.attempt_id IN ({placeholders}) ORDER BY p.attempt_id,p.seat""",
             attempts,
         ):
             player = dict(row)
@@ -504,7 +536,7 @@ class AttemptStore:
             args.append(bot)
         if deck:
             clauses.append(
-                "EXISTS(SELECT 1 FROM attempt_players s WHERE s.attempt_id=a.id AND s.deck=?)"
+                f"EXISTS(SELECT 1 FROM attempt_players p WHERE p.attempt_id=a.id AND p.deck=? AND NOT {CLOSED_DECK_SQL})"
             )
             args.append(deck)
         if pairing:

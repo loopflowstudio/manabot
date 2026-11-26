@@ -291,6 +291,9 @@ RULES_BINARY_SHA256 = hashlib.sha256(
 ).hexdigest()
 SESSION_TTL = timedelta(minutes=15)
 SESSION_EXPIRED_END_REASON = "session_expired"
+# Played games kept in memory with no connection, so a script that starts
+# many does not hold every one's Env and opponent until its time is up.
+IDLE_GAMES_KEPT = 8
 
 
 def _now_utc() -> datetime:
@@ -1397,7 +1400,7 @@ class GameSession:
         replay = source.get("canonical_replay")
         config = GameConfig(**source["config"])
         if config.watch_players is not None or config.seed is None or replay is None:
-            raise ValueError("resume_unavailable: That game has no record to resume.")
+            raise ValueError("game_stopped: That game has no record to resume.")
         env, obs, policy = self._open_game(config)
         tracks = {
             int(track["viewer"]): track["events"]
@@ -2473,11 +2476,13 @@ class GameSession:
         )
 
     def _deck_names_for(self, viewer: int) -> dict[str, str] | None:
-        """Display names `viewer` may know; a closed opponent's deck is unnamed."""
+        """Display names `viewer` may know; a closed opponent's deck is unnamed
+        until the game is over."""
         if self.deck_names is None:
             return None
         names = dict(self.deck_names)
-        if self.decklists_closed:
+        over = self.obs is not None and self.obs.game_over
+        if self.decklists_closed and not over:
             names["villain" if viewer == self.human_seat else "hero"] = CLOSED_DECK_NAME
         return names
 
@@ -3201,40 +3206,67 @@ def evict_game(game_id: str, watch_end_reason: str) -> None:
 
 
 def _cleanup_expired_games() -> None:
-    """Release idle games. A game with a connection is never idle: the person
-    may be thinking, and its board still asks for previews."""
+    """Release idle games: every one past its time, and the longest-idle
+    played games beyond `IDLE_GAMES_KEPT`. A game with a connection is never
+    idle: the person may be thinking, and its board still asks for previews.
+    A watched game is driven without a connection and would end, so only its
+    time releases it."""
     now = _now_utc()
-    expired = [
-        game_id
+    idle = [
+        (live.expires_at, game_id, live.game.watch_mode)
         for game_id, live in LIVE_GAMES.items()
-        if live.expires_at <= now and live.websocket is None and not live.lock.locked()
+        if live.websocket is None and not live.lock.locked()
     ]
-    for game_id in expired:
-        evict_game(game_id, SESSION_EXPIRED_END_REASON)
+    played = sorted(entry for entry in idle if not entry[2])
+    surplus = {
+        game_id for _, game_id, _ in played[: max(0, len(played) - IDLE_GAMES_KEPT)]
+    }
+    for expires_at, game_id, _ in idle:
+        if expires_at <= now or game_id in surplus:
+            evict_game(game_id, SESSION_EXPIRED_END_REASON)
 
 
-# One rebuild of a game at a time: a second would replay and extend the same
-# stored record.
-_RESUMING: dict[str, asyncio.Lock] = {}
+# The rebuild of each game in progress, so a second request for the game
+# waits for it: two would replay and extend the same stored record.
+_REBUILDS: dict[str, asyncio.Task[LiveGame]] = {}
+
+
+async def _rebuild_game(game_id: str) -> LiveGame:
+    game = _new_game_session()
+    try:
+        await asyncio.to_thread(game.resume, game_id)
+    finally:
+        # The rebuild loaded an opponent and advanced the game; once it
+        # returns, no reply may describe that as work still running.
+        game.work.finish()
+    live = LIVE_GAMES[game_id] = LiveGame(game)
+    return live
+
+
+async def held_game(game_id: str) -> LiveGame:
+    """The played game `game_id` in memory, rebuilt from its stored record
+    when it is not there. Raises ValueError where it is a watched game, or is
+    not in memory and cannot be rebuilt (`GameSession.resume`)."""
+    live = LIVE_GAMES.get(game_id)
+    if live is None:
+        rebuild = _REBUILDS.get(game_id)
+        if rebuild is None:
+            rebuild = _REBUILDS[game_id] = asyncio.ensure_future(_rebuild_game(game_id))
+            rebuild.add_done_callback(lambda _: _REBUILDS.pop(game_id, None))
+        # A connection that leaves while it waits does not stop the rebuild.
+        live = await asyncio.shield(rebuild)
+    if live.game.watch_mode:
+        raise ValueError("game_is_watch: A watched game has no seat of yours.")
+    return live
 
 
 async def take_up_game(game_id: str) -> LiveGame:
-    """The live game `game_id`, rebuilt from its stored record when it is not
-    in memory. Raises ValueError where it is not an unfinished played game or
-    cannot be rebuilt (`GameSession.resume`)."""
-    async with _RESUMING.setdefault(game_id, asyncio.Lock()):
-        live = LIVE_GAMES.get(game_id)
-        if live is None:
-            game = _new_game_session()
-            try:
-                await asyncio.to_thread(game.resume, game_id)
-            finally:
-                # The rebuild loaded an opponent and advanced the game; once it
-                # returns, no reply may describe that as work still running.
-                game.work.finish()
-            live = LIVE_GAMES[game_id] = LiveGame(game)
-    if live.game.watch_mode:
-        raise ValueError("game_is_watch: A watched game has no seat of yours.")
+    """The unfinished played game `game_id`, for a connection that asks for it
+    by id or by its launch. A finished game is refused whether or not it is
+    still in memory, so its address always means its Replay."""
+    live = await held_game(game_id)
+    if live.game.obs is not None and live.game.obs.game_over:
+        raise ValueError("game_finished: That game is over.")
     return live
 
 
@@ -3576,7 +3608,7 @@ async def play_socket(websocket: WebSocket) -> None:
                     raise ValueError("No active game session. Send new_game first.")
                 # A game dropped from memory while this connection idled is
                 # rebuilt from its record.
-                live = await take_up_game(attached)
+                live = await held_game(attached)
                 if live.websocket is not websocket:
                     await _attach_websocket(live, websocket)
                 game = live.game
@@ -3662,7 +3694,7 @@ async def play_socket(websocket: WebSocket) -> None:
         error = _request_error(request, message)
         if running is not None:
             # The game broke: it is over, and the client must not resume it.
-            error["session_ended"] = True
+            error["game_stopped"] = True
             try:
                 end_game(running, end_reason="error")
             except Exception:
@@ -3979,10 +4011,6 @@ def get_recording_index(
     if isinstance(provenance, dict):
         provenance = {k: v for k, v in provenance.items() if k != "checkpoint"}
     players = deepcopy(metadata.get("players", []))
-    if payload["config"].get("decklists") == "closed":
-        for player in players:
-            if player["seat"] == 1 - payload["config"].get("human_seat", 0):
-                player["deck"] = "closed"
     for player in players:
         deck = player.get("deck")
         if isinstance(deck, str):
@@ -4462,15 +4490,16 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
     }
 
 
-async def _previewed_game(game_id: str) -> LiveGame:
-    """The game a preview reads, rebuilt from its record when it left memory
-    (its prompt is then a new one, so the preview answers stale)."""
+def _previewed_game(game_id: str, stale: str) -> LiveGame:
+    """The game in memory a preview reads. A preview changes nothing: a game
+    that left memory is not rebuilt for one, and since taking it up again
+    gives it a new prompt, a preview of the old one answers `stale`."""
     live = LIVE_GAMES.get(game_id)
     if live is None:
-        try:
-            live = await take_up_game(game_id)
-        except ValueError as exc:
-            raise HTTPException(404, "game_not_found") from exc
+        store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+        if store.unfinished(game_id):
+            raise HTTPException(409, stale)
+        raise HTTPException(404, "game_not_found")
     return live
 
 
@@ -4490,7 +4519,7 @@ async def get_payment_preview(
     game_id: str,
     payload: PaymentPreviewRequest,
 ) -> dict[str, Any]:
-    live = await _previewed_game(game_id)
+    live = _previewed_game(game_id, "payment_preview_stale")
     async with live.lock:
         game = live.game
         context = game.published_prompt
@@ -4553,7 +4582,7 @@ async def get_combat_preview(
     Academy offer ids enumerate the native actions in order
     (`_build_decision_context`), so a step's native action index is its offer.
     """
-    live = await _previewed_game(game_id)
+    live = _previewed_game(game_id, "combat_preview_stale")
     async with live.lock:
         game = live.game
         context = game.published_prompt
