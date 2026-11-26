@@ -269,6 +269,19 @@ Route: `clean` — no regression on `bench_steps` (+0.53%) or `bench_search`
   Academy UI (`svelte-check` 0 errors + 731/731 vitest), `test_pinned_pilot.py`
   (zero drift), and Python model/contract/Academy/semantic suites (350 passed,
   2 skipped).
+- **Synced `3e4c5df658` (MTG-486) & `41da14dcdc` (MTG-484)**: resolved
+  `triggers.rs` (`FiredDelayedTrigger::simple` / `fire_delayed_trigger` player
+  handling), `sba.rs`, and ported `StaticSources`, `StateReads`
+  (`revisions.counters`), `NodeSource` (command-zone emblems),
+  `Operation::ExemptStateBasedAction`, `acquired: Option<GrantKey>`, and
+  `latest_inherit` onto `41da14dcdc`'s dense `Eval` / `LayerScratch` /
+  `CharacteristicDetails` / `with_layer_board` implementation in `layers.rs`
+  and `statics.rs`. Refreshed `-planeswalkers` conformance/authority/parity
+  receipts after MTG-486 (`170` deliberate commands, `1,026` viewer checks,
+  zero divergence). Verified full Rust workspace debug nextest, release
+  `bench_steps` (`20,151.2 steps/s`, digest `4186394851247720253` matching
+  `managym/perf/baseline.json`), cp313 release rebuild, `public_api.py check`,
+  and Python pinned-pilot/authority/parity/loyalty/decision-surface suites.
 
 ## Target model (updated by concept review)
 

@@ -41,6 +41,7 @@ fn naming_game() -> Game {
     game.run_frame(EffectFrame {
         targets: vec![ResolutionTarget {
             share: 0,
+            division: 0,
             target: Target::Player(PlayerId(1)),
             requirement: 0,
             legal: true,

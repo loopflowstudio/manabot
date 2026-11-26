@@ -31,26 +31,28 @@ impl Game {
     /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<ObjectId>> {
         let _scan = self.board_scan();
-        let mut groups = Vec::new();
-        for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
-            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
-            {
-                if characteristics.is_legendary
-                    && !characteristics
-                        .exempt_sbas
-                        .contains(StateBasedAction::LegendRule)
-                {
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    names
-                        .entry(characteristics.name.clone())
-                        .or_default()
-                        .push(permanent.object);
+        self.with_layer_board(|board| {
+            let mut groups = Vec::new();
+            for player in [self.active_player(), self.non_active_player()] {
+                let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
+                for id in self.iter_battlefield_permanents(player) {
+                    let characteristics = board.view(id);
+                    if characteristics.is_legendary
+                        && !characteristics
+                            .exempt_sbas
+                            .contains(StateBasedAction::LegendRule)
+                    {
+                        let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                        names
+                            .entry(characteristics.name.clone())
+                            .or_default()
+                            .push(permanent.object);
+                    }
                 }
+                groups.extend(names.into_values().filter(|objects| objects.len() > 1));
             }
-            groups.extend(names.into_values().filter(|objects| objects.len() > 1));
-        }
-        groups
+            groups
+        })
     }
 
     pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
@@ -172,11 +174,10 @@ impl Game {
         // no later commit can accidentally follow a re-entered card.
         let (events, rules): (Vec<_>, Vec<_>) = {
             let _scan = self.board_scan();
+            let board = self.layer_board();
             let mut candidates = Vec::new();
             let mut rules = Vec::new();
-            for (permanent_id, characteristics) in
-                self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            {
+            for (permanent_id, characteristics) in board.iter() {
                 let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
                 // CR 704.5f — A creature with toughness 0 or less is put into
                 // its owner's graveyard (an earthbent land losing its counters
@@ -195,13 +196,13 @@ impl Game {
                 let legend_loser = legend_losers.contains(&permanent.object);
                 // CR 704.5m — An Aura attached to an illegal object or to
                 // nothing is put into its owner's graveyard.
-                let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
+                let illegal_aura = self.aura_attachment_illegal(permanent_id, characteristics);
                 let put_in_graveyard =
                     zero_toughness || zero_counters || legend_loser || illegal_aura;
                 // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
                 // above do not destroy, even when lethal damage also applies.
                 let destroy = !put_in_graveyard
-                    && self.has_lethal_damage(permanent_id, &characteristics)
+                    && self.has_lethal_damage(permanent_id, characteristics)
                     && !characteristics.keywords.has(Keyword::Indestructible);
                 if !put_in_graveyard && !destroy {
                     continue;
@@ -238,7 +239,7 @@ impl Game {
                 })
                 .collect();
             events.extend(
-                self.finished_sagas()
+                self.finished_sagas(&board)
                     .into_iter()
                     .filter_map(|id| self.permanent_object(id))
                     .map(|target| ProposedEvent::Sacrifice { target }),
@@ -314,16 +315,20 @@ impl Game {
         let detached: Vec<PermanentId> = if attached.is_empty() {
             Vec::new()
         } else {
-            self.layer_views(attached.into_iter())
-                .filter(|(id, view)| {
+            let board = self.layer_board();
+            attached
+                .into_iter()
+                .filter(|&id| {
+                    let Some(view) = board.get(id) else {
+                        return false;
+                    };
                     !view.has_subtype("Aura")
                         && !(view.has_subtype("Equipment")
                             && !view.is_creature()
                             && self
-                                .attached_creature(*id)
-                                .is_some_and(|target| !self.protected_from_permanent(target, *id)))
+                                .attached_creature(id)
+                                .is_some_and(|target| !self.protected_from_permanent(target, id)))
                 })
-                .map(|(id, _)| id)
                 .collect()
         };
         for permanent_id in detached {
@@ -382,17 +387,16 @@ impl Game {
         performed
     }
 
-    fn finished_sagas(&self) -> Vec<PermanentId> {
-        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            .filter(|(id, view)| {
-                let permanent = self.state.permanents[*id].as_ref().unwrap();
-                let Some(last) = view.final_chapter() else {
-                    return false;
-                };
-                permanent.counter_count(CounterKind::Lore) >= i32::from(last)
-                    && !self.chapter_ability_pending(permanent.object)
+    fn finished_sagas(&self, board: &crate::flow::statics::LayerBoard) -> Vec<PermanentId> {
+        board
+            .iter()
+            .filter_map(|(id, view)| {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                let last = view.final_chapter()?;
+                (permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                    && !self.chapter_ability_pending(permanent.object))
+                .then_some(id)
             })
-            .map(|(id, _)| id)
             .collect()
     }
 

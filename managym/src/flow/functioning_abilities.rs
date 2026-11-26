@@ -374,7 +374,7 @@ impl Game {
             let Some(permanent) = self.state.permanents[id].as_ref() else {
                 continue;
             };
-            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
+            let Some(view) = board.get(id) else {
                 continue;
             };
             let Some((kind, zone, phased_out)) = self.object_function_context(permanent.object)

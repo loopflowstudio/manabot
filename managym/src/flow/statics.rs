@@ -1,11 +1,13 @@
-//! Derived characteristics and rules questions. `layers::Context` owns CR 613
-//! evaluation; this module caches its immutable board and exposes the one public
-//! view. Activation prices and dynamic mana outputs are finalized afterwards.
+//! Derived characteristics and rules questions. `layers::evaluate_board` owns
+//! CR 613 evaluation; this module caches its immutable board and exposes the one
+//! public view. Activation prices and dynamic mana outputs are finalized afterwards.
 use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context, PredicateSource, SourceSeed, StateReads, StaticSources},
+        layers::{
+            evaluate_board, matches_view, PredicateSource, SourceSeed, StateReads, StaticSources,
+        },
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -27,7 +29,8 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::Arc,
+    ops::Deref,
+    sync::{Arc, OnceLock},
 };
 /// Stop as soon as the threshold is met. Ordinary counts never read a name.
 pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
@@ -50,11 +53,11 @@ pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
     }
 }
 
-/// A battlefield permanent's characteristics with every static ability and
-/// continuous-effect record applied (CR 613). A permanent that has left the
-/// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
+/// CoW-shared heap fields of [`Characteristics`] (identity, types, subtypes,
+/// colors, and ability lists). Kept behind an `Arc` so frequent layer 6/7
+/// keyword, counter, and P/T updates clone only the small flat outer struct.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Characteristics {
+pub struct CharacteristicDetails {
     pub mana_abilities: Vec<crate::state::card::ManaAbility>,
     pub triggered_mana_abilities: Vec<crate::state::card::TriggeredManaAbility>,
     pub colors: crate::state::mana::Colors,
@@ -62,13 +65,6 @@ pub struct Characteristics {
     pub triggered_abilities: Vec<crate::state::ability::EffectiveTrigger>,
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
     pub name: String,
-    /// Whether a layer 3 effect set its name.
-    pub name_set: bool,
-    /// Whether a layer 4 effect replaced its creature types (Kellan's
-    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
-    /// later grant of all creature types clears it, so it never accompanies
-    /// `CreatureTypes::All`.
-    pub creature_types_set: bool,
     /// Every subtype it has: printed or set, then added by records.
     pub subtypes: Vec<String>,
     /// Subtypes added on top of its printed or set ones (layer 4), in record
@@ -79,6 +75,30 @@ pub struct Characteristics {
     /// Layer 4 card types: printed, added by static type grants, and
     /// Creature when animated.
     pub types: CardTypes,
+    /// Its printed ward cost (layer 6), unless it has lost its abilities.
+    pub ward: Option<PaymentCost>,
+    /// Effective activations in layer/timestamp order, with current costs.
+    /// Its index binds offers and payments; stacking captures the chosen effects.
+    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+}
+
+fn empty_details() -> Arc<CharacteristicDetails> {
+    static EMPTY: OnceLock<Arc<CharacteristicDetails>> = OnceLock::new();
+    Arc::clone(EMPTY.get_or_init(|| Arc::new(CharacteristicDetails::default())))
+}
+
+/// A battlefield permanent's characteristics with every static ability and
+/// continuous-effect record applied (CR 613). A permanent that has left the
+/// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Characteristics {
+    /// Whether a layer 3 effect set its name.
+    pub name_set: bool,
+    /// Whether a layer 4 effect replaced its creature types (Kellan's
+    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
+    /// later grant of all creature types clears it, so it never accompanies
+    /// `CreatureTypes::All`.
+    pub creature_types_set: bool,
     /// Layer 4 supertype: its copiable values' legendary supertype, unless a
     /// `Modification::Nonlegendary` record removes it. The legend rule and
     /// the card row read this.
@@ -95,20 +115,75 @@ pub struct Characteristics {
     /// Whether it has lost all abilities (a record, or a characteristic-
     /// setting Aura); grants with later timestamps still apply.
     pub abilities_lost: bool,
-    /// Its printed ward cost (layer 6), unless it has lost its abilities.
-    pub ward: Option<PaymentCost>,
     /// State-based actions this permanent is exempt from via layer 6.
     pub exempt_sbas: crate::state::card::StateBasedActions,
     pub power: i32,
     pub toughness: i32,
-    /// Effective activations in layer/timestamp order, with current costs.
-    /// Its index binds offers and payments; stacking captures the chosen effects.
-    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub(super) details: Arc<CharacteristicDetails>,
+}
+
+impl Default for Characteristics {
+    fn default() -> Self {
+        Self {
+            name_set: false,
+            creature_types_set: false,
+            is_legendary: false,
+            is_animated: false,
+            keywords: Keywords::default(),
+            keyword_grants: Vec::new(),
+            firebending: 0,
+            abilities_lost: false,
+            exempt_sbas: Default::default(),
+            power: 0,
+            toughness: 0,
+            details: empty_details(),
+        }
+    }
+}
+
+impl Deref for Characteristics {
+    type Target = CharacteristicDetails;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.details
+    }
+}
+
+fn default_characteristics_slot() -> &'static Arc<Characteristics> {
+    static DEFAULT: OnceLock<Arc<Characteristics>> = OnceLock::new();
+    DEFAULT.get_or_init(|| Arc::new(Characteristics::default()))
+}
+
+pub(super) fn has_board_statics(abilities: &[StaticAbility]) -> bool {
+    abilities.iter().any(|ability| {
+        matches!(
+            ability,
+            StaticAbility::ControllerHas(_)
+                | StaticAbility::Restriction(_)
+                | StaticAbility::AdditionalLandPlayEachPlayer
+                | StaticAbility::AdditionalLandPlay
+                | StaticAbility::PlayUnownedExiledWithCounter(_)
+                | StaticAbility::PlayGraveyardByPermanentType
+                | StaticAbility::LookAtLibraryTop
+                | StaticAbility::CastFromHandWithoutManaCost
+                | StaticAbility::OpponentsCastOnlyFromHand
+                | StaticAbility::GraveyardSpellsHaveFlashback
+                | StaticAbility::CastFromLibraryTop(_)
+                | StaticAbility::CastSpellsAsThoughFlash(_)
+                | StaticAbility::ActivatedAbilitiesCostLess { .. }
+        )
+    })
 }
 
 impl Characteristics {
+    #[inline]
+    pub(super) fn details_mut(&mut self) -> &mut CharacteristicDetails {
+        Arc::make_mut(&mut self.details)
+    }
+
     /// Dynamic outputs and reductions can change without changing source plans.
-    fn has_dynamic_activations(&self) -> bool {
+    pub(super) fn has_dynamic_activations(&self) -> bool {
         self.activated_abilities.iter().any(|ability| {
             ability.power_up
                 || ability.reduce_by_source_power
@@ -241,7 +316,7 @@ pub(super) struct StaticPlayPermissions {
 pub(super) struct LayerBoard {
     pub(super) player_modifications: [Vec<Modification>; 2],
     control_changes: Vec<(PermanentId, PlayerId)>,
-    pub(super) objects: Vec<Option<Arc<Characteristics>>>,
+    objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
     restrictions: Vec<(PermanentId, PlayerId, StaticRestriction)>,
@@ -254,6 +329,68 @@ pub(super) struct LayerBoard {
     /// fixed activations retain their finalized entry across state writes
     /// that leave the board unchanged.
     dynamic_activations: bool,
+    has_activated_cost_reduction: [bool; 2],
+    pub(super) has_triggered_mana_abilities: bool,
+}
+
+impl LayerBoard {
+    #[inline]
+    pub(super) fn get(&self, id: PermanentId) -> Option<&Characteristics> {
+        self.objects.get(id.0).and_then(Option::as_deref)
+    }
+
+    #[inline]
+    pub(super) fn iter(&self) -> impl Iterator<Item = (PermanentId, &Characteristics)> {
+        self.objects
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, view)| Some((PermanentId(slot), view.as_deref()?)))
+    }
+
+    #[inline]
+    pub(super) fn view(&self, id: PermanentId) -> &Characteristics {
+        self.get(id)
+            .unwrap_or_else(|| default_characteristics_slot().as_ref())
+    }
+
+    #[inline]
+    pub(super) fn view_arc(&self, id: PermanentId) -> Arc<Characteristics> {
+        self.objects
+            .get(id.0)
+            .and_then(Clone::clone)
+            .unwrap_or_else(|| Arc::clone(default_characteristics_slot()))
+    }
+
+    #[inline]
+    fn needs_finalization(&self) -> bool {
+        self.dynamic_activations
+            || self.has_activated_cost_reduction[0]
+            || self.has_activated_cost_reduction[1]
+    }
+
+    #[inline]
+    fn needs_finalization_for(&self, player: PlayerId) -> bool {
+        self.dynamic_activations || self.has_activated_cost_reduction[player.0]
+    }
+}
+
+/// Borrowed raw board view when activation finalization is a no-op, or an owned
+/// finalized `Arc<Characteristics>` otherwise.
+pub(super) enum CharacteristicsRef<'a> {
+    Borrowed(&'a Characteristics),
+    Owned(Arc<Characteristics>),
+}
+
+impl Deref for CharacteristicsRef<'_> {
+    type Target = Characteristics;
+
+    #[inline]
+    fn deref(&self) -> &Characteristics {
+        match self {
+            Self::Borrowed(view) => view,
+            Self::Owned(view) => view,
+        }
+    }
 }
 impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -307,160 +444,169 @@ impl DerivedCache {
 }
 impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
-        let (context, mut static_sources) = Context::evaluate(self, sources);
-        let mut objects = vec![None; self.state.permanents.len()];
-        let mut restrictions = Vec::new();
-        let mut control_changes = Vec::new();
-        let mut player_modifications: [Vec<Modification>; 2] = Default::default();
-        let mut land_plays_each_player = 0;
-        let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
-        let mut dynamic_activations = false;
-        let apply_play_static =
-            |ability: &StaticAbility,
-             object_id: ObjectId,
-             public_id: crate::state::game_object::PublicId,
-             permissions: &mut StaticPlayPermissions,
-             player_mods: &mut Vec<Modification>,
-             land_plays_each_player: &mut u32,
-             dynamic_activations: &mut bool| match ability {
-                StaticAbility::ControllerHas(grant) => player_mods.push((**grant).clone()),
-                StaticAbility::AdditionalLandPlayEachPlayer => *land_plays_each_player += 1,
-                StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
-                StaticAbility::PlayUnownedExiledWithCounter(kind) => {
-                    if !permissions.exile_counter_plays.contains(kind) {
-                        permissions.exile_counter_plays.push(*kind)
+        let use_seed_summaries = sources.is_some();
+        evaluate_board(self, sources, |mut evaluated| {
+            let mut objects = Vec::with_capacity(evaluated.len());
+            let mut restrictions = Vec::new();
+            let mut control_changes = Vec::new();
+            let mut player_modifications: [Vec<Modification>; 2] = Default::default();
+            let mut land_plays_each_player = 0;
+            let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
+            let mut dynamic_activations = false;
+            let mut has_activated_cost_reduction = [false; 2];
+            let mut has_triggered_mana_abilities = false;
+            let apply_play_static =
+                |ability: &StaticAbility,
+                 object_id: ObjectId,
+                 public_id: crate::state::game_object::PublicId,
+                 permissions: &mut StaticPlayPermissions,
+                 player_mods: &mut Vec<Modification>,
+                 land_plays_each_player: &mut u32,
+                 has_cost_reduction: &mut bool| match ability {
+                    StaticAbility::ControllerHas(grant) => player_mods.push((**grant).clone()),
+                    StaticAbility::AdditionalLandPlayEachPlayer => *land_plays_each_player += 1,
+                    StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
+                    StaticAbility::PlayUnownedExiledWithCounter(kind) => {
+                        if !permissions.exile_counter_plays.contains(kind) {
+                            permissions.exile_counter_plays.push(*kind)
+                        }
                     }
-                }
-                StaticAbility::PlayGraveyardByPermanentType => permissions
-                    .graveyard_type_sources
-                    .push((object_id, public_id)),
-                StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
-                StaticAbility::CastFromHandWithoutManaCost => permissions.free_from_hand = true,
-                StaticAbility::OpponentsCastOnlyFromHand => permissions.opponents_hand_only = true,
-                StaticAbility::GraveyardSpellsHaveFlashback => {
-                    permissions.graveyard_flashback = true
-                }
-                StaticAbility::CastFromLibraryTop(predicate) => {
-                    permissions.library_spells.push(predicate.clone())
-                }
-                StaticAbility::CastSpellsAsThoughFlash(predicate) => {
-                    permissions.flash_spells.push(predicate.clone())
-                }
-                StaticAbility::ActivatedAbilitiesCostLess { .. } => {
-                    *dynamic_activations = true;
-                }
-                _ => {}
-            };
-        let mut controllers = vec![PlayerId(0); self.state.permanents.len()];
-        for (id, object) in context.objects {
-            let permanent = self.state.permanents[id].as_ref().unwrap();
-            controllers[id.0] = object.controller;
-            if object.controller != permanent.controller && !self.is_phased_out(id) {
-                control_changes.push((id, object.controller));
-            }
-            if !dynamic_activations && !object.view.activated_abilities.is_empty() {
-                dynamic_activations = object.view.has_dynamic_activations();
-            }
-            objects[id.0] = Some(object.view.clone());
-        }
-        let mut battlefield_statics: Vec<PermanentId> =
-            static_sources.battlefield_ids(None).collect();
-        if battlefield_statics.len() > 1 {
-            battlefield_statics.sort_unstable();
-        }
-        for id in battlefield_statics {
-            let Some(view) = objects.get(id.0).and_then(Option::as_ref) else {
-                continue;
-            };
-            if view.static_abilities.is_empty() {
-                continue;
-            }
-            let permanent = self.state.permanents[id].as_ref().unwrap();
-            let controller = controllers[id.0];
-            let permissions = &mut play_permissions[controller.0];
-            let player_mods = &mut player_modifications[controller.0];
-            for ability in &view.static_abilities {
-                if !self.static_ability_functions(permanent.object, ability) {
-                    continue;
-                }
-                if let StaticAbility::Restriction(rule) = ability {
-                    restrictions.push((id, controller, rule.clone()));
-                } else {
-                    apply_play_static(
-                        ability,
-                        permanent.object,
-                        permanent.id,
-                        permissions,
-                        player_mods,
-                        &mut land_plays_each_player,
-                        &mut dynamic_activations,
-                    );
-                }
-            }
-        }
-        for (controller, object) in static_sources.command_objects(None) {
-            let permissions = &mut play_permissions[controller.0];
-            let player_mods = &mut player_modifications[controller.0];
-            let record_id = self.state[object].id;
-            for ability in self.functioning_object_statics(object) {
-                apply_play_static(
-                    ability,
-                    object,
-                    record_id,
-                    permissions,
-                    player_mods,
-                    &mut land_plays_each_player,
-                    &mut dynamic_activations,
-                );
-            }
-        }
-        static_sources.finalize_for_board(self, &objects);
-        #[cfg(debug_assertions)]
-        {
-            for (slot, view) in objects.iter().enumerate() {
-                let Some(view) = view else {
+                    StaticAbility::PlayGraveyardByPermanentType => permissions
+                        .graveyard_type_sources
+                        .push((object_id, public_id)),
+                    StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
+                    StaticAbility::CastFromHandWithoutManaCost => {
+                        permissions.free_from_hand = true
+                    }
+                    StaticAbility::OpponentsCastOnlyFromHand => {
+                        permissions.opponents_hand_only = true
+                    }
+                    StaticAbility::GraveyardSpellsHaveFlashback => {
+                        permissions.graveyard_flashback = true
+                    }
+                    StaticAbility::CastFromLibraryTop(predicate) => {
+                        permissions.library_spells.push(predicate.clone())
+                    }
+                    StaticAbility::CastSpellsAsThoughFlash(predicate) => {
+                        permissions.flash_spells.push(predicate.clone())
+                    }
+                    StaticAbility::ActivatedAbilitiesCostLess { .. } => {
+                        *has_cost_reduction = true;
+                    }
+                    _ => {}
+                };
+            for slot in 0..evaluated.len() {
+                let Some(entry) = evaluated.take_slot(slot) else {
+                    objects.push(None);
                     continue;
                 };
                 let id = PermanentId(slot);
-                if !view.static_abilities.is_empty() && self.permanent_abilities_function(id) {
-                    let seat = self.state.permanents[id].as_ref().unwrap().controller.0;
-                    debug_assert!(
-                        static_sources.battlefield[seat].contains(&id),
-                        "StaticSources missed functioning battlefield static {id:?}"
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                if entry.controller != permanent.controller && !self.is_phased_out(id) {
+                    control_changes.push((id, entry.controller));
+                }
+                let scan_statics = if use_seed_summaries && entry.shares_seed_details {
+                    dynamic_activations |= entry.seed.has_dynamic_activations;
+                    has_triggered_mana_abilities |= entry.seed.has_triggered_mana_abilities;
+                    entry.seed.has_board_statics
+                } else {
+                    dynamic_activations =
+                        dynamic_activations || entry.view.has_dynamic_activations();
+                    has_triggered_mana_abilities = has_triggered_mana_abilities
+                        || !entry.view.triggered_mana_abilities.is_empty();
+                    !entry.view.static_abilities.is_empty()
+                };
+                if scan_statics && !self.is_phased_out(id) {
+                    let controller = entry.controller;
+                    let permissions = &mut play_permissions[controller.0];
+                    let player_mods = &mut player_modifications[controller.0];
+                    let has_cost_reduction = &mut has_activated_cost_reduction[controller.0];
+                    for ability in &entry.view.static_abilities {
+                        if !self.static_ability_functions(permanent.object, ability) {
+                            continue;
+                        }
+                        if let StaticAbility::Restriction(rule) = ability {
+                            restrictions.push((id, controller, rule.clone()));
+                        } else {
+                            apply_play_static(
+                                ability,
+                                permanent.object,
+                                permanent.id,
+                                permissions,
+                                player_mods,
+                                &mut land_plays_each_player,
+                                has_cost_reduction,
+                            );
+                        }
+                    }
+                }
+                objects.push(Some(entry.view));
+            }
+            let mut static_sources = evaluated.static_sources;
+            for (controller, object) in static_sources.command_objects(None) {
+                let permissions = &mut play_permissions[controller.0];
+                let player_mods = &mut player_modifications[controller.0];
+                let has_cost_reduction = &mut has_activated_cost_reduction[controller.0];
+                let record_id = self.state[object].id;
+                for ability in self.functioning_object_statics(object) {
+                    apply_play_static(
+                        ability,
+                        object,
+                        record_id,
+                        permissions,
+                        player_mods,
+                        &mut land_plays_each_player,
+                        has_cost_reduction,
                     );
                 }
             }
-            for (seat, object) in self.functioning_command_objects(None) {
-                if self.functioning_object_statics(object).next().is_some() {
-                    debug_assert!(
-                        static_sources.command[seat.0].contains(&object),
-                        "StaticSources missed functioning command-zone static {object:?}"
-                    );
+            static_sources.finalize_for_board(self, &objects);
+            #[cfg(debug_assertions)]
+            {
+                for (slot, view) in objects.iter().enumerate() {
+                    let Some(view) = view else {
+                        continue;
+                    };
+                    let id = PermanentId(slot);
+                    if !view.static_abilities.is_empty() && self.permanent_abilities_function(id) {
+                        let seat = self.state.permanents[id].as_ref().unwrap().controller.0;
+                        debug_assert!(
+                            static_sources.battlefield[seat].contains(&id),
+                            "StaticSources missed functioning battlefield static {id:?}"
+                        );
+                    }
+                }
+                for (seat, object) in self.functioning_command_objects(None) {
+                    if self.functioning_object_statics(object).next().is_some() {
+                        debug_assert!(
+                            static_sources.command[seat.0].contains(&object),
+                            "StaticSources missed functioning command-zone static {object:?}"
+                        );
+                    }
                 }
             }
-        }
-        for permissions in &mut play_permissions {
-            permissions.extra_land_plays += land_plays_each_player;
-        }
-        LayerBoard {
-            player_modifications,
-            control_changes,
-            reads: context.reads,
-            dynamic_activations,
-            restrictions,
-            static_sources,
-            land_type_overwrites: context.land_type_overwrites,
-            objects,
-            play_permissions,
-        }
+            for permissions in &mut play_permissions {
+                permissions.extra_land_plays += land_plays_each_player;
+            }
+            LayerBoard {
+                player_modifications,
+                control_changes,
+                reads: evaluated.reads,
+                dynamic_activations,
+                has_activated_cost_reduction,
+                has_triggered_mana_abilities,
+                restrictions,
+                static_sources,
+                land_type_overwrites: evaluated.land_type_overwrites,
+                objects,
+                play_permissions,
+            }
+        })
     }
 
     /// Both seats share the same layered board and its invalidation rules.
     pub(crate) fn visible_library_tops(&self) -> [bool; 2] {
-        self.layer_board()
-            .play_permissions
-            .each_ref()
-            .map(|p| p.look_at_top)
+        self.with_layer_board(|board| board.play_permissions.each_ref().map(|p| p.look_at_top))
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
@@ -480,8 +626,70 @@ impl Game {
             game: std::marker::PhantomData,
         }
     }
+
+    /// Borrow the cached [`LayerBoard`] without atomic `Arc::clone`/`Arc::drop`
+    /// on revision hits. Callers must not invoke `self.derived.borrow_mut()`
+    /// (e.g., `characteristics()`, `board_scan()`, or trigger indexing) inside `f`.
+    #[inline]
+    pub(super) fn with_layer_board<R>(&self, f: impl FnOnce(&LayerBoard) -> R) -> R {
+        let revisions = self.state.revisions();
+        #[cfg(debug_assertions)]
+        {
+            let needs_populate_or_validate = {
+                let derived = self.derived.borrow();
+                derived.revisions != revisions || derived.board.is_none() || derived.scans.0 == 0
+            };
+            if needs_populate_or_validate {
+                let _ = self.layer_board();
+            }
+            let derived = self.derived.borrow();
+            f(derived
+                .board
+                .as_deref()
+                .expect("layer_board populated cache"))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            {
+                let derived = self.derived.borrow();
+                if derived.revisions == revisions {
+                    if let Some(board) = derived.board.as_deref() {
+                        return f(board);
+                    }
+                }
+            }
+            let board = self.layer_board();
+            f(&board)
+        }
+    }
+
+    #[inline]
+    pub(super) fn with_layer_view<R>(
+        &self,
+        id: PermanentId,
+        f: impl FnOnce(&Characteristics) -> R,
+    ) -> R {
+        self.with_layer_board(|board| f(board.view(id)))
+    }
+
     pub(super) fn layer_board(&self) -> Arc<LayerBoard> {
         let revisions = self.state.revisions();
+        {
+            let derived = self.derived.borrow();
+            if derived.revisions == revisions {
+                if let Some(board) = derived.board.as_ref() {
+                    let board = Arc::clone(board);
+                    #[cfg(debug_assertions)]
+                    let should_check = derived.scans.0 == 0;
+                    drop(derived);
+                    #[cfg(debug_assertions)]
+                    if should_check {
+                        assert_eq!(*board, self.compute_board(None), "stale layer context");
+                    }
+                    return board;
+                }
+            }
+        }
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
             #[cfg(debug_assertions)]
@@ -509,12 +717,19 @@ impl Game {
         rule: Option<crate::experience::PresentationRule>,
     ) {
         loop {
-            let cached = self
-                .derived
-                .borrow_mut()
-                .at(self.state.revisions())
-                .board
-                .clone();
+            let revisions = self.state.revisions();
+            #[cfg(not(debug_assertions))]
+            {
+                let derived = self.derived.borrow();
+                if derived.revisions == revisions {
+                    if let Some(board) = derived.board.as_deref() {
+                        if board.control_changes.is_empty() {
+                            return;
+                        }
+                    }
+                }
+            }
+            let cached = self.derived.borrow_mut().at(revisions).board.clone();
             // Most games have no layer-2 instruction. When another write
             // invalidated the board, scan permanents directly before rebuilding
             // every layer solely to check control. A phased-out control source
@@ -548,11 +763,7 @@ impl Game {
     }
 
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
-        self.layer_board()
-            .objects
-            .get(id.0)
-            .and_then(Clone::clone)
-            .unwrap_or_default()
+        self.with_layer_board(|board| board.view_arc(id))
     }
     /// One immutable board read for a whole-board consumer. In debug this
     /// validates the entire board once, rather than once per permanent.
@@ -570,6 +781,26 @@ impl Game {
         })
     }
     pub fn characteristics(&self, id: PermanentId) -> Arc<Characteristics> {
+        let fast = self.with_layer_board(|board| {
+            let raw = board.view(id);
+            if !board.needs_finalization() || raw.activated_abilities.is_empty() {
+                Some(board.view_arc(id))
+            } else {
+                None
+            }
+        });
+        if let Some(view) = fast {
+            #[cfg(debug_assertions)]
+            {
+                let _scan = self.board_scan();
+                debug_assert_eq!(
+                    view,
+                    self.finalize_characteristics(id, self.layer_view(id)),
+                    "characteristics fast path diverged"
+                );
+            }
+            return view;
+        }
         self.characteristics_from(id, || self.layer_view(id))
     }
     /// Read several final views at one immutable game state, preserving the
@@ -579,22 +810,78 @@ impl Game {
         &'a self,
         ids: impl Iterator<Item = PermanentId> + 'a,
     ) -> impl Iterator<Item = (PermanentId, Arc<Characteristics>)> + 'a {
-        self.layer_views(ids)
-            .map(move |(id, raw)| (id, self.characteristics_from(id, || raw)))
+        let board = self.layer_board();
+        let needs_finalization = board.needs_finalization();
+        ids.filter_map(move |id| {
+            let raw = board.objects.get(id.0).and_then(Clone::clone)?;
+            let view = if !needs_finalization || raw.activated_abilities.is_empty() {
+                #[cfg(debug_assertions)]
+                {
+                    let _scan = self.board_scan();
+                    debug_assert_eq!(
+                        raw,
+                        self.finalize_characteristics(id, raw.clone()),
+                        "characteristics_many fast path diverged"
+                    );
+                }
+                raw
+            } else {
+                self.characteristics_from(id, || raw)
+            };
+            Some((id, view))
+        })
     }
+    /// Borrow `raw` directly when `board` needs no activation finalization for
+    /// `player` (zero `Arc` refcount traffic); otherwise read or compute the
+    /// cached finalized view.
+    #[inline]
+    pub(super) fn finalized_view<'a>(
+        &self,
+        board: &'a LayerBoard,
+        player: PlayerId,
+        id: PermanentId,
+        raw: &'a Characteristics,
+    ) -> CharacteristicsRef<'a> {
+        if board.needs_finalization_for(player) && !raw.activated_abilities.is_empty() {
+            CharacteristicsRef::Owned(self.characteristics_from(id, || board.view_arc(id)))
+        } else {
+            #[cfg(debug_assertions)]
+            if !raw.activated_abilities.is_empty() {
+                let _scan = self.board_scan();
+                debug_assert_eq!(
+                    *raw,
+                    *self.finalize_characteristics(id, board.view_arc(id)),
+                    "finalized_view fast path diverged"
+                );
+            }
+            CharacteristicsRef::Borrowed(raw)
+        }
+    }
+
     fn characteristics_from(
         &self,
         id: PermanentId,
         raw: impl FnOnce() -> Arc<Characteristics>,
     ) -> Arc<Characteristics> {
         let revisions = self.state.revisions();
-        let cached = self
-            .derived
-            .borrow_mut()
-            .at(revisions)
-            .characteristics
-            .get(id.0)
-            .and_then(Clone::clone);
+        let fast = {
+            let derived = self.derived.borrow();
+            if derived.revisions == revisions {
+                Some(derived.characteristics.get(id.0).and_then(Clone::clone))
+            } else {
+                None
+            }
+        };
+        let cached = match fast {
+            Some(hit) => hit,
+            None => self
+                .derived
+                .borrow_mut()
+                .at(revisions)
+                .characteristics
+                .get(id.0)
+                .and_then(Clone::clone),
+        };
         if let Some(view) = cached {
             #[cfg(debug_assertions)]
             {
@@ -636,7 +923,7 @@ impl Game {
         }
 
         let power = view.power.clamp(0, u8::MAX.into()) as u8;
-        for ability in &mut Arc::make_mut(&mut view).activated_abilities {
+        for ability in &mut Arc::make_mut(&mut view).details_mut().activated_abilities {
             if ability.has_dynamic_mana_output() {
                 if let Some(output) = self.current_mana_output(
                     &ability.effects[0],
@@ -669,15 +956,38 @@ impl Game {
         controller: PlayerId,
         view: &Characteristics,
     ) -> u8 {
-        let mut total = 0u8;
-        self.for_each_functioning_static(Some(controller), |_, ability| {
-            if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
-                if matches_view(self, id, predicate, view, None) {
-                    total = total.saturating_add(*generic);
+        self.with_layer_board(|board| {
+            if !board.has_activated_cost_reduction[controller.0] {
+                return 0;
+            }
+            let mut total = 0u8;
+            for source_id in board.static_sources.battlefield_ids(Some(controller)) {
+                let Some(source_view) = board.get(source_id) else {
+                    continue;
+                };
+                for ability in &source_view.static_abilities {
+                    if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } =
+                        ability
+                    {
+                        if matches_view(self, id, predicate, view, None) {
+                            total = total.saturating_add(*generic);
+                        }
+                    }
                 }
             }
-        });
-        total
+            for (_, object) in board.static_sources.command_objects(Some(controller)) {
+                for ability in self.functioning_object_statics(object) {
+                    if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } =
+                        ability
+                    {
+                        if matches_view(self, id, predicate, view, None) {
+                            total = total.saturating_add(*generic);
+                        }
+                    }
+                }
+            }
+            total
+        })
     }
     pub(super) fn layer_state_condition(
         &self,
@@ -702,7 +1012,7 @@ impl Game {
     /// means the owner (CR 109.5), including owned outside-game copies.
     pub fn object_pt(&self, object_id: ObjectId) -> (i32, i32) {
         if let Some(permanent) = self.state.permanent_of(object_id) {
-            return self.layer_view(permanent).pt();
+            return self.with_layer_view(permanent, Characteristics::pt);
         }
         // An outside-game card is allocated but in no zone.
         let object = self
@@ -979,9 +1289,11 @@ impl Game {
     }
 
     fn creature_count(&self, controller: PlayerId) -> usize {
-        self.layer_views(self.iter_battlefield_permanents(controller))
-            .filter(|(_, view)| view.is_creature())
-            .count()
+        self.with_layer_board(|board| {
+            self.iter_battlefield_permanents(controller)
+                .filter(|&id| board.view(id).is_creature())
+                .count()
+        })
     }
 
     /// Power as printed, with a characteristic-defining ability evaluated
@@ -1128,14 +1440,15 @@ impl Game {
     /// The attached permanent, if it is still a creature.
     pub(crate) fn attached_creature(&self, source: PermanentId) -> Option<PermanentId> {
         self.attached_permanent(source)
-            .filter(|&creature| self.layer_view(creature).is_creature())
+            .filter(|&creature| self.with_layer_view(creature, Characteristics::is_creature))
     }
 
     /// The power of the creature `source` is attached to, at least 0; 0 when
     /// it is attached to no creature (`EffectValue::AttachedCreaturePower`).
     pub(crate) fn attached_creature_power(&self, source: PermanentId) -> i32 {
-        self.attached_creature(source)
-            .map_or(0, |creature| self.layer_view(creature).power.max(0))
+        self.attached_creature(source).map_or(0, |creature| {
+            self.with_layer_view(creature, |v| v.power.max(0))
+        })
     }
 
     /// `value` as a static ability of `source` reads it: values relative to
@@ -1153,6 +1466,10 @@ impl Game {
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
+        if self.with_layer_board(|board| !board.restrictions.iter().any(|(_, _, r)| r.kind == kind))
+        {
+            return false;
+        }
         self.restriction_sources(&self.layer_board(), target, kind)
             .next()
             .is_some()
@@ -1163,6 +1480,10 @@ impl Game {
         target: PermanentId,
         kind: Restriction,
     ) -> Vec<PermanentId> {
+        if self.with_layer_board(|board| !board.restrictions.iter().any(|(_, _, r)| r.kind == kind))
+        {
+            return Vec::new();
+        }
         self.restriction_sources(&self.layer_board(), target, kind)
             .filter(|source| *source != target)
             .collect()
@@ -1207,19 +1528,21 @@ impl Game {
 
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         // A creature with all creature types shares each listed one.
-        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-        let mut all = 0;
-        for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-            match &view.creature_types {
-                CreatureTypes::All => all += 1,
-                CreatureTypes::Listed(listed) => {
-                    for creature_type in listed {
-                        *counts.entry(creature_type.clone()).or_default() += 1;
+        self.with_layer_board(|board| {
+            let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+            let mut all = 0;
+            for id in self.iter_battlefield_permanents(controller) {
+                match &board.view(id).creature_types {
+                    CreatureTypes::All => all += 1,
+                    CreatureTypes::Listed(listed) => {
+                        for creature_type in listed {
+                            *counts.entry(creature_type.clone()).or_default() += 1;
+                        }
                     }
                 }
             }
-        }
-        counts.into_values().max().unwrap_or(0) + all
+            counts.into_values().max().unwrap_or(0) + all
+        })
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
@@ -1234,10 +1557,12 @@ impl Game {
         cast.flash_surcharge
             || granted_flash
             || spell.is_instant_speed()
-            || self.layer_board().play_permissions[player.0]
-                .flash_spells
-                .iter()
-                .any(|predicate| cast.matches_spell(self, object, predicate))
+            || (!self
+                .with_layer_board(|board| board.play_permissions[player.0].flash_spells.is_empty())
+                && self.layer_board().play_permissions[player.0]
+                    .flash_spells
+                    .iter()
+                    .any(|predicate| cast.matches_spell(self, object, predicate)))
             || (spell.types.is_creature() && self.has_next_creature_cast_flash(player))
             || spell.flash_if().is_some_and(|condition| {
                 self.object_ability_functions(
@@ -1355,34 +1680,30 @@ impl Game {
                 count,
                 predicate,
                 distinct_names,
-            } => {
-                let source_view = self.predicate_source_view(source_id(), predicate);
-                let predicate_source = self.predicate_source(source_view.as_ref());
-                let matching = self
-                    .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| {
-                        matches_view(self, *id, predicate, view, predicate_source)
-                    });
-                controlled_threshold(matching, *count, *distinct_names, |(_, view)| {
-                    view.name.clone()
+            } => self.with_layer_board(|board| {
+                let predicate_source = self.board_predicate_source(board, source_id(), predicate);
+                let matching = self.iter_battlefield_permanents(controller).filter(|&id| {
+                    matches_view(self, id, predicate, board.view(id), predicate_source)
+                });
+                controlled_threshold(matching, *count, *distinct_names, |id| {
+                    board.view(id).name.as_str()
                 })
-            }
+            }),
             Condition::OpponentControlsMoreCreatures => {
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
-            Condition::BattlefieldAtLeast { count, predicate } => {
-                let source_view = self.predicate_source_view(source_id(), predicate);
-                let predicate_source = self.predicate_source(source_view.as_ref());
-                self.layer_views(
-                    [PlayerId(0), PlayerId(1)]
-                        .into_iter()
-                        .flat_map(|player| self.iter_battlefield_permanents(player)),
-                )
-                .filter(|(id, view)| matches_view(self, *id, predicate, view, predicate_source))
-                .take(*count)
-                .count()
+            Condition::BattlefieldAtLeast { count, predicate } => self.with_layer_board(|board| {
+                let predicate_source = self.board_predicate_source(board, source_id(), predicate);
+                [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.iter_battlefield_permanents(player))
+                    .filter(|&id| {
+                        matches_view(self, id, predicate, board.view(id), predicate_source)
+                    })
+                    .take(*count)
+                    .count()
                     == *count
-            }
+            }),
             Condition::ControlsUnownedAtLeast { count } => {
                 self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
@@ -1563,7 +1884,7 @@ impl Game {
     }
 
     pub(crate) fn permanent_is_battlefield_creature(&self, id: PermanentId) -> bool {
-        self.layer_view(id).is_creature()
+        self.with_layer_view(id, Characteristics::is_creature)
     }
     pub(crate) fn permanent_matches_predicate(
         &self,
@@ -1572,24 +1893,18 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
-    fn predicate_source_view(
-        &self,
+    fn board_predicate_source<'a>(
+        &'a self,
+        board: &'a LayerBoard,
         source: Option<PermanentId>,
         predicate: &CardPredicate,
-    ) -> Option<(PermanentId, Arc<Characteristics>)> {
+    ) -> Option<PredicateSource<'a>> {
         source
             .filter(|_| predicate.reads_source())
-            .map(|id| (id, self.layer_view(id)))
-    }
-
-    fn predicate_source<'a>(
-        &'a self,
-        source: Option<&'a (PermanentId, Arc<Characteristics>)>,
-    ) -> Option<PredicateSource<'a>> {
-        source.map(|(id, view)| PredicateSource {
-            name: view.name.as_str(),
-            chosen: self.live_permanent(*id).chosen.as_deref(),
-        })
+            .map(|id| PredicateSource {
+                name: board.view(id).name.as_str(),
+                chosen: self.live_permanent(id).chosen.as_deref(),
+            })
     }
 
     pub(super) fn cast_from_matches(
@@ -1611,15 +1926,10 @@ impl Game {
         predicate: &CardPredicate,
         source: Option<PermanentId>,
     ) -> bool {
-        let view = self.layer_view(id);
-        let source_view = self.predicate_source_view(source, predicate);
-        matches_view(
-            self,
-            id,
-            predicate,
-            &view,
-            self.predicate_source(source_view.as_ref()),
-        )
+        self.with_layer_board(|board| {
+            let predicate_source = self.board_predicate_source(board, source, predicate);
+            matches_view(self, id, predicate, board.view(id), predicate_source)
+        })
     }
 
     /// Whether an ability's "tap [its grantor]" cost can be paid: the
@@ -1647,9 +1957,10 @@ impl Game {
             return false;
         }
         !permanent.summoning_sick
-            || !self
-                .characteristics(permanent_id)
-                .restricted_by_summoning_sickness()
+            || !self.with_layer_view(
+                permanent_id,
+                Characteristics::restricted_by_summoning_sickness,
+            )
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's
@@ -1865,14 +2176,23 @@ mod cache_tests {
 
         // A granted static whose nested condition reads mana must invalidate
         // layers, including when the condition was previously false.
-        grant_pt_static(
-            &mut branch,
-            id,
-            StaticScope::This,
-            Some(Condition::AnyOf(vec![Condition::UnspentManaAtLeast {
-                count: 3,
-            }])),
-            2,
+        let affected = branch.affected_permanent(id).unwrap();
+        branch.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::AnyOf(vec![Condition::UnspentManaAtLeast {
+                    count: 3,
+                }])),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(2),
+                }],
+            }))),
+            EffectDuration::Indefinite,
         );
         assert_eq!(branch.characteristics(id).pt(), (2, 2));
         *branch.state.mana_pool_mut(PlayerId(0)) = Mana::parse("RRR").into();
@@ -2014,16 +2334,26 @@ mod cache_tests {
                 }],
                 ..Default::default()
             };
-            grant_pt_static(
-                &mut branch,
-                id,
-                if in_scope {
-                    StaticScope::YouControl(tapped.clone())
-                } else {
-                    StaticScope::This
-                },
-                (!in_scope).then(|| Condition::AnyOf(vec![Condition::SourceMatches(tapped)])),
-                2,
+            let affected = branch.affected_permanent(id).unwrap();
+            branch.apply_continuous(
+                None,
+                PlayerId(0),
+                [affected],
+                Modification::GrantStatic(Box::new(StaticAbility::Continuous(StaticContinuous {
+                    scope: if in_scope {
+                        StaticScope::YouControl(tapped.clone())
+                    } else {
+                        StaticScope::This
+                    },
+                    condition: (!in_scope)
+                        .then(|| Condition::AnyOf(vec![Condition::SourceMatches(tapped)])),
+                    characteristic_defining: false,
+                    modifications: vec![Modification::ModifyPt {
+                        power: LayerValue::Fixed(2),
+                        toughness: LayerValue::Fixed(2),
+                    }],
+                }))),
+                EffectDuration::Indefinite,
             );
             assert_eq!(branch.characteristics(id).pt(), (2, 2));
             branch.state.tap(id);
@@ -2177,7 +2507,7 @@ mod cache_tests {
             .has(Keyword::Trample));
 
         // Counter-reading statics (SourceCountersAtLeast, ObjectProperty::Counters,
-        // and no_counters) set reads_counters and evict on non-P/T counter writes.
+        // and no_counters) set reads.counters and evict on non-P/T counter writes.
         let mut quest_branch = game.clone();
         grant_pt_static(
             &mut quest_branch,
@@ -2321,6 +2651,49 @@ mod cache_tests {
         let board = game.layer_board();
         assert!(board.static_sources.battlefield[0].is_empty());
         assert_eq!(game.characteristics(tokens[63]).pt(), (1, 2));
+    }
+
+    #[test]
+    fn play_routes_evaluates_conditional_grant_outside_layer_borrow() {
+        use crate::{
+            flow::cast_permission::{PlayGrant, PlayRoute},
+            state::ability::{Aggregate, CompareOp, ObjectProperty, ObjectSelector},
+        };
+        let deck = [("Gray Ogre".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            244,
+            true,
+        );
+        game.play();
+        let player = PlayerId(0);
+        game.scenario_force_battlefield(player, "Gray Ogre", true)
+            .unwrap();
+        let card = game
+            .state
+            .zone_cards(ZoneType::Hand, player)
+            .next()
+            .expect("opening hand card");
+        let object = game.state.object_of(card);
+        let object = game.move_object(object, ZoneType::Exile);
+        game.state.cast_permissions.grant(PlayGrant {
+            this_turn: true,
+            condition: Some(Condition::compare(
+                ObjectSelector::each_you_control(CardPredicate::creature())
+                    .property(ObjectProperty::Power, Aggregate::Sum),
+                CompareOp::Ge,
+                2,
+            )),
+            ..PlayGrant::new(object, player)
+        });
+        // Warm the layer board so `with_layer_board` takes the `RefCell::borrow()`
+        // fast path; a reentrant `live_grants` inside it would panic with BorrowMutError.
+        let _board = game.layer_board();
+        let routes = game.play_routes(player, object);
+        assert!(routes.iter().any(|r| matches!(r, PlayRoute::Grant(_))));
     }
 
     #[test]

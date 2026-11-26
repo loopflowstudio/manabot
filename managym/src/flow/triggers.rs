@@ -2116,28 +2116,33 @@ impl Game {
     fn build_trigger_index(&self) -> TriggerIndex {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
-        let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views(self.functioning_permanents())
-            .map(|(id, view)| {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                let object = permanent.object;
-                TriggerSourceEntry {
-                    object,
-                    command_controller: None,
-                    kinds: view.triggered_abilities.iter().fold(
-                        EventKinds::NONE,
-                        |kinds, grant| {
-                            let Ability::Triggered { condition, .. } = &grant.ability;
-                            if self.trigger_condition_functions(object, condition) {
-                                kinds | condition_event_kinds(condition)
-                            } else {
-                                kinds
-                            }
-                        },
-                    ),
-                }
-            })
-            .collect();
+        let mut sources: Vec<TriggerSourceEntry> = self.with_layer_board(|board| {
+            board
+                .iter()
+                .filter_map(|(id, view)| {
+                    if !self.permanent_abilities_function(id) {
+                        return None;
+                    }
+                    let permanent = self.state.permanents[id].as_ref().unwrap();
+                    let object = permanent.object;
+                    Some(TriggerSourceEntry {
+                        object,
+                        command_controller: None,
+                        kinds: view.triggered_abilities.iter().fold(
+                            EventKinds::NONE,
+                            |kinds, grant| {
+                                let Ability::Triggered { condition, .. } = &grant.ability;
+                                if self.trigger_condition_functions(object, condition) {
+                                    kinds | condition_event_kinds(condition)
+                                } else {
+                                    kinds
+                                }
+                            },
+                        ),
+                    })
+                })
+                .collect()
+        });
         sources.extend(
             self.functioning_command_objects(None)
                 .map(|(controller, object)| {

@@ -756,6 +756,7 @@ impl Game {
         floats: &mut Vec<Action>,
     ) -> Vec<Action> {
         let mut actions = Vec::new();
+        let board = self.layer_board();
         for permanent_id in self.iter_battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
@@ -769,15 +770,12 @@ impl Game {
                     object: permanent.object,
                 });
             }
-            if self.activations_prohibited(permanent_id) {
+            let raw = board.view(permanent_id);
+            if raw.activated_abilities.is_empty() || self.activations_prohibited(permanent_id) {
                 continue;
             }
-            for (ability_index, ability) in self
-                .characteristics(permanent_id)
-                .activated_abilities
-                .iter()
-                .enumerate()
-            {
+            let view = self.finalized_view(&board, player, permanent_id, raw);
+            for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
                     || (!ability.is_mana_ability()

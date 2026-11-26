@@ -32,7 +32,7 @@ impl BlockRequirements {
 impl Game {
     fn block_requirements(&self, attacker: PermanentId) -> BlockRequirements {
         let mut rules = BlockRequirements {
-            menace: self.layer_view(attacker).keywords.has(Keyword::Menace),
+            menace: self.with_layer_view(attacker, |v| v.keywords.has(Keyword::Menace)),
             limited: self.has_restriction(attacker, Restriction::CantBeBlockedByMoreThanOne),
             ..Default::default()
         };
