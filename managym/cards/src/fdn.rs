@@ -20,6 +20,8 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        kaito_cunning_infiltrator(),
+        chandra_flameshaper(),
         abyssal_harvester(),
         arbiter_of_woe(),
         arcane_epiphany(),
@@ -569,6 +571,88 @@ fn drake_hatcher() -> CardDefinition {
                 effects: vec![Effect::create_tokens("token.drake", 1)],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn chandra_flameshaper() -> CardDefinition {
+    let text_box = "+2: Add {R}{R}{R}. Exile the top three cards of your library. Choose one. You may play that card this turn.\n+1: Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\n−4: Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    let creature_or_pw = TargetSpec::Permanent {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    CardDefinition {
+        key: "fdn.chandra_flameshaper",
+        scryfall_id: "a22d21ec-0fb3-4574-a803-6442ec13167e",
+        printed: PrintedCharacteristics {
+            name: "Chandra, Flameshaper".into(),
+            mana_cost: Some(ManaCost::parse("{5}{R}{R}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Chandra".into()],
+            loyalty: Some(6),
+            activated_abilities: vec![
+                loyalty(
+                    2,
+                    vec![
+                        Effect::add_mana(Mana::parse("RRR")),
+                        Effect::exile(ObjectSelector::LibraryTop(Box::new(3.into()))),
+                        Effect::SelectCards {
+                            from: ObjectSelector::Moved,
+                            predicate: CardPredicate::default(),
+                            max_mana_value: None,
+                            min: 1,
+                            max: 1.into(),
+                            effects: vec![Effect::GrantPlay {
+                                what: ObjectSelector::Selected,
+                                until: PlayWindow::ThisTurn,
+                                play_lands: true,
+                                flashback: false,
+                                face_down: false,
+                                condition: None,
+                            }],
+                            if_declined: Vec::new(),
+                        },
+                    ],
+                ),
+                loyalty(
+                    1,
+                    vec![Effect::CreateTokenCopy {
+                        count: 1.into(),
+                        of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        exceptions: vec![
+                            CopyException::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                            CopyException::GrantTriggered(Box::new(Ability::Triggered {
+                                condition: TriggerCondition::beginning_of(
+                                    TurnStep::End,
+                                    Actor::AnyPlayer,
+                                ),
+                                intervening_if: None,
+                                effects: vec![Effect::sacrifice_this()],
+                            })),
+                        ],
+                    }],
+                ),
+                loyalty(
+                    -4,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            division: Some(EffectValue::Fixed(8)),
+                            ..TargetRequirement::up_to(
+                                TargetRequirement::ANY_NUMBER,
+                                creature_or_pw.clone(),
+                            )
+                        },
+                        effects: vec![Effect::deal_damage(
+                            EffectValue::TargetDivision,
+                            ObjectSelector::Targets(creature_or_pw),
+                        )],
+                    }],
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -1203,6 +1287,8 @@ fn armasaur_guide() -> CardDefinition {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Batch,
                     attackers: AttackSize::AtLeast(3),
+                    attacked: Actor::AnyPlayer,
+                    attacked_kind: Default::default(),
                     nth: None,
                 },
                 intervening_if: None,
@@ -1698,6 +1784,7 @@ fn wardens_of_the_cycle() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::CreatureDiedThisTurn),
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     modes: vec![
                         vec![Effect::gain_life(2)],
                         vec![
@@ -3270,6 +3357,7 @@ fn apothecary_stomper() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: false,
                     modes: vec![
@@ -3312,8 +3400,9 @@ fn spinner_of_souls() -> CardDefinition {
                 },
                 effects: vec![Effect::Modal {
                     modes: vec![
-                        vec![Effect::RevealUntilToHand {
+                        vec![Effect::RevealUntil {
                             predicate: CardPredicate::creature(),
+                            to: ZoneType::Hand,
                         }],
                         vec![],
                     ],
@@ -3969,6 +4058,7 @@ fn kykar_zephyr_awakener() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     unchosen: false,
                     up_to: None,
                     modes: vec![
@@ -4060,6 +4150,65 @@ fn raise_the_past() -> CardDefinition {
                 false,
             )],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn kaito_cunning_infiltrator() -> CardDefinition {
+    let text_box = "Whenever a creature you control deals combat damage to a player, put a loyalty counter on Kaito.\n+1: Up to one target creature you control can't be blocked this turn. Draw a card, then discard a card.\n−2: Create a 2/1 blue Ninja creature token.\n−9: You get an emblem with \"Whenever a player casts a spell, you create a 2/1 blue Ninja creature token.\"";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "fdn.kaito_cunning_infiltrator",
+        scryfall_id: "5dabdea9-2015-49b9-853d-4f7e1262eab3",
+        printed: PrintedCharacteristics {
+            name: "Kaito, Cunning Infiltrator".into(),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Kaito".into()],
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            loyalty: Some(3),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    to: Some(Actor::AnyPlayer),
+                    per: Per::Object,
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Loyalty,
+                    1,
+                )],
+            }],
+            activated_abilities: vec![
+                loyalty(
+                    1,
+                    vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::up_to(
+                                1,
+                                TargetSpec::CreatureYouControl,
+                            ),
+                            effects: vec![Effect::until_end_of_turn(
+                                ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                Modification::CantBeBlocked,
+                            )],
+                        },
+                        Effect::DrawCards { count: 1.into() },
+                        Effect::discard(),
+                    ],
+                ),
+                loyalty(-2, vec![Effect::create_tokens("token.ninja_2_1_u", 1)]),
+                loyalty(
+                    -9,
+                    vec![Effect::CreateEmblem {
+                        key: "emblem.kaito_cunning_infiltrator".into(),
+                    }],
+                ),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -4521,6 +4670,7 @@ fn sylvan_scavenging() -> CardDefinition {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     up_to: None,
                     unchosen: false,
                     modes: vec![

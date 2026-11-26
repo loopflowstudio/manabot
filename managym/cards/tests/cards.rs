@@ -679,7 +679,7 @@ fn walk_attack_declaration(
             .filter_map(|action| match action {
                 Action::DeclareAttacker {
                     permanent, attack, ..
-                } => Some((*permanent, *attack)),
+                } => Some((*permanent, attack.is_some())),
                 _ => None,
             })
             .collect();

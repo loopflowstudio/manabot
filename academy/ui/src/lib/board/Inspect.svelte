@@ -35,6 +35,7 @@
   const abilities = $derived(badges.filter(badge => badge.kind === 'ability' || badge.kind === 'status'));
   const facts = $derived(badges.filter(badge => badge.kind !== 'ability' && badge.kind !== 'status').map(badgeReading).join(' · '));
   const pt = $derived(permanent ? ptProvenance(permanent, face) : null);
+  const printedLoyalty = $derived(permanent?.printed_loyalty ?? card?.printed_loyalty);
   const plain = $derived(!permanent && card?.types.is_creature ? `${card.power}/${card.toughness}` : face?.power != null && !permanent ? `${face.power}/${face.toughness}` : null);
   const url = $derived(artUrl(name));
   let loaded = $state<string | null>(null);
@@ -58,6 +59,7 @@
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text"><ManaText text={text} size={14} /></p>{/if}
+  {#if printedLoyalty != null}<p class="state">Starting loyalty {printedLoyalty}</p>{/if}
   {#if !permanent}{#each counterTerms(card?.counters) as term (term)}<p class="state">{term}</p>{/each}{/if}
   {#each castTerms as term}<p class="state">{term}</p>{/each}
   {#if pt}

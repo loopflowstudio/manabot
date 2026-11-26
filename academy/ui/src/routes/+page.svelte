@@ -42,16 +42,19 @@
     leaveGame,
     resumeGame,
     sendAction,
+    sendDecisionGroupCommand,
     sendNewGame,
     sendRematch,
     sendPassTurn,
     sendRetrySearch,
     sendSetStops,
     sendShowAnalysis,
+    sendSwapSides,
     storedGame,
     fetchPaymentPreview,
-    fetchCombatPreview,
+    fetchDecisionGroupPreview,
   } from '$lib/socket.svelte';
+  import type { DecisionGroupPlan } from '$lib/decision-group';
   import type { InteractionOffer, StopSide } from '$lib/types';
 
   onDestroy(() => watchStart.cancel());
@@ -275,9 +278,13 @@
   $effect(() => {
     const config = gameStore.setup;
     if (!config || demoName || !gameStore.observation) return;
+    // The game's setup keeps its starting seats after Swap sides, which changes only this game; name its decks the same way.
+    const swapped = gameStore.observation.agent.player_index !== (config.human_seat === 1 ? 1 : 0);
+    const heroName = swapped ? gameStore.deckNames?.villain : gameStore.deckNames?.hero;
+    const villainName = swapped ? gameStore.deckNames?.hero : gameStore.deckNames?.villain;
     const decks = {
-      hero: matchupDeckLabel(config.hero_deck_pool, gameStore.deckNames?.hero, gameStore.decks.hero),
-      villain: matchupDeckLabel(config.villain_deck_pool, gameStore.deckNames?.villain, gameStore.decks.villain),
+      hero: matchupDeckLabel(config.hero_deck_pool, heroName, gameStore.decks.hero),
+      villain: matchupDeckLabel(config.villain_deck_pool, villainName, gameStore.decks.villain),
     };
     untrack(() => {
       lastMatchup = { config, opponent: opponentName, decks };
@@ -312,8 +319,9 @@
   }
 
   function handleCycleStop(side: StopSide, step: string): void {
+    const hadStop = gameStore.stops[side].includes(step);
     gameStore.cycleStop(side, step);
-    syncStopsToServer();
+    if (gameStore.stops[side].includes(step) !== hadStop) syncStopsToServer();
   }
 
   // A stop set to hold once holds the game for you and is spent when you leave
@@ -383,6 +391,19 @@
     sendAction(action.id);
   }
 
+  function handleGroupSubmit(plan: DecisionGroupPlan): void {
+    if (!canSubmitLive) return;
+    sendDecisionGroupCommand(plan);
+  }
+
+  const groupRejection = $derived(
+    gameActive
+      && (gameStore.lastCommandRejection?.code === 'decision_group_refused'
+        || gameStore.lastCommandRejection?.code === 'decision_group_incomplete')
+      ? gameStore.lastCommandRejection
+      : null,
+  );
+
   const inGame = $derived(gameStore.observation !== null && decisionFrame !== null);
 
   // Who is deciding while you wait: the opponent's search or policy, or the board itself.
@@ -439,6 +460,23 @@
     const pool = gameStore.setup?.[`${side}_deck_pool`];
     return typeof pool === 'string' ? pool : null;
   };
+  const canSwapSides = $derived(
+    gameActive && !demoName && !gameStore.searchRetry
+    && !gameStore.newGamePending && !gameStore.swapPending && inputReady
+  );
+  // Close the Settings sheet automatically once a mid-game swap commits so the
+  // person immediately sees their new seat; a refusal keeps the sheet open with its error.
+  let lastSeatKey = '';
+  $effect(() => {
+    const matchId = gameStore.protocolFrame?.match_id;
+    const seat = heroSeat;
+    if (!matchId || seat === null) { lastSeatKey = ''; return; }
+    const key = `${matchId}:${seat}`;
+    if (lastSeatKey && lastSeatKey.startsWith(`${matchId}:`) && lastSeatKey !== key) {
+      document.querySelector<HTMLDetailsElement>('details.game-menu')?.removeAttribute('open');
+    }
+    lastSeatKey = key;
+  });
 
 </script>
 
@@ -498,7 +536,7 @@
           <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendRematch('rematch', { hero_deck: heroPool ?? gameStore.setup?.hero_deck, villain_deck: villainPool ?? gameStore.setup?.villain_deck, seed: null })}>Deal new decks</button>
         {/if}
         <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendRematch('rematch')}>Rematch</button>
-        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendRematch('swap_sides')}>Swap sides</button>
+        <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendRematch('swap_sides')}>Swap play/draw</button>
       {/if}
     </div>
     <p class="type-caption result-links">
@@ -547,6 +585,18 @@
 {/snippet}
 
 {#snippet gameSettings()}
+  {#if !demoName}
+    <section aria-label="This game" class="game-group">
+      <p class="type-label text-ink-2">This game</p>
+      <div class="swap-control">
+        <button class="btn btn-secondary btn-sm" data-testid="swap-sides" disabled={!canSwapSides} onclick={sendSwapSides}>{gameStore.swapPending ? 'Swapping sides…' : 'Swap sides'}</button>
+        <p class="type-caption text-ink-3">{!inputReady && !gameStore.swapPending ? 'Available when you have a decision to make.' : "Take the opponent's seat and hand; the bot plays yours from here."}</p>
+        {#if gameStore.swapError}
+          <p role="alert" class="type-caption swap-error" data-testid="swap-sides-error">{gameStore.swapError}</p>
+        {/if}
+      </div>
+    </section>
+  {/if}
   <button class="btn btn-secondary btn-sm" data-testid="new-game" onclick={openSetup}>New game</button>
 {/snippet}
 
@@ -580,7 +630,11 @@
       interrupted={gameStore.stopped}
       payment={paymentState}
       onpreview={previewPayment}
-      combatPreview={gameActive ? fetchCombatPreview : undefined}
+      group={gameActive ? gameStore.liveDecisionGroup : null}
+      groupPreview={gameActive ? fetchDecisionGroupPreview : undefined}
+      ongroupact={handleGroupSubmit}
+      {groupRejection}
+      ondismissgrouprejection={rejection => gameStore.dismissCommandRejection(rejection.command_id)}
       onact={handleActionSelect}
       pending={gameStore.commandPending}
       onpassturn={handlePassTurn}
@@ -668,4 +722,7 @@
   .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
   .live-analysis { display: grid; gap: 6px; }
   .live-analysis select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 190px; }
+  .game-group { display: grid; gap: 6px; justify-items: start; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .swap-control { display: grid; gap: 4px; justify-items: start; }
+  .swap-error { color: var(--error-text); }
 </style>

@@ -18,6 +18,9 @@ class SpaStaticFiles(StaticFiles):
     """
 
     async def get_response(self, path: str, scope: Scope) -> Response:
+        # Never let unknown /api/* routes fall through to index.html or StaticFiles 405.
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
             if response.status_code == 404:

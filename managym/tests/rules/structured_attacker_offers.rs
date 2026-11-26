@@ -3,13 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
-        observation::Observation,
-        structured_offer::{
+        decision_surface::{
             Candidate, CandidateId, CandidateSource, CandidateSourceId, CandidateValue,
-            ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId, OfferSubmission,
-            OfferVerb, PromptKind, RoleId, StructuredOfferError, StructuredOfferProjection,
-            SubjectRef,
+            ChoiceAnswer, ChoiceStep, DecisionOption, DecisionOptionId, DecisionProjection,
+            DecisionSubmission, DecisionSurfaceError, DecisionVerb, ObjectRenderId, PromptKind,
+            RoleId, SubjectRef,
         },
+        observation::Observation,
     },
     flow::turn::StepKind,
     state::game_object::PermanentId,
@@ -84,17 +84,17 @@ fn arranged_attack_scenario(
     scenario
 }
 
-fn attacker_offer(set: &managym::agent::structured_offer::StructuredOfferSet) -> &InteractionOffer {
+fn attacker_offer(set: &managym::agent::decision_surface::DecisionSurface) -> &DecisionOption {
     let projection = set.projection();
     assert_eq!(projection.kind, PromptKind::DeclareAttackers);
     assert_eq!(projection.offers.len(), 1);
     let offer = &projection.offers[0];
     assert_eq!(offer.actor, projection.actor);
-    assert_eq!(offer.verb, OfferVerb::DeclareAttackers);
+    assert_eq!(offer.verb, DecisionVerb::DeclareAttackers);
     offer
 }
 
-fn attacker_candidates(offer: &InteractionOffer) -> (RoleId, &[Candidate]) {
+fn attacker_candidates(offer: &DecisionOption) -> (RoleId, &[Candidate]) {
     let [ChoiceStep::Select {
         role,
         candidates,
@@ -126,11 +126,11 @@ fn subject_entity(candidate: &Candidate) -> u32 {
 }
 
 fn submission_for_mask(
-    offer: &InteractionOffer,
+    offer: &DecisionOption,
     role: RoleId,
     candidates: &[Candidate],
     mask: usize,
-) -> (OfferSubmission, BTreeSet<u32>) {
+) -> (DecisionSubmission, BTreeSet<u32>) {
     let mut selected_candidates = Vec::new();
     let mut selected_entities = BTreeSet::new();
     for (index, candidate) in candidates.iter().enumerate() {
@@ -140,7 +140,7 @@ fn submission_for_mask(
         }
     }
     (
-        OfferSubmission {
+        DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role,
@@ -186,7 +186,7 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
                         permanent,
                         attack: offered,
                         ..
-                    } if *permanent == permanent_id && *offered == attack
+                    } if *permanent == permanent_id && offered.is_some() == attack
                 )
             })
             .expect("legacy ABI should represent attack and decline");
@@ -325,31 +325,31 @@ fn structured_attacker_offer_is_prompt_bound_and_rejects_bad_selections() {
     let (role, candidates) = attacker_candidates(offer);
 
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: Vec::new(),
         }),
-        Err(StructuredOfferError::MissingAnswer(role))
+        Err(DecisionSurfaceError::MissingAnswer(role))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role,
                 candidates: vec![CandidateId(999)],
             }],
         }),
-        Err(StructuredOfferError::UnknownCandidate(CandidateId(999)))
+        Err(DecisionSurfaceError::UnknownCandidate(CandidateId(999)))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role,
                 candidates: vec![candidates[0].id, candidates[0].id],
             }],
         }),
-        Err(StructuredOfferError::DuplicateCandidate(candidates[0].id))
+        Err(DecisionSurfaceError::DuplicateCandidate(candidates[0].id))
     );
 
     let (empty_submission, _) = submission_for_mask(offer, role, candidates, 0);
@@ -358,14 +358,14 @@ fn structured_attacker_offer_is_prompt_bound_and_rejects_bad_selections() {
         .expect("legacy prompt")
         .actions
         .iter()
-        .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+        .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
         .expect("legacy decline");
     root.step(legacy_decline)
         .expect("advance to a later attacker prompt");
     let before = format!("{root:?}");
     assert!(matches!(
         root.apply_offer_submission(&set, &empty_submission),
-        Err(StructuredOfferError::StaleOrIllegal(_))
+        Err(DecisionSurfaceError::StaleOrIllegal(_))
     ));
     assert_eq!(
         format!("{root:?}"),
@@ -498,13 +498,13 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
             preview: None,
         })
         .collect();
-    let projection = StructuredOfferProjection {
+    let projection = DecisionProjection {
         actor: 0,
         kind: PromptKind::DeclareAttackers,
-        offers: vec![InteractionOffer {
-            id: OfferId(0),
+        offers: vec![DecisionOption {
+            id: DecisionOptionId(0),
             actor: 0,
-            verb: OfferVerb::DeclareAttackers,
+            verb: DecisionVerb::DeclareAttackers,
             public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
@@ -534,8 +534,7 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
         fixture_value
     );
     assert_eq!(
-        serde_json::from_str::<StructuredOfferProjection>(fixture)
-            .expect("fixture should deserialize"),
+        serde_json::from_str::<DecisionProjection>(fixture).expect("fixture should deserialize"),
         projection
     );
 }
@@ -612,7 +611,7 @@ fn compound_decline_stops_before_a_later_attacker_declaration() {
             .unwrap()
             .actions
             .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: None, .. }))
             .unwrap();
         expected.step(decline).unwrap();
         let expected_actor = PlayerId(usize::from(opponent_has_attacker));
@@ -659,7 +658,7 @@ fn reachable_declarations(
     }
     let offers = game.compound_offers().expect("attacker declaration offers");
     let mut submissions = Vec::new();
-    if offers.projection().offers[0].verb == OfferVerb::DeclareAttackers {
+    if offers.projection().offers[0].verb == DecisionVerb::DeclareAttackers {
         let offer = attacker_offer(&offers);
         let (role, candidates) = attacker_candidates(offer);
         assert!(
@@ -673,7 +672,7 @@ fn reachable_declarations(
         }
     } else {
         for offer in &offers.projection().offers {
-            submissions.push(OfferSubmission {
+            submissions.push(DecisionSubmission {
                 offer_id: offer.id,
                 answers: Vec::new(),
             });
@@ -732,7 +731,7 @@ fn compound_offers_require_a_creature_that_attacks_each_combat() {
             if juggernaut_pending {
                 assert!(matches!(
                     game.structured_attacker_offers(),
-                    Err(StructuredOfferError::WrongDecision)
+                    Err(DecisionSurfaceError::WrongDecision)
                 ));
             }
             assert_eq!(

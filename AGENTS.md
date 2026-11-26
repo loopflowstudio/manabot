@@ -44,10 +44,11 @@ domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
 terms (`recipe` for training recipes, `manifest` for content packs, `replay`
 for seed-and-action replays) for unrelated concepts, even internally, and avoid
 duplicating module filenames across packages. When renaming or replacing a
-published API, convert remaining callers, emit a `DeprecationWarning` targeting
-the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
-compatibility graph with that version so rollover finds it; serialized keys,
-checkpoint fields and frozen evidence keep their spelling.
+published API, rename surviving core modules and functions into the new
+vocabulary, convert callers, and keep the old names only on thin compatibility
+wrappers emitting a `DeprecationWarning` targeting the next minor release (e.g.
+`0.3.0` on `0.2.x`), tagged as one deletable compatibility graph; serialized
+keys, checkpoint fields and frozen evidence keep their spelling.
 
 Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
@@ -92,10 +93,13 @@ them in the browser. Preserve Command binding, stale rejection, actual pending
 decisions on reconnect, replay/fork identity and accessibility. Cancellation or
 undo requires an explicit shared action and cannot erase committed costs or
 revealed information. Keep priority-stop automation distinct from deliberate
-human decisions. Keep multi-step choices (combat, pile partitions) as sequential
-Commands for agents while drafting them holistically in Academy over verified
-steps: fold raw step offers into a collapsed disclosure while drafting, and keep
-them listed in Replay and Study for recorded policy probabilities. Play's retained `hero_*`/`villain_*` setup fields name
+human decisions. Live grouped decisions (combat declarations on the board,
+Scry, Surveil, and OrderLibrary in `ArrangePanel`, and `PartitionPiles` in the
+two-pile partition panel) are drafted whole and committed in one `decision_group_command`
+compiled to sequential native `Action`s with no engine action-space change:
+fold raw single-step offers under a collapsed disclosure while drafting (not
+beside the draft), and keep them listed in Replay and Study where recorded
+policy probabilities attach. Play's retained `hero_*`/`villain_*` setup fields name
 human/opponent roles; `GameConfig.human_seat` orders them at the native
 boundary. Record and project actual native seats; Watch keeps its two-seat
 acting-view contract. A game is named by its id and nothing else identifies a
@@ -489,13 +493,19 @@ it. Discard replacements use that controller to determine who caused the
 discard, including a discard paid during resolution.
 
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
-use action-aligned `structured_search_offers`: these offers have no choices
-and reject nonempty `Command.answers`. Compound submissions belong to the
-separate `compound_offers` / `step_structured` API. Do not infer supported
-atomic answers from the `Command` field alone, or pass compound offer ids to
-the semantic executor. Recording preserves the original native Command and
-its object preconditions; Academy's presentation Command has a separate
-revision scope.
+project the action-aligned `decision_surface` (no choices; rejects nonempty
+`Command.answers`; prefer `decision` / `decision_group` vocabulary over `offer`
+in new core engine code). Grouped input (`flow/decision_group/`,
+`managym.decision_group`, Academy `decision_group_command`) compiles a typed
+choice to sequential native `Action`s on a clone before stepping the live game
+without widening action spaces, observations or digests. Recording preserves
+the original native Command and its object preconditions; Academy's
+presentation Command has a separate revision scope.
+
+Native snapshot v1 cold replay reads action indices or Commands. Issued object
+candidates bind the entire action-aligned offer projection, and the final state
+digest includes the current action space. When changing declaration offers,
+exercise a recorded object-bound Command through cold restore.
 
 Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
@@ -635,8 +645,9 @@ a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
-shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged).
+shifts the name-ordered definition ids. Refresh Academy fixtures with
+`uv run --extra dev python scripts/refresh_academy_fixtures.py`. The script
+replays each recorded offer and checks its label before writing the new digests.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -766,11 +777,12 @@ in layer, dependency and timestamp order; callers read its fields, and rules
 questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
 Its `activated_abilities` follow layer/timestamp order; activation, payment and
 offer code indexes only that list, never `card.activated_abilities`. Resolution
-consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
+consumes the effects captured at activation. `flow/layers.rs::evaluate_board` evaluates
 the board without calling the public view; `flow/statics.rs` caches that board
 and finalizes activation costs and dynamic mana outputs. Each immutable view is
 shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
-(or internal `layer_views` when activation finalization is unnecessary), preserving
+(or internal `with_layer_board`/`with_layer_view` for non-reentrant borrowed reads
+and `layer_views` when activation finalization is unnecessary), preserving
 their input order and validating the shared board once per immutable scan.
 `Game::state` is a `TrackedState` with
 `Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
@@ -789,6 +801,11 @@ live in `EffectRecords` (indexed by affected object and player); trigger
 sources are looked up per event kind through `TriggerIndex`
 (`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
 facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Stacked abilities keep an exact source object across zone changes.
+Live trigger and layer sources use the exact object. Battlefield triggers retain
+their source’s battlefield LKI. Command-zone emblems get their controller from
+their zone and their abilities from the emblem definition. Their display label
+is separate from their rules name.
 Layer rebuilds reuse immutable copiable source objects and static plans, bound to
 exact definition identity, appearance and timestamp; copy/transform definition
 changes invalidate that source. Intermediate layer objects detach on writes.

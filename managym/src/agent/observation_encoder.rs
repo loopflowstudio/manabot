@@ -1107,6 +1107,7 @@ pub fn encode_rows(
                     row[permanent::COMBAT_DAMAGE_TO_ME],
                     row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
                 ] = combat_damage_flags(&permanent.combat_damage_to_players);
+                row[permanent::ATTACKED_PERMANENT] = link(permanent.attacked_permanent);
             }
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
@@ -1251,6 +1252,8 @@ fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE
         row[turn_state::NONLAND_PERMANENTS_LEFT] =
             Integer(i64::from(history.nonland_permanents_left));
         row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
+        row[turn_state::LOYALTY_ABILITIES_ACTIVATED] =
+            Integer(i64::from(history.loyalty_abilities_activated));
     }
     row[turn_state::LIFE_LOST] = Scalar(player.turn_history.life_lost as f32 / 20.0);
     row[turn_state::SPELLS_CAST] = Scalar(player.spells_cast as f32 / 10.0);
@@ -1598,6 +1601,7 @@ fn encode_card_features(
     out[card::VALID] = Integer(1);
     if layout == InputLayout::OneToken {
         out[card::PUT_INTO_GRAVEYARD_THIS_TURN] = flag(card.put_into_graveyard_this_turn);
+        out[card::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
     }
 }
 
@@ -1649,6 +1653,9 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::PRINTED_LOYALTY] =
+            Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
+        out[permanent::LOYALTY_ACTIVATED_THIS_TURN] = flag(permanent.loyalty_activated_this_turn);
         out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
         out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
@@ -1717,6 +1724,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
     out[stack::ABILITY_RESOLUTIONS] = Integer(i64::from(object.ability_resolutions));
     if let Some(card) = &object.spell {
         out[stack::CAST_FROM_GRAVEYARD] = flag(card.cast_from_graveyard);
+        out[stack::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
         out[stack::IS_COPY] = flag(card.is_copy);
         out[stack::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
         out[stack::POWER] = Scalar(card.power as f32 / 10.0);
@@ -2385,6 +2393,11 @@ fn encode_actions(
         if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
             *route = Integer(i64::from(action.play_route.unwrap_or_default()));
         }
+        if let (Some(amount), Some(column)) =
+            (action.division_amount, row.get_mut(action::DIVISION))
+        {
+            *column = Integer(i64::from(amount));
+        }
         out.write(Table::Actions, 0, action_index, row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;
         focus.fill(Integer(-1));
@@ -2613,6 +2626,7 @@ mod tests {
                         pays_directly: false,
                         is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2632,6 +2646,7 @@ mod tests {
                         pays_directly: false,
                         is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2651,6 +2666,7 @@ mod tests {
                         pays_directly: false,
                         is_mana_ability: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2805,6 +2821,7 @@ mod tests {
                 pays_directly: false,
                 is_mana_ability: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
@@ -2833,6 +2850,7 @@ mod tests {
         CardData {
             characteristics: crate::agent::observation::CharacteristicsData {
                 name: format!("Card {id}"),
+                printed_loyalty: None,
                 text_box: String::new(),
                 power,
                 toughness,
@@ -3131,6 +3149,7 @@ mod tests {
                 pays_directly: false,
                 is_mana_ability: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,

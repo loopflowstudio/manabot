@@ -32,7 +32,7 @@ impl BlockRequirements {
 impl Game {
     fn block_requirements(&self, attacker: PermanentId) -> BlockRequirements {
         let mut rules = BlockRequirements {
-            menace: self.layer_view(attacker).keywords.has(Keyword::Menace),
+            menace: self.with_layer_view(attacker, |v| v.keywords.has(Keyword::Menace)),
             limited: self.has_restriction(attacker, Restriction::CantBeBlockedByMoreThanOne),
             ..Default::default()
         };
@@ -81,7 +81,7 @@ impl Game {
     ) -> Vec<Option<PermanentId>> {
         let _scan = self.board_scan();
         let combat = self.state.combat.as_ref().expect("declaring blockers");
-        let attackers = &combat.attackers;
+        let attackers: Vec<_> = combat.attackers().collect();
         let rules: Vec<_> = attackers
             .iter()
             .map(|&id| self.block_requirements(id))

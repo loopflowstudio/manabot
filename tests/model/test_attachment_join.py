@@ -48,7 +48,11 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     assert encoded["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] == host + 1
     torch.manual_seed(5)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
-    assert len(agent.link_to_target) == len(agent.link_from_target) == 2
+    assert (
+        len(agent.link_to_target)
+        == len(agent.link_from_target)
+        == len(PERMANENT_LINK_INDEXES)
+    )
     detached = dict(encoded)
     detached["agent_permanents"] = encoded["agent_permanents"].copy()
     detached["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] = 0

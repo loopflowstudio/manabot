@@ -252,24 +252,60 @@ describe('GameStore', () => {
 });
 
 describe('stop changes in flight', () => {
-  it('drops the echo of an older config, so fast presses keep their last state', () => {
+  it('ignores an unrelated earlier frame while one stop change is in flight', () => {
+    const store = createGameStore();
+    const before = { ...store.stops, my: [...store.stops.my], opponent: [...store.stops.opponent] };
+    store.cycleStop('opponent', 'upkeep');
+    store.noteStopsSent();
+    const every = { ...store.stops, my: [...store.stops.my], opponent: [...store.stops.opponent] };
+
+    // An earlier command's observation (such as Keep hand) arrives before the set_stops echo.
+    store.applyServerStops(before);
+    expect(store.stops.opponent).toContain('upkeep');
+
+    // A second press sees "every" rather than a reverted "off", so it advances to "once".
+    store.cycleStop('opponent', 'upkeep');
+    expect(store.onceStops.opponent).toEqual(['upkeep']);
+
+    // Once the set_stops echo arrives, the server's config holds again.
+    store.applyServerStops(every);
+    expect(store.onceStops.opponent).toEqual(['upkeep']);
+    store.applyServerStops({ ...before, my: ['main1'] });
+    expect(store.stops.my).toEqual(['main1']);
+  });
+
+  it('drops intermediate echoes when fast presses cycle back through the same config', () => {
+    const store = createGameStore();
+    store.cycleStop('my', 'upkeep');
+    const every = { ...store.stops, my: [...store.stops.my] };
+    store.noteStopsSent();
+    store.cycleStop('my', 'upkeep'); // every -> once (same server config)
+    store.cycleStop('my', 'upkeep'); // once -> off
+    const off = { ...store.stops, my: [...store.stops.my] };
+    store.noteStopsSent();
+    store.cycleStop('my', 'upkeep'); // off -> every
+    store.noteStopsSent();
+
+    store.applyServerStops(every);
+    expect(store.stops.my).toContain('upkeep');
+    store.applyServerStops(off);
+    expect(store.stops.my).toContain('upkeep');
+    store.applyServerStops(every);
+    expect(store.stops.my).toContain('upkeep');
+
+    // After all in-flight echoes arrive, subsequent server updates apply again.
+    store.applyServerStops(off);
+    expect(store.stops.my).not.toContain('upkeep');
+  });
+
+  it('clears pending stop expectations on disconnect or control error', () => {
     const store = createGameStore();
     const before = { ...store.stops, my: [...store.stops.my] };
     store.cycleStop('my', 'upkeep');
     store.noteStopsSent();
-    const every = { ...store.stops, my: [...store.stops.my] };
-    store.cycleStop('my', 'upkeep');
-    store.noteStopsSent();
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    // The frame that answers an earlier change, or one sent before any, still carries the old config.
+    store.clearPendingStops();
     store.applyServerStops(before);
-    expect(store.stops.my).toContain('upkeep');
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    store.applyServerStops(every);
-    expect(store.onceStops.my).toEqual(['upkeep']);
-    // After the last echo the server's config holds again.
-    store.applyServerStops({ ...before, my: ['main1'] });
-    expect(store.stops.my).toEqual(['main1']);
+    expect(store.stops.my).not.toContain('upkeep');
   });
 
   it('does not persist passive server echoes to localStorage', () => {
@@ -290,5 +326,42 @@ describe('stop changes in flight', () => {
     } finally {
       delete (globalThis as { localStorage?: unknown }).localStorage;
     }
+  });
+});
+
+describe('dismissCommandRejection', () => {
+  it('clears the matching rejection and error banner without wiping unrelated errors', () => {
+    const store = createGameStore();
+    store.lastCommandRejection = {
+      command_id: 'cmd-1',
+      code: 'decision_group_refused',
+      message: 'Boggart Brute requires at least two blockers.',
+      current_revision: 12,
+      current_prompt: null,
+    };
+    store.setError('Boggart Brute requires at least two blockers.');
+
+    // Mismatched command id leaves both intact.
+    store.dismissCommandRejection('cmd-other');
+    expect(store.errorMessage).toBe('Boggart Brute requires at least two blockers.');
+    expect(store.lastCommandRejection?.command_id).toBe('cmd-1');
+
+    // Matching command id clears both rejection and matching error banner.
+    store.dismissCommandRejection('cmd-1');
+    expect(store.errorMessage).toBeNull();
+    expect(store.lastCommandRejection).toBeNull();
+
+    // Unrelated error message is preserved when dismissing a rejection.
+    store.lastCommandRejection = {
+      command_id: 'cmd-2',
+      code: 'decision_group_incomplete',
+      message: 'Place remaining cards before confirming.',
+      current_revision: 13,
+      current_prompt: null,
+    };
+    store.setError('WebSocket error. Trying to reconnect.');
+    store.dismissCommandRejection('cmd-2');
+    expect(store.lastCommandRejection).toBeNull();
+    expect(store.errorMessage).toBe('WebSocket error. Trying to reconnect.');
   });
 });

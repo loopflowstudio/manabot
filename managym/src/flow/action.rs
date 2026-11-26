@@ -29,8 +29,10 @@ use crate::{
 };
 
 impl Game {
-    /// Whether a ChooseMode index at this decision is a quantity (X, a
-    /// replicate count, or assigned damage).
+    /// Whether a ChooseMode index at this decision is an announced X quantity
+    /// (X for a spell or activation, a replicate count, a payment's X, or
+    /// assigned combat damage). Target division uses its own `division_amount`
+    /// field rather than aliasing X.
     pub(crate) fn announces_x(&self) -> bool {
         matches!(
             self.pending_choice,
@@ -48,6 +50,30 @@ impl Game {
             return opening.action_description(self, action);
         }
         match action {
+            Action::ChooseTarget { target, .. }
+                if let Some(Decision::EnterAttacking { object, .. }) =
+                    self.state.suspended_decision.as_ref().map(|s| &s.decision) =>
+            {
+                let defender = match *target {
+                    Target::Player(seat) => format!("Seat {}", seat.0 + 1),
+                    Target::Permanent(id) => self.observed_object_name(self.permanent_object(id)?),
+                    _ => return None,
+                };
+                Some(format!(
+                    "Attack {defender} with {}",
+                    self.state.entry_object(*object).name
+                ))
+            }
+            Action::DeclareAttacker {
+                permanent,
+                attack: Some(super::combat::AttackTarget::Permanent(object)),
+                ..
+            } => Some(format!(
+                "Attack {} (object {}) with {}",
+                self.observed_object_name(*object),
+                self.object_event_ref(*object)?.entity.0,
+                self.observed_object_name(self.permanent_object(*permanent)?)
+            )),
             Action::CastSpell {
                 object,
                 route: None,
@@ -133,6 +159,13 @@ impl Game {
             } => {
                 let view = self.characteristics(*permanent);
                 let ability = view.activated_abilities.get(*ability_index)?;
+                if let Some(cost) = ability.loyalty {
+                    return Some(format!(
+                        "{} {cost}: {}",
+                        view.name,
+                        effects_description(&ability.effects)
+                    ));
+                }
                 if ability.is_simple_mana_tap() {
                     let name = self.observed_object_name(self.permanent_object(*permanent)?);
                     return Some(format!(
@@ -396,15 +429,42 @@ impl Game {
             }) => {
                 let rest = remaining - mode as i32;
                 let recipient = if *last {
-                    "to defending player"
+                    let id = self.state.permanent_of(*attacker)?;
+                    match self.state.combat.as_ref()?.defender(id)? {
+                        super::combat::AttackTarget::Permanent(object) => {
+                            format!("to {}", self.observed_object_name(object))
+                        }
+                        super::combat::AttackTarget::Player(_) => "to defending player".into(),
+                    }
                 } else {
-                    "left to assign"
+                    "left to assign".into()
                 };
                 Some(format!(
                     "{} assigns {mode} to {}, {rest} {recipient}",
                     self.observed_object_name(*attacker),
                     self.observed_object_name(*blocker)
                 ))
+            }
+            _ if let Some(PendingChoice::DivideAmount {
+                slots,
+                next,
+                remaining,
+                parent,
+                ..
+            }) = &self.pending_choice =>
+            {
+                let target_name = match parent.chosen().get(slots[*next]) {
+                    Some(Target::Player(seat)) => format!("Seat {}", seat.0 + 1),
+                    Some(Target::Permanent(id)) => self
+                        .permanent_object(*id)
+                        .map_or_else(|| "target".into(), |obj| self.observed_object_name(obj)),
+                    Some(Target::StackSpell(obj) | Target::GraveyardCard(obj)) => {
+                        self.observed_object_name(*obj)
+                    }
+                    _ => "target".into(),
+                };
+                let rest = remaining - mode as i32;
+                Some(format!("Assign {mode} to {target_name} ({rest} remaining)"))
             }
             _ if self.announces_x() => Some(format!("X = {mode}")),
             Some(Decision::PartitionPiles { looked, next, .. }) => {
@@ -696,6 +756,7 @@ impl Game {
         floats: &mut Vec<Action>,
     ) -> Vec<Action> {
         let mut actions = Vec::new();
+        let board = self.layer_board();
         for permanent_id in self.iter_battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
@@ -709,24 +770,30 @@ impl Game {
                     object: permanent.object,
                 });
             }
-            if self.activations_prohibited(permanent_id) {
+            let raw = board.view(permanent_id);
+            if raw.activated_abilities.is_empty() || self.activations_prohibited(permanent_id) {
                 continue;
             }
-            for (ability_index, ability) in self
-                .characteristics(permanent_id)
-                .activated_abilities
-                .iter()
-                .enumerate()
-            {
+            let view = self.finalized_view(&board, player, permanent_id, raw);
+            for (ability_index, ability) in view.activated_abilities.iter().enumerate() {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
                     || (!ability.is_mana_ability()
                         && self.nonmana_activation_prohibited(permanent.object))
-                    || !self.activation_targets_available(player, source, ability_index)
+                    || (!ability.announces_x()
+                        && !self.activation_targets_available(
+                            player,
+                            source,
+                            ability_index,
+                            ability,
+                            i32::from(ability.x_min),
+                        ))
                 {
                     continue;
                 }
-                if self.check_activation_terms(player, ability).is_err()
+                if self
+                    .check_permanent_activation_terms(player, permanent_id, ability)
+                    .is_err()
                     || !permanent.can_pay_counters(ability)
                     || permanent.activation_used(ability_index, ability)
                     || (ability.discard_card
@@ -754,6 +821,8 @@ impl Game {
                     source,
                     ability_index,
                     targets: Vec::new(),
+                    target_req_indices: Vec::new(),
+                    target_divisions: Vec::new(),
                     x: 0,
                 };
                 if let Some(cost) = &ability.sacrifice {
@@ -797,7 +866,16 @@ impl Game {
                         receipt: Default::default(),
                     };
                     self.tap_activation_payment_possible(player, &payment, None)
-                } else if ability.waterbend || ability.mana_cost.x > 0 {
+                        && (!ability.announces_x()
+                            || self.has_legal_activation_x(
+                                player,
+                                permanent_id,
+                                ability_index,
+                                ability,
+                            ))
+                } else if ability.announces_x() {
+                    self.has_legal_activation_x(player, permanent_id, ability_index, ability)
+                } else if ability.waterbend {
                     self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
@@ -840,7 +918,13 @@ impl Game {
                     };
                     let source = ActivationSource::Card(card);
                     if self.check_activation_terms(player, &ability).is_err()
-                        || !self.activation_targets_available(player, source, ability_index)
+                        || !self.activation_targets_available(
+                            player,
+                            source,
+                            ability_index,
+                            &ability,
+                            0,
+                        )
                     {
                         continue;
                     }
@@ -848,6 +932,8 @@ impl Game {
                         source,
                         ability_index,
                         targets: Vec::new(),
+                        target_req_indices: Vec::new(),
+                        target_divisions: Vec::new(),
                         x: 0,
                     };
                     if self.can_pay_announced_activation(
@@ -962,6 +1048,7 @@ impl Game {
             mode: None,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
             target_shares: Vec::new(),
         });
         (self
@@ -981,23 +1068,18 @@ impl Game {
             PendingChoice::Pay { player, payment } => {
                 Some(self.payment_action_space(*player, payment))
             }
-            PendingChoice::ActivatedTarget {
-                player,
-                source,
-                ability_index,
-                chosen,
-                requirement,
-            } => {
+            PendingChoice::ActivatedTarget(targeting) => {
+                let crate::flow::game::ActivatedTargeting {
+                    player,
+                    source,
+                    ability_index,
+                    requirement,
+                    ..
+                } = targeting;
                 let chooser =
                     self.activation_target_chooser(*player, *source, *ability_index, *requirement);
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(
-                        *player,
-                        *source,
-                        *ability_index,
-                        *requirement,
-                        chosen,
-                    )
+                    .activated_ability_targets(targeting)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: chooser,
@@ -1006,10 +1088,8 @@ impl Game {
                     .collect();
                 let clause =
                     self.activation_target_requirement(*source, *ability_index, *requirement)?;
-                let in_clause = self
-                    .activation_clause_chosen(*source, *ability_index, *requirement, chosen)
-                    .len();
-                if in_clause >= clause.min {
+                let in_clause = targeting.clause_slots(*requirement).count();
+                if in_clause >= clause.min_for(targeting.x, false) {
                     actions.push(Action::Decline { player: chooser });
                 }
                 Some(ActionSpace {
@@ -1061,7 +1141,9 @@ impl Game {
                 cast,
             } => Some(x_action_space(
                 *player,
-                self.legal_x_values(*player, *object, *cast),
+                self.legal_x_values(*player, *object, *cast)
+                    .into_iter()
+                    .map(i32::from),
                 vec![self.state[object].id],
             )),
             PendingChoice::ActivationX {
@@ -1085,43 +1167,72 @@ impl Game {
                 ],
                 focus: vec![self.state[object].id],
             }),
-            PendingChoice::ChooseTargets {
+            PendingChoice::DivideAmount {
                 player,
-                object,
-                cast,
-                requirement_index,
-                mode,
-                chosen_req_indices,
+                slots,
+                next,
+                remaining,
+                parent,
+            } => {
+                let rem_targets = (slots.len() - *next) as i32;
+                let max_amt = (*remaining - (rem_targets - 1)).max(1);
+                let focus = match parent.chosen().get(slots[*next]).copied() {
+                    Some(Target::Permanent(id)) => self.state.permanents[id]
+                        .as_ref()
+                        .map(|perm| vec![perm.id])
+                        .unwrap_or_default(),
+                    Some(Target::StackSpell(obj) | Target::GraveyardCard(obj)) => {
+                        vec![self.state[obj].id]
+                    }
+                    _ => Vec::new(),
+                };
+                Some(ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Modal,
+                    actions: (1..=max_amt)
+                        .map(|amt| Action::ChooseMode {
+                            player: *player,
+                            mode: amt as usize,
+                        })
+                        .collect(),
+                    focus,
+                })
+            }
+            PendingChoice::ChooseTargets {
+                targeting,
                 legal_targets,
-                ..
             } => {
                 let mut actions: Vec<Action> = legal_targets
                     .iter()
                     .copied()
                     .map(|target| Action::ChooseTarget {
-                        player: *player,
+                        player: targeting.player,
                         target,
                     })
                     .collect();
-                let requirements = cast
-                    .spell(&self.state[object])
-                    .target_requirements_for_mode(*mode);
-                let chosen_in_req = chosen_req_indices
-                    .iter()
-                    .filter(|i| **i == *requirement_index)
-                    .count();
-                let min_met = requirements.get(*requirement_index).is_some_and(|req| {
-                    chosen_in_req >= req.min_for(cast.x, cast.kicked)
-                        && req.max_for(cast.x, cast.kicked) > req.min_for(cast.x, cast.kicked)
-                });
+                let requirements = targeting
+                    .cast
+                    .spell(&self.state[targeting.object])
+                    .target_requirements_for_mode(targeting.mode);
+                let chosen_in_req = targeting.clause_slots(targeting.requirement_index).count();
+                let x = i32::from(targeting.cast.x);
+                let kicked = targeting.cast.kicked;
+                let min_met = requirements
+                    .get(targeting.requirement_index)
+                    .is_some_and(|req| {
+                        let min = req.min_for(x, kicked);
+                        chosen_in_req >= min && req.max_for(x, kicked) > min
+                    });
                 if min_met {
-                    actions.push(Action::Decline { player: *player });
+                    actions.push(Action::Decline {
+                        player: targeting.player,
+                    });
                 }
                 Some(ActionSpace {
-                    player: Some(*player),
+                    player: Some(targeting.player),
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
-                    focus: vec![self.state[object].id],
+                    focus: vec![self.state[targeting.object].id],
                 })
             }
         }
@@ -1405,10 +1516,7 @@ impl Game {
                     Some(PendingChoice::ChooseTargets { .. })
                 ) {
                     self.choose_target_action(*player, target)
-                } else if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::ActivatedTarget { .. })
-                ) {
+                } else if matches!(self.pending_choice, Some(PendingChoice::ActivatedTarget(_))) {
                     self.choose_activated_target(*player, target)
                 } else if self
                     .state
@@ -1487,6 +1595,14 @@ impl Game {
             {
                 self.choose_activation_x_action(*player, *mode)
             }
+            Action::ChooseMode { player, mode }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::DivideAmount { .. })
+                ) =>
+            {
+                self.choose_division_amount(*player, *mode)
+            }
             Action::SelectCard { player, object }
                 if self.state.suspended_decision.is_none() && self.paying().is_some() =>
             {
@@ -1502,7 +1618,7 @@ impl Game {
                     return self.execute_decision_action(action);
                 }
                 match self.pending_choice {
-                    Some(PendingChoice::ActivatedTarget { .. }) => {
+                    Some(PendingChoice::ActivatedTarget(_)) => {
                         self.decline_activated_target(*player)
                     }
                     Some(PendingChoice::KickerChoice { .. }) => {
@@ -1550,7 +1666,11 @@ impl Game {
 }
 
 /// Announcing X offers each payable value as a `ChooseMode` whose mode is X.
-fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> ActionSpace {
+fn x_action_space(
+    player: PlayerId,
+    values: impl IntoIterator<Item = i32>,
+    focus: Vec<PublicId>,
+) -> ActionSpace {
     ActionSpace {
         player: Some(player),
         kind: ActionSpaceKind::Modal,
@@ -1558,7 +1678,7 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
             .into_iter()
             .map(|x| Action::ChooseMode {
                 player,
-                mode: usize::from(x),
+                mode: x as usize,
             })
             .collect(),
         focus,

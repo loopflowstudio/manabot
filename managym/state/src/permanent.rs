@@ -286,6 +286,8 @@ pub struct Permanent {
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub activated_this_turn: Vec<usize>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
 }
 
 impl Permanent {
@@ -293,22 +295,39 @@ impl Permanent {
         turn != 0 && self.entry_turn == turn
     }
 
-    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
-        ability
+    /// Loyalty left for a loyalty symbol after other source-counter costs.
+    pub fn available_loyalty(&self, ability: &ActivatedAbilityDefinition) -> i32 {
+        let reserved = ability
             .remove_counters
-            .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
+            .filter(|(kind, _)| *kind == CounterKind::Loyalty)
+            .map_or(0, |(_, count)| i32::from(count));
+        self.counter_count(CounterKind::Loyalty) - reserved
+    }
+
+    pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        if let Some((kind, count)) = ability.remove_counters {
+            if self.counter_count(kind) < i32::from(count) {
+                return false;
+            }
+        }
+        ability.loyalty.is_none_or(|loyalty| {
+            let removed = -loyalty.counter_change(i32::from(ability.x_min)).min(0);
+            self.available_loyalty(ability) >= removed
+        })
     }
 
     /// Whether this object has used up the ability: a once-per-object
     /// ability ever (CR 702.177a, 602.5b), "once each turn" already this
     /// turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        (ability.once_per_object() && self.spent_abilities.contains(&index))
+        (self.loyalty_activated_this_turn && ability.loyalty.is_some())
+            || (ability.once_per_object() && self.spent_abilities.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        self.loyalty_activated_this_turn |= ability.loyalty.is_some();
         if ability.once_per_object() {
             let mut spent = std::mem::take(&mut self.spent_abilities).into_vec();
             spent.push(index);
@@ -353,6 +372,7 @@ impl Permanent {
             attached_to: None,
             spent_abilities: Default::default(),
             activated_this_turn: Vec::new(),
+            loyalty_activated_this_turn: false,
         }
     }
 
@@ -405,5 +425,6 @@ impl Permanent {
     pub fn clear_turn_history(&mut self) {
         self.dealt_damage_this_turn = false;
         self.activated_this_turn.clear();
+        self.loyalty_activated_this_turn = false;
     }
 }

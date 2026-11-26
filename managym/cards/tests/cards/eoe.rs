@@ -193,7 +193,7 @@ fn silencer_and_fynn_count_artifact_creature_hits() {
         let silencer = s.force_permanent_on_battlefield(0, "Virulent Silencer");
         let attacker = if token {
             s.game_mut()
-                .create_token("token.ballistic_boulder", PlayerId(0), false)
+                .create_token("token.ballistic_boulder", PlayerId(0))
                 .unwrap()
         } else {
             silencer

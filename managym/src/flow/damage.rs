@@ -69,7 +69,7 @@ impl Game {
         matches!(target, ProposedDamageTarget::Player(player) if self.player_has(player, &crate::state::effect::Modification::ProtectionFromEverything))
     }
 
-    /// Excess after replacement, measured against the pre-commit creature.
+    /// Excess after replacement, measured against each applicable type (CR 120.10).
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
     fn excess_for_damage(
         &self,
@@ -81,16 +81,23 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return 0;
         };
-        if !view.is_creature() {
-            return 0;
+        let mut excess = 0;
+        if view.is_creature() {
+            let remaining = (view.toughness - permanent.damage).max(0);
+            let lethal = if deathtouch {
+                remaining.min(1)
+            } else {
+                remaining
+            };
+            excess = excess.max(amount - lethal);
         }
-        let remaining = (view.toughness - permanent.damage).max(0);
-        let lethal = if deathtouch {
-            remaining.min(1)
-        } else {
-            remaining
-        };
-        (amount - lethal).max(0)
+        if view.types.is_planeswalker() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Loyalty));
+        }
+        if view.types.is_battle() {
+            excess = excess.max(amount - permanent.counter_count(CounterKind::Defense));
+        }
+        excess
     }
 
     pub(crate) fn commit_damage(
@@ -179,8 +186,8 @@ impl Game {
                 if view.is_creature() {
                     self.state
                         .mark_damage(permanent_id, amount, source_has_deathtouch);
-                } else if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.dealt_damage_this_turn = true;
+                } else {
+                    self.state.mark_dealt_damage(permanent_id);
                 }
                 if view.types.is_planeswalker() {
                     self.commit_counter_change(object_ref, CounterKind::Loyalty, -amount, None);
@@ -217,11 +224,8 @@ impl Game {
 
     pub(super) fn can_gain_life(&self, player: PlayerId) -> bool {
         !self.life_total_cant_change(player)
-            && !self.static_sources().any(|(id, _, view)| {
-                !self.is_phased_out(id)
-                    && view
-                        .static_abilities
-                        .contains(&StaticAbility::PlayersCantGainLife)
+            && !self.has_functioning_static(None, |ability| {
+                matches!(ability, StaticAbility::PlayersCantGainLife)
             })
     }
 
@@ -264,7 +268,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.layer_view(permanent_id).keywords;
+            return self.with_layer_view(permanent_id, |v| v.keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;
@@ -329,7 +333,9 @@ impl Game {
             if self.state.permanents[permanent_id]
                 .as_ref()
                 .is_some_and(|permanent| {
-                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                    permanent.loyalty_activated_this_turn
+                        || !permanent.activated_this_turn.is_empty()
+                        || permanent.dealt_damage_this_turn
                 })
             {
                 self.state.clear_permanent_turn_history(permanent_id);

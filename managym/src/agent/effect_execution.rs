@@ -89,6 +89,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "effect execution",
     "end batch",
     "end the turn",
+    "attacked defender",
     "entering card",
     "entering definition",
     "enters back face up",
@@ -217,6 +218,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "target",
     "target shares",
     "target clauses",
+    "target divisions",
     "target eligibility",
     "this way",
     "token definition",
@@ -599,6 +601,7 @@ impl<'a> Projection<'a> {
                 mode,
                 targets,
                 target_req_indices,
+                target_divisions,
                 target_shares,
             }) => {
                 self.object_id("paid spell", *object);
@@ -624,6 +627,9 @@ impl<'a> Projection<'a> {
                 self.field("mode", mode);
                 self.division(targets, target_shares);
                 self.field("target clauses", target_req_indices);
+                if !target_divisions.is_empty() {
+                    self.field("target divisions", target_divisions);
+                }
                 for target in targets {
                     self.target("target", *target);
                 }
@@ -632,7 +638,9 @@ impl<'a> Projection<'a> {
                 source,
                 ability_index,
                 targets,
+                target_divisions,
                 x,
+                ..
             } => {
                 match source {
                     ActivationSource::Permanent(id) => {
@@ -644,6 +652,9 @@ impl<'a> Projection<'a> {
                 }
                 self.field("ability", ability_index);
                 self.field("X", x);
+                if !target_divisions.is_empty() {
+                    self.field("target divisions", target_divisions);
+                }
                 for target in targets {
                     self.target("target", *target);
                 }
@@ -907,6 +918,12 @@ impl<'a> Projection<'a> {
         if let Some(object) = entry.attached_to {
             self.object("enters attached to", object);
         }
+        if let Some(subject) = entry
+            .attack_target
+            .and_then(|t| self.game.attack_target_subject(t))
+        {
+            self.target("attacked defender", subject);
+        }
     }
 
     fn batch(&mut self, batch: &EventBatch) {
@@ -1099,8 +1116,8 @@ impl<'a> Projection<'a> {
                 reveal,
             } => {
                 self.field("bind moved", &(shuffle, library_end, reveal));
-                if let Some((source, returns)) = linked {
-                    self.object("linked source", *source);
+                if let Some((linked_source, returns)) = linked {
+                    self.object("linked source", linked_source.creator);
                     self.field("linked return", returns);
                 }
             }
@@ -1432,7 +1449,7 @@ pub(crate) fn project_frame(
     if let Some(source) = effect.source_ref() {
         out.retained_object(source);
     }
-    if let Some(target) = effect.context_target {
+    if let Some(target) = effect.context {
         out.retained_target(target);
     }
     if let Some(attached) = effect.attached {
@@ -1822,6 +1839,7 @@ pub(crate) fn project_decision(
             }
             out.object_ids("legends kept", keep);
         }
+        Decision::EnterAttacking { object, .. } => out.object_id("entering card", *object),
         Decision::EnterAsCopy {
             object_id,
             candidates,
@@ -1895,6 +1913,15 @@ pub(crate) fn project_decision(
                     out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
                 }
+                ResolutionCastOffer::ChooseExiled {
+                    objects,
+                    if_declined,
+                } => {
+                    for object in objects {
+                        out.object_id("cast from exile", *object);
+                    }
+                    out.effects("if declined", if_declined);
+                }
                 ResolutionCastOffer::AmongExiled { objects } => {
                     for object in objects {
                         out.object_id("cast from exile", *object);
@@ -1915,7 +1942,7 @@ pub(crate) fn project_decision(
                     out.object_id("cast from library", *object_id)
                 }
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
-                    out.object("exiled with", *source);
+                    out.object("exiled with", source.creator);
                     out.field("cast predicate", predicate);
                 }
             }

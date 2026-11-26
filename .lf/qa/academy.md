@@ -30,7 +30,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_SEARCH_PORT`. The release config covers unified replay, session
   continuation and laptop navigation. Keep generation/builds finished while
   browser proofs run; rebuilding replaces chunks under a preview server.
-  Combat remains ordinary per-creature offers, including nonparticipation.
   A swapped human is native seat 1; check player-target role labels against
   actual native seats. Floating mana has its own disclosure outside player
   status; status retains full policy identity and provenance.
@@ -98,14 +97,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   New game page.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
-  path), open the frontend URL, press Start game, play a land and Pass Turn.
+  path), open the frontend URL, press Deal & Play (the landing's start button;
+  mocked e2e setups at `/?setup=1` still say Start game), play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
   'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
   leaves both servers running. To play specific cards, open "Import decklist
   files", check "Use imported decks for the next game", set both files
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
-  "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
-  Start game; imported decks take any number of copies.
+  "Check decklists", wait for `Ready —`, pick the `passive` opponent with
+  `getByTestId('opponent-select').selectOption('passive')`, set
+  `getByLabel('Mana payment')` to `auto` so scripts need not pay, and press
+  Deal & Play; imported decks take any number of copies.
   Under heavy host load the first frontend probe in `scripts/play.py` keeps a
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
@@ -174,13 +176,45 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.
-- Combat drafts (`[data-testid=combat-draft]`, `POST
-  /api/games/<game>/combat-preview`): the draft appears only after the
-  preview answers, so wait for it before clicking creatures; without a preview
-  (a mocked socket with no route) the table keeps one creature at a time.
-  `[data-draft]` on a card is `can`, `in` or `armed`; confirm only once the
-  primary has `data-draft-ready=true`. Collect creature ids before clicking:
-  a locator over `[data-draft=can]` shifts as cards are drafted.
+- Grouped decisions (combat drafts, Scry, Surveil, OrderLibrary): the live
+  `decision_group` arrives beside the frame; drafts preview through `POST
+  /api/games/<game>/decision-group-preview` and Confirm sends one `decision_group_command`
+  WebSocket message (count `framesent` types). `[data-draft]` on a card is
+  `can`, `in` or `armed`; confirm only once `[data-testid=primary-action]` has
+  `data-draft-ready=true`. Collect creature ids before clicking: a locator over
+  `[data-draft=can]` shifts as cards are drafted. A creature cast this turn is
+  its own pile, so "Attack with 4" can sit beside "3 of 3 Raging Goblin".
+  For library groups, import `12 Island / 12 Swamp / 20 Bilbo Baggins,
+  Burglar / 16 Diresight` against `60 Plains` with `--opponent passive`:
+  Take a Glance ({U}, Scry 2) is castable on turn 1 and Diresight (Surveil 2,
+  then OrderLibrary when both are kept) on turn 3. Drive
+  `[data-testid=arrange-panel]` by its buttons (`Put X on top|bottom`,
+  `Put X in graveyard`, `Add X to order`) and `[data-testid=arrange-confirm]`;
+  the raw per-card offers are in the closed `[data-testid=per-creature-choices]`.
+  One raw step on Scry 2 leaves one card, below the group threshold, so the
+  panel gives way to raw offers. Recorded rows are per native step with
+  command ids `authority.decision_group.<id>.<n>` in
+  `canonical_replay.decisions` of `<traces>/play.sqlite`. Land and spell offers
+  are `[data-testid=action-option]` rows in "All legal choices", not in
+  `[data-testid=action-panel]`. Placed rows move with `Move X to
+  top|bottom` and `Unplace X`. Raging Goblin attacks need a script that plays
+  Mountains, or the game decks out with no combat. To exercise an authority
+  rejection from the real browser, `page.routeWebSocket(/.*/, ws => …)` with
+  `ws.connectToServer()` and rewrite one outgoing `decision_group_command` plan (empty
+  `bottom` on Scry 2): the server answers `rejected` with "Place remaining
+  cards before confirming", the game stays at the Scry, and Confirm stays
+  disabled until the draft is edited.
+- PartitionPiles live: import `24 Island / 36 Curator of Destinies` against
+  `60 Plains`, passive opponent, automatic mana; a script that clicks "Keep",
+  "Play Island" and "Cast Curator of Destinies" reaches the split in about a
+  minute. The `decision_group` arrives while the board still walks the cast and
+  trigger: `[data-testid=partition-panel]` (like ArrangePanel) is absent and
+  the rail Confirm is disabled until the walk ends, so detect the decision from
+  received WebSocket messages (`decision_group.kind === 'partition_piles'`), never by
+  clicking `primary-action` as "pass" — it becomes the split's Confirm. Toggle
+  a card with its `[data-testid=partition-card] [data-testid=board-card]`.
+  Recorded rows are `Put <card> in the face-down|face-up pile` under
+  `authority.decision_group.<id>.<n>`, then the opponent's `Choose … pile`.
 - Payment previews (`[data-testid=payment-preview]`, `POST
   /api/games/<game>/payment-preview`): the panel exists only once a payment
   offer has been previewed in the current decision, so read it with a count
@@ -394,6 +428,38 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
   themselves as a restriction source), Tiger-Dillo (own conditional
   restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).
+- Swap sides (Play → Settings → This game, `[data-testid=swap-sides]`): a
+  policy launched from `etude train manabot/recipes/local.py` needs
+  `--deck ur_lessons --opponent-deck gw_allies` (otherwise `setup.invalid`).
+  Each fresh browser launch of the same `?launch=` URL starts a new game as a
+  new player, so drive the whole game, swaps and reloads in one script. The
+  flipped board publishes immediately after policy build (with `work.state`
+  `running`) before the bot plays the seat you left; the settled turn can
+  still take seconds (at load ~110 policy build was 1.2 s and the new
+  runner's first decision 4.3 s, which a fresh game's first bot move also
+  costs). To time the server path, start the CLI from a small script that
+  wraps `GameSession.swap_sides`, `_build_swap_policy` and `_advance` with
+  `perf_counter` and then calls `managym.cli.main()`. The live line's caption
+  (`/decisions? read/`) shows how many readings it holds; after a swap it must
+  restart from the new seat. In browser scripts, read optional elements with
+  `count()`: `innerText().catch()` on an absent one waits the full 30 s
+  timeout and looks like a slow server. For a dark screenshot, pass
+  `colorScheme: 'dark'` when launching the context; `emulateMedia` after load
+  can capture the theme's transition with unreadable text.
+  A driver that clicks offers must filter with
+  `[data-testid=action-option]:enabled:not([aria-disabled]) >> visible=true`:
+  during a live combat draft the per-creature offers sit hidden under a
+  collapsed disclosure and the decision commits with the `No attack`/confirm
+  button, whose `kbd` reads `Space` (press Space when no offer is visible).
+  `/api/traces/{id}`, `/recording` and `/decisions` refuse an unfinished game
+  with `participant_credential_required`; fetch them inside the player's
+  browser profile with headers `x-etude-participant-tokens` (localStorage
+  `etude.play.record-credentials` plus `etude.play.player-credential`).
+  `--decklists closed` works with swaps; restart the server to interrupt a
+  game rather than waiting for it to end.
+  `play-session.spec.ts` (release and default configs) fails six tests on
+  this branch's base, looking for a "Seat 1 controller" select no GameSetup
+  renders; compare against a revert before reading it as a regression.
 - Priority stops in a real combat (MTG-475): `managym academy play --deck
   <f> --opponent-deck <f> --opponent heuristic --order play --seed 3 --no-open
   --port <unused> --traces-dir .runs/<dir>` with `24 Plains / 18 Savannah
@@ -424,3 +490,15 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   launch with `20 Mountain / 40 Lightning Bolt` against `40 Plains`, Passive,
   seed 7 ends in 9 turns with 17 clicks preferring Bolt → "Target Passive
   player".
+- Scripted Play with chosen cards (no file upload needed): a fresh worktree has
+  no `.venv`; `uv venv --python 3.13 && uv sync --extra play --extra dev`
+  builds the release engine and installs it editable (about 10 min at load
+  ~85). On `/?setup=1` the opponent picker's values are `policy` (the
+  registered checkpoint), `random` and `passive`; there is no heuristic. After
+  "Import decklist files" and the "Use imported decks" checkbox, `fill` the
+  "Your deck source" / "Opponent deck source" textareas with counted lines; the
+  Play page has no Seed field, so deals vary. Combat is drafted on the board:
+  the per-creature offers are hidden, so click every `.board
+  [data-testid=board-card][data-draft=can]` and then `primary-action`, and
+  restrict offer clicks to `:visible`. A passive opponent discards to hand
+  size, which fills its graveyard by about turn 4.

@@ -403,6 +403,7 @@ fn charming_prince() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::TriggerModes {
+                    min: 0,
                     unchosen: false,
                     up_to: None,
                     modes: vec![

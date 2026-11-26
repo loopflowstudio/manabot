@@ -299,6 +299,8 @@ pub struct LegacyCardTypesView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCardView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -471,6 +473,8 @@ pub struct PermanentDetails {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
     #[serde(flatten)]
     pub details: PermanentDetails,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -487,6 +491,8 @@ pub struct LegacyPermanentView {
     /// "Once each turn" abilities this object has used this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: u32,
@@ -537,6 +543,9 @@ pub struct LegacyPermanentView {
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,
+    /// The permanent this creature is attacking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attacked_permanent: Option<u32>,
     /// It has lost all abilities.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
@@ -686,6 +695,8 @@ pub struct LegacyPlayerView {
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub command: Vec<LegacyCardView>,
     pub stack: Vec<LegacyCardView>,
     pub battlefield: Vec<LegacyPermanentView>,
 }

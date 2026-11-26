@@ -515,7 +515,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/decision.py",
         "managym/possible_worlds.py",
         "managym/src/agent/env.rs",
-        "managym/src/agent/structured_offer.rs",
+        "managym/src/agent/decision_surface.rs",
         "managym/src/decision.rs",
         "managym/src/possible_worlds.rs",
         "managym/src/python/bindings.rs",

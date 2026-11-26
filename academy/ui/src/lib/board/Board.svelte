@@ -24,7 +24,29 @@
   import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
   import type { PreviewState } from '$lib/payment-preview';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
-  import type { CardState, ConnectionState, ExperienceFrame, InteractionOffer, StopsConfig, StopSide } from '$lib/types';
+  import {
+    decisionGroupPlanKey,
+    isArrangeDecisionGroup,
+    isCombatDecisionGroup,
+    isPartitionDecisionGroup,
+    loadDecisionGroupDraft,
+    saveDecisionGroupDraft,
+    type DecisionGroupPlan,
+    type DecisionGroupPreviewFetcher,
+    type DecisionGroupPreviewResponse,
+    type DecisionGroupRefusal,
+    type LiveDecisionGroup,
+  } from '$lib/decision-group';
+  import type { CardState, CommandRejection, ConnectionState, ExperienceFrame, InteractionOffer, ObjectRenderId, StopsConfig, StopSide } from '$lib/types';
+  import ArrangePanel from './ArrangePanel.svelte';
+  import {
+    arrangePlanOf,
+    arrangeWords,
+    emptyArrangeDraft,
+    isArrangeComplete,
+    sanitizeArrangeDraft,
+    type ArrangeDraft,
+  } from './arrange';
   import Field from './Field.svelte';
   import Inspect from './Inspect.svelte';
   import ManaText from './ManaText.svelte';
@@ -39,11 +61,13 @@
   import { buildHistory, cursorReading, hasTrackHistory, stepCursor, turnAt, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
-  import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
-    setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type Draft } from './combat';
   import {
-    loadPartitionDraft, partitionContext, partitionOffer, partitionSteps, partitionWords,
-    savePartitionDraft, swapPiles, toggleCardPile, type PartitionStep,
+    addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, combatPlanOf, drawDraft, draftWords,
+    EMPTY_DRAFT, pileCounts as draftPiles, sanitizeCombatDraft, setAttackerDefender, setBlock, setPileCount, toggleAttacker, toggleBlock,
+    type Draft,
+  } from './combat';
+  import {
+    partitionPlanOf, partitionWords, sanitizePartitionDraft, swapPiles, toggleCardPile,
   } from './partition';
   import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
   import { recentMarks, boardLines, turnOwners, type Endpoint, type RecentMarks } from './recent';
@@ -133,8 +157,16 @@
     /** Page settings that are off their default, shown in the bar; pressing one turns it back. */
     chips?: readonly { key: string; label: string; clear: () => void }[];
     historyHref?: string;
-    /** The native combat preview, when this table may draft a whole declaration (live play). */
-    combatPreview?: CombatFetcher;
+    /** The active live grouped-decision descriptor for this frame, when piloting live. */
+    group?: LiveDecisionGroup | null;
+    /** The native grouped preview endpoint, when this table may draft grouped decisions. */
+    groupPreview?: DecisionGroupPreviewFetcher;
+    /** Commit a whole validated grouped plan in one atomic `decision_group_command`. */
+    ongroupact?: (plan: DecisionGroupPlan) => void;
+    /** Latest grouped rejection (`decision_group_refused` / `decision_group_incomplete`) for this frame, if any. */
+    groupRejection?: CommandRejection | null;
+    /** Clear a dismissed group rejection banner owned by the caller. */
+    ondismissgrouprejection?: (rejection: CommandRejection) => void;
     /** The person's board after each step that led to this frame: each beat is shown on its own. */
     stepBoards?: readonly StepBoard[];
     /** Arena-style client Auto-tap: auto-submits mandatory pure-mana payments when Full Control is off. */
@@ -153,7 +185,7 @@
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, moveMarks, shownMoves, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
-    combatPreview, stepBoards = [],
+    group = null, groupPreview, ongroupact, groupRejection = null, ondismissgrouprejection, stepBoards = [],
     autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
     walkPace = 'study', onwalkpace,
   }: Props = $props();
@@ -207,91 +239,181 @@
   const draftLine = $derived(connect && current.phase === 'dragging'
     ? { from: connect.from, to: snapped ?? current.pointer, kind: connect.style } : null);
 
-  // ———————————————— Combat draft
+  // ———————————————— Grouped decisions (combat, library arrangement & pile partition)
 
-  // At an attack or block declaration a person drafts the whole declaration
-  // on the board. The native preview (read-only) says which creatures may
-  // take part and returns the exact per-creature offers that declare the
-  // draft; nothing is sent until Confirm, which sends them one at a time and
-  // stops at any frame the preview did not predict.
+  // Live grouped decisions come directly from the authority (`group`), bound
+  // to `(match_id, frame_hash)`. Draft edits preview through `/decision-group-preview`
+  // (read-only), and Confirm submits one atomic `decision_group_command`.
   let draft = $state.raw<Draft>(EMPTY_DRAFT);
-  /** The blocker a person is placing: the next attacker clicked is the one it blocks. */
+  /** The blocker being placed (blockers), or the drafted attacker last touched (attackers). */
   let armed = $state<number | null>(null);
-  let previewed = $state.raw<{ frameHash: string; plan: string; preview: CombatPreview } | null>(null);
-  /** Confirmed steps being sent: `at` was sent at frame `sentAt`. */
-  let running = $state.raw<{ preview: CombatPreview; at: number; sentAt: number } | null>(null);
-  let stopNote = $state<string | null>(null);
-  let draftFrame = '';
-  const declaring = $derived(combatPreview !== undefined && isDeclaration(frame));
-  const preview = $derived(running?.preview ?? (previewed?.frameHash === frame.frame_hash ? previewed.preview : null));
-  const drafting = $derived(declaring && !running && preview !== null && preview.declarable.length > 0);
-  const joint = $derived(drafting || running !== null);
-  const plan = $derived(preview ? planOf(draft, preview) : null);
-  /** The preview answers this very draft, not an earlier one. */
-  const exact = $derived(preview !== null && plan !== null && previewed?.plan === planKey(plan) ? preview : null);
+  let arrangeDraft = $state.raw<ArrangeDraft | null>(null);
+  let partitionFaceUp = $state.raw<number[]>([]);
+  let partitionFolded = $state(false);
+  let previewed = $state.raw<{ frameHash: string; planKey: string; response: DecisionGroupPreviewResponse } | null>(null);
+  let dismissedRejectionId = $state<string | null>(null);
+  let draftScopeKey = '';
 
-  // A new declaration starts from the draft saved for it in this tab, if any.
+  const activeGroup = $derived(
+    group && group.frame_hash === frame.frame_hash && group.match_id === frame.match_id ? group : null,
+  );
+  const combatGroup = $derived(isCombatDecisionGroup(activeGroup) ? activeGroup : null);
+  const arrangeGroup = $derived(isArrangeDecisionGroup(activeGroup) ? activeGroup : null);
+  const partitionGroup = $derived(isPartitionDecisionGroup(activeGroup) ? activeGroup : null);
+  const activeArrangeDraft = $derived(
+    arrangeGroup && arrangeDraft?.kind === arrangeGroup.kind ? arrangeDraft : null,
+  );
+
+  function dismissRejection(): void {
+    if (!groupRejection) return;
+    dismissedRejectionId = groupRejection.command_id;
+    ondismissgrouprejection?.(groupRejection);
+  }
+
+  // Load any saved draft for this exact `(match_id, frame_hash, kind)`.
   $effect(() => {
-    // Live play may connect after the frame is drawn: the draft loads once the board may declare.
-    const key = `${frame.match_id}:${frame.frame_hash}:${declaring}`;
-    if (key === draftFrame) return;
-    draftFrame = key;
+    const scope = activeGroup ? `${activeGroup.match_id}:${activeGroup.frame_hash}:${activeGroup.kind}` : '';
+    if (scope === draftScopeKey) return;
+    draftScopeKey = scope;
     untrack(() => {
       armed = null;
-      if (running) return;
-      draft = declaring ? loadDraft(frame) ?? EMPTY_DRAFT : EMPTY_DRAFT;
+      previewed = null;
+      partitionFolded = false;
+      draft = combatGroup ? sanitizeCombatDraft(loadDecisionGroupDraft<Draft>(combatGroup), combatGroup) : EMPTY_DRAFT;
+      arrangeDraft = arrangeGroup ? sanitizeArrangeDraft(loadDecisionGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup) : null;
+      partitionFaceUp = partitionGroup ? sanitizePartitionDraft(loadDecisionGroupDraft<number[]>(partitionGroup), partitionGroup) : [];
     });
   });
-  // Every draft change asks the preview again; an answer for another frame or draft is dropped.
+
+  const activePlan = $derived.by((): DecisionGroupPlan | null => {
+    if (combatGroup) return combatPlanOf(draft, combatGroup);
+    if (arrangeGroup && activeArrangeDraft && isArrangeComplete(activeArrangeDraft, arrangeGroup)) {
+      return arrangePlanOf(activeArrangeDraft, arrangeGroup);
+    }
+    if (partitionGroup) return partitionPlanOf(partitionFaceUp, partitionGroup);
+    return null;
+  });
+  const activePlanKey = $derived(activePlan ? decisionGroupPlanKey(activePlan) : null);
+
+  // Every complete draft asks `/decision-group-preview` (read-only); stale answers are dropped.
   $effect(() => {
-    const fetcher = combatPreview;
+    const fetcher = groupPreview;
     const address = addressOf(frame);
-    const current = draft;
-    if (!fetcher || !declaring || !address || running) return;
-    // The first answer names the creatures; a draft restored before it is asked again with their identities.
+    const plan = activePlan;
+    const key = activePlanKey;
+    if (!fetcher || !activeGroup || !address || !plan || !key) return;
     const known = previewed?.frameHash === frame.frame_hash ? previewed : null;
-    const request = known ? planOf(current, known.preview) : { attackers: [], blocks: [] };
-    if (known && known.plan === planKey(request)) return;
+    if (known && known.planKey === key) return;
     const controller = new AbortController();
     const frameHash = frame.frame_hash;
     const actor = frame.prompt?.actor;
-    fetcher({ ...address, plan: request }, controller.signal).then(response => {
+    fetcher({ ...address, plan }, controller.signal).then(response => {
       if (controller.signal.aborted) return;
-      if (Object.entries(address).some(([name, value]) => response[name as keyof typeof address] !== value) || response.viewer !== actor) return;
-      previewed = { frameHash, plan: planKey(request), preview: response.preview };
-    }).catch(() => { /* Without a preview the board keeps one creature at a time. */ });
+      if (
+        response.match_id !== address.match_id
+        || response.revision !== address.revision
+        || response.prompt_id !== address.prompt_id
+        || response.frame_hash !== address.frame_hash
+        || response.viewer !== actor
+      ) return;
+      previewed = { frameHash, planKey: key, response };
+    }).catch(() => { /* Transient preview errors keep Confirm disabled until a fresh check succeeds. */ });
     return () => controller.abort();
   });
+
+  // Persist the active draft in tab sessionStorage, scoped to `(match_id, frame_hash, kind)`.
   $effect(() => {
-    if (drafting) saveDraft(frame, draft);
+    if (combatGroup) saveDecisionGroupDraft(combatGroup, draft);
+    else if (arrangeGroup && activeArrangeDraft) saveDecisionGroupDraft(arrangeGroup, activeArrangeDraft);
+    else if (partitionGroup) saveDecisionGroupDraft(partitionGroup, partitionFaceUp);
   });
 
-  const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names, committedOf(frame)) : null);
-  const declarable = $derived(new Map((preview?.declarable ?? []).map(creature => [creature.creature.entity, creature])));
+  /** The preview answers this exact draft, not an earlier one. */
+  const exactPreview = $derived(
+    previewed && activePlanKey && previewed.frameHash === frame.frame_hash && previewed.planKey === activePlanKey
+      ? previewed.response
+      : null,
+  );
+  const activeRefusal = $derived.by((): DecisionGroupRefusal | null => {
+    if (exactPreview?.refused) return exactPreview.refused;
+    if (
+      groupRejection
+      && groupRejection.command_id !== dismissedRejectionId
+      && groupRejection.current_revision === frame.revision
+    ) {
+      return groupRejection.refused ?? { item: null, label: '', reason: groupRejection.message };
+    }
+    return null;
+  });
+
+  const words = $derived(combatGroup ? draftWords(combatGroup, draft, names) : null);
+  const arrangeSummary = $derived(
+    arrangeGroup && activeArrangeDraft ? arrangeWords(activeArrangeDraft, arrangeGroup) : null,
+  );
+  const attackerItems = $derived(
+    new Map(combatGroup?.kind === 'declare_attackers' ? combatGroup.declarable.map(c => [c.item.entity, c]) : []),
+  );
+  const blockerItems = $derived(
+    new Map(combatGroup?.kind === 'declare_blockers' ? combatGroup.declarable.map(c => [c.item.entity, c]) : []),
+  );
+  /** The drafted attacker that clicking an opposing planeswalker retargets. */
+  const activeAttacker = $derived.by(() => {
+    if (combatGroup?.kind !== 'declare_attackers') return null;
+    if (armed !== null && draft.attackers.includes(armed) && (attackerItems.get(armed)?.can_attack?.length ?? 0) > 0) return armed;
+    for (let i = draft.attackers.length - 1; i >= 0; i -= 1) {
+      const id = draft.attackers[i];
+      if ((attackerItems.get(id)?.can_attack?.length ?? 0) > 0) return id;
+    }
+    return null;
+  });
   const draggedBlocker = $derived(connect?.blocker);
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
-    if (!joint || !preview) return null;
+    if (!combatGroup) return null;
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
-    if (preview.kind === 'attackers') {
-      for (const [id, creature] of declarable) {
-        const drafted = draft.attackers.includes(id);
-        places.set(id, drafted ? 'in' : 'can');
-        notes.set(id, drafted ? 'in the drafted attack; press to leave it out'
-          : creature.must_attack ? 'must attack; press to add it to the attack' : 'can attack; press to add it to the attack');
+    const refusedId = activeRefusal?.item?.entity ?? null;
+    const withRefusal = (id: number, base: string): string =>
+      refusedId === id && activeRefusal ? `${base}. ${activeRefusal.reason}` : base;
+    if (combatGroup.kind === 'declare_attackers') {
+      const retarget = activeAttacker;
+      for (const [id, creature] of attackerItems) {
+        const inDraft = draft.attackers.includes(id);
+        places.set(id, inDraft ? 'in' : 'can');
+        const base = inDraft
+          ? 'in the drafted attack; press to leave it out'
+          : creature.must_attack
+            ? 'must attack; press to add it to the attack'
+            : 'can attack; press to add it to the attack';
+        notes.set(id, withRefusal(id, base));
+      }
+      if (retarget !== null) {
+        const currentTarget = draft.defenders?.[retarget] ?? null;
+        for (const defender of attackerItems.get(retarget)?.can_attack ?? []) {
+          const id = defender.entity;
+          const targetedByActive = currentTarget === id;
+          places.set(id, targetedByActive ? 'in' : 'can');
+          notes.set(id, targetedByActive
+            ? `retarget ${names.get(retarget) ?? 'attacker'} to ${said}`
+            : `attack ${names.get(id) ?? 'planeswalker'} with ${names.get(retarget) ?? 'attacker'}`);
+        }
       }
     } else {
       const blocks = new Map(draft.blocks);
-      for (const [id, creature] of declarable) {
+      for (const [id, creature] of blockerItems) {
         const blocking = blocks.get(id);
         places.set(id, placingBlocker === id ? 'armed' : blocking !== undefined ? 'in' : 'can');
-        notes.set(id, placingBlocker === id ? 'placing this block; press an attacker it can block'
-          : blocking !== undefined ? `drafted to block ${names.get(blocking) ?? 'an attacker'}; press to move or take back the block`
-            : creature.must_block ? 'must block; press, then the attacker it blocks' : 'can block; press, then the attacker it blocks');
+        const base = placingBlocker === id
+          ? 'placing this block; press an attacker it can block'
+          : blocking !== undefined
+            ? `drafted to block ${names.get(blocking) ?? 'an attacker'}; press to move or take back the block`
+            : creature.must_block
+              ? 'must block; press, then the attacker it blocks'
+              : 'can block; press, then the attacker it blocks';
+        notes.set(id, withRefusal(id, base));
       }
-      const placing = placingBlocker === null ? null : declarable.get(placingBlocker);
+      const placing = placingBlocker === null ? null : blockerItems.get(placingBlocker);
       for (const attacker of placing?.can_block ?? []) {
         const id = attacker.entity;
         const taken = draft.blocks.some(([b, a]) => b === placingBlocker && a === id);
@@ -303,29 +425,51 @@
   });
   /** Identical creatures drawn as one pile take a count: "4 of 9 Allies". */
   const counts = $derived.by(() => {
-    if (!drafting || !preview || preview.kind !== 'attackers') return [];
+    if (!combatGroup || combatGroup.kind !== 'declare_attackers') return [];
     // Piles as drawn without offers: the creature asked about now is still one of its pile.
     const base = boardView({ ...frame, offers: [] }, players);
     const pileOf = new Map(base.you.creatures.flatMap(pile => pile.items.map(item => [item.permanent.id, pile.key] as const)));
-    return draftPiles(preview.declarable, draft, id => pileOf.get(id) ?? null);
+    return draftPiles(combatGroup.declarable, draft, id => pileOf.get(id) ?? null);
   });
 
+  function defenderOptionLabel(entity: number, targets: ObjectRenderId[]): string {
+    const label = names.get(entity) ?? `permanent #${entity}`;
+    const duplicates = targets.filter(target => (names.get(target.entity) ?? `permanent #${target.entity}`) === label).length;
+    return duplicates > 1 ? `${label} (#${entity})` : label;
+  }
+
   function onDraft(id: number): boolean {
-    if (!live || !drafting || !preview) return false;
-    stopNote = null;
-    if (preview.kind === 'attackers') {
-      if (!declarable.has(id)) return false;
-      draft = toggleAttacker(draft, id);
-      return true;
+    if (!live || !combatGroup) return false;
+    if (combatGroup.kind === 'declare_attackers') {
+      if (attackerItems.has(id)) {
+        dismissRejection();
+        const adding = !draft.attackers.includes(id);
+        draft = toggleAttacker(draft, id);
+        armed = adding ? id : (armed === id ? null : armed);
+        return true;
+      }
+      const attacker = activeAttacker;
+      if (attacker !== null && attackerItems.get(attacker)?.can_attack?.some(target => target.entity === id)) {
+        dismissRejection();
+        const current = draft.defenders?.[attacker] ?? null;
+        draft = setAttackerDefender(draft, attacker, current === id ? null : id);
+        return true;
+      }
+      return false;
     }
-    const blocker = declarable.get(id);
+    const blocker = blockerItems.get(id);
     if (blocker) {
+      dismissRejection();
       // A blocker with exactly one attacker to block takes it at once.
-      if (blocker.can_block.length === 1 && armed === null) { draft = toggleBlock(draft, id, blocker.can_block[0].entity); return true; }
+      if (blocker.can_block.length === 1 && armed === null) {
+        draft = toggleBlock(draft, id, blocker.can_block[0].entity);
+        return true;
+      }
       armed = armed === id ? null : id;
       return true;
     }
-    if (armed !== null && declarable.get(armed)?.can_block.some(attacker => attacker.entity === id)) {
+    if (armed !== null && blockerItems.get(armed)?.can_block.some(attacker => attacker.entity === id)) {
+      dismissRejection();
       draft = toggleBlock(draft, armed, id);
       armed = null;
       return true;
@@ -333,157 +477,60 @@
     return false;
   }
 
-  function confirmDraft(): void {
-    const ready = exact;
-    if (!live || !drafting || !ready || ready.refused || !ready.steps.length) return;
-    const offer = stepOffer(frame, ready.kind, ready.steps[0]);
-    if (!offer) { stopNote = 'The board changed before the plan was sent; draft again.'; return; }
-    running = { preview: ready, at: 0, sentAt: frame.revision };
-    send(offer);
+  function updateArrangeDraft(next: ArrangeDraft): void {
+    dismissRejection();
+    arrangeDraft = next;
   }
 
-  // Each frame after a sent step must be the decision the preview predicted for the next. The accepted
-  // step's frame can arrive before the table takes input again; the next step waits for it rather than
-  // judging a frame no one may answer yet.
-  $effect(() => {
-    const revision = frame.revision;
-    const sending = running;
-    if (!sending) return;
-    if (!combatPreview) { running = null; draft = EMPTY_DRAFT; return; }
-    const answerable = live && !pending;
-    const { steps, kind } = sending.preview;
-    untrack(() => {
-      if (revision === sending.sentAt) {
-        if (!answerable) return;
-        running = null;
-        if (sending.at > 0) {
-          draft = EMPTY_DRAFT;
-          stopNote = `Stopped after ${sending.at} of ${steps.length}. The next declaration was not accepted. Draft again from here.`;
-        }
-        return;
-      }
-      const next = sending.at + 1;
-      if (next >= steps.length) { running = null; draft = EMPTY_DRAFT; return; }
-      if (!answerable) return;
-      const offer = stepOffer(frame, kind, steps[next]);
-      if (!offer) {
-        running = null;
-        draft = EMPTY_DRAFT;
-        stopNote = `Stopped after ${next} of ${steps.length}: the game asked something the preview did not predict. The board shows where it stands; draft again from here.`;
-        return;
-      }
-      running = { ...sending, at: next, sentAt: revision };
-      onact(offer);
-    });
-  });
-  function stopSending(): void {
-    if (!running) return;
-    stopNote = `Stopped after ${running.at + 1} of ${running.preview.steps.length}; the rest was not sent.`;
-    running = null;
-    draft = EMPTY_DRAFT;
+  function confirmGroup(): void {
+    if (!live || pending || !activePlan || !groupReady || !ongroupact) return;
+    returnToNow();
+    menuAt = null;
+    hush();
+    since = frame.revision;
+    ongroupact(activePlan);
   }
 
-  // ———————————————— Pile partition draft
-
-  // Curator of Destinies asks about one inspected card at a time. Show all
-  // remaining inspected cards together so a person can split them holistically,
-  // then send the engine's exact per-card offers one by one on Confirm.
-  let partitionFaceUp = $state.raw<number[]>([]);
-  let partitionRunning = $state.raw<{ steps: PartitionStep[]; at: number; sentAt: number } | null>(null);
-  let partitionFolded = $state(false);
-  let partitionFrameKey = '';
-  const partition = $derived(live && !drafting && !running ? partitionContext(frame) : null);
-  const partitioning = $derived(partition !== null && !partitionRunning);
-
-  $effect(() => {
-    const active = partition !== null;
-    const key = `${frame.match_id}:${frame.frame_hash}:${active}`;
-    if (key === partitionFrameKey) return;
-    partitionFrameKey = key;
-    untrack(() => {
-      if (partitionRunning) return;
-      partitionFolded = false;
-      if (!partition) { partitionFaceUp = []; return; }
-      const validIds = new Set(partition.remaining.map(card => card.id));
-      partitionFaceUp = loadPartitionDraft(frame, validIds) ?? [];
-    });
-  });
-  $effect(() => {
-    if (partitioning) savePartitionDraft(frame, partitionFaceUp);
-  });
-
-  const partitionSummary = $derived(partition ? partitionWords(partition.remaining, partitionFaceUp, partition.committed.length) : null);
+  const partitionSourceName = $derived(
+    frame.projection.decision_context?.source?.label ?? 'Split into two piles',
+  );
+  const partitionSummary = $derived(
+    partitionGroup ? partitionWords(partitionGroup, partitionFaceUp) : null,
+  );
   const partitionUpSet = $derived(new Set(partitionFaceUp));
-  const partitionUpCards = $derived(partition ? partition.remaining.filter(card => partitionUpSet.has(card.id)) : []);
-  const partitionDownCards = $derived(partition ? partition.remaining.filter(card => !partitionUpSet.has(card.id)) : []);
+  const partitionUpItems = $derived(
+    partitionGroup ? partitionGroup.items.filter(entry => partitionUpSet.has(entry.item.entity)) : [],
+  );
+  const partitionDownItems = $derived(
+    partitionGroup ? partitionGroup.items.filter(entry => !partitionUpSet.has(entry.item.entity)) : [],
+  );
+  const partitionCommitted = $derived(
+    partitionGroup
+      ? [
+          partitionGroup.committed_face_up.length ? `Face-up: ${partitionGroup.committed_face_up.map(card => card.label).join(', ')}` : '',
+          partitionGroup.committed_face_down.length ? `Face-down: ${partitionGroup.committed_face_down.map(card => card.label).join(', ')}` : '',
+        ].filter(Boolean).join(' · ')
+      : '',
+  );
 
   function togglePartitionCard(cardId: number): void {
-    if (!partitioning) return;
-    stopNote = null;
+    if (!live || pending || !partitionGroup) return;
+    dismissRejection();
     partitionFaceUp = toggleCardPile(partitionFaceUp, cardId);
   }
 
-  function confirmPartition(): void {
-    if (!partitioning || !partition || !partition.remaining.length) return;
-    const steps = partitionSteps(partition.remaining, partitionFaceUp);
-    const offer = partitionOffer(frame, steps[0]);
-    if (!offer) {
-      stopNote = 'The decision changed before the split was sent; split the remaining cards again.';
-      return;
-    }
-    partitionRunning = { steps, at: 0, sentAt: frame.revision };
-    send(offer);
-  }
-
-  $effect(() => {
-    const revision = frame.revision;
-    const sending = partitionRunning;
-    if (!sending) return;
-    const answerable = live && !pending;
-    untrack(() => {
-      if (revision === sending.sentAt) {
-        if (!answerable) return;
-        partitionRunning = null;
-        if (sending.at > 0) {
-          partitionFaceUp = [];
-          stopNote = `Stopped after ${sending.at} of ${sending.steps.length}. The next choice was not accepted. Split any remaining cards from here.`;
-        }
-        return;
-      }
-      const next = sending.at + 1;
-      if (next >= sending.steps.length) { partitionRunning = null; partitionFaceUp = []; return; }
-      if (!answerable) return;
-      const offer = partitionOffer(frame, sending.steps[next]);
-      if (!offer) {
-        partitionRunning = null;
-        partitionFaceUp = [];
-        stopNote = `Stopped after ${next} of ${sending.steps.length}: the game asked something unexpected. The board shows where it stands; split any remaining cards from here.`;
-        return;
-      }
-      partitionRunning = { ...sending, at: next, sentAt: revision };
-      onact(offer);
-    });
-  });
-
-  function stopPartitionSending(): void {
-    if (!partitionRunning) return;
-    stopNote = `Stopped after ${partitionRunning.at + 1} of ${partitionRunning.steps.length}; the rest was not sent.`;
-    partitionRunning = null;
-    partitionFaceUp = [];
-  }
-
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
-  const drafted = $derived(joint ? drawDraft(frame, draft) : frame);
+  const drafted = $derived(combatGroup ? drawDraft(frame, draft) : frame);
   const view = $derived(boardView(drafted, players));
   const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
         ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${possessive(you.name)} decision`
         : `${possessive(said)} decision`));
-  const targeting = $derived(canDrag && !joint && (frame.action_space === 'CHOOSE_TARGET'
+  const targeting = $derived(canDrag && !combatGroup && (frame.action_space === 'CHOOSE_TARGET'
     || frame.action_space === 'DECLARE_BLOCKER' || frame.offers.some(offer => offer.subjects?.some(s => s.role === 'target'))));
   const fieldSources = $derived.by(() => {
-    if (canDrag && drafting && preview?.kind === 'blockers') return new Set(declarable.keys());
+    if (canDrag && combatGroup?.kind === 'declare_blockers') return new Set(blockerItems.keys());
     if (!targeting) return new Set<number>();
     const ids = new Set(view.asked);
     // A forced block can have only attacker offers, without a decline button naming the blocker.
@@ -513,7 +560,7 @@
   const connecting = $derived(connect !== null);
   const connectTargets = $derived.by(() => {
     if (!connecting) return undefined;
-    if (draggedBlocker !== undefined) return new Set(declarable.get(draggedBlocker)?.can_block.map(attacker => attacker.entity));
+    if (draggedBlocker !== undefined) return new Set(blockerItems.get(draggedBlocker)?.can_block.map(attacker => attacker.entity));
     const targets = new Set<number>();
     for (const [id, item] of fieldById) if (item.offers.length) targets.add(id);
     return targets;
@@ -564,13 +611,15 @@
   const payKnownPlan = $derived(paymentPlan(payKnown, frame));
   const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
-  const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
-    : running ? `Declaring ${running.at + 1} of ${running.preview.steps.length}…`
-      : partitioning && partitionSummary ? partitionSummary.plan
-        : partitionRunning ? `Placing ${partitionRunning.at + 1} of ${partitionRunning.steps.length}…`
-          : promptLine(frame, view, !readOnly));
+  const line = $derived(
+    activeGroup && activeRefusal ? activeRefusal.reason
+      : combatGroup && words ? words.plan
+        : arrangeGroup && arrangeSummary ? arrangeSummary.planLine
+          : partitionGroup && partitionSummary ? partitionSummary.plan
+            : promptLine(frame, view, !readOnly),
+  );
   // How to answer with the live input; a recording has none.
-  const hint = $derived(joint || partitioning || partitionRunning || readOnly ? null : promptHint(frame, view));
+  const hint = $derived(activeGroup || readOnly ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -607,6 +656,7 @@
   // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
   let shownMatch = untrack(() => frame.match_id);
+  let shownSeat = untrack(() => frame.projection.agent.player_index);
   let shownRevision = untrack(() => frame.revision);
   let wasConnected = untrack(() => connection === 'connected');
   let selection = $state<CursorSelection | null>(null);
@@ -622,6 +672,12 @@
     connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
   );
   const cursor = $derived(activeCursor?.seq ?? null);
+  // Arrange and pile panels hide while the board walks the past; their Confirm
+  // waits for them so a click never commits cards nobody has seen.
+  const groupShown = $derived(combatGroup !== null || activeCursor === null);
+  const groupReady = $derived(
+    groupShown && exactPreview !== null && exactPreview.complete && activeRefusal === null,
+  );
 
   const stopsAll = $derived(walkStops(history, stepBoards));
   const scrubber = $derived(scrubberStops(stopsAll, cursor));
@@ -681,11 +737,12 @@
     const currentStops = stopsAll;
     const lastSeq = presentation.events.at(-1)?.seq ?? -1;
     const { match_id, revision } = frame;
+    const seat = frame.projection.agent.player_index;
     const connected = connection === 'connected';
     const ms = activePaceMs;
     if (connection === null) return;
     untrack(() => {
-      if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
+      if (!connected || !wasConnected || match_id !== shownMatch || seat !== shownSeat || revision < shownRevision) {
         returnToNow();
         shownSeq = lastSeq;
       } else if (revision === shownRevision) {
@@ -706,6 +763,7 @@
         shownSeq = Math.max(shownSeq, lastSeq);
       }
       shownMatch = match_id;
+      shownSeat = seat;
       shownRevision = revision;
       wasConnected = connected;
     });
@@ -786,14 +844,14 @@
     ...pointedObjectIds,
   ]));
   const boardAsked = $derived(
-    joint
+    combatGroup
       ? new Set<number>()
       : pointedObjectIds.size
         ? new Set([...board.asked, ...pointedObjectIds])
         : board.asked,
   );
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting || partitioning));
+  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || activeGroup !== null));
   const boardNotice = $derived.by<{ testid: string; text: string } | null>(() => {
     if (activeCursor === null) return null;
     if (stepBoardsError) return { testid: 'board-unavailable', text: 'Board unavailable for this step' };
@@ -831,7 +889,7 @@
     const id = Number(source.dataset.stackEntry ?? source.dataset.objectId);
     const drag: ConnectDrag = source.dataset.stackEntry !== undefined
       ? { kind: 'connect', from: { kind: 'entry', id }, style: 'target', target: null }
-      : drafting
+      : combatGroup
         ? { kind: 'connect', from: { kind: 'object', id }, style: 'block', blocker: id, target: null }
         : { kind: 'connect', from: { kind: 'object', id }, style: frame.action_space === 'DECLARE_BLOCKER' ? 'block' : 'target', target: null };
     gesture = press(drag, event.pointerId, frame.revision, start);
@@ -966,7 +1024,6 @@
     returnToNow();
     gesture = promote(gesture, offer.id);
     menuAt = null;
-    stopNote = null;
     hush();
     since = frame.revision;
     onact(offer);
@@ -1041,6 +1098,12 @@
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
+  function previewDecisionCard(entityId: number | null, label: string | null, element: HTMLElement | null): void {
+    if (entityId === null || label === null || !element) { show(null, null); return; }
+    const card = cards.get(entityId) ?? null;
+    show({ name: card?.name ?? label, text: card?.text_box ?? null, permanent: null, card: card?.id ?? null }, element);
+  }
+
   const playerName = (id: number): string => (id === boardProjection.agent.id ? you.name : opponent.name);
   const castTerms = $derived(permissionTerms(shownCard,
     id => permanents.get(id)?.name ?? `permanent #${id}`,
@@ -1053,7 +1116,7 @@
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
-    if (joint) return;
+    if (combatGroup) return;
     activate(item.permanent.name ?? 'Permanent', item.offers, element);
   }
   function previewPermanent(item: PermanentItem | null, element: HTMLElement | null): void {
@@ -1129,7 +1192,7 @@
 
   // ———————————————— Pointer gestures
 
-  const canMarquee = $derived(canDrag && drafting && preview?.kind === 'attackers' && activeCursor === null);
+  const canMarquee = $derived(canDrag && combatGroup?.kind === 'declare_attackers' && activeCursor === null);
   const dropPermanents = $derived.by(() => {
     const hits = new Set<number>();
     if (snapped?.kind === 'object') hits.add(snapped.id);
@@ -1140,7 +1203,7 @@
         if (!area) continue;
         for (const card of field.querySelectorAll<HTMLElement>('[data-draft][data-object-id]')) {
           const id = Number(card.dataset.objectId);
-          if (declarable.has(id) && overlap(area, card.getBoundingClientRect())) hits.add(id);
+          if (attackerItems.has(id) && overlap(area, card.getBoundingClientRect())) hits.add(id);
         }
       }
     }
@@ -1151,7 +1214,7 @@
   // its slot steps back, and releasing it over the battlefield is a click on
   // it. Released anywhere else, or on Escape, it settles back with nothing sent.
   function pressHand(event: PointerEvent, item: HandItem): void {
-    if (!canDrag || activeCursor !== null || joint || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
+    if (!canDrag || activeCursor !== null || activeGroup || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
     const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
     if (!opener) return;
     const rect = opener.getBoundingClientRect();
@@ -1161,9 +1224,9 @@
   /** Resolve the element under the pointer against the same offers and preview used for clicks. */
   function connectTarget(drag: ConnectDrag, hit: Element | null): ConnectDrag {
     if (drag.blocker !== undefined) {
-      const permanent = drafting ? hit?.closest<HTMLElement>('.rows [data-testid=board-card]') : null;
+      const permanent = combatGroup ? hit?.closest<HTMLElement>('.rows [data-testid=board-card]') : null;
       const id = permanent ? Number(permanent.dataset.objectId) : null;
-      const legal = id !== null && declarable.get(drag.blocker)?.can_block.some(attacker => attacker.entity === id);
+      const legal = id !== null && blockerItems.get(drag.blocker)?.can_block.some(attacker => attacker.entity === id);
       return { ...drag, target: legal ? { endpoint: { kind: 'object', id } } : null };
     }
     return { ...drag, target: offerTarget(hit) };
@@ -1231,15 +1294,15 @@
     switch (result.outcome) {
       case 'cancel': settleHome(result.drag, result.at); return;
       case 'marquee':
-        if (canMarquee && hits.size) { draft = addAttackers(draft, hits); stopNote = null; }
+        if (canMarquee && hits.size) { dismissRejection(); draft = addAttackers(draft, hits); }
         return;
       case 'connect': {
         const { drag } = result;
         if (!drag.target) return;
         if (drag.blocker !== undefined) {
+          dismissRejection();
           draft = setBlock(draft, drag.blocker, drag.target.endpoint.id);
           armed = null;
-          stopNote = null;
         } else activate(drag.target.title, drag.target.offers, drag.target.element);
         return;
       }
@@ -1309,7 +1372,7 @@
           { key: 'Shift Ctrl', does: 'Hold Full Control across turns' },
         ]),
     { key: 'Esc', does: recording ? 'Close a menu or preview' : 'Cancel a drag; close a menu or preview; return to now' },
-    ...(canDrag || combatPreview !== undefined ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
+    ...(canDrag || groupPreview !== undefined ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
     { key: '?', does: 'Show or hide these keys' },
   ]);
@@ -1327,7 +1390,7 @@
   let ctrlShift = false;
 
   $effect(() => {
-    if (recording || !live || activeCursor !== null || result || drafting || partitioning || partitionRunning || !onautotap) return;
+    if (recording || !live || activeCursor !== null || result || activeGroup || !onautotap) return;
     if (fullControl === 'once') {
       if (frame.action_space === 'PAY_OR_NOT') {
         wasPayingInOnce = true;
@@ -1438,8 +1501,6 @@
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && strip?.open) { strip.ontoggle(); return; }
     if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
-    if (event.key === 'Escape' && running) { stopSending(); return; }
-    if (event.key === 'Escape' && partitionRunning) { stopPartitionSending(); return; }
     if (event.key === 'Escape' && live && armed !== null) { armed = null; return; }
     if (event.key === 'Escape' && (menuAt || zoneAt || hovered)) { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'Escape' && activeCursor !== null) { clearActiveCursor(); return; }
@@ -1456,8 +1517,8 @@
     }
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // A joint combat or pile-partition draft owns the whole decision; its folded per-item offers are not numbered shortcuts.
-      if (!menuAt && (joint || partitioning || partitionRunning)) return;
+      // Live grouped decisions fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
+      if (!menuAt && activeGroup) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1471,8 +1532,7 @@
       const inHistoryOrWalk = event.target instanceof HTMLElement && event.target.closest('.log, .walk-bar') !== null;
       if (inHistoryOrWalk) event.preventDefault();
       if (!inHistoryOrWalk && ownsSpace(event.target)) return;
-      if (drafting) { event.preventDefault(); confirmDraft(); return; }
-      if (partitioning) { event.preventDefault(); confirmPartition(); return; }
+      if (activeGroup) { event.preventDefault(); confirmGroup(); return; }
       if (view.primary && live) { event.preventDefault(); act(view.primary); }
     }
   }
@@ -1610,7 +1670,7 @@
           </div>
         {/each}
       </div>
-      {#if view.tray.length && !finished && !partitioning && !partitionRunning && activeCursor === null}
+      {#if view.tray.length && !finished && !arrangeGroup && !partitionGroup && activeCursor === null}
         <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
@@ -1630,19 +1690,22 @@
       {/if}
     </section>
 
-    {#if (partitioning || partitionRunning) && partition && !finished && activeCursor === null}
+    {#if partitionGroup && !finished && activeCursor === null}
       <!-- Over the board, foldable so the battlefield stays readable around it. -->
-      <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partition.sourceName}: split into two piles`} data-testid="partition-panel">
+      <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partitionSourceName}: split into two piles`} data-testid="partition-panel" data-group-kind="partition_piles">
         {#if partitionFolded}
           <button type="button" class="btn btn-secondary btn-sm" data-testid="partition-unfold" onclick={() => (partitionFolded = false)}>Show pile split</button>
         {:else}
           <header class="partition-head">
             <div>
-              <p class="type-heading text-ink">{partition.sourceName} · Split into two piles</p>
+              <p class="type-heading text-ink">{partitionSourceName} · Split into two piles</p>
               <p class="type-caption text-ink-2">Click a card to move it between piles. Your opponent sees the face-up pile and only the count of face-down cards.</p>
             </div>
             <button type="button" class="fold type-caption" data-testid="partition-fold" onclick={() => (partitionFolded = true)}>Look at the board</button>
           </header>
+          {#if activeRefusal}
+            <p class="partition-refusal type-caption" role="alert" data-testid="partition-refusal">{activeRefusal.reason}</p>
+          {/if}
           <div class="partition-piles">
             {#each [
               {
@@ -1650,7 +1713,7 @@
                 testId: 'partition-pile-up',
                 title: 'Face-up',
                 hint: 'Opponent sees these',
-                cards: partitionUpCards,
+                entries: partitionUpItems,
                 draft: 'in' as const,
                 note: 'in the face-up pile; press to move to the face-down pile',
                 empty: 'Empty — click a card below to put it face-up',
@@ -1660,25 +1723,26 @@
                 testId: 'partition-pile-down',
                 title: 'Face-down',
                 hint: 'Hidden — opponent sees count only',
-                cards: partitionDownCards,
+                entries: partitionDownItems,
                 draft: 'can' as const,
                 note: 'in the face-down pile; press to move to the face-up pile',
                 empty: 'Empty — all remaining cards are face-up',
               },
             ] as pile (pile.key)}
-              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.cards.length} ${pile.cards.length === 1 ? 'card' : 'cards'}`}>
+              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.entries.length} ${pile.entries.length === 1 ? 'card' : 'cards'}`}>
                 <p class="partition-pile-head">
-                  <span class="type-label text-ink">{pile.title} · {pile.cards.length}</span>
+                  <span class="type-label text-ink">{pile.title} · {pile.entries.length}</span>
                   <span class="type-caption text-ink-3">{pile.hint}</span>
                 </p>
-                {#if pile.cards.length}
+                {#if pile.entries.length}
                   <div class="partition-cards">
-                    {#each pile.cards as card (card.id)}
-                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile={pile.key}>
-                        <BoardCard name={card.name} width={104} {card} live={partitioning} draft={pile.draft}
+                    {#each pile.entries as entry (`${entry.item.entity}:${entry.item.incarnation}`)}
+                      {@const card = cards.get(entry.item.entity)}
+                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={entry.item.entity} data-pile={pile.key}>
+                        <BoardCard name={card?.name ?? entry.label} width={104} {card} live={live && !pending} draft={pile.draft}
                           note={pile.note}
-                          onactivate={() => togglePartitionCard(card.id)}
-                          onpreview={element => previewCard(element ? card : null, element)} />
+                          onactivate={() => togglePartitionCard(entry.item.entity)}
+                          onpreview={element => previewDecisionCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
                       </div>
                     {/each}
                   </div>
@@ -1688,9 +1752,9 @@
               </div>
             {/each}
           </div>
-          {#if partition.committed.length}
+          {#if partitionCommitted}
             <p class="partition-committed type-caption text-ink-3" data-testid="partition-committed">
-              Already placed ({partition.committed.length}): {partition.committed.map(card => card.name).join(', ')}
+              Already placed: {partitionCommitted}
             </p>
           {/if}
         {/if}
@@ -1702,6 +1766,20 @@
       <div class="drop-zone" class:over={carried.overField} style:bottom={handTrack} data-testid="drop-zone" data-over={carried.overField} aria-hidden="true">
         <span class="drop-label type-caption">{dropLabel(carried)}</span>
       </div>
+    {/if}
+
+    {#if arrangeGroup && activeArrangeDraft && !finished && activeCursor === null}
+      <ArrangePanel
+        group={arrangeGroup}
+        draft={activeArrangeDraft}
+        {live}
+        {pending}
+        ready={groupReady}
+        refused={activeRefusal}
+        onchange={updateArrangeDraft}
+        onconfirm={confirmGroup}
+        onpreviewcard={previewDecisionCard}
+      />
     {/if}
 
     {#if finished}
@@ -1782,53 +1860,78 @@
       {evidence} {moveMarks} {shownMoves} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
-      draft={joint ? combatControls : partitioning || partitionRunning ? partitionControls : undefined} stopped={stopNote} />
+      draft={combatGroup ? combatControls : arrangeGroup ? arrangeControls : partitionGroup ? partitionControls : undefined}
+      groupKind={activeGroup?.kind ?? null} />
   </div>
 
   {#snippet partitionControls()}
     <div class="combat-draft" data-testid="partition-draft">
-      {#if partitionRunning}
-        <button type="button" class="btn btn-secondary" data-testid="partition-stop" onclick={stopPartitionSending}><kbd>Esc</kbd>Stop sending</button>
-      {:else if partition && partitionSummary}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready="true"
-          aria-label={`Confirm: ${partitionSummary.plan}`} title={partitionSummary.plan}
-          disabled={!live} onclick={confirmPartition}>
+      {#if partitionGroup && partitionSummary}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={groupReady}
+          aria-label={`Confirm: ${activeRefusal ? activeRefusal.reason : partitionSummary.plan}`} title={partitionSummary.plan}
+          disabled={!live || pending || !groupReady} onclick={confirmGroup}>
           <span>{partitionSummary.text}</span><kbd>Space</kbd>
         </button>
-        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live}
-          onclick={() => { stopNote = null; partitionFaceUp = swapPiles(partition.remaining, partitionFaceUp); }}>Swap piles</button>
+        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live || pending}
+          onclick={() => { dismissRejection(); partitionFaceUp = swapPiles(partitionGroup.items, partitionFaceUp); }}>Swap piles</button>
         <p class="type-caption text-ink-3">Nothing is placed until you confirm. Click any card to move it between piles.</p>
       {/if}
     </div>
   {/snippet}
 
   {#snippet combatControls()}
-    <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind}>
-      {#if running}
-        <button type="button" class="btn btn-secondary" data-testid="combat-stop" onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
-      {:else if words}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
-          aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={!live || !exact || exact.refused !== null} onclick={confirmDraft}>
+    <div class="combat-draft" data-testid="combat-draft" data-kind={combatGroup?.kind === 'declare_attackers' ? 'attackers' : 'blockers'}>
+      {#if words}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={groupReady}
+          aria-label={`Confirm: ${activeRefusal ? activeRefusal.reason : words.plan}`} title={words.plan}
+          disabled={!live || pending || !groupReady} onclick={confirmGroup}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
+        {#each draft.attackers as attacker (attacker)}
+          {@const targets = attackerItems.get(attacker)?.can_attack ?? []}
+          {#if targets.length}
+            <div class="attack-target" data-testid="attack-target">
+              <span class="type-caption attack-who">{names.get(attacker)}</span>
+              <span class="type-caption text-ink-3" aria-hidden="true">→</span>
+              <select class="type-caption" aria-label={`Defender for ${names.get(attacker)}`}
+                value={draft.defenders?.[attacker] === undefined ? 'player' : String(draft.defenders[attacker])}
+                onfocus={() => { armed = attacker; }}
+                onchange={event => {
+                  armed = attacker;
+                  dismissRejection();
+                  const chosen = event.currentTarget.value === 'player' ? null : Number(event.currentTarget.value);
+                  draft = setAttackerDefender(draft, attacker, chosen);
+                }}>
+                <option value="player">{said}</option>
+                {#each targets as target (target.entity)}
+                  <option value={String(target.entity)}>{defenderOptionLabel(target.entity, targets)}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
+        {/each}
         {#each counts as group (group.ids[0])}
           <div class="pile-count" data-testid="pile-count" role="group" aria-label={`${group.name}: ${group.drafted} of ${group.ids.length} attacking`}>
             <span class="type-caption"><b>{group.drafted}</b> of {group.ids.length} {group.name}</span>
-            <button type="button" class="step" aria-label={`One fewer ${group.name}`} disabled={!live || group.drafted === 0}
-              onclick={() => { draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
-            <button type="button" class="step" aria-label={`One more ${group.name}`} disabled={!live || group.drafted === group.ids.length}
-              onclick={() => { draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
+            <button type="button" class="step" aria-label={`One fewer ${group.name}`} disabled={!live || pending || group.drafted === 0}
+              onclick={() => { dismissRejection(); draft = setPileCount(draft, group.ids, group.drafted - 1); }}>−</button>
+            <button type="button" class="step" aria-label={`One more ${group.name}`} disabled={!live || pending || group.drafted === group.ids.length}
+              onclick={() => { dismissRejection(); draft = setPileCount(draft, group.ids, group.drafted + 1); }}>+</button>
           </div>
         {/each}
         {#if draft.attackers.length || draft.blocks.length}
-          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" disabled={!live} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
+          <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" disabled={!live || pending} onclick={() => { dismissRejection(); draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
-        <p class="type-caption text-ink-3">Nothing is declared until you confirm. {preview?.kind === 'blockers' ? BLOCK_INSTRUCTION : ATTACK_INSTRUCTION}.</p>
+        <p class="type-caption text-ink-3">Nothing is declared until you confirm. {combatGroup?.kind === 'declare_blockers' ? BLOCK_INSTRUCTION : ATTACK_INSTRUCTION}.</p>
       {/if}
     </div>
   {/snippet}
 
+  {#snippet arrangeControls()}
+    <div class="combat-draft" data-testid="arrange-rail-note">
+      <p class="type-caption text-ink-3">Arrange the cards in the panel on the board, then confirm once.</p>
+    </div>
+  {/snippet}
   {#snippet stripToggle()}
     <!-- Live play's strip only counts, so Tab passes it by; a recording's opens to a navigable line. -->
     <button type="button" class="strip-toggle" aria-expanded={strip!.open} onclick={strip!.ontoggle} data-testid="strip-toggle"
@@ -2165,6 +2268,13 @@
   .partition-pile-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .partition-cards { display: flex; flex-wrap: wrap; gap: 8px; }
   .partition-empty { padding: 10px 0; }
+  .partition-refusal {
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--error) 50%, transparent);
+    border-radius: var(--radius-sm);
+    background: var(--error-wash);
+    color: var(--error-text);
+  }
   .partition-committed { border-top: 1px solid var(--border); padding-top: 8px; }
 
   .combat-draft { display: grid; gap: 6px; }
@@ -2178,6 +2288,9 @@
   .pile-count span { flex: 1; }
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
+  .attack-target { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .attack-target .attack-who { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attack-target select { max-width: 55%; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-field); color: var(--text); }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
   .game.with-sidebar .rail-slot { grid-column: 3; }
   .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }

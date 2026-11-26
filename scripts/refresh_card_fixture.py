@@ -51,7 +51,7 @@ def registered_names(oracle: dict[str, dict]) -> list[str]:
     names = {
         row["registry_name"]
         for row in rows
-        if row["key"] and not row["key"].startswith("token.")
+        if row["key"] and not row["key"].startswith(("token.", "emblem."))
     }
     registered = {row["registry_name"] for row in rows}
     # Back faces have no key of their own. Join them through the printing
@@ -149,6 +149,8 @@ def main() -> int:
             print(f"  {name}: NOT FOUND on Scryfall")
             continue
         cards[name] = {field: card.get(field) for field in FIELDS}
+        if "loyalty" in card:
+            cards[name]["loyalty"] = card["loyalty"]
 
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(

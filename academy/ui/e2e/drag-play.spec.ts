@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { CardState, Command, DecisionObjectView, ExperienceFrame, InteractionOffer, Observation, RecoveryEnvelope, SubjectRef } from '../src/lib/types';
-import type { CombatPlan } from '../src/lib/board/combat';
+import type { DecisionGroupCommand, DecisionGroupPlan, LiveDecisionGroup } from '../src/lib/decision-group';
 import { startCombat } from './fixtures/combat';
 import { gameReply } from './fixtures/game';
 
@@ -59,14 +59,23 @@ function mainPhase(revision: number, hand: number[] = [BOLT, SHOCK, ISLAND, 74])
   };
 }
 
-interface Authority { commands: Command[]; previews: number[] }
+interface Authority { commands: Command[]; groupCommands: DecisionGroupCommand[]; previews: number[] }
 
 /** Accepts every Command but `refuse`'s offers, which it rejects at the same revision. */
 async function installAuthority(page: Page, {
-  refuse = [], initial = mainPhase(REVISION), after, stopEcho, commandReply,
-}: { refuse?: number[]; initial?: ExperienceFrame; stopEcho?: Promise<void>; commandReply?: Promise<void>; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
-  const authority: Authority = { commands: [], previews: [] };
+  refuse = [], initial = mainPhase(REVISION), initialGroup = null, after, afterGroup, stopEcho, commandReply,
+}: {
+  refuse?: number[];
+  initial?: ExperienceFrame;
+  initialGroup?: LiveDecisionGroup | null;
+  stopEcho?: Promise<void>;
+  commandReply?: Promise<void>;
+  after?: (command: Command) => ExperienceFrame;
+  afterGroup?: (command: DecisionGroupCommand) => { frame: ExperienceFrame; group?: LiveDecisionGroup | null };
+} = {}): Promise<Authority> {
+  const authority: Authority = { commands: [], groupCommands: [], previews: [] };
   let current = initial;
+  let currentGroup: LiveDecisionGroup | null = initialGroup;
   await page.route('**/api/games/*/payment-preview', async route => {
     const request = route.request().postDataJSON() as { offer_id: number } & Record<string, unknown>;
     authority.previews.push(request.offer_id);
@@ -80,29 +89,43 @@ async function installAuthority(page: Page, {
       presentation_tail: [], presentation_cursor: 0, accepted_commands: [], replay_cursor: frame.revision });
     const game = gameReply();
     socket.onMessage(async raw => {
-      const message = JSON.parse(String(raw)) as { type?: string; command?: Command; stops?: Pick<ExperienceFrame['stops'], 'my' | 'opponent'> };
+      const message = JSON.parse(String(raw)) as { type?: string; command?: Command | DecisionGroupCommand; stops?: Pick<ExperienceFrame['stops'], 'my' | 'opponent'> };
       if (message.type === 'new_game' || message.type === 'resume' || message.type === 'set_stops') {
         if (message.type === 'set_stops') {
           await stopEcho;
           current = { ...current, stops: { ...current.stops, ...message.stops } };
         }
         socket.send(JSON.stringify({ type: 'observation', ...game, data: current.projection, actions: [],
-          recovery: recovery(current) }));
+          decision_group: currentGroup, recovery: recovery(current) }));
+        return;
+      }
+      if (message.type === 'decision_group_command' && message.command) {
+        const command = message.command as DecisionGroupCommand;
+        authority.groupCommands.push(command);
+        await commandReply;
+        const result = afterGroup?.(command) ?? { frame: mainPhase(current.revision + 1, []), group: null };
+        current = result.frame;
+        currentGroup = result.group ?? null;
+        socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', decision_group: currentGroup, update: {
+          base_revision: command.expected_revision, frame: current, presentation: [],
+          receipt: { command_id: command.command_id, actor: 0, accepted_at: command.expected_revision, resulting_revision: current.revision, resulting_frame_hash: current.frame_hash },
+        } }));
         return;
       }
       if (message.type !== 'command' || !message.command) return;
-      const command = message.command;
+      const command = message.command as Command;
       authority.commands.push(command);
       await commandReply;
       if (refuse.includes(command.offer_id)) {
-        socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
+        socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected', decision_group: currentGroup,
           rejection: { command_id: command.command_id, code: 'stale_revision', message: 'That play is no longer available.',
             current_revision: current.revision, current_prompt: current.prompt!.id }, recovery: { ...recovery(current), reason: 'command_rejected' } }));
         return;
       }
       const played = current.offers.find(candidate => candidate.id === command.offer_id)?.focus[0];
       const next = after?.(command) ?? mainPhase(current.revision + 1, current.projection.agent.hand.map(held => held.id).filter(id => id !== played));
-      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update: {
+      currentGroup = null;
+      socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', decision_group: currentGroup, update: {
         base_revision: command.expected_revision, frame: next, presentation: [],
         receipt: { command_id: command.command_id, actor: 0, accepted_at: command.expected_revision, resulting_revision: next.revision, resulting_frame_hash: next.frame_hash },
       } }));
@@ -343,8 +366,7 @@ function blocks(blocker = otter, revision = REVISION): ExperienceFrame {
 test('drag the required blocker to an attacker in a one-at-a-time prompt', async ({ page }) => {
   const initial = blocks();
   initial.offers.pop(); // A required block has no decline button to identify the blocker.
-  await page.route('**/combat-preview', route => route.fulfill({ status: 503 }));
-  const authority = await installAuthority(page, { initial });
+  const authority = await installAuthority(page, { initial, initialGroup: null });
   const from = permanent(page, otter.display_id);
   await carry(page, from, await center(permanent(page, tiger.display_id)));
   await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
@@ -361,21 +383,48 @@ test('drag the required blocker to an attacker in a one-at-a-time prompt', async
 });
 
 test('dragging a drafted block reassigns it and Escape restores the click-selected blocker', async ({ page }) => {
-  await page.route('**/combat-preview', route => {
-    const request = route.request().postDataJSON() as { plan: CombatPlan };
-    const blockers = [otter, tiger];
-    const steps = blockers.map((object, i) => {
-      const assigned = request.plan.blocks.find(b => b.blocker.entity === object.display_id)?.attacker;
-      return { revision: REVISION + i, fingerprint: `block-${i}`, creature: renderId(object.display_id),
-        action_index: assigned ? (assigned.entity === cub.display_id ? 20 : 21) : 22, attack: false, blocks: assigned ?? null };
+  const initial = blocks();
+  const blockers = [otter, tiger];
+  const initialGroup: LiveDecisionGroup = {
+    match_id: initial.match_id,
+    revision: initial.revision,
+    prompt_id: initial.prompt!.id,
+    frame_hash: initial.frame_hash,
+    kind: 'declare_blockers',
+    declarable: blockers.map(object => ({
+      item: renderId(object.display_id),
+      label: object.label,
+      can_block: [renderId(cub.display_id), renderId(ally.display_id)],
+      must_block: false,
+    })),
+    committed: [],
+  };
+  await page.route('**/decision-group-preview', route => {
+    const request = route.request().postDataJSON() as {
+      match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: DecisionGroupPlan;
+    };
+    return route.fulfill({
+      json: {
+        match_id: request.match_id,
+        revision: request.revision,
+        prompt_id: request.prompt_id,
+        frame_hash: request.frame_hash,
+        viewer: 0,
+        complete: true,
+        refused: null,
+        outcome: request.plan.kind === 'declare_blockers'
+          ? { kind: 'declare_blockers', blocks: request.plan.blocks }
+          : null,
+      },
     });
-    return route.fulfill({ json: { ...request, viewer: 0, preview: { kind: 'blockers', steps, refused: null, declared_attackers: [],
-      declared_blocks: request.plan.blocks, declarable: blockers.map(object => ({ creature: renderId(object.display_id), label: object.label,
-        can_block: [renderId(cub.display_id), renderId(ally.display_id)], must_block: false, must_attack: false })) } } });
   });
   const stopEcho = Promise.withResolvers<void>();
-  const authority = await installAuthority(page, { initial: blocks(), stopEcho: stopEcho.promise, after: command => command.expected_revision === REVISION
-    ? blocks(tiger, REVISION + 1) : mainPhase(REVISION + 2, []) });
+  const authority = await installAuthority(page, {
+    initial,
+    initialGroup,
+    stopEcho: stopEcho.promise,
+    afterGroup: () => ({ frame: mainPhase(REVISION + 2, []), group: null }),
+  });
   await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'blockers');
   const from = permanent(page, otter.display_id);
   const other = permanent(page, tiger.display_id);
@@ -408,7 +457,7 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
   stopEcho.resolve();
   await expect(page.getByTestId('primary-action')).toBeEnabled();
   await expect(other).toHaveAttribute('data-draft', 'armed');
-  expect(authority.commands).toEqual([]);
+  expect(authority.groupCommands).toEqual([]);
 
   await carry(page, from, await center(second));
   await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
@@ -425,9 +474,17 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
   await page.mouse.up();
   await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Ally');
   await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
-  expect(authority.commands).toEqual([]);
+  expect(authority.groupCommands).toEqual([]);
   await page.getByTestId('primary-action').click();
-  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 21], [REVISION + 1, 22]]);
+  await expect.poll(() => authority.groupCommands.length).toBe(1);
+  expect(authority.groupCommands[0]).toMatchObject({
+    expected_revision: REVISION,
+    frame_hash: initial.frame_hash,
+    plan: {
+      kind: 'declare_blockers',
+      blocks: [{ blocker: renderId(otter.display_id), attacker: renderId(ally.display_id) }],
+    },
+  });
 });
 
 test('a targeted creature with two offers opens its choices from an asked stack ability', async ({ page }) => {
@@ -476,10 +533,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(tigerCard).toHaveAttribute('data-draft', 'in');
     const confirm = page.getByTestId('primary-action');
     await expect(confirm).toHaveAttribute('data-draft-ready', 'true');
-    expect(authority.commands).toEqual([]);
+    expect(authority.groupCommands).toEqual([]);
     await confirm.click();
-    await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.prompt_id, c.offer_id]))
-      .toEqual([[10, 110, 101], [11, 111, 103]]);
+    await expect.poll(() => authority.groupCommands.length).toBe(1);
+    expect(authority.groupCommands[0]).toMatchObject({
+      expected_revision: 10,
+      prompt_id: 110,
+      plan: {
+        kind: 'declare_attackers',
+        attackers: [renderId(otter.display_id), renderId(tiger.display_id)],
+      },
+    });
     await expect(page.getByTestId('decision-prompt')).toContainText('No blocks · Drag a blocker onto an attacker, or click each');
   });
 }

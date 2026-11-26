@@ -242,7 +242,7 @@ impl Game {
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_default();
-                combat.already_attacking = combat.attackers.len();
+                combat.already_attacking = combat.attack_targets.len();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
@@ -331,36 +331,59 @@ impl Game {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
                     let first = std::mem::take(&mut combat.already_attacking);
-                    let attackers = combat.attackers[first..].to_vec();
-                    if !attackers.is_empty() {
-                        self.state.turn.history[active.0].attacked = true;
-                        for &attacker in &attackers {
-                            let object =
-                                self.permanent_object(attacker).expect("declared attacker");
-                            self.state.turn.record_attack(object);
+                    if first == combat.attack_targets.len() {
+                        return None;
+                    }
+                    let declared = combat.attack_targets[first..].to_vec();
+                    let mut attackers = Vec::with_capacity(declared.len());
+                    let mut permanent_defenders = Vec::new();
+                    let mut visible_defenders = Vec::new();
+                    self.state.turn.history[active.0].attacked = true;
+                    for (attacker, target) in declared {
+                        attackers.push(attacker);
+                        let object = self.permanent_object(attacker).expect("declared attacker");
+                        self.state.turn.record_attack(object);
+                        if let Some(target @ super::combat::AttackTarget::Permanent(defender)) =
+                            target
+                        {
+                            permanent_defenders.push((attacker, target));
+                            if let (Some(a), Some(d)) = (
+                                self.permanent_event_ref(attacker),
+                                self.object_event_ref(defender),
+                            ) {
+                                visible_defenders.push((a, d));
+                            }
                         }
-                        self.emit(GameEvent::AttackersDeclared {
+                    }
+                    let visible_attackers: Vec<_> = attackers
+                        .iter()
+                        .filter_map(|&permanent| self.permanent_event_ref(permanent))
+                        .collect();
+                    self.emit(GameEvent::AttackersDeclared {
+                        permanent_defenders: (!permanent_defenders.is_empty())
+                            .then(|| Box::new(permanent_defenders)),
+                        player: active,
+                        attackers,
+                    });
+                    if !visible_attackers.is_empty() {
+                        self.emit_observation_event(GameEvent::CombatAttackersDeclared {
                             player: active,
-                            attackers: attackers.clone(),
+                            defender: self.non_active_player(),
+                            permanent_defenders: (!visible_defenders.is_empty())
+                                .then(|| Box::new(visible_defenders)),
+                            attackers: visible_attackers,
                         });
-                        let attackers = attackers
-                            .into_iter()
-                            .filter_map(|permanent| self.permanent_event_ref(permanent))
-                            .collect::<Vec<_>>();
-                        if !attackers.is_empty() {
-                            self.emit_observation_event(GameEvent::CombatAttackersDeclared {
-                                player: active,
-                                defender: self.non_active_player(),
-                                attackers,
-                            });
-                        }
                     }
                     return None;
                 };
                 let must_attack = self.must_attack(attacker);
-                let actions = [true, false]
+                let mut targets = self.declaration_targets(active);
+                let actions = targets
+                    .next()
+                    .map(Some)
                     .into_iter()
-                    .filter(|attack| *attack || !must_attack)
+                    .chain((!must_attack).then_some(None))
+                    .chain(targets.map(Some))
                     .map(|attack| Action::DeclareAttacker {
                         player: active,
                         permanent: attacker,
@@ -422,10 +445,8 @@ impl Game {
             StepKind::Cleanup => {
                 let player = self.active_player();
                 let unlimited = self.has_no_maximum_hand_size_effect(player)
-                    || self.battlefield_permanents(player).iter().any(|id| {
-                        self.characteristics(*id)
-                            .static_abilities
-                            .contains(&StaticAbility::NoMaximumHandSize)
+                    || self.has_functioning_static(Some(player), |ability| {
+                        matches!(ability, StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited && self.state.zones.size(ZoneType::Hand, player) > 7 {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {

@@ -177,6 +177,7 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
 
   // Default stops: the game opens at my main1 on turn 1.
+  await expect(game).toHaveAttribute('data-action-space', 'PRIORITY', { timeout: 15_000 });
   await expect(game).toHaveAttribute('data-turn', '1');
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
@@ -194,6 +195,7 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
+  await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PRIORITY', { timeout: 15_000 });
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
   // Default stops: main phases, active combat steps, and opponent end step stop every time.

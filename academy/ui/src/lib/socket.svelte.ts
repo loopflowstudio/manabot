@@ -1,5 +1,10 @@
 import type { PreviewAddress, PreviewResponse } from './payment-preview';
-import type { CombatAddress, CombatPlan, CombatResponse } from './board/combat';
+import {
+  validDecisionGroupPlan,
+  type DecisionGroupPlan,
+  type DecisionGroupPreviewRequest,
+  type DecisionGroupPreviewResponse,
+} from './decision-group';
 import { browser } from '$app/environment';
 
 import { sanitizeDeckSelection } from './decks';
@@ -43,11 +48,11 @@ function applyLaunchSetup(setup: LaunchSetup): void {
 const GAME_STORAGE_KEY = 'academy.game';
 const tabStorageKey = (game: string): string => `academy.tab.${game}`;
 
-type PendingCommand = Extract<ClientMessage, { type: 'command' }>;
+type PendingSubmission = Extract<ClientMessage, { type: 'command' | 'decision_group_command' }>;
 type StartMessage = Extract<ClientMessage, { type: 'new_game' | 'rematch' }>;
 
 interface TabState {
-  pending_command?: PendingCommand;
+  pending_command?: PendingSubmission;
   last_frame?: ExperienceFrame;
 }
 
@@ -102,14 +107,26 @@ function loadTabState(game: string): TabState {
   }
 }
 
-function validPendingCommand(value: unknown): value is PendingCommand {
+function validPendingCommand(value: unknown): value is PendingSubmission {
   if (!value || typeof value !== 'object') return false;
-  const request = value as Partial<PendingCommand>;
-  const command = request.command;
-  return request.type === 'command' && !!command
-    && typeof command.command_id === 'string' && typeof command.match_id === 'string'
-    && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
-    && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0;
+  const request = value as Partial<PendingSubmission>;
+  if (request.type === 'command') {
+    const command = request.command;
+    return !!command
+      && typeof command.command_id === 'string' && typeof command.match_id === 'string'
+      && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+      && Number.isSafeInteger(command.offer_id) && Array.isArray(command.answers) && command.answers.length === 0;
+  }
+  if (request.type === 'decision_group_command') {
+    const command = request.command;
+    return !!command
+      && typeof command.command_id === 'string' && command.command_id.length > 0
+      && typeof command.match_id === 'string'
+      && Number.isSafeInteger(command.expected_revision) && Number.isSafeInteger(command.prompt_id)
+      && typeof command.frame_hash === 'string'
+      && validDecisionGroupPlan(command.plan);
+  }
+  return false;
 }
 
 // ———————————————— The wire
@@ -169,7 +186,7 @@ export class GameSocketController {
   /** Whether the resume in flight takes the game from a tab that holds it. */
   private takeOver = true;
   private outboundQueue: ClientMessage[] = [];
-  private pendingCommand: PendingCommand | null = null;
+  private pendingCommand: PendingSubmission | null = null;
   private presentationCursor: number | null = null;
 
   connect(): void {
@@ -223,6 +240,7 @@ export class GameSocketController {
     socket.onclose = (event: CloseEvent) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      gameStore.clearPendingStops();
       if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
       gameStore.setConnection('disconnected');
       if (this.intentionallyClosed) return;
@@ -238,6 +256,7 @@ export class GameSocketController {
 
   disconnect(): void {
     this.intentionallyClosed = true;
+    gameStore.clearPendingStops();
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -320,6 +339,28 @@ export class GameSocketController {
     this.send(request);
   }
 
+  sendSwapSides(): void {
+    const frame = gameStore.protocolFrame;
+    if (
+      !gameStore.gameId
+      || !frame
+      || gameStore.swapPending
+      || gameStore.newGamePending
+      || gameStore.gameOver
+      || gameStore.stopped
+      || gameStore.searchRetry
+    ) return;
+    gameStore.swapPending = true;
+    gameStore.swapError = null;
+    gameStore.setError(null);
+    this.send({
+      type: 'swap_sides',
+      request_id: crypto.randomUUID(),
+      match_id: frame.match_id,
+      expected_revision: frame.revision,
+    });
+  }
+
   sendAction(offerId: number): boolean {
     const frame = gameStore.protocolFrame;
     const prompt = frame?.prompt;
@@ -334,7 +375,24 @@ export class GameSocketController {
     });
   }
 
-  private submitCommand(request: PendingCommand): boolean {
+  sendDecisionGroupCommand(plan: DecisionGroupPlan): boolean {
+    const frame = gameStore.protocolFrame;
+    const prompt = frame?.prompt;
+    if (!frame || !prompt) return false;
+    return this.submitCommand({
+      type: 'decision_group_command',
+      command: {
+        command_id: crypto.randomUUID(),
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: prompt.id,
+        frame_hash: frame.frame_hash,
+        plan,
+      },
+    });
+  }
+
+  private submitCommand(request: PendingSubmission): boolean {
     if (this.pendingCommand || this.pendingResume || gameStore.stopped || gameStore.work?.state === 'running') return false;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       gameStore.setError('Connection changed. Recovering the latest game state.');
@@ -359,7 +417,6 @@ export class GameSocketController {
 
   sendSetStops(): void {
     const stops = gameStore.stops;
-    gameStore.noteStopsSent();
     this.send({
       type: 'set_stops',
       stops: { my: [...stops.my], opponent: [...stops.opponent] },
@@ -387,9 +444,26 @@ export class GameSocketController {
     return true;
   }
 
+  private transmit(message: ClientMessage): void {
+    if (
+      message.type === 'set_stops'
+      && message.stops
+      && typeof message.stop_on_stack === 'boolean'
+      && typeof message.auto_pass === 'boolean'
+    ) {
+      gameStore.noteStopsSent({
+        my: message.stops.my,
+        opponent: message.stops.opponent,
+        stop_on_stack: message.stop_on_stack,
+        auto_pass: message.auto_pass,
+      });
+    }
+    this.socket!.send(JSON.stringify(message));
+  }
+
   private send(message: ClientMessage): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
       return;
     }
 
@@ -407,7 +481,7 @@ export class GameSocketController {
       if (!message) {
         break;
       }
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
     }
   }
 
@@ -460,6 +534,8 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       this.starting = null;
+      const matchBefore = gameStore.protocolFrame?.match_id ?? null;
+      const seatBefore = gameStore.observation?.agent.player_index ?? null;
       gameStore.newGamePending = false;
       this.pendingResume = false;
       // Once attached, the game is this tab's: its reconnects take it back.
@@ -468,16 +544,26 @@ export class GameSocketController {
       if (message.game && message.game !== this.game) this.attach(message.game);
       if (!this.pendingCommand) gameStore.endCommand();
       if (message.recovery) {
-        const sameMatch = gameStore.protocolFrame?.match_id === message.recovery.frame.match_id;
-        const prevLastSeq = sameMatch ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
+        const sameMatch = matchBefore === message.recovery.frame.match_id;
+        const seatSwapped = sameMatch && seatBefore !== null && seatBefore !== message.recovery.frame.projection.agent.player_index;
+        const prevLastSeq = sameMatch && !seatSwapped ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
         this.applyRecovery(message.recovery);
+        if (seatSwapped) {
+          gameStore.keptBoards = null;
+          const lastSeq = presentationPlayer.events.at(-1)?.seq ?? -1;
+          gameStore.historyNotes = gameStore.historyNotes
+            .filter(note => note.actor === 'note')
+            .map(note => (note.afterSeq > lastSeq ? { ...note, afterSeq: lastSeq } : note));
+        }
         const patches = message.boards ?? [];
         // Recovery on reconnect/reload brings presentation_tail with no earlier
         // boards; only span the frame board across freshly delivered non-pass
-        // events (never across missed pre-reconnect events).
-        const freshNonPass = message.recovery.presentation_tail.filter(
-          event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
-        );
+        // events (never across missed pre-reconnect or pre-swap events).
+        const freshNonPass = seatSwapped
+          ? []
+          : message.recovery.presentation_tail.filter(
+              event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
+            );
         const isReconnect = message.recovery.reason === 'reconnect';
         const range = (!isReconnect || patches.length > 0) && freshNonPass.length > 0
           ? {
@@ -509,11 +595,25 @@ export class GameSocketController {
         else rememberGame(this.game);
       }
       this.persistTab();
+      gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       // A first/replacement recovery resets match state. Its runner metadata
       // and live-analysis flag belong to the recovered frame and must survive that reset.
       if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
+      // Live scores are read from one seat's view; after Swap sides the line
+      // starts again from the new seat and live history marks the swap.
+      const matchAfter = gameStore.protocolFrame?.match_id ?? null;
+      const seatAfter = gameStore.observation?.agent.player_index ?? null;
+      if (matchBefore !== null && matchBefore === matchAfter && seatBefore !== null && seatAfter !== null && seatAfter !== seatBefore) {
+        gameStore.liveAnalysis = { ...gameStore.liveAnalysis, points: [], reading: null };
+        gameStore.addHistoryNote(
+          'note',
+          gameStore.observation?.turn.turn_number ?? null,
+          presentationPlayer.events.at(-1)?.seq ?? -1,
+          'Swapped sides',
+        );
+      }
       this.flushQueue();
       return;
     }
@@ -527,11 +627,18 @@ export class GameSocketController {
       if (message.status === 'accepted') {
         gameStore.submissionAccepted = true;
         this.applyUpdate(message.update);
+        gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       } else if (message.status === 'duplicate') {
         this.applyRecovery(message.recovery);
+        gameStore.applyLiveDecisionGroup('decision_group' in message ? message.decision_group : null);
       } else {
         if (message.recovery) {
           this.applyRecovery(message.recovery);
+        }
+        if ('decision_group' in message) {
+          gameStore.applyLiveDecisionGroup(message.decision_group);
+        } else if (message.recovery) {
+          gameStore.applyLiveDecisionGroup(null);
         }
         gameStore.lastCommandRejection = message.rejection;
         gameStore.setError(message.rejection.message);
@@ -556,8 +663,13 @@ export class GameSocketController {
     }
     gameStore.endFastForward();
     this.clearPendingCommand();
+    gameStore.clearPendingStops();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (gameStore.swapPending) {
+      gameStore.swapPending = false;
+      gameStore.swapError = message.message;
+    }
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (message.type === 'error' && message.game_stopped) {
       this.stop(text);
@@ -626,8 +738,9 @@ export class GameSocketController {
       return;
     }
     const frame = recovery.frame;
+    const sameHash = request.type !== 'decision_group_command' || frame.frame_hash === request.command.frame_hash;
     if (frame.match_id === command.match_id && frame.revision === command.expected_revision
-      && frame.prompt?.id === command.prompt_id) {
+      && frame.prompt?.id === command.prompt_id && sameHash) {
       // No replacement ID or choice: the server deduplicates this exact envelope.
       gameStore.beginCommand();
       this.socket?.send(JSON.stringify(request));
@@ -703,6 +816,15 @@ export class GameSocketController {
       && next.revision < current.revision
     ) {
       return;
+    }
+    const seatChanged = Boolean(
+      current
+      && current.match_id === next.match_id
+      && current.projection.agent.player_index !== next.projection.agent.player_index,
+    );
+    if (seatChanged) {
+      this.presentationCursor = null;
+      presentationPlayer.clear();
     }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
@@ -793,6 +915,13 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
+export function sendDecisionGroupCommand(plan: DecisionGroupPlan): boolean {
+  return controller.sendDecisionGroupCommand(plan);
+}
+
+export function sendSwapSides(): void {
+  controller.sendSwapSides();
+}
 export function sendShowAnalysis(shown: boolean, policy: string | null = null): void {
   controller.sendShowAnalysis(shown, policy);
 }
@@ -809,13 +938,13 @@ export function sendRetrySearch(): void {
   controller.sendRetrySearch();
 }
 
-async function preview<T>(kind: 'payment' | 'combat', body: unknown, signal: AbortSignal): Promise<T> {
+async function preview<T>(kind: 'payment' | 'decision-group', body: unknown, signal: AbortSignal): Promise<T> {
   const game = gameStore.gameId;
   if (!game) throw new Error('No game in progress');
   const response = await fetch(`/api/games/${encodeURIComponent(game)}/${kind}-preview`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(kind === 'payment' ? 'Payment preview unavailable' : 'Combat preview unavailable');
+  if (!response.ok) throw new Error(kind === 'payment' ? 'Payment preview unavailable' : 'Group preview unavailable');
   return response.json();
 }
 
@@ -823,7 +952,10 @@ export function fetchPaymentPreview(address: PreviewAddress, signal: AbortSignal
   return preview('payment', address, signal);
 }
 
-/** The native whole-declaration preview for a drafted attack or block; read-only. */
-export function fetchCombatPreview(request: CombatAddress & { plan: CombatPlan }, signal: AbortSignal): Promise<CombatResponse> {
-  return preview('combat', request, signal);
+/** Read-only native preview for a drafted grouped plan; never mutates the live game. */
+export function fetchDecisionGroupPreview(
+  request: DecisionGroupPreviewRequest,
+  signal: AbortSignal,
+): Promise<DecisionGroupPreviewResponse> {
+  return preview('decision-group', request, signal);
 }

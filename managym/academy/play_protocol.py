@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal, TypeAlias, get_args
 
 from pydantic import Field, TypeAdapter
 
+from managym.decision_group import DecisionGroupChoice
 from managym.experience import Command, ProtocolModel, UInt64
 
 
@@ -43,9 +44,30 @@ class RematchMessage(ProtocolModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class SwapSidesMessage(ProtocolModel):
+    type: Literal["swap_sides"]
+    request_id: str = Field(min_length=1, max_length=128)
+    match_id: str
+    expected_revision: UInt64
+
+
 class CommandMessage(ProtocolModel):
     type: Literal["command"]
     command: Command
+
+
+class DecisionGroupCommand(ProtocolModel):
+    command_id: str
+    match_id: str
+    expected_revision: UInt64
+    prompt_id: UInt64
+    frame_hash: str
+    plan: DecisionGroupChoice
+
+
+class DecisionGroupCommandMessage(ProtocolModel):
+    type: Literal["decision_group_command"]
+    command: DecisionGroupCommand
 
 
 class ActionMessage(ProtocolModel):
@@ -82,7 +104,9 @@ class ShowAnalysisMessage(ProtocolModel):
 
 StartMessage: TypeAlias = ResumeMessage | NewGameMessage | RematchMessage
 GameMessage: TypeAlias = (
-    CommandMessage
+    SwapSidesMessage
+    | CommandMessage
+    | DecisionGroupCommandMessage
     | ActionMessage
     | PassTurnMessage
     | RetryMirrorMessage

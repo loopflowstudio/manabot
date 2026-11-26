@@ -42,6 +42,7 @@
     { key: 'Hand', count: hand, cards: shownHand, shown: shownHand?.length },
     { key: 'Library', count: player.library_count, cards: null },
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
+    ...(player.command?.length ? [{ key: 'Emblems', count: player.command.length, cards: player.command }] : []),
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
   ]);
   const knownHand = $derived(Object.entries(player.known_hand ?? {}).flatMap(([id, count]) =>
@@ -61,7 +62,7 @@
   const label = $derived(`${name}, ${player.life} life${player.hexproof ? ', hexproof' : ''}${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
-<section class="plate" aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
+<section class="plate" aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
   <button
     type="button"
     class="who"

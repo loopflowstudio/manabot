@@ -531,3 +531,165 @@ it('ignores work from another game, revision or earlier operation', () => {
   gameStore.work = null;
   gameStore.leaveGame();
 });
+
+describe('grouped decisions in GameSocketController', () => {
+  it('tracks liveDecisionGroup on observation and frame hash changes', () => {
+    gameStore.prepareForNewGame();
+    const controller = new GameSocketController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const scryGroup = {
+      match_id: frame.match_id,
+      revision: frame.revision,
+      prompt_id: frame.prompt!.id,
+      frame_hash: frame.frame_hash,
+      kind: 'scry' as const,
+      items: [{ item: { entity: 1, incarnation: 0 }, label: 'Island' }, { item: { entity: 2, incarnation: 0 }, label: 'Opt' }],
+      committed_top: [],
+      committed_bottom: [],
+    };
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: null,
+    });
+    expect(gameStore.liveDecisionGroup).toBeNull();
+
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: scryGroup,
+    });
+    expect(gameStore.liveDecisionGroup).toEqual(scryGroup);
+
+    // Mismatched frame hash is ignored.
+    deliver(controller, {
+      type: 'observation',
+      data: frame.projection,
+      actions: [],
+      recovery,
+      decision_group: { ...scryGroup, frame_hash: 'wrong-hash' },
+    });
+    expect(gameStore.liveDecisionGroup).toBeNull();
+  });
+
+  it('reconciles a pending decision_group_command by accepted_commands and frame_hash', () => {
+    const controller = new GameSocketController();
+    const sent: string[] = [];
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    const frame = recovery.frame;
+    const request = {
+      type: 'decision_group_command' as const,
+      command: {
+        command_id: 'grp-pending-1',
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: frame.prompt!.id,
+        frame_hash: frame.frame_hash,
+        plan: { kind: 'declare_attackers' as const, attackers: [] },
+      },
+    };
+    const state = controller as unknown as {
+      pendingCommand: typeof request | null;
+      socket: { send(raw: string): void; close(): void };
+      reconcileCommand(env: RecoveryEnvelope): void;
+    };
+    state.socket = { send: raw => sent.push(raw), close: () => {} };
+    gameStore.prepareForNewGame();
+
+    // Resends exact envelope when address and frame_hash match.
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    recovery.accepted_commands = [];
+    state.reconcileCommand(recovery);
+    expect(sent.map(raw => JSON.parse(raw))).toEqual([request]);
+    expect(gameStore.commandPending).toBe(true);
+
+    // Refuses to resend when frame_hash drifted.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({ ...recovery, frame: { ...frame, frame_hash: 'drifted-hash' } });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+
+    // Retires cleanly when already recorded in accepted_commands.
+    sent.length = 0;
+    state.pendingCommand = request;
+    gameStore.beginCommand();
+    state.reconcileCommand({
+      ...recovery,
+      accepted_commands: [{
+        command_id: request.command.command_id,
+        actor: 0,
+        accepted_at: frame.revision,
+        resulting_revision: frame.revision + 2,
+        resulting_frame_hash: 'after',
+      }],
+    });
+    expect(sent).toEqual([]);
+    expect(state.pendingCommand).toBeNull();
+    expect(gameStore.commandPending).toBe(false);
+  });
+});
+
+describe('live analysis across Swap sides', () => {
+  const point = { event: 3, at: 1, score: 70, semantic: 'signed_outcome' };
+
+  function recoveryAt(revision: number, swapped: boolean): RecoveryEnvelope {
+    const frame = frameAt(revision);
+    if (swapped) {
+      const { agent, opponent } = frame.projection;
+      frame.projection = { ...frame.projection, agent: opponent, opponent: agent };
+    }
+    return { ...structuredClone(boltProtocolFixture.recovery), frame };
+  }
+
+  function showing(): void {
+    gameStore.prepareForNewGame();
+    gameStore.applyFrame(frameAt(42));
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, shown: true, points: [point] };
+  }
+
+  it('starts the line again from the new seat', () => {
+    showing();
+    const recovery = recoveryAt(43, true);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.observation?.agent.player_index).toBe(1);
+    expect(gameStore.liveAnalysis.points).toEqual([]);
+  });
+
+  it('keeps the line while the seat stays', () => {
+    showing();
+    const recovery = recoveryAt(43, false);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.liveAnalysis.points).toEqual([point]);
+  });
+
+  it('drops old-seat automation notes on swap and keeps swap dividers monotonic across a swap back', () => {
+    showing();
+    gameStore.addHistoryNote('you', 1, 905, 'Pass turn');
+    const controller = new GameSocketController();
+    const firstSwap = recoveryAt(43, true);
+    firstSwap.presentation_cursor = 900;
+    firstSwap.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 4); // seq 900..903
+    deliver(controller, { type: 'observation', data: firstSwap.frame.projection, actions: [], recovery: firstSwap });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 903],
+    ]);
+
+    const swapBack = recoveryAt(44, false);
+    swapBack.presentation_cursor = 900;
+    swapBack.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2); // seq 900..901
+    deliver(controller, { type: 'observation', data: swapBack.frame.projection, actions: [], recovery: swapBack });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 901],
+      ['note', 'Swapped sides', 901],
+    ]);
+  });
+});

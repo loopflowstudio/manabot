@@ -40,3 +40,14 @@ Read when the change touches the published library API: `__all__` in `PUBLIC_MOD
   `## Local-update search`, whose example writes to a checkout-relative
   `.runs/`) and run it with `-W error::DeprecationWarning`; it prints
   `2 1.0 <value>` in about 4 s.
+- `Env.decision`/`preview`/`submit` (`managym.decision_group`) as a library user: play
+  `{"Mountain": 24, "Raging Goblin": 36}` against `{"Plains": 60}` with
+  `skip_trivial=True`, submitting offers by `verb` (`play_land`, `cast`,
+  `pay_cost`, `pass_priority`) until `decision().kind == "declare_attackers"`;
+  turn 2 onward has several goblins. Take one raw offer, then `decision()` shows
+  `committed` plus the rest. Library kinds come from `12 Island / 12 Swamp / 20
+  Bilbo Baggins, Burglar / 16 Diresight`, and `partition_piles` from `Curator
+  of Destinies`. `Offer.label` carries human-readable labels (`"Play Mountain"`,
+  `"Cast Raging Goblin"`, `"Pass priority"`) and `Offer.source` carries the
+  viewer-safe `SubjectRef` (leaving `semantic_decision_frame()` fingerprints
+  unchanged).

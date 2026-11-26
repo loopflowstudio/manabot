@@ -322,6 +322,7 @@ columns! { turn_state {
     12: PERMANENTS_LEFT => ("permanents_left", ValueLayout::COUNT),
     13: NONLAND_PERMANENTS_LEFT => ("nonland_permanents_left", ValueLayout::COUNT),
     14: WARPED_THIS_TURN => ("warped_this_turn", ValueLayout::FLAG),
+    15: LOYALTY_ABILITIES_ACTIVATED => ("loyalty_abilities_activated", ValueLayout::COUNT),
 } }
 
 columns! { card {
@@ -382,6 +383,7 @@ columns! { card {
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
     56: PUT_INTO_GRAVEYARD_THIS_TURN => ("put_into_graveyard_this_turn", ValueLayout::FLAG),
+    57: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { permanent {
@@ -444,6 +446,9 @@ columns! { permanent {
     56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
     57: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
     58: BLOCKED => ("blocked", ValueLayout::FLAG),
+    59: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    60: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
+    61: ATTACKED_PERMANENT => ("attacked_permanent", ValueLayout::OBJECT_REFERENCE),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -497,6 +502,7 @@ columns! { stack {
     44: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
     45: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
     46: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
+    47: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -533,6 +539,7 @@ columns! { action {
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
+    30: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -798,6 +805,8 @@ columns! { relation {
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
     49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
+    50: UNTIL_NEXT_TURN => ("until_next_turn", ValueLayout::FLAG),
+    51: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 #[derive(Clone, Debug)]
@@ -1126,8 +1135,8 @@ pub fn observation_layout(
         },
     );
     relations.row_kinds = BTreeMap::from([
-        (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
-        (2, "Target: clause, ordinal, reference_definition/reference/reference_player and legal_at_resolution_start"),
+        (1, "Frame header; frame_kind describes the unfinished work; division is remaining division budget during DivideAmount; other rows repeat this header"),
+        (2, "Target: clause, ordinal, reference_definition/reference/reference_player, legal_at_resolution_start and division (assigned share)"),
         (3, "Event context: reference_definition/reference/reference_player"),
         (4, "Sacrifice: reference_definition/reference/reference_player"),
         (5, "Hybrid payment: hybrid_first/hybrid_second are alternative colors"),
@@ -1284,17 +1293,17 @@ mod tests {
                 (
                     "agent_cards",
                     config.card_dim(),
-                    if one_token { 57 } else { 56 },
+                    if one_token { 58 } else { 56 },
                 ),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 59 } else { 38 },
+                    if one_token { 62 } else { 38 },
                 ),
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 30 } else { 22 },
+                    if one_token { 31 } else { 22 },
                 ),
                 (
                     "events",
@@ -1304,7 +1313,7 @@ mod tests {
                 (
                     "relations",
                     config.relation_dim(),
-                    if one_token { 50 } else { 49 },
+                    if one_token { 52 } else { 49 },
                 ),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
@@ -1319,7 +1328,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 47);
+                assert_eq!(stack::WIDTH, 48);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

@@ -11,6 +11,7 @@ import type { HistoryNote } from './board/history';
 import type { ResumeRefusal } from './resume-refusal';
 import { findKeptDeck } from './kept-decks';
 import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
+import type { LiveDecisionGroup } from './decision-group';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -138,6 +139,8 @@ export class GameStore {
   // read rather than a deep proxy's (the board reads them thousands of times
   // a frame, and the tab record serializes the frame on every update).
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** The active live grouped-decision descriptor for `protocolFrame`, or null. */
+  liveDecisionGroup = $state.raw<LiveDecisionGroup | null>(null);
   /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
   keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
   /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
@@ -186,6 +189,8 @@ export class GameStore {
   work = $state<WorkStatus | null>(null);
   submissionAccepted = $state(false);
   newGamePending = $state(false);
+  swapPending = $state(false);
+  swapError = $state<string | null>(null);
   // Monotonic count of applied server updates (observation/game_over).
   // Surfaced in the DOM so tests can serialize on server responses.
   updateSeq = $state(0);
@@ -223,6 +228,15 @@ export class GameStore {
 
   setError(message: string | null): void {
     this.errorMessage = message;
+  }
+
+  /** Clear a command rejection and its matching rail error banner once the player edits the draft. */
+  dismissCommandRejection(commandId: string): void {
+    if (this.lastCommandRejection?.command_id !== commandId) return;
+    if (this.errorMessage === this.lastCommandRejection.message) {
+      this.errorMessage = null;
+    }
+    this.lastCommandRejection = null;
   }
 
   setOpponentChoice(next: PlayerChoice): void {
@@ -328,8 +342,8 @@ export class GameStore {
     );
   }
 
-  /** Record a client-local history note (a spent once stop or F6 yield). */
-  addHistoryNote(actor: 'you' | 'auto', turn: number | null, afterSeq: number, text: string): void {
+  /** Record a client-local history note (a spent once stop, F6 yield, or mid-game swap). */
+  addHistoryNote(actor: 'you' | 'auto' | 'note', turn: number | null, afterSeq: number, text: string): void {
     this.logSequence += 1;
     this.historyNotes = [
       ...this.historyNotes,
@@ -360,24 +374,28 @@ export class GameStore {
   }
 
   /**
-   * The server echoes its stop config on every frame, and answers each
-   * `set_stops` with one frame, in order. While stop changes are in flight,
-   * an echo that is not the last config sent predates it and is dropped;
-   * after as many echoes as sends the server's config holds again.
+   * The server echoes its stop config on every frame — including frames that
+   * answer an earlier command (`action`, `pass_turn`, `swap_sides`) as well as
+   * `set_stops`. While stop changes are in flight, hold the FIFO queue of sent
+   * configs and drop any frame until every sent config has been echoed in order.
    */
-  private stopsInFlight: { config: string; echoes: number } | null = null;
+  private pendingStops: string[] = [];
 
-  noteStopsSent(): void {
-    this.stopsInFlight = { config: stopsKey(this.stops), echoes: (this.stopsInFlight?.echoes ?? 0) + 1 };
+  noteStopsSent(stops: StopsConfig = this.stops): void {
+    this.pendingStops.push(stopsKey(stops));
+  }
+
+  clearPendingStops(): void {
+    this.pendingStops = [];
   }
 
   applyServerStops(stops: StopsConfig | undefined): void {
     if (!stops) return;
-    const flight = this.stopsInFlight;
-    if (flight) {
-      const settled = stopsKey(stops) === flight.config || flight.echoes <= 1;
-      this.stopsInFlight = settled ? null : { ...flight, echoes: flight.echoes - 1 };
-      if (!settled) return;
+    if (this.pendingStops.length > 0) {
+      if (stopsKey(stops) === this.pendingStops[0]) {
+        this.pendingStops.shift();
+      }
+      if (this.pendingStops.length > 0) return;
     }
     this.updateStops(stops, false);
   }
@@ -417,6 +435,8 @@ export class GameStore {
     this.stopped = false;
     this.fastForwarding = false;
     this.commandPending = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
@@ -443,9 +463,20 @@ export class GameStore {
     this.keptBoards = { matchId: frame.match_id, boards: next };
   }
 
+  applyLiveDecisionGroup(group: LiveDecisionGroup | null | undefined): void {
+    const frame = this.protocolFrame;
+    this.liveDecisionGroup =
+      group && frame && group.frame_hash === frame.frame_hash && group.match_id === frame.match_id
+        ? group
+        : null;
+  }
+
   applyFrame(frame: ExperienceFrame): void {
     this.lastCommandRejection = null;
     this.protocolFrame = frame;
+    if (this.liveDecisionGroup && (this.liveDecisionGroup.frame_hash !== frame.frame_hash || this.liveDecisionGroup.match_id !== frame.match_id)) {
+      this.liveDecisionGroup = null;
+    }
     const actions = frame.offers.map((offer) => ({
       index: offer.id,
       type: offer.action_type,
@@ -481,10 +512,13 @@ export class GameStore {
     this.actions = [];
     this.actionSpaceKind = '';
     this.gameOver = true;
+    this.liveDecisionGroup = null;
     this.winner = winner;
     this.errorMessage = null;
     this.stopped = false;
     this.fastForwarding = false;
+    this.swapPending = false;
+    this.swapError = null;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
@@ -514,10 +548,14 @@ export class GameStore {
     this.fastForwarding = false;
     this.commandPending = false;
     this.newGamePending = false;
+    this.swapPending = false;
+    this.swapError = null;
+    this.pendingStops = [];
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
+    this.liveDecisionGroup = null;
     this.stopped = true;
     this.errorMessage = message;
   }
@@ -568,6 +606,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
+    this.liveDecisionGroup = null;
     this.keptBoards = null;
     this.observation = null;
     this.actions = [];
@@ -577,6 +616,9 @@ export class GameStore {
     this.historyNotes = [];
     this.fastForwarding = false;
     this.commandPending = false;
+    this.swapPending = false;
+    this.swapError = null;
+    this.pendingStops = [];
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;

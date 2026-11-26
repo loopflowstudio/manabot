@@ -8,7 +8,7 @@ import { markText } from '$lib/analysis';
 import { findBoard } from './boards';
 import { buildHistory, legacyMoveHistory } from './history';
 import {
-  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks, withLiveAnalysisPoints, type StripMark,
+  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, withLiveAnalysisPoints, type StripMark,
 } from './replay';
 import { boardView } from './view';
 
@@ -399,5 +399,174 @@ describe('withLiveAnalysisPoints', () => {
     expect(marks.map(mark => mark.key)).toEqual(['read-1', 'a', 'b', 'read-6', 'c', 'd', 'read-9']);
     expect(marks[0].label).toBe('Turn 1 · Play Mountain');
     expect(marks[3]).toMatchObject({ turn: 2, value: 0.4, label: 'Turn 2 · Cast Shock' });
+  });
+});
+
+describe('mid-game seat swaps in Review', () => {
+  it('defaults perspective to chooser when swapped, inserts swap dividers, and breaks strip segments', () => {
+    const swaps = [{ event: 2, turn: 2 }];
+    expect(perspectiveOf(null, { players: [{ seat: 1, kind: 'human' }] as never, seat_swaps: swaps })).toBe('chooser');
+    expect(perspectiveOf('0', { players: [{ seat: 1, kind: 'human' }] as never, seat_swaps: swaps })).toBe(0);
+    const positions = [
+      position('choice', { key: 'c0', actor: 0, event: 0, turn: 1, label: 'Play Island' }),
+      position('consequences', { key: 'a0', actor: 0, event: 0, turn: 1, label: 'Play Island' }),
+      position('choice', { key: 'c2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
+      position('consequences', { key: 'a2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
+    ];
+    const log = replayLog(positions, 0, (seat, currentHero) => (seat === currentHero ? 'You' : 'Reader'), swaps);
+    expect(log.map(entry => [entry.actor, entry.text])).toEqual([
+      ['hero', 'Play Island'],
+      ['system', 'Swapped sides · Turn 2'],
+      ['hero', 'Play Mountain'],
+    ]);
+    expect(entryPosition(log[1].id)).toBe('c2');
+    const marks = stripMarks(positions, 0, swaps);
+    expect(marks.map(mark => [mark.side, Boolean(mark.breakBefore)])).toEqual([
+      ['you', false],
+      ['you', false],
+      ['you', true],
+      ['you', false],
+    ]);
+  });
+
+  it('separates permanent native seat from position-dependent pilot before and after a swap', () => {
+    const swaps = [{ event: 2, turn: 2 }];
+    // Game started with human in seat 0 (UR Lessons) and Reader in seat 1 (GW Allies),
+    // swapped once at event 2 so final players have Reader in seat 0 and You in seat 1.
+    const index = {
+      watch: false,
+      players: [
+        { seat: 0, kind: 'bot', name: 'Reader', player_id: 'policy:p1', version: 'ab'.repeat(32), deck: 'ur_lessons', deck_name: 'UR Lessons' },
+        { seat: 1, kind: 'human', name: 'Human', player_id: 'human:1', version: null, deck: 'gw_allies', deck_name: 'GW Allies' },
+      ] as never,
+      opponent: { name: 'Reader', sha256: 'ab'.repeat(32), producer: 'manabot' },
+      opponent_checkpoint: { source: 'runs', world: 'w17', step: 8 },
+    };
+    const finalHero: 0 | 1 = 1;
+    const nameOf = (seat: 0 | 1): string => (seat === finalHero ? 'You' : 'Reader');
+
+    // Pre-swap (event 0): human piloted seat 0 (UR Lessons), bot piloted seat 1 (GW Allies).
+    const preHero = humanSeatAt(0, swaps, 0);
+    expect(preHero).toBe(0);
+    expect(nameOf(pilotSeatAt(0, finalHero, preHero))).toBe('You');
+    expect(nameOf(pilotSeatAt(1, finalHero, preHero))).toBe('Reader');
+    expect(positionHeading(
+      { kind: 'choice', actor: 0, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, preHero)),
+      false,
+      null,
+    )).toBe('Your choice');
+    expect(positionHeading(
+      { kind: 'consequences', actor: 1, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, preHero)),
+      false,
+      null,
+    )).toBe("After Reader's move");
+
+    // Post-swap (event 2): human pilots seat 1 (GW Allies), bot pilots seat 0 (UR Lessons).
+    const postHero = humanSeatAt(0, swaps, 2);
+    expect(postHero).toBe(1);
+    expect(nameOf(pilotSeatAt(1, finalHero, postHero))).toBe('You');
+    expect(nameOf(pilotSeatAt(0, finalHero, postHero))).toBe('Reader');
+    expect(positionHeading(
+      { kind: 'choice', actor: 1, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, postHero)),
+      false,
+      null,
+    )).toBe('Your choice');
+    expect(positionHeading(
+      { kind: 'state', actor: null, automatic: false },
+      seat => nameOf(pilotSeatAt(seat, finalHero, humanSeatAt(0, swaps, null))),
+      true,
+      1,
+    )).toBe('Game over · You win');
+
+    // Bot provenance attaches to the bot player (seat 0 after swap), never to the human (seat 1).
+    const botIdentity = seatIdentity(index, 0);
+    const humanIdentity = seatIdentity(index, 1);
+    expect(botIdentity.producer).toBe('manabot');
+    expect(botIdentity.provenance).toEqual({ source: 'runs', world: 'w17', step: 8 });
+    expect(humanIdentity.producer).toBeUndefined();
+    expect(humanIdentity.provenance).toBeUndefined();
+
+    // Fixed Perspective options label native seat + deck when swapped, and pilot when unswapped.
+    expect(perspectiveLabel(0, 'Reader', 'UR Lessons', true)).toBe('Seat 1 at the bottom · UR Lessons');
+    expect(perspectiveLabel(1, 'You', 'GW Allies', true)).toBe('Seat 2 at the bottom · GW Allies');
+    expect(perspectiveLabel(1, 'You', null, true)).toBe('Seat 2 at the bottom');
+    expect(perspectiveLabel(0, 'You', 'UR Lessons', false)).toBe('Seat 1 at the bottom · You');
+  });
+
+  it('inserts clickable swap dividers and preserves pilot attribution in track history', () => {
+    const swaps = [{ event: 1, turn: 2 }];
+    const positions: Position[] = [
+      position('choice', { key: 'c0', actor: 0, event: 0, turn: 1, revision: 0, label: 'Play Island' }),
+      position('consequences', { key: 'a0', actor: 0, event: 0, turn: 1, revision: 0, label: 'Play Island' }),
+      position('choice', { key: 'c1', actor: 1, event: 1, turn: 2, revision: 2, label: 'Play Mountain' }),
+      position('consequences', { key: 'a1', actor: 1, event: 1, turn: 2, revision: 2, label: 'Play Mountain' }),
+    ];
+    const events: PresentationEvent[] = [
+      {
+        seq: 0, from_revision: 0, to_revision: 1, caused_by: null, group: 0, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'land_played', player: 0, object: { entity: 10, incarnation: 1 } },
+        labels: { objects: { '10:1': 'Island' }, stacks: {} },
+      },
+      {
+        seq: 1, from_revision: 2, to_revision: 3, caused_by: 'cmd-2', group: 1, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'land_played', player: 1, object: { entity: 20, incarnation: 1 } },
+        labels: { objects: { '20:1': 'Mountain' }, stacks: {} },
+      },
+    ];
+    const notes = swapHistoryNotes(swaps, positions, events);
+    expect(notes).toEqual([{
+      id: 'swap:0:c1',
+      actor: 'note',
+      turn: 2,
+      afterSeq: 0,
+      text: 'Swapped sides · Turn 2',
+      jumpKey: 'swap:0:c1',
+    }]);
+    const turns = buildHistory(events, () => ({ objects: {}, players: {}, stacks: {} }), { youSeat: 1, you: 'You', opponent: 'Passive' }, {
+      notes,
+      jumpKeyFor: (event, isMove) => positionKeyForEvent(positions, event, isMove),
+      playersFor: event => ({ youSeat: event.from_revision <= 0 ? 0 : 1, you: 'You', opponent: 'Passive' }),
+      isAutomatic: () => false,
+    });
+    const lines = turns.flatMap(turn => turn.lines);
+    expect(lines.map(line => [line.actor, line.who, line.jumpKey, line.sentence])).toEqual([
+      ['you', 'You', 'c0', 'You played Island'],
+      ['note', '', 'swap:0:c1', 'Swapped sides · Turn 2'],
+      ['you', 'You', 'c1', 'You played Mountain'],
+    ]);
+    expect(entryPosition(lines[1].jumpKey!)).toBe('c1');
+  });
+
+  it('attributes pre-swap bot blocks and mid-turn post-swap human blocks accurately in Review track history', () => {
+    const events: PresentationEvent[] = [
+      {
+        seq: 0, from_revision: 0, to_revision: 1, caused_by: null, group: 0, importance: 'normal', suggested_ms: 0, sound: null,
+        kind: { kind: 'turn_started', turn_number: 2, player: 0 },
+      },
+      // Pre-swap: Seat 0 (You) attacked; Seat 1 (bot) blocked. On Seat 1's track, caused_by is non-null.
+      {
+        seq: 1, from_revision: 1, to_revision: 2, caused_by: 'authority.policy.1', group: 1, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'blocked', attacker: { entity: 10, incarnation: 1 }, blockers: [{ entity: 11, incarnation: 1 }] },
+        labels: { objects: { '10:1': 'Bear', '11:1': 'Ally' }, stacks: {} },
+      },
+      // Mid-turn swap at revision 3: now Seat 1 is You, Seat 0 is still Turn 2's active player (now Opponent).
+      {
+        seq: 2, from_revision: 4, to_revision: 5, caused_by: 'cmd-4', group: 2, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'blocked', attacker: { entity: 10, incarnation: 1 }, blockers: [{ entity: 12, incarnation: 1 }] },
+        labels: { objects: { '10:1': 'Bear', '12:1': 'Scout' }, stacks: {} },
+      },
+    ];
+    const turns = buildHistory(events, () => ({ objects: {}, players: {}, stacks: {} }), { youSeat: 1, you: 'You', opponent: 'Passive' }, {
+      playersFor: event => ({ youSeat: event.from_revision < 3 ? 0 : 1, you: 'You', opponent: 'Passive' }),
+      isAutomatic: () => false,
+    });
+    const lines = turns.flatMap(turn => turn.lines);
+    expect(lines.map(line => [line.actor, line.who])).toEqual([
+      ['opponent', 'Passive'],
+      ['you', 'You'],
+    ]);
   });
 });

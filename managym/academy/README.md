@@ -65,10 +65,10 @@ pending choice with the same legal offers and permitted information.
 - **`recording.py`**: positions over retained recordings; `record_of(attempt)`
   builds the engine's `GameRecord` from a played game's stored seed, setups
   and actions, so a played game is re-executed like any other record.
-- **`analysis.py`**: a policy's reading of one seat of a played game
-  (`analyse_game`), saved per decision in the `analyses` and
-  `analysed_decisions` tables beside the game, never in its trace; and the
-  same reading during play (`LiveAnalysis`).
+- **`analysis.py`**: a policy's reading of a played game's deliberate human
+  decisions across whichever seats the person piloted (`analyse_game`), saved
+  per decision in the `analyses` and `analysed_decisions` tables beside the
+  game, never in its trace; and the same reading during play (`LiveAnalysis`).
 - **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
   `managym.statistics` over one re-execution and saved in
   `attempts.numbers_json` (cleared on append when a resumed game moves on).
@@ -441,6 +441,37 @@ ids, persists the prefix once, and continues against a fresh opponent policy.
 `GameNumbers.played_from` copies the step and the recording index returns it
 with the turn it starts on.
 
+### Swapping sides mid-game
+
+The pilot's `swap_sides` request (`SwapSidesMessage`, `CONFIGURE_MATCH`, bound
+to `match_id`, `expected_revision` and an idempotent `request_id`) flips seats
+in place on the live `GameSession` without restarting the engine or mutating
+`GameConfig` or `play_sessions.draft_json`. Before mutating session state,
+`GameSession.swap_sides` builds and admits a replacement villain policy for the
+human's old seat; stateless policies observe the live `Env` directly (decision
+memory is already captured for both native seats), while `recurrent=True`
+policies warm up over `managym.replay.walk` of the game so far. Any admission
+or load failure closes the disposable policy and leaves the live game untouched
+at the same revision.
+
+On commit, the session flips `human_seat` and `deck_names`, appends
+`len(trace.events)` to `Trace.seat_swaps` (omitted from JSON when empty),
+refreshes presentation state from the new seat's canonical track, bumps the
+protocol revision so in-flight Commands for the old seat are rejected as stale,
+updates active `attempt_players` and `session_games.matchup_json` atomically in
+`AttemptStore.save`, immediately broadcasts the committed flipped board (with
+`work.state == "running"` and active live-analysis policy metadata), then
+advances if the bot is now to act and restarts `LiveAnalysis` for the new seat
+if live analysis was on. Every reader
+(`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
+`analyse_game`, `agent_line`, `LiveAnalysis`, and `_play_recorded_prefix`)
+resolves the human seat at step `i` through `human_seat_at(trace, i)` in
+`trace.py`. `Recording` and `GET /api/traces/{id}/decisions`
+(`play_decisions_with_addresses`) include all `DecisionSource.CLIENT` decisions
+across both seats and exclude `DecisionSource.POLICY` rows;
+`/api/traces/{id}/recording` exposes `seat_swaps` and `starting_human_seat`.
+Native mana payment and float modes remain on their starting seats.
+
 ### Analysis while you play
 
 The `show_analysis {"shown": true, "policy": <Policy ID or null>}` request
@@ -449,9 +480,9 @@ the policies that may read the game (`analysing_policies`, from
 `PolicyAdmissions`) and why none may. The connection admits them off the game
 lock before dispatching the request, so the first Show analysis of a game's
 decks never holds play while checkpoints are admitted. Showing starts a `LiveAnalysis` on its own daemon
-thread: it loads a fresh runner, walks the game so far with `seat_decisions`
-(asking the runner at each earlier decision, as an analysis after the game
-does, so decision memory matches), then applies each step the game commits and
+thread: it loads a fresh runner, walks the game so far with `recorded_steps`
+(asking the runner at each earlier deliberate human decision in that seat, plus
+any other step in that seat when recurrent, so decision memory matches), then applies each step the game commits and
 reads each decision the game publishes to the person (`_publish_current_prompt`)
 with `read_decision`. Steps and decisions reach the worker in the game's order
 on one queue; the worker never reads the game's Env, so nothing it does holds

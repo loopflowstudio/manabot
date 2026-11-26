@@ -30,6 +30,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
+        decision_surface::{DecisionOptionId, DecisionSubmission, DecisionSurface},
         env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
@@ -40,7 +41,6 @@ use crate::{
         },
         observation_encoder::ObservationEncoderConfig,
         shared_effects,
-        structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
     },
     decision::Command as SemanticCommand,
@@ -1758,6 +1758,10 @@ impl PyObservationCharacteristics {
         self.data.power
     }
     #[getter]
+    fn printed_loyalty(&self) -> Option<i32> {
+        self.data.printed_loyalty
+    }
+    #[getter]
     fn toughness(&self) -> i32 {
         self.data.toughness
     }
@@ -2374,6 +2378,10 @@ impl PyPermanent {
         self.data.exhausted_abilities = value;
     }
     #[getter]
+    fn loyalty_activated_this_turn(&self) -> bool {
+        self.data.loyalty_activated_this_turn
+    }
+    #[getter]
     fn once_each_turn_used(&self) -> i32 {
         self.data.once_each_turn_used
     }
@@ -2456,6 +2464,10 @@ impl PyPermanent {
     #[setter]
     fn set_is_granted_land(&mut self, value: bool) {
         self.data.is_granted_land = value;
+    }
+    #[getter]
+    fn attacked_permanent(&self) -> Option<i32> {
+        self.data.attacked_permanent
     }
     #[getter]
     fn blocking(&self) -> Option<i32> {
@@ -2646,6 +2658,9 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// Announced divided share assigned to the current target during `DivideAmount`.
+    #[pyo3(get)]
+    pub division_amount: Option<i32>,
     /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
     #[pyo3(get)]
     pub spell_profile: u8,
@@ -2772,6 +2787,7 @@ impl From<ActionOption> for PyAction {
             pays_directly: value.pays_directly,
             is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -2797,6 +2813,7 @@ impl From<PyAction> for ActionOption {
             pays_directly: value.pays_directly,
             is_mana_ability: value.is_mana_ability,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -3709,15 +3726,15 @@ impl PyEnv {
 /// to the public projection, so Python can submit IDs but cannot forge engine
 /// identities from presentation values.
 #[cfg(feature = "python")]
-#[pyclass(name = "StructuredOfferSet", frozen)]
+#[pyclass(name = "DecisionSurface", frozen)]
 #[derive(Clone)]
-pub struct PyStructuredOfferSet {
-    inner: StructuredOfferSet,
+pub struct PyDecisionSurface {
+    inner: DecisionSurface,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyStructuredOfferSet {
+impl PyDecisionSurface {
     fn projection_json(&self) -> PyResult<String> {
         serde_json::to_string(self.inner.projection())
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -3857,7 +3874,7 @@ impl PySelectedBranchRuntime {
         #[cfg(feature = "benchmark")]
         let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let current_revision = env.selected_revision().map_err(map_agent_err)?;
-        let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let current_offers = env.decision_surface().map_err(map_agent_err)?;
         let current_offer = current_offers
             .projection()
             .offers
@@ -3918,8 +3935,8 @@ impl PySelectedBranchRuntime {
             offer_id: ExperienceOfferId(expected_offer_id),
             answers: Vec::new(),
         };
-        let submission = OfferSubmission {
-            offer_id: StructuredOfferId(command.offer_id.0),
+        let submission = DecisionSubmission {
+            offer_id: DecisionOptionId(command.offer_id.0),
             answers: Vec::new(),
         };
         #[cfg(feature = "benchmark")]
@@ -4196,33 +4213,48 @@ impl PyEnv {
     }
 
     /// Return the exact structured projection for the current supported
-    /// priority or attacker decision.
-    fn structured_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// priority or attacker decision. Deprecated; removed in 0.3.0.
+    fn structured_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.structured_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.structured_offers().map_err(map_agent_err)?,
         })
     }
 
-    fn compound_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Deprecated; removed in 0.3.0.
+    fn compound_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.compound_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.compound_offers().map_err(map_agent_err)?,
         })
     }
 
+    /// Deprecated; removed in 0.3.0.
     fn compound_commands_json(
         &self,
-        offers: &PyStructuredOfferSet,
+        py: Python<'_>,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<String> {
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        warn_deprecated(
+            py,
+            "Env.compound_commands_json is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(error.to_string()))?;
         let env = self
             .inner
@@ -4234,16 +4266,24 @@ impl PyEnv {
         serde_json::to_string(&commands).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    /// Complete action-aligned structured surface used by the selected
-    /// production search backend.
-    fn structured_search_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Complete action-aligned decision surface for the current prompt.
+    fn decision_surface(&self) -> PyResult<PyDecisionSurface> {
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
-            inner: env.structured_search_offers().map_err(map_agent_err)?,
+        Ok(PyDecisionSurface {
+            inner: env.decision_surface().map_err(map_agent_err)?,
         })
+    }
+
+    /// Deprecated alias for `Env.decision_surface`; removed in 0.3.0.
+    fn structured_search_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.structured_search_offers is deprecated and removed in 0.3.0; use Env.decision_surface or Env.decision",
+        )?;
+        self.decision_surface()
     }
 
     /// Read-only revision, offer, and witness context for differential audit.
@@ -4259,7 +4299,7 @@ impl PyEnv {
         } else {
             Value::Null
         };
-        let offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let offers = env.decision_surface().map_err(map_agent_err)?;
         serde_json::to_string(&json!({
             "revision": revision,
             "prompt_id": revision,
@@ -4281,14 +4321,19 @@ impl PyEnv {
     }
 
     /// Apply an ID-only submission through the atomic structured path.
+    /// Deprecated; removed in 0.3.0.
     fn step_structured(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_structured is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         self.reject_guarded_mutation("direct Env.step_structured")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -4309,14 +4354,19 @@ impl PyEnv {
     }
 
     /// Apply the same semantic submission by walking the positional prompts.
+    /// Deprecated; removed in 0.3.0.
     fn step_legacy_submission(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_legacy_submission is deprecated and removed in 0.3.0; use Env.submit",
+        )?;
         self.reject_guarded_mutation("Env.step_legacy_submission")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -4508,14 +4558,19 @@ impl PyEnv {
     }
 
     /// Read-only whole combat declaration preview for a JSON plan; see
-    /// `managym.combat`.
+    /// `managym.combat`. Deprecated in favor of `Env.preview` (removed in 0.3.0).
     fn combat_preview_json(
         &self,
+        py: Python<'_>,
         viewer: usize,
         revision: u64,
         fingerprint: &str,
         plan_json: &str,
     ) -> PyResult<String> {
+        warn_deprecated(
+            py,
+            "Env.combat_preview_json is deprecated and removed in 0.3.0; use Env.preview",
+        )?;
         let plan: crate::flow::combat_preview::CombatPlan = serde_json::from_str(plan_json)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
         let env = self
@@ -4526,6 +4581,73 @@ impl PyEnv {
             .combat_preview(viewer, revision, fingerprint, &plan)
             .map_err(map_agent_err)?;
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Active decision for `viewer` (defaults to the current actor), or `None`
+    /// if the game is over or `viewer` is not the acting player. See `managym.decision_group`.
+    #[pyo3(signature = (viewer=None))]
+    fn decision(&self, py: Python<'_>, viewer: Option<usize>) -> PyResult<PyObject> {
+        let decision = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.decision(viewer).map_err(map_agent_err)?
+        };
+        let Some(decision) = decision else {
+            return Ok(py.None());
+        };
+        to_group_model(py, "parse_decision", &decision)
+    }
+
+    /// Read-only preview of a single offer id (`int`) or grouped `Choice`.
+    /// Pass `at=decision.address` for optimistic concurrency. See `managym.decision_group`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn preview(
+        &self,
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let preview = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.preview(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        to_group_model(py, "parse_preview", &preview)
+    }
+
+    /// Validate on a clone and commit a single offer id (`int`) or complete
+    /// grouped `Choice` atomically, returning `(obs, reward, done, trunc, info)`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn submit(
+        &self,
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
+        self.reject_guarded_mutation("Env.submit")?;
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let (obs, reward, terminated, truncated, info) = {
+            let mut env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.submit(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(obs),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+        ))
     }
 
     /// Shared semantic DecisionFrame for the current revision, as canonical
@@ -5382,7 +5504,7 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         "registry_names",
         content
             .definitions()
-            .map(|definition| definition.name.clone())
+            .map(|definition| definition.registry_name().to_owned())
             .collect::<Vec<_>>(),
     )?;
     out.set_item("token_kind", catalog.token_kind)?;
@@ -5727,7 +5849,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStackObject>()?;
     m.add_class::<PyEventData>()?;
 
-    m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PyDecisionSurface>()?;
+    m.add("StructuredOfferSet", m.getattr("DecisionSurface")?)?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
@@ -5835,6 +5958,51 @@ pub(crate) fn python_game_setup(
         .getattr("GameSetup")?
         .call((players,), Some(&kwargs))?
         .unbind())
+}
+
+#[cfg(feature = "python")]
+fn to_group_model<T: serde::Serialize>(
+    py: Python<'_>,
+    parser_name: &str,
+    value: &T,
+) -> PyResult<PyObject> {
+    let raw =
+        serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Ok(py
+        .import_bound("managym.decision_group")?
+        .getattr(parser_name)?
+        .call1((raw,))?
+        .unbind())
+}
+
+#[cfg(feature = "python")]
+fn parse_group_json<T: serde::de::DeserializeOwned>(
+    group_mod: &Bound<'_, PyModule>,
+    dumper_name: &str,
+    value: Bound<'_, PyAny>,
+) -> PyResult<T> {
+    let raw: String = group_mod.getattr(dumper_name)?.call1((value,))?.extract()?;
+    serde_json::from_str(&raw).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+#[cfg(feature = "python")]
+fn parse_choice_and_address(
+    py: Python<'_>,
+    choice: Bound<'_, PyAny>,
+    at: Option<Bound<'_, PyAny>>,
+) -> PyResult<(
+    crate::flow::decision_group::DecisionChoice,
+    Option<crate::flow::decision_group::DecisionAddress>,
+)> {
+    let group_mod = py.import_bound("managym.decision_group")?;
+    let parsed_choice = parse_group_json(&group_mod, "dump_choice", choice)?;
+    let parsed_at = match at {
+        Some(value) if !value.is_none() => {
+            Some(parse_group_json(&group_mod, "dump_address", value)?)
+        }
+        _ => None,
+    };
+    Ok((parsed_choice, parsed_at))
 }
 
 #[cfg(feature = "python")]
