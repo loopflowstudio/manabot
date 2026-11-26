@@ -1932,26 +1932,27 @@ impl Game {
     fn build_trigger_index(&self) -> TriggerIndex {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
-        let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views(
-                (0..self.state.permanents.len())
-                    .map(PermanentId)
-                    .filter(|&id| !self.is_phased_out(id)),
-            )
-            .map(|(id, view)| {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                TriggerSourceEntry {
-                    object: permanent.object,
-                    kinds: view.triggered_abilities.iter().fold(
-                        EventKinds::NONE,
-                        |kinds, grant| {
-                            let Ability::Triggered { condition, .. } = &grant.ability;
-                            kinds | condition_event_kinds(condition)
-                        },
-                    ),
-                }
-            })
-            .collect();
+        let mut sources: Vec<TriggerSourceEntry> = self.with_layer_board(|board| {
+            board
+                .iter()
+                .filter_map(|(id, view)| {
+                    if self.is_phased_out(id) {
+                        return None;
+                    }
+                    let permanent = self.state.permanents[id].as_ref().unwrap();
+                    Some(TriggerSourceEntry {
+                        object: permanent.object,
+                        kinds: view.triggered_abilities.iter().fold(
+                            EventKinds::NONE,
+                            |kinds, grant| {
+                                let Ability::Triggered { condition, .. } = &grant.ability;
+                                kinds | condition_event_kinds(condition)
+                            },
+                        ),
+                    })
+                })
+                .collect()
+        });
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
         sources.sort_by_key(|entry| entry.object);
