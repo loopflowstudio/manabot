@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review — MTG-430 Slice R3: AbilitySet and the state hash</title>
+<title>Concept Review — MTG-430 Slice R4: acquired grants and the state hash</title>
 <style>
   :root {
     --bg: #f8f6f1; --surface: #ffffff; --surface-2: #f1ede4; --ink: #1d1b18;
@@ -60,159 +60,120 @@
   .timeline { border-left: 3px solid var(--border); margin-left: .4rem; padding-left: 1rem; }
   .timeline div { margin: .5rem 0; }
 </style>
-
 </head>
 <body>
 <main>
 <header>
-<h1>Does the code's <code>AbilitySet</code> say only what CR 607 needs, at <code>bc0486e957</code>?</h1>
-<p class="meta">MTG-430 · card-review after Slice R3 (<code>00151c7d69</code>) · previous page reviewed R1–R2 at
-<code>e4a02d45cb</code> · CR text: November 6, 2026 · 2026-11-25</p>
-<p><strong>Area taken.</strong> R3 replaced <code>AbilityProvenance</code> and
-<code>characteristic_set: Option&lt;CardDefId&gt;</code> with one rules type,
-<code>AbilitySet { Printed(CardDefId), Acquired(GrantKey) }</code>, carried on every ability
-record from layer evaluation to the stack and exile links. It is a rules-state type change, so
-this page reviews the whole linked-ability area again: what CR 607 asks the engine to remember,
-which records hold it, and what those records write into the canonical state hash
-and retained receipts. The planeswalker, loyalty, emblem, empower, defender and division concepts
-(group A) and the functioning-abilities gate (group B) are unchanged since the previous page and still line up.</p>
+<h1>Do the code's ability-identity records say only what CR 607 needs, at <code>4211b4bac1</code>?</h1>
+<p class="meta">MTG-430 · card-review after Slice R4 (<code>38c9318125</code>, receipts <code>57f07018df</code>) · previous page reviewed R3 at <code>bc0486e957</code> · CR text: November 6, 2026 · 2026-11-25</p>
+<p><strong>Area taken.</strong> R4 changed a rules-state type: every ability carrier
+(<code>ActivatedAbilityDefinition</code>, <code>ActivatedAbilityOnStack</code>,
+<code>TriggeredAbilityOnStack</code>, <code>EffectFrame</code>, <code>PendingTrigger</code>,
+<code>EffectiveTrigger</code>) now holds <code>acquired: Option&lt;GrantKey&gt;</code> instead of
+<code>Option&lt;AbilitySet&gt;</code>, and <code>EffectiveTrigger.clock</code> became a derivation.
+So this page re-reviews the whole linked-ability and grant-identity area: what CR 607 and the
+once-each-turn grant clock ask the engine to remember, which records hold it, and what those
+records write into the canonical state hash. Groups A (planeswalkers) and B (functioning gate)
+are unchanged since the previous page; no v11 column, learning token, Command or offer shape
+changed in R4.</p>
 </header>
 
 <h2>1. Concept alignment</h2>
 <table>
-<thead><tr><th style="width:27%">Domain concept (CR)</th><th style="width:30%">Code concept at HEAD</th><th style="width:9%">Lines up?</th><th>What is wrong</th></tr></thead>
-<tbody>
-<tr><th colspan="4">A — planeswalkers (unchanged since the previous review)</th></tr>
-<tr><td>Planeswalker, loyalty, loyalty abilities once per turn (CR 306, 606)</td><td><code>PrintedCharacteristics.loyalty</code>, <code>LoyaltyCost</code>, <code>loyalty_activated_this_turn</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
+<tr><th>Domain concept (CR)</th><th>Code concept at HEAD</th><th>Lines up?</th><th>What is wrong</th></tr>
+<tr><td colspan="4" class="scope">A — planeswalkers (unchanged)</td></tr>
+<tr><td>Planeswalker, loyalty, one loyalty activation per turn (CR 306, 606)</td><td><code>PrintedCharacteristics.loyalty</code>, <code>LoyaltyCost</code>, <code>loyalty_activated_this_turn</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
 <tr><td>Emblem in the command zone (CR 114)</td><td><code>ObjectKind::Emblem</code> + catalog <code>EmblemDefinition</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
 <tr><td>Attack a player or planeswalker (CR 508.1b)</td><td><code>CombatState.attack_targets</code>, <code>AttackTarget</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
 <tr><td>Empower, divided damage, zero-loyalty / legend SBA exemptions</td><td><code>Effect::empower_jace</code>, <code>division_remaining</code>, <code>Characteristics.exempt_sbas</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
-<tr><th colspan="4">B — which abilities function (R1, renamed in R3)</th></tr>
-<tr><td>Zone of function (CR 113.6), emblems (114.4), phasing (702.26b)</td><td><code>ability_functions_in(…, FunctionZones)</code> with <code>FunctionZones::Default</code></td><td><span class="tag yes">yes</span></td><td>The previous F4/F5 are fixed: <code>FunctionZones::Command</code>, <code>emblems_linked_to</code> and <code>ObjectForm.emblem_source</code> are gone, and <code>Default</code> names what it admits.</td></tr>
-<tr><td>Static abilities from functioning sources apply in layers (CR 613)</td><td><code>StaticSources</code>, a per-evaluation filter with its seat-bucket invariant documented</td><td><span class="tag yes">yes</span></td><td>The previous F3/F6 are fixed: <code>source_census.rs</code> is deleted and access goes through module visibility.</td></tr>
-<tr><td>Replacement effects in an order the affected player chooses (CR 616.1)</td><td><code>ReplacementSourceOrder::{BySeat, SlotOrder, ControlledBy}</code></td><td><span class="tag no">no</span></td><td>Unchanged and still deferred (F7 → G4): this is a separate CR 616.1 Task.</td></tr>
-<tr><th colspan="4">C — linked abilities (R3)</th></tr>
-<tr><td>Linked pairs: printed together (607.1, 607.1a–b) or acquired together by one effect (607.5)</td><td><code>AbilitySet::{Printed(CardDefId), Acquired(GrantKey)}</code>; <code>LinkedAbilitySource { creator, set }</code>; <code>pairs_with</code> is equality</td><td><span class="tag yes">yes</span></td><td>The previous F1/F2 are fixed. Koh inheriting Boiling Rock Rioter can cast what its inherited ability exiled. Its printed choice does not see those cards. A re-choice gets a new key (<code>tla.rs</code> <code>koh_inherits_boiling_rock_rioter_linked_exile_pair_under_cr_607_5</code>).</td></tr>
-<tr><td>A printed ability's set is the face it was printed on: a fact the ability already holds</td><td><code>Printed(def)</code> is stored and <strong>serialized</strong> on <code>ActivatedAbilityOnStack</code> (always), <code>PendingTrigger</code> and <code>TriggeredAbilityOnStack</code> (always <code>Some</code> for printed), and <code>EffectFrame</code>, beside <code>source_definition_id</code> / <code>ability_face</code></td><td><span class="tag no">no</span></td><td>One fact is stored twice, and the copy enters the canonical state hash. Every state with a printed ability on the stack or pending now hashes differently from main. The checked-in authority receipt and 14 frozen semantic-conformance traces fail (G1, §2).</td></tr>
-<tr><td>"Was this acquired, and by which effect?" (607.5)</td><td><code>Option&lt;AbilitySet&gt;</code> on definitions, frames and triggers. <code>None</code> means "derive printed later", using three fallbacks in <code>linked_ability_source</code> plus <code>unwrap_or(Printed(..))</code> in <code>play.rs</code></td><td><span class="tag no">no</span></td><td>An optional enum whose absence also means "printed" is a third state that the rules don't have. The real distinction is <code>acquired: Option&lt;GrantKey&gt;</code> (G1).</td></tr>
-<tr><td>A once-each-turn clock for an acquired trigger</td><td><code>EffectiveTrigger.{ability_set: Acquired(key), clock: Some(GrantClock { grant: key, ability_index })}</code></td><td><span class="tag no">no, minor</span></td><td>The <code>GrantKey</code> is stored twice on one record. The clock is the key plus the index (G2).</td></tr>
-<tr><td>An exile link remembers which set exiled the card (607.1a, 607.5)</td><td><code>ExileLink.ability_set: AbilitySet</code> (always serialized)</td><td><span class="tag yes">yes</span></td><td>This is real state that main did not record, so its hash bytes have to move. Exile links are rare in retained receipts. G3 asks whether to accept the move.</td></tr>
-</tbody>
+<tr><td colspan="4" class="scope">B — which abilities function (unchanged)</td></tr>
+<tr><td>Zone of function (113.6), emblems (114.4), phasing (702.26b)</td><td><code>flow/functioning_abilities.rs</code>, <code>FunctionZones::Default</code></td><td><span class="tag yes">yes</span></td><td></td></tr>
+<tr><td>Replacement effects in an order the affected player chooses (CR 616.1)</td><td><code>ReplacementSourceOrder::{BySeat, SlotOrder, ControlledBy}</code></td><td><span class="tag no">no</span></td><td>Unchanged and still deferred (G4): a separate CR 616.1 Task.</td></tr>
+<tr><td colspan="4" class="scope">C — linked abilities and grants (R4)</td></tr>
+<tr><td>"Was this ability acquired, and by which effect?" (607.5)</td><td><code>acquired: Option&lt;GrantKey&gt;</code> on every carrier; <code>None</code> for printed and Layer-1 copied abilities; set only in <code>flow/layers.rs</code> Layer 6 (<code>let acquired = Some(grant_key)</code>)</td><td><span class="tag yes">yes</span></td><td>G1 fixed. The option now has the rules' two states; the third "derive later" state is gone.</td></tr>
+<tr><td>A printed ability's set is the face it was printed on (607.1)</td><td>Not stored. <code>Game::linked_ability_source</code> (<code>flow/resolution.rs:687</code>) derives <code>AbilitySet::Printed(def)</code> once from <code>ability_face</code> → observed source definition → <code>source_base</code></td><td><span class="tag yes">yes</span></td><td>One owner. The fallback chain is the frames without an ability face (spell effects). See nit G7.</td></tr>
+<tr><td>Linked pairs and exile links (607.1a, 607.5)</td><td><code>LinkedAbilitySource { creator, set }</code>, <code>ExileLink.ability_set</code>; pairing is equality</td><td><span class="tag yes">yes</span></td><td>Koh / Boiling Rock Rioter still pairs within one grant and isolates others (<code>layer6_acquired_abilities_pair_within_same_grant_and_isolate_other_sets</code>).</td></tr>
+<tr><td>Once-each-turn clock for a granted trigger</td><td><code>EffectiveTrigger::clock()</code> = <code>(acquired, ability_index)</code> when the condition is <code>OnceEachTurn</code></td><td><span class="tag yes">yes</span></td><td>G2 fixed; the key is stored once.</td></tr>
+<tr><td>A reflexive trigger is linked to the ability that made it (603.12)</td><td><code>trigger.acquired = frame.acquired</code> (<code>flow/resolution.rs:2306</code>)</td><td><span class="tag yes">yes</span></td><td></td></tr>
+<tr><td>A delayed trigger acts on "that card", not on a linked ability (603.7c)</td><td><code>DelayedTrigger</code> carries <code>remembered</code> objects and no <code>acquired</code></td><td><span class="tag yes">yes</span></td><td>Correct as long as delayed programs never read <code>ExiledWithSource</code>; no card does (the two linked returns, M11 and TLA, are printed pairs).</td></tr>
+<tr><td>The effect that granted an ability, for "this Equipment" reads and catalog-program lookup</td><td><code>granted_by: Option&lt;AbilityGrant { grantor: ObjectId, index }&gt;</code> <em>beside</em> <code>acquired: Option&lt;GrantKey { grantor: PermanentId, timestamp, static_slot }&gt;</code></td><td><span class="tag no">no, minor</span></td><td>One granting effect, two records in two identity spaces; <code>play.rs:2271</code> only <code>debug_assert!</code>s that <code>granted_by</code> implies <code>acquired</code>. G6, separate outcome.</td></tr>
 </table>
 
-<h2>2. Biggest mismatch: printed abilities write a duplicate of their face into the state hash</h2>
+<h2>2. Biggest mismatch: none in this work; the two grant records are the remaining seam</h2>
+
+<div class="card existing">
+<p class="scope">Walkthrough: the R3 failure, replayed at HEAD</p>
+<div class="timeline">
+<div>R3 serialized <code>Printed(def)</code> onto every printed ability on the stack or pending; the planeswalkers authority receipt and 14 frozen semantic-conformance traces failed.</div>
+<div>R4 stores <code>acquired</code> and omits it when <code>None</code> (<code>skip_serializing_if</code> on stack objects, a hand-written skip in <code>PendingTrigger</code>'s serializer, <code>#[serde(skip)]</code> on definitions and <code>EffectiveTrigger</code>). Printed abilities write the same bytes as main.</div>
+<div>Debug <code>cargo nextest -p managym --test match_state_hash_tests --test semantic_conformance_tests</code>: <strong>32/32 passed</strong> at HEAD (this review). <code>tests/academy/test_authored_match_authority.py</code> + <code>test_authored_match_parity.py</code>: <strong>8/8 passed</strong> (this review). <span class="tag yes">fixed</span></div>
+</div>
+</div>
+
 <div class="card big">
-<h3>Walkthrough: the checked-in planeswalkers authority receipt</h3>
-<ol>
-<li><code>conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-planeswalkers.json</code> was last written at the main merge <code>2ba91adae0</code>. Its game has no granted ability.</li>
-<li>R3 (<code>00151c7d69</code>, extension rebuilt 18:23) makes every printed trigger carry <code>ability_set: Some(Printed(def))</code> (<code>flow/triggers.rs:1153</code>, <code>:1715</code>). It also drops the old <code>skip_serializing_if = is_characteristic</code> from <code>ActivatedAbilityOnStack.ability_set</code> (<code>state/src/stack_object.rs:113</code>).</li>
-<li><code>uv run --extra dev python -m pytest tests/academy/test_authored_match_authority.py</code> <strong>fails at HEAD</strong>. 33 fields differ, all <code>state.before/after</code> and <code>resulting_state_digest</code>, at decisions 8–9 and 30–33, the ones with an ability on the stack or pending. Offers, commands and labels are identical. <span class="tag no">wrong</span></li>
-<li>No rules behavior changed. The bytes that moved repeat the face the record already names through <code>source_card_registry_key</code> / <code>ability_face</code>. This branch otherwise keeps old hashes stable with explicit omissions, for example <code>non_player_defenders</code> "preserving v31 player-only hashes" in <code>state/hash.rs</code>.</li>
-</ol>
-<p><strong>Narrowest reproductions:</strong> the failing test above (18 s), and in debug Rust <code>cargo nextest run -p managym --test semantic_conformance_tests frozen_ur_vs_gw_5eed</code>. Neither needs a new fixture.</p>
+<p class="scope">G5 · this work, decision only · hash bytes for granted abilities</p>
+<p>Main never serialized acquisition. At HEAD any state with a <em>Layer-6-granted</em> ability on the
+stack or pending (TLA <code>AttachedHas</code> equipment, <code>GrantActivated</code> /
+<code>GrantTriggered</code> statics, granted firebending or ward) writes
+<code>"acquired": {grantor, timestamp, static_slot}</code>, so its state hash differs from main's.
+This is the same class as G3 (exile links): real CR 607.5 state, needed for linked reads and the
+once-each-turn clock after the grantor leaves, so it cannot be dropped from the hash. No
+checked-in receipt holds such a state (all pass). Recommendation: accept it and say so in the PR
+beside G3. Not undoable once retained receipts record it.</p>
 </div>
 
 <div class="grid2">
 <div class="card existing">
-<p class="scope"><span class="tag exist">existing at HEAD</span></p>
-<pre>// on ActivatedAbilityDefinition, EffectFrame,
-// PendingTrigger, TriggeredAbilityOnStack:
-ability_set: Option&lt;AbilitySet&gt;   // None ⇒ "printed, derive later"
-// on ActivatedAbilityOnStack, EffectiveTrigger:
-ability_set: AbilitySet            // always serialized
-clock: Option&lt;GrantClock&gt;          // = GrantKey + index
-
-fn linked_ability_source(frame) {
-  let set = frame.ability_set.unwrap_or_else(||
-    Printed(frame.ability_face
-      .or(observed_source_definition(creator))
-      .unwrap_or(source_base(creator))));
-  …
-}</pre>
+<p class="scope">existing at HEAD — G6</p>
+<pre>// ActivatedAbilityDefinition / ActivatedAbilityOnStack
+granted_by: Option&lt;AbilityGrant&gt;,   // exact grantor ObjectId
+                                      // + attached_grants() index
+acquired:   Option&lt;GrantKey&gt;,       // grantor PermanentId
+                                      // + timestamp + static slot
+// play.rs:2271
+debug_assert!(granted_by.is_none() || acquired.is_some());</pre>
 </div>
 <div class="card proposed">
-<p class="scope"><span class="tag prop">proposed</span></p>
-<pre>/// CR 607.5: the acquiring effect, absent for a
-/// printed ability (607.1). Omitted when None.
-#[serde(skip_serializing_if = "Option::is_none")]
-acquired: Option&lt;GrantKey&gt;
-// on every ability carrier above, replacing ability_set
-
-fn linked_ability_source(frame) {
-  let set = match frame.acquired {
-    Some(key) =&gt; Acquired(key),
-    None =&gt; Printed(frame.ability_face …),  // one derivation
-  };
-  …
-}
-// AbilitySet stays the value LinkedAbilitySource
-// and ExileLink store; nothing else holds it.
-// EffectiveTrigger.clock derives (acquired, index).</pre>
+<p class="scope">proposed, separate outcome — G6</p>
+<pre>// one record for "the effect that granted this"
+acquired: Option&lt;Acquisition&gt;,
+struct Acquisition {
+    key: GrantKey,                 // CR 607.5 identity, clock
+    grantor: Option&lt;ObjectId&gt;,     // exact, for grantor reads
+    attached_index: Option&lt;usize&gt;, // AttachedHas catalog row
+}</pre>
+<p>Removes the implication that is only debug-checked. It moves main's <code>granted_by</code>
+bytes and the catalog-program lookup for TLA equipment, so it needs its own Task with a pinned-pilot
+and receipt check, not this branch.</p>
 </div>
-</div>
-<div class="card">
-<p><strong>Why this shape.</strong> CR 607 needs one fact that the ability does not already carry: the acquiring effect.
-Its printed set is the face it is bound to, and every carrier already names that face. Keeping
-<code>Option&lt;GrantKey&gt;</code> on carriers and building <code>AbilitySet</code> only where two
-abilities are compared (<code>LinkedAbilitySource</code>, <code>ExileLink</code>) removes the
-third "None means printed" state. It also restores main's bytes for every printed ability, so the
-receipt passes without regeneration. The 607.5 behavior is unchanged: the Koh test compares the
-same <code>Acquired(key)</code> values. Size is unchanged: <code>Option&lt;GrantKey&gt;</code> is
-16 bytes, the same as <code>Option&lt;AbilitySet&gt;</code>.</p>
-<p><strong>Passed over.</strong> (a) Regenerate the receipt and accept the drift. This is the
-cheapest option, but it moves every retained digest that has a printed ability on the stack relative to
-main, for a value that says nothing new. (b) Keep <code>AbilitySet</code> on carriers with a
-custom serializer that omits <code>Printed</code>. That fixes the bytes, keeps the duplicate and
-the three-way fallback, and leaves <code>None</code> ambiguous.</p>
-<p><strong>Hard to undo once shipped:</strong> canonical state-hash bytes. After PR #607 merges,
-retained receipts and snapshots bind them, and a later fix moves them again.</p>
 </div>
 
 <h2>3. Findings</h2>
 <table>
-<thead><tr><th>#</th><th>Finding</th><th>Target</th><th>Scope</th></tr></thead>
-<tbody>
-<tr><td>G1</td><td>Printed abilities serialize a duplicate <code>Printed(def)</code> into the canonical state hash. The checked-in planeswalkers authority receipt (33 digest fields) and 14 frozen <code>semantic_conformance_tests</code> traces fail at HEAD, so CI would be red. <code>Option&lt;AbilitySet&gt;</code> also gives "None = printed" as a third state with three fallbacks. Replace it with <code>acquired: Option&lt;GrantKey&gt;</code> on carriers, skipped when <code>None</code> (§2). Afterwards both must pass on unmodified evidence.</td>
-<td><code>state/src/stack_object.rs:113,180</code>, <code>state/src/card.rs:1096</code>, <code>state/src/ability.rs</code> <code>EffectiveTrigger</code>; <code>flow/decision.rs:239</code>, <code>flow/trigger.rs:100,195,328</code>, <code>flow/triggers.rs:1148–1172,1715</code>, <code>flow/layers.rs:964,974,1851–2089</code>, <code>flow/play.rs:2270–2340</code>, <code>flow/resolution.rs:678–695,754,806,2298</code>; test <code>tests/academy/test_authored_match_authority.py</code></td>
-<td><span class="tag no">this work</span></td></tr>
-<tr><td>G2</td><td><code>EffectiveTrigger.clock</code> repeats the <code>GrantKey</code> held in its set. Derive <code>GrantClock</code> from <code>(acquired, ability_index)</code> where once-each-turn applies, and drop the stored copy.</td>
-<td><code>state/src/ability.rs</code> <code>EffectiveTrigger</code>, <code>GrantClock</code>; <code>flow/layers.rs</code> <code>clock</code> closure; <code>flow/triggers.rs</code> <code>used_trigger_grants.record</code></td>
-<td><span class="tag no">this work (same pass, small)</span></td></tr>
-<tr><td>G3</td><td><code>ExileLink.ability_set</code> always serializes. It is new state, and the Koh case needs it. Any retained state with an exile link (Boiling Rock Rioter or Koh in TLA) hashes differently from main. No checked-in receipt failed for this reason. Accept it and say so in the PR, or show that no retained TLA receipt holds a mid-game exile link.</td>
-<td><code>flow/trigger.rs</code> <code>ExileLink</code></td>
-<td><span class="tag exist">this work (decision)</span></td></tr>
-<tr><td>G4 (was F7)</td><td><code>ReplacementSourceOrder</code> keeps three call-site orders. CR 616.1 makes the order a choice.</td>
-<td><code>flow/proposed_event.rs</code>, <code>flow/mana.rs</code></td>
-<td><span class="tag exist">separate outcome</span>: a CR 616.1 Task</td></tr>
-</tbody>
+<tr><th>#</th><th>Finding</th><th>Scope</th><th>Target</th></tr>
+<tr><td>G1</td><td>Printed set stored twice on carriers</td><td><span class="tag yes">fixed in R4</span></td><td><code>state/src/{card,stack_object,ability}.rs</code>, <code>flow/trigger.rs</code></td></tr>
+<tr><td>G2</td><td>Grant clock stored beside its key</td><td><span class="tag yes">fixed in R4</span></td><td><code>EffectiveTrigger::clock()</code></td></tr>
+<tr><td>G3</td><td><code>ExileLink.ability_set</code> moves hash bytes</td><td><span class="tag exist">adopted: note in PR</span></td><td>—</td></tr>
+<tr><td>G4</td><td>Three replacement source orders vs CR 616.1 choice</td><td><span class="tag exist">deferred: own Task</span></td><td><code>flow/proposed_event.rs</code>, <code>flow/mana.rs</code></td></tr>
+<tr><td>G5</td><td>Granted abilities on the stack/pending write <code>acquired</code> into the hash</td><td><span class="tag prop">this work: decide, note in PR</span></td><td>PR description</td></tr>
+<tr><td>G6</td><td><code>granted_by</code> and <code>acquired</code> name one granting effect twice</td><td><span class="tag exist">separate outcome</span></td><td><code>state/src/card.rs:942</code>, <code>flow/layers.rs:1785</code>, <code>flow/play.rs:2271</code></td></tr>
+<tr><td>G7</td><td>nit: <code>linked_ability_source</code>'s printed fallback chain is undocumented about when <code>ability_face</code> is absent</td><td><span class="tag prop">this work, nit</span></td><td><code>flow/resolution.rs:695</code>: one comment naming spell frames</td></tr>
 </table>
+<p>Simplification sweep of R4: <code>AbilitySet::is_acquired</code> deleted, the Printed constructions
+in <code>play.rs</code> and <code>triggers.rs</code> deleted, no leftover scaffolding found. The test in
+<code>functioning_abilities.rs</code> asserts printed frames serialize neither key.</p>
 
-<h3>Composability check (two cards per changed mechanism)</h3>
-<ul>
-<li><strong>Acquired linked pair:</strong> Koh inheriting Boiling Rock Rioter (<code>HasAbilitiesOfSource</code>, one key for both inherited abilities) and a Way grant (<code>StaticAbility::Continuous</code> + <code>GrantActivated</code>, <code>granted_by: None</code>, key from the static slot) both build <code>Acquired(GrantKey::new(grantor, timestamp, slot))</code> in one place (<code>layers.rs:1851</code>). The next 20 granted linked pairs need only card-file edits. <span class="tag yes">yes</span></li>
-<li><strong>Printed linked pair:</strong> Boiling Rock Rioter and Koh's own ETB/choice both reach <code>Printed(def)</code> through <code>seed</code> (<code>layers.rs:964</code>) or the frame fallback. The behavior is right; the representation is G1. <span class="tag yes">yes</span></li>
-<li><strong>Delayed triggers from a resolving ability</strong> inherit <code>frame.ability_set</code> (<code>resolution.rs:2298</code>), so an acquired "exile, then return" pair stays linked. No card-specific dispatch. <span class="tag yes">yes</span></li>
-</ul>
-
-<h2>4. Workspace verification at <code>bc0486e957</code></h2>
-<ul>
-<li><code>tests/academy/test_authored_match_authority.py</code>: <strong>1 failed</strong> (G1). I did not run <code>test_learn_evidence.py</code> because <code>-x</code> stopped after that failure.</li>
-<li>Debug workspace <code>cargo nextest run --profile ci --workspace</code> (<code>CARGO_BUILD_JOBS=2</code>, <code>--test-threads 2</code>): <strong>2,243 passed, 14 failed, 3 skipped</strong> (224 s). All 14 failures are <code>semantic_conformance_tests frozen_*</code> (elemental 161–164, both elemental-world seatings, gw/ur 5eee/5ef0, ur/gw 5eed/5eef, sacrifice 162–163, temur 163–164). Each compares BLAKE3 over a frozen trace whose state hashes are per decision (<code>tests/semantic_conformance_tests.rs:75</code>). That matches G1. The suite passed in full at <code>e4a02d45cb</code> (2,205), and the R3 commit message lists focused suites only. I did not bisect between the main merge <code>2ba91adae0</code> and R3. The Python receipt diff is confined to stack-holding decisions, which points to R3. The test after G1 is that these pass against unmodified evidence.</li>
-<li>R3 changed no v11 column, learning token, Command or offer shape. <code>AbilitySet</code> is <code>#[serde(skip)]</code> on definitions and <code>EffectiveTrigger</code>, so catalog tokens and the pinned pilot are unaffected (the plan records zero drift). Academy fixtures and <code>protocol/*.schema.json</code> carry no ability set.</li>
-</ul>
-
-<h2>5. Questions</h2>
+<h2>4. Questions</h2>
 <ol class="questions">
-<li>Printed-set representation (G1):
-<ol><li>Carriers hold <code>acquired: Option&lt;GrantKey&gt;</code>, skipped when <code>None</code>; <code>AbilitySet</code> lives only on <code>LinkedAbilitySource</code> / <code>ExileLink</code> (recommended).</li>
-<li>Keep <code>AbilitySet</code> on carriers and omit <code>Printed</code> with a custom serializer.</li>
-<li>Regenerate the receipt and accept the digest drift.</li></ol></li>
-<li>Grant clock (G2):
-<ol><li>Derive it from the acquired key and the index (recommended).</li>
-<li>Keep the stored copy.</li></ol></li>
-<li>Exile-link bytes (G3):
-<ol><li>Accept the move and note it in the PR (recommended).</li>
-<li>First check retained TLA receipts for mid-game exile links.</li></ol></li>
+<li>Granted-ability hash bytes (G5):
+<ol><li>Accept and note in the PR with G3 (recommended).</li>
+<li>Audit retained TLA receipts for states with a granted ability on the stack first.</li></ol></li>
+<li>Two grant records (G6):
+<ol><li>File a separate Task to fold <code>granted_by</code> into one acquisition record (recommended).</li>
+<li>Leave both; the debug assertion is enough.</li></ol></li>
+<li>Fallback comment (G7):
+<ol><li>Add the one-line comment in the next pass (recommended).</li>
+<li>Skip.</li></ol></li>
 <li>Replacement order (G4):
 <ol><li>File a separate CR 616.1 Task (recommended).</li>
 <li>Leave it.</li></ol></li>
