@@ -89,7 +89,12 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
                 assert settled_message(socket)["status"] == "accepted"
             assert record.game.env is not None
             digest = record.game.env.state_digest()
-            command = _command(record.game, 0, "lost-order-response")
+            surviving = next(
+                i
+                for i, action in enumerate(record.game.obs.action_space.actions)
+                if "Callous Inspector" in (action.description or "")
+            )
+            command = _command(record.game, surviving, "lost-order-response")
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json(
                 {

@@ -3470,6 +3470,11 @@ def _work_publisher(
     return publish_work
 
 
+def _new_game_session() -> GameSession:
+    """Construct the runtime GameSession; conformance harnesses override this hook."""
+    return GameSession()
+
+
 async def _start_game(
     request: NewGameMessage | RematchMessage, websocket: WebSocket
 ) -> LiveGame:
@@ -3493,7 +3498,7 @@ async def _start_game(
             )
         return live
 
-    game = GameSession()
+    game = _new_game_session()
     live = LiveGame(game, websocket)
     game.work.publish = _work_publisher(live, asyncio.get_running_loop())
     started_ok = False

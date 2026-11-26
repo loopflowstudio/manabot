@@ -1,8 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
 import type { CardState, Command, ExperienceFrame, FrameUpdate, InteractionOffer, RecoveryEnvelope } from '../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
@@ -152,17 +155,16 @@ async function installPartitionAuthority(page: Page, interruptAfter?: number): P
   let cursor = 0;
   const faceUp: string[] = [];
   let current = partitionFrame(0);
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage((raw) => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
-          table: tableSnapshot(),
+          ...game,
           data: current.projection,
           actions: [],
-          session_id: 'curator-session',
-          resume_token: 'curator-resume-token',
           recovery: {
             ...structuredClone(boltFixture.recovery),
             reason: 'initial_connect',
@@ -196,9 +198,9 @@ async function installPartitionAuthority(page: Page, interruptAfter?: number): P
 
 async function startPartition(page: Page, interruptAfter?: number): Promise<{ commands: Command[] }> {
   const authority = await installPartitionAuthority(page, interruptAfter);
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('partition-panel')).toBeVisible();
   return authority;
 }
