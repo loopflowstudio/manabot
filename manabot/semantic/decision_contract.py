@@ -8,7 +8,7 @@ composite :class:`~managym.decision.Observation`.
 
 This is the manabot-side slice of the README's one-rules-authority contract.
 Legal-action identity comes from the authoritative action space via
-``structured_search_offers``; the contract is revision-bound and fail-closed.
+``decision_surface``; the contract is revision-bound and fail-closed.
 It does not migrate the legacy positional ``Env.step`` path or duplicate
 world-space ownership (RUL-8).
 """

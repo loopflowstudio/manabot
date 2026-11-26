@@ -6,9 +6,9 @@
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
+        decision_surface::DecisionVerb,
         env::Env,
         player_policy::PlayerPolicy,
-        structured_offer::OfferVerb,
     },
     experience::{ObjectRenderId, SubjectRef},
     flow::{
@@ -1109,7 +1109,7 @@ fn env_submit_settles_mixed_policy_identically_to_env_step() {
         let offer_id = d
             .offers
             .iter()
-            .find(|o| o.verb == OfferVerb::PassPriority)
+            .find(|o| o.verb == DecisionVerb::PassPriority)
             .unwrap_or(&d.offers[0])
             .id;
         env.submit(None, &DecisionChoice::Single { offer_id })
@@ -1134,7 +1134,7 @@ fn single_decision_offers_have_readable_labels_sources_and_unchanged_fingerprint
         d.address.fingerprint, raw_frame.fingerprint,
         "Offer enrichment must not alter semantic_decision_frame().fingerprint"
     );
-    // Raw DecisionFrame still carries the unchanged structured_search_offers labels.
+    // Raw DecisionFrame still carries the unchanged decision_surface labels.
     assert!(
         raw_frame
             .offers

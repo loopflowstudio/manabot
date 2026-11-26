@@ -30,6 +30,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
+        decision_surface::{DecisionOptionId, DecisionSubmission, DecisionSurface},
         env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
@@ -40,7 +41,6 @@ use crate::{
         },
         observation_encoder::ObservationEncoderConfig,
         shared_effects,
-        structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
         vector_env::ObservationRead,
     },
     decision::Command as SemanticCommand,
@@ -3726,15 +3726,15 @@ impl PyEnv {
 /// to the public projection, so Python can submit IDs but cannot forge engine
 /// identities from presentation values.
 #[cfg(feature = "python")]
-#[pyclass(name = "StructuredOfferSet", frozen)]
+#[pyclass(name = "DecisionSurface", frozen)]
 #[derive(Clone)]
-pub struct PyStructuredOfferSet {
-    inner: StructuredOfferSet,
+pub struct PyDecisionSurface {
+    inner: DecisionSurface,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
-impl PyStructuredOfferSet {
+impl PyDecisionSurface {
     fn projection_json(&self) -> PyResult<String> {
         serde_json::to_string(self.inner.projection())
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -3874,7 +3874,7 @@ impl PySelectedBranchRuntime {
         #[cfg(feature = "benchmark")]
         let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let current_revision = env.selected_revision().map_err(map_agent_err)?;
-        let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let current_offers = env.decision_surface().map_err(map_agent_err)?;
         let current_offer = current_offers
             .projection()
             .offers
@@ -3935,8 +3935,8 @@ impl PySelectedBranchRuntime {
             offer_id: ExperienceOfferId(expected_offer_id),
             answers: Vec::new(),
         };
-        let submission = OfferSubmission {
-            offer_id: StructuredOfferId(command.offer_id.0),
+        let submission = DecisionSubmission {
+            offer_id: DecisionOptionId(command.offer_id.0),
             answers: Vec::new(),
         };
         #[cfg(feature = "benchmark")]
@@ -4214,7 +4214,7 @@ impl PyEnv {
 
     /// Return the exact structured projection for the current supported
     /// priority or attacker decision. Deprecated; removed in 0.3.0.
-    fn structured_offers(&self, py: Python<'_>) -> PyResult<PyStructuredOfferSet> {
+    fn structured_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
         warn_deprecated(
             py,
             "Env.structured_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
@@ -4223,13 +4223,13 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.structured_offers().map_err(map_agent_err)?,
         })
     }
 
     /// Deprecated; removed in 0.3.0.
-    fn compound_offers(&self, py: Python<'_>) -> PyResult<PyStructuredOfferSet> {
+    fn compound_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
         warn_deprecated(
             py,
             "Env.compound_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
@@ -4238,7 +4238,7 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
+        Ok(PyDecisionSurface {
             inner: env.compound_offers().map_err(map_agent_err)?,
         })
     }
@@ -4247,14 +4247,14 @@ impl PyEnv {
     fn compound_commands_json(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<String> {
         warn_deprecated(
             py,
             "Env.compound_commands_json is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
         )?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(error.to_string()))?;
         let env = self
             .inner
@@ -4266,16 +4266,24 @@ impl PyEnv {
         serde_json::to_string(&commands).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    /// Complete action-aligned structured surface used by the selected
-    /// production search backend.
-    fn structured_search_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Complete action-aligned decision surface for the current prompt.
+    fn decision_surface(&self) -> PyResult<PyDecisionSurface> {
         let env = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        Ok(PyStructuredOfferSet {
-            inner: env.structured_search_offers().map_err(map_agent_err)?,
+        Ok(PyDecisionSurface {
+            inner: env.decision_surface().map_err(map_agent_err)?,
         })
+    }
+
+    /// Deprecated alias for `Env.decision_surface`; removed in 0.3.0.
+    fn structured_search_offers(&self, py: Python<'_>) -> PyResult<PyDecisionSurface> {
+        warn_deprecated(
+            py,
+            "Env.structured_search_offers is deprecated and removed in 0.3.0; use Env.decision_surface or Env.decision",
+        )?;
+        self.decision_surface()
     }
 
     /// Read-only revision, offer, and witness context for differential audit.
@@ -4291,7 +4299,7 @@ impl PyEnv {
         } else {
             Value::Null
         };
-        let offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let offers = env.decision_surface().map_err(map_agent_err)?;
         serde_json::to_string(&json!({
             "revision": revision,
             "prompt_id": revision,
@@ -4317,7 +4325,7 @@ impl PyEnv {
     fn step_structured(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
         warn_deprecated(
@@ -4325,7 +4333,7 @@ impl PyEnv {
             "Env.step_structured is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
         )?;
         self.reject_guarded_mutation("direct Env.step_structured")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -4346,14 +4354,19 @@ impl PyEnv {
     }
 
     /// Apply the same semantic submission by walking the positional prompts.
+    /// Deprecated; removed in 0.3.0.
     fn step_legacy_submission(
         &self,
         py: Python<'_>,
-        offers: &PyStructuredOfferSet,
+        offers: &PyDecisionSurface,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_legacy_submission is deprecated and removed in 0.3.0; use Env.submit",
+        )?;
         self.reject_guarded_mutation("Env.step_legacy_submission")?;
-        let submission: OfferSubmission = serde_json::from_str(submission_json)
+        let submission: DecisionSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
             .inner
@@ -5836,7 +5849,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStackObject>()?;
     m.add_class::<PyEventData>()?;
 
-    m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PyDecisionSurface>()?;
+    m.add("StructuredOfferSet", m.getattr("DecisionSurface")?)?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;

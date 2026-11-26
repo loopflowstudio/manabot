@@ -400,3 +400,19 @@ def test_partition_piles_round_trip_and_choose_pile_transition() -> None:
     next_decision = env.decision(viewer=1)
     assert isinstance(next_decision, SingleDecision)
     assert any("face-up pile" in o.label for o in next_decision.offers)
+
+
+def test_decision_surface_and_deprecated_structured_search_offers_alias() -> None:
+    env = _setup_env({"Mountain": 40}, {"Forest": 40}, seed=5)
+    _keep_opening_hands(env)
+
+    assert managym.StructuredOfferSet is managym.DecisionSurface
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        surface = env.decision_surface()
+    assert isinstance(surface, managym.DecisionSurface)
+    assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
+
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
+        legacy = env.structured_search_offers()
+    assert legacy.projection_json() == surface.projection_json()

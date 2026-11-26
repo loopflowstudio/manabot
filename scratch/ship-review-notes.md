@@ -27,6 +27,14 @@
 8. Follow-up naming direction (2026-11-26):
    > i feel like group should be called DecisionGroup or something
    > do all of these (in reply to renaming across managym Python+Rust and Academy wire/UI)
+   > structured_offer is still in the codebase is that al eftover remmant
+   > should rename the functions to be in the decisiongroup langauge
+   > and leave the deprecated old names as wrappers on top where ncessary
+   > I dont know that we need the word "offer" anymore in the core code
+   > this one (confirming renaming surviving structured_offer / structured_search_offers into decision language with 0.3.0-deprecated wrappers)
+
+9. Ship approval (2026-11-26):
+   > otherwise this lg2m an we should ship it
 
 ## Reading (separate from verbatim quotes)
 

@@ -19,7 +19,7 @@ use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::action::{Action, ActionSpaceKind, AgentError};
-use crate::agent::structured_offer::OfferVerb;
+use crate::agent::decision_surface::DecisionVerb;
 use crate::cards::content_pack::default_content_pack;
 use crate::experience::{ObjectRenderId, OfferSubjectView, SubjectRef};
 use crate::flow::decision::Decision;
@@ -117,7 +117,7 @@ pub struct DecisionAddress {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct DecisionOffer {
     pub id: usize,
-    pub verb: OfferVerb,
+    pub verb: DecisionVerb,
     pub label: String,
     pub source: Option<SubjectRef>,
 }

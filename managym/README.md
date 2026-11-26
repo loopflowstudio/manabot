@@ -1292,10 +1292,11 @@ Supported `Decision` kinds and grouped activation thresholds:
   graveyard picks commit; any following `order_library` is its own decision.
 - **Deprecations (`0.3.0`):** `Env.compound_offers`,
   `Env.compound_commands_json`, `Env.structured_offers`, `Env.step_structured`,
-  `Env.combat_preview_json`, and `managym.combat.preview_combat` emit
-  `DeprecationWarning` and are scheduled for removal in `0.3.0` in favor of
-  `Env.decision` / `Env.preview` / `Env.submit`. `Env.structured_search_offers`
-  remains unchanged for the search backend.
+  `Env.step_legacy_submission`, `Env.structured_search_offers`,
+  `StructuredOfferSet`, `Env.combat_preview_json`, and
+  `managym.combat.preview_combat` emit `DeprecationWarning` and are scheduled
+  for removal in `0.3.0` in favor of `Env.decision` / `Env.preview` /
+  `Env.submit` and `Env.decision_surface` (`DecisionSurface`).
 
 ### Combat declaration and damage rules
 

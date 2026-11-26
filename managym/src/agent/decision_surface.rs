@@ -35,7 +35,7 @@ macro_rules! numeric_id {
     };
 }
 
-numeric_id!(OfferId, u32);
+numeric_id!(DecisionOptionId, u32);
 numeric_id!(CandidateId, u32);
 numeric_id!(CandidateSourceId, u32);
 numeric_id!(RoleId, u16);
@@ -48,7 +48,7 @@ numeric_id!(RoleId, u16);
 /// actions. Search forks cloned from the offered state intentionally retain
 /// the same binding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct OfferSetBinding(u64);
+pub struct DecisionBinding(u64);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ObjectRenderId {
@@ -83,7 +83,7 @@ pub enum PromptKind {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OfferVerb {
+pub enum DecisionVerb {
     ActivateAbility,
     Cast,
     ChooseMode,
@@ -158,10 +158,10 @@ pub enum ChoiceStep {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct InteractionOffer {
-    pub id: OfferId,
+pub struct DecisionOption {
+    pub id: DecisionOptionId,
     pub actor: u8,
-    pub verb: OfferVerb,
+    pub verb: DecisionVerb,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public_commitment: Option<PublicCommitment>,
     pub source: Option<SubjectRef>,
@@ -172,10 +172,10 @@ pub struct InteractionOffer {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct StructuredOfferProjection {
+pub struct DecisionProjection {
     pub actor: u8,
     pub kind: PromptKind,
-    pub offers: Vec<InteractionOffer>,
+    pub offers: Vec<DecisionOption>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -196,19 +196,19 @@ impl ChoiceAnswer {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct OfferSubmission {
-    pub offer_id: OfferId,
+pub struct DecisionSubmission {
+    pub offer_id: DecisionOptionId,
     pub answers: Vec<ChoiceAnswer>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AtomicCommand {
     PassPriority {
-        binding: OfferSetBinding,
+        binding: DecisionBinding,
         player: PlayerId,
     },
     CastSpell {
-        binding: OfferSetBinding,
+        binding: DecisionBinding,
         player: PlayerId,
         object: ObjectId,
         route: Option<PlayRoute>,
@@ -216,17 +216,17 @@ pub enum AtomicCommand {
         targets: Vec<BoundTarget>,
     },
     DeclareAttackers {
-        binding: OfferSetBinding,
+        binding: DecisionBinding,
         player: PlayerId,
         attackers: Vec<ObjectId>,
     },
     DeclarationSequence {
-        binding: OfferSetBinding,
+        binding: DecisionBinding,
         kind: ActionSpaceKind,
         actions: Vec<Action>,
     },
     SearchAction {
-        binding: OfferSetBinding,
+        binding: DecisionBinding,
         action: Action,
     },
 }
@@ -284,24 +284,24 @@ struct CombatChoice {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructuredOfferSet {
-    projection: StructuredOfferProjection,
-    binding: OfferSetBinding,
-    internal: BTreeMap<OfferId, InternalOffer>,
+pub struct DecisionSurface {
+    projection: DecisionProjection,
+    binding: DecisionBinding,
+    internal: BTreeMap<DecisionOptionId, InternalOffer>,
 }
 
-impl StructuredOfferSet {
-    pub fn projection(&self) -> &StructuredOfferProjection {
+impl DecisionSurface {
+    pub fn projection(&self) -> &DecisionProjection {
         &self.projection
     }
 
-    pub(crate) fn into_projection(self) -> StructuredOfferProjection {
+    pub(crate) fn into_projection(self) -> DecisionProjection {
         self.projection
     }
 
     pub(crate) fn object_candidate_bindings(
         &self,
-    ) -> Vec<(OfferId, RoleId, CandidateId, ObjectId)> {
+    ) -> Vec<(DecisionOptionId, RoleId, CandidateId, ObjectId)> {
         let mut bindings = Vec::new();
         for (offer_id, offer) in &self.internal {
             match offer {
@@ -350,17 +350,17 @@ impl StructuredOfferSet {
     /// presentation data and are never trusted during decoding.
     pub fn decode(
         &self,
-        submission: &OfferSubmission,
-    ) -> Result<AtomicCommand, StructuredOfferError> {
+        submission: &DecisionSubmission,
+    ) -> Result<AtomicCommand, DecisionSurfaceError> {
         let offer = self
             .internal
             .get(&submission.offer_id)
-            .ok_or(StructuredOfferError::UnknownOffer(submission.offer_id))?;
+            .ok_or(DecisionSurfaceError::UnknownOffer(submission.offer_id))?;
 
         match offer {
             InternalOffer::PassPriority { player } => {
                 if !submission.answers.is_empty() {
-                    return Err(StructuredOfferError::UnexpectedAnswers);
+                    return Err(DecisionSurfaceError::UnexpectedAnswers);
                 }
                 Ok(AtomicCommand::PassPriority {
                     binding: self.binding,
@@ -377,7 +377,7 @@ impl StructuredOfferSet {
             } => {
                 let candidates = candidate_answer(&submission.answers, *role)?;
                 if candidates.len() != 1 {
-                    return Err(StructuredOfferError::WrongCardinality {
+                    return Err(DecisionSurfaceError::WrongCardinality {
                         role: *role,
                         expected: 1,
                         actual: candidates.len(),
@@ -388,7 +388,7 @@ impl StructuredOfferSet {
                 let target = targets
                     .get(&candidate)
                     .copied()
-                    .ok_or(StructuredOfferError::UnknownCandidate(candidate))?;
+                    .ok_or(DecisionSurfaceError::UnknownCandidate(candidate))?;
                 Ok(AtomicCommand::CastSpell {
                     binding: self.binding,
                     player: *player,
@@ -406,7 +406,7 @@ impl StructuredOfferSet {
             } => {
                 let candidates = candidate_answer(&submission.answers, *role)?;
                 if candidates.len() > attackers.len() {
-                    return Err(StructuredOfferError::CardinalityOutOfRange {
+                    return Err(DecisionSurfaceError::CardinalityOutOfRange {
                         role: *role,
                         min: 0,
                         max: attackers.len(),
@@ -418,12 +418,12 @@ impl StructuredOfferSet {
                 let mut selected_objects = BTreeSet::new();
                 for candidate in candidates {
                     if !selected.insert(*candidate) {
-                        return Err(StructuredOfferError::DuplicateCandidate(*candidate));
+                        return Err(DecisionSurfaceError::DuplicateCandidate(*candidate));
                     }
                     let object_ref = attackers
                         .get(candidate)
                         .copied()
-                        .ok_or(StructuredOfferError::UnknownCandidate(*candidate))?;
+                        .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?;
                     selected_objects.insert(object_ref);
                 }
 
@@ -447,23 +447,23 @@ impl StructuredOfferSet {
                 let mut answers = BTreeMap::new();
                 for ChoiceAnswer::Candidates { role, candidates } in &submission.answers {
                     if answers.insert(*role, candidates).is_some() {
-                        return Err(StructuredOfferError::DuplicateRole(*role));
+                        return Err(DecisionSurfaceError::DuplicateRole(*role));
                     }
                 }
                 let mut actions = Vec::with_capacity(choices.len());
                 for choice in choices {
                     let selected = answers
                         .remove(&choice.role)
-                        .ok_or(StructuredOfferError::MissingAnswer(choice.role))?;
+                        .ok_or(DecisionSurfaceError::MissingAnswer(choice.role))?;
                     let action = match selected.as_slice() {
                         [] => choice.decline.clone(),
                         [candidate] => choice
                             .targets
                             .get(candidate)
                             .cloned()
-                            .ok_or(StructuredOfferError::UnknownCandidate(*candidate))?,
+                            .ok_or(DecisionSurfaceError::UnknownCandidate(*candidate))?,
                         _ => {
-                            return Err(StructuredOfferError::CardinalityOutOfRange {
+                            return Err(DecisionSurfaceError::CardinalityOutOfRange {
                                 role: choice.role,
                                 min: 0,
                                 max: 1,
@@ -474,7 +474,7 @@ impl StructuredOfferSet {
                     actions.push(action);
                 }
                 if let Some(role) = answers.keys().next() {
-                    return Err(StructuredOfferError::UnexpectedRole(*role));
+                    return Err(DecisionSurfaceError::UnexpectedRole(*role));
                 }
                 Ok(AtomicCommand::DeclarationSequence {
                     binding: self.binding,
@@ -492,7 +492,7 @@ impl StructuredOfferSet {
             } => {
                 let selected = candidate_answer(&submission.answers, *role)?;
                 if selected.len() < *min || selected.len() > *max {
-                    return Err(StructuredOfferError::CardinalityOutOfRange {
+                    return Err(DecisionSurfaceError::CardinalityOutOfRange {
                         role: *role,
                         min: *min,
                         max: *max,
@@ -502,10 +502,10 @@ impl StructuredOfferSet {
                 let mut ids = BTreeSet::new();
                 for candidate in selected {
                     if !ids.insert(*candidate) {
-                        return Err(StructuredOfferError::DuplicateCandidate(*candidate));
+                        return Err(DecisionSurfaceError::DuplicateCandidate(*candidate));
                     }
                     if !taps.contains_key(candidate) {
-                        return Err(StructuredOfferError::UnknownCandidate(*candidate));
+                        return Err(DecisionSurfaceError::UnknownCandidate(*candidate));
                     }
                 }
                 // Canonical candidate order removes permutation aliases. Payment
@@ -522,7 +522,7 @@ impl StructuredOfferSet {
             }
             InternalOffer::SearchAction { action } => {
                 if !submission.answers.is_empty() {
-                    return Err(StructuredOfferError::UnexpectedAnswers);
+                    return Err(DecisionSurfaceError::UnexpectedAnswers);
                 }
                 Ok(AtomicCommand::SearchAction {
                     binding: self.binding,
@@ -534,7 +534,7 @@ impl StructuredOfferSet {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StructuredOfferError {
+pub enum DecisionSurfaceError {
     GameOver,
     NoActiveActionSpace,
     WrongDecision,
@@ -542,7 +542,7 @@ pub enum StructuredOfferError {
     IdentityOverflow,
     InvalidCurrentTarget,
     Invariant(String),
-    UnknownOffer(OfferId),
+    UnknownOffer(DecisionOptionId),
     UnexpectedAnswers,
     MissingAnswer(RoleId),
     DuplicateRole(RoleId),
@@ -563,7 +563,7 @@ pub enum StructuredOfferError {
     StaleOrIllegal(String),
 }
 
-impl std::fmt::Display for StructuredOfferError {
+impl std::fmt::Display for DecisionSurfaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::GameOver => write!(f, "game is over"),
@@ -608,46 +608,44 @@ impl std::fmt::Display for StructuredOfferError {
     }
 }
 
-impl std::error::Error for StructuredOfferError {}
+impl std::error::Error for DecisionSurfaceError {}
 
 impl Game {
-    /// Project the currently supported structured decision without changing
-    /// state. Unsupported legacy decisions remain available through
-    /// `ActionSpace`.
-    pub fn structured_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+    /// Project object-bearing candidate bindings for the current priority or
+    /// attacker decision without changing state.
+    pub fn decision_candidate_surface(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
         match self.current_action_space.as_ref().map(|space| space.kind) {
             Some(ActionSpaceKind::Priority) => self.structured_priority_offers(),
             Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
-            Some(_) => Err(StructuredOfferError::WrongDecision),
-            None => Err(StructuredOfferError::NoActiveActionSpace),
+            Some(_) => Err(DecisionSurfaceError::WrongDecision),
+            None => Err(DecisionSurfaceError::NoActiveActionSpace),
         }
     }
 
-    /// Project one stable structured offer for every action in the current
-    /// learner-facing policy surface.
-    ///
-    /// Unlike the presentation-oriented projection above, this projection is
-    /// deliberately action-aligned: one policy lookup row decodes to one
-    /// exact cloned `Action`. The decoded action is still applied by the
-    /// atomic structured executor, never by passing the policy index to
-    /// `Game::step`.
-    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+    /// Deprecated compatibility alias for [`Self::decision_candidate_surface`] (removed in 0.3.0).
+    pub fn structured_offers(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
+        self.decision_candidate_surface()
+    }
+
+    /// Project one stable action-aligned decision option for every action in
+    /// the current authoritative policy surface.
+    pub fn decision_surface(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
         let action_space = self
             .current_action_space
             .as_ref()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?;
         let actor = action_space
             .player
-            .ok_or(StructuredOfferError::MissingActor)?;
+            .ok_or(DecisionSurfaceError::MissingActor)?;
         let wire_actor = wire_player_id(actor)?;
         if action_space.actions.is_empty() {
-            return Err(StructuredOfferError::Invariant(
+            return Err(DecisionSurfaceError::Invariant(
                 "search action space is empty".to_string(),
             ));
         }
@@ -690,7 +688,7 @@ impl Game {
                 }
                 _ => None,
             };
-            offers.push(InteractionOffer {
+            offers.push(DecisionOption {
                 id,
                 actor: wire_actor,
                 verb: search_offer_verb(action),
@@ -709,21 +707,26 @@ impl Game {
             );
         }
 
-        Ok(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        Ok(DecisionSurface {
+            projection: DecisionProjection {
                 actor: wire_actor,
                 kind: search_prompt_kind(action_space.kind)?,
                 offers,
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal,
         })
     }
 
+    /// Deprecated compatibility alias for [`Self::decision_surface`] (removed in 0.3.0).
+    pub fn structured_search_offers(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
+        self.decision_surface()
+    }
+
     /// Complete legal policy surface. Only engine-owned atomic choices group;
     /// every other decision retains its ordinary action-aligned offer.
-    pub fn compound_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
-        let mut complete = self.structured_search_offers()?;
+    pub fn compound_offers(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
+        let mut complete = self.decision_surface()?;
         match self.current_action_space.as_ref().map(|space| space.kind) {
             Some(ActionSpaceKind::DeclareAttacker) if self.attacker_declaration_is_dependent() => {
                 Ok(complete)
@@ -760,22 +763,20 @@ impl Game {
 
     /// Coupled block declarations use the sequential offers. A product of
     /// independent roles would admit plans the next decision must reject.
-    fn structured_blocker_offers(
-        &self,
-    ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
+    fn structured_blocker_offers(&self) -> Result<Option<DecisionSurface>, DecisionSurfaceError> {
         let space = self
             .action_space()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?;
         let player = space
             .actions
             .first()
             .map(|action| action.player())
-            .ok_or(StructuredOfferError::MissingActor)?;
+            .ok_or(DecisionSurfaceError::MissingActor)?;
         let combat = self
             .state
             .combat
             .as_ref()
-            .ok_or(StructuredOfferError::WrongDecision)?;
+            .ok_or(DecisionSurfaceError::WrongDecision)?;
         if combat
             .attackers()
             .any(|attacker| self.blocks_are_coupled(attacker))
@@ -789,7 +790,7 @@ impl Game {
                 Action::DeclareBlocker { blocker, .. } => Some(*blocker),
                 _ => None,
             })
-            .ok_or(StructuredOfferError::WrongDecision)?;
+            .ok_or(DecisionSurfaceError::WrongDecision)?;
         let mut choices = Vec::new();
         let mut bound = Vec::new();
         for blocker in
@@ -806,7 +807,7 @@ impl Game {
                 continue;
             }
             let role = RoleId(
-                u16::try_from(choices.len()).map_err(|_| StructuredOfferError::IdentityOverflow)?,
+                u16::try_from(choices.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
             );
             let mut candidates = Vec::new();
             let mut actions = BTreeMap::new();
@@ -849,10 +850,10 @@ impl Game {
                 },
             });
         }
-        let offer = InteractionOffer {
-            id: OfferId(0),
-            actor: wire_player_id(space.player.ok_or(StructuredOfferError::MissingActor)?)?,
-            verb: OfferVerb::DeclareBlockers,
+        let offer = DecisionOption {
+            id: DecisionOptionId(0),
+            actor: wire_player_id(space.player.ok_or(DecisionSurfaceError::MissingActor)?)?,
+            verb: DecisionVerb::DeclareBlockers,
             public_commitment: None,
             source: None,
             label: "Declare blockers".into(),
@@ -860,15 +861,15 @@ impl Game {
             choices,
             confirm_label: "Declare blockers".into(),
         };
-        Ok(Some(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        Ok(Some(DecisionSurface {
+            projection: DecisionProjection {
                 actor: offer.actor,
                 kind: PromptKind::DeclareBlockers,
                 offers: vec![offer],
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal: BTreeMap::from([(
-                OfferId(0),
+                DecisionOptionId(0),
                 InternalOffer::CombatAssignments {
                     kind: ActionSpaceKind::DeclareBlocker,
                     choices: bound,
@@ -880,14 +881,12 @@ impl Game {
     /// Group a commuting subset of waterbend taps and the remaining mana
     /// payment. Taps with triggered effects or competing mana production stay
     /// sequential: their support and information boundary can depend on order.
-    fn structured_waterbend_offers(
-        &self,
-    ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
+    fn structured_waterbend_offers(&self) -> Result<Option<DecisionSurface>, DecisionSurfaceError> {
         let Some((player, payment, _)) = self
             .paying()
             .filter(|(_, payment, _)| payment.paying_mana() && payment.waterbends())
         else {
-            return Err(StructuredOfferError::WrongDecision);
+            return Err(DecisionSurfaceError::WrongDecision);
         };
         if !self.state.delayed_triggers.is_empty()
             || self.state.permanents.iter().flatten().any(|permanent| {
@@ -910,7 +909,7 @@ impl Game {
         let min = (0..=max)
             .find(|count| self.can_pay_mana_cost(player, &cost.reduced_generic(*count as u8)))
             .ok_or_else(|| {
-                StructuredOfferError::Invariant("waterbend has no payable completion".into())
+                DecisionSurfaceError::Invariant("waterbend has no payable completion".into())
             })?;
         let role = RoleId(0);
         let mut candidates = Vec::new();
@@ -920,14 +919,14 @@ impl Game {
             candidates.push(self.compound_permanent_candidate(permanent, id)?);
             taps.insert(id, Action::WaterbendTap { player, permanent });
         }
-        let offer = InteractionOffer {
-            id: OfferId(0),
+        let offer = DecisionOption {
+            id: DecisionOptionId(0),
             actor: wire_player_id(
                 self.action_space()
                     .and_then(|space| space.player)
-                    .ok_or(StructuredOfferError::MissingActor)?,
+                    .ok_or(DecisionSurfaceError::MissingActor)?,
             )?,
-            verb: OfferVerb::PayWaterbend,
+            verb: DecisionVerb::PayWaterbend,
             public_commitment: None,
             source: None,
             label: "Pay waterbend".into(),
@@ -947,15 +946,15 @@ impl Game {
             }],
             confirm_label: "Pay waterbend".into(),
         };
-        Ok(Some(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        Ok(Some(DecisionSurface {
+            projection: DecisionProjection {
                 actor: offer.actor,
                 kind: PromptKind::Waterbend,
                 offers: vec![offer],
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal: BTreeMap::from([(
-                OfferId(0),
+                DecisionOptionId(0),
                 InternalOffer::Waterbend {
                     player,
                     role,
@@ -969,10 +968,10 @@ impl Game {
     }
 
     /// The render id a viewer knows `object` by (`Game::object_event_ref`).
-    fn object_render_ref(&self, object: ObjectId) -> Result<ObjectRenderId, StructuredOfferError> {
+    fn object_render_ref(&self, object: ObjectId) -> Result<ObjectRenderId, DecisionSurfaceError> {
         let event = self
             .object_event_ref(object)
-            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+            .ok_or(DecisionSurfaceError::InvalidCurrentTarget)?;
         Ok(object_render_id(event.entity, event.incarnation))
     }
 
@@ -980,10 +979,10 @@ impl Game {
         &self,
         permanent: PermanentId,
         id: CandidateId,
-    ) -> Result<Candidate, StructuredOfferError> {
+    ) -> Result<Candidate, DecisionSurfaceError> {
         let object = self
             .permanent_object(permanent)
-            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+            .ok_or(DecisionSurfaceError::InvalidCurrentTarget)?;
         Ok(Candidate {
             id,
             value: CandidateValue::Subject {
@@ -1002,9 +1001,9 @@ impl Game {
     /// No planner or policy observes intermediate states during this operation.
     pub fn compound_commands(
         &self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
-    ) -> Result<Vec<crate::decision::Command>, StructuredOfferError> {
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
+    ) -> Result<Vec<crate::decision::Command>, DecisionSurfaceError> {
         let command = offers.decode(submission)?;
         let mut fork = self.clone();
         let mut commands = Some(Vec::new());
@@ -1016,11 +1015,11 @@ impl Game {
         &mut self,
         action: usize,
         commands: &mut Option<Vec<crate::decision::Command>>,
-    ) -> Result<bool, StructuredOfferError> {
+    ) -> Result<bool, DecisionSurfaceError> {
         if let Some(commands) = commands {
             let frame = self
                 .semantic_decision_frame()
-                .map_err(|error| StructuredOfferError::Invariant(error.to_string()))?;
+                .map_err(|error| DecisionSurfaceError::Invariant(error.to_string()))?;
             commands.push(crate::decision::Command {
                 command_id: format!("compound-{}-{}", frame.revision, commands.len()),
                 expected_revision: frame.revision,
@@ -1030,7 +1029,7 @@ impl Game {
             });
         }
         self.step(action)
-            .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))
+            .map_err(|error| DecisionSurfaceError::StaleOrIllegal(error.0))
     }
 
     /// Project the currently covered priority actions without changing state.
@@ -1038,20 +1037,20 @@ impl Game {
     /// Unsupported legacy actions remain available through `ActionSpace`; this
     /// experimental projection covers pass and casts with a single target
     /// that can be chosen immediately.
-    pub fn structured_priority_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+    pub fn structured_priority_offers(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
         let action_space = self
             .current_action_space
             .as_ref()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?;
         if action_space.kind != ActionSpaceKind::Priority {
-            return Err(StructuredOfferError::WrongDecision);
+            return Err(DecisionSurfaceError::WrongDecision);
         }
         let actor = action_space
             .player
-            .ok_or(StructuredOfferError::MissingActor)?;
+            .ok_or(DecisionSurfaceError::MissingActor)?;
         let wire_actor = wire_player_id(actor)?;
 
         let mut offers = Vec::new();
@@ -1061,10 +1060,10 @@ impl Game {
             match action {
                 Action::PassPriority { player } => {
                     let id = next_offer_id(offers.len())?;
-                    offers.push(InteractionOffer {
+                    offers.push(DecisionOption {
                         id,
                         actor: wire_actor,
-                        verb: OfferVerb::PassPriority,
+                        verb: DecisionVerb::PassPriority,
                         public_commitment: None,
                         source: None,
                         label: "Pass priority".to_string(),
@@ -1090,13 +1089,13 @@ impl Game {
             }
         }
 
-        Ok(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        Ok(DecisionSurface {
+            projection: DecisionProjection {
                 actor: wire_actor,
                 kind: PromptKind::Priority,
                 offers,
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal,
         })
     }
@@ -1131,10 +1130,10 @@ impl Game {
     fn single_target_offer(
         &self,
         action: &Action,
-        id: OfferId,
+        id: DecisionOptionId,
         wire_actor: u8,
         targets: Option<Vec<Target>>,
-    ) -> Result<Option<(InteractionOffer, InternalOffer)>, StructuredOfferError> {
+    ) -> Result<Option<(DecisionOption, InternalOffer)>, DecisionSurfaceError> {
         let Action::CastSpell {
             player,
             object,
@@ -1165,17 +1164,17 @@ impl Game {
             target_by_candidate.insert(candidate_id, bound_target);
         }
 
-        let offer = InteractionOffer {
+        let offer = DecisionOption {
             id,
             actor: wire_actor,
-            verb: OfferVerb::Cast,
+            verb: DecisionVerb::Cast,
             public_commitment: None,
             source: Some(SubjectRef::Object {
                 id: object_render_id(
                     self.state[*object].id,
                     self.state
                         .live(*object)
-                        .ok_or(StructuredOfferError::InvalidCurrentTarget)?
+                        .ok_or(DecisionSurfaceError::InvalidCurrentTarget)?
                         .generation(),
                 ),
             }),
@@ -1266,20 +1265,20 @@ impl Game {
     /// Project one complete CR 508 attacker declaration as an unordered
     /// multi-select offer. N eligible creatures produce N candidates and
     /// represent all 2^N declarations without enumerating those subsets.
-    pub fn structured_attacker_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+    pub fn structured_attacker_offers(&self) -> Result<DecisionSurface, DecisionSurfaceError> {
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
         // `Select` cannot require one candidate, so a creature that attacks
         // each combat (CR 508.1d) keeps the sequential path.
         if self.attacker_declaration_is_dependent() {
-            return Err(StructuredOfferError::WrongDecision);
+            return Err(DecisionSurfaceError::WrongDecision);
         }
         let (player, declaration_order) = self.current_attacker_declaration()?;
         let wire_actor = wire_player_id(
             self.action_space()
                 .and_then(|space| space.player)
-                .ok_or(StructuredOfferError::MissingActor)?,
+                .ok_or(DecisionSurfaceError::MissingActor)?,
         )?;
         let defenders: Vec<_> = self.declaration_targets(player).collect();
         if defenders.len() > 1 {
@@ -1296,7 +1295,7 @@ impl Game {
         let mut attacker_by_candidate = BTreeMap::new();
         for attacker in &declaration_order {
             let object_ref = self.permanent_object(*attacker).ok_or_else(|| {
-                StructuredOfferError::Invariant(
+                DecisionSurfaceError::Invariant(
                     "legacy attacker prompt names a missing permanent".to_string(),
                 )
             })?;
@@ -1316,12 +1315,12 @@ impl Game {
         }
 
         let max =
-            u16::try_from(candidates.len()).map_err(|_| StructuredOfferError::IdentityOverflow)?;
-        let id = OfferId(0);
-        let offer = InteractionOffer {
+            u16::try_from(candidates.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?;
+        let id = DecisionOptionId(0);
+        let offer = DecisionOption {
             id,
             actor: wire_actor,
-            verb: OfferVerb::DeclareAttackers,
+            verb: DecisionVerb::DeclareAttackers,
             public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
@@ -1342,13 +1341,13 @@ impl Game {
             confirm_label: "Declare attackers".to_string(),
         };
 
-        Ok(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        Ok(DecisionSurface {
+            projection: DecisionProjection {
                 actor: wire_actor,
                 kind: PromptKind::DeclareAttackers,
                 offers: vec![offer],
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal: BTreeMap::from([(
                 id,
                 InternalOffer::DeclareAttackers {
@@ -1359,7 +1358,7 @@ impl Game {
                         .into_iter()
                         .map(|permanent| {
                             self.permanent_object(permanent)
-                                .ok_or(StructuredOfferError::InvalidCurrentTarget)
+                                .ok_or(DecisionSurfaceError::InvalidCurrentTarget)
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 },
@@ -1375,13 +1374,13 @@ impl Game {
         actor: u8,
         attackers: &[PermanentId],
         defenders: &[crate::flow::combat::AttackTarget],
-    ) -> Result<StructuredOfferSet, StructuredOfferError> {
+    ) -> Result<DecisionSurface, DecisionSurfaceError> {
         use crate::flow::combat::AttackTarget;
         let mut choices = Vec::new();
         let mut bound = Vec::new();
         for &permanent in attackers {
             let role = RoleId(
-                u16::try_from(bound.len()).map_err(|_| StructuredOfferError::IdentityOverflow)?,
+                u16::try_from(bound.len()).map_err(|_| DecisionSurfaceError::IdentityOverflow)?,
             );
             let mut candidates = Vec::new();
             let mut targets = BTreeMap::new();
@@ -1401,7 +1400,7 @@ impl Game {
                     },
                     AttackTarget::Permanent(object) => self.compound_permanent_candidate(
                         self.lookup_current_permanent(object)
-                            .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?,
+                            .map_err(|_| DecisionSurfaceError::InvalidCurrentTarget)?,
                         id,
                     )?,
                 };
@@ -1417,7 +1416,7 @@ impl Game {
             }
             let object = self
                 .permanent_object(permanent)
-                .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+                .ok_or(DecisionSurfaceError::InvalidCurrentTarget)?;
             choices.push(ChoiceStep::Select {
                 role,
                 label: format!("Attack with {}", self.observed_object_name(object)),
@@ -1441,15 +1440,15 @@ impl Game {
                 },
             });
         }
-        let id = OfferId(0);
-        Ok(StructuredOfferSet {
-            projection: StructuredOfferProjection {
+        let id = DecisionOptionId(0);
+        Ok(DecisionSurface {
+            projection: DecisionProjection {
                 actor,
                 kind: PromptKind::DeclareAttackers,
-                offers: vec![InteractionOffer {
+                offers: vec![DecisionOption {
                     id,
                     actor,
-                    verb: OfferVerb::DeclareAttackers,
+                    verb: DecisionVerb::DeclareAttackers,
                     public_commitment: None,
                     source: None,
                     label: "Declare attackers".into(),
@@ -1458,7 +1457,7 @@ impl Game {
                     confirm_label: "Declare attackers".into(),
                 }],
             },
-            binding: OfferSetBinding(self.decision_epoch),
+            binding: DecisionBinding(self.decision_epoch),
             internal: BTreeMap::from([(
                 id,
                 InternalOffer::CombatAssignments {
@@ -1473,9 +1472,9 @@ impl Game {
     /// through the existing rules path as one transactional call.
     pub fn apply_offer_submission(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
-    ) -> Result<bool, StructuredOfferError> {
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
+    ) -> Result<bool, DecisionSurfaceError> {
         #[cfg(feature = "benchmark")]
         let decode_timer = crate::benchmark_search::Timer::new("command_validation");
         let command = offers.decode(submission)?;
@@ -1491,9 +1490,9 @@ impl Game {
     /// the public legacy prompts instead of sharing the atomic executor.
     pub fn apply_legacy_offer_submission(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
-    ) -> Result<(bool, usize), StructuredOfferError> {
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
+    ) -> Result<(bool, usize), DecisionSurfaceError> {
         let command = offers.decode(submission)?;
         let checkpoint = self.rollback_snapshot();
         match self.apply_legacy_command_inner(&command, &mut None) {
@@ -1509,7 +1508,7 @@ impl Game {
         &mut self,
         command: &AtomicCommand,
         commands: &mut Option<Vec<crate::decision::Command>>,
-    ) -> Result<(bool, usize), StructuredOfferError> {
+    ) -> Result<(bool, usize), DecisionSurfaceError> {
         let binding = match command {
             AtomicCommand::PassPriority { binding, .. }
             | AtomicCommand::CastSpell { binding, .. }
@@ -1517,13 +1516,13 @@ impl Game {
             | AtomicCommand::DeclarationSequence { binding, .. }
             | AtomicCommand::SearchAction { binding, .. } => *binding,
         };
-        if binding != OfferSetBinding(self.decision_epoch) {
-            return Err(StructuredOfferError::StaleOrIllegal(
+        if binding != DecisionBinding(self.decision_epoch) {
+            return Err(DecisionSurfaceError::StaleOrIllegal(
                 "offer set no longer names the current decision".to_string(),
             ));
         }
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
 
         match command {
@@ -1539,7 +1538,7 @@ impl Game {
                             )
                         })
                     })
-                    .ok_or(StructuredOfferError::WrongDecision)?;
+                    .ok_or(DecisionSurfaceError::WrongDecision)?;
                 let done = self.record_compound_step(action, commands)?;
                 Ok((done, 1))
             }
@@ -1552,7 +1551,7 @@ impl Game {
                 ..
             } => {
                 if targets.len() != 1 {
-                    return Err(StructuredOfferError::StaleOrIllegal(format!(
+                    return Err(DecisionSurfaceError::StaleOrIllegal(format!(
                         "single-target cast requires one target, got {}",
                         targets.len()
                     )));
@@ -1567,14 +1566,14 @@ impl Game {
                     .action_space()
                     .filter(|space| space.kind == ActionSpaceKind::Priority)
                     .and_then(|space| space.actions.iter().position(|legal| legal == &action))
-                    .ok_or(StructuredOfferError::WrongDecision)?;
+                    .ok_or(DecisionSurfaceError::WrongDecision)?;
                 // Trivial-decision skipping may commit the sole target during the cast step.
                 let wanted = self.resolve_bound_target(targets[0])?;
                 if !self
                     .compound_targets_for_action(&action)
                     .is_some_and(|legal| legal.contains(&wanted))
                 {
-                    return Err(StructuredOfferError::StaleOrIllegal(
+                    return Err(DecisionSurfaceError::StaleOrIllegal(
                         "structured target is no longer legal".into(),
                     ));
                 }
@@ -1602,7 +1601,7 @@ impl Game {
                             })
                         })
                         .ok_or_else(|| {
-                            StructuredOfferError::StaleOrIllegal(
+                            DecisionSurfaceError::StaleOrIllegal(
                                 "structured target is absent from the legacy prompt".to_string(),
                             )
                         })?;
@@ -1616,13 +1615,13 @@ impl Game {
             } => {
                 let (actor, declaration_order) = self.current_attacker_declaration()?;
                 if actor != *player {
-                    return Err(StructuredOfferError::WrongDecision);
+                    return Err(DecisionSurfaceError::WrongDecision);
                 }
                 let selected: BTreeSet<_> = attackers
                     .iter()
                     .map(|object_ref| {
                         self.lookup_current_permanent(*object_ref).map_err(|_| {
-                            StructuredOfferError::StaleOrIllegal(format!(
+                            DecisionSurfaceError::StaleOrIllegal(format!(
                                 "attacker object {}@{} is no longer current",
                                 object_ref.slot(),
                                 object_ref.generation()
@@ -1632,7 +1631,7 @@ impl Game {
                     .collect::<Result<_, _>>()?;
                 let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
                 if selected.len() != attackers.len() || !selected.is_subset(&legal) {
-                    return Err(StructuredOfferError::StaleOrIllegal(
+                    return Err(DecisionSurfaceError::StaleOrIllegal(
                         "attacker declaration contains a duplicate or unoffered permanent".into(),
                     ));
                 }
@@ -1649,7 +1648,7 @@ impl Game {
                                 && space.actions.first().map(|action| action.player())
                                     == Some(*player)
                         })
-                        .ok_or(StructuredOfferError::WrongDecision)?;
+                        .ok_or(DecisionSurfaceError::WrongDecision)?;
                     let attack = selected.contains(&permanent);
                     let action = space
                         .actions
@@ -1667,7 +1666,7 @@ impl Game {
                             )
                         })
                         .ok_or_else(|| {
-                            StructuredOfferError::Invariant(
+                            DecisionSurfaceError::Invariant(
                                 "legacy attacker prompt lacks a binary choice".to_string(),
                             )
                         })?;
@@ -1707,7 +1706,7 @@ impl Game {
                         .action_space()
                         .filter(|space| space.kind == *kind)
                         .and_then(|space| space.actions.iter().position(|legal| legal == action))
-                        .ok_or(StructuredOfferError::WrongDecision)?;
+                        .ok_or(DecisionSurfaceError::WrongDecision)?;
                     done = self.record_compound_step(index, commands)?;
                     executed += 1;
                 }
@@ -1717,7 +1716,7 @@ impl Game {
                 let index = self
                     .action_space()
                     .and_then(|space| space.actions.iter().position(|legal| legal == action))
-                    .ok_or(StructuredOfferError::WrongDecision)?;
+                    .ok_or(DecisionSurfaceError::WrongDecision)?;
                 Ok((self.record_compound_step(index, commands)?, 1))
             }
         }
@@ -1731,7 +1730,7 @@ impl Game {
     pub fn apply_atomic_command(
         &mut self,
         command: &AtomicCommand,
-    ) -> Result<bool, StructuredOfferError> {
+    ) -> Result<bool, DecisionSurfaceError> {
         if matches!(command, AtomicCommand::SearchAction { .. }) {
             return self.apply_search_action(command);
         }
@@ -1764,29 +1763,29 @@ impl Game {
     fn apply_search_action(
         &mut self,
         command: &AtomicCommand,
-    ) -> Result<bool, StructuredOfferError> {
+    ) -> Result<bool, DecisionSurfaceError> {
         #[cfg(feature = "benchmark")]
         let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let AtomicCommand::SearchAction { binding, action } = command else {
-            return Err(StructuredOfferError::WrongDecision);
+            return Err(DecisionSurfaceError::WrongDecision);
         };
-        if *binding != OfferSetBinding(self.decision_epoch) {
-            return Err(StructuredOfferError::StaleOrIllegal(
+        if *binding != DecisionBinding(self.decision_epoch) {
+            return Err(DecisionSurfaceError::StaleOrIllegal(
                 "offer set no longer names the current decision".to_string(),
             ));
         }
         if self.is_game_over() {
-            return Err(StructuredOfferError::GameOver);
+            return Err(DecisionSurfaceError::GameOver);
         }
         let offered = self
             .current_action_space
             .as_ref()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?
             .actions
             .iter()
             .any(|legal| legal == action);
         if !offered {
-            return Err(StructuredOfferError::StaleOrIllegal(
+            return Err(DecisionSurfaceError::StaleOrIllegal(
                 "search action is no longer offered".to_string(),
             ));
         }
@@ -1816,7 +1815,7 @@ impl Game {
     fn apply_atomic_command_inner(
         &mut self,
         command: &AtomicCommand,
-    ) -> Result<bool, StructuredOfferError> {
+    ) -> Result<bool, DecisionSurfaceError> {
         // One canonical choice sequence for ordinary and compound commits.
         self.apply_legacy_command_inner(command, &mut None)
             .map(|(done, _)| done)
@@ -1862,19 +1861,19 @@ impl Game {
     /// prompt was built; the remainder will be popped from the back.
     fn current_attacker_declaration(
         &self,
-    ) -> Result<(PlayerId, Vec<PermanentId>), StructuredOfferError> {
+    ) -> Result<(PlayerId, Vec<PermanentId>), DecisionSurfaceError> {
         let action_space = self
             .current_action_space
             .as_ref()
-            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
+            .ok_or(DecisionSurfaceError::NoActiveActionSpace)?;
         if action_space.kind != ActionSpaceKind::DeclareAttacker {
-            return Err(StructuredOfferError::WrongDecision);
+            return Err(DecisionSurfaceError::WrongDecision);
         }
         let subject = action_space
             .actions
             .first()
             .map(|action| action.player())
-            .ok_or(StructuredOfferError::MissingActor)?;
+            .ok_or(DecisionSurfaceError::MissingActor)?;
 
         let mut current = None;
         let mut attacks = BTreeSet::new();
@@ -1885,12 +1884,12 @@ impl Game {
                 attack,
             } = action
             else {
-                return Err(StructuredOfferError::Invariant(
+                return Err(DecisionSurfaceError::Invariant(
                     "declare-attacker prompt contains another action kind".to_string(),
                 ));
             };
             if *player != subject {
-                return Err(StructuredOfferError::Invariant(
+                return Err(DecisionSurfaceError::Invariant(
                     "declare-attacker prompt contains another rules player".to_string(),
                 ));
             }
@@ -1898,23 +1897,23 @@ impl Game {
                 .replace(*permanent)
                 .is_some_and(|seen| seen != *permanent)
             {
-                return Err(StructuredOfferError::Invariant(
+                return Err(DecisionSurfaceError::Invariant(
                     "declare-attacker prompt names multiple permanents".to_string(),
                 ));
             }
             attacks.insert(attack.is_some());
         }
         let current = current.ok_or_else(|| {
-            StructuredOfferError::Invariant("declare-attacker prompt is empty".to_string())
+            DecisionSurfaceError::Invariant("declare-attacker prompt is empty".to_string())
         })?;
         if attacks != BTreeSet::from([false, true]) {
-            return Err(StructuredOfferError::Invariant(
+            return Err(DecisionSurfaceError::Invariant(
                 "declare-attacker prompt must offer attack and decline".to_string(),
             ));
         }
 
         let combat = self.state.combat.as_ref().ok_or_else(|| {
-            StructuredOfferError::Invariant(
+            DecisionSurfaceError::Invariant(
                 "declare-attacker prompt has no combat state".to_string(),
             )
         })?;
@@ -1928,34 +1927,34 @@ impl Game {
             .len()
             != declaration_order.len()
         {
-            return Err(StructuredOfferError::Invariant(
+            return Err(DecisionSurfaceError::Invariant(
                 "declare-attacker prompt repeats a permanent".to_string(),
             ));
         }
         Ok((subject, declaration_order))
     }
 
-    fn bind_target(&self, target: Target) -> Result<BoundTarget, StructuredOfferError> {
+    fn bind_target(&self, target: Target) -> Result<BoundTarget, DecisionSurfaceError> {
         match target {
             Target::Player(player) => Ok(BoundTarget::Player(player)),
             Target::Permanent(permanent) => self
                 .permanent_object(permanent)
                 .map(BoundTarget::Permanent)
-                .ok_or(StructuredOfferError::InvalidCurrentTarget),
+                .ok_or(DecisionSurfaceError::InvalidCurrentTarget),
             Target::StackSpell(object_id) => Ok(BoundTarget::StackSpell(object_id)),
             Target::StackAbility(id) => Ok(BoundTarget::StackAbility(id)),
             Target::GraveyardCard(object) => Ok(BoundTarget::GraveyardCard(object)),
         }
     }
 
-    fn resolve_bound_target(&self, target: BoundTarget) -> Result<Target, StructuredOfferError> {
+    fn resolve_bound_target(&self, target: BoundTarget) -> Result<Target, DecisionSurfaceError> {
         match target {
             BoundTarget::Player(player) => Ok(Target::Player(player)),
             BoundTarget::Permanent(object_ref) => self
                 .lookup_current_permanent(object_ref)
                 .map(Target::Permanent)
                 .map_err(|_| {
-                    StructuredOfferError::StaleOrIllegal(format!(
+                    DecisionSurfaceError::StaleOrIllegal(format!(
                         "target object {}@{} is no longer current",
                         object_ref.slot(),
                         object_ref.generation()
@@ -1965,14 +1964,14 @@ impl Game {
             BoundTarget::StackAbility(id) => self
                 .stack_index_of(Target::StackAbility(id))
                 .map(|_| Target::StackAbility(id))
-                .ok_or(StructuredOfferError::InvalidCurrentTarget),
+                .ok_or(DecisionSurfaceError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {
                 if self.state.live(object).is_some()
                     && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
                 {
                     Ok(Target::GraveyardCard(object))
                 } else {
-                    Err(StructuredOfferError::InvalidCurrentTarget)
+                    Err(DecisionSurfaceError::InvalidCurrentTarget)
                 }
             }
         }
@@ -1981,7 +1980,7 @@ impl Game {
     fn subject_and_label(
         &self,
         target: BoundTarget,
-    ) -> Result<(SubjectRef, String), StructuredOfferError> {
+    ) -> Result<(SubjectRef, String), DecisionSurfaceError> {
         match target {
             BoundTarget::Player(player) => Ok((
                 SubjectRef::Player {
@@ -1991,7 +1990,7 @@ impl Game {
             )),
             BoundTarget::Permanent(object_ref) => {
                 self.lookup_current_permanent(object_ref)
-                    .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?;
+                    .map_err(|_| DecisionSurfaceError::InvalidCurrentTarget)?;
                 Ok((
                     SubjectRef::Object {
                         id: self.object_render_ref(object_ref)?,
@@ -2001,7 +2000,7 @@ impl Game {
             }
             BoundTarget::GraveyardCard(object) => {
                 if self.state.live(object).is_none() {
-                    return Err(StructuredOfferError::InvalidCurrentTarget);
+                    return Err(DecisionSurfaceError::InvalidCurrentTarget);
                 }
                 Ok((
                     SubjectRef::Object {
@@ -2011,7 +2010,7 @@ impl Game {
                 ))
             }
             BoundTarget::StackSpell(_) | BoundTarget::StackAbility(_) => {
-                Err(StructuredOfferError::InvalidCurrentTarget)
+                Err(DecisionSurfaceError::InvalidCurrentTarget)
             }
         }
     }
@@ -2020,19 +2019,19 @@ impl Game {
 fn candidate_answer(
     answers: &[ChoiceAnswer],
     role: RoleId,
-) -> Result<&[CandidateId], StructuredOfferError> {
+) -> Result<&[CandidateId], DecisionSurfaceError> {
     if answers.is_empty() {
-        return Err(StructuredOfferError::MissingAnswer(role));
+        return Err(DecisionSurfaceError::MissingAnswer(role));
     }
 
     let mut seen_roles = BTreeSet::new();
     for answer in answers {
         if !seen_roles.insert(answer.role()) {
-            return Err(StructuredOfferError::DuplicateRole(answer.role()));
+            return Err(DecisionSurfaceError::DuplicateRole(answer.role()));
         }
     }
     if answers.len() != 1 {
-        return Err(StructuredOfferError::UnexpectedAnswers);
+        return Err(DecisionSurfaceError::UnexpectedAnswers);
     }
 
     let ChoiceAnswer::Candidates {
@@ -2040,7 +2039,7 @@ fn candidate_answer(
         candidates,
     } = &answers[0];
     if *answer_role != role {
-        return Err(StructuredOfferError::UnexpectedRole(*answer_role));
+        return Err(DecisionSurfaceError::UnexpectedRole(*answer_role));
     }
     Ok(candidates)
 }
@@ -2052,23 +2051,23 @@ fn object_render_id(id: PublicId, incarnation: u32) -> ObjectRenderId {
     }
 }
 
-fn wire_player_id(player: PlayerId) -> Result<u8, StructuredOfferError> {
-    u8::try_from(player.0).map_err(|_| StructuredOfferError::IdentityOverflow)
+fn wire_player_id(player: PlayerId) -> Result<u8, DecisionSurfaceError> {
+    u8::try_from(player.0).map_err(|_| DecisionSurfaceError::IdentityOverflow)
 }
 
-fn next_offer_id(len: usize) -> Result<OfferId, StructuredOfferError> {
+fn next_offer_id(len: usize) -> Result<DecisionOptionId, DecisionSurfaceError> {
     u32::try_from(len)
-        .map(OfferId)
-        .map_err(|_| StructuredOfferError::IdentityOverflow)
+        .map(DecisionOptionId)
+        .map_err(|_| DecisionSurfaceError::IdentityOverflow)
 }
 
-fn next_candidate_id(len: usize) -> Result<CandidateId, StructuredOfferError> {
+fn next_candidate_id(len: usize) -> Result<CandidateId, DecisionSurfaceError> {
     u32::try_from(len)
         .map(CandidateId)
-        .map_err(|_| StructuredOfferError::IdentityOverflow)
+        .map_err(|_| DecisionSurfaceError::IdentityOverflow)
 }
 
-fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOfferError> {
+fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, DecisionSurfaceError> {
     match kind {
         ActionSpaceKind::Priority => Ok(PromptKind::Priority),
         ActionSpaceKind::DeclareAttacker => Ok(PromptKind::DeclareAttackers),
@@ -2083,36 +2082,36 @@ fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOff
         ActionSpaceKind::Discard => Ok(PromptKind::Discard),
         ActionSpaceKind::LegendRule => Ok(PromptKind::LegendRule),
         ActionSpaceKind::OrderTriggers => Ok(PromptKind::OrderTriggers),
-        ActionSpaceKind::GameOver => Err(StructuredOfferError::GameOver),
+        ActionSpaceKind::GameOver => Err(DecisionSurfaceError::GameOver),
     }
 }
 
-fn search_offer_verb(action: &Action) -> OfferVerb {
+fn search_offer_verb(action: &Action) -> DecisionVerb {
     match action {
-        Action::PlayLand { .. } => OfferVerb::PlayLand,
-        Action::CastSpell { .. } => OfferVerb::Cast,
+        Action::PlayLand { .. } => DecisionVerb::PlayLand,
+        Action::CastSpell { .. } => DecisionVerb::Cast,
         Action::ActivateAbility { .. }
         | Action::ActivateCardAbility { .. }
         | Action::TurnFaceUp { .. }
-        | Action::Foretell { .. } => OfferVerb::ActivateAbility,
-        Action::PassPriority { .. } => OfferVerb::PassPriority,
-        Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,
-        Action::DeclareBlocker { .. } => OfferVerb::DeclareBlocker,
-        Action::ChooseTarget { .. } => OfferVerb::ChooseTarget,
+        | Action::Foretell { .. } => DecisionVerb::ActivateAbility,
+        Action::PassPriority { .. } => DecisionVerb::PassPriority,
+        Action::DeclareAttacker { .. } => DecisionVerb::DeclareAttacker,
+        Action::DeclareBlocker { .. } => DecisionVerb::DeclareBlocker,
+        Action::ChooseTarget { .. } => DecisionVerb::ChooseTarget,
         Action::ScryCard {
             to_bottom: false, ..
-        } => OfferVerb::ScryKeep,
+        } => DecisionVerb::ScryKeep,
         Action::ScryCard {
             to_bottom: true, ..
-        } => OfferVerb::ScryBottom,
-        Action::LearnTakeLesson { .. } => OfferVerb::LearnTakeLesson,
-        Action::LearnDiscard { .. } => OfferVerb::LearnDiscard,
-        Action::SelectCard { .. } => OfferVerb::SelectCard,
-        Action::Decline { .. } => OfferVerb::Decline,
-        Action::PayCost { .. } => OfferVerb::PayCost,
-        Action::ChooseMode { .. } => OfferVerb::ChooseMode,
-        Action::ChooseTrigger { .. } => OfferVerb::ChooseTrigger,
-        Action::WaterbendTap { .. } => OfferVerb::WaterbendTap,
-        Action::TapForMana { .. } => OfferVerb::TapForMana,
+        } => DecisionVerb::ScryBottom,
+        Action::LearnTakeLesson { .. } => DecisionVerb::LearnTakeLesson,
+        Action::LearnDiscard { .. } => DecisionVerb::LearnDiscard,
+        Action::SelectCard { .. } => DecisionVerb::SelectCard,
+        Action::Decline { .. } => DecisionVerb::Decline,
+        Action::PayCost { .. } => DecisionVerb::PayCost,
+        Action::ChooseMode { .. } => DecisionVerb::ChooseMode,
+        Action::ChooseTrigger { .. } => DecisionVerb::ChooseTrigger,
+        Action::WaterbendTap { .. } => DecisionVerb::WaterbendTap,
+        Action::TapForMana { .. } => DecisionVerb::TapForMana,
     }
 }

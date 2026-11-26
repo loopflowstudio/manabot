@@ -1925,6 +1925,15 @@
           }
         }
       },
+      "DecisionSurface": {
+        "kind": "class",
+        "members": {
+          "projection_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
       "Deck": {
         "kind": "class",
         "members": {
@@ -2157,6 +2166,10 @@
             "kind": "method",
             "signature": "(self, viewer)"
           },
+          "decision_surface": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "determinize": {
             "kind": "method",
             "signature": "(self, seed, perspective=...)"
@@ -2372,6 +2385,7 @@
             "signature": "(self, action=...)"
           },
           "step_legacy_submission": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
@@ -2386,6 +2400,7 @@
             "signature": "(self)"
           },
           "structured_search_offers": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
@@ -3941,6 +3956,7 @@
         }
       },
       "StructuredOfferSet": {
+        "deprecated": true,
         "kind": "class",
         "members": {
           "projection_json": {

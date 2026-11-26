@@ -4,6 +4,7 @@ use crate::state::player::{ManaFloats, ManaPayment};
 use crate::{
     agent::{
         action::AgentError,
+        decision_surface::{DecisionSubmission, DecisionSurface},
         heuristic::Heuristic,
         observation::{EventData, Observation},
         observation_encoder::{
@@ -11,7 +12,6 @@ use crate::{
             ObservationEncoderConfig,
         },
         player_policy::PlayerPolicy,
-        structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cards::{
         content_pack::{default_content_pack, ContentPackManifest},
@@ -754,7 +754,7 @@ impl Env {
     }
 
     /// Project the exact currently supported structured decision.
-    pub fn structured_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn structured_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env.structured_offers called before reset".to_string()))?
@@ -763,7 +763,7 @@ impl Env {
     }
 
     /// Project the complete action-aligned structured surface used by search.
-    pub fn compound_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn compound_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env not reset".into()))?
@@ -773,8 +773,8 @@ impl Env {
 
     pub fn compound_commands(
         &self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<Vec<SemanticCommand>, AgentError> {
         self.game
             .as_ref()
@@ -783,21 +783,25 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
-    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    /// Project the action-aligned decision surface for the current prompt.
+    pub fn decision_surface(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| {
-                AgentError("env.structured_search_offers called before reset".to_string())
-            })?
-            .structured_search_offers()
+            .ok_or_else(|| AgentError("env.decision_surface called before reset".to_string()))?
+            .decision_surface()
             .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Deprecated compatibility alias for [`Self::decision_surface`] (removed in 0.3.0).
+    pub fn structured_search_offers(&self) -> Result<DecisionSurface, AgentError> {
+        self.decision_surface()
     }
 
     /// Apply one prompt-bound structured submission through the atomic path.
     pub fn step_structured(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let mut result = {
@@ -824,8 +828,8 @@ impl Env {
     /// adapter. The final count is the number of legacy actions consumed.
     pub fn step_legacy_submission(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let (mut result, legacy_actions) = {
