@@ -1,11 +1,11 @@
-at: 735620f5a6d0674959f6672a99c4627d5c51bef4
+at: 00151c7d69a1b73c106cba6a317b2dd2ace13540
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
   - path: managym/state/src/card.rs
     why: Printed loyalty, LoyaltyCost, EmblemDefinition and unified StateBasedActionDoesntApply
   - path: managym/state/src/ability.rs
-    why: DelayedEvent::Whenever, two-axis Attacks, AbilityProvenance, LinkedAbilitySource, Fight, RevealUntil and TargetDivision
+    why: DelayedEvent::Whenever, two-axis Attacks, AbilitySet, GrantKey, LinkedAbilitySource, Fight, RevealUntil and TargetDivision
   - path: managym/state/src/permanent.rs
     why: Per-turn loyalty activation quota and available loyalty accounting
   - path: managym/src/flow/game.rs
@@ -21,9 +21,9 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads, NodeSource and condition-independent StaticSourceIndex
+    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads, NodeSource, AbilitySet grants and condition-independent StaticSources
   - path: managym/src/flow/statics.rs
-    why: LayerBoard invalidation on StateReads, StaticSourceIndex board reads and dynamic activation cache tests
+    why: LayerBoard invalidation on StateReads, StaticSources board reads and dynamic activation cache tests
   - path: managym/src/flow/sba.rs
     why: Layer-projected zero-loyalty and legend-rule SBA exemptions and streaming checks
   - path: managym/src/flow/triggers.rs
@@ -42,8 +42,6 @@ first:
     why: Registered planeswalker emblem definitions
   - path: managym/cards/src/fra.rs
     why: Reality Fracture planeswalkers, Ways, empower cards and adjacent support
-  - path: managym/src/source_census.rs
-    why: Comment-aware single-authority source-census guards across managym/src/
   - path: managym/src/flow/target_authority_tests.rs
     why: Directed -X target filtering and TargetDivision isolation witnesses
   - path: managym/cards/tests/cards/fra.rs

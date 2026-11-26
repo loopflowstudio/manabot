@@ -128,49 +128,8 @@ batch `DeclareAttackers`.
   debug workspace nextest 2,205 passed / 3 skipped at `e4a02d45cb`; no v11
   column, token, Command or offer shape changed in R1–R2. Findings F1–F6 are
   Slice R3; F7 is deferred.
-
-### Slice R3 — linked-ability identity and redo cleanup (next pass)
-
-Headless choices made for review (the review's recommended options; not
-settled by a person):
-
-- **F1 + F2 (CR 607.5).** Replace `AbilityProvenance` and
-  `characteristic_set: Option<CardDefId>` with one
-  `AbilitySet { Printed(CardDefId), Acquired(GrantKey) }`, where `GrantKey` is
-  `GrantClock` without `ability_index` (grantor, timestamp, static slot), and
-  `LinkedAbilitySource { creator, set }` pairs by equality. Store it in place of
-  every provenance field (`EffectFrame`, `PendingTrigger`, `EffectiveTrigger`,
-  `ActivatedAbilityDefinition`, both stack ability records); delete
-  `AbilityProvenance::from_origin` and the `is_granted` branches in
-  `latch_linked_ability_source` / `frame_linked_ability_source`
-  (`flow/resolution.rs`). Passed over: keep fail-closed `None` (breaks
-  Koh/Rioter), pair by object only (pre-R1; printed choice sees inherited
-  exiles), key by `AbilityGrant` (misses program and `HasAbilitiesOfSource`
-  grants). Do it before PR #607 merges: the link serializes into snapshots and
-  the state hash.
-  - Acceptance: new `tla.rs` test beside `koh_inherits` — Koh inherits Boiling
-    Rock Rioter, the inherited exile takes a graveyard Ally card you own, the
-    inherited attack trigger offers casting it, and Koh's printed "choose a
-    creature card exiled with Koh" does not list it. Rewrite
-    `layer6_granted_ability_fails_closed_on_linked_exile_pairing` (and the
-    emblem variant) to the 607.5 behavior; a re-choice by Koh is a new grant
-    and cannot reach old exiles.
-- **F3.** Delete `managym/src/source_census.rs` and its `lib.rs` mod line;
-  enforce the boundary with visibility (reads of `LayerObject.statics` /
-  `replacement_effects` and command-zone object scans go through
-  `functioning_abilities` accessors). Directed tests in
-  `functioning_abilities::tests` keep behavior covered.
-- **F4.** Delete `FunctionZones::Command`, `emblems_linked_to` and
-  `ObjectForm.emblem_source` (plus its `CanonicalCard.emblem_source` hash
-  field) until a catalog emblem reads its creator's linked choice (CR 607.1d).
-- **F5 / F6.** Rename `FunctionZones::Battlefield` → `Default` and
-  `StaticSourceIndex` → `StaticSources`; document beside its seat buckets that
-  they use the previous evaluation's controller and are safe only because
-  consumers sort by timestamp.
-- Checks: debug nextest of `managym --lib`, `rules_tests`,
-  `match_state_hash_tests`, `managym-cards` (tla/fdn/fra); cp313 rebuild;
-  pinned pilot (expect zero drift; R1 changed no tokens); release `bench_steps`
-  digest; `cargo fmt --all`.
+- Slice R3 (`00151c7d69`): replaced `AbilityProvenance` and
+  `characteristic_set: Option<CardDefId>` with compact `AbilitySet { Printed(CardDefId), Acquired(GrantKey) }` (12-byte `GrantKey` preserving `size_of::<Game>() <= 5248`) and single `linked_ability_source` pairing by equality (CR 607.5); guarded `Operation::Inherit` to the latest `HasAbilitiesOfSource` record so Koh re-choices replace without duplicating and sever old links; deleted `source_census.rs`, `FunctionZones::Command`, `emblems_linked_to`, and `ObjectForm.emblem_source` (`CanonicalCard.emblem_source`); routed printed static reads through `functioning_object_statics*` and tightened `StaticSources` visibility; renamed `FunctionZones::Default` and `StaticSources` with seat-bucket invariant doc. Added Koh/Boiling Rock Rioter CR 607.5 test in `tla.rs` and rewrote `functioning_abilities::tests`. Verified: `cargo fmt --all`, debug nextest (`managym --lib`, `rules_tests`, `match_state_hash_tests`, `tla`/`fdn`/`fra` card tests), cp313 rebuild, `test_pinned_pilot.py` (2 passed, 1 skipped, zero drift), release `bench_steps` digest `10601622128491155944` unchanged.
 
 ## Deferred findings
 
