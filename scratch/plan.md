@@ -145,30 +145,29 @@ batch `DeclareAttackers`.
   retained TLA receipts first, since no checked-in receipt failed for it);
   G4 (was F7) stays deferred.
 
-## Next pass — Slice R4: printed abilities stop writing their set
-
-- **G1.** Replace `ability_set: Option<AbilitySet>` / `AbilitySet` on every
-  carrier (`ActivatedAbilityDefinition` `state/src/card.rs:1096`,
-  `ActivatedAbilityOnStack` / `TriggeredAbilityOnStack`
-  `state/src/stack_object.rs:113,180`, `EffectFrame` `flow/decision.rs:239`,
-  `PendingTrigger` `flow/trigger.rs`, `EffectiveTrigger`) with
-  `acquired: Option<GrantKey>`, `#[serde(skip_serializing_if = "Option::is_none")]`.
-  `AbilitySet` survives only in `LinkedAbilitySource` and `ExileLink`, built in
-  one derivation in `linked_ability_source` (`Some(key)` → `Acquired`, `None` →
-  `Printed(ability_face …)`); delete the three fallbacks and `play.rs`
-  `unwrap_or(Printed(..))`. Sites: `flow/triggers.rs:1148–1172,1715`,
-  `flow/layers.rs:964,974,1851–2089`, `flow/play.rs:2270–2340`,
-  `flow/resolution.rs:678–695,754,806,2298`.
-- **G2.** Drop `EffectiveTrigger.clock`; derive `GrantClock` from
-  `(acquired, ability_index)` where once-each-turn applies
-  (`flow/layers.rs` clock closure, `flow/triggers.rs` `used_trigger_grants`).
-- Acceptance, on unmodified evidence: `uv run --extra dev python -m pytest
-  tests/academy/test_authored_match_authority.py` and debug
-  `cargo nextest run --profile ci -p managym --test semantic_conformance_tests`
-  pass; Koh CR 607.5 test in `tla.rs` still passes; debug workspace nextest,
-  `size_of::<Game>() <= 5248`, cp313 rebuild, pinned pilot zero drift, release
-  `bench_steps` digest `10601622128491155944`.
-- Teaches: whether any digest still moves beyond exile links (G3), before ship.
+- Slice R4 (`38c9318125`, post-MTG-439 sync receipts `57f07018df`): replaced
+  `Option<AbilitySet>` / `AbilitySet` on every ability carrier with
+  `acquired: Option<GrantKey>` (omitted from serialization when `None`;
+  `AbilitySet` now lives only in `LinkedAbilitySource` and `ExileLink`,
+  derived once in `Game::linked_ability_source`); dropped
+  `EffectiveTrigger.clock` and derived `GrantClock` from
+  `(acquired, ability_index)` via `EffectiveTrigger::clock()`. Added
+  serialization/clock regression test in `match_state_hash_tests.rs`.
+  Note: sync merge `134d4c07bd` (main `d9751886b6`: `9f20178dbf` Academy
+  history + `f4b272349b` MTG-439 auto-skipped forced dual-land payments) had
+  left the `-planeswalkers` receipts at pre-sync counts (174 commands / 193
+  commands on `ur-vs-gw-5eed`), so `57f07018df` refreshed them to the
+  post-sync line (`170` deliberate commands, identical `TERMINAL_STATE`
+  `c3947b7f2c1cc675a34b8884daa2a5efe280ba937c970faf0cad8d5ea974492d`, all 14
+  `semantic_conformance` command counts matching main's
+  `evidence-forced-mana-v1.json`). Verified: `match_state_hash_tests` (12),
+  `functioning_abilities` (4), Koh CR 607.5 & `power_batch_grantors` card
+  tests, `size_of::<Game>() <= 5248` (compile-time const), debug workspace
+  `cargo nextest run --profile ci --workspace`, release `bench_steps`
+  (`115,941` steps, digest `4186394851247720253` matching
+  `managym/perf/baseline.json`), cp313 rebuild, `test_pinned_pilot.py` (zero
+  drift), `test_authored_match_authority.py` + `test_authored_match_parity.py`
+  (8/8), and `scripts/public_api.py check`. All planned passes built.
 
 ## Deferred findings
 

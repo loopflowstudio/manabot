@@ -1,4 +1,4 @@
-at: 00151c7d69a1b73c106cba6a317b2dd2ace13540
+at: 57f07018df
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
@@ -21,7 +21,7 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads, NodeSource, AbilitySet grants and condition-independent StaticSources
+    why: Command-zone emblem statics, Way grants, SBA exemptions, StateReads, NodeSource, acquired GrantKey tagging and condition-independent StaticSources
   - path: managym/src/flow/statics.rs
     why: LayerBoard invalidation on StateReads, StaticSources board reads and dynamic activation cache tests
   - path: managym/src/flow/sba.rs
