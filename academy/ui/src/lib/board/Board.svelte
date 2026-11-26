@@ -279,23 +279,9 @@
       armed = null;
       previewed = null;
       partitionFolded = false;
-      if (combatGroup) {
-        draft = sanitizeCombatDraft(loadGroupDraft<Draft>(combatGroup), combatGroup);
-        arrangeDraft = null;
-        partitionFaceUp = [];
-      } else if (arrangeGroup) {
-        arrangeDraft = sanitizeArrangeDraft(loadGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup);
-        draft = EMPTY_DRAFT;
-        partitionFaceUp = [];
-      } else if (partitionGroup) {
-        partitionFaceUp = sanitizePartitionDraft(loadGroupDraft<number[]>(partitionGroup), partitionGroup);
-        draft = EMPTY_DRAFT;
-        arrangeDraft = null;
-      } else {
-        draft = EMPTY_DRAFT;
-        arrangeDraft = null;
-        partitionFaceUp = [];
-      }
+      draft = combatGroup ? sanitizeCombatDraft(loadGroupDraft<Draft>(combatGroup), combatGroup) : EMPTY_DRAFT;
+      arrangeDraft = arrangeGroup ? sanitizeArrangeDraft(loadGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup) : null;
+      partitionFaceUp = partitionGroup ? sanitizePartitionDraft(loadGroupDraft<number[]>(partitionGroup), partitionGroup) : [];
     });
   });
 
@@ -481,6 +467,14 @@
   );
   const partitionDownItems = $derived(
     partitionGroup ? partitionGroup.items.filter(entry => !partitionUpSet.has(entry.item.entity)) : [],
+  );
+  const partitionCommitted = $derived(
+    partitionGroup
+      ? [
+          partitionGroup.committed_face_up.length ? `Face-up: ${partitionGroup.committed_face_up.map(card => card.label).join(', ')}` : '',
+          partitionGroup.committed_face_down.length ? `Face-down: ${partitionGroup.committed_face_down.map(card => card.label).join(', ')}` : '',
+        ].filter(Boolean).join(' · ')
+      : '',
   );
 
   function togglePartitionCard(cardId: number): void {
@@ -1067,7 +1061,7 @@
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
 
-  function previewArrangeCard(entityId: number | null, label: string | null, element: HTMLElement | null): void {
+  function previewGroupCard(entityId: number | null, label: string | null, element: HTMLElement | null): void {
     if (entityId === null || label === null || !element) { show(null, null); return; }
     const card = cards.get(entityId) ?? null;
     show({ name: card?.name ?? label, text: card?.text_box ?? null, permanent: null, card: card?.id ?? null }, element);
@@ -1668,7 +1662,7 @@
             <button type="button" class="fold type-caption" data-testid="partition-fold" onclick={() => (partitionFolded = true)}>Look at the board</button>
           </header>
           {#if activeRefusal}
-            <p class="type-caption text-danger" role="alert" data-testid="partition-refusal">{activeRefusal.reason}</p>
+            <p class="partition-refusal type-caption" role="alert" data-testid="partition-refusal">{activeRefusal.reason}</p>
           {/if}
           <div class="partition-piles">
             {#each [
@@ -1706,7 +1700,7 @@
                         <BoardCard name={card?.name ?? entry.label} width={104} {card} live={live && !pending} draft={pile.draft}
                           note={pile.note}
                           onactivate={() => togglePartitionCard(entry.item.entity)}
-                          onpreview={element => previewArrangeCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
+                          onpreview={element => previewGroupCard(element ? entry.item.entity : null, element ? entry.label : null, element)} />
                       </div>
                     {/each}
                   </div>
@@ -1716,16 +1710,9 @@
               </div>
             {/each}
           </div>
-          {#if partitionGroup.committed_face_up.length || partitionGroup.committed_face_down.length}
+          {#if partitionCommitted}
             <p class="partition-committed type-caption text-ink-3" data-testid="partition-committed">
-              Already placed:
-              {#if partitionGroup.committed_face_up.length}
-                Face-up: {partitionGroup.committed_face_up.map(card => card.label).join(', ')}
-              {/if}
-              {#if partitionGroup.committed_face_up.length && partitionGroup.committed_face_down.length}{' · '}{/if}
-              {#if partitionGroup.committed_face_down.length}
-                Face-down: {partitionGroup.committed_face_down.map(card => card.label).join(', ')}
-              {/if}
+              Already placed: {partitionCommitted}
             </p>
           {/if}
         {/if}
@@ -1749,7 +1736,7 @@
         refused={activeRefusal}
         onchange={updateArrangeDraft}
         onconfirm={confirmGroup}
-        onpreviewcard={previewArrangeCard}
+        onpreviewcard={previewGroupCard}
       />
     {/if}
 
@@ -2212,6 +2199,13 @@
   .partition-pile-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .partition-cards { display: flex; flex-wrap: wrap; gap: 8px; }
   .partition-empty { padding: 10px 0; }
+  .partition-refusal {
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--error) 50%, transparent);
+    border-radius: var(--radius-sm);
+    background: var(--error-wash);
+    color: var(--error-text);
+  }
   .partition-committed { border-top: 1px solid var(--border); padding-top: 8px; }
 
   .combat-draft { display: grid; gap: 6px; }

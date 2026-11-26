@@ -4,11 +4,12 @@
  * Driven strictly by the authority's `ArrangeGroup` descriptor (`items` and
  * `committed*` lists) — no prompt-text or label scraping.
  */
-import type {
-  ArrangeGroup,
-  OrderLibraryPlan,
-  ScryPlan,
-  SurveilPlan,
+import {
+  sanitizeEntityIds,
+  type ArrangeGroup,
+  type OrderLibraryPlan,
+  type ScryPlan,
+  type SurveilPlan,
 } from '$lib/group';
 import type { ObjectRenderId } from '$lib/types';
 
@@ -50,25 +51,19 @@ export function sanitizeArrangeDraft(saved: unknown, group: ArrangeGroup): Arran
   const candidate = saved as Record<string, unknown>;
   if (candidate.kind !== group.kind) return emptyArrangeDraft(group);
   const allowed = new Set(group.items.map(card => card.item.entity));
-  const clean = (raw: unknown, seen: Set<number>): number[] => {
-    const result: number[] = [];
-    for (const id of Array.isArray(raw) ? raw : []) {
-      if (typeof id === 'number' && allowed.has(id) && !seen.has(id)) {
-        seen.add(id);
-        result.push(id);
-      }
-    }
-    return result;
-  };
   switch (group.kind) {
     case 'scry': {
       const seen = new Set<number>();
-      return { kind: 'scry', top: clean(candidate.top, seen), bottom: clean(candidate.bottom, seen) };
+      return {
+        kind: 'scry',
+        top: sanitizeEntityIds(candidate.top, allowed, seen),
+        bottom: sanitizeEntityIds(candidate.bottom, allowed, seen),
+      };
     }
     case 'surveil':
-      return { kind: 'surveil', graveyard: clean(candidate.graveyard, new Set()) };
+      return { kind: 'surveil', graveyard: sanitizeEntityIds(candidate.graveyard, allowed) };
     case 'order_library':
-      return { kind: 'order_library', order: clean(candidate.order, new Set()) };
+      return { kind: 'order_library', order: sanitizeEntityIds(candidate.order, allowed) };
   }
 }
 

@@ -11,12 +11,13 @@
  * A draft names creatures by their display ids (`PermanentState.id`, the
  * group descriptor's `ObjectRenderId.entity`).
  */
-import type {
-  AttackerItem,
-  CombatGroup,
-  DeclareAttackersPlan,
-  DeclareBlockersPlan,
-  GroupAddress,
+import {
+  sanitizeEntityIds,
+  type AttackerItem,
+  type CombatGroup,
+  type DeclareAttackersPlan,
+  type DeclareBlockersPlan,
+  type GroupAddress,
 } from '$lib/group';
 import type { ExperienceFrame, ObjectRenderId } from '$lib/types';
 import { PRIMARY_CHARS } from './prompt';
@@ -80,15 +81,7 @@ export function sanitizeCombatDraft(saved: unknown, group: CombatGroup): Draft {
   const candidate = saved as Partial<Draft>;
   if (group.kind === 'declare_attackers') {
     const allowed = new Set(group.declarable.map(creature => creature.item.entity));
-    const seen = new Set<number>();
-    const attackers: number[] = [];
-    for (const entity of Array.isArray(candidate.attackers) ? candidate.attackers : []) {
-      if (typeof entity === 'number' && allowed.has(entity) && !seen.has(entity)) {
-        seen.add(entity);
-        attackers.push(entity);
-      }
-    }
-    return { attackers, blocks: [] };
+    return { attackers: sanitizeEntityIds(candidate.attackers, allowed), blocks: [] };
   }
   const canBlock = new Map(
     group.declarable.map(creature => [

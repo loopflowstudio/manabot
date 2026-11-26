@@ -26,7 +26,7 @@ use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
 use crate::state::ability::LibraryEnd as StateLibraryEnd;
-use crate::state::game_object::{ObjectId, PlayerId, Target};
+use crate::state::game_object::{ObjectId, PlayerId};
 use crate::state::zone::ZoneType;
 
 mod combat;
@@ -570,24 +570,12 @@ fn format_offer_label(
             }
         }
         Action::ChooseTarget { target, .. } => {
-            if let Some(subject) = subjects.first() {
-                format!("Target {}", subject.object.label)
-            } else {
-                match target {
-                    Target::Player(player) => format!("Target Seat {}", player.0 + 1),
-                    Target::Permanent(permanent) => format!("Target {}", perm_name(*permanent)),
-                    Target::StackSpell(object) | Target::GraveyardCard(object) => {
-                        format!("Target {}", game.observed_object_name(*object))
-                    }
-                    Target::StackAbility(id) => {
-                        let name = game
-                            .stack_ability_source(*id)
-                            .map(|object| game.observed_object_name(object))
-                            .unwrap_or_else(|| "ability".to_string());
-                        format!("Target {name}")
-                    }
-                }
-            }
+            let label = subjects
+                .first()
+                .map(|subject| subject.object.label.clone())
+                .or_else(|| game.decision_target(target).map(|view| view.label))
+                .unwrap_or_else(|| "target".to_string());
+            format!("Target {label}")
         }
         Action::ActivateAbility { permanent, .. } => format!("Activate {}", perm_name(*permanent)),
         Action::ActivateCardAbility { object, .. } => {

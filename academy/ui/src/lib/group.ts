@@ -269,6 +269,23 @@ export interface GroupDraftScope {
   kind: GroupKind;
 }
 
+/** Keep only distinct numeric entity ids present in `allowed`, preserving order. */
+export function sanitizeEntityIds(
+  raw: unknown,
+  allowed: ReadonlySet<number>,
+  seen: Set<number> = new Set(),
+): number[] {
+  if (!Array.isArray(raw)) return [];
+  const clean: number[] = [];
+  for (const id of raw) {
+    if (typeof id === 'number' && allowed.has(id) && !seen.has(id)) {
+      seen.add(id);
+      clean.push(id);
+    }
+  }
+  return clean;
+}
+
 /** Persist a live grouped draft scoped to `(match_id, frame_hash, kind)`. */
 export function saveGroupDraft<T>(scope: GroupDraftScope, draft: T): void {
   try {

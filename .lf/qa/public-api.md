@@ -46,6 +46,8 @@ Read when the change touches the published library API: `__all__` in `PUBLIC_MOD
   `pay_cost`, `pass_priority`) until `decision().kind == "declare_attackers"`;
   turn 2 onward has several goblins. Take one raw offer, then `decision()` shows
   `committed` plus the rest. Library kinds come from `12 Island / 12 Swamp / 20
-  Bilbo Baggins, Burglar / 16 Diresight`. Raw `Offer.label`s are native
-  projection labels (`PriorityPlayLand`, `DeclareAttacker`) with `source`
-  unset; match offers by `verb`, not label.
+  Bilbo Baggins, Burglar / 16 Diresight`, and `partition_piles` from `Curator
+  of Destinies`. `Offer.label` carries human-readable labels (`"Play Mountain"`,
+  `"Cast Raging Goblin"`, `"Pass priority"`) and `Offer.source` carries the
+  viewer-safe `SubjectRef` (leaving `semantic_decision_frame()` fingerprints
+  unchanged).

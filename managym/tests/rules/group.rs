@@ -1254,7 +1254,7 @@ fn partition_piles_full_mid_group_threshold_refusal_and_choose_pile_transition()
     // Clone for mid-group raw stepping before committing the full split.
     let mut mid = s.game().clone();
 
-    // Full split: Gray Ogre (0) and Forest (2) face-up; Hill Giant (1), Plains (3), Swamp (4) face-down.
+    // Full split: Gray Ogre (0) and Mountain (2) face-up; Forest (1), Island (3), Swamp (4) face-down.
     // The final step emits CardRevealed and transitions to ChoosePile for opponent (seat 1)
     // without tripping the inter-step purity boundary.
     let full_choice = DecisionChoice::PartitionPiles {
@@ -1337,7 +1337,7 @@ fn partition_piles_full_mid_group_threshold_refusal_and_choose_pile_transition()
         DecisionSpec::Single
     );
 
-    // Submitting the remaining 3 cards (Forest face-up; Plains, Swamp face-down) matches full submit digest.
+    // Submitting the remaining 3 cards (Mountain face-up; Island, Swamp face-down) matches full submit digest.
     let rest_submitted = assert_submit_matches_manual(
         &mut mid,
         0,

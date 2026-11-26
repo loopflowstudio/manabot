@@ -8,7 +8,7 @@
  * `group_command`. Draft persistence uses the unified `academy.table.group-draft`
  * store in `group.ts`.
  */
-import type { GroupCard, PartitionPilesGroup, PartitionPilesPlan } from '$lib/group';
+import { sanitizeEntityIds, type GroupCard, type PartitionPilesGroup, type PartitionPilesPlan } from '$lib/group';
 
 export interface PartitionWords {
   /** Primary button label: "Confirm split (2 up, 3 down)". */
@@ -22,17 +22,7 @@ export function sanitizePartitionDraft(
   saved: readonly number[] | null | undefined,
   group: PartitionPilesGroup,
 ): number[] {
-  if (!Array.isArray(saved)) return [];
-  const valid = new Set(group.items.map(card => card.item.entity));
-  const seen = new Set<number>();
-  const clean: number[] = [];
-  for (const id of saved) {
-    if (typeof id === 'number' && valid.has(id) && !seen.has(id)) {
-      seen.add(id);
-      clean.push(id);
-    }
-  }
-  return clean;
+  return sanitizeEntityIds(saved, new Set(group.items.map(card => card.item.entity)));
 }
 
 /** Toggle one card between the face-up and face-down piles in the draft. */
