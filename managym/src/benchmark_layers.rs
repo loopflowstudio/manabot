@@ -117,7 +117,10 @@ pub fn cast_targets(game: &crate::Game) -> Vec<crate::agent::action::Action> {
     let requirements = spell.target_requirements_for_mode(*mode);
     let requirement = &requirements[*requirement_index];
     assert_eq!(
-        (requirement.min_for(cast.x), requirement.max_for(cast.x)),
+        (
+            requirement.min_for(cast.x, cast.kicked),
+            requirement.max_for(cast.x, cast.kicked),
+        ),
         (1, 1)
     );
     game.legal_spell_targets(*player, *object, spell, requirement)

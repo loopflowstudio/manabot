@@ -1442,6 +1442,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "chosen": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "combat_damage_to_players": {
           "type": "array",
           "items": {
@@ -2239,6 +2245,9 @@
             "string",
             "null"
           ]
+        },
+        "expiry": {
+          "type": "string"
         },
         "mana": {
           "type": "array",

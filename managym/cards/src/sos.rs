@@ -2,9 +2,8 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect,
-        EffectValue, LibraryEnd, ObjectSelector, PaymentCost, Per, PlayerSelector, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, Condition, Effect, EffectValue, LibraryEnd, ObjectSelector, PaymentCost,
+        Per, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
@@ -516,6 +515,7 @@ fn all_aboard() -> PrintedCharacteristics {
             ),
             Effect::Move {
                 unrevealed: false,
+                face_down: false,
                 what: ObjectSelector::Moved,
                 to: ZoneType::Battlefield,
                 under: Some(PlayerSelector::Owner),
@@ -686,16 +686,9 @@ fn pigment_wrangler() -> CardDefinition {
                 mana_cost: Some(ManaCost::parse("{R}")),
                 types: CardTypes::new([CardType::Sorcery]),
                 text_box: spell_text.into(),
-                spell_effects: vec![Effect::CreateDelayedTrigger {
-                    remember: None,
-                    event: DelayedEvent::YouCastSpell(Box::new(CardPredicate {
-                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    })),
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::ThisTurn,
-                    effects: vec![Effect::CopyTriggeringObject],
-                }],
+                spell_effects: vec![Effect::copy_next_spell_this_turn(
+                    CardPredicate::instant_or_sorcery(),
+                )],
                 ..Default::default()
             })
         },
@@ -733,6 +726,7 @@ fn vastlands_scavenger() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 0,
                         max: 1.into(),
                         effects: vec![Effect::return_to_battlefield(
@@ -1196,6 +1190,7 @@ fn harmonized_trio() -> CardDefinition {
     let put_on_top = Effect::SelectCards {
         from: ObjectSelector::Zone(ZoneType::Hand),
         predicate: CardPredicate::default(),
+        max_mana_value: None,
         min: 1,
         max: EffectValue::Fixed(1),
         effects: vec![Effect::put_in_library(

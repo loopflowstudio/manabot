@@ -196,7 +196,7 @@ macro_rules! keywords {
     ($( $(#[$meta:meta])* $variant:ident => $name:literal ),+ $(,)?) => {
         /// A parameterless keyword ability (CR 702), held in a [`Keywords`] set.
         /// Parameterized keywords (ward, firebending) have their own rules types.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
         pub enum Keyword {
             $( $(#[$meta])* #[serde(rename = $name)] $variant, )+
         }
@@ -448,6 +448,7 @@ pub struct StaticRestriction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Restriction {
+    CantActivateNonmanaAbilities,
     /// CR 508.1c, 509.1b.
     CantAttackOrBlock,
     /// CR 502.3.
@@ -486,11 +487,6 @@ pub enum GraveyardMover {
 pub enum Redirect {
     Exile,
     OwnerLibraryShuffled { reveal: bool },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum EntryChoice {
-    CreatureType,
 }
 
 /// Which prospective permanent receives entry counters (CR 614.12).
@@ -570,6 +566,13 @@ impl DamageRecipient {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryChoiceKind {
+    Color,
+    CreatureType,
+    CardName,
+}
+
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
@@ -577,12 +580,15 @@ impl DamageRecipient {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
+    AsEntersChoose {
+        kind: EntryChoiceKind,
+        look_at_opponent_hand: bool,
+    },
     AdventureExile,
     GraveyardInstead {
         what: GraveyardMover,
         to: Redirect,
     },
-    AsEntersChoose(EntryChoice),
     DiscardedInstead {
         by: super::ability::Actor,
         to: ZoneType,
@@ -662,6 +668,59 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
             | Effect::Modal { .. }
             | Effect::If { .. }
     ) && effect.target_spec().is_none()
+}
+
+/// Materialize `Effect::AddOneColorManaValue` once its count is known. Shared
+/// by layer evaluation (for `EffectValue::Fixed`) and dynamic/resolution reads.
+pub fn materialize_one_color_mana(
+    amount: i32,
+    chosen_color: bool,
+    creature_purposes: &[crate::mana::CreatureManaPurpose],
+    chosen: Option<&crate::permanent::EntryChoice>,
+) -> Effect {
+    use crate::{
+        mana::{ManaRestriction, SpendPredicate},
+        permanent::EntryChoice,
+    };
+    let amount = amount.max(0) as usize;
+    if amount == 0 {
+        return Effect::add_mana(Mana::default());
+    }
+    let restriction = (!creature_purposes.is_empty()).then(|| {
+        let mut purposes = BTreeSet::new();
+        if let Some(EntryChoice::CreatureType(t)) = chosen {
+            for p in creature_purposes {
+                purposes.insert(match p {
+                    crate::mana::CreatureManaPurpose::Cast => {
+                        SpendPredicate::CastCreatureSubtype(t.clone())
+                    }
+                    crate::mana::CreatureManaPurpose::Activate => {
+                        SpendPredicate::ActivateCreatureSubtype(t.clone())
+                    }
+                });
+            }
+        }
+        ManaRestriction::only_predicates(purposes)
+    });
+    let output = |color: Color| {
+        let mut amounts = [0; 6];
+        amounts[color as usize] = amount.min(u8::MAX as usize) as u8;
+        match &restriction {
+            Some(r) => Mana::restricted_to(r.clone(), amounts),
+            None => Mana {
+                mana: amounts,
+                ..Default::default()
+            },
+        }
+    };
+    if chosen_color {
+        Effect::add_mana(match chosen {
+            Some(EntryChoice::Color(c)) => output(*c),
+            _ => Mana::default(),
+        })
+    } else {
+        Effect::mana_choice(Color::COLORS.map(output))
+    }
 }
 
 /// A single fixed immediate mana output (CR 605.1a).
@@ -754,6 +813,26 @@ impl ActivatedAbilityDefinition {
         suffix.iter().all(is_mana_suffix_effect)
             && is_mana_output(effect)
             && !is_static_mana_output(effect)
+    }
+
+    /// Resolve a fixed-count `AddOneColorManaValue` mana ability from the
+    /// permanent's entry choice during layer evaluation so it becomes a static
+    /// output instead of requiring per-read finalization.
+    pub fn resolve_fixed_entry_mana(&mut self, chosen: Option<&crate::permanent::EntryChoice>) {
+        let Some((effect, suffix)) = self.effects.split_first_mut() else {
+            return;
+        };
+        if let Effect::AddOneColorManaValue {
+            amount: EffectValue::Fixed(amount),
+            chosen_color,
+            creature_purposes,
+        } = effect
+        {
+            if suffix.iter().all(is_mana_suffix_effect) {
+                *effect =
+                    materialize_one_color_mana(*amount, *chosen_color, creature_purposes, chosen);
+            }
+        }
     }
 
     /// The concrete outputs of a mana ability: a leading effect adding one of
@@ -1220,6 +1299,7 @@ impl SourceQuality {
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    HasChosenCreatureType,
     BeginOnBattlefield,
     HexproofFrom(SourceQuality),
     Protection(SourceQuality),
@@ -1558,6 +1638,8 @@ pub struct PrintedCharacteristics {
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
     pub spell_effects: Vec<Effect>,
+    /// Total divided among chosen targets as this spell is cast (CR 601.2d).
+    pub division: u8,
     /// Explicit targeting clauses for multi-target or effect-decoupled
     /// spells. When empty, a single requirement is derived from the first
     /// targeted spell effect.
@@ -1680,6 +1762,8 @@ struct DefinitionWire<'a> {
     triggered_mana_abilities: &'a Vec<TriggeredManaAbility>,
     activated_abilities: &'a Vec<ActivatedAbilityDefinition>,
     spell_effects: &'a Vec<Effect>,
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    division: u8,
     targeting: &'a Vec<TargetRequirement>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     additional_costs: &'a Vec<AdditionalCost>,
@@ -1754,6 +1838,7 @@ impl PrintedCharacteristics {
             triggered_mana_abilities: &self.triggered_mana_abilities,
             activated_abilities: &self.activated_abilities,
             spell_effects: &self.spell_effects,
+            division: self.division,
             targeting: &self.targeting,
             additional_costs: &self.additional_costs,
             keywords: &self.keywords,

@@ -716,8 +716,8 @@ fn foretell_and_graveyard_card_ability_fold_with_aliases() {
     gy_game
         .state
         .turn
-        .graveyard_from_battlefield
-        .push(skeletons[0]);
+        .graveyard_arrivals
+        .push((skeletons[0], true));
     gy_game.scenario_refresh_priority().unwrap();
     let separate_indices: Vec<usize> = gy_game
         .action_space()

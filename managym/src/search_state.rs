@@ -233,6 +233,7 @@ mod tests {
         spell_lki.state.spell_lki.insert(
             object,
             crate::state::stack_object::SpellLki {
+                copiable: None,
                 object,
                 definition_id: game.state[object].definition_id,
                 controller: PlayerId(0),

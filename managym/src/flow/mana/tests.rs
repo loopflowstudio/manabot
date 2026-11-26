@@ -493,12 +493,7 @@ fn bounded_search(
     let path = model.witness(state.clone(), policy, &mut search);
     if compare {
         // No classes: identity keys throughout.
-        let mut identities = PaymentSearch {
-            groups: Some(Vec::new()),
-            gross_bound_only: true,
-            max_states: Some(20_000),
-            ..Default::default()
-        };
+        let mut identities = PaymentSearch::identity_only(true, 20_000);
         let original = model.witness(state, policy, &mut identities);
         assert_eq!(path, original);
     }
@@ -517,7 +512,9 @@ fn payment_shared_outputs_keep_cached_witness_after_source_change() {
     let blue = model.plan(Mana::default(), vec![pay("U")], SourcePolicy::All);
     assert!(blue.is_some());
     let ability = &mut Arc::make_mut(&mut model.sources)[0].abilities[0];
-    Arc::make_mut(&mut ability.outputs)[0] = Mana::parse("G");
+    let mut updated = ability.outputs.to_vec();
+    updated[0] = Mana::parse("G");
+    ability.outputs = updated.into();
     assert!(model
         .plan(Mana::default(), vec![pay("U")], SourcePolicy::All)
         .is_none());
@@ -1237,7 +1234,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
         .into(),
         [0, 1, 0, 0, 0, 0],
     );
-    pool.add_combat(&Mana::parse("R"));
+    pool.add(&Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat));
     let model = PaymentModel {
         cache: None,
         sources: Arc::new(Vec::new()),
@@ -1252,7 +1249,7 @@ fn payment_bound_counts_spend_effect_and_combat_classes() {
 fn funded_final_payment_needs_no_unit_search() {
     let model = forests(1);
     let mut pool = Mana::parse("U");
-    pool.add_combat(&Mana::parse("R"));
+    pool.add(&Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat));
     pool.add(&Mana::of_class(
         SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),
@@ -1361,14 +1358,10 @@ fn limited_mana_uses_preserve_grouped_witnesses() {
                 }
             }
         }
-        let mut identities = PaymentSearch {
-            groups: Some(vec![]),
-            max_states: Some(2000),
-            ..Default::default()
-        };
+        let mut identities = PaymentSearch::identity_only(false, 2000);
         let reference = model.witness(state.clone(), SourcePolicy::All, &mut identities);
         let mut grouped = PaymentSearch::new(&state.obligations);
-        grouped.groups = Some(grouped.groups(&model));
+        grouped.groups(&model);
         grouped.max_states = Some(2000);
         assert_eq!(
             model.witness(state, SourcePolicy::All, &mut grouped),
@@ -1388,7 +1381,7 @@ fn projected_output_bound_keeps_class_maxima_and_saturation() {
         Mana::restricted_to(ally, [0, 5, 0, 0, 0, 0]),
         Mana::of_class(
             crate::state::mana::ManaClass {
-                combat: true,
+                expiry: crate::state::mana::ManaExpiry::EndOfCombat,
                 restriction: None,
                 effect: None,
             },
@@ -1411,14 +1404,33 @@ fn projected_output_bound_keeps_class_maxima_and_saturation() {
                 for mode in modes {
                     reference.max_with(mode);
                 }
-                let projected = super::optimistic_pool(modes, &cost);
-                assert!(projected.classes().is_empty());
+                let (upper, max_usable) =
+                    super::optimistic_supply(modes, |class| class.allows(&cost.purpose));
+                let projected = Mana {
+                    mana: upper,
+                    classes: None,
+                };
+                assert_eq!(
+                    max_usable,
+                    modes
+                        .iter()
+                        .map(|mode| u64::from(mode.usable_total(&cost)))
+                        .max()
+                        .unwrap_or(0)
+                );
                 assert_eq!(projected.can_pay(&cost), reference.can_pay(&cost));
                 // Adding repeated outputs preserves the same saturation
                 // even when their allowed classes differ.
                 for mode in &outputs {
+                    let (mode_upper, _) =
+                        super::optimistic_supply(std::slice::from_ref(mode), |class| {
+                            class.allows(&cost.purpose)
+                        });
                     let mut combined = projected.clone();
-                    combined.add(&super::optimistic_pool(std::slice::from_ref(mode), &cost));
+                    combined.add(&Mana {
+                        mana: mode_upper,
+                        classes: None,
+                    });
                     let mut single_reference = reference.clone();
                     single_reference.add(mode);
                     assert_eq!(combined.can_pay(&cost), single_reference.can_pay(&cost));
@@ -1564,10 +1576,12 @@ fn payment_color_bound_keeps_payable_costs_at_the_bound() {
         })
     };
     let mut herbalist = modal_source(9, &["U", "R"], "");
-    Arc::make_mut(&mut herbalist.abilities[0].outputs).push(Mana::restricted_to(
+    let mut outputs = herbalist.abilities[0].outputs.to_vec();
+    outputs.push(Mana::restricted_to(
         ManaRestriction::spell(["Lesson"]),
         [0, 2, 0, 0, 0, 0],
     ));
+    herbalist.abilities[0].outputs = outputs.into();
     let cases: Vec<(Vec<ManaSource>, Mana, Vec<Obligation>)> = vec![
         // Two U/R sources and a Forest pay two hybrid pips and green.
         (
@@ -1765,5 +1779,548 @@ fn registered_mana_activations_consume_finite_payment_resources() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserve_riders() {
+    use crate::state::card::CardType;
+    use crate::state::mana::{ManaClass, ManaExpiry, SpendPredicate};
+    use std::collections::BTreeSet;
+
+    const TYPES: [&str; 16] = [
+        "Elf", "Goblin", "Ally", "Dragon", "Human", "Soldier", "Wizard", "Cat", "Angel", "Demon",
+        "Spirit", "Zombie", "Beast", "Bird", "Warrior", "Knight",
+    ];
+    let courtyard = |index: usize, subtype: &str| -> ManaSource {
+        let restriction = ManaRestriction::only_predicates(BTreeSet::from([
+            SpendPredicate::CastCreatureSubtype(subtype.into()),
+            SpendPredicate::ActivateCreatureSubtype(subtype.into()),
+        ]));
+        let outputs = crate::state::mana::Color::COLORS
+            .into_iter()
+            .map(|color| {
+                let mut amounts = [0; 6];
+                amounts[color as usize] = 1;
+                Mana::restricted_to(restriction.clone(), amounts)
+            })
+            .collect();
+        source(index, Some("C"), vec![tapping_ability(outputs)])
+    };
+
+    // On a non-creature spell with no creature filter, all 16 distinct-type
+    // Courtyards behave identically and collapse into one group.
+    let model = PaymentModel {
+        cache: None,
+        sources: Arc::new(
+            TYPES
+                .iter()
+                .enumerate()
+                .map(|(i, ty)| courtyard(i, ty))
+                .collect(),
+        ),
+        life: 20,
+    };
+    let noncreature = Obligation::mana(ManaCost {
+        purpose: SpendingContext::cast([], [CardType::Instant]),
+        ..ManaCost::parse("UU")
+    });
+    let mut search = PaymentSearch::new(std::slice::from_ref(&noncreature));
+    assert_eq!(
+        search.groups_for(&model, std::slice::from_ref(&noncreature)),
+        vec![(0..16).collect::<Vec<_>>()]
+    );
+
+    // On a Cat creature spell, Cat stays separate while the other 15 collapse.
+    let cat_spell = Obligation::mana(ManaCost {
+        purpose: SpendingContext::cast(["Cat"], [CardType::Creature]),
+        ..ManaCost::parse("1WW")
+    });
+    let mut cat_search = PaymentSearch::new(std::slice::from_ref(&cat_spell));
+    let cat_groups = cat_search.groups_for(&model, std::slice::from_ref(&cat_spell));
+    assert_eq!(cat_groups.len(), 1);
+    assert_eq!(cat_groups[0].len(), 15);
+    assert!(!cat_groups[0].contains(&7));
+
+    // With a Changeling filter ({1} -> any color), all 16 distinct-type
+    // Courtyards can pay the filter; verify exact first witness parity on 4
+    // Courtyards and bounded states on 16 Courtyards.
+    for count in [4_usize, 16] {
+        let mut sources: Vec<ManaSource> = TYPES[..count]
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| courtyard(i, ty))
+            .collect();
+        let mut mascot = tapping_ability(
+            crate::state::mana::Color::COLORS
+                .into_iter()
+                .map(Mana::single)
+                .collect(),
+        );
+        mascot.tap_source = false;
+        mascot.limited = true;
+        mascot.cost = ManaCost {
+            purpose: SpendingContext::Activate {
+                zone: crate::state::zone::ZoneType::Battlefield,
+                source: crate::state::mana::SpendingObject::new([], true, true),
+            },
+            ..ManaCost::parse("1")
+        };
+        sources.push(source(count, None, vec![mascot]));
+        let model = PaymentModel {
+            cache: None,
+            sources: Arc::new(sources),
+            life: 20,
+        };
+        // Unpayable double colored pip for a non-creature spell (only 1 Mascot
+        // can filter color; Courtyards produce only restricted color + {C}).
+        let state = search_state(&model, vec![noncreature.clone()]);
+        assert!(bounded_search(&model, state, SourcePolicy::All, 200, count == 4).is_none());
+        // Payable single colored pip + generic on a Cat spell.
+        if count >= 8 {
+            let state = search_state(&model, vec![cat_spell.clone()]);
+            assert!(bounded_search(&model, state, SourcePolicy::All, 200, false).is_some());
+        }
+    }
+
+    // Both `PaymentSearch` and `SourceClassCache` project pure feasibility, so
+    // unrestricted classes differing only in `SpendEffect` or `ManaExpiry`
+    // collapse together while every source still emits its own player-visible
+    // offer.
+    let mut rider_sources = vec![
+        source(
+            0,
+            Some("G"),
+            vec![tapping_ability(vec![Mana::of_class(
+                ManaClass {
+                    expiry: ManaExpiry::Step,
+                    restriction: None,
+                    effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
+                        without_subtype: "Human".into(),
+                    }),
+                },
+                [0, 1, 0, 0, 0, 0],
+            )])],
+        ),
+        source(
+            1,
+            Some("G"),
+            vec![tapping_ability(vec![Mana::of_class(
+                ManaClass {
+                    expiry: ManaExpiry::EndOfCombat,
+                    restriction: None,
+                    effect: None,
+                },
+                [0, 1, 0, 0, 0, 0],
+            )])],
+        ),
+        source(2, Some("G"), vec![tapping_ability(vec![Mana::parse("U")])]),
+    ];
+    let rider_model = PaymentModel {
+        cache: None,
+        sources: Arc::new(std::mem::take(&mut rider_sources)),
+        life: 20,
+    };
+    let obligations = [pay("U")];
+    let mut rider_search = PaymentSearch::new(&obligations);
+    assert_eq!(
+        rider_search.groups_for(&rider_model, &obligations),
+        vec![vec![0, 1, 2]]
+    );
+
+    let mut class_cache = super::SourceClassCache::<usize>::new(&rider_model, &obligations, &[]);
+    assert!(class_cache.get(0, 0).is_none());
+    class_cache.insert(0, 0, 42);
+    assert_eq!(class_cache.get(1, 0), Some(42));
+    assert_eq!(class_cache.get(2, 0), Some(42));
+}
+
+#[test]
+fn feasibility_projection_collapses_mixed_expiry_and_spend_effects_with_witness_parity() {
+    use crate::state::card::Keyword;
+    use crate::state::mana::{ManaClass, ManaExpiry};
+    use crate::state::predicate::CardPredicate;
+
+    let mut mixed_pool = Mana::parse("R");
+    mixed_pool.add(&Mana::parse("RRRGGG").with_expiry(ManaExpiry::EndOfTurn));
+    mixed_pool.add(&Mana::parse("R").with_expiry(ManaExpiry::EndOfCombat));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::CopySpell {
+            spell: Arc::new(CardPredicate::default()),
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::SpellGainsKeyword {
+            spell: Arc::new(CardPredicate::default()),
+            keyword: Keyword::Haste,
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::CreatureEntersWithPlusOneCounter {
+            without_subtype: "Human".into(),
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+
+    let prism = || {
+        let mut ability = tapping_ability(["W", "U", "B", "R", "G"].map(Mana::parse).to_vec());
+        ability.cost = ManaCost::parse("1");
+        ability
+    };
+    let model = PaymentModel {
+        cache: None,
+        sources: Arc::new((0..4).map(|i| source(i, None, vec![prism()])).collect()),
+        life: 20,
+    };
+
+    // Unpayable multi-blue cost after spending through Prism filters: exact
+    // witness parity with identity DFS, and feasibility projection keeps the
+    // state space tiny despite 6 distinct {R} classes in the pool.
+    for cost in ["2UUUUU", "4UUU", "1UUU"] {
+        let obligations = vec![pay("1"), pay(cost)];
+        let mut state = search_state(&model, obligations);
+        state.pool = mixed_pool.clone();
+        bounded_search(&model, state, SourcePolicy::All, 120, true);
+    }
+}
+
+#[test]
+fn payment_resources_bitmasks_preserve_order_and_hash() {
+    use std::hash::{Hash, Hasher};
+
+    let hash_of = |res: &super::PaymentResources| -> u64 {
+        let mut h = super::FastHasher::default();
+        res.hash(&mut h);
+        h.finish()
+    };
+
+    let mut a = super::PaymentResources {
+        present: vec![true, true],
+        untapped: vec![true, true],
+        used_masks: Vec::new(),
+    };
+    assert!(!a.is_used(0, 0));
+    assert!(!a.is_used(0, 63));
+    assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Equal);
+
+    a.use_ability(0, 0);
+    a.use_ability(0, 63);
+    assert!(a.is_used(0, 0));
+    assert!(a.is_used(0, 63));
+    assert!(!a.is_used(0, 1));
+    assert!(!a.is_used(1, 0));
+    assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Greater);
+
+    let mut b = a.clone();
+    b.use_ability(0, 63); // idempotent
+    assert_eq!(a, b);
+    assert_eq!(hash_of(&a), hash_of(&b));
+
+    a.use_ability(1, 0);
+    a.use_ability(1, 63);
+    assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Equal);
+}
+
+#[test]
+fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors_distinct() {
+    use crate::agent::action::Action;
+    use crate::flow::game::{Game, PendingChoice};
+    use crate::flow::payment::{AnnouncedSpell, Operation, Payment};
+    use crate::state::{
+        card::{ActivatedAbilityDefinition, CardType},
+        game_object::PlayerId,
+        permanent::EntryChoice,
+        player::PlayerConfig,
+        zone::ZoneType,
+    };
+    use std::collections::BTreeMap;
+
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Secluded Courtyard".into(), 8),
+        ("Three Tree Mascot".into(), 8),
+        ("Forest".into(), 4),
+        ("Helpful Hunter".into(), 4),
+        ("Pillar Launch".into(), 4),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        431,
+        true,
+    );
+    game.keep_opening_hands();
+    game.scenario_clear_hand(player);
+
+    let mut courtyards = Vec::new();
+    for ty in ["Elf", "Goblin", "Cat", "Dragon", "Human", "Soldier"] {
+        let id = game
+            .scenario_force_battlefield(player, "Secluded Courtyard", true)
+            .unwrap();
+        game.state.permanents[id].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::CreatureType(ty.into())));
+        courtyards.push(id);
+    }
+    let mut mascots = Vec::new();
+    for _ in 0..4 {
+        mascots.push(
+            game.scenario_force_battlefield(player, "Three Tree Mascot", true)
+                .unwrap(),
+        );
+    }
+    game.scenario_force_card_in_hand(player, "Helpful Hunter")
+        .unwrap();
+    let hunter_card = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+    game.payment_cache.borrow_mut().entries.clear();
+
+    // Casting Helpful Hunter ({1}{W}, Cat creature): only the Cat Courtyard
+    // can pay {W} directly; all 6 Courtyards and 4 Mascots are legal because
+    // Mascot can filter and Cat Courtyard can pay, and deduplication must
+    // preserve the exact action list while running one search per class.
+    let operation = Operation::Spell(AnnouncedSpell {
+        object: hunter_card,
+        cast: Default::default(),
+        mode: None,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_shares: vec![],
+    });
+    let payment = Payment {
+        owed: game.cost_components(player, &operation),
+        operation,
+        receipt: Default::default(),
+    };
+    game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(payment),
+    });
+
+    SEARCHED.with(|s| s.set(0));
+    let offered = game.mana_ability_actions(player, true);
+    let searches = SEARCHED.with(|s| s.get());
+    let expected: Vec<Action> = courtyards
+        .iter()
+        .chain(&mascots)
+        .map(|&permanent| Action::ActivateAbility {
+            player,
+            permanent,
+            ability_index: 0,
+        })
+        .collect();
+    assert_eq!(offered, expected);
+    // Cat Courtyard is answered directly via fixed_sufficient; the remaining 2
+    // equivalence classes (the other 5 Courtyards and 4 Mascots) search once each.
+    assert!(searches >= 2);
+    game.pending_choice = None;
+
+    // Convoke distinction: two creatures with identical `{T}: Add {C}`
+    // abilities but different colors (Green vs Red) paying a `{1}{G}` convoke
+    // cost. Only tapping the Red creature leaves the Green creature untapped
+    // to convoke `{G}`.
+    let deck = BTreeMap::from([
+        ("Gray Ogre".into(), 4),
+        ("Guardian of Vitu-Ghazi".into(), 4),
+    ]);
+    let mut convoke_game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        432,
+        true,
+    );
+    convoke_game.keep_opening_hands();
+    convoke_game.scenario_clear_hand(player);
+    let tap_for_c = ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![crate::state::ability::Effect::add_mana(Mana::parse("C"))],
+        ..Default::default()
+    };
+    let green = convoke_game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let green_obj = convoke_game.state.permanents[green]
+        .as_ref()
+        .unwrap()
+        .object;
+    convoke_game.state[green_obj].mana_cost = Some(ManaCost::parse("G"));
+    convoke_game.state[green_obj].activated_abilities = vec![tap_for_c.clone()];
+
+    let red = convoke_game
+        .scenario_force_battlefield(player, "Gray Ogre", true)
+        .unwrap();
+    let red_obj = convoke_game.state.permanents[red].as_ref().unwrap().object;
+    convoke_game.state[red_obj].mana_cost = Some(ManaCost::parse("R"));
+    convoke_game.state[red_obj].activated_abilities = vec![tap_for_c];
+
+    convoke_game
+        .scenario_force_card_in_hand(player, "Guardian of Vitu-Ghazi")
+        .unwrap();
+    let spell = convoke_game
+        .state
+        .zones
+        .zone_objects(ZoneType::Hand, player)[0];
+    convoke_game.state[spell].mana_cost = Some(ManaCost::parse("1G"));
+    convoke_game.state[spell].types = crate::state::card::CardTypes::new([CardType::Creature]);
+    let op = Operation::Spell(AnnouncedSpell {
+        object: spell,
+        cast: Default::default(),
+        mode: None,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_shares: vec![],
+    });
+    let pay = Payment {
+        owed: convoke_game.cost_components(player, &op),
+        operation: op,
+        receipt: Default::default(),
+    };
+    convoke_game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(pay),
+    });
+    assert_eq!(
+        convoke_game.mana_ability_actions(player, true),
+        vec![Action::ActivateAbility {
+            player,
+            permanent: red,
+            ability_index: 0,
+        }]
+    );
+}
+
+#[test]
+fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
+    use crate::agent::action::Action;
+    use crate::flow::game::{Game, PendingChoice};
+    use crate::flow::payment::{AnnouncedSpell, Operation, Payment};
+    use crate::state::{
+        game_object::PlayerId, permanent::EntryChoice, player::PlayerConfig, zone::ZoneType,
+    };
+    use std::collections::BTreeMap;
+
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Three Tree Mascot".into(), 8),
+        ("Secluded Courtyard".into(), 8),
+        ("Forest".into(), 4),
+        ("Pillar Launch".into(), 4),
+        ("Helpful Hunter".into(), 4),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        433,
+        true,
+    );
+    game.keep_opening_hands();
+    game.scenario_clear_hand(player);
+
+    let mut mascots = Vec::new();
+    for _ in 0..8 {
+        mascots.push(
+            game.scenario_force_battlefield(player, "Three Tree Mascot", true)
+                .unwrap(),
+        );
+    }
+    for _ in 0..2 {
+        game.scenario_force_battlefield(player, "Forest", true)
+            .unwrap();
+    }
+    game.payment_cache.borrow_mut().entries.clear();
+
+    // Fixed sources (Forests) already pay `{G}` and fund Mascot's `{1}` filter
+    // even when 8 Mascots precede the Forests in source order: zero DFS calls.
+    SEARCHED.with(|s| s.set(0));
+    assert!(game.can_pay_with_mana_abilities(player, &ManaCost::parse("G"), None));
+    assert!(game.can_activate_mana_ability(player, mascots[0], 0));
+    assert_eq!(game.mana_ability_actions(player, true).len(), 8);
+    assert_eq!(SEARCHED.with(|s| s.get()), 0);
+
+    // Paying for Helpful Hunter ({1}{W}, Cat) with 6 Courtyards (1 Cat + 5
+    // non-Cat) and 8 Mascots: useful_payment_taps deduplicates equivalent
+    // Courtyards while offering all 6 in board order and keeping PaymentCache.
+    let mut courtyards = Vec::new();
+    for ty in ["Elf", "Goblin", "Cat", "Dragon", "Human", "Soldier"] {
+        let id = game
+            .scenario_force_battlefield(player, "Secluded Courtyard", true)
+            .unwrap();
+        game.state.permanents[id].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::CreatureType(ty.into())));
+        courtyards.push(id);
+    }
+    game.scenario_force_card_in_hand(player, "Helpful Hunter")
+        .unwrap();
+    let hunter = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+    let op = Operation::Spell(AnnouncedSpell {
+        object: hunter,
+        cast: Default::default(),
+        mode: None,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_shares: vec![],
+    });
+    let payment = Payment {
+        owed: game.cost_components(player, &op),
+        operation: op,
+        receipt: Default::default(),
+    };
+    game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(payment),
+    });
+    let actions =
+        game.compute_announced_mana_actions(player, game.pending_payment(player).unwrap());
+    let taps: Vec<_> = actions
+        .into_iter()
+        .filter(|action| matches!(action, Action::TapForMana { .. }))
+        .collect();
+    // Forests (2) + Courtyards (6) are all useful fixed taps toward {1}{W}.
+    assert_eq!(taps.len(), 8);
+    for id in courtyards {
+        assert!(taps.contains(&Action::TapForMana {
+            player,
+            permanent: id,
+        }));
+    }
+}
+
+#[test]
+fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
+    let filter = ManaActivation {
+        automatic: false,
+        tap_source: true,
+        tap_count: 0,
+        tap_candidates: Arc::new(Vec::new()),
+        limited: false,
+        sacrifice_source: false,
+        ability_index: 0,
+        cost: ManaCost::parse("1"),
+        outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),
+        life_cost: 0,
+    };
+    let model = PaymentModel {
+        cache: None,
+        sources: Arc::new(vec![
+            source(0, None, vec![filter.clone()]),
+            source(1, None, vec![filter.clone()]),
+            source(2, None, vec![filter.clone()]),
+            source(3, None, vec![filter]),
+            source(4, Some("G"), Vec::new()),
+            source(5, Some("G"), Vec::new()),
+        ]),
+        life: 20,
+    };
+    // Unpayable ({W}{U}{B}) and payable ({W}{U}) both match identity-keyed DFS.
+    for cost in ["WUB", "WU"] {
+        let obligations = vec![pay(cost)];
+        let state = search_state(&model, obligations);
+        bounded_search(&model, state, SourcePolicy::All, 200, true);
     }
 }

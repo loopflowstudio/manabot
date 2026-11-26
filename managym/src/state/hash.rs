@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 32;
+pub const MATCH_STATE_HASH_VERSION: u32 = 34;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -96,7 +96,7 @@ struct CanonicalTurn<'a> {
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "crate::state::game_object::exact"
     )]
-    graveyard_from_battlefield: Vec<ObjectId>,
+    graveyard_arrivals: Vec<(ObjectId, bool)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     ability_triggers_this_turn: Vec<(ObjectId, (CardDefId, usize), u32)>,
@@ -131,7 +131,7 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             attacks_this_turn: turn.attacks_this_turn.clone(),
 
             history: turn.history,
-            graveyard_from_battlefield: turn.graveyard_from_battlefield.clone(),
+            graveyard_arrivals: turn.graveyard_arrivals.clone(),
             used_trigger_grants: &turn.used_trigger_grants,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn

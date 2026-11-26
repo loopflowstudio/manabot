@@ -20,6 +20,20 @@ use crate::{
     Game,
 };
 
+fn payment_cost_part(cost: &PaymentCost) -> String {
+    match cost {
+        PaymentCost::Mana(cost) => cost_description(cost),
+        PaymentCost::Life(n) => format!("Pay {n} life"),
+        PaymentCost::Discard => "Discard a card".into(),
+        PaymentCost::Waterbend { generic } => format!("Waterbend {{{generic}}}"),
+        PaymentCost::All(parts) => parts
+            .iter()
+            .map(payment_cost_part)
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
 /// A keyword trigger's public name. ActiveIf is evaluated for its controller;
 /// intervening "if" and other trigger shapes are distinct rules.
 fn keyword_label(ability: &Ability, active: impl FnOnce(&Condition) -> bool) -> Option<String> {
@@ -75,9 +89,7 @@ fn keyword_label(ability: &Ability, active: impl FnOnce(&Condition) -> bool) -> 
         {
             Some(match cost {
                 PaymentCost::Mana(cost) => format!("Ward {}", cost_description(cost)),
-                PaymentCost::Life(n) => format!("Ward—Pay {n} life"),
-                PaymentCost::Discard => "Ward—Discard a card".into(),
-                PaymentCost::Waterbend { generic } => format!("Ward—Waterbend {{{generic}}}"),
+                other => format!("Ward—{}", payment_cost_part(other)),
             })
         }
         _ => None,

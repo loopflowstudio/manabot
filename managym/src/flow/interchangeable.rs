@@ -21,17 +21,17 @@ use crate::{
         cast_permission::{CastPermissions, PlayGrant, PlayRoute},
         combat::CombatState,
         decision::{
-            Decision, EffectFrame, FrameCompletion, ManaProduction, PendingManaBonus,
+            AfterNaming, Decision, EffectFrame, FrameCompletion, ManaProduction, PendingManaBonus,
             ResolutionCastOffer, ResolutionTarget, SpendCompletion, SuspendedResolution,
             TargetIteration,
         },
         event::{CombatPlayerHit, DamageTarget, GameEvent},
         game::{ActivationSource, CastChoices, Game, GameProcedure, GameState, PendingChoice},
-        payment::{CostComponent, Help, Operation, Payment, PaymentProgress},
+        payment::{AnnouncedSpell, CostComponent, Help, Operation, Payment, PaymentProgress},
         priority::PriorityState,
         proposed_event::{
-            DiscardCause, EntryFace, EventBatch, EventBinding, PendingEvent, ProposedDamageTarget,
-            ProposedEvent, ReplacementId, ZoneEntry,
+            DiscardCause, EntryDecision, EntryFace, EntryQuestion, EventBatch, EventBinding,
+            PendingEvent, ProposedDamageTarget, ProposedEvent, ReplacementId, ZoneEntry,
         },
         statics::Characteristics,
         trigger::{
@@ -184,7 +184,7 @@ impl<'a> ReferenceCensus<'a> {
             permanents,
             object_to_permanent: _, // storage index
             object_lki: _,          // vouched history (departed objects)
-            spell_lki: _,           // vouched history (departed spells)
+            spell_lki,              // history except live `copiable` retained for copy triggers
             players,
             zones: _,              // zone storage
             library_order_pins: _, // vouched: private branch sampling only, rules never read it
@@ -230,6 +230,7 @@ impl<'a> ReferenceCensus<'a> {
         // A settled permanent's `spell_entry.payment` is vouched as history.
         for permanent in permanents.iter().flatten() {
             let Permanent {
+                chosen: _,
                 transforms: _,
                 manifested: _,
                 id: _,
@@ -268,16 +269,20 @@ impl<'a> ReferenceCensus<'a> {
                 counters: _,
                 drew_when_empty: _,
                 mana_pool,
-                combat_mana_pool,
             } = player;
             mana_pool.visit_referenced_objects(|obj| self.mark_object(obj));
-            combat_mana_pool.visit_referenced_objects(|obj| self.mark_object(obj));
         }
 
         self.walk_turn_state(turn);
 
         for stack_object in stack_objects {
             self.walk_stack_object(stack_object);
+        }
+
+        for lki in spell_lki.values() {
+            if let Some(copiable) = &lki.copiable {
+                self.walk_spell_on_stack(&copiable.spell);
+            }
         }
 
         if let Some(combat) = combat.as_deref() {
@@ -361,7 +366,7 @@ impl<'a> ReferenceCensus<'a> {
             lands_played: _,
             spells_cast,
             history: _,
-            graveyard_from_battlefield,
+            graveyard_arrivals: _, // per-object arrival flags compared in `same_object_pair_cheap`
             damage_pairs,
             attacks_this_turn: _, // per-object count compared in `same_permanent_state_cheap`
             ability_triggers_this_turn,
@@ -382,9 +387,6 @@ impl<'a> ReferenceCensus<'a> {
             for RecordedCast { object, profile: _ } in seat_casts {
                 self.mark_object(*object);
             }
-        }
-        for &object in graveyard_from_battlefield {
-            self.mark_object(object);
         }
         damage_pairs.visit_objects(|obj| self.mark_object(obj));
         for &(object, _, _) in ability_triggers_this_turn.keys() {
@@ -552,32 +554,35 @@ impl<'a> ReferenceCensus<'a> {
         self.mark_object(*object);
     }
 
+    fn walk_spell_on_stack(&mut self, spell: &SpellOnStack) {
+        let SpellOnStack {
+            exile_instead_of_graveyard: _,
+            cast_from: _,
+            flashback: _,
+            from_prepared: _,
+            profile: _,
+            id: _,
+            object,
+            controller: _,
+            source_definition_id: _,
+            targets,
+            target_shares: _,
+            target_req_indices: _,
+            kicked: _,
+            x: _,
+            mode: _,
+            spent,
+        } = spell;
+        self.mark_object(*object);
+        for &target in targets {
+            self.mark_target(target);
+        }
+        spent.visit_referenced_objects(|obj| self.mark_object(obj));
+    }
+
     fn walk_stack_object(&mut self, stack_object: &StackObject) {
         match stack_object {
-            StackObject::Spell(spell) => {
-                let SpellOnStack {
-                    exile_instead_of_graveyard: _,
-                    cast_from: _,
-                    flashback: _,
-                    from_prepared: _,
-                    profile: _,
-                    id: _,
-                    object,
-                    controller: _,
-                    source_definition_id: _,
-                    targets,
-                    target_req_indices: _,
-                    kicked: _,
-                    x: _,
-                    mode: _,
-                    spent,
-                } = spell;
-                self.mark_object(*object);
-                for &target in targets {
-                    self.mark_target(target);
-                }
-                spent.visit_referenced_objects(|obj| self.mark_object(obj));
-            }
+            StackObject::Spell(spell) => self.walk_spell_on_stack(spell),
             StackObject::ActivatedAbility(ability) => {
                 self.walk_activated_ability_on_stack(ability);
             }
@@ -876,6 +881,9 @@ impl<'a> ReferenceCensus<'a> {
                 permanent,
                 ability_index: _,
             } => self.mark_permanent(*permanent),
+            PendingChoice::DivideAmongTargets { player: _, spell } => {
+                self.walk_announced_spell(spell);
+            }
             PendingChoice::ChooseTargets {
                 player: _,
                 object,
@@ -895,6 +903,22 @@ impl<'a> ReferenceCensus<'a> {
         }
     }
 
+    fn walk_announced_spell(&mut self, spell: &AnnouncedSpell) {
+        let AnnouncedSpell {
+            object,
+            cast,
+            mode: _,
+            targets,
+            target_req_indices: _,
+            target_shares: _,
+        } = spell;
+        self.mark_object(*object);
+        self.walk_cast_choices(cast);
+        for &target in targets {
+            self.mark_target(target);
+        }
+    }
+
     fn walk_payment(&mut self, payment: &Payment) {
         let Payment {
             operation,
@@ -902,19 +926,7 @@ impl<'a> ReferenceCensus<'a> {
             receipt,
         } = payment;
         match operation {
-            Operation::Spell {
-                object,
-                cast,
-                mode: _,
-                targets,
-                target_req_indices: _,
-            } => {
-                self.mark_object(*object);
-                self.walk_cast_choices(cast);
-                for &target in targets {
-                    self.mark_target(target);
-                }
-            }
+            Operation::Spell(spell) => self.walk_announced_spell(spell),
             Operation::Activation {
                 source,
                 ability_index: _,
@@ -968,6 +980,7 @@ impl<'a> ReferenceCensus<'a> {
     fn walk_payment_progress(&mut self, progress: &PaymentProgress) {
         let PaymentProgress {
             committed: _,
+            waterbend: _,
             player: _,
             owed,
             receipt,
@@ -976,7 +989,9 @@ impl<'a> ReferenceCensus<'a> {
             spends,
             counters_on_decline,
         } = progress;
-        self.walk_cost_component(owed);
+        for component in owed {
+            self.walk_cost_component(component);
+        }
         receipt.visit_referenced_objects(|obj| self.mark_object(obj));
         if let Some((object, _, _)) = spends {
             self.mark_object(*object);
@@ -1010,14 +1025,16 @@ impl<'a> ReferenceCensus<'a> {
             life_lost: _,
             this_way,
             selected,
+            unselected,
             selected_from: _,
             moved,
+            moved_from,
             selected_revealed: _,
             chosen,
             created,
             targets,
             active_requirement: _,
-            context_target,
+            context,
             attached,
             triggering_player: _,
             grantor,
@@ -1039,6 +1056,7 @@ impl<'a> ReferenceCensus<'a> {
                 target,
                 requirement: _,
                 legal: _,
+                share: _,
             } in remaining
             {
                 self.mark_target(*target);
@@ -1057,7 +1075,13 @@ impl<'a> ReferenceCensus<'a> {
         for &object in selected {
             self.mark_object(object);
         }
+        for &object in unselected {
+            self.mark_object(object);
+        }
         for &object in moved {
+            self.mark_object(object);
+        }
+        for &object in moved_from {
             self.mark_object(object);
         }
         self.mark_opt_object(*chosen);
@@ -1068,11 +1092,12 @@ impl<'a> ReferenceCensus<'a> {
             target,
             requirement: _,
             legal: _,
+            share: _,
         } in targets
         {
             self.mark_target(*target);
         }
-        self.mark_opt_target(*context_target);
+        self.mark_opt_target(*context);
         self.mark_opt_object(*attached);
         self.mark_opt_object(*grantor);
         self.walk_frame_completion(completion);
@@ -1173,6 +1198,7 @@ impl<'a> ReferenceCensus<'a> {
             | EventBinding::ThisWay
             | EventBinding::Discard { .. }
             | EventBinding::Destroyed
+            | EventBinding::OwnSacrifices
             | EventBinding::LifeLost
             | EventBinding::Damage { .. }
             | EventBinding::Deaths
@@ -1203,8 +1229,8 @@ impl<'a> ReferenceCensus<'a> {
 
     fn walk_zone_entry(&mut self, entry: &ZoneEntry) {
         let ZoneEntry {
+            chosen: _,
             discard,
-            chosen_creature_type: _,
             cast_from: _,
             resolving_adventure: _,
             adventure_player: _,
@@ -1291,13 +1317,38 @@ impl<'a> ReferenceCensus<'a> {
                     }
                 }
             }
-            Decision::ChooseCreatureType {
+            Decision::OrderEntryChoices {
                 player: _,
-                object_id,
+                questions,
+            } => {
+                for EntryDecision {
+                    member: _,
+                    object,
+                    decision,
+                    look_at_opponent_hand: _,
+                } in questions
+                {
+                    self.mark_object(*object);
+                    self.walk_decision(decision, false);
+                }
+            }
+            Decision::ChooseEntryValue {
+                player: _,
+                question: EntryQuestion { object, kind: _ },
                 scope: _,
-            } => self.mark_object(*object_id),
-            Decision::NameCard { .. }
-            | Decision::ChoosePaymentX { .. }
+            } => self.mark_object(*object),
+            Decision::NameCard {
+                player: _,
+                after,
+                names: _,
+                scope: _,
+            } => match after {
+                AfterNaming::Exile { count: _ } => {}
+                AfterNaming::Entry {
+                    question: EntryQuestion { object, kind: _ },
+                } => self.mark_object(*object),
+            },
+            Decision::ChoosePaymentX { .. }
             | Decision::SearchNamed { .. }
             | Decision::DistributeCounters { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -1362,11 +1413,17 @@ impl<'a> ReferenceCensus<'a> {
                 excluded,
                 optional: _,
                 effect: _,
-            } => self.mark_opt_permanent(*excluded),
+            } => {
+                for &id in excluded {
+                    self.mark_permanent(id);
+                }
+            }
             Decision::SelectCards {
                 origin: _,
                 player: _,
                 from: _,
+                pool,
+                inspected: _,
                 candidates,
                 selected,
                 min: _,
@@ -1375,8 +1432,17 @@ impl<'a> ReferenceCensus<'a> {
                 if_declined: _,
             } => {
                 if !is_current {
+                    for &object in pool {
+                        self.mark_object(object);
+                    }
                     for &object in candidates {
                         self.mark_object(object);
+                    }
+                } else {
+                    for &object in pool {
+                        if !candidates.contains(&object) {
+                            self.mark_object(object);
+                        }
                     }
                 }
                 for &object in selected {
@@ -1500,10 +1566,29 @@ impl<'a> ReferenceCensus<'a> {
                 grantee: _,
                 source,
             } => self.mark_opt_object(*source),
-            Decision::KeepCreatures {
+            Decision::PartitionPiles {
                 player: _,
-                max_total_power: _,
-                sacrifice: _,
+                looked,
+                next: _,
+                face_up,
+            } => {
+                for &object in looked.iter().chain(face_up) {
+                    self.mark_object(object);
+                }
+            }
+            Decision::ChoosePile {
+                player: _,
+                owner: _,
+                looked,
+                face_up,
+            } => {
+                for &object in looked.iter().chain(face_up) {
+                    self.mark_object(object);
+                }
+            }
+            Decision::KeepPermanents {
+                player: _,
+                limit: _,
                 kept,
             } => {
                 for &id in kept {
@@ -1513,9 +1598,14 @@ impl<'a> ReferenceCensus<'a> {
             Decision::Retarget {
                 player: _,
                 object,
-                slot: _,
+                chosen,
                 may_keep: _,
-            } => self.mark_target(*object),
+            } => {
+                self.mark_target(*object);
+                for &target in chosen {
+                    self.mark_target(target);
+                }
+            }
             Decision::ChooseToExile {
                 player: _,
                 controller: _,
@@ -1559,6 +1649,7 @@ fn settled_spell_entry_key(entry: Option<&SpellEntry>) -> (bool, bool, u8) {
 /// characteristics are known.
 fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
     let Permanent {
+        chosen,
         transforms,
         manifested,
         id: _,     // unique public id
@@ -1581,6 +1672,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         activated_this_turn,
     } = left;
     let Permanent {
+        chosen: r_chosen,
         transforms: r_transforms,
         manifested: r_manifested,
         id: _,
@@ -1608,7 +1700,8 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         return false;
     }
 
-    transforms == r_transforms
+    chosen == r_chosen
+        && transforms == r_transforms
         && manifested == r_manifested
         && controller == r_controller
         && control_differs_from_entry == r_control_differs_from_entry
@@ -2112,6 +2205,18 @@ impl Game {
             self.state[left].same_object_identity(&self.state[right])
                 && self.same_permanent_state_cheap(left_id, left_perm, right_id, right_perm)
         } else {
+            let turn = &self.state.turn;
+            if !turn.graveyard_arrivals.is_empty()
+                && (
+                    turn.in_graveyard_this_turn(left),
+                    turn.in_graveyard_from_battlefield(left),
+                ) != (
+                    turn.in_graveyard_this_turn(right),
+                    turn.in_graveyard_from_battlefield(right),
+                )
+            {
+                return false;
+            }
             self.state
                 .entry_object(left)
                 .same_object_identity(self.state.entry_object(right))
@@ -2234,6 +2339,7 @@ impl Game {
                 | PendingChoice::KickerChoice { .. }
                 | PendingChoice::ActivationX { .. }
                 | PendingChoice::SpellMode { .. }
+                | PendingChoice::DivideAmongTargets { .. }
                 | PendingChoice::ChooseTargets { .. } => false,
             };
         }
@@ -2251,13 +2357,14 @@ impl Game {
             | Decision::CastDuringResolution { .. }
             | Decision::ExileLinked { .. }
             | Decision::Discard { .. }
-            | Decision::KeepCreatures { .. }
+            | Decision::KeepPermanents { .. }
             | Decision::ChooseToExile { .. }
             | Decision::LegendRule { .. } => true,
-            Decision::OrderMeldedCards { .. }
+            Decision::OrderEntryChoices { .. }
+            | Decision::ChooseEntryValue { .. }
+            | Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }
             | Decision::OrderReplacement { .. }
-            | Decision::ChooseCreatureType { .. }
             | Decision::NameCard { .. }
             | Decision::ChoosePaymentX { .. }
             | Decision::ManaSpend { .. }
@@ -2269,6 +2376,8 @@ impl Game {
             | Decision::LookAndSelect { .. }
             | Decision::OrderLibrary { .. }
             | Decision::SearchDistinctNames { .. }
+            | Decision::PartitionPiles { .. }
+            | Decision::ChoosePile { .. }
             | Decision::OpponentSplitsRevealed { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }

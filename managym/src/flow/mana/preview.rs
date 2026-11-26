@@ -4,6 +4,7 @@ use super::*;
 use crate::agent::ability_description::cost_description;
 use crate::experience::{PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
+use crate::flow::payment::AnnouncedSpell;
 use crate::flow::payment::CostComponent;
 use crate::flow::play::CastAuthority;
 
@@ -56,7 +57,8 @@ impl From<&Mana> for PreviewPool {
                 .iter()
                 .map(|(class, amounts)| PooledManaView {
                     mana: amounts.map(i32::from),
-                    combat: class.combat,
+                    combat: class.expiry == crate::state::mana::ManaExpiry::EndOfCombat,
+                    expiry: class.expiry.as_str().into(),
                     restriction: class.restriction.as_ref().map(|r| r.describe()),
                     effect: class
                         .effect
@@ -118,13 +120,14 @@ impl Game {
     ) -> Vec<CostComponent> {
         self.cost_components(
             player,
-            &Operation::Spell {
+            &Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 mode: None,
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
-            },
+                target_shares: Vec::new(),
+            }),
         )
     }
 
@@ -246,7 +249,7 @@ impl Game {
                             .filter(|index| **index == *requirement_index)
                             .count()
                             + 1
-                            >= requirements[*requirement_index].max_for(cast.x);
+                            >= requirements[*requirement_index].max_for(cast.x, cast.kicked);
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
                             "Choose the remaining targets before previewing this target-dependent cost."));
@@ -269,8 +272,8 @@ impl Game {
                 // A cost paid in life has no mana route: `None` answers
                 // `not_applicable` below, as for any other decision.
                 match suspended.decision {
-                    Decision::Payment(payment) => match payment.owed.clone() {
-                        CostComponent::Mana { cost, .. } => {
+                    Decision::Payment(payment) => match payment.owed.first().cloned() {
+                        Some(CostComponent::Mana { cost, .. }) => {
                             sources.extend(
                                 offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
                             );
@@ -680,14 +683,14 @@ mod tests {
             &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), blue),
             None,
         );
-        game.state.combat_mana_pool_mut(payer).add(
+        game.state.mana_pool_mut(payer).add(
             &Mana::of_class(
                 ManaClass {
                     restriction: Some(ManaRestriction::spell(["Pirate"])),
                     effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
                         without_subtype: "Human".into(),
                     }),
-                    combat: false,
+                    expiry: crate::state::mana::ManaExpiry::EndOfCombat,
                 },
                 blue,
             ),
@@ -745,9 +748,17 @@ mod tests {
         let rider = crate::state::mana::SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),
         };
-        game.state
-            .combat_mana_pool_mut(PlayerId(0))
-            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]), None);
+        game.state.mana_pool_mut(PlayerId(0)).add(
+            &Mana::of_class(
+                crate::state::mana::ManaClass {
+                    expiry: crate::state::mana::ManaExpiry::EndOfCombat,
+                    restriction: None,
+                    effect: Some(rider),
+                },
+                [0, 0, 0, 1, 0, 0],
+            ),
+            None,
+        );
         let result = preview(&game, cast_index(&game));
         assert!(result.sources.is_empty());
         let final_pool = result.pool_after_spending.unwrap();

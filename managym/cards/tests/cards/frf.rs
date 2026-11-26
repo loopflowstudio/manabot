@@ -65,3 +65,48 @@ fn foundations_5e_valorous_stance() {
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
 }
+
+#[test]
+fn flamewake_phoenix_must_attack_and_returns_from_graveyard_on_ferocious() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::zone_of,
+        play::{choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::player::ManaPayment,
+    };
+
+    // Without a 4+ power creature: graveyard trigger does not fire.
+    let mut s = five_color_setup(&["Flamewake Phoenix", "Gray Ogre", "Craw Wurm"]);
+    let phoenix = plant_in_graveyard(&mut s, 0, "Flamewake Phoenix");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert_eq!(zone_of(&s, phoenix), Some(ZoneType::Graveyard));
+
+    // With a 4+ power creature: triggers at beginning of combat, pays {R}, returns with haste and must attack.
+    let mut s = five_color_setup(&["Flamewake Phoenix", "Craw Wurm"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let phoenix = plant_in_graveyard(&mut s, 0, "Flamewake Phoenix");
+    s.force_permanent_on_battlefield(0, "Craw Wurm");
+    s.force_permanent_on_battlefield(0, "Mountain");
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, phoenix), Some(ZoneType::Battlefield));
+    let phoenix_perm = s.battlefield_permanents_named(0, "Flamewake Phoenix")[0];
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    assert!(
+        !s.action_space().actions.iter().any(|a| matches!(
+            a,
+            Action::DeclareAttacker {
+                permanent,
+                attack: false,
+                ..
+            } if *permanent == phoenix_perm
+        )),
+        "Flamewake Phoenix must attack if able"
+    );
+}

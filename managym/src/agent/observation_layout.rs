@@ -26,6 +26,13 @@ impl InputLayout {
     }
 }
 
+pub fn card_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::OneToken => card::COLUMNS,
+        InputLayout::Legacy => &card::COLUMNS[..super::legacy_input::CARD_DIM],
+    }
+}
+
 /// A permanent row's columns: input v11 writes every `permanent` column; the
 /// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
 /// (`legacy_input`).
@@ -374,6 +381,7 @@ columns! { card {
     53: HAS_X => ("has_x", ValueLayout::FLAG),
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
+    56: PUT_INTO_GRAVEYARD_THIS_TURN => ("put_into_graveyard_this_turn", ValueLayout::FLAG),
 } }
 
 columns! { permanent {
@@ -916,6 +924,9 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::ChosenColor => ("chosen_color","id: chosen color token; value: 1"),
+        FactKind::ChosenSubtype => ("chosen_subtype","id: chosen creature type token; value: 1"),
+        FactKind::ChosenName => ("chosen_name","id: chosen card name; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::Keyword => ("keyword", "id: keyword token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
@@ -1031,7 +1042,7 @@ pub fn observation_layout(
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
             ("player", "player", Some(1), layout_kind.player_columns()),
-            ("cards", "card", None, card::COLUMNS),
+            ("cards", "card", None, card_columns(layout_kind)),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
             layout.insert(
@@ -1148,7 +1159,12 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount | FactKind::Keyword
+                FactKind::AbilityResolution
+                    | FactKind::TriggeringAmount
+                    | FactKind::Keyword
+                    | FactKind::ChosenColor
+                    | FactKind::ChosenSubtype
+                    | FactKind::ChosenName
             )
     });
     facts.row_kinds = kinds
@@ -1265,7 +1281,11 @@ mod tests {
                     config.player_dim(),
                     if one_token { 76 } else { 74 },
                 ),
-                ("agent_cards", card::WIDTH, 56),
+                (
+                    "agent_cards",
+                    config.card_dim(),
+                    if one_token { 57 } else { 56 },
+                ),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
@@ -1328,7 +1348,8 @@ mod tests {
                 layout["agent_permanents"].columns[permanent_valid].name,
                 "valid"
             );
-            for key in ["agent_cards", "facts", "effects"] {
+            assert_eq!(layout["agent_cards"].columns[card::VALID].name, "valid");
+            for key in ["facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

@@ -39,6 +39,10 @@
   import { paymentPlan, previewable } from './payment';
   import { addAttackers, addressOf, ATTACK_INSTRUCTION, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type Draft } from './combat';
+  import {
+    loadPartitionDraft, partitionContext, partitionOffer, partitionSteps, partitionWords,
+    savePartitionDraft, swapPiles, toggleCardPile, type PartitionStep,
+  } from './partition';
   import { offerText, primaryLabel, promptHint, promptLine } from './prompt';
   import { recentMarks, boardLines, turnOwners, type Endpoint, type RecentMarks } from './recent';
   import Plate from './Plate.svelte';
@@ -379,6 +383,95 @@
     draft = EMPTY_DRAFT;
   }
 
+  // ———————————————— Pile partition draft
+
+  // Curator of Destinies asks about one inspected card at a time. Show all
+  // remaining inspected cards together so a person can split them holistically,
+  // then send the engine's exact per-card offers one by one on Confirm.
+  let partitionFaceUp = $state.raw<number[]>([]);
+  let partitionRunning = $state.raw<{ steps: PartitionStep[]; at: number; sentAt: number } | null>(null);
+  let partitionFolded = $state(false);
+  let partitionFrameKey = '';
+  const partition = $derived(live && !drafting && !running ? partitionContext(frame) : null);
+  const partitioning = $derived(partition !== null && !partitionRunning);
+
+  $effect(() => {
+    const active = partition !== null;
+    const key = `${frame.match_id}:${frame.frame_hash}:${active}`;
+    if (key === partitionFrameKey) return;
+    partitionFrameKey = key;
+    untrack(() => {
+      if (partitionRunning) return;
+      partitionFolded = false;
+      if (!partition) { partitionFaceUp = []; return; }
+      const validIds = new Set(partition.remaining.map(card => card.id));
+      partitionFaceUp = loadPartitionDraft(frame, validIds) ?? [];
+    });
+  });
+  $effect(() => {
+    if (partitioning) savePartitionDraft(frame, partitionFaceUp);
+  });
+
+  const partitionSummary = $derived(partition ? partitionWords(partition.remaining, partitionFaceUp, partition.committed.length) : null);
+  const partitionUpSet = $derived(new Set(partitionFaceUp));
+  const partitionUpCards = $derived(partition ? partition.remaining.filter(card => partitionUpSet.has(card.id)) : []);
+  const partitionDownCards = $derived(partition ? partition.remaining.filter(card => !partitionUpSet.has(card.id)) : []);
+
+  function togglePartitionCard(cardId: number): void {
+    if (!partitioning) return;
+    stopNote = null;
+    partitionFaceUp = toggleCardPile(partitionFaceUp, cardId);
+  }
+
+  function confirmPartition(): void {
+    if (!partitioning || !partition || !partition.remaining.length) return;
+    const steps = partitionSteps(partition.remaining, partitionFaceUp);
+    const offer = partitionOffer(frame, steps[0]);
+    if (!offer) {
+      stopNote = 'The decision changed before the split was sent; split the remaining cards again.';
+      return;
+    }
+    partitionRunning = { steps, at: 0, sentAt: frame.revision };
+    send(offer);
+  }
+
+  $effect(() => {
+    const revision = frame.revision;
+    const sending = partitionRunning;
+    if (!sending) return;
+    const answerable = live && !pending;
+    untrack(() => {
+      if (revision === sending.sentAt) {
+        if (!answerable) return;
+        partitionRunning = null;
+        if (sending.at > 0) {
+          partitionFaceUp = [];
+          stopNote = `Stopped after ${sending.at} of ${sending.steps.length}. The next choice was not accepted. Split any remaining cards from here.`;
+        }
+        return;
+      }
+      const next = sending.at + 1;
+      if (next >= sending.steps.length) { partitionRunning = null; partitionFaceUp = []; return; }
+      if (!answerable) return;
+      const offer = partitionOffer(frame, sending.steps[next]);
+      if (!offer) {
+        partitionRunning = null;
+        partitionFaceUp = [];
+        stopNote = `Stopped after ${next} of ${sending.steps.length}: the game asked something unexpected. The board shows where it stands; split any remaining cards from here.`;
+        return;
+      }
+      partitionRunning = { ...sending, at: next, sentAt: revision };
+      onact(offer);
+    });
+  });
+
+  function stopPartitionSending(): void {
+    if (!partitionRunning) return;
+    stopNote = `Stopped after ${partitionRunning.at + 1} of ${partitionRunning.steps.length}; the rest was not sent.`;
+    partitionRunning = null;
+    partitionFaceUp = [];
+  }
+
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
   const drafted = $derived(joint ? drawDraft(frame, draft) : frame);
   const view = $derived(boardView(drafted, players));
@@ -473,9 +566,11 @@
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
   const line = $derived(drafting && words ? (exact?.refused ? exact.refused.reason : words.plan)
     : running ? `Declaring ${running.at + 1} of ${running.preview.steps.length}…`
-      : promptLine(frame, view, !readOnly));
+      : partitioning && partitionSummary ? partitionSummary.plan
+        : partitionRunning ? `Placing ${partitionRunning.at + 1} of ${partitionRunning.steps.length}…`
+          : promptLine(frame, view, !readOnly));
   // How to answer with the live input; a recording has none.
-  const hint = $derived(joint || readOnly ? null : promptHint(frame, view));
+  const hint = $derived(joint || partitioning || partitionRunning || readOnly ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -706,7 +801,7 @@
         : board.asked,
   );
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
+  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting || partitioning));
   const boardNotice = $derived.by<{ testid: string; text: string } | null>(() => {
     if (activeCursor === null) return null;
     if (stepBoardsError) return { testid: 'board-unavailable', text: 'Board unavailable for this step' };
@@ -1237,7 +1332,7 @@
   let ctrlShift = false;
 
   $effect(() => {
-    if (recording || !live || activeCursor !== null || result || drafting || !onautotap) return;
+    if (recording || !live || activeCursor !== null || result || drafting || partitioning || partitionRunning || !onautotap) return;
     if (fullControl === 'once') {
       if (frame.action_space === 'PAY_OR_NOT') {
         wasPayingInOnce = true;
@@ -1348,6 +1443,7 @@
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
     if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
+    if (event.key === 'Escape' && partitionRunning) { stopPartitionSending(); return; }
     if (event.key === 'Escape' && live && armed !== null) { armed = null; return; }
     if (event.key === 'Escape' && (menuAt || zoneAt || hovered)) { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'Escape' && activeCursor !== null) { clearActiveCursor(); return; }
@@ -1364,8 +1460,8 @@
     }
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // A combat draft declares the whole combat; its per-creature offers are not numbered shortcuts.
-      if (!menuAt && joint) return;
+      // A joint combat or pile-partition draft owns the whole decision; its folded per-item offers are not numbered shortcuts.
+      if (!menuAt && (joint || partitioning || partitionRunning)) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1380,6 +1476,7 @@
       if (inHistoryOrWalk) event.preventDefault();
       if (!inHistoryOrWalk && ownsSpace(event.target)) return;
       if (drafting) { event.preventDefault(); confirmDraft(); return; }
+      if (partitioning) { event.preventDefault(); confirmPartition(); return; }
       if (view.primary && live) { event.preventDefault(); act(view.primary); }
     }
   }
@@ -1481,7 +1578,7 @@
     data-board={activeCursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
     onclick={event => { if (activeCursor !== null && !(event.target instanceof Element && event.target.closest('.zone, .combat-table-sheet'))) clearActiveCursor(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
-      <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
+      <Plate player={boardProjection.opponent} definitionNames={boardProjection.definition_names} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         stopLifeDelta={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} pointed={pointedPlayerIndex === boardProjection.opponent.player_index} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
         ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
@@ -1516,7 +1613,7 @@
           </div>
         {/each}
       </div>
-      {#if view.tray.length && !finished && activeCursor === null}
+      {#if view.tray.length && !finished && !partitioning && !partitionRunning && activeCursor === null}
         <div class="tray" role="group" aria-label="Choices from outside the board" data-testid="tray" style:max-width={`${trayReserve}px`}>
           {#each view.tray as item (item.placed.offer.id)}
             {#if item.name}
@@ -1535,6 +1632,73 @@
         </div>
       {/if}
     </section>
+
+    {#if (partitioning || partitionRunning) && partition && !finished && activeCursor === null}
+      <!-- Over the board, foldable so the battlefield stays readable around it. -->
+      <section use:region={{ across: connection !== null }} class="partition-panel" class:folded={partitionFolded} aria-label={`${partition.sourceName}: split into two piles`} data-testid="partition-panel">
+        {#if partitionFolded}
+          <button type="button" class="btn btn-secondary btn-sm" data-testid="partition-unfold" onclick={() => (partitionFolded = false)}>Show pile split</button>
+        {:else}
+          <header class="partition-head">
+            <div>
+              <p class="type-heading text-ink">{partition.sourceName} · Split into two piles</p>
+              <p class="type-caption text-ink-2">Click a card to move it between piles. Your opponent sees the face-up pile and only the count of face-down cards.</p>
+            </div>
+            <button type="button" class="fold type-caption" data-testid="partition-fold" onclick={() => (partitionFolded = true)}>Look at the board</button>
+          </header>
+          <div class="partition-piles">
+            {#each [
+              {
+                key: 'face_up',
+                testId: 'partition-pile-up',
+                title: 'Face-up',
+                hint: 'Opponent sees these',
+                cards: partitionUpCards,
+                draft: 'in' as const,
+                note: 'in the face-up pile; press to move to the face-down pile',
+                empty: 'Empty — click a card below to put it face-up',
+              },
+              {
+                key: 'face_down',
+                testId: 'partition-pile-down',
+                title: 'Face-down',
+                hint: 'Hidden — opponent sees count only',
+                cards: partitionDownCards,
+                draft: 'can' as const,
+                note: 'in the face-down pile; press to move to the face-up pile',
+                empty: 'Empty — all remaining cards are face-up',
+              },
+            ] as pile (pile.key)}
+              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.cards.length} ${pile.cards.length === 1 ? 'card' : 'cards'}`}>
+                <p class="partition-pile-head">
+                  <span class="type-label text-ink">{pile.title} · {pile.cards.length}</span>
+                  <span class="type-caption text-ink-3">{pile.hint}</span>
+                </p>
+                {#if pile.cards.length}
+                  <div class="partition-cards">
+                    {#each pile.cards as card (card.id)}
+                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile={pile.key}>
+                        <BoardCard name={card.name} width={104} {card} live={partitioning} draft={pile.draft}
+                          note={pile.note}
+                          onactivate={() => togglePartitionCard(card.id)}
+                          onpreview={element => previewCard(element ? card : null, element)} />
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="partition-empty type-caption text-ink-3">{pile.empty}</p>
+                {/if}
+              </div>
+            {/each}
+          </div>
+          {#if partition.committed.length}
+            <p class="partition-committed type-caption text-ink-3" data-testid="partition-committed">
+              Already placed ({partition.committed.length}): {partition.committed.map(card => card.name).join(', ')}
+            </p>
+          {/if}
+        {/if}
+      </section>
+    {/if}
 
     {#if dragging && carried}
       <!-- Where releasing plays the card, and what it does: the battlefield above the hand. -->
@@ -1616,8 +1780,25 @@
       {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} recording={readOnly} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
       cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
-      draft={joint ? combatControls : undefined} stopped={stopNote} />
+      draft={joint ? combatControls : partitioning || partitionRunning ? partitionControls : undefined} stopped={stopNote} />
   </div>
+
+  {#snippet partitionControls()}
+    <div class="combat-draft" data-testid="partition-draft">
+      {#if partitionRunning}
+        <button type="button" class="btn btn-secondary" data-testid="partition-stop" onclick={stopPartitionSending}><kbd>Esc</kbd>Stop sending</button>
+      {:else if partition && partitionSummary}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready="true"
+          aria-label={`Confirm: ${partitionSummary.plan}`} title={partitionSummary.plan}
+          disabled={!live} onclick={confirmPartition}>
+          <span>{partitionSummary.text}</span><kbd>Space</kbd>
+        </button>
+        <button type="button" class="btn btn-secondary secondary" data-testid="partition-swap" disabled={!live}
+          onclick={() => { stopNote = null; partitionFaceUp = swapPiles(partition.remaining, partitionFaceUp); }}>Swap piles</button>
+        <p class="type-caption text-ink-3">Nothing is placed until you confirm. Click any card to move it between piles.</p>
+      {/if}
+    </div>
+  {/snippet}
 
   {#snippet combatControls()}
     <div class="combat-draft" data-testid="combat-draft" data-kind={preview?.kind}>
@@ -1963,6 +2144,28 @@
   .result-card .fold { justify-self: end; color: var(--text-secondary); }
   .result-card .fold:hover { color: var(--text); }
 
+  .partition-panel {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); z-index: var(--layer-panel);
+    width: min(680px, 92%); max-height: 82%; overflow-y: auto;
+    display: grid; gap: 12px; padding: 16px 18px 14px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+    background: var(--bg-surface); box-shadow: var(--shadow-raised);
+    animation: appear var(--motion-fast) ease-out;
+  }
+  .partition-panel.folded { top: auto; bottom: 12px; left: auto; right: 12px; transform: none; width: auto; max-height: none; padding: 6px; }
+  .partition-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .partition-head .fold { flex: none; color: var(--text-secondary); }
+  .partition-head .fold:hover { color: var(--text); }
+  .partition-piles { display: grid; gap: 10px; }
+  .partition-pile {
+    display: grid; gap: 8px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-field);
+  }
+  .partition-pile-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .partition-cards { display: flex; flex-wrap: wrap; gap: 8px; }
+  .partition-empty { padding: 10px 0; }
+  .partition-committed { border-top: 1px solid var(--border); padding-top: 8px; }
+
   .combat-draft { display: grid; gap: 6px; }
   /* The draft's buttons are the rail's primary and secondary, drawn by the board. */
   .combat-draft .primary { height: 40px; padding-block: 6px; width: 100%; font-size: 14px; justify-content: center; white-space: nowrap; }
@@ -2046,6 +2249,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }
-    .menu, .preview, .result-card, .keys { animation: none; }
+    .menu, .preview, .result-card, .partition-panel, .keys { animation: none; }
   }
 </style>

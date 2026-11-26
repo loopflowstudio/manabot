@@ -237,6 +237,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         controller: PlayerId(0),
         source_definition_id: CardDefId(7),
         targets: Vec::new(),
+        target_shares: Vec::new(),
         target_req_indices: Vec::new(),
         kicked: false,
         x: 0,
@@ -303,7 +304,7 @@ fn pending_turn_and_combat_schedules_are_part_of_match_identity() {
 
     let mut gy_from_bf = baseline.clone();
     let card = gy_from_bf.state.zones.latest().next().unwrap();
-    gy_from_bf.state.turn.graveyard_from_battlefield.push(card);
+    gy_from_bf.state.turn.graveyard_arrivals.push((card, true));
     assert_ne!(gy_from_bf.state.deterministic_hash(), hash);
 
     let mut declined = baseline.clone();

@@ -15,7 +15,48 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![exsanguinate(), steel_hellkite(), painful_quandary()]
+    vec![
+        genesis_wave(),
+        exsanguinate(),
+        steel_hellkite(),
+        painful_quandary(),
+    ]
+}
+
+fn genesis_wave() -> CardDefinition {
+    let text_box = "Reveal the top X cards of your library. You may put any number of permanent cards with mana value X or less from among them onto the battlefield. Then put all cards revealed this way that weren't put onto the battlefield into your graveyard.";
+    CardDefinition {
+        key: "som.genesis_wave",
+        scryfall_id: "c920236f-c3d7-421c-b021-103996da790e",
+        printed: PrintedCharacteristics {
+            name: "Genesis Wave".into(),
+            mana_cost: Some(ManaCost::parse("{X}{G}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::Reveal {
+                    what: ObjectSelector::LibraryTop(Box::new(EffectValue::X)),
+                },
+                Effect::SelectCards {
+                    from: ObjectSelector::LibraryTop(Box::new(EffectValue::X)),
+                    predicate: CardPredicate::permanent(),
+                    max_mana_value: Some(Box::new(EffectValue::X)),
+                    min: 0,
+                    max: EffectValue::X,
+                    effects: vec![
+                        Effect::return_to_battlefield(ObjectSelector::Selected, false),
+                        Effect::move_to(ObjectSelector::Unselected, ZoneType::Graveyard),
+                    ],
+                    if_declined: vec![Effect::move_to(
+                        ObjectSelector::Unselected,
+                        ZoneType::Graveyard,
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn exsanguinate() -> CardDefinition {
@@ -108,6 +149,7 @@ fn painful_quandary() -> CardDefinition {
                     effects: vec![Effect::SelectCards {
                         from: ObjectSelector::Zone(ZoneType::Hand),
                         predicate: CardPredicate::default(),
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::move_to(
