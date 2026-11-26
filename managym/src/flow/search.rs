@@ -289,8 +289,8 @@ impl Game {
             });
             if !unchanged {
                 self.publish_folded_action_space(space, aliases);
-            } else {
-                self.set_published_aliases(aliases);
+            } else if let Some(decision) = self.published_decision.as_mut() {
+                decision.aliases = aliases;
             }
         }
     }

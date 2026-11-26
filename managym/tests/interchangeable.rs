@@ -1,6 +1,6 @@
-//! Pass 1–2 proofs for MTG-487: indistinguishable-object predicate, permanent
-//! and card/selection offer folding, alias storage, compound lowering through
-//! aliases, and a debug-build behavioral soundness oracle.
+//! Proofs for MTG-487: indistinguishable-object predicate, permanent/card/selection
+//! offer folding, combat symmetry breaking and normalization, alias storage and
+//! published-decision seam, compound lowering, and a debug-build soundness oracle.
 
 use std::collections::BTreeMap;
 
@@ -58,15 +58,51 @@ fn position(lands: &[&str], entries: &[(&str, usize)], spell: &str) -> Game {
     game
 }
 
+fn try_step_matching(game: &mut Game, pred: impl Fn(&Action) -> bool) -> bool {
+    if let Some(idx) = game.action_space().unwrap().actions.iter().position(pred) {
+        game.step(idx).unwrap();
+        true
+    } else {
+        false
+    }
+}
+
+fn step_matching(game: &mut Game, pred: impl Fn(&Action) -> bool) {
+    assert!(try_step_matching(game, pred), "expected matching action");
+}
+
 fn cast_first(game: &mut Game) {
-    let idx = game
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| a.action_type() == ActionType::PriorityCastSpell)
-        .expect("castable spell");
-    game.step(idx).unwrap();
+    step_matching(game, |a| a.action_type() == ActionType::PriorityCastSpell);
+}
+
+fn pin_object(game: &mut Game, controller: PlayerId, object: ObjectId) {
+    game.state.delayed_triggers.push(DelayedTrigger {
+        remembered: vec![ObjectBinding {
+            object,
+            selection: None,
+            known_to: [true, true],
+        }],
+        event: DelayedTriggerEvent::EndStep { your_turn: false },
+        controller,
+        source_identity: AbilitySource::exact(object),
+        effects: DelayedEffects::new(Vec::new()),
+        frequency: DelayedFrequency::Once,
+        expiry: DelayedExpiry::ThisTurn,
+    });
+}
+
+fn grant_must_be_blocked(game: &mut Game, controller: PlayerId, perm: PermanentId) {
+    let object = game.permanent_object(perm).unwrap();
+    let timestamp = game.state.permanents[perm].as_ref().unwrap().timestamp;
+    game.state.effects.push(ContinuousEffect {
+        timestamp,
+        source: None,
+        controller,
+        affected: Affected::Object(object),
+        modification: Modification::MustBeBlocked,
+        duration: EffectDuration::EndOfTurn,
+        source_object: None,
+    });
 }
 
 fn labels(game: &Game) -> Vec<String> {
@@ -364,16 +400,10 @@ fn snapshot_and_game_over_preserve_and_clear_aliases() {
     );
 
     // Game over clears aliases cleanly.
-    let mut game = position(&["Forest"; 3], &entries, "Badgermole Cub");
-    game.mana_floats = [ManaFloats::All, ManaFloats::Off];
-    game.scenario_refresh_priority().unwrap();
-    assert!(!game.action_aliases().is_empty());
-    game.lose_game(PlayerId(1));
-    game.step(0).unwrap_or(false);
-    // Tick into terminal space via a fresh game-over transition.
     let mut over = position(&["Forest"; 3], &entries, "Badgermole Cub");
     over.mana_floats = [ManaFloats::All, ManaFloats::Off];
     over.scenario_refresh_priority().unwrap();
+    assert!(!over.action_aliases().is_empty());
     over.state.players[1].life = 0;
     let pass = over
         .action_space()
@@ -900,19 +930,7 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
         .zone_objects(ZoneType::Hand, player)
         .to_vec();
     assert!(pin_game.interchangeable(flyers[0], flyers[1]));
-    pin_game.state.delayed_triggers.push(DelayedTrigger {
-        remembered: vec![ObjectBinding {
-            object: flyers[0],
-            selection: None,
-            known_to: [true, true],
-        }],
-        event: DelayedTriggerEvent::EndStep { your_turn: false },
-        controller: player,
-        source_identity: AbilitySource::exact(flyers[0]),
-        effects: DelayedEffects::new(Vec::new()),
-        frequency: DelayedFrequency::Once,
-        expiry: DelayedExpiry::ThisTurn,
-    });
+    pin_object(&mut pin_game, player, flyers[0]);
     pin_game.scenario_refresh_priority().unwrap();
     assert!(!pin_game.interchangeable(flyers[0], flyers[1]));
     let cast_count = pin_game
@@ -1025,24 +1043,10 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
     rev_unpinned.skip_trivial = false;
     rev_unpinned.scenario_refresh_priority().unwrap();
     cast_first(&mut rev_unpinned);
-    if let Some(t) = rev_unpinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::ChooseTarget { .. }))
-    {
-        rev_unpinned.step(t).unwrap();
-    }
-    if let Some(p) = rev_unpinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::PayCost { .. }))
-    {
-        rev_unpinned.step(p).unwrap();
-    }
+    try_step_matching(&mut rev_unpinned, |a| {
+        matches!(a, Action::ChooseTarget { .. })
+    });
+    try_step_matching(&mut rev_unpinned, |a| matches!(a, Action::PayCost { .. }));
     pass_until(&mut rev_unpinned, |g| {
         g.action_space()
             .is_some_and(|s| s.kind == ActionSpaceKind::Discard)
@@ -1053,39 +1057,13 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
     // Pinned copy: pinning opp_hand[0] keeps both copies separate (previously broken by dedup).
     let mut rev_pinned = rev_base;
     rev_pinned.skip_trivial = false;
-    rev_pinned.state.delayed_triggers.push(DelayedTrigger {
-        remembered: vec![ObjectBinding {
-            object: opp_hand[0],
-            selection: None,
-            known_to: [true, true],
-        }],
-        event: DelayedTriggerEvent::EndStep { your_turn: false },
-        controller: player,
-        source_identity: AbilitySource::exact(opp_hand[0]),
-        effects: DelayedEffects::new(Vec::new()),
-        frequency: DelayedFrequency::Once,
-        expiry: DelayedExpiry::ThisTurn,
-    });
+    pin_object(&mut rev_pinned, player, opp_hand[0]);
     rev_pinned.scenario_refresh_priority().unwrap();
     cast_first(&mut rev_pinned);
-    if let Some(t) = rev_pinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::ChooseTarget { .. }))
-    {
-        rev_pinned.step(t).unwrap();
-    }
-    if let Some(p) = rev_pinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::PayCost { .. }))
-    {
-        rev_pinned.step(p).unwrap();
-    }
+    try_step_matching(&mut rev_pinned, |a| {
+        matches!(a, Action::ChooseTarget { .. })
+    });
+    try_step_matching(&mut rev_pinned, |a| matches!(a, Action::PayCost { .. }));
     pass_until(&mut rev_pinned, |g| {
         g.action_space()
             .is_some_and(|s| s.kind == ActionSpaceKind::Discard)
@@ -1115,23 +1093,11 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
 
     let mut free_unpinned = free_base.clone();
     free_unpinned.scenario_refresh_priority().unwrap();
-    let activate_yue = free_unpinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == yue))
-        .unwrap();
-    free_unpinned.step(activate_yue).unwrap();
-    if let Some(pay) = free_unpinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::PayCost { .. }))
-    {
-        free_unpinned.step(pay).unwrap();
-    }
+    step_matching(
+        &mut free_unpinned,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == yue),
+    );
+    try_step_matching(&mut free_unpinned, |a| matches!(a, Action::PayCost { .. }));
     pass_until(&mut free_unpinned, |g| {
         g.action_space()
             .is_some_and(|s| s.kind == ActionSpaceKind::LookAndSelect)
@@ -1144,37 +1110,13 @@ fn distinguishing_card_and_selection_cases_stay_separate() {
     assert_eq!(free_unpinned.action_aliases(), &[(0, free_hand[1])]);
 
     let mut free_pinned = free_base;
-    free_pinned.state.delayed_triggers.push(DelayedTrigger {
-        remembered: vec![ObjectBinding {
-            object: free_hand[0],
-            selection: None,
-            known_to: [true, true],
-        }],
-        event: DelayedTriggerEvent::EndStep { your_turn: false },
-        controller: player,
-        source_identity: AbilitySource::exact(free_hand[0]),
-        effects: DelayedEffects::new(Vec::new()),
-        frequency: DelayedFrequency::Once,
-        expiry: DelayedExpiry::ThisTurn,
-    });
+    pin_object(&mut free_pinned, player, free_hand[0]);
     free_pinned.scenario_refresh_priority().unwrap();
-    let activate_yue_p = free_pinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == yue))
-        .unwrap();
-    free_pinned.step(activate_yue_p).unwrap();
-    if let Some(pay) = free_pinned
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::PayCost { .. }))
-    {
-        free_pinned.step(pay).unwrap();
-    }
+    step_matching(
+        &mut free_pinned,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == yue),
+    );
+    try_step_matching(&mut free_pinned, |a| matches!(a, Action::PayCost { .. }));
     pass_until(&mut free_pinned, |g| {
         g.action_space()
             .is_some_and(|s| s.kind == ActionSpaceKind::LookAndSelect)
@@ -1960,45 +1902,38 @@ fn declare_attackers_three_identical_tokens_yields_four_outcomes_not_eight() {
     assert_eq!(leaves.len(), 6);
 }
 
-#[test]
-fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
-    let entries = [("Plains", 32), ("Gray Ogre", 8)];
-    let mut game = position(&["Plains"], &entries, "Gray Ogre");
-    let p0 = PlayerId(0);
-    let p1 = PlayerId(1);
-    let mut attackers = Vec::new();
-    for _ in 0..3 {
-        let id = game.create_token("token.ally", p0, false).unwrap();
-        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
-        attackers.push(id);
-    }
-    for _ in 0..2 {
-        game.create_token("token.ally", p1, false).unwrap();
-    }
+fn declare_all_attackers_and_advance_to_blockers(game: &mut Game, active: PlayerId) {
     game.scenario_refresh_priority().unwrap();
     advance_to_step(
-        &mut game,
-        p0,
+        game,
+        active,
         managym::flow::turn::StepKind::DeclareAttackers,
     );
     while game
         .action_space()
         .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
     {
-        let attack_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-            .unwrap();
-        game.step(attack_idx).unwrap();
+        step_matching(game, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
     }
-    advance_to_step(
-        &mut game,
-        p0,
-        managym::flow::turn::StepKind::DeclareBlockers,
-    );
+    advance_to_step(game, active, managym::flow::turn::StepKind::DeclareBlockers);
+}
+
+#[test]
+fn declare_blockers_folds_identical_attackers_and_declined_blockers() {
+    let entries = [("Plains", 32), ("Gray Ogre", 8)];
+    let mut game = position(&["Plains"], &entries, "Gray Ogre");
+    let p0 = PlayerId(0);
+    let p1 = PlayerId(1);
+    for _ in 0..3 {
+        let id = game.create_token("token.ally", p0, false).unwrap();
+        game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+    }
+    for _ in 0..2 {
+        game.create_token("token.ally", p1, false).unwrap();
+    }
+    declare_all_attackers_and_advance_to_blockers(&mut game, p0);
     assert_eq!(
         game.action_space().unwrap().kind,
         ActionSpaceKind::DeclareBlocker
@@ -2073,40 +2008,11 @@ fn declare_blockers_menace_and_must_block_never_empty_after_decline() {
     let brute = game
         .scenario_force_battlefield(p0, "Boggart Brute", true)
         .unwrap();
-    let brute_obj = game.permanent_object(brute).unwrap();
     for _ in 0..3 {
         game.create_token("token.ally", p1, false).unwrap();
     }
-    // Give Boggart Brute (Menace) "must be blocked if able" via continuous effect.
-    let ts = game.state.permanents[brute].as_ref().unwrap().timestamp;
-    game.state.effects.push(ContinuousEffect {
-        timestamp: ts,
-        source: None,
-        controller: p0,
-        affected: Affected::Object(brute_obj),
-        modification: Modification::MustBeBlocked,
-        duration: EffectDuration::EndOfTurn,
-        source_object: None,
-    });
-    game.scenario_refresh_priority().unwrap();
-    advance_to_step(
-        &mut game,
-        p0,
-        managym::flow::turn::StepKind::DeclareAttackers,
-    );
-    let attack_idx = game
-        .action_space()
-        .unwrap()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-        .unwrap();
-    game.step(attack_idx).unwrap();
-    advance_to_step(
-        &mut game,
-        p0,
-        managym::flow::turn::StepKind::DeclareBlockers,
-    );
+    grant_must_be_blocked(&mut game, p0, brute);
+    declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
     // Exhaust every reachable blocker path: never empty, and every leaf satisfies
     // Menace + MustBeBlocked with zero duplicate blocker-count branches (exact
@@ -2134,39 +2040,11 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
         let ogre = game
             .scenario_force_battlefield(p0, "Gray Ogre", true)
             .unwrap();
-        let ogre_obj = game.permanent_object(ogre).unwrap();
         for _ in 0..blocker_count {
             game.create_token("token.ally", p1, false).unwrap();
         }
-        let ts = game.state.permanents[ogre].as_ref().unwrap().timestamp;
-        game.state.effects.push(ContinuousEffect {
-            timestamp: ts,
-            source: None,
-            controller: p0,
-            affected: Affected::Object(ogre_obj),
-            modification: Modification::MustBeBlocked,
-            duration: EffectDuration::EndOfTurn,
-            source_object: None,
-        });
-        game.scenario_refresh_priority().unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareAttackers,
-        );
-        let attack_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-            .unwrap();
-        game.step(attack_idx).unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareBlockers,
-        );
+        grant_must_be_blocked(&mut game, p0, ogre);
+        declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
         let events_from = game.state.observation_events.len();
         let mut leaves = Vec::new();
@@ -2187,31 +2065,12 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
     //    exact leaves [0, 2, 3] with zero duplicate 2-blocker outcomes.
     {
         let mut game = position(&["Mountain"], &entries, "Gray Ogre");
-        let _brute = game
-            .scenario_force_battlefield(p0, "Boggart Brute", true)
+        game.scenario_force_battlefield(p0, "Boggart Brute", true)
             .unwrap();
         for _ in 0..3 {
             game.create_token("token.ally", p1, false).unwrap();
         }
-        game.scenario_refresh_priority().unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareAttackers,
-        );
-        let attack_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-            .unwrap();
-        game.step(attack_idx).unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareBlockers,
-        );
+        declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
         let events_from = game.state.observation_events.len();
         let mut leaves = Vec::new();
@@ -2234,42 +2093,14 @@ fn declare_blockers_must_be_blocked_and_menace_have_no_duplicate_branches() {
         let attacker = game
             .scenario_force_battlefield(p0, "Gray Ogre", true)
             .unwrap();
-        let attacker_obj = game.permanent_object(attacker).unwrap();
         let _tok_b = game.create_token("token.ally", p1, false).unwrap();
         let ogre_blk = game
             .scenario_force_battlefield(p1, "Gray Ogre", true)
             .unwrap();
         let ogre_blk_render = render_perm(&game, ogre_blk);
         let _tok_a = game.create_token("token.ally", p1, false).unwrap();
-        let ts = game.state.permanents[attacker].as_ref().unwrap().timestamp;
-        game.state.effects.push(ContinuousEffect {
-            timestamp: ts,
-            source: None,
-            controller: p0,
-            affected: Affected::Object(attacker_obj),
-            modification: Modification::MustBeBlocked,
-            duration: EffectDuration::EndOfTurn,
-            source_object: None,
-        });
-        game.scenario_refresh_priority().unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareAttackers,
-        );
-        let attack_idx = game
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-            .unwrap();
-        game.step(attack_idx).unwrap();
-        advance_to_step(
-            &mut game,
-            p0,
-            managym::flow::turn::StepKind::DeclareBlockers,
-        );
+        grant_must_be_blocked(&mut game, p0, attacker);
+        declare_all_attackers_and_advance_to_blockers(&mut game, p0);
 
         let events_from = game.state.observation_events.len();
         let mut leaves = Vec::new();
@@ -2442,30 +2273,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         for _ in 0..3 {
             blk.push(bgame.create_token("token.ally", p1, false).unwrap());
         }
-        bgame.scenario_refresh_priority().unwrap();
-        advance_to_step(
-            &mut bgame,
-            p0,
-            managym::flow::turn::StepKind::DeclareAttackers,
-        );
-        while bgame
-            .action_space()
-            .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
-        {
-            let attack_idx = bgame
-                .action_space()
-                .unwrap()
-                .actions
-                .iter()
-                .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-                .unwrap();
-            bgame.step(attack_idx).unwrap();
-        }
-        advance_to_step(
-            &mut bgame,
-            p0,
-            managym::flow::turn::StepKind::DeclareBlockers,
-        );
+        declare_all_attackers_and_advance_to_blockers(&mut bgame, p0);
 
         // Split-block drafted on non-canonical blockers (blk[1] -> att[0], blk[0] -> att[1]),
         // skipping blk[2] (first asked) and naming folded attacker att[0] first!
@@ -2595,30 +2403,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         .unwrap();
     let b0 = mgame.create_token("token.ally", p1, false).unwrap();
     let b1 = mgame.create_token("token.ally", p1, false).unwrap();
-    mgame.scenario_refresh_priority().unwrap();
-    advance_to_step(
-        &mut mgame,
-        p0,
-        managym::flow::turn::StepKind::DeclareAttackers,
-    );
-    while mgame
-        .action_space()
-        .is_some_and(|s| s.kind == ActionSpaceKind::DeclareAttacker)
-    {
-        let attack_idx = mgame
-            .action_space()
-            .unwrap()
-            .actions
-            .iter()
-            .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
-            .unwrap();
-        mgame.step(attack_idx).unwrap();
-    }
-    advance_to_step(
-        &mut mgame,
-        p0,
-        managym::flow::turn::StepKind::DeclareBlockers,
-    );
+    declare_all_attackers_and_advance_to_blockers(&mut mgame, p0);
     // m1 was declared first, so m0 is the folded Menace attacker.
     let mframe = mgame.semantic_decision_frame().unwrap();
     let mevents_from = mgame.state.observation_events.len();

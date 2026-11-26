@@ -142,53 +142,6 @@ impl Game {
             return Ok(preview);
         }
 
-        let mut working_attackers: Vec<(PermanentId, bool)> = Vec::new();
-        let mut working_blocks: Vec<PlannedBlockEntry> = Vec::new();
-        match kind {
-            DeclarationKind::Attackers => {
-                for id in &plan.attackers {
-                    let perm = self
-                        .permanent_by_render_id(*id)
-                        .expect("verified by unaskable");
-                    working_attackers.push((perm, !order.contains(&perm)));
-                }
-                for id in self.declared_attackers() {
-                    if !plan.attackers.contains(&id) {
-                        let perm = self.permanent_by_render_id(id).expect("declared attacker");
-                        working_attackers.push((perm, true));
-                    }
-                }
-            }
-            DeclarationKind::Blockers => {
-                for block in &plan.blocks {
-                    let blocker = self
-                        .permanent_by_render_id(block.blocker)
-                        .expect("verified by unaskable");
-                    let attacker = self.permanent_by_render_id(block.attacker);
-                    working_blocks.push(PlannedBlockEntry {
-                        blocker,
-                        attacker,
-                        raw_attacker: Some(block.attacker),
-                        committed: !order.contains(&blocker),
-                    });
-                }
-                for block in self.declared_blocks() {
-                    if !plan.blocks.contains(&block) {
-                        let blocker = self
-                            .permanent_by_render_id(block.blocker)
-                            .expect("declared blocker");
-                        let attacker = self.permanent_by_render_id(block.attacker);
-                        working_blocks.push(PlannedBlockEntry {
-                            blocker,
-                            attacker,
-                            raw_attacker: Some(block.attacker),
-                            committed: true,
-                        });
-                    }
-                }
-            }
-        }
-
         let rules_player = space
             .actions
             .first()
@@ -201,6 +154,19 @@ impl Game {
         // about none of the creatures still to declare.
         match kind {
             DeclarationKind::Attackers => {
+                let mut working_attackers: Vec<(PermanentId, bool)> = Vec::new();
+                for id in &plan.attackers {
+                    let perm = self
+                        .permanent_by_render_id(*id)
+                        .expect("verified by unaskable");
+                    working_attackers.push((perm, !order.contains(&perm)));
+                }
+                for id in self.declared_attackers() {
+                    if !plan.attackers.contains(&id) {
+                        let perm = self.permanent_by_render_id(id).expect("declared attacker");
+                        working_attackers.push((perm, true));
+                    }
+                }
                 let mut normalizer = AttackPlanNormalizer::new(order, working_attackers);
                 while position
                     .action_space()
@@ -233,10 +199,35 @@ impl Game {
                 }
                 self.read_declaration(&position, events_from, &mut preview);
                 if preview.refused.is_none() {
-                    preview.refused = self.undeclared(kind, normalizer.planned(), &[], &preview);
+                    preview.refused = self.undeclared_attackers(normalizer.planned(), &preview);
                 }
             }
             DeclarationKind::Blockers => {
+                let mut working_blocks: Vec<PlannedBlockEntry> = Vec::new();
+                for block in &plan.blocks {
+                    let blocker = self
+                        .permanent_by_render_id(block.blocker)
+                        .expect("verified by unaskable");
+                    working_blocks.push(PlannedBlockEntry {
+                        blocker,
+                        attacker: self.permanent_by_render_id(block.attacker),
+                        raw_attacker: Some(block.attacker),
+                        committed: !order.contains(&blocker),
+                    });
+                }
+                for block in self.declared_blocks() {
+                    if !plan.blocks.contains(&block) {
+                        let blocker = self
+                            .permanent_by_render_id(block.blocker)
+                            .expect("declared blocker");
+                        working_blocks.push(PlannedBlockEntry {
+                            blocker,
+                            attacker: self.permanent_by_render_id(block.attacker),
+                            raw_attacker: Some(block.attacker),
+                            committed: true,
+                        });
+                    }
+                }
                 let mut normalizer = BlockPlanNormalizer::new(order, working_blocks);
                 while position
                     .action_space()
@@ -274,7 +265,7 @@ impl Game {
                 }
                 self.read_declaration(&position, events_from, &mut preview);
                 if preview.refused.is_none() {
-                    preview.refused = self.undeclared(kind, &[], normalizer.planned(), &preview);
+                    preview.refused = self.undeclared_blocks(normalizer.planned(), &preview);
                 }
             }
         }
@@ -570,90 +561,126 @@ impl Game {
         }
     }
 
-    /// The engine finished the declaration but did not declare the normalized
-    /// plan: the engine answered a forced declaration for a skipped creature,
-    /// or a planned target could not be resolved.
-    fn undeclared(
+    /// The engine finished the attacker declaration but did not declare the
+    /// normalized plan (e.g., a forced attack on a skipped creature).
+    fn undeclared_attackers(
         &self,
-        kind: DeclarationKind,
         working_attackers: &[(PermanentId, bool)],
+        preview: &CombatPreview,
+    ) -> Option<DeclarationRefusal> {
+        let mut planned: Vec<ObjectRenderId> = working_attackers
+            .iter()
+            .map(|(perm, _)| self.render_id(*perm))
+            .collect();
+        let mut declared = preview.declared_attackers.clone();
+        planned.sort_by_key(|id| (id.entity, id.incarnation));
+        declared.sort_by_key(|id| (id.entity, id.incarnation));
+        (planned != declared).then(|| {
+            let creature = planned
+                .iter()
+                .find(|id| !preview.declared_attackers.contains(id))
+                .or_else(|| {
+                    preview
+                        .declared_attackers
+                        .iter()
+                        .find(|id| !planned.contains(id))
+                })
+                .copied()
+                .expect("differing attacker sets");
+            let label = self.render_label(creature);
+            let must_attack = self
+                .permanent_by_render_id(creature)
+                .is_some_and(|attacker| self.must_attack(attacker));
+            let reason = if must_attack && !planned.contains(&creature) {
+                format!("{label} must attack.")
+            } else {
+                format!("The engine would not declare {label} as planned.")
+            };
+            DeclarationRefusal {
+                creature,
+                reason,
+                label,
+            }
+        })
+    }
+
+    /// The engine finished the blocker declaration but did not declare the
+    /// normalized plan (a forced block on a skipped creature or unresolvable target).
+    fn undeclared_blocks(
+        &self,
         working_blocks: &[PlannedBlockEntry],
         preview: &CombatPreview,
     ) -> Option<DeclarationRefusal> {
-        let named = |id: ObjectRenderId| self.render_label(id);
-        match kind {
-            DeclarationKind::Attackers => {
-                let mut planned: Vec<ObjectRenderId> = working_attackers
-                    .iter()
-                    .map(|(perm, _)| self.render_id(*perm))
-                    .collect();
-                let mut declared = preview.declared_attackers.clone();
-                planned.sort_by_key(|id| (id.entity, id.incarnation));
-                declared.sort_by_key(|id| (id.entity, id.incarnation));
-                (planned != declared).then(|| {
-                    let creature = planned
-                        .iter()
-                        .find(|id| !preview.declared_attackers.contains(id))
-                        .or_else(|| {
-                            preview
-                                .declared_attackers
-                                .iter()
-                                .find(|id| !planned.contains(id))
-                        })
-                        .copied()
-                        .expect("differing attacker sets");
-                    let label = named(creature);
-                    let must_attack = self
-                        .permanent_by_render_id(creature)
-                        .is_some_and(|attacker| self.must_attack(attacker));
-                    let reason = if must_attack && !planned.contains(&creature) {
-                        format!("{label} must attack.")
-                    } else {
-                        format!("The engine would not declare {label} as planned.")
-                    };
-                    DeclarationRefusal {
-                        creature,
-                        reason,
-                        label,
-                    }
-                })
-            }
-            DeclarationKind::Blockers => {
-                let planned: Vec<PlannedBlock> = working_blocks
-                    .iter()
-                    .map(|block| PlannedBlock {
-                        blocker: self.render_id(block.blocker),
-                        attacker: block
-                            .raw_attacker
-                            .expect("combat preview blocks carry render ids"),
-                    })
-                    .collect();
-                let missing = planned
-                    .iter()
-                    .find(|block| !preview.declared_blocks.contains(block));
-                if let Some(block) = missing {
-                    let label = named(block.blocker);
-                    let attacker = named(block.attacker);
-                    return Some(DeclarationRefusal {
-                        creature: block.blocker,
-                        reason: format!("{label} can't block {attacker} in this declaration."),
-                        label,
-                    });
-                }
-                preview
-                    .declared_blocks
-                    .iter()
-                    .find(|block| !planned.contains(block))
-                    .map(|block| {
-                        let label = named(block.blocker);
-                        DeclarationRefusal {
-                            creature: block.blocker,
-                            reason: format!("{label} must block {}.", named(block.attacker)),
-                            label,
-                        }
-                    })
-            }
+        let planned: Vec<PlannedBlock> = working_blocks
+            .iter()
+            .map(|block| PlannedBlock {
+                blocker: self.render_id(block.blocker),
+                attacker: block
+                    .raw_attacker
+                    .expect("combat preview blocks carry render ids"),
+            })
+            .collect();
+        if let Some(block) = planned
+            .iter()
+            .find(|block| !preview.declared_blocks.contains(block))
+        {
+            let label = self.render_label(block.blocker);
+            let attacker = self.render_label(block.attacker);
+            return Some(DeclarationRefusal {
+                creature: block.blocker,
+                reason: format!("{label} can't block {attacker} in this declaration."),
+                label,
+            });
         }
+        preview
+            .declared_blocks
+            .iter()
+            .find(|block| !planned.contains(block))
+            .map(|block| {
+                let label = self.render_label(block.blocker);
+                DeclarationRefusal {
+                    creature: block.blocker,
+                    reason: format!("{label} must block {}.", self.render_label(block.attacker)),
+                    label,
+                }
+            })
+    }
+}
+
+/// Cursor tracking the engine's sequential declaration order past creatures
+/// auto-resolved by `skip_trivial`.
+struct DeclarationCursor {
+    order: Vec<PermanentId>,
+    cursor: usize,
+    skipped: usize,
+}
+
+impl DeclarationCursor {
+    fn new(order: Vec<PermanentId>) -> Self {
+        Self {
+            order,
+            cursor: 0,
+            skipped: 0,
+        }
+    }
+
+    fn advance(
+        &mut self,
+        game: &Game,
+        kind: DeclarationKind,
+        player: PlayerId,
+    ) -> Option<(PermanentId, &[PermanentId])> {
+        let asked = game.asked_creature_for_rules_player(kind, player)?;
+        let rel = self.order[self.cursor..]
+            .iter()
+            .position(|creature| *creature == asked)?;
+        self.skipped += rel;
+        self.cursor += rel + 1;
+        Some((asked, &self.order[self.cursor..]))
+    }
+
+    fn all_asked(&self) -> bool {
+        self.skipped == 0 && self.cursor == self.order.len()
     }
 }
 
@@ -690,18 +717,14 @@ pub(crate) struct NormalizedBlockStep {
 /// asked so non-canonical subsets (like `[A:no, B:yes]`) normalize cleanly
 /// under the declined-earlier symmetry rule.
 pub(crate) struct AttackPlanNormalizer {
-    order: Vec<PermanentId>,
-    cursor: usize,
-    skipped: usize,
+    cursor: DeclarationCursor,
     planned: Vec<(PermanentId, bool)>,
 }
 
 impl AttackPlanNormalizer {
     pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<(PermanentId, bool)>) -> Self {
         Self {
-            order,
-            cursor: 0,
-            skipped: 0,
+            cursor: DeclarationCursor::new(order),
             planned,
         }
     }
@@ -711,13 +734,9 @@ impl AttackPlanNormalizer {
         game: &Game,
         player: PlayerId,
     ) -> Option<NormalizedAttackStep> {
-        let asked = game.asked_creature_for_rules_player(DeclarationKind::Attackers, player)?;
-        let rel = self.order[self.cursor..]
-            .iter()
-            .position(|creature| *creature == asked)?;
-        self.skipped += rel;
-        self.cursor += rel + 1;
-        let remaining = &self.order[self.cursor..];
+        let (asked, remaining) = self
+            .cursor
+            .advance(game, DeclarationKind::Attackers, player)?;
         let attack = if let Some(entry) = self
             .planned
             .iter_mut()
@@ -725,18 +744,14 @@ impl AttackPlanNormalizer {
         {
             entry.1 = true;
             true
-        } else if let Some(&donor) = remaining.iter().find(|&&other| {
-            self.planned
-                .iter()
-                .any(|(perm, committed)| !*committed && *perm == other)
-                && game.interchangeable_permanents(asked, other)
-        }) {
-            let entry = self
+        } else if let Some(pos) = remaining.iter().find_map(|&other| {
+            let pos = self
                 .planned
-                .iter_mut()
-                .find(|(perm, committed)| !*committed && *perm == donor)
-                .expect("matched donor");
-            *entry = (asked, true);
+                .iter()
+                .position(|(perm, committed)| !*committed && *perm == other)?;
+            game.interchangeable_permanents(asked, other).then_some(pos)
+        }) {
+            self.planned[pos] = (asked, true);
             true
         } else {
             false
@@ -759,12 +774,8 @@ impl AttackPlanNormalizer {
         self.planned.iter().all(|(_, committed)| *committed)
     }
 
-    pub(crate) fn skipped(&self) -> usize {
-        self.skipped
-    }
-
-    pub(crate) fn remaining_count(&self) -> usize {
-        self.order.len() - self.cursor
+    pub(crate) fn all_asked(&self) -> bool {
+        self.cursor.all_asked()
     }
 
     pub(crate) fn planned(&self) -> &[(PermanentId, bool)] {
@@ -780,18 +791,14 @@ impl AttackPlanNormalizer {
 /// transposes `want <-> canon` across remaining uncommitted blocks so
 /// split-blocks stay split and double-blocks stay paired.
 pub(crate) struct BlockPlanNormalizer {
-    order: Vec<PermanentId>,
-    cursor: usize,
-    skipped: usize,
+    cursor: DeclarationCursor,
     planned: Vec<PlannedBlockEntry>,
 }
 
 impl BlockPlanNormalizer {
     pub(crate) fn new(order: Vec<PermanentId>, planned: Vec<PlannedBlockEntry>) -> Self {
         Self {
-            order,
-            cursor: 0,
-            skipped: 0,
+            cursor: DeclarationCursor::new(order),
             planned,
         }
     }
@@ -801,13 +808,9 @@ impl BlockPlanNormalizer {
         game: &Game,
         player: PlayerId,
     ) -> Option<NormalizedBlockStep> {
-        let asked = game.asked_creature_for_rules_player(DeclarationKind::Blockers, player)?;
-        let rel = self.order[self.cursor..]
-            .iter()
-            .position(|creature| *creature == asked)?;
-        self.skipped += rel;
-        self.cursor += rel + 1;
-        let remaining = &self.order[self.cursor..];
+        let (asked, remaining) = self
+            .cursor
+            .advance(game, DeclarationKind::Blockers, player)?;
 
         let entry_pos = if let Some(pos) = self
             .planned
@@ -815,19 +818,12 @@ impl BlockPlanNormalizer {
             .position(|entry| !entry.committed && entry.blocker == asked)
         {
             Some(pos)
-        } else if let Some(&donor) = remaining.iter().find(|&&other| {
-            self.planned
-                .iter()
-                .any(|entry| !entry.committed && entry.blocker == other && entry.attacker.is_some())
-                && game.interchangeable_permanents(asked, other)
+        } else if let Some(pos) = remaining.iter().find_map(|&other| {
+            let pos = self.planned.iter().position(|entry| {
+                !entry.committed && entry.blocker == other && entry.attacker.is_some()
+            })?;
+            game.interchangeable_permanents(asked, other).then_some(pos)
         }) {
-            let pos = self
-                .planned
-                .iter()
-                .position(|entry| {
-                    !entry.committed && entry.blocker == donor && entry.attacker.is_some()
-                })
-                .expect("matched donor");
             self.planned[pos].blocker = asked;
             Some(pos)
         } else {
@@ -853,29 +849,27 @@ impl BlockPlanNormalizer {
             }
             if let (Some(want), Some(canon)) = (wanted_attacker, resolved_attacker) {
                 if canon != want {
-                    let canon_render = self.planned[pos]
-                        .raw_attacker
-                        .map(|_| game.render_id(canon));
-                    let want_render = self.planned[pos].raw_attacker.map(|_| game.render_id(want));
-                    self.planned[pos].attacker = Some(canon);
-                    if let Some(render) = canon_render {
-                        self.planned[pos].raw_attacker = Some(render);
-                    }
+                    let has_render = self.planned[pos].raw_attacker.is_some();
+                    let canon_render = has_render.then(|| game.render_id(canon));
+                    let want_render = has_render.then(|| game.render_id(want));
+                    let assign = |entry: &mut PlannedBlockEntry,
+                                  perm: PermanentId,
+                                  render: Option<ObjectRenderId>| {
+                        entry.attacker = Some(perm);
+                        if render.is_some() {
+                            entry.raw_attacker = render;
+                        }
+                    };
+                    assign(&mut self.planned[pos], canon, canon_render);
                     // Transpose want <-> canon across uncommitted blocks so
                     // split-blocks stay split and double-blocks stay paired on
                     // the canonical attacker.
                     for (i, other) in self.planned.iter_mut().enumerate() {
                         if i != pos && !other.committed {
                             if other.attacker == Some(want) {
-                                other.attacker = Some(canon);
-                                if let Some(render) = canon_render {
-                                    other.raw_attacker = Some(render);
-                                }
+                                assign(other, canon, canon_render);
                             } else if other.attacker == Some(canon) {
-                                other.attacker = Some(want);
-                                if let Some(render) = want_render {
-                                    other.raw_attacker = Some(render);
-                                }
+                                assign(other, want, want_render);
                             }
                         }
                     }
@@ -895,12 +889,8 @@ impl BlockPlanNormalizer {
         self.planned.iter().all(|entry| entry.committed)
     }
 
-    pub(crate) fn skipped(&self) -> usize {
-        self.skipped
-    }
-
-    pub(crate) fn remaining_count(&self) -> usize {
-        self.order.len() - self.cursor
+    pub(crate) fn all_asked(&self) -> bool {
+        self.cursor.all_asked()
     }
 
     pub(crate) fn planned(&self) -> &[PlannedBlockEntry] {

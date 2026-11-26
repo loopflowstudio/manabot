@@ -13,6 +13,8 @@
 //! destructure every live rules struct without `..`, so adding a new
 //! id-bearing field fails to compile until it is explicitly classified.
 
+use std::sync::Arc;
+
 use crate::{
     agent::action::{Action, ActionSpace},
     flow::{
@@ -1623,7 +1625,7 @@ fn same_permanent_record_cheap(left: &Permanent, right: &Permanent) -> bool {
         && activated_this_turn == r_activated
 }
 
-pub(crate) fn can_become_creature(view: &Characteristics) -> bool {
+fn can_become_creature(view: &Characteristics) -> bool {
     view.activated_abilities
         .iter()
         .any(|ability| ability.effects.iter().any(Effect::may_become_creature))
@@ -1642,6 +1644,16 @@ pub(crate) fn can_become_creature(view: &Characteristics) -> bool {
             StaticAbility::TypeGrant(grant) => grant.types.contains(&CardType::Creature),
             _ => false,
         })
+}
+
+fn push_unique(watch: &mut Vec<ObjectId>, object: ObjectId) -> usize {
+    if let Some(pos) = watch.iter().position(|&w| w == object) {
+        pos
+    } else {
+        let pos = watch.len();
+        watch.push(object);
+        pos
+    }
 }
 
 /// Cheap bucket key for permanent actions.
@@ -1665,186 +1677,186 @@ struct CardBucket {
     kind: ObjectKind,
 }
 
-/// Cheap bucket key for foldable actions.
-/// Two actions can fold only if they share a `FoldKey`.
+/// Invariant parts of a foldable `Action` (everything except the object or
+/// permanent it names). Shared by action bucketing and alias resolution so
+/// both agree on which actions may fold together.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum FoldKey {
+enum ActionShell {
     TapForMana {
         player: PlayerId,
-        perm: PermanentBucket,
     },
     ActivateAbility {
         player: PlayerId,
         ability_index: usize,
-        perm: PermanentBucket,
     },
     WaterbendTap {
         player: PlayerId,
-        perm: PermanentBucket,
     },
     PlayLand {
         player: PlayerId,
         profile: SpellProfile,
         route: Option<PlayRoute>,
-        card: CardBucket,
     },
     CastSpell {
         player: PlayerId,
         profile: SpellProfile,
         route: Option<PlayRoute>,
-        card: CardBucket,
     },
     ActivateCardAbility {
         player: PlayerId,
         ability_index: usize,
-        card: CardBucket,
     },
     Foretell {
         player: PlayerId,
-        card: CardBucket,
     },
     ChooseTargetPermanent {
         player: PlayerId,
-        perm: PermanentBucket,
     },
     ChooseTargetGraveyard {
         player: PlayerId,
-        card: CardBucket,
-    },
-    SelectCardPermanent {
-        player: PlayerId,
-        perm: PermanentBucket,
     },
     SelectCard {
         player: PlayerId,
-        card: CardBucket,
     },
     LearnDiscard {
         player: PlayerId,
-        card: CardBucket,
     },
     LearnTakeLesson {
         player: PlayerId,
-        card: CardBucket,
     },
     DeclareBlocker {
         player: PlayerId,
         blocker: PermanentId,
-        attacker: PermanentBucket,
     },
 }
 
-impl FoldKey {
+#[derive(Clone, Copy)]
+enum FoldSubject {
+    Permanent(PermanentId),
+    ZoneCard(ObjectId, Option<ZoneType>),
+    Sideboard(ObjectId),
+    SelectCard(ObjectId),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SubjectBucket {
+    Permanent(PermanentBucket),
+    Card(CardBucket),
+}
+
+impl SubjectBucket {
     #[inline]
     fn is_permanent(self) -> bool {
-        matches!(
-            self,
-            Self::TapForMana { .. }
-                | Self::ActivateAbility { .. }
-                | Self::WaterbendTap { .. }
-                | Self::ChooseTargetPermanent { .. }
-                | Self::SelectCardPermanent { .. }
-                | Self::DeclareBlocker { .. }
-        )
+        matches!(self, Self::Permanent(_))
     }
 }
 
-/// Whether two actions differ at most in the object/permanent they name,
-/// sharing the same action variant, player, profile, route, ability index,
-/// and target kind.
-fn same_action_shell(left: &Action, right: &Action) -> bool {
-    match (left, right) {
-        (
-            Action::PlayLand {
-                profile: lp,
-                player: lpl,
-                route: lr,
-                ..
+/// Cheap bucket key for foldable actions. Two actions can fold only if they
+/// share both their invariant shell and cheap subject bucket.
+type FoldKey = (ActionShell, SubjectBucket);
+type FoldCandidate = (FoldKey, usize, ObjectId);
+
+/// Decompose a foldable action into its invariant shell and the subject it
+/// names. Face-down `TurnFaceUp`, library/stack targets, `ChooseMode`,
+/// `ScryCard`, `ChooseTrigger`, `PassPriority`, `PayCost`, `Decline`, and
+/// `DeclareAttacker` / `DeclareBlocker(None)` never fold and return `None`.
+fn decompose_foldable_action(action: &Action) -> Option<(ActionShell, FoldSubject)> {
+    match *action {
+        Action::TapForMana { player, permanent } => Some((
+            ActionShell::TapForMana { player },
+            FoldSubject::Permanent(permanent),
+        )),
+        Action::ActivateAbility {
+            player,
+            permanent,
+            ability_index,
+        } => Some((
+            ActionShell::ActivateAbility {
+                player,
+                ability_index,
             },
-            Action::PlayLand {
-                profile: rp,
-                player: rpl,
-                route: rr,
-                ..
+            FoldSubject::Permanent(permanent),
+        )),
+        Action::WaterbendTap { player, permanent } => Some((
+            ActionShell::WaterbendTap { player },
+            FoldSubject::Permanent(permanent),
+        )),
+        Action::PlayLand {
+            profile,
+            player,
+            object,
+            route,
+        } => Some((
+            ActionShell::PlayLand {
+                player,
+                profile,
+                route,
             },
-        )
-        | (
-            Action::CastSpell {
-                profile: lp,
-                player: lpl,
-                route: lr,
-                ..
+            FoldSubject::ZoneCard(object, None),
+        )),
+        Action::CastSpell {
+            profile,
+            player,
+            object,
+            route,
+        } => Some((
+            ActionShell::CastSpell {
+                player,
+                profile,
+                route,
             },
-            Action::CastSpell {
-                profile: rp,
-                player: rpl,
-                route: rr,
-                ..
+            FoldSubject::ZoneCard(object, None),
+        )),
+        Action::ActivateCardAbility {
+            player,
+            object,
+            ability_index,
+        } => Some((
+            ActionShell::ActivateCardAbility {
+                player,
+                ability_index,
             },
-        ) => lp == rp && lpl == rpl && lr == rr,
-        (
-            Action::ActivateAbility {
-                player: lpl,
-                ability_index: li,
-                ..
-            },
-            Action::ActivateAbility {
-                player: rpl,
-                ability_index: ri,
-                ..
-            },
-        )
-        | (
-            Action::ActivateCardAbility {
-                player: lpl,
-                ability_index: li,
-                ..
-            },
-            Action::ActivateCardAbility {
-                player: rpl,
-                ability_index: ri,
-                ..
-            },
-        ) => lpl == rpl && li == ri,
-        (Action::Foretell { player: lpl, .. }, Action::Foretell { player: rpl, .. })
-        | (Action::TapForMana { player: lpl, .. }, Action::TapForMana { player: rpl, .. })
-        | (Action::WaterbendTap { player: lpl, .. }, Action::WaterbendTap { player: rpl, .. })
-        | (Action::SelectCard { player: lpl, .. }, Action::SelectCard { player: rpl, .. })
-        | (Action::LearnDiscard { player: lpl, .. }, Action::LearnDiscard { player: rpl, .. })
-        | (
-            Action::LearnTakeLesson { player: lpl, .. },
-            Action::LearnTakeLesson { player: rpl, .. },
-        ) => lpl == rpl,
-        (
-            Action::ChooseTarget {
-                player: lpl,
-                target: lt,
-            },
-            Action::ChooseTarget {
-                player: rpl,
-                target: rt,
-            },
-        ) => {
-            lpl == rpl
-                && matches!(
-                    (lt, rt),
-                    (Target::Permanent(_), Target::Permanent(_))
-                        | (Target::GraveyardCard(_), Target::GraveyardCard(_))
-                )
-        }
-        (
-            Action::DeclareBlocker {
-                player: lpl,
-                blocker: lb,
-                attacker: Some(_),
-            },
-            Action::DeclareBlocker {
-                player: rpl,
-                blocker: rb,
-                attacker: Some(_),
-            },
-        ) => lpl == rpl && lb == rb,
-        _ => false,
+            FoldSubject::ZoneCard(object, None),
+        )),
+        Action::Foretell { player, object } => Some((
+            ActionShell::Foretell { player },
+            FoldSubject::ZoneCard(object, Some(ZoneType::Hand)),
+        )),
+        Action::ChooseTarget {
+            player,
+            target: Target::Permanent(permanent),
+        } => Some((
+            ActionShell::ChooseTargetPermanent { player },
+            FoldSubject::Permanent(permanent),
+        )),
+        Action::ChooseTarget {
+            player,
+            target: Target::GraveyardCard(object),
+        } => Some((
+            ActionShell::ChooseTargetGraveyard { player },
+            FoldSubject::ZoneCard(object, Some(ZoneType::Graveyard)),
+        )),
+        Action::SelectCard { player, object } => Some((
+            ActionShell::SelectCard { player },
+            FoldSubject::SelectCard(object),
+        )),
+        Action::LearnDiscard { player, object } => Some((
+            ActionShell::LearnDiscard { player },
+            FoldSubject::ZoneCard(object, Some(ZoneType::Hand)),
+        )),
+        Action::LearnTakeLesson { player, object } => Some((
+            ActionShell::LearnTakeLesson { player },
+            FoldSubject::Sideboard(object),
+        )),
+        Action::DeclareBlocker {
+            player,
+            blocker,
+            attacker: Some(attacker),
+        } => Some((
+            ActionShell::DeclareBlocker { player, blocker },
+            FoldSubject::Permanent(attacker),
+        )),
+        _ => None,
     }
 }
 
@@ -1984,18 +1996,12 @@ impl Game {
         }
 
         let mut watch: Vec<ObjectId> = Vec::new();
-        let mut watch_index = |object: ObjectId| -> usize {
-            if let Some(pos) = watch.iter().position(|&w| w == object) {
-                pos
-            } else {
-                let pos = watch.len();
-                watch.push(object);
-                pos
-            }
-        };
         let mut pair_slots: Vec<(usize, usize)> = Vec::with_capacity(pairs.len());
         for &(_, _, anchor_object, _, cand_object) in &pairs {
-            pair_slots.push((watch_index(anchor_object), watch_index(cand_object)));
+            pair_slots.push((
+                push_unique(&mut watch, anchor_object),
+                push_unique(&mut watch, cand_object),
+            ));
         }
 
         let census = ReferenceCensus::run(self, &watch);
@@ -2004,8 +2010,7 @@ impl Game {
         }
 
         let _scan = self.board_scan();
-        let mut anchor_views: Vec<(PermanentId, Option<std::sync::Arc<Characteristics>>)> =
-            Vec::new();
+        let mut anchor_views: Vec<(PermanentId, Option<Arc<Characteristics>>)> = Vec::new();
         for (&(ci, anchor, _, cand, _), &(a_slot, c_slot)) in pairs.iter().zip(&pair_slots) {
             if matched[ci] || census.is_named(a_slot) || census.is_named(c_slot) {
                 continue;
@@ -2027,12 +2032,25 @@ impl Game {
         matched
     }
 
+    pub(crate) fn any_interchangeable_permanent(
+        &self,
+        anchors: &[PermanentId],
+        candidates: &[PermanentId],
+    ) -> bool {
+        !anchors.is_empty()
+            && !candidates.is_empty()
+            && self
+                .interchangeable_with_any_permanent(anchors, candidates)
+                .into_iter()
+                .any(|matched| matched)
+    }
+
     fn declined_interchangeable_permanent(
         &self,
         candidate: PermanentId,
         declined: &[PermanentId],
     ) -> bool {
-        !declined.is_empty() && self.interchangeable_with_any_permanent(declined, &[candidate])[0]
+        self.any_interchangeable_permanent(declined, &[candidate])
     }
 
     /// Compare two battlefield permanents on their cheap permanent record,
@@ -2064,17 +2082,14 @@ impl Game {
         if combat.attackers.contains(&left) != combat.attackers.contains(&right) {
             return false;
         }
-        let left_blocked = combat.blocked.contains(&left)
-            || combat
-                .attacker_to_blockers
-                .get(&left)
-                .is_some_and(|blockers| !blockers.is_empty());
-        let right_blocked = combat.blocked.contains(&right)
-            || combat
-                .attacker_to_blockers
-                .get(&right)
-                .is_some_and(|blockers| !blockers.is_empty());
-        !left_blocked && !right_blocked
+        let is_blocked = |id: PermanentId| {
+            combat.blocked.contains(&id)
+                || combat
+                    .attacker_to_blockers
+                    .get(&id)
+                    .is_some_and(|blockers| !blockers.is_empty())
+        };
+        !is_blocked(left) && !is_blocked(right)
     }
 
     /// Cheap (pre-census, pre-layer) pair check for two objects that already
@@ -2104,45 +2119,32 @@ impl Game {
     }
 
     /// Cheap (pre-census, pre-layer) object and permanent state check.
+    /// `rest` is non-empty; face-down rejection is enforced by
+    /// `same_object_identity` inside `same_object_pair_cheap`.
     fn same_object_state_cheap(
         &self,
         zone: Option<ZoneType>,
         first: ObjectId,
         rest: &[ObjectId],
     ) -> bool {
-        let first_obj = match zone {
-            Some(_) => match self.state.object(first) {
-                Ok(obj) => obj,
-                Err(_) => return false,
-            },
-            None => {
-                if !self.state.zones.is_latest(first) {
-                    return false;
-                }
-                self.state.entry_object(first)
-            }
+        let is_valid = |object: ObjectId| match zone {
+            Some(_) => self.state.object(object).is_ok(),
+            None => self.state.zones.is_latest(object),
         };
-        if first_obj.is_face_down() {
+        if !is_valid(first) {
             return false;
         }
         let is_permanent = zone == Some(ZoneType::Battlefield);
-        for &other in rest {
-            let other_valid = match zone {
-                Some(_) => self.state.object(other).is_ok(),
-                None => self.state.zones.is_latest(other),
-            };
-            if !other_valid || !self.same_object_pair_cheap(is_permanent, first, other) {
-                return false;
-            }
-        }
-        true
+        rest.iter().all(|&other| {
+            is_valid(other) && self.same_object_pair_cheap(is_permanent, first, other)
+        })
     }
 
     /// Layered characteristics for a battlefield permanent eligible to fold.
     /// Permanents with any layered (printed or granted) static ability have
     /// layer-ordering timestamps (CR 613.7) and never fold. Caller holds a
     /// `board_scan()`.
-    fn foldable_permanent_view(&self, id: PermanentId) -> Option<std::sync::Arc<Characteristics>> {
+    fn foldable_permanent_view(&self, id: PermanentId) -> Option<Arc<Characteristics>> {
         let view = self.characteristics(id);
         view.static_abilities.is_empty().then_some(view)
     }
@@ -2154,13 +2156,13 @@ impl Game {
     fn post_census_permanents_equivalent(
         &self,
         left_id: PermanentId,
-        left_view: &std::sync::Arc<Characteristics>,
+        left_view: &Arc<Characteristics>,
         right_id: PermanentId,
     ) -> bool {
         let Some(right_view) = self.foldable_permanent_view(right_id) else {
             return false;
         };
-        if !std::sync::Arc::ptr_eq(left_view, &right_view) && left_view != &right_view {
+        if !Arc::ptr_eq(left_view, &right_view) && left_view != &right_view {
             return false;
         }
         let left = self.state.permanents[left_id].as_ref().unwrap();
@@ -2195,46 +2197,26 @@ impl Game {
         if let Some(index) = space.actions.iter().position(|legal| legal == wanted) {
             return Some(index);
         }
-        let wanted_object = self.action_fold_object(wanted)?;
+        let (wanted_shell, subject) = decompose_foldable_action(wanted)?;
+        let wanted_object = match subject {
+            FoldSubject::Permanent(permanent) => self.permanent_object(permanent)?,
+            FoldSubject::ZoneCard(object, _)
+            | FoldSubject::Sideboard(object)
+            | FoldSubject::SelectCard(object) => object,
+        };
         for &(surviving_idx, alias_object) in self.action_aliases() {
             if alias_object != wanted_object {
                 continue;
             }
             if let Some(surviving) = space.actions.get(surviving_idx) {
-                if same_action_shell(surviving, wanted) {
+                if decompose_foldable_action(surviving)
+                    .is_some_and(|(shell, _)| shell == wanted_shell)
+                {
                     return Some(surviving_idx);
                 }
             }
         }
         None
-    }
-
-    fn action_fold_object(&self, action: &Action) -> Option<ObjectId> {
-        match *action {
-            Action::PlayLand { object, .. }
-            | Action::CastSpell { object, .. }
-            | Action::ActivateCardAbility { object, .. }
-            | Action::Foretell { object, .. }
-            | Action::SelectCard { object, .. }
-            | Action::LearnDiscard { object, .. }
-            | Action::LearnTakeLesson { object, .. } => Some(object),
-            Action::TapForMana { permanent, .. }
-            | Action::ActivateAbility { permanent, .. }
-            | Action::WaterbendTap { permanent, .. } => self.permanent_object(permanent),
-            Action::ChooseTarget {
-                target: Target::Permanent(permanent),
-                ..
-            } => self.permanent_object(permanent),
-            Action::ChooseTarget {
-                target: Target::GraveyardCard(object),
-                ..
-            } => Some(object),
-            Action::DeclareBlocker {
-                attacker: Some(attacker),
-                ..
-            } => self.permanent_object(attacker),
-            _ => None,
-        }
     }
 
     /// Whether the active decision allows folding `Action::SelectCard`.
@@ -2362,143 +2344,41 @@ impl Game {
         action: &Action,
         allow_select_card: bool,
     ) -> Option<(FoldKey, ObjectId)> {
-        match *action {
-            Action::TapForMana { player, permanent } => {
+        let (shell, subject) = decompose_foldable_action(action)?;
+        let (bucket, object) = match subject {
+            FoldSubject::Permanent(permanent) => {
                 let (perm, object) = self.permanent_bucket(permanent)?;
-                Some((FoldKey::TapForMana { player, perm }, object))
+                (SubjectBucket::Permanent(perm), object)
             }
-            Action::ActivateAbility {
-                player,
-                permanent,
-                ability_index,
-            } => {
-                let (perm, object) = self.permanent_bucket(permanent)?;
-                Some((
-                    FoldKey::ActivateAbility {
-                        player,
-                        ability_index,
-                        perm,
-                    },
-                    object,
-                ))
-            }
-            Action::WaterbendTap { player, permanent } => {
-                let (perm, object) = self.permanent_bucket(permanent)?;
-                Some((FoldKey::WaterbendTap { player, perm }, object))
-            }
-            Action::PlayLand {
-                profile,
-                player,
+            FoldSubject::ZoneCard(object, expected) => (
+                SubjectBucket::Card(self.zone_card_bucket(object, expected)?),
                 object,
-                route,
-            } => {
-                let card = self.zone_card_bucket(object, None)?;
-                Some((
-                    FoldKey::PlayLand {
-                        player,
-                        profile,
-                        route,
-                        card,
-                    },
-                    object,
-                ))
-            }
-            Action::CastSpell {
-                profile,
-                player,
+            ),
+            FoldSubject::Sideboard(object) => (
+                SubjectBucket::Card(self.sideboard_card_bucket(object)?),
                 object,
-                route,
-            } => {
-                let card = self.zone_card_bucket(object, None)?;
-                Some((
-                    FoldKey::CastSpell {
-                        player,
-                        profile,
-                        route,
-                        card,
-                    },
-                    object,
-                ))
-            }
-            Action::ActivateCardAbility {
-                player,
-                object,
-                ability_index,
-            } => {
-                let card = self.zone_card_bucket(object, None)?;
-                Some((
-                    FoldKey::ActivateCardAbility {
-                        player,
-                        ability_index,
-                        card,
-                    },
-                    object,
-                ))
-            }
-            Action::Foretell { player, object } => {
-                let card = self.zone_card_bucket(object, Some(ZoneType::Hand))?;
-                Some((FoldKey::Foretell { player, card }, object))
-            }
-            Action::ChooseTarget {
-                player,
-                target: Target::Permanent(permanent),
-            } => {
-                let (perm, object) = self.permanent_bucket(permanent)?;
-                Some((FoldKey::ChooseTargetPermanent { player, perm }, object))
-            }
-            Action::ChooseTarget {
-                player,
-                target: Target::GraveyardCard(object),
-            } => {
-                let card = self.zone_card_bucket(object, Some(ZoneType::Graveyard))?;
-                Some((FoldKey::ChooseTargetGraveyard { player, card }, object))
-            }
-            Action::SelectCard { player, object } if allow_select_card => {
+            ),
+            FoldSubject::SelectCard(object) if allow_select_card => {
                 match self.state.zones.zone_of(object) {
                     Some(ZoneType::Battlefield) => {
                         let permanent = self.state.permanent_of(object)?;
                         let (perm, obj) = self.permanent_bucket(permanent)?;
-                        Some((FoldKey::SelectCardPermanent { player, perm }, obj))
+                        (SubjectBucket::Permanent(perm), obj)
                     }
-                    Some(ZoneType::Hand | ZoneType::Graveyard | ZoneType::Exile) => {
-                        let card = self.zone_card_bucket(object, None)?;
-                        Some((FoldKey::SelectCard { player, card }, object))
-                    }
-                    None => {
-                        let card = self.sideboard_card_bucket(object)?;
-                        Some((FoldKey::SelectCard { player, card }, object))
-                    }
-                    Some(ZoneType::Library | ZoneType::Stack | ZoneType::Command) => None,
+                    Some(ZoneType::Hand | ZoneType::Graveyard | ZoneType::Exile) => (
+                        SubjectBucket::Card(self.zone_card_bucket(object, None)?),
+                        object,
+                    ),
+                    None => (
+                        SubjectBucket::Card(self.sideboard_card_bucket(object)?),
+                        object,
+                    ),
+                    Some(ZoneType::Library | ZoneType::Stack | ZoneType::Command) => return None,
                 }
             }
-            Action::LearnDiscard { player, object } => {
-                let card = self.zone_card_bucket(object, Some(ZoneType::Hand))?;
-                Some((FoldKey::LearnDiscard { player, card }, object))
-            }
-            Action::LearnTakeLesson { player, object } => {
-                let card = self.sideboard_card_bucket(object)?;
-                Some((FoldKey::LearnTakeLesson { player, card }, object))
-            }
-            Action::DeclareBlocker {
-                player,
-                blocker,
-                attacker: Some(attacker_id),
-            } => {
-                let (attacker, object) = self.permanent_bucket(attacker_id)?;
-                Some((
-                    FoldKey::DeclareBlocker {
-                        player,
-                        blocker,
-                        attacker,
-                    },
-                    object,
-                ))
-            }
-            // Face-down TurnFaceUp, Library/Stack targets, ChooseMode,
-            // ScryCard, ChooseTrigger, PassPriority, PayCost, Decline, and
-            // DeclareAttacker / DeclareBlocker(None) never fold here.
-            _ => None,
-        }
+            FoldSubject::SelectCard(_) => return None,
+        };
+        Some(((shell, bucket), object))
     }
 
     /// Fold actions that differ only in which of several game-indistinguishable
@@ -2517,9 +2397,9 @@ impl Game {
 
         // Stack-buffered candidate scan: avoids any heap allocation in the
         // common case where no two foldable actions share a bucket key.
-        let mut inline: [Option<(FoldKey, usize, ObjectId)>; 24] = [None; 24];
+        let mut inline: [Option<FoldCandidate>; 24] = [None; 24];
         let mut inline_len = 0usize;
-        let mut spill: Vec<(FoldKey, usize, ObjectId)> = Vec::new();
+        let mut spill: Vec<FoldCandidate> = Vec::new();
         let mut has_dup = false;
 
         for (index, action) in space.actions.iter().enumerate() {
@@ -2555,7 +2435,7 @@ impl Game {
             return (space, None);
         }
 
-        let candidates: Vec<(FoldKey, usize, ObjectId)> = if spill.is_empty() {
+        let candidates: Vec<FoldCandidate> = if spill.is_empty() {
             inline[..inline_len].iter().flatten().copied().collect()
         } else {
             spill
@@ -2570,21 +2450,12 @@ impl Game {
         let mut watch_slot: Vec<usize> = vec![usize::MAX; candidates.len()];
         let mut has_perm_dup = false;
         let mut next_group = 0usize;
-        let mut watch_index = |object: ObjectId| -> usize {
-            if let Some(pos) = watch.iter().position(|&w| w == object) {
-                pos
-            } else {
-                let pos = watch.len();
-                watch.push(object);
-                pos
-            }
-        };
         for i in 0..candidates.len() {
             if cheap_group[i] != usize::MAX {
                 continue;
             }
             let (key, _, rep_obj) = candidates[i];
-            let is_perm = key.is_permanent();
+            let is_perm = key.1.is_permanent();
             let mut group = usize::MAX;
             for j in (i + 1)..candidates.len() {
                 if cheap_group[j] != usize::MAX || candidates[j].0 != key {
@@ -2598,10 +2469,10 @@ impl Game {
                     next_group += 1;
                     has_perm_dup |= is_perm;
                     cheap_group[i] = group;
-                    watch_slot[i] = watch_index(rep_obj);
+                    watch_slot[i] = push_unique(&mut watch, rep_obj);
                 }
                 cheap_group[j] = group;
-                watch_slot[j] = watch_index(candidates[j].2);
+                watch_slot[j] = push_unique(&mut watch, candidates[j].2);
             }
         }
 
@@ -2622,8 +2493,7 @@ impl Game {
         let mut any_folded = false;
 
         // Track post-census representatives per cheap group.
-        let mut perm_reps: Vec<(usize, usize, PermanentId, std::sync::Arc<Characteristics>)> =
-            Vec::new();
+        let mut perm_reps: Vec<(usize, usize, PermanentId, Arc<Characteristics>)> = Vec::new();
         let mut card_rep: Vec<Option<usize>> = vec![None; next_group];
 
         for (ci, &(key, orig_idx, object)) in candidates.iter().enumerate() {
@@ -2631,7 +2501,7 @@ impl Game {
             if g == usize::MAX || census.is_named(watch_slot[ci]) {
                 continue;
             }
-            if key.is_permanent() {
+            if key.1.is_permanent() {
                 let Some(perm_id) = self.state.permanent_of(object) else {
                     continue;
                 };

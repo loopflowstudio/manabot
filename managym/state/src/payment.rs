@@ -131,15 +131,6 @@ impl PaymentReceipt {
         self.0.as_deref().unwrap_or(&NOTHING)
     }
 
-    /// Whether this exact appearance contributed an object or produced spent mana.
-    pub fn names_object(&self, object: ObjectId) -> bool {
-        self.contributions().iter().any(|c| c.object == object)
-            || self
-                .mana()
-                .iter()
-                .any(|u| u.source.is_some_and(|s| s.object == object))
-    }
-
     /// Visit every `ObjectId` referenced by this receipt. Exhaustive
     /// destructuring ensures any new id-bearing field on `Paid`, `SpentMana`,
     /// `ManaOrigin` or `Contribution` is accounted for.

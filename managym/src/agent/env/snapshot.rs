@@ -143,9 +143,7 @@ impl GameSnapshot {
         }
         let forced = if let Some(index) = options.forced_first_action {
             let space = self
-                .published_decision
-                .as_ref()
-                .map(|d| &d.space)
+                .action_space()
                 .filter(|_| !self.state.is_game_over())
                 .ok_or_else(|| {
                     AgentError("forced_first_action requires a non-terminal decision".into())
@@ -238,19 +236,17 @@ impl GameSnapshot {
         }
     }
 
+    fn action_space(&self) -> Option<&ActionSpace> {
+        self.published_decision.as_ref().map(|d| &d.space)
+    }
+
     pub fn metadata(&self) -> SnapshotMetadata {
-        SnapshotMetadata::from_position(
-            &self.state,
-            self.published_decision.as_ref().map(|d| &d.space),
-        )
+        SnapshotMetadata::from_position(&self.state, self.action_space())
     }
 
     /// Read the saved decision owner without collecting the board summary.
     pub fn acting_player(&self) -> Option<usize> {
-        snapshot_chooser(
-            self.published_decision.as_ref().map(|d| &d.space),
-            self.state.is_game_over(),
-        )
+        snapshot_chooser(self.action_space(), self.state.is_game_over())
     }
 
     pub fn seed(&self) -> u64 {
@@ -261,7 +257,7 @@ impl GameSnapshot {
         self.digest.get_or_init(|| {
             state_digest(
                 &self.state,
-                self.published_decision.as_ref().map(|d| &d.space),
+                self.action_space(),
                 &self.pending_choice,
                 self.skip_trivial,
                 self.skipped,

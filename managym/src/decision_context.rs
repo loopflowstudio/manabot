@@ -163,13 +163,14 @@ impl Game {
             return Vec::new();
         }
         let mut by_offer = vec![Vec::new(); space.actions.len()];
-        if self.action_aliases().is_empty() {
+        let aliases = self.action_aliases();
+        if aliases.is_empty() {
             return by_offer;
         }
-        for &(offer_index, alias_object) in self.action_aliases() {
-            if offer_index >= by_offer.len() {
+        for &(offer_index, alias_object) in aliases {
+            let Some(slot) = by_offer.get_mut(offer_index) else {
                 continue;
-            }
+            };
             if self
                 .visible_reference(alias_object, viewer)
                 .object
@@ -178,7 +179,7 @@ impl Game {
                 continue;
             }
             if let Some(view) = self.decision_object(alias_object) {
-                by_offer[offer_index].push(view);
+                slot.push(view);
             }
         }
         by_offer

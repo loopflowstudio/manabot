@@ -865,23 +865,6 @@ impl Game {
         Some(&mut decision.space)
     }
 
-    pub(crate) fn take_published_decision(&mut self) -> Option<PublishedDecision> {
-        self.published_decision.take()
-    }
-
-    pub(crate) fn restore_published_decision(&mut self, decision: PublishedDecision) {
-        self.published_decision = Some(decision);
-    }
-
-    pub(crate) fn set_published_aliases(
-        &mut self,
-        aliases: crate::flow::interchangeable::ActionAliases,
-    ) {
-        if let Some(decision) = self.published_decision.as_mut() {
-            decision.aliases = aliases;
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn set_unfolded_action_space(&mut self, space: Option<ActionSpace>) {
         self.published_decision = space.map(|space| PublishedDecision {

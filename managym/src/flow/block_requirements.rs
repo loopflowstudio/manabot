@@ -124,18 +124,22 @@ impl Game {
             .iter()
             .map(|a| combat.attacker_to_blockers.get(a).map_or(0, Vec::len))
             .collect();
-        let active_remaining: Vec<PermanentId> =
+        let (blocker_suppressed, active_remaining) =
             if respect_declines && !combat.declined_blockers.is_empty() {
+                let mut query = Vec::with_capacity(1 + remaining.len());
+                query.push(blocker);
+                query.extend_from_slice(remaining);
                 let suppressed =
-                    self.interchangeable_with_any_permanent(&combat.declined_blockers, remaining);
-                remaining
+                    self.interchangeable_with_any_permanent(&combat.declined_blockers, &query);
+                let active = remaining
                     .iter()
                     .copied()
-                    .zip(suppressed)
+                    .zip(suppressed[1..].iter().copied())
                     .filter_map(|(id, is_suppressed)| (!is_suppressed).then_some(id))
-                    .collect()
+                    .collect();
+                (suppressed[0], active)
             } else {
-                remaining.to_vec()
+                (false, remaining.to_vec())
             };
         let edges: Vec<Vec<usize>> = attackers
             .iter()
@@ -148,8 +152,10 @@ impl Game {
                     .collect()
             })
             .collect();
+        // When `blocker_suppressed` is already true, every remaining blocker in
+        // `blocker`'s equivalence class was already filtered from `active_remaining`.
         let decline_edges: Option<Vec<Vec<usize>>> =
-            if respect_declines && !active_remaining.is_empty() {
+            if respect_declines && !blocker_suppressed && !active_remaining.is_empty() {
                 let suppressed_on_decline =
                     self.interchangeable_with_any_permanent(&[blocker], &active_remaining);
                 suppressed_on_decline.iter().any(|&s| s).then(|| {
@@ -201,11 +207,7 @@ impl Game {
                 &options,
             )
         };
-        if respect_declines
-            && chosen.len() > 1
-            && chosen.contains(&None)
-            && self.declined_interchangeable_blocker(blocker)
-        {
+        if blocker_suppressed && chosen.len() > 1 && chosen.contains(&None) {
             chosen.retain(Option::is_none);
         }
         chosen

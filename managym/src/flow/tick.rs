@@ -19,12 +19,13 @@ impl Game {
             return Err(AgentError("game is over".to_string()));
         }
         let decision = self
-            .take_published_decision()
+            .published_decision
+            .take()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
 
         if action >= decision.space.actions.len() {
             let len = decision.space.actions.len();
-            self.restore_published_decision(decision);
+            self.published_decision = Some(decision);
             return Err(AgentError(format!(
                 "Action index {action} out of bounds: {len}"
             )));
@@ -38,7 +39,7 @@ impl Game {
         let exposure = self.exposure_choice(&decision.space, action);
         let selected_action = decision.space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
-            self.restore_published_decision(decision);
+            self.published_decision = Some(decision);
             return Err(error);
         }
 

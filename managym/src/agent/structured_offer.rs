@@ -775,11 +775,13 @@ impl Game {
                 _ => None,
             })
             .ok_or(StructuredOfferError::WrongDecision)?;
-        if std::iter::once(first)
-            .chain(combat.blockers_to_declare.iter().copied())
-            .any(|blocker| self.declined_interchangeable_blocker(blocker))
-        {
-            return Ok(None);
+        if !combat.declined_blockers.is_empty() {
+            let candidates: Vec<_> = std::iter::once(first)
+                .chain(combat.blockers_to_declare.iter().copied())
+                .collect();
+            if self.any_interchangeable_permanent(&combat.declined_blockers, &candidates) {
+                return Ok(None);
+            }
         }
         let mut choices = Vec::new();
         let mut bound = Vec::new();
@@ -1526,9 +1528,7 @@ impl Game {
                     done = self.record_compound_step(action, commands)?;
                     actions += 1;
                 }
-                if !self.skip_trivial
-                    && (normalizer.skipped() > 0 || normalizer.remaining_count() > 0)
-                {
+                if !self.skip_trivial && !normalizer.all_asked() {
                     return Err(StructuredOfferError::WrongDecision);
                 }
                 if !normalizer.all_committed() {
@@ -1538,162 +1538,26 @@ impl Game {
                 }
                 Ok((done, actions))
             }
-            AtomicCommand::DeclarationSequence { kind, actions, .. } => {
-                let mut done = false;
-                let mut executed = 0;
-                if *kind == ActionSpaceKind::DeclareBlocker {
-                    let player = actions
-                        .first()
-                        .map(Action::player)
-                        .ok_or(StructuredOfferError::WrongDecision)?;
-                    let mut order = Vec::with_capacity(actions.len());
-                    let mut planned = Vec::new();
+            AtomicCommand::DeclarationSequence { kind, actions, .. } => match *kind {
+                ActionSpaceKind::DeclareBlocker => self.lower_blocker_sequence(actions, commands),
+                ActionSpaceKind::Waterbend => self.lower_waterbend_sequence(actions, commands),
+                _ => {
+                    let mut done = false;
+                    let mut executed = 0;
                     for action in actions {
-                        match *action {
-                            Action::DeclareBlocker {
-                                player: action_player,
-                                blocker,
-                                attacker,
-                            } if action_player == player => {
-                                order.push(blocker);
-                                if attacker.is_some() {
-                                    planned.push(crate::flow::combat_preview::PlannedBlockEntry {
-                                        blocker,
-                                        attacker,
-                                        raw_attacker: None,
-                                        committed: false,
-                                    });
-                                }
-                            }
-                            _ => return Err(StructuredOfferError::WrongDecision),
-                        }
-                    }
-                    let mut normalizer =
-                        crate::flow::combat_preview::BlockPlanNormalizer::new(order, planned);
-                    while let Some(step) = normalizer.next_step(self, player) {
-                        let index = step
-                            .action_index
-                            .ok_or(StructuredOfferError::WrongDecision)?;
-                        done = self.record_compound_step(index, commands)?;
-                        executed += 1;
-                    }
-                    if executed == 0
-                        || (!self.skip_trivial
-                            && (normalizer.skipped() > 0 || normalizer.remaining_count() > 0))
-                        || !normalizer.all_committed()
-                    {
-                        return Err(StructuredOfferError::WrongDecision);
-                    }
-                    return Ok((done, executed));
-                }
-                if *kind == ActionSpaceKind::Waterbend {
-                    let mut remaining_taps: Vec<PermanentId> = Vec::new();
-                    let mut want_pay_cost = false;
-                    for action in actions {
-                        match *action {
-                            Action::WaterbendTap { permanent, .. } => {
-                                remaining_taps.push(permanent);
-                            }
-                            Action::PayCost { .. } => {
-                                want_pay_cost = true;
-                            }
-                            _ => return Err(StructuredOfferError::WrongDecision),
-                        }
-                    }
-                    let player = actions
-                        .first()
-                        .map(Action::player)
-                        .ok_or(StructuredOfferError::WrongDecision)?;
-                    while let Some(permanent) = remaining_taps.first().copied() {
-                        remaining_taps.remove(0);
-                        // tick() with skip_trivial may have consumed forced
-                        // tap suffix factors (either this permanent or an
-                        // interchangeable representative).
-                        if self.skip_trivial {
-                            if !self
-                                .paying()
-                                .is_some_and(|(_, payment, _)| payment.waterbends())
-                            {
-                                break;
-                            }
-                            if self.state.permanents[permanent]
-                                .as_ref()
-                                .is_some_and(|perm| perm.tapped)
-                            {
-                                continue;
-                            }
-                        }
-                        let generic_before = self.paying().map(|(_, payment, _)| payment.mana().1);
-                        let wanted = Action::WaterbendTap { player, permanent };
+                        // Exact action equality includes its rules player. Keep
+                        // the decision kind too: never cross into another window.
                         let index = self
                             .action_space()
-                            .filter(|space| space.kind == ActionSpaceKind::Waterbend)
-                            .and_then(|space| self.resolve_action_index(space, &wanted))
-                            .ok_or(StructuredOfferError::WrongDecision)?;
-                        done = self.record_compound_step(index, commands)?;
-                        executed += 1;
-                        if self.skip_trivial {
-                            let Some(before) = generic_before else {
-                                continue;
-                            };
-                            let Some((_, payment, _)) =
-                                self.paying().filter(|(_, payment, _)| payment.waterbends())
-                            else {
-                                remaining_taps.clear();
-                                break;
-                            };
-                            let after = payment.mana().1;
-                            let auto_taps =
-                                usize::from(before.saturating_sub(1).saturating_sub(after));
-                            if auto_taps > 0 {
-                                let mut retired = 0usize;
-                                remaining_taps.retain(|&id| {
-                                    if retired < auto_taps
-                                        && self.state.permanents[id]
-                                            .as_ref()
-                                            .is_some_and(|perm| perm.tapped)
-                                    {
-                                        retired += 1;
-                                        false
-                                    } else {
-                                        true
-                                    }
-                                });
-                                let extra = (auto_taps - retired).min(remaining_taps.len());
-                                remaining_taps.drain(0..extra);
-                            }
-                        }
-                    }
-                    if want_pay_cost
-                        && (!self.skip_trivial
-                            || self
-                                .paying()
-                                .is_some_and(|(_, payment, _)| payment.waterbends()))
-                    {
-                        let wanted = Action::PayCost { player };
-                        let index = self
-                            .action_space()
-                            .filter(|space| space.kind == ActionSpaceKind::Waterbend)
-                            .and_then(|space| self.resolve_action_index(space, &wanted))
+                            .filter(|space| space.kind == *kind)
+                            .and_then(|space| self.resolve_action_index(space, action))
                             .ok_or(StructuredOfferError::WrongDecision)?;
                         done = self.record_compound_step(index, commands)?;
                         executed += 1;
                     }
-                    return Ok((done, executed));
+                    Ok((done, executed))
                 }
-                for action in actions {
-                    // Exact action equality includes its rules player. Keep
-                    // the decision kind too: never cross into another window.
-                    let index = self
-                        .action_space()
-                        .filter(|space| space.kind == *kind)
-                        .and_then(|space| self.resolve_action_index(space, action))
-                        .ok_or(StructuredOfferError::WrongDecision)?;
-                    done = self.record_compound_step(index, commands)?;
-                    executed += 1;
-                }
-                Ok((done, executed))
-            }
+            },
             AtomicCommand::SearchAction { action, .. } => {
                 let index = self
                     .action_space()
@@ -1799,6 +1663,147 @@ impl Game {
             .map(|(done, _)| done)
     }
 
+    fn lower_blocker_sequence(
+        &mut self,
+        actions: &[Action],
+        commands: &mut Option<Vec<crate::decision::Command>>,
+    ) -> Result<(bool, usize), StructuredOfferError> {
+        let player = actions
+            .first()
+            .map(Action::player)
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let mut order = Vec::with_capacity(actions.len());
+        let mut planned = Vec::new();
+        for action in actions {
+            match *action {
+                Action::DeclareBlocker {
+                    player: action_player,
+                    blocker,
+                    attacker,
+                } if action_player == player => {
+                    order.push(blocker);
+                    if attacker.is_some() {
+                        planned.push(crate::flow::combat_preview::PlannedBlockEntry {
+                            blocker,
+                            attacker,
+                            raw_attacker: None,
+                            committed: false,
+                        });
+                    }
+                }
+                _ => return Err(StructuredOfferError::WrongDecision),
+            }
+        }
+        let mut normalizer = crate::flow::combat_preview::BlockPlanNormalizer::new(order, planned);
+        let mut done = false;
+        let mut executed = 0;
+        while let Some(step) = normalizer.next_step(self, player) {
+            let index = step
+                .action_index
+                .ok_or(StructuredOfferError::WrongDecision)?;
+            done = self.record_compound_step(index, commands)?;
+            executed += 1;
+        }
+        if executed == 0
+            || (!self.skip_trivial && !normalizer.all_asked())
+            || !normalizer.all_committed()
+        {
+            return Err(StructuredOfferError::WrongDecision);
+        }
+        Ok((done, executed))
+    }
+
+    fn lower_waterbend_sequence(
+        &mut self,
+        actions: &[Action],
+        commands: &mut Option<Vec<crate::decision::Command>>,
+    ) -> Result<(bool, usize), StructuredOfferError> {
+        let player = actions
+            .first()
+            .map(Action::player)
+            .ok_or(StructuredOfferError::WrongDecision)?;
+        let mut remaining_taps = std::collections::VecDeque::new();
+        let mut want_pay_cost = false;
+        for action in actions {
+            match *action {
+                Action::WaterbendTap { permanent, .. } => remaining_taps.push_back(permanent),
+                Action::PayCost { .. } => want_pay_cost = true,
+                _ => return Err(StructuredOfferError::WrongDecision),
+            }
+        }
+        let is_waterbending = |game: &Game| {
+            game.paying()
+                .is_some_and(|(_, payment, _)| payment.waterbends())
+        };
+        let mut done = false;
+        let mut executed = 0;
+        while let Some(permanent) = remaining_taps.pop_front() {
+            // tick() with skip_trivial may have consumed forced tap suffix
+            // factors (either this permanent or an interchangeable copy).
+            if self.skip_trivial {
+                if !is_waterbending(self) {
+                    break;
+                }
+                if self.state.permanents[permanent]
+                    .as_ref()
+                    .is_some_and(|perm| perm.tapped)
+                {
+                    continue;
+                }
+            }
+            let generic_before = self.paying().map(|(_, payment, _)| payment.mana().1);
+            let wanted = Action::WaterbendTap { player, permanent };
+            let index = self
+                .action_space()
+                .filter(|space| space.kind == ActionSpaceKind::Waterbend)
+                .and_then(|space| self.resolve_action_index(space, &wanted))
+                .ok_or(StructuredOfferError::WrongDecision)?;
+            done = self.record_compound_step(index, commands)?;
+            executed += 1;
+            if self.skip_trivial {
+                let Some(before) = generic_before else {
+                    continue;
+                };
+                let Some((_, payment, _)) =
+                    self.paying().filter(|(_, payment, _)| payment.waterbends())
+                else {
+                    remaining_taps.clear();
+                    break;
+                };
+                let auto_taps =
+                    usize::from(before.saturating_sub(1).saturating_sub(payment.mana().1));
+                if auto_taps > 0 {
+                    let mut retired = 0usize;
+                    remaining_taps.retain(|&id| {
+                        if retired < auto_taps
+                            && self.state.permanents[id]
+                                .as_ref()
+                                .is_some_and(|perm| perm.tapped)
+                        {
+                            retired += 1;
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    let extra = (auto_taps - retired).min(remaining_taps.len());
+                    remaining_taps.drain(0..extra);
+                }
+            }
+        }
+        if want_pay_cost && (!self.skip_trivial || is_waterbending(self)) {
+            let wanted = Action::PayCost { player };
+            let index = self
+                .action_space()
+                .filter(|space| space.kind == ActionSpaceKind::Waterbend)
+                .and_then(|space| self.resolve_action_index(space, &wanted))
+                .ok_or(StructuredOfferError::WrongDecision)?;
+            done = self.record_compound_step(index, commands)?;
+            executed += 1;
+        }
+        Ok((done, executed))
+    }
+
     /// Whether a creature still to be declared in this combat must attack or
     /// is forced to decline because an interchangeable creature declined earlier.
     fn attacker_declaration_is_constrained(&self) -> bool {
@@ -1806,7 +1811,7 @@ impl Game {
             .action_space()
             .into_iter()
             .flat_map(|space| &space.actions)
-            .filter_map(|action| match action {
+            .find_map(|action| match action {
                 Action::DeclareAttacker { permanent, .. } => Some(*permanent),
                 _ => None,
             });
@@ -1816,9 +1821,21 @@ impl Game {
             .as_ref()
             .into_iter()
             .flat_map(|combat| combat.attackers_to_declare.iter().copied());
-        current.chain(pending).any(|attacker| {
-            self.must_attack(attacker) || self.declined_interchangeable_attacker(attacker)
-        })
+        if current
+            .into_iter()
+            .chain(pending.clone())
+            .any(|attacker| self.must_attack(attacker))
+        {
+            return true;
+        }
+        let Some(combat) = self.state.combat.as_deref() else {
+            return false;
+        };
+        if combat.declined_attackers.is_empty() {
+            return false;
+        }
+        let candidates: Vec<_> = current.into_iter().chain(pending).collect();
+        self.any_interchangeable_permanent(&combat.declined_attackers, &candidates)
     }
 
     /// Recover the complete, still-undecided attacker batch from the current

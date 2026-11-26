@@ -86,7 +86,9 @@ fn cr_103_opening_commands_keep_private_bottom_order_and_enter_before_turn_one()
     for seat in 0..2 {
         assert_eq!(s.game().state.turn.turn_number, 0);
         assert_eq!(s.action_space().player, Some(PlayerId(seat)));
-        assert_eq!(s.action_space().actions.len(), 6);
+        // 5 pregame cards across 2 names fold to 2 SelectCard offers + Decline = 3, with 3 aliases.
+        assert_eq!(s.action_space().actions.len(), 3);
+        assert_eq!(s.game().action_aliases().len(), 3);
         assert_choice_contract(&s);
         let name = ["Leyline Axe", "Quicksilver, Brash Blur"][seat];
         let index = s.action_space().actions.iter().position(|a| matches!(a,Action::SelectCard {object,..} if s.game().state[*object].name == name)).unwrap();
