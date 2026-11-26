@@ -256,10 +256,15 @@ interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
 digests wherever the source retained them, and saves what it verified to this traces
 directory as a finished recording. A snapshot replay carries its final digest.
-It opens as a **Recorded game**. The acting view hides the opponent’s hand.
-**Show both hands** includes both hands in the spectator response. The board
-draws the bottom seat’s cards; the top seat’s **Hand** count opens a list of
-its cards, by pointer or keyboard, as the graveyard does. Where the record
+It opens as a **Recorded game**, with Seat 1 at the bottom, Seat 2 at the top,
+and **Show both hands** on across choices, consequences and the final board.
+Both hands sit as upright card ribbons along the top and bottom edges of a
+fixed battlefield: the active seat's ribbon glides open while the waiting
+seat's stays tucked showing each card's name bar (hover or focus a tucked card
+to peek and inspect it, or use **Show hand / Tuck hand** on its plate).
+Unchecking **Show both hands** switches to the acting view, which draws the
+non-acting seat's hidden cards as backs while keeping any rules-revealed cards
+face-up. Where the record
 re-dealt the position before a decision, the move list shows a neutral note
 in its place, such as **Branch · libraries reshuffled** or **Branch · hidden
 cards re-dealt**, which jumps to that decision. Branch seeds stay private in
@@ -455,7 +460,8 @@ pending decision. Otherwise `/` shows the setup screen:
   the first time). The last matchup is a browser preference
   (`academy.last-matchup` in local storage).
 - Choose **Play vs Bot** or **Watch Bot vs Bot**, pick decks, an opponent,
-  decklist disclosure, deal mode and priority stops, then click **Start**.
+  decklist disclosure, **Open hands** (Play only, off by default), deal mode
+  and priority stops, then click **Start**.
 
 Before a first matchup, setup proposes the default opponent and, where a deck
 pool is installed, a dealt held-out deck for each seat. A matchup named by the
@@ -506,13 +512,13 @@ one line from the history: turns, and each player's spells cast and attacks.
 
 | Action on the result card | What carries forward |
 |---|---|
-| **Rematch** | Both decks (including imported lists), exact opponent configuration, disclosure, priority stops and your seat from the game just played |
+| **Rematch** | Both decks (including imported lists), exact opponent configuration, disclosure, **Open hands**, priority stops and your seat from the game just played |
 | **Swap sides** | The rematch setup with your native play/draw seat reversed; your deck stays yours |
 | **Deal new decks** | Same deck pools and opponent configuration, drawing fresh decks from the pools |
 | **Review this game** | Opens `/replay?trace=<id>` from the first recorded position |
 
-Priority-stop changes made during play are saved into the game's setup and
-carry forward into **Rematch** and **Swap sides**.
+Priority-stop and **Open hands** changes made during play are saved into the
+game's setup and carry forward into **Rematch**, **Swap sides** and **Resume**.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
@@ -628,8 +634,15 @@ When the line snaps to a target, the board previews any lands it would tap.
 Release to choose that target, or release elsewhere or press Escape to cancel.
 
 The board is split at the centre line: the opponent's creatures face yours,
-with each side's lands and other permanents behind them. A plate at the left of
-each half shows the player, life, zone counts and floating mana as mana
+with each side's lands and other permanents behind them. In live play, your
+hand keeps its full row along the bottom for clicking and dragging, while the
+opponent's hand runs along the top edge past their plate as a tucked ribbon of
+card backs; any card the rules revealed (such as from Learn or Duress) sits
+upright and face-up among those backs so you can hover or focus it to inspect
+it, and turning on [Open hands](#open-hands-while-you-play) glides their actual
+cards down face-up without shifting the battlefield. A plate at the left of
+each half shows the player, life, zone counts (**Hand** is a count only) and
+floating mana as mana
 symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
@@ -837,8 +850,8 @@ frame, disconnect or looking back cancels a drag with nothing sent, and
 read-only recordings and Watch never start a drag. With reduced motion, dragged
 cards, lines and selection boxes still follow the pointer directly, without the
 return-to-hand or post-drop travel transitions.
-**Settings** holds game controls, priority stops, live analysis, view options
-(including **Card art credits**), and **New game**.
+**Settings** holds game controls, priority stops, live analysis and **Open
+hands**, view options (including **Card art credits**), and **New game**.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload to recover the actual
@@ -1326,7 +1339,7 @@ command line.
 
 | Position | What the board shows |
 |---|---|
-| Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
+| Choice | The chooser's recorded board and every legal offer, on its card (whether the chooser sits at the bottom or the top) and in the rail's numbered list, read-only; off-board offers such as Lessons sit in a board-level tray with their probabilities. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
 | Consequences | The board after the action, with what it did, and why, in the rail's history; selecting a line inside the transition shows its per-line board. In a game you played this is your own view, your hand included, whoever acts next. |
 | Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An unfinished or stopped recording has no invented winner, and one opened from a file says why and where it stops. |
 
@@ -1358,19 +1371,44 @@ select another.
 
 #### Perspective
 
-The **Perspective** control in the top bar chooses who sits at the bottom:
-**Follow the chooser** (the default for bot games: each choice is drawn from
-its chooser's seat, hand included, and the board stays turned through that
-choice's consequences), or a fixed seat (the default for a game you played).
-Turning the board never reveals a hand or changes the recorded policy inputs.
+Start a **Watch Bot vs Bot** game (or open an imported training or evaluation
+game) and step through it with →: Seat 1 stays at the bottom, Seat 2 stays at
+the top, and **Show both hands** starts on across every choice, consequences
+board and the final result. The halves never swap and the top hand never closes
+between a choice and what followed it.
 
-At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** appears at Watch choices that captured a spectator view and
-at every position of a played game once it has finished (`game_over`). It does
-not enrich the bot's recorded evidence or acting-view history. In Watch and
-imported games, consequences and result boards use the recorded view of the
-seat named in the menu's perspective line when a private post-action view was
-not captured.
+On recordings (Watch, Review and **See its line**), both hands sit as upright
+1:1 card ribbons bleeding along the top and bottom edges of a fixed two-half
+battlefield; live Play and **Try another line** (Study) keep your dedicated
+bottom hand row. Whichever seat is making the current choice shows
+**Choosing…** and an accent bar on its plate, and its hand ribbon glides into
+full view with its legal offers and recorded policy probabilities directly on
+those cards — staying extended through that choice's consequences until the
+other seat acts. The waiting seat's ribbon stays tucked along its edge showing
+each card's name bar: hover or focus any face-up tucked card to glide that card
+alone out and open Inspect without moving neighbouring cards or the
+battlefield, or press **Show hand / Tuck hand** on the waiting plate to expand
+or tuck both hands together. At game over, neither ribbon stays extended.
+
+The **Perspective** control in the top bar chooses who sits at the bottom:
+fixed seats (**Seat 1 at the bottom** is the default for Watch and imported
+games; your seat is the default for a game you played), or **Follow the
+chooser** (`near=chooser`), which turns each choice and its consequences to the
+choosing seat. Turning the board never reveals a hand or changes the recorded
+policy inputs.
+
+**Show both hands** starts checked in Watch and imported games unless
+`view=acting` or a saved preference turns it off. Unchecking it switches to the
+acting view, showing only what the acting seat could see — with the other
+seat's hidden cards drawn as backs and any rules-revealed cards face-up. Older
+Watch recordings saved before final opponent hands were captured fall back to
+the acting view at the last position and hide the checkbox there. For a game
+you played, **Show both hands** appears only once the game finishes
+(`game_over`) and is never offered on an unfinished played game, even if it was
+played with open hands. Showing both hands never enriches the bot's recorded
+evidence or acting-view history. Entering **Try another line** (Study) always
+returns to the acting view and your bottom hand row, and restores your previous
+view on **Return to recorded decision**.
 
 **Settings** holds the recording's kind and status, each seat's identity
 (policy ID, runner, provenance), **Refresh saved head**, analysis controls, and
@@ -1495,6 +1533,39 @@ never unmarks a choice. A game you play without it saves exactly as before.
 | **No registered policy can read this game** under the switch | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
 | A reason under the switch, and no probabilities | The policy failed, or the game could not be replayed here. Your game goes on. | Turn the switch off and on to start again. |
 
+#### Open hands while you play
+
+In **Play vs Bot**, the opponent's hand normally sits along the top edge as a
+tucked ribbon of card backs (with any card the rules revealed shown face-up
+among them). Switch **Open hands** on in Play setup, or toggle **Settings →
+Analysis → Open hands** (beside **Show analysis**) at any point during a game:
+the backs glide smoothly down into the bot's actual cards face-up without
+shifting the battlefield, and an **Open hands ×** chip appears in the top bar.
+Click the chip or switch **Open hands** off to glide them back into card backs
+(keeping any rules-revealed cards face-up).
+
+- **Works with closed decklists.** Open hands is available in both open- and
+  closed-decklist Play games (including the default TLA Trophies setup). It
+  sends only the bot's current hand to your live board; canonical frames,
+  `frame_hash`, viewer trace exports and the bot's own observation stay
+  strictly blind, so nothing about the bot's decisions or replay identity
+  changes.
+- **History and beat playback.** While the board is walking through recent
+  moves or you are looking back at an earlier line in **History**, the top
+  ribbon shows that historical board's own opponent hand (backs plus any
+  rules-revealed cards) rather than running ahead to show cards before they
+  were drawn or cast. Returning to now restores the live open hand.
+- **Resume, rematch and game over.** Toggling **Open hands** during an active
+  game saves it on the game's configuration, so reloading, reconnecting,
+  resuming from **History**, **Rematch** and **Swap sides** preserve your
+  setting. After game over, toggling **Open hands** lets you peek at the bot's
+  remaining hand without changing the finished game's saved configuration.
+- **Counted in Review.** Every deliberate decision you commit while **Open
+  hands** is on is recorded on that decision, and Review's **Settings → This
+  game** reports **Played with open hands: N decisions** beside **Chosen with
+  analysis shown**. Opening an unfinished played game in Review still hides the
+  opponent's hand regardless of whether **Open hands** was on.
+
 #### The game in numbers
 
 The result card of a game you played ends with one line of its numbers, such as
@@ -1516,6 +1587,8 @@ chose as Reader would: 8 of 20**, where the policy's first choice was yours,
 and the policy's estimate from your seat at the start, at its highest and at
 the end. A game with choices made while [analysis was
 shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
+decisions**, and one with choices made while [Open
+hands](#open-hands-while-you-play) was on reads **Played with open hands: 4
 decisions**. An unfinished or stopped game is counted up to its latest recorded
 step, and the cached counts clear automatically when a resumed game appends new
 moves so the next read recounts fresh numbers. An older game is counted the
