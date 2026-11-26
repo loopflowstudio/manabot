@@ -539,4 +539,34 @@ describe('mid-game seat swaps in Review', () => {
     ]);
     expect(entryPosition(lines[1].jumpKey!)).toBe('c1');
   });
+
+  it('attributes pre-swap bot blocks and mid-turn post-swap human blocks accurately in Review track history', () => {
+    const events: PresentationEvent[] = [
+      {
+        seq: 0, from_revision: 0, to_revision: 1, caused_by: null, group: 0, importance: 'normal', suggested_ms: 0, sound: null,
+        kind: { kind: 'turn_started', turn_number: 2, player: 0 },
+      },
+      // Pre-swap: Seat 0 (You) attacked; Seat 1 (bot) blocked. On Seat 1's track, caused_by is non-null.
+      {
+        seq: 1, from_revision: 1, to_revision: 2, caused_by: 'authority.policy.1', group: 1, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'blocked', attacker: { entity: 10, incarnation: 1 }, blockers: [{ entity: 11, incarnation: 1 }] },
+        labels: { objects: { '10:1': 'Bear', '11:1': 'Ally' }, stacks: {} },
+      },
+      // Mid-turn swap at revision 3: now Seat 1 is You, Seat 0 is still Turn 2's active player (now Opponent).
+      {
+        seq: 2, from_revision: 4, to_revision: 5, caused_by: 'cmd-4', group: 2, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'blocked', attacker: { entity: 10, incarnation: 1 }, blockers: [{ entity: 12, incarnation: 1 }] },
+        labels: { objects: { '10:1': 'Bear', '12:1': 'Scout' }, stacks: {} },
+      },
+    ];
+    const turns = buildHistory(events, () => ({ objects: {}, players: {}, stacks: {} }), { youSeat: 1, you: 'You', opponent: 'Passive' }, {
+      playersFor: event => ({ youSeat: event.from_revision < 3 ? 0 : 1, you: 'You', opponent: 'Passive' }),
+      isAutomatic: () => false,
+    });
+    const lines = turns.flatMap(turn => turn.lines);
+    expect(lines.map(line => [line.actor, line.who])).toEqual([
+      ['opponent', 'Passive'],
+      ['you', 'You'],
+    ]);
+  });
 });

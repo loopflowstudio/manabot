@@ -201,7 +201,7 @@ function actorForMove(
   isAutomatic?: (event: PresentationEvent) => boolean,
 ): HistoryActor {
   if (event.kind.kind === 'blocked') {
-    if (event.caused_by !== null) return 'you';
+    if (!isAutomatic && event.caused_by !== null) return 'you';
     return turnOwner === 'opponent' ? 'you' : 'opponent';
   }
   const seat = eventSeat(event);
@@ -422,6 +422,7 @@ export function buildHistory(
   const turns: HistoryTurn[] = [];
   let currentTurn: number | null = options.initialTurn ?? null;
   let currentOwner: 'you' | 'opponent' | null = options.initialOwner ?? null;
+  let currentTurnPlayer: number | null = null;
   let openBlock: { line: HistoryLine; seqs: Set<number>; castSeq: number | null; resolvedSeq: number | null } | null = null;
 
   const pendingNotes = options.notes ?? [];
@@ -494,18 +495,22 @@ export function buildHistory(
     if (event.kind.kind === 'turn_started') {
       closeBlock();
       currentTurn = event.kind.turn_number;
+      currentTurnPlayer = event.kind.player;
       currentOwner = playerSide(event.kind.player, eventPlayers.youSeat);
       ensureTurn(currentTurn, currentOwner, eventPlayers);
       continue;
     }
 
-    const turn = ensureTurn(currentTurn, currentOwner, eventPlayers);
+    const eventOwner = currentTurnPlayer !== null
+      ? playerSide(currentTurnPlayer, eventPlayers.youSeat)
+      : currentOwner;
+    const turn = ensureTurn(currentTurn, eventOwner, eventPlayers);
     const labels = labelsAt(i);
     const move = isMoveEvent(event);
 
     if (event.kind.kind === 'passed') {
       closeBlock();
-      const actor = actorForMove(event, eventPlayers, currentOwner, options.isAutomatic);
+      const actor = actorForMove(event, eventPlayers, eventOwner, options.isAutomatic);
       const jumpKey = options.jumpKeyFor?.(event, true) ?? null;
       if (actor === 'opponent' || actor === 'auto') {
         pushPassRun(turn, actor, whoForActor(actor, eventPlayers), {
@@ -570,7 +575,7 @@ export function buildHistory(
     const sentence = segmentText(sentenceSegments);
 
     const sourceSeq = origin?.seq ?? null;
-    const actor: HistoryActor = move ? actorForMove(event, eventPlayers, currentOwner, options.isAutomatic) : 'note';
+    const actor: HistoryActor = move ? actorForMove(event, eventPlayers, eventOwner, options.isAutomatic) : 'note';
     const line = makeLine({
       id: `seq-${event.seq}`,
       seq: event.seq,

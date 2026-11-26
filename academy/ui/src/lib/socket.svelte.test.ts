@@ -540,4 +540,26 @@ describe('live analysis across Swap sides', () => {
     deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(gameStore.liveAnalysis.points).toEqual([point]);
   });
+
+  it('drops old-seat automation notes on swap and keeps swap dividers monotonic across a swap back', () => {
+    showing();
+    gameStore.addHistoryNote('you', 1, 905, 'Pass turn');
+    const controller = new GameSocketController();
+    const firstSwap = recoveryAt(43, true);
+    firstSwap.presentation_cursor = 900;
+    firstSwap.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 4); // seq 900..903
+    deliver(controller, { type: 'observation', data: firstSwap.frame.projection, actions: [], recovery: firstSwap });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 903],
+    ]);
+
+    const swapBack = recoveryAt(44, false);
+    swapBack.presentation_cursor = 900;
+    swapBack.presentation_tail = LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2); // seq 900..901
+    deliver(controller, { type: 'observation', data: swapBack.frame.projection, actions: [], recovery: swapBack });
+    expect(gameStore.historyNotes.map(note => [note.actor, note.text, note.afterSeq])).toEqual([
+      ['note', 'Swapped sides', 901],
+      ['note', 'Swapped sides', 901],
+    ]);
+  });
 });

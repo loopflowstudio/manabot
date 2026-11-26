@@ -1751,7 +1751,11 @@ class GameSession:
             and live_analysis_publish is not None
             and not self.obs.game_over
         ):
-            self._start_live_analysis(live_analysis_policy, live_analysis_publish)
+            live = self._start_live_analysis(
+                live_analysis_policy, live_analysis_publish
+            )
+            if self.published_prompt is not None:
+                live.decide(len(self.trace.events), self.revision)
         return self._wire_message(reason="explicit_resync")
 
     def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:

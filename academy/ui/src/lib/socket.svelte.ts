@@ -714,7 +714,13 @@ export class GameSocketController {
           sessionId,
           resumeToken,
         );
-        if (seatSwapped) gameStore.keptBoards = null;
+        if (seatSwapped) {
+          gameStore.keptBoards = null;
+          const lastSeq = presentationPlayer.events.at(-1)?.seq ?? -1;
+          gameStore.historyNotes = gameStore.historyNotes
+            .filter(note => note.actor === 'note')
+            .map(note => (note.afterSeq > lastSeq ? { ...note, afterSeq: lastSeq } : note));
+        }
         const patches = message.boards ?? [];
         // Recovery on reconnect/reload brings presentation_tail with no earlier
         // boards; only span the frame board across freshly delivered non-pass
