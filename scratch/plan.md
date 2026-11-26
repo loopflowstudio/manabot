@@ -310,6 +310,17 @@ aligned:
 3. **Combat** — done (`4c9a00ae9b`). `declined_attackers`/`declined_blockers`, hash v31 → v32 (adds `graveyard_from_battlefield`). Fold share 25.07%, 3.332 → 2.832.
 4. **Academy and records** — done (`2111195908`). `InteractionOffer.aliases` on all wire/schema copies, drawn-object anchors, conformance `evidence-interchangeable-v1.json` (14 cases / 3,077 commands, zero divergence), pinned pilot games re-recorded. Local release `bench_steps` 118,308 steps / 7.02s, digest `4443070906626209330`.
 5. **Concept-review fixes** — done (`cd1b497671`). Coupled decline-pruning into `block_requirements.rs`, shared `AttackPlanNormalizer`/`BlockPlanNormalizer` between `combat_preview.rs` and `structured_offer.rs`, paired `PublishedDecision` (`space` + `aliases`) on `Game` and `GameSnapshot`, added pre-census cheap filtering and shared post-census equivalence helpers in `interchangeable.rs`, made `select_card_decision_allows_fold` exhaustive over `PendingChoice` and `Decision`, and removed dead `TurnFaceUp` arms. Zero conformance action-space hash changes (20/20 pass); local release `bench_steps` unchanged at 118,308 steps / 7.87s (`15,038.7 steps/s`), digest `4443070906626209330` (noisy shared local host; CI Engine Budget baseline adoption deferred to gate/CI).
+6. **Ship-review follow-up (PR #623 alignment + CI fixes)** — next. Direction from `scratch/ship-review-notes.md` (Jack Heart, 2026-11-26): *"1a"*, *"i think we are changing the name Offer to nomencalture around decision group"*, *"so those names sshoudl probaly align with the code its building on top off / but otherwise seems fine"*:
+   - **Sync onto `main` (absorbing merged PR #623 / MTG-483).** Reconcile `structured_offer` → `decision_surface`, keep `managym/src/flow/combat_preview.rs` as PR #623's thin deprecated wrapper, and port `AttackPlanNormalizer` / `BlockPlanNormalizer` + modulo-equivalence `combat_undeclared` directly into `managym/src/flow/decision_group/combat.rs` so grouped combat `Confirm` accepts drafted subsets of identical creatures and folded attacker aliases.
+   - **Align alias API names with `decision_group`.** Expose optional `aliases: list[ObjectRenderId]` directly on `managym.decision_group.Offer` (Rust `flow/decision_group/mod.rs` + Python `managym/decision_group.py`) as well as on `InteractionOffer` in the Academy wire frame (`experience-v1` schemas). Remove the separate `Env.decision_offer_aliases_json` public method from `managym/__init__.pyi` / `bindings.rs` / `tests/public_api.json` and have `managym/academy/server.py` read aliases through the aligned `decision_group` / `decision_context` surface instead.
+   - **Fix the ~22 pre-folding CI test assertions** across run `45769130209`:
+     - `Rust Tests` + `Academy Integration (contracts)`: `retained_professor_cast_prefix_can_enter_and_finish_mana_payment` / `test_retained_professor_offer_completes_payment_and_replays_exactly`.
+     - `Academy UI`: `e2e/decision-surface.spec.ts:118` (`Precision exposes the shared four-mana alternative`) plus any combat/drag e2e adjustment after PR #623 merge.
+     - `Integration (model)`: `tests/env/test_native_player_policies.py` (3 mulligan bottom count tests) and `tests/env/test_game_snapshot.py` (3 offer-count/JSON tests).
+     - `Integration (sim)`: `tests/sim/test_heuristic.py` (1) and `tests/semantic/test_text_observation.py` (6).
+     - `Integration (training)` & `Integration (experiment)`: `tests/training/test_action_cutoff.py` (4) and `tests/verify/test_native_buffer_capacities.py` (2) — make sure cutoff/capacity tests construct distinct (non-interchangeable) actions so they still genuinely test the 64-action cap and buffer capacities.
+   - **Add a dedicated London mulligan bottom-putting test** in `managym/tests/interchangeable.rs` verifying duplicate opening-hand cards fold into one `SelectCard` offer with aliases (and 7 identical cards auto-skip).
+   - **Refresh conformance / docs if affected by PR #623 merge** (`managym/README.md`, `docs/academy.md`, `conformance/`), and adopt `managym/perf/baseline.json` from a green CI `Engine Budget` artifact during gate/CI.
 
 ## Concept reviews — choices made for review
 
@@ -328,8 +339,8 @@ Post-Pass 5 (27088fb760): no conceptual defects found; every concept lines up at
 
 ## Deferred findings
 
-- **Compound offer candidates.** `compound_offers()` (`agent/structured_offer.rs:708-958`) still lists every identical target, waterbend tap, attacker and blocker; lowering resolves aliases, so it is correct but redundant for compound policies. Takes: dedup `CandidateSource` lists through `fold_action_space` aliases, with count-based roles for identical creatures/taps.
-- **`autotapper` tiebreak.** `flow/mana/autotapper.rs` breaks equal-reluctance ties by `PermanentId`, so tapping one of two interchangeable Plains can change a later auto-payment's color; the oracle stops before autotapper shortcuts. Takes: tie-break by color/output before `PermanentId`, then let the oracle run through shortcuts.
+- **Compound offer candidates — dropped at ship-review.** `compound_offers()` was deprecated by merged PR #623 (`use Env.decision / Env.preview / Env.submit; removed in 0.3.0`).
+- **`autotapper` tiebreak — filed as MTG-495 (`task_62704c2f24884e28ab710e8d4c907316`).** Tie-break equal-reluctance, equal-followup lands in `flow/mana/autotapper.rs` by color/output class before `PermanentId`, then extend the behavioral oracle through `autotapper` shortcuts.
 
 ## Acceptance check at gate
 

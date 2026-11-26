@@ -1,0 +1,63 @@
+at: b71f1620c391af5e72285efd1d692e9570e36ed4
+first:
+  - path: managym/README.md
+    why: Indistinguishable-object contract, allowlist, and manual-mana rules
+  - path: docs/academy.md
+    why: Board/hand alias interaction, piles, and payment preview contract
+  - path: docs/engine.md
+    why: Forced-decision skipping when folding collapses a space to one
+  - path: managym/state/src/game_object.rs
+    why: Shared cheap object-identity comparator across zones
+  - path: managym/src/flow/combat.rs
+    why: Declined attacker/blocker tracking for combat symmetry breaking
+  - path: managym/src/state/hash.rs
+    why: Hash v32 adding combat declines and graveyard_from_battlefield
+  - path: managym/src/experience.rs
+    why: Optional InteractionOffer.aliases wire field
+  - path: managym/experience.py
+  - path: academy/ui/src/lib/types.ts
+  - path: managym/__init__.pyi
+    why: Public Env.decision_offer_aliases_json binding
+  - path: managym/src/flow/interchangeable.rs
+    why: Fail-closed reference census, equivalence predicate, and action folding
+  - path: managym/src/flow/mana/interchangeable.rs
+    why: Mana-payment skip moved onto shared equivalence predicate
+  - path: managym/src/flow/game.rs
+    why: Paired PublishedDecision seam keeping ActionSpace and aliases together
+  - path: managym/src/flow/tick.rs
+    why: Single fold/publish path and combat decline-pruning integration
+  - path: managym/src/flow/block_requirements.rs
+    why: Blocker decline-pruning coupled into Menace and MustBeBlocked solver
+  - path: managym/src/flow/combat_preview.rs
+    why: Shared AttackPlanNormalizer and BlockPlanNormalizer for drafted subsets
+  - path: managym/src/agent/structured_offer.rs
+    why: Compound lowering through aliases and shared combat normalizer
+  - path: managym/src/decision_context.rs
+    why: Viewer-safe alias projection onto experience offers
+  - path: managym/academy/server.py
+    why: Copying offer aliases onto live Academy wire frames
+  - path: academy/ui/src/lib/board/view.ts
+    why: Anchoring folded offers on drawn board and hand aliases
+  - path: academy/ui/src/lib/board/Board.svelte
+  - path: academy/ui/src/lib/board/Rail.svelte
+  - path: academy/ui/src/routes/replay/+page.svelte
+    why: Wrap long hex digest stop reasons on pre-change recordings
+  - path: managym/tests/interchangeable.rs
+    why: Behavioral oracle, per-row matrix, and coupled combat tests
+  - path: tests/academy/test_interchangeable_offers.py
+    why: End-to-end Academy alias, Command, stale-revision, and replay contract
+  - path: academy/ui/src/lib/board/view.test.ts
+    why: Drawn-alias anchoring and pile stability unit tests
+hide:
+  - path: conformance/authored-matches/
+    why: Regenerated authored-match replay fixtures for hash v32
+  - path: conformance/semantic-kernel-w17-v6/evidence-interchangeable-v1.json
+    why: Recorded semantic conformance evidence (14 cases, zero divergence)
+  - path: managym/academy/fixtures/
+    why: Regenerated Academy demo opening fixtures
+  - path: tests/fixtures/pinned_pilot/
+    why: Re-recorded pinned-pilot fixtures for folded spaces
+  - path: protocol/
+    why: Six byte-exact JSON schema copies adding optional aliases array
+  - path: scratch/
+    why: Working notes, concept review, QA page, and ship-review artifacts
