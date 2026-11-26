@@ -302,12 +302,12 @@ def test_watch_reads_never_carry_person_seat_boards(
     try:
         revision = 0
         for _ in range(12):
-            result = step_watch(trace_id, created["token"], revision)
+            result = step_watch(trace_id, revision)
             revision = result["revision"]
             if result.get("game_over"):
                 break
     finally:
-        server._drop_session(trace_id, "test")
+        server.end_game(trace_id, "test")
 
     payload = trace_store.load_trace(trace_id, tmp_path)
     assert all("boards" not in ev for ev in payload["events"])

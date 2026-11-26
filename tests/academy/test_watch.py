@@ -27,7 +27,7 @@ def watch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[WatchCrea
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
     result = create_watch(WatchRequest(players=["random", "random"], seed=42))
     yield result
-    server._drop_session(result["id"], "test")
+    server.end_game(result["id"], "test")
 
 
 def test_watch_opening_choice_for_second_seat_preserves_acting_view(
@@ -36,36 +36,32 @@ def test_watch_opening_choice_for_second_seat_preserves_acting_view(
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
     result = create_watch(WatchRequest(players=["random", "passive"], seed=7))
     try:
-        game = server._live_record_for_trace(result["id"]).game
+        game = server._live_game_for_trace(result["id"]).game
         assert game.obs is not None
         assert game.obs.agent.player_index == 0
-        step_watch(result["id"], result["token"], 0)
+        step_watch(result["id"], 0)
         assert game.obs is not None and game.obs.agent.player_index == 1
         recovery = game.current_recovery("explicit_resync")
         assert recovery["frame"]["projection"]["agent"]["player_index"] == 0
         assert recovery["frame"]["prompt"] is None
         assert recovery["frame"]["offers"] == []
-        step_watch(result["id"], result["token"], 1)
-        row = inspect_watch(result["id"], 1, result["token"])
+        step_watch(result["id"], 1)
+        row = inspect_watch(result["id"], 1)
         assert row["decision"]["viewer"] == 1
         assert row["observation"]["agent"]["player_index"] == 1
         assert row["observation"]["opponent"]["hand"] == []
     finally:
-        server._drop_session(result["id"], "test")
+        server.end_game(result["id"], "test")
 
 
 def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
-    trace_id, token = watch["id"], watch["token"]
+    trace_id = watch["id"]
     client = TestClient(server.app)
-    assert (
-        client.post(f"/api/watch/{trace_id}/step", json={"revision": 0}).status_code
-        == 403
-    )
     actors: set[int] = set()
     for revision in range(20):
-        result = step_watch(trace_id, token, revision)
+        result = step_watch(trace_id, revision)
         assert result["revision"] == revision + 1
-        row = inspect_watch(trace_id, revision, token, reveal=False)
+        row = inspect_watch(trace_id, revision, reveal=False)
         actors.add(row["decision"]["viewer"])
         assert row["count"] == revision + 1
         assert row["observation"]["opponent"]["hand"] == []
@@ -75,7 +71,7 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
         assert all(
             event["seq"] < row["decision"]["presentation_cursor"] for event in history
         )
-        game = server._live_record_for_trace(trace_id).game
+        game = server._live_game_for_trace(trace_id).game
         track = next(
             track
             for track in game.canonical_replay().presentation_tracks
@@ -89,15 +85,15 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
         outputs = row["outputs"]
         assert sum(outputs["probabilities"]) == pytest.approx(1)
         assert outputs["probabilities"][outputs["action"]] > 0
-        assert row == inspect_watch(trace_id, revision, token, reveal=False)
-        spectator = inspect_watch(trace_id, revision, token, reveal=True)
+        assert row == inspect_watch(trace_id, revision, reveal=False)
+        spectator = inspect_watch(trace_id, revision, reveal=True)
         assert spectator["revealed"]
         assert spectator["decision"] == row["decision"]
         assert spectator["outputs"] == row["outputs"]
         assert spectator["presentation"] == row["presentation"]
         assert (
             spectator["observation"]
-            == server._live_record_for_trace(trace_id)
+            == server._live_game_for_trace(trace_id)
             .game.trace.events[revision]
             .analysis_observation
         )
@@ -105,36 +101,19 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
             assert spectator["observation"]["agent"]["hand"]
             assert spectator["observation"]["opponent"]["hand"]
             assert (
-                client.get(f"/api/watch/{trace_id}/decisions/0?reveal=true").status_code
-                == 403
+                client.get(f"/api/watch/{trace_id}/decisions/0?reveal=true").json()
+                == spectator
             )
     assert actors == {0, 1}
     address = row["decision"]["address"]
-    assert (
-        client.get(
-            f"/api/traces/{trace_id}/decisions/{address}",
-            headers={"x-etude-participant-tokens": token},
-        ).status_code
-        == 403
-    )
-    assert (
-        client.get(
-            f"/api/traces/{trace_id}/decisions/{address}",
-            headers={
-                "x-etude-participant-token": token,
-                "x-etude-participant-tokens": token,
-            },
-        ).status_code
-        == 200
-    )
+    assert client.get(f"/api/traces/{trace_id}/decisions/{address}").status_code == 200
     response = client.post(
         f"/api/watch/{trace_id}/step",
-        headers={"x-etude-participant-token": token},
         json={"revision": 0},
     )
     assert response.status_code == 409
-    assert len(server._live_record_for_trace(trace_id).game.canonical_decisions) == 20
-    metadata = server._live_record_for_trace(trace_id).game.attempt_store.metadata(
+    assert len(server._live_game_for_trace(trace_id).game.canonical_decisions) == 20
+    metadata = server._live_game_for_trace(trace_id).game.attempt_store.metadata(
         trace_id
     )
     assert [player["kind"] for player in metadata["players"]] == ["bot", "bot"]
@@ -143,13 +122,13 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
 def test_watch_roots_fork_both_seats_without_mutating_match(
     watch: WatchCreated,
 ) -> None:
-    game = server._live_record_for_trace(watch["id"]).game
+    game = server._live_game_for_trace(watch["id"]).game
     for revision in range(12):
-        step_watch(watch["id"], watch["token"], revision)
+        step_watch(watch["id"], revision)
     original = game.env.state_digest()
     actors: set[int] = set()
     for index in range(12):
-        row = inspect_watch(watch["id"], index, watch["token"])
+        row = inspect_watch(watch["id"], index)
         actor = row["decision"]["viewer"]
         address = row["decision"]["address"]
         branch = game.fork_study(address)
@@ -180,12 +159,12 @@ def test_watch_roots_fork_both_seats_without_mutating_match(
 def test_search_captures_actual_scores(watch: WatchCreated) -> None:
     from managym.bots import FlatSearchPolicy, choose_bot
 
-    game = server._live_record_for_trace(watch["id"]).game
+    game = server._live_game_for_trace(watch["id"]).game
     # Forced actions bypass search; reach a real choice before checking scores.
     for revision in range(64):
         if len(game.obs.action_space.actions) > 1:
             break
-        step_watch(watch["id"], watch["token"], revision)
+        step_watch(watch["id"], revision)
     assert len(game.obs.action_space.actions) > 1
     outputs = choose_bot(FlatSearchPolicy(sims=1, max_steps=2), game.env, game.obs)
     assert len(outputs.search_scores) == len(game.obs.action_space.actions)
@@ -219,7 +198,7 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     assert source.get("failure") is None
     canonical = import_game(source["record"])
     assert canonical["finished"] and canonical["count"] == len(source["decisions"])
-    assert inspect_watch(canonical["id"], 0, None)["source_kind"] == "evaluation"
+    assert inspect_watch(canonical["id"], 0)["source_kind"] == "evaluation"
     # The historical Command envelope remains a reader contract of its own.
     from manabot.infra.identity import canonical_sha256
 
@@ -231,20 +210,20 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     assert source == original
     assert result["finished"]
     assert result["count"] == len(source["decisions"])
-    inspected = inspect_watch(result["id"], 0, None)
+    inspected = inspect_watch(result["id"], 0)
     assert inspected["decision"]["frame"]["projection"]["opponent"]["hand"] == []
     assert not inspected["outputs"]["probabilities"]
-    revealed = inspect_watch(result["id"], 0, None, reveal=True)
+    revealed = inspect_watch(result["id"], 0, reveal=True)
     assert revealed["revealed"]
     assert revealed["observation"]["opponent"]["hand"]
     # Saved acting-seat inspection outlives the controllers and retained roots.
-    server._drop_session(result["id"], "test")
+    server.end_game(result["id"], "test")
     second_seat = next(
         index
         for index, decision in enumerate(source["decisions"])
         if decision["actor"] == 1
     )
-    saved = inspect_watch(result["id"], second_seat, None)
+    saved = inspect_watch(result["id"], second_seat)
     response = TestClient(server.app).get(
         f"/api/traces/{result['id']}/decisions/{saved['decision']['address']}"
     )
@@ -329,8 +308,8 @@ def test_training_watch_players_keep_their_declared_identity(
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
     result = create_watch(WatchRequest(players=[kind, kind], seed=42))
     try:
-        assert step_watch(result["id"], result["token"], 0)["revision"] == 1
-        row = inspect_watch(result["id"], 0, result["token"])
+        assert step_watch(result["id"], 0)["revision"] == 1
+        row = inspect_watch(result["id"], 0)
         assert row["players"] == [kind, kind]
         assert [player["name"] for player in row["identities"]] == [
             kind.title(),
@@ -338,7 +317,7 @@ def test_training_watch_players_keep_their_declared_identity(
         ]
         assert row["outputs"]["probabilities"] == []
     finally:
-        server._drop_session(result["id"], "test")
+        server.end_game(result["id"], "test")
 
 
 @pytest.mark.parametrize(
@@ -367,8 +346,8 @@ def test_checkpoint_watch_records_exact_seats_and_policy_outputs(
     try:
         seen: set[int] = set()
         for revision in range(24):
-            step_watch(created["id"], created["token"], revision)
-            row = inspect_watch(created["id"], revision, created["token"])
+            step_watch(created["id"], revision)
+            row = inspect_watch(created["id"], revision)
             seat = row["decision"]["viewer"]
             seen.add(seat)
             assert row["players"] == selected
@@ -377,19 +356,15 @@ def test_checkpoint_watch_records_exact_seats_and_policy_outputs(
                 assert row["identities"][seat]["inference"]["sha256"] == digest
                 assert row["outputs"]["value"] is not None
                 assert sum(row["outputs"]["probabilities"]) == pytest.approx(1)
-            assert (
-                inspect_watch(created["id"], revision, created["token"])["outputs"]
-                == row["outputs"]
-            )
+            assert inspect_watch(created["id"], revision)["outputs"] == row["outputs"]
         assert seen == {0, 1}
     finally:
-        server._drop_session(created["id"], "test")
+        server.end_game(created["id"], "test")
 
 
 def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from fastapi import HTTPException
 
     from managym.academy.opponent import policy_registry
     from managym.policy import PolicySpec
@@ -417,18 +392,16 @@ def test_checkpoint_watch_refuses_incompatible_and_wrong_decks(
         create_watch(WatchRequest(players=[f"policy:{digest}", "random"]))
 
 
-def test_unified_watch_reads_are_bounded_authorized_and_do_not_produce(
+def test_unified_watch_reads_are_bounded_and_do_not_produce(
     watch: WatchCreated,
 ) -> None:
-    trace_id, token = watch["id"], watch["token"]
+    trace_id = watch["id"]
     client = TestClient(server.app)
-    headers = {"x-etude-participant-token": token}
-    game = server._live_record_for_trace(trace_id).game
+    game = server._live_game_for_trace(trace_id).game
     for revision in range(2):
-        step_watch(trace_id, token, revision)
+        step_watch(trace_id, revision)
     url = f"/api/traces/{trace_id}"
-    assert client.get(f"{url}/recording").status_code == 403
-    response = client.get(f"{url}/recording?limit=2", headers=headers)
+    response = client.get(f"{url}/recording?limit=2")
     assert response.status_code == 200
     index = response.json()
     assert index["can_produce"]
@@ -436,7 +409,7 @@ def test_unified_watch_reads_are_bounded_authorized_and_do_not_produce(
     assert index["next_offset"] == 2
     assert len(index["positions"]) == 2
     key = index["positions"][0]["key"]
-    choice = client.get(f"{url}/positions/{key}", headers=headers).json()
+    choice = client.get(f"{url}/positions/{key}").json()
     assert choice["kind"] == "choice"
     assert not choice["observation"]["opponent"]["hand"]
     assert all(event["seq"] < choice["cursor"] for event in choice["history"])
@@ -447,49 +420,26 @@ def test_unified_watch_reads_are_bounded_authorized_and_do_not_produce(
     assert summary["label"] == choice["decision"]["offer"]["label"]
     assert summary["revision"] == choice["decision"]["revision"]
     assert summary["value"] == (choice["outputs"] or {}).get("value")
-    after = client.get(f"{url}/positions/after:0", headers=headers).json()
+    after = client.get(f"{url}/positions/after:0").json()
     assert index["positions"][1]["label"] == after["description"]
     assert isinstance(index["positions"][1]["revision"], int)
-    source = client.get(f"{url}/positions/{key}?study=true", headers=headers).json()[
-        "study_source"
-    ]
+    source = client.get(f"{url}/positions/{key}?study=true").json()["study_source"]
 
     assert source["sha256"] == canonical_projection_sha256(
         project_replay(game.canonical_replay(), choice["viewer"])
     )
     assert "decisions" not in source and "presentation" not in source
-    reveal = client.get(f"{url}/positions/{key}?reveal=true", headers=headers).json()
+    reveal = client.get(f"{url}/positions/{key}?reveal=true").json()
     assert reveal["revealed"]
     assert reveal["history"] == choice["history"]
     assert reveal["history_labels"] == choice["history_labels"]
     assert reveal["outputs"] == choice["outputs"]
-    assert (
-        client.get(f"{url}/positions/after:1", headers=headers).json()["kind"]
-        == "consequences"
-    )
-    assert (
-        client.get(f"{url}/positions/latest?reveal=true", headers=headers).status_code
-        == 409
-    )
-    assert client.get(f"{url}/positions/absent", headers=headers).status_code == 404
+    assert client.get(f"{url}/positions/after:1").json()["kind"] == "consequences"
+    assert client.get(f"{url}/positions/latest?reveal=true").status_code == 409
+    assert client.get(f"{url}/positions/absent").status_code == 404
     assert len(game.canonical_decisions) == 2
-    server._drop_session(trace_id, "expired")
-    interrupted = client.get(f"{url}/recording", headers=headers).json()
+    server.end_game(trace_id, "expired")
+    interrupted = client.get(f"{url}/recording").json()
     assert interrupted["status"] == "interrupted"
     assert not interrupted["can_produce"] and not interrupted["can_study"]
-    assert (
-        client.get(f"{url}/positions/{key}", headers=headers).json()["decision"]
-        == choice["decision"]
-    )
-    # Cache hits must still enforce changed visibility, including the old URL.
-    with game.attempt_store.connect() as db:
-        db.execute(
-            "UPDATE attempts SET visibility='private',status='completed' WHERE id=?",
-            (trace_id,),
-        )
-    assert client.get(f"{url}/recording").status_code == 403
-    assert client.get(f"{url}/positions/{key}").status_code == 403
-    assert client.get(f"/api/watch/{trace_id}/decisions/0").status_code == 403
-    with pytest.raises(HTTPException) as denied:
-        inspect_watch(trace_id, 0, None)
-    assert denied.value.status_code == 403
+    assert client.get(f"{url}/positions/{key}").json()["decision"] == choice["decision"]

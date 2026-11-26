@@ -29,8 +29,6 @@ server._parse_game_config = parse_game_config
 def new_game(
     self: server.GameSession,
     raw_config: Any = None,
-    *,
-    continuation_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     # Only the dedicated browser proof opts in; other release cases use the
     # ordinary server unchanged. Any is confined to the existing JSON boundary.
@@ -78,9 +76,7 @@ def new_game(
         isinstance(raw_config, dict) and raw_config.get("trigger_order_fixture") is True
     )
     if not fixture:
-        return _new_game(
-            self, raw_config, continuation_fingerprint=continuation_fingerprint
-        )
+        return _new_game(self, raw_config)
     _new_game(
         self,
         {

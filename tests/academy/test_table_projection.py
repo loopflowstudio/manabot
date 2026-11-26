@@ -15,7 +15,7 @@ def test_battlefield_permanents_carry_their_effective_keywords(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json(
@@ -31,7 +31,7 @@ def test_battlefield_permanents_carry_their_effective_keywords(
                 }
             )
             initial = settled_message(websocket)
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             assert game.env is not None and game.obs is not None
             while game.obs.turn.turn_number == 0:
                 game.obs, *_ = game.env.step(0)
@@ -54,7 +54,7 @@ def test_the_spell_being_paid_for_is_announced_with_its_target(
     """Between Cast and its payment the spell is on the stack by the rules
     (CR 601.2a); the acting viewer's projection says so, with its target."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Mountain": 30, "Lightning Bolt": 10},
         "villain_deck": {"Plains": 40},

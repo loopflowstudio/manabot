@@ -133,16 +133,17 @@ def test_rematch_keeps_closed_decklists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {"villain_type": "random", "seed": 0, "decklists": "closed"}
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
             assert settled_message(websocket)["type"] == "observation"
-            (record,) = server.SESSION_REGISTRY.values()
-            websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
+            (first_game,) = server.LIVE_GAMES
+            websocket.send_json({"type": "rematch", "game": first_game})
             payload = settled_message(websocket)
             assert payload["type"] == "observation"
+            (record,) = server.LIVE_GAMES.values()
             assert record.game.trace is not None
             assert record.game.trace.config.decklists == "closed"
     assert "main_counts" not in payload["frame"]["projection"]["opponent"]
@@ -153,16 +154,17 @@ def test_rematch_re_admits_retained_sources(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": _request()})
             assert settled_message(websocket)["type"] == "observation"
-            (record,) = server.SESSION_REGISTRY.values()
+            ((first_game, record),) = server.LIVE_GAMES.items()
             assert record.game.trace is not None
             first = record.game.trace.config
-            websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
+            websocket.send_json({"type": "rematch", "game": first_game})
             assert settled_message(websocket)["type"] == "observation"
+            (record,) = server.LIVE_GAMES.values()
             assert record.game.trace is not None
             second = record.game.trace.config
     assert second is not first

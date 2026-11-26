@@ -43,16 +43,75 @@ from managym.academy.replay_index import (
     InvalidAddressError,
     ReplayDecisionAddress,
 )
-from managym.academy.shared_table_protocol import BeliefScenario, ViewerIdentity
 from managym.academy.study_protocol import (
     DecisionEvidence,
     StudyArtifact,
     StudyLandmark,
 )
 from managym.bots import BotArtifactError
-from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
+from managym.experience import (
+    ExperienceFrame,
+    InteractionOffer,
+    ProtocolModel,
+    UInt64,
+)
 
 from .extensions import CheckpointRegistration, bot_extension
+
+
+class ViewerIdentity(ProtocolModel):
+    viewer_id: str
+    table_id: str
+    rules_viewer: Literal[0, 1] = 0
+
+
+class BeliefSource(ProtocolModel):
+    decision_address: str
+    gam6_scenario_id: str
+    advice_identity: AdviceIdentity
+
+
+class PersonalAudience(ProtocolModel):
+    kind: Literal["personal"]
+
+
+class TableAudience(ProtocolModel):
+    kind: Literal["table"]
+    table_id: str
+
+
+BeliefAudience: TypeAlias = Annotated[
+    PersonalAudience | TableAudience,
+    Field(discriminator="kind"),
+]
+
+
+class PlayerAuthoredBeliefProvenance(ProtocolModel):
+    kind: Literal["player_authored"] = "player_authored"
+    created_at_table_revision: UInt64
+    shared_at_table_revision: UInt64 | None = None
+
+
+class ModelInferredBeliefProvenance(ProtocolModel):
+    kind: Literal["model_inferred"] = "model_inferred"
+    belief_model_id: str
+    checkpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    viewer_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+BeliefProvenance: TypeAlias = Annotated[
+    PlayerAuthoredBeliefProvenance | ModelInferredBeliefProvenance,
+    Field(discriminator="kind"),
+]
+
+
+class BeliefScenario(ProtocolModel):
+    id: str
+    author_viewer_id: str
+    source: BeliefSource
+    audience: BeliefAudience
+    provenance: BeliefProvenance
 
 
 class ConditionResult(Protocol):

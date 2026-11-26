@@ -133,7 +133,7 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
                 offer["label"].endswith(" next on the bottom")
                 for offer in frame["offers"]
             )
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             assert game.env is not None
             pending = frame["projection"]["decision_context"]["pending"]
             assert pending
@@ -150,8 +150,7 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = settled_message(socket)["recovery"]["frame"]

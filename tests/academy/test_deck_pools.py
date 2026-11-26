@@ -16,8 +16,8 @@ from managym.academy.deck_pools import (
     NamedDeck,
     set_deck_pools,
 )
+from managym.academy.game_setup import continuation_config, setup_draft
 from managym.academy.launch import AcademyLaunchError, serve
-from managym.academy.play_session import continuation_config, setup_draft
 from managym.academy.watch import WatchRequest, create_watch, inspect_watch, step_watch
 from tests.academy.socket_messages import settled_message
 
@@ -75,7 +75,7 @@ def test_direct_managym_deck_and_named_deck_preserve_names_in_play_and_watch(
             decklists="closed",
         )
         launch_id = parse_qs(urlparse(launched.url).query)["launch"][0]
-        parsed = server._parse_game_config(server.LAUNCH_CONFIGS[launch_id])
+        parsed = server._parse_game_config(server.LAUNCHES[launch_id].config)
         assert parsed.hero_deck_name == "TLA Trophy · UR · aaaa1111"
         assert parsed.villain_deck_name == "Custom Ally List"
         assert parsed.decklists == "closed"
@@ -90,8 +90,7 @@ def test_direct_managym_deck_and_named_deck_preserve_names_in_play_and_watch(
                     "hero": "TLA Trophy · UR · aaaa1111",
                     "villain": server.CLOSED_DECK_NAME,
                 }
-                session_id = msg["session_id"]
-                server._drop_session(session_id, "test")
+                server.end_game(msg["game"], "test")
 
         # Bare managym.Deck gets a deterministic Deck <hash> label rather than "imported".
         bare = academy.new_game(
@@ -101,7 +100,7 @@ def test_direct_managym_deck_and_named_deck_preserve_names_in_play_and_watch(
             seed=12,
         )
         bare_id = parse_qs(urlparse(bare.url).query)["launch"][0]
-        bare_parsed = server._parse_game_config(server.LAUNCH_CONFIGS[bare_id])
+        bare_parsed = server._parse_game_config(server.LAUNCHES[bare_id].config)
         assert bare_parsed.hero_deck_name == f"Deck {d3.deck.identity[:8]}"
         assert bare_parsed.villain_deck_name == f"Deck {d2.deck.identity[:8]}"
 
@@ -158,8 +157,8 @@ def test_deck_pool_samples_fresh_matchups_and_rematch_vs_deal_new_decks(
             decklists="closed",
         )
         launch_id = parse_qs(urlparse(seeded.url).query)["launch"][0]
-        cfg1 = server._parse_game_config(server.LAUNCH_CONFIGS[launch_id])
-        cfg2 = server._parse_game_config(server.LAUNCH_CONFIGS[launch_id])
+        cfg1 = server._parse_game_config(server.LAUNCHES[launch_id].config)
+        cfg2 = server._parse_game_config(server.LAUNCHES[launch_id].config)
         assert cfg1.hero_deck_name == cfg2.hero_deck_name
         assert cfg1.villain_deck_name == cfg2.villain_deck_name
         assert cfg1.hero_deck_name != cfg1.villain_deck_name
@@ -199,12 +198,12 @@ def test_deck_pool_samples_fresh_matchups_and_rematch_vs_deal_new_decks(
                 decklists="closed",
             )
         )
-        step_watch(created["id"], created["token"], 0)
-        row = inspect_watch(created["id"], 0, created["token"])
+        step_watch(created["id"], 0)
+        row = inspect_watch(created["id"], 0)
         recorded_decks = [p["deck"] for p in row["identities"]]
         assert len(set(recorded_decks)) == 2
         assert set(recorded_decks) <= {d.name for d in decks}
-        server._drop_session(created["id"], "test")
+        server.end_game(created["id"], "test")
 
         # Unknown pool raises AcademyLaunchError.
         with pytest.raises(AcademyLaunchError) as missing:
@@ -258,7 +257,7 @@ def test_inline_policy_factory_in_new_game_and_watch(
             decklists="closed",
         )
         launch_id = parse_qs(urlparse(game.url).query)["launch"][0]
-        cfg = server._parse_game_config(server.LAUNCH_CONFIGS[launch_id])
+        cfg = server._parse_game_config(server.LAUNCHES[launch_id].config)
         assert cfg.opponent is not None
         assert cfg.opponent["name"] == "Jace A"
         assert cfg.hero_deck_name == d1.name

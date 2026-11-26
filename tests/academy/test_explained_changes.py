@@ -258,7 +258,6 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
         },
         "Fire Sages": 4,
     }
-    owner_token = "turn6-owner-token-" + "a" * 24
     session = GameSession(trace_dir=tmp_path)
     session.new_game(
         {
@@ -267,7 +266,6 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
             "villain_deck": REAPER_DECK,
             "auto_pass": False,
             "seed": 7,
-            "player_token": owner_token,
         }
     )
     assert session.env is not None
@@ -389,7 +387,6 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
     client = TestClient(server.app)
     resp = client.get(
         f"/api/traces/{session.trace_id}/recording",
-        headers={"x-etude-player-token": owner_token},
     )
     assert resp.status_code == 200
     body = resp.json()

@@ -33,7 +33,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json(
@@ -49,7 +49,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
                 }
             )
             initial = settled_message(websocket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             game = record.game
             assert game.env is not None
             frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
@@ -67,8 +67,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
                 frame = _command(game, frame, passing.id)
             assert frame.prompt is not None
 
-            endpoint = f"/api/sessions/{record.session_id}/combat-preview"
-            headers = {"x-etude-participant-token": initial["resume_token"]}
+            endpoint = f"/api/games/{initial['game']}/combat-preview"
             address = {
                 "match_id": frame.match_id,
                 "revision": frame.revision,
@@ -76,8 +75,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
                 "frame_hash": frame.frame_hash,
             }
             empty = {**address, "plan": {"attackers": [], "blocks": []}}
-            assert client.post(endpoint, json=empty).status_code == 403
-            ask = client.post(endpoint, json=empty, headers=headers)
+            ask = client.post(endpoint, json=empty)
             assert ask.status_code == 200, ask.text
             declarable = ask.json()["preview"]["declarable"]
             ogres = [creature["creature"] for creature in declarable]
@@ -87,7 +85,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
             prompts = game._next_prompt_id
             decisions = len(game.canonical_decisions)
             plan = {**address, "plan": {"attackers": ogres[:2], "blocks": []}}
-            response = client.post(endpoint, json=plan, headers=headers)
+            response = client.post(endpoint, json=plan)
             assert response.status_code == 200, response.text
             preview = response.json()["preview"]
             assert preview["refused"] is None
@@ -96,12 +94,7 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
             assert game._next_prompt_id == prompts
             assert len(game.canonical_decisions) == decisions
             for change in ({"revision": frame.revision + 1}, {"frame_hash": "other"}):
-                assert (
-                    client.post(
-                        endpoint, json={**plan, **change}, headers=headers
-                    ).status_code
-                    == 409
-                )
+                assert client.post(endpoint, json={**plan, **change}).status_code == 409
 
             # Each step's offer, sent at the frame it predicts, names its creature.
             for step in preview["steps"]:
@@ -114,4 +107,4 @@ def test_a_drafted_attack_is_previewed_without_commitment_and_declared_as_planne
                 frame = _command(game, frame, offer.id)
             # Two 2/2 attackers reached the unblocked passive opponent.
             assert frame.projection.opponent.life == 16, frame.projection.turn
-            assert client.post(endpoint, json=plan, headers=headers).status_code == 409
+            assert client.post(endpoint, json=plan).status_code == 409

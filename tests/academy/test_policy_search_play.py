@@ -62,7 +62,7 @@ def test_search_flag_cannot_bypass_missing_evaluator_and_forks(
     factory = IncorrectFlagFactory()
     key = registry.register(factory)
     set_policy_registry(registry)
-    original = set(server.SESSION_REGISTRY)
+    original = set(server.LIVE_GAMES)
     try:
         with pytest.raises(HTTPException) as failure:
             create_watch(
@@ -74,7 +74,7 @@ def test_search_flag_cannot_bypass_missing_evaluator_and_forks(
         assert failure.value.detail["code"] == "mirror_unavailable"
         assert "isolated forks" in failure.value.detail["message"]
         assert factory.sessions[0].closed
-        assert set(server.SESSION_REGISTRY) == original
+        assert set(server.LIVE_GAMES) == original
     finally:
         set_policy_registry(None)
 
@@ -128,9 +128,9 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
         assert game.record_players is not None
         assert game.record_players[1].version == game.trace.config.opponent["sha256"]
         with pytest.raises(HTTPException) as refusal:
-            inspect_watch(game.match_id, 0, None)
-        assert refusal.value.status_code == 403
-        assert refusal.value.detail == "participant_credential_required"
+            inspect_watch(game.match_id, 0)
+        assert refusal.value.status_code == 409
+        assert refusal.value.detail == "not_a_bot_watch"
 
         created = create_watch(
             WatchRequest(
@@ -139,8 +139,8 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
         )
         try:
             for revision in range(6):
-                step_watch(created["id"], created["token"], revision)
-                row = inspect_watch(created["id"], revision, created["token"])
+                step_watch(created["id"], revision)
+                row = inspect_watch(created["id"], revision)
                 assert row["mirror"] == [asdict(spec), None]
                 assert row["identities"][0]["inference"]["runtime"]["config"][
                     "mirror"
@@ -159,7 +159,7 @@ def test_independent_adapter_search_plays_watches_and_retains_private_evidence(
             else:
                 pytest.fail("Watch never reached the searching seat")
         finally:
-            server._drop_session(created["id"], "test")
+            server.end_game(created["id"], "test")
     finally:
         game.close("test")
         set_policy_registry(None)
@@ -269,7 +269,7 @@ def test_watch_releases_both_seats_when_persistence_and_cleanup_fail(
     key = registry.register(factory)
     set_policy_registry(registry)
     created = create_watch(WatchRequest(players=[f"policy:{key}", f"policy:{key}"]))
-    game = server.SESSION_REGISTRY[created["id"]].game
+    game = server.LIVE_GAMES[created["id"]].game
 
     def refuse_save(*, end_reason: str | None = None) -> None:
         raise OSError("fixture persistence failed")
@@ -282,7 +282,7 @@ def test_watch_releases_both_seats_when_persistence_and_cleanup_fail(
     monkeypatch.setattr(factory.sessions[1], "close", fail_close)
     try:
         with pytest.raises(RuntimeError, match="cleanup failed"):
-            server._drop_session(created["id"], "test")
+            server.end_game(created["id"], "test")
         assert all(session.closed for session in factory.sessions)
         assert game.env is None and game.watch_policies is None
         monkeypatch.undo()
@@ -307,26 +307,26 @@ def test_first_watch_search_timeout_survives_inspection_and_retries_same_choice(
             mirror=[SearchConfig(worlds=1, depth=1), None],
         )
     )
-    game = server.SESSION_REGISTRY[created["id"]].game
+    game = server.LIVE_GAMES[created["id"]].game
     factory.sessions[0].clock = clock
     assert game.env is not None
     original = game.env.state_digest()
     try:
         with pytest.raises(search.SearchError) as failure:
-            step_watch(created["id"], created["token"], 0)
+            step_watch(created["id"], 0)
         assert failure.value.reason == "mirror_deadline_exceeded"
         with pytest.raises(HTTPException) as pending:
-            inspect_watch(created["id"], 0, created["token"])
+            inspect_watch(created["id"], 0)
         assert pending.value.detail["code"] == "mirror_deadline_exceeded"
         assert pending.value.detail["revision"] == 0
         assert game.env.state_digest() == original
         assert game.trace is not None and len(game.trace.events) == 0
         factory.sessions[0].clock = None
-        result = step_watch(created["id"], created["token"], 0, retry=True)
+        result = step_watch(created["id"], 0, retry=True)
         assert result["revision"] == 1
         assert game.mirror_retry is None
     finally:
-        server._drop_session(created["id"], "test")
+        server.end_game(created["id"], "test")
         set_policy_registry(None)
 
 
@@ -347,56 +347,50 @@ def test_watch_latest_reconnect_preserves_timeout_history_and_explicit_retry(
             seed=42,
         )
     )
-    game = server.SESSION_REGISTRY[created["id"]].game
+    game = server.LIVE_GAMES[created["id"]].game
     client = TestClient(server.app)
-    headers = {"x-etude-participant-token": created["token"]}
     url = f"/api/watch/{created['id']}"
     try:
         for revision in range(3):
-            step_watch(created["id"], created["token"], revision)
+            step_watch(created["id"], revision)
         assert game.env is not None and game.obs is not None
         original = game.env.state_digest()
         seat = int(game.obs.agent.player_index)
         factory.sessions[seat].clock = clock
-        response = client.post(f"{url}/step", headers=headers, json={"revision": 3})
+        response = client.post(f"{url}/step", json={"revision": 3})
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "mirror_deadline_exceeded"
         assert game._bot_decision is None
         for ordinal in (-1, 0, -1):
-            recovered = client.get(f"{url}/decisions/{ordinal}", headers=headers)
+            recovered = client.get(f"{url}/decisions/{ordinal}")
             assert recovered.status_code == 200
             row = recovered.json()
             assert (
                 row["decision"]
-                == inspect_watch(
-                    created["id"], 2 if ordinal == -1 else 0, created["token"]
-                )["decision"]
+                == inspect_watch(created["id"], 2 if ordinal == -1 else 0)["decision"]
             )
             assert row["mirror_retry"] == game.mirror_retry
             assert row["mirror_retry"]["expected_revision"] == 3
             assert game.revision == 3 and game.env.state_digest() == original
         index_url = f"/api/traces/{created['id']}/recording"
-        index = client.get(index_url, headers=headers)
+        index = client.get(index_url)
         assert index.status_code == 200
         assert index.json()["mirror_retry"] == game.mirror_retry
         assert index.json()["mirror"] == [asdict(SearchConfig())] * 2
         assert index.json()["can_produce"]
         assert len(index.json()["positions"]) == 7
-        assert client.get(f"{url}/decisions/-1").status_code == 403
-        assert client.get(f"{url}/decisions/-2", headers=headers).status_code == 400
-        stale = client.post(f"{url}/step", headers=headers, json={"revision": 2})
+        assert client.get(f"{url}/decisions/-2").status_code == 400
+        stale = client.post(f"{url}/step", json={"revision": 2})
         assert stale.status_code == 409
         assert game.env.state_digest() == original
         factory.sessions[seat].clock = None
-        response = client.post(
-            f"{url}/step", headers=headers, json={"revision": 3, "retry": True}
-        )
+        response = client.post(f"{url}/step", json={"revision": 3, "retry": True})
         assert response.status_code == 200
         assert response.json()["revision"] == 4
-        recovered = client.get(f"{url}/decisions/-1", headers=headers).json()
+        recovered = client.get(f"{url}/decisions/-1").json()
         assert recovered["count"] == 4 and recovered["mirror_retry"] is None
     finally:
-        server._drop_session(created["id"], "test")
+        server.end_game(created["id"], "test")
         set_policy_registry(None)
 
 

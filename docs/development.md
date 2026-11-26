@@ -260,13 +260,12 @@ and narration controls, and `npm --prefix academy/ui run test:e2e:release`.
 Settle narration through `finishBoardNarration` before captures; reduced motion
 does not stop semantic beat timers.
 
-**Shared game history.** Exercise `game-history.spec.ts` against an isolated
+**Game history.** Exercise `game-history.spec.ts` against an isolated
 built SPA/ASGI instance
 ([Academy isolated browser validation](../managym/academy/README.md#isolated-browser-validation)),
-including empty results, visible request errors and retry, shared/private
-replay and feedback. Permission or replay-projection changes add the relevant
-history, replay and shared-table cases; match terminal traces by the live
-table's `attempt_id` (replays omit the deal seed). Treat failures in frozen
+including empty results, visible request errors and retry, replay and resume.
+Replay-projection changes add the relevant history and replay cases; match
+terminal traces by the live game's id (replays omit the deal seed). Treat failures in frozen
 advice evidence as gate blockers; never regenerate fixtures or relax historical
 checkpoint validation to pass.
 

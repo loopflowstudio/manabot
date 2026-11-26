@@ -70,8 +70,8 @@ def registry(
     registry = PolicyRegistry(providers={})
     set_policy_registry(registry)
     yield registry
-    for key in list(server.SESSION_REGISTRY):
-        server._drop_session(key, "test")
+    for key in list(server.LIVE_GAMES):
+        server.end_game(key, "test")
     set_policy_registry(None)
 
 
@@ -85,18 +85,18 @@ def test_independent_policies_watch_both_seats_and_cleanup(
         WatchRequest(players=[f"policy:{key}" for key in keys], seed=42)
     )
     for revision in range(8):
-        step_watch(created["id"], created["token"], revision)
-        row = inspect_watch(created["id"], revision, created["token"])
+        step_watch(created["id"], revision)
+        row = inspect_watch(created["id"], revision)
         assert row["outputs"]["probabilities"] == []
         assert row["outputs"]["value"] is None
         assert row["observation"]["opponent"]["hand"] == []
     assert first.sessions[0] is not second.sessions[0]
     assert all(factory.sessions[0].seen for factory in (first, second))
-    game = server.SESSION_REGISTRY[created["id"]].game
+    game = server.LIVE_GAMES[created["id"]].game
     before = game.revision
     first.sessions[0].stale = second.sessions[0].stale = True
     with pytest.raises(HTTPException) as refused:
-        step_watch(created["id"], created["token"], before)
+        step_watch(created["id"], before)
     assert refused.value.status_code == 422
     assert refused.value.detail["code"] == "policy_failed"
     assert (
@@ -107,7 +107,7 @@ def test_independent_policies_watch_both_seats_and_cleanup(
         len(session.seen) for factory in (first, second) for session in factory.sessions
     )
     with pytest.raises(HTTPException) as implicit:
-        step_watch(created["id"], created["token"], before)
+        step_watch(created["id"], before)
     assert implicit.value.detail["code"] == "explicit_retry_required"
     assert (
         sum(
@@ -118,11 +118,8 @@ def test_independent_policies_watch_both_seats_and_cleanup(
         == calls
     )
     first.sessions[0].stale = second.sessions[0].stale = False
-    assert (
-        step_watch(created["id"], created["token"], before, retry=True)["revision"]
-        == before + 1
-    )
-    server._drop_session(created["id"], "test")
+    assert step_watch(created["id"], before, retry=True)["revision"] == before + 1
+    server.end_game(created["id"], "test")
     assert all(factory.sessions[0].closed for factory in (first, second))
     # Replay needs neither registry nor a reconstructed policy.
     set_policy_registry(PolicyRegistry(providers={}))
@@ -190,7 +187,7 @@ def test_failed_opponent_policy_preserves_commitment_until_explicit_retry(
             assert pending["message"] == "Policy returned a stale decision binding."
             game = next(
                 record.game
-                for record in server.SESSION_REGISTRY.values()
+                for record in server.LIVE_GAMES.values()
                 if record.game.match_id == command["match_id"]
             )
             assert game.env is not None and game.trace is not None
@@ -283,8 +280,8 @@ set_policy_registry(registry)
 server.trace_store.TRACES_DIR = Path(sys.argv[1])
 watch = create_watch(WatchRequest(players=[f'policy:{key}', f'policy:{key}']))
 for revision in range(6):
-    step_watch(watch['id'], watch['token'], revision)
-server._drop_session(watch['id'], 'test')
+    step_watch(watch['id'], revision)
+server.end_game(watch['id'], 'test')
 assert 'manabot' not in sys.modules and 'torch' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", probe, str(tmp_path)], check=True, timeout=30)
@@ -353,14 +350,14 @@ def test_completed_independent_game_replays_without_a_provider(
         WatchRequest(players=[f"policy:{key}", f"policy:{key}"], seed=42)
     )
     for revision in range(2000):
-        if step_watch(created["id"], created["token"], revision)["finished"]:
+        if step_watch(created["id"], revision)["finished"]:
             break
     else:
         pytest.fail("Independent game did not finish in its decision budget.")
     assert all(session.closed for session in factory.sessions)
-    server._drop_session(created["id"], "test")
+    server.end_game(created["id"], "test")
     set_policy_registry(PolicyRegistry(providers={}))
-    retained = inspect_watch(created["id"], 0, created["token"])
+    retained = inspect_watch(created["id"], 0)
     assert retained["finished"]
     assert retained["outputs"]["probabilities"] == []
     assert retained["identities"][0]["inference"]["runtime"]["id"] == key
@@ -502,7 +499,7 @@ def test_refused_launch_retains_setup_and_exact_policy(
         "decklists": "closed",
         "seed": 7,
     }
-    server.LAUNCH_CONFIGS[launch] = config
+    server.LAUNCHES[launch] = server.Launch("play", config)
     factory.runner = "changed"
     try:
         with TestClient(server.app) as client:
@@ -516,7 +513,7 @@ def test_refused_launch_retains_setup_and_exact_policy(
         }
         assert not factory.sessions
     finally:
-        del server.LAUNCH_CONFIGS[launch]
+        del server.LAUNCHES[launch]
 
 
 def test_registered_aliases_distinguish_catalog_and_watch_identities(
@@ -543,8 +540,8 @@ def test_registered_aliases_distinguish_catalog_and_watch_identities(
     created = create_watch(
         WatchRequest(players=[f"policy:{key}" for key in keys], seed=42)
     )
-    step_watch(created["id"], created["token"], 0)
-    recorded = inspect_watch(created["id"], 0, created["token"])
+    step_watch(created["id"], 0)
+    recorded = inspect_watch(created["id"], 0)
     assert {p["name"] for p in recorded["identities"]} == {
         "Independent · uniform",
         "Independent · action-only",
@@ -587,7 +584,7 @@ def test_receipt_and_cached_resume_are_published_before_bot_finishes(
                     }
                 )
                 payload = settled_message(socket)
-                credentials = {k: payload[k] for k in ("session_id", "resume_token")}
+                credentials = {"game": payload["game"]}
                 receipt = None
                 for attempt in range(20):
                     frame = payload.get("frame") or payload["update"]["frame"]
@@ -665,12 +662,11 @@ def test_watch_setup_reconciles_one_load_through_lost_reply(
     key = registry.register(factory)
     request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
     handle = uuid4().hex
-    credential = uuid4().hex
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(start_setup, handle, request, credential)
+        future = executor.submit(start_setup, handle, request)
         try:
             assert entered.wait(10)
-            snapshot = setup_attempt(handle, credential).payload()
+            snapshot = setup_attempt(handle).payload()
             assert snapshot["created"] is None
             assert snapshot["work"]["scope"] == "setup"
             assert snapshot["work"]["setup_id"] == handle
@@ -678,28 +674,18 @@ def test_watch_setup_reconciles_one_load_through_lost_reply(
             assert snapshot["work"]["chooser"] is None
             assert snapshot["work"]["match_id"] is None
             # An unresolved POST and reads reconcile without loading again.
-            assert start_setup(handle, request, credential) == snapshot
+            assert start_setup(handle, request) == snapshot
             with pytest.raises(HTTPException) as changed:
-                start_setup(handle, request.model_copy(update={"seed": 43}), credential)
+                start_setup(handle, request.model_copy(update={"seed": 43}))
             assert changed.value.status_code == 409
         finally:
             release.set()
         created = future.result(timeout=10)["created"]
-    assert setup_attempt(handle, credential).payload()["created"] == created
-    assert start_setup(handle, request, credential)["created"] == created
+    assert setup_attempt(handle).payload()["created"] == created
+    assert start_setup(handle, request)["created"] == created
     assert len(factory.sessions) == 2
     client = TestClient(server.app)
-    recovered = client.get(
-        f"/api/watch/setups/{handle}", headers={"x-etude-participant-token": credential}
-    ).json()
-    assert client.get(f"/api/watch/setups/{handle}").status_code == 403
-    assert (
-        client.get(
-            f"/api/watch/setups/{handle}",
-            headers={"x-etude-participant-token": "wrong"},
-        ).status_code
-        == 403
-    )
+    recovered = client.get(f"/api/watch/setups/{handle}").json()
     assert recovered["created"] == created
     assert recovered["work"]["state"] == "complete"
     assert recovered["work"]["scope"] == "setup"
@@ -722,18 +708,17 @@ def test_watch_setup_failure_closes_candidates_and_never_retries_a_read(
     key = registry.register(factory)
     request = WatchRequest(players=[f"policy:{key}"] * 2, seed=42)
     handle = uuid4().hex
-    credential = uuid4().hex
-    result = start_setup(handle, request, credential)
+    result = start_setup(handle, request)
     assert result["created"] is None
     assert result["work"]["state"] == "failed"
     assert "Seat 2 bot loading failed" in result["error"]
     assert "private/local/path" not in result["error"]
     assert "Start again explicitly" in result["error"]
     assert factory.sessions[0].closed
-    assert start_setup(handle, request, credential) == result
-    assert setup_attempt(handle, credential).payload() == result
+    assert start_setup(handle, request) == result
+    assert setup_attempt(handle).payload() == result
     assert len(factory.sessions) == 1
-    assert not server.SESSION_REGISTRY
+    assert not server.LIVE_GAMES
     client = TestClient(server.app)
     assert client.get(f"/api/watch/setups/{uuid4().hex}").status_code == 404
 
@@ -766,7 +751,7 @@ def test_observe_policies_delivers_recent_events_to_waiting_seat(
         WatchRequest(players=[f"policy:{key}" for key in keys], seed=7)
     )
     for revision in range(12):
-        step_watch(created["id"], created["token"], revision)
+        step_watch(created["id"], revision)
     waiting_with_events = [
         view
         for factory in (first, second)
@@ -829,7 +814,6 @@ def test_policy_load_observe_and_watch_failures_log_tracebacks(
         result = start_setup(
             uuid4().hex,
             WatchRequest(players=[f"policy:{load_key}", "random"], seed=1),
-            uuid4().hex,
         )
         assert result["error"] is not None
         assert "cuda oom loading weights" not in result["error"]

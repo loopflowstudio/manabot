@@ -1,52 +1,16 @@
-"""Private repeated-play setup and continuation receipts in the attempt database.
+"""The setup a game was started from, as a request that starts it again.
 
-Attempts remain the outcome authority. Session rows retain only the next setup;
-request receipts and membership are inserted with the attempt's first save.
+`setup_draft` reads it from a game's recorded config; `continuation_config`
+applies a rematch's seat swap and edits to it.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-import hashlib
-import json
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
-
-from pydantic import Field
-
-from managym.experience import ProtocolModel, UInt64
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from managym.academy.trace import GameConfig
-
-
-class PlaySessionRecord(TypedDict):
-    id: str
-    created_at: str
-    title: str
-    revision: int
-    # The existing wire setup is validated through _parse_game_config before
-    # saving and re-admitted before play; sources never leave owner reads.
-    draft: dict[str, Any]
-
-
-class SessionMembership(TypedDict):
-    session_id: str
-    game_number: int
-    revision: int
-
-
-@dataclass(frozen=True)
-class SessionStart:
-    session_id: str
-    owner: str
-    request_id: str
-    fingerprint: str
-    revision: int
-    draft: dict[str, Any]
-
-
-def request_fingerprint(config: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
 
 
 def setup_draft(config: GameConfig) -> dict[str, Any]:
@@ -100,7 +64,7 @@ def setup_draft(config: GameConfig) -> dict[str, Any]:
 def continuation_config(
     draft: dict[str, Any],
     overrides: dict[str, Any],
-    intent: Literal["rematch", "swap_sides", "change_opponent"],
+    intent: Literal["rematch", "swap_sides"],
 ) -> dict[str, Any]:
     """Apply explicit edits once, after deriving seat changes from retained setup."""
     resolved = dict(draft)
@@ -112,10 +76,3 @@ def continuation_config(
         resolved.pop("villain_deck_pool", None)
     resolved.update(overrides)
     return resolved
-
-
-class SessionSetupUpdate(ProtocolModel):
-    table_id: str
-    grant_revision: UInt64
-    revision: int = Field(ge=1)
-    config: dict[str, Any]

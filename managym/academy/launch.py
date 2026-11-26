@@ -330,9 +330,10 @@ class Academy:
             )
         from managym.academy import server
 
-        for session_id in list(server.SESSION_REGISTRY):
-            server.evict_session(session_id, "server_shutdown")
-        server.LAUNCH_CONFIGS.clear()
+        for game_id in list(server.LIVE_GAMES):
+            server.evict_game(game_id, "server_shutdown")
+        server.LAUNCHES.clear()
+        server.LAUNCH_GAMES.clear()
         self._listener.close()
         self._closed = True
         from managym.academy.opponent import set_policy_registry
@@ -451,7 +452,7 @@ class Academy:
             )
             raise AcademyLaunchError(code, str(exc)) from exc
         launch_id = secrets.token_hex(16)
-        server.LAUNCH_CONFIGS[launch_id] = config
+        server.LAUNCHES[launch_id] = server.Launch("play", config)
         return Launched(f"{self.url}/?{urlencode({'launch': launch_id})}")
 
     def _player(self, value: PlayerInput, code: str) -> str:
@@ -547,9 +548,9 @@ class Academy:
             except (ValueError, SearchError) as exc:
                 raise AcademyLaunchError("setup.invalid", str(exc)) from exc
             launch_id = secrets.token_hex(16)
-            server.LAUNCH_CONFIGS[launch_id] = setup
+            server.LAUNCHES[launch_id] = server.Launch("watch", setup)
             query["launch"] = launch_id
-        return Launched(f"{self.url}/replay?{urlencode(query)}")
+        return Launched(f"{self.url}/?{urlencode(query)}")
 
     def replay(self, source: str | Path, game: int | str | None = None) -> Launched:
         self._require_open()
@@ -574,11 +575,9 @@ class Academy:
                     "replay.rejected",
                     f"{exc}; open the trace with the revision that wrote it.",
                 ) from exc
-            return Launched(
-                f"{self.url}/replay?{urlencode({'watch': 1, 'trace': imported['id']})}"
-            )
+            return Launched(f"{self.url}/replay?{urlencode({'trace': imported['id']})}")
         store = AttemptStore(self.traces_dir / "play.sqlite")
-        if store.owner(source) is None:
+        if not store.has_attempt(source):
             raise AcademyLaunchError(
                 "replay.missing",
                 f"No recording {source!r} in {self.traces_dir}."

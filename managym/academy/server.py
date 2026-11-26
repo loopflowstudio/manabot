@@ -6,7 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Iterable
+from collections.abc import Iterable
 import concurrent.futures
 from contextlib import ExitStack, suppress
 from copy import deepcopy
@@ -25,10 +25,8 @@ import warnings
 
 from fastapi import (
     FastAPI,
-    Header,
     HTTPException,
     Query,
-    Request,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -99,13 +97,11 @@ from .analysis import (
 )
 from .append_json import encode_list, splice
 from .attempts import (
-    CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
     RetainedAttempt,
     decode_cursor,
     page_cursor,
-    participant_id,
 )
 from .curated_pack import (
     CURATED_PACK,
@@ -125,7 +121,8 @@ from .deck_pools import (
     resolve_deck_pool,
     set_deck_pools,
 )
-from .numbers import game_numbers, wilson_interval
+from .game_setup import continuation_config, setup_draft
+from .numbers import game_numbers
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -134,12 +131,18 @@ from .opponent import (
     policy_registry,
     policy_settings_fit,
 )
-from .play_session import (
-    SessionSetupUpdate,
-    SessionStart,
-    continuation_config,
-    request_fingerprint,
-    setup_draft,
+from .play_protocol import (
+    REQUEST_ADAPTER,
+    REQUEST_TYPES,
+    ActionMessage,
+    CommandMessage,
+    NewGameMessage,
+    PassTurnMessage,
+    RematchMessage,
+    ResumeMessage,
+    RetryMirrorMessage,
+    SetStopsMessage,
+    ShowAnalysisMessage,
 )
 from .presentation import PresentationProjector
 from .recording import Recording, person_board, read_cache, step_matches
@@ -160,35 +163,6 @@ from .replay_index import (
     project_replay,
     projection_with_addresses,
     restore_decision,
-)
-from .shared_table_protocol import (
-    REQUEST_ADAPTER,
-    REQUEST_TYPES,
-    ROLE_CAPABILITIES,
-    ActionMessage,
-    AuthorBeliefMessage,
-    BranchPreviewMessage,
-    BranchRevealMessage,
-    CommandMessage,
-    JoinTableMessage,
-    NewGameMessage,
-    PassTurnMessage,
-    RematchMessage,
-    RestoreDecisionMessage,
-    ResumeMessage,
-    RetryDecisionMessage,
-    RetryMirrorMessage,
-    ReturnFromBranchMessage,
-    ReturnToLiveMessage,
-    SetStopsMessage,
-    ShareBeliefMessage,
-    ShowAnalysisMessage,
-    TableCapability,
-    TableSnapshot,
-    TransferPilotMessage,
-    ViewerAccess,
-    ViewerIdentity,
-    ViewerRole,
 )
 from .step_boards import MAX_STEP_BOARDS, StepBoard, WireStepBoard, wire_boards
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
@@ -323,56 +297,39 @@ def _now_utc() -> datetime:
 
 
 @dataclass
-class ParticipantLease:
-    viewer_id: str
-    resume_token: str
-    role: ViewerRole
-    grant_revision: int = 1
-    websocket: WebSocket | None = None
-    personal_beliefs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    study_attempts: set[str] = field(default_factory=set)
+class LiveGame:
+    """A game held in memory: its authority, the one browser connection
+    playing it, and the lock that takes its requests one at a time.
 
+    Dropping it from memory ends nothing for a played game: the record is
+    saved, and the game is rebuilt from it when it is next named."""
 
-@dataclass
-class SessionRecord:
-    session_id: str
-    resume_token: str
     game: "GameSession"
     websocket: WebSocket | None = None
     expires_at: datetime = field(default_factory=lambda: _now_utc() + SESSION_TTL)
-    participants: dict[str, ParticipantLease] = field(default_factory=dict)
-    watcher_invite_digest: str | None = None
-    table_revision: int = 0
-    shared_beliefs: dict[str, dict[str, Any]] = field(default_factory=dict)
-    accepted_command_submitters: dict[str, str] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    published: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.participants:
-            return
-        viewer_id = f"viewer.{secrets.token_urlsafe(12)}"
-        self.participants[viewer_id] = ParticipantLease(
-            viewer_id=viewer_id,
-            resume_token=self.resume_token,
-            role=ViewerRole.PILOT,
-            websocket=self.websocket,
-        )
-
-    def pilot(self) -> ParticipantLease:
-        return next(
-            participant
-            for participant in self.participants.values()
-            if participant.role == ViewerRole.PILOT
-        )
+    # The last reply, for a connection that arrives while a request runs.
+    published: dict[str, Any] | None = None
 
     def touch(self) -> None:
         self.expires_at = _now_utc() + SESSION_TTL
 
 
-SESSION_REGISTRY: dict[str, SessionRecord] = {}
+@dataclass(frozen=True)
+class Launch:
+    """A game or Watch setup configured before the browser opened."""
+
+    mode: Literal["play", "watch"]
+    config: dict[str, Any]
+
+
+# Live games by game id (the attempt id, which is also the trace id).
+LIVE_GAMES: dict[str, LiveGame] = {}
 # Private, process-local configurations. Never included in viewer frames.
-LAUNCH_CONFIGS: dict[str, dict[str, Any]] = {}
+LAUNCHES: dict[str, Launch] = {}
+# The game each Play launch started: a launch starts one game however often
+# its address is opened.
+LAUNCH_GAMES: dict[str, str] = {}
 
 
 @dataclass(frozen=True)
@@ -438,7 +395,6 @@ class StudyCommandUnavailableError(ValueError):
 @dataclass
 class StudyAttempt:
     attempt_id: str
-    owner_viewer_id: str
     trace_id: str
     address: str
     projection: CanonicalReplayProjectionV1
@@ -1116,12 +1072,9 @@ class GameSession:
         self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
-        self.attempt_owner = participant_id(secrets.token_urlsafe(32))
-        self._session_start: SessionStart | None = None
         self._preparing_demo = False
         self.attempt_store = AttemptStore(self.trace_dir / "play.sqlite")
-        self.record_players = None
-        self._record_player_owner = None
+        self.record_players: list[RecordedPlayer] | None = None
         self._villain_offer_policy = villain_offer_policy
         self._capture_authority_evidence = capture_authority_evidence
         self._historical_evidence_provider = (
@@ -1197,50 +1150,9 @@ class GameSession:
         self._study_attempts: dict[str, StudyAttempt] = {}
         self._study_attempt_seq = 0
 
-    def new_game(
-        self, raw_config: Any, *, continuation_fingerprint: str | None = None
-    ) -> dict[str, Any]:
-        launch_id = raw_config.get("launch") if isinstance(raw_config, dict) else None
-        if launch_id is not None:
-            if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
-                raise ValueError(
-                    "launch_unknown: This launch is unknown; run the launch command again or choose a new game."
-                )
-            raw_config = {
-                **raw_config,
-                **LAUNCH_CONFIGS[launch_id],
-                "request_id": f"launch.{launch_id}",
-            }
-        request_id = (
-            raw_config.get("request_id") if isinstance(raw_config, dict) else None
-        )
-        if request_id is not None and (
-            not isinstance(request_id, str) or len(request_id) > 128
-        ):
-            raise ValueError("Invalid new-game request id.")
-        request_id = request_id or secrets.token_urlsafe(16)
-        fingerprint = continuation_fingerprint or request_fingerprint(raw_config or {})
-        if not self.watch_mode:
-            previous_attempt = self.attempt_store.continuation_receipt(
-                self.attempt_owner, request_id, fingerprint
-            )
-            if previous_attempt is not None:
-                if previous_attempt == self.match_id and self.obs is not None:
-                    return self.current_message()
-                raise ValueError(
-                    f"Request already started recording {previous_attempt}; it cannot be redealt. Open its recording or explicitly start another game."
-                )
-
-        if (
-            isinstance(raw_config, dict)
-            and raw_config.get("play_session_id") is not None
-        ):
-            retained_session = self.attempt_store.session(
-                raw_config["play_session_id"], {self.attempt_owner}
-            )
-            if retained_session["revision"] != raw_config.get("setup_revision"):
-                raise ValueError("Session setup changed; recover before continuing.")
-
+    def new_game(self, raw_config: Any) -> dict[str, Any]:
+        """Deal the game `raw_config` asks for and play it to its first
+        decision. A failure leaves nothing started."""
         from .play_demo import load_play_demo, replay_checked_prefix
 
         demo_name = (raw_config if isinstance(raw_config, dict) else {}).get("demo")
@@ -1251,49 +1163,21 @@ class GameSession:
         played_from: PlayedFrom | None = None
         source_events: list[dict[str, Any]] = []
         if isinstance(raw_config, dict) and raw_config.get("played_from") is not None:
-            played_from, source = self._played_from_source(
-                raw_config["played_from"], raw_config.get("player_token")
-            )
+            played_from, source = self._played_from_source(raw_config["played_from"])
             source_events = source["events"]
-            # The source's own setup and seed; only identity travels with the request.
+            # The source's own setup and seed.
             raw_config = {
                 **setup_draft(GameConfig(**source["config"])),
                 "seed": str(source["config"]["seed"]),
-                **{
-                    key: raw_config[key]
-                    for key in ("player_token", "player_name", "request_id")
-                    if key in raw_config
-                },
             }
 
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
-        player_config = raw_config if isinstance(raw_config, dict) else {}
-        players = self.attempt_store.players_for_game(
-            self.attempt_owner,
-            config.to_record(),
-            player_config.get("player_token"),
-            player_config.get("player_name"),
-        )
         env, obs, policy = self._open_game(config)
-        if self.watch_mode and self.record_players is not None:
-            players = self.record_players
-        if (
-            not self.watch_mode
-            and not player_config.get("player_token")
-            and self.record_players
-            and self._record_player_owner == self.attempt_owner
-        ):
-            players[0] = replace(
-                next(
-                    player for player in self.record_players if player.kind == "human"
-                ),
-                deck=config.hero_deck_name,
-                seat=config.human_seat,
-            )
-        self.record_players = players
-        self._record_player_owner = self.attempt_owner
+        # A watched game names both of its bots before it starts.
+        if not (self.watch_mode and self.record_players is not None):
+            self.record_players = AttemptStore.players_for_game(config.to_record())
         self._begin(
             config,
             env,
@@ -1304,17 +1188,6 @@ class GameSession:
             played_from=played_from,
         )
         self._demo_name = demo_name
-        if not self.watch_mode:
-            session_id = player_config.get("play_session_id")
-            session_revision = player_config.get("setup_revision", 0)
-            self._session_start = SessionStart(
-                session_id=session_id or secrets.token_urlsafe(16),
-                owner=self.attempt_owner,
-                request_id=request_id,
-                fingerprint=fingerprint,
-                revision=session_revision,
-                draft=setup_draft(config),
-            )
         self._persist_attempt()
         # A checked demo prefix is setup, not a sequence of surfaced human
         # decisions. Retain every Command and Study root in memory, then persist
@@ -1334,8 +1207,6 @@ class GameSession:
             self._preparing_demo = False
         if demo is not None or played_from is not None:
             update = self._wire_message(reason="initial_connect")
-        if launch_id is not None:
-            update["launch"] = launch_id
         return update
 
     def _open_game(
@@ -1460,7 +1331,6 @@ class GameSession:
         )
         self._trace_saved = False
         self._persisted = None
-        self._session_start = None
         self._encoded_events = []
         self._encoded_decisions = []
         self._encoded_presentation = {0: [], 1: []}
@@ -1599,11 +1469,9 @@ class GameSession:
         self._advance()
         return self.current_message()
 
-    def _played_from_source(
-        self, raw: Any, player_token: Any
-    ) -> tuple[PlayedFrom, dict[str, Any]]:
-        """The game to play on from and its stored trace: one of yours, finished
-        or not, at one of your deliberate decisions."""
+    def _played_from_source(self, raw: Any) -> tuple[PlayedFrom, dict[str, Any]]:
+        """The game to play on from and its stored trace: any saved played
+        game, finished or not, at one of the person's deliberate decisions."""
         if (
             not isinstance(raw, dict)
             or not isinstance(raw.get("trace_id"), str)
@@ -1611,17 +1479,9 @@ class GameSession:
         ):
             raise ValueError("played_from needs a game and a decision.")
         trace_id, event = raw["trace_id"], raw["event"]
-        access = self.attempt_store.access(
-            trace_id,
-            {self.attempt_owner},
-            player_token if isinstance(player_token, str) else None,
-        )
-        if access is None or not access["mine"]:
-            raise ValueError(
-                "played_from_unavailable: Only your own games can be played on."
-            )
         source = self.attempt_store.load(trace_id)
-        assert source is not None
+        if source is None:
+            raise ValueError("played_from_unavailable: That game is not saved here.")
         if source["config"].get("watch_players") is not None:
             raise ValueError(
                 "played_from_unavailable: A watched game has no seat of yours."
@@ -1707,69 +1567,6 @@ class GameSession:
         self.published_prompt = None
         if len(self.trace.events) != upto or self._publish_current_prompt() is None:
             raise ValueError("played_from_diverged: The decision was not reached.")
-
-    def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
-        """Resolve one revision-bound next game from the owner-private draft."""
-        if self.trace is None:
-            raise ValueError("No game to continue.")
-        membership = self.attempt_store.session_for_attempt(self.match_id)
-        if membership is None:
-            raise ValueError("This recording has no play session.")
-        session = self.attempt_store.session(membership["session_id"], {owner})
-        # Legacy callers may omit continuation bindings. New clients always pin
-        # all three; generate a single-use binding for the legacy operation.
-        request = request.model_copy(
-            update={
-                "request_id": request.request_id or secrets.token_urlsafe(16),
-                "attempt_id": request.attempt_id or self.match_id,
-                "setup_revision": request.setup_revision
-                if request.setup_revision is not None
-                else session["revision"],
-            }
-        )
-        assert request.request_id is not None
-        receipt_config = {
-            "request_id": request.request_id,
-            "intent": request.intent,
-            "attempt_id": request.attempt_id,
-            "setup_revision": request.setup_revision,
-            "overrides": request.config,
-        }
-        fingerprint = request_fingerprint(receipt_config)
-        receipt = self.attempt_store.continuation_receipt(
-            owner, request.request_id, fingerprint
-        )
-        if receipt is not None:
-            if receipt == self.match_id:
-                return self.current_message()
-            raise ValueError(
-                f"Continuation already started recording {receipt}; recover that recording."
-            )
-        if (
-            request.attempt_id != self.match_id
-            or request.setup_revision != session["revision"]
-        ):
-            raise ValueError("The game or setup changed. Recover before continuing.")
-        overrides = dict(request.config)
-        forbidden = {
-            "play_session_id",
-            "setup_revision",
-            "request_id",
-            "launch",
-            "demo",
-        }
-        if forbidden.intersection(overrides):
-            raise ValueError("Continuation setup contains reserved fields.")
-        config = continuation_config(session["draft"], overrides, request.intent)
-        config.update(
-            play_session_id=membership["session_id"],
-            setup_revision=session["revision"],
-            request_id=request.request_id,
-        )
-        # new_game checks the exact receipt again. Retain the request envelope's
-        # fingerprint so a retry can be checked before resolving against new setup.
-        self.attempt_owner = owner
-        return self.new_game(config, continuation_fingerprint=fingerprint)
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
@@ -1959,21 +1756,6 @@ class GameSession:
             stop_on_stack=self.stop_on_stack,
             auto_pass=self.auto_pass,
         )
-
-        membership = self.attempt_store.session_for_attempt(self.match_id)
-        if membership is not None:
-            session = self.attempt_store.session(
-                membership["session_id"], {self.attempt_owner}
-            )
-            draft = {
-                **session["draft"],
-                "stops": self.stops,
-                "stop_on_stack": self.stop_on_stack,
-                "auto_pass": self.auto_pass,
-            }
-            self.attempt_store.update_session(
-                membership["session_id"], self.attempt_owner, session["revision"], draft
-            )
 
         # Stop configuration is versioned authority state even though it is not
         # a player decision and therefore never receives a replay ordinal.
@@ -2934,7 +2716,6 @@ class GameSession:
         }
         self.attempt_store.save(
             self.match_id,
-            self.attempt_owner,
             self.revision,
             world,
             retained.to_record(),
@@ -2943,7 +2724,6 @@ class GameSession:
             ),
             finished=finished,
             players=self.record_players,
-            session_start=self._session_start,
             origin=(
                 (os.getenv("ACADEMY_PLAY_RECORD_ORIGIN") or "bot_evaluation")
                 if self.watch_mode
@@ -2952,7 +2732,6 @@ class GameSession:
                 else None
             ),
         )
-        self._session_start = None
         self._persisted = written
         if finished:
             self._study_provider = study_provider
@@ -3062,18 +2841,15 @@ class GameSession:
         replay: CanonicalReplayV1,
         raw_address: str,
         raw_command: Any,
-        owner_viewer_id: str = "legacy",
     ) -> dict[str, Any]:
-        """Commit one canonical command on an exact retained Study fork."""
+        """Commit one canonical command on an exact retained Study fork. A
+        game has one Study attempt at a time."""
         live_trace_id = self.trace_id or f"live.{self.match_id}"
         if live_trace_id != trace_id:
             raise StudyBranchUnavailableError(
                 "Study roots are unavailable for this recording."
             )
-        if any(
-            attempt.owner_viewer_id == owner_viewer_id
-            for attempt in self._study_attempts.values()
-        ):
+        if self._study_attempts:
             raise StudyCommandUnavailableError("study_attempt_active")
         viewer = (
             int(parse_decision_address(raw_address).viewer)
@@ -3112,7 +2888,6 @@ class GameSession:
             attempt_id = secrets.token_urlsafe(18)
         attempt = StudyAttempt(
             attempt_id=attempt_id,
-            owner_viewer_id=owner_viewer_id,
             trace_id=trace_id,
             address=raw_address,
             projection=projection,
@@ -3139,11 +2914,9 @@ class GameSession:
             },
         }
 
-    def reveal_study(
-        self, attempt_id: str, owner_viewer_id: str | None = None
-    ) -> dict[str, Any]:
+    def reveal_study(self, attempt_id: str) -> dict[str, Any]:
         """Release evidence only after the attempt owns an accepted Retry."""
-        attempt = self._require_study_attempt(attempt_id, owner_viewer_id)
+        attempt = self._require_study_attempt(attempt_id)
         request = HistoricalStudyEvidenceRequest(
             projection=attempt.projection.model_copy(deep=True),
             source_replay_sha256=canonical_projection_sha256(attempt.projection),
@@ -3166,10 +2939,9 @@ class GameSession:
         self,
         attempt_id: str,
         kind: StudyPlanKind,
-        owner_viewer_id: str | None = None,
     ) -> dict[str, Any]:
         """Project one labelled plan without reusing the player's Retry fork."""
-        attempt = self._require_study_attempt(attempt_id, owner_viewer_id)
+        attempt = self._require_study_attempt(attempt_id)
         if attempt.evidence is None:
             raise StudyEvidenceUnavailableError("study_evidence_not_revealed")
         selection = select_study_plan(attempt.evidence.landmark, kind)
@@ -3206,14 +2978,10 @@ class GameSession:
             },
         }
 
-    def return_from_study(
-        self, attempt_id: str, owner_viewer_id: str | None = None
-    ) -> dict[str, Any]:
+    def return_from_study(self, attempt_id: str) -> dict[str, Any]:
         """Close one branch and restore the exact canonical decision."""
-        attempt = self._require_study_attempt(attempt_id, owner_viewer_id)
+        attempt = self._require_study_attempt(attempt_id)
         self._study_attempts.pop(attempt_id)
-        if attempt is None:
-            raise StudyAttemptNotFoundError("study_attempt_not_found")
         receipt = attempt.branch.return_to_recorded()
         restored = RestoredReplayDecision.model_validate(
             receipt.model_dump(mode="python", exclude={"source_digest", "execution"})
@@ -3222,21 +2990,12 @@ class GameSession:
             raise RuntimeError("Study return identity drifted.")
         return restored.model_dump(mode="json")
 
-    def has_study_attempt(
-        self, attempt_id: str, owner_viewer_id: str | None = None
-    ) -> bool:
-        attempt = self._study_attempts.get(attempt_id)
-        return attempt is not None and (
-            owner_viewer_id is None or attempt.owner_viewer_id == owner_viewer_id
-        )
+    def has_study_attempt(self, attempt_id: str) -> bool:
+        return attempt_id in self._study_attempts
 
-    def _require_study_attempt(
-        self, attempt_id: str, owner_viewer_id: str | None = None
-    ) -> StudyAttempt:
+    def _require_study_attempt(self, attempt_id: str) -> StudyAttempt:
         attempt = self._study_attempts.get(attempt_id)
-        if attempt is None or (
-            owner_viewer_id is not None and attempt.owner_viewer_id != owner_viewer_id
-        ):
+        if attempt is None:
             raise StudyAttemptNotFoundError("study_attempt_not_found")
         return attempt
 
@@ -3311,7 +3070,7 @@ class GameSession:
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
         if self.watch_mode:
-            raise TableDispatchError("conflict", "A watched game has no seat of yours.")
+            raise PlayRequestError("conflict", "A watched game has no seat of yours.")
         self._end_live_analysis()
         # Admission takes seconds the first time; the connection admits off the
         # game lock before dispatching here (`policy_admissions`).
@@ -3330,7 +3089,7 @@ class GameSession:
         key = policy or choices.default or choices.policies[0]["sha256"]
         chosen = next((p for p in choices.policies if p["sha256"] == key), None)
         if chosen is None:
-            raise TableDispatchError("not_found", "That policy cannot read this game.")
+            raise PlayRequestError("not_found", "That policy cannot read this game.")
         config = self.trace.config
         setup = config.to_rust()
         seat = self.human_seat
@@ -3392,15 +3151,15 @@ def _error_message(message: str) -> dict[str, str]:
     return {"type": "error", "message": message}
 
 
-class TableDispatchError(ValueError):
-    """A closed table-control request failed before match authority."""
+class PlayRequestError(ValueError):
+    """A `/ws/play` request refused before it reached the game."""
 
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
 
 
-def _control_error(error: TableDispatchError) -> dict[str, str]:
+def _control_error(error: PlayRequestError) -> dict[str, str]:
     return {"type": "control_error", "code": error.code, "message": str(error)}
 
 
@@ -3409,183 +3168,64 @@ def _new_game_session() -> GameSession:
     return GameSession()
 
 
-def _invite_digest(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def _create_session_record() -> tuple[SessionRecord, str]:
-    while True:
-        session_id = secrets.token_urlsafe(12)
-        if session_id not in SESSION_REGISTRY:
-            break
-
-    invite_token = secrets.token_urlsafe(24)
-    record = SessionRecord(
-        session_id=session_id,
-        resume_token=secrets.token_urlsafe(24),
-        game=_new_game_session(),
-        watcher_invite_digest=_invite_digest(invite_token),
-    )
-    SESSION_REGISTRY[session_id] = record
-    return record, invite_token
-
-
-def _drop_session(session_id: str, end_reason: str) -> None:
-    record = SESSION_REGISTRY.pop(session_id, None)
-    if record is None:
+def end_game(game_id: str, end_reason: str) -> None:
+    """End a live game with `end_reason` and drop it from memory."""
+    live = LIVE_GAMES.pop(game_id, None)
+    if live is None:
         return
-    record.game.close(end_reason=end_reason)
-    for participant in record.participants.values():
-        participant.websocket = None
-    record.websocket = None
+    live.game.close(end_reason=end_reason)
+    live.websocket = None
 
 
-def evict_session(session_id: str, watch_end_reason: str) -> None:
-    """Drop an idle or shut-down session from memory. A played game ends
+def evict_game(game_id: str, watch_end_reason: str) -> None:
+    """Drop an idle or shut-down game from memory. A played game ends
     nothing and stays unfinished; a watched game cannot be rebuilt from its
     record, so it ends with `watch_end_reason`."""
-    record = SESSION_REGISTRY.get(session_id)
-    if record is None:
+    live = LIVE_GAMES.get(game_id)
+    if live is None:
         return
-    if record.game.watch_mode:
-        _drop_session(session_id, end_reason=watch_end_reason)
+    if live.game.watch_mode:
+        end_game(game_id, end_reason=watch_end_reason)
         return
-    del SESSION_REGISTRY[session_id]
-    record.game.release()
-    for participant in record.participants.values():
-        participant.websocket = None
-    record.websocket = None
+    del LIVE_GAMES[game_id]
+    live.game.release()
+    live.websocket = None
 
 
-def _cleanup_expired_sessions() -> None:
+def _cleanup_expired_games() -> None:
     now = _now_utc()
-    expired_ids = [
-        session_id
-        for session_id, record in SESSION_REGISTRY.items()
-        if record.expires_at <= now and not record.lock.locked()
+    expired = [
+        game_id
+        for game_id, live in LIVE_GAMES.items()
+        if live.expires_at <= now and not live.lock.locked()
     ]
-    for session_id in expired_ids:
-        evict_session(session_id, SESSION_EXPIRED_END_REASON)
+    for game_id in expired:
+        evict_game(game_id, SESSION_EXPIRED_END_REASON)
 
 
-def _participant_from_resume(
-    raw_session_id: Any,
-    raw_resume_token: Any,
-) -> tuple[SessionRecord, ParticipantLease]:
-    if not isinstance(raw_session_id, str) or not raw_session_id:
-        raise ValueError("resume messages require a non-empty 'session_id'.")
-    if not isinstance(raw_resume_token, str) or not raw_resume_token:
-        raise ValueError("resume messages require a non-empty 'resume_token'.")
-
-    record = SESSION_REGISTRY.get(raw_session_id)
-    if record is None:
-        raise ValueError("Session not found or expired. Start a new game.")
-    participants = [
-        participant
-        for participant in record.participants.values()
-        if secrets.compare_digest(participant.resume_token, raw_resume_token)
-    ]
-    if len(participants) != 1:
-        raise ValueError("Invalid resume credentials. Start a new game.")
-    if record.expires_at <= _now_utc():
-        evict_session(raw_session_id, SESSION_EXPIRED_END_REASON)
-        raise ValueError("Session has expired. Start a new game.")
-    return record, participants[0]
+# One rebuild of a game at a time: a second would replay and extend the same
+# stored record.
+_RESUMING: dict[str, asyncio.Lock] = {}
 
 
-def _participant_from_invite(
-    raw_table_id: Any,
-    raw_invite_token: Any,
-) -> tuple[SessionRecord, ParticipantLease]:
-    if not isinstance(raw_table_id, str) or not raw_table_id:
-        raise ValueError("join_table messages require a non-empty 'table_id'.")
-    if not isinstance(raw_invite_token, str) or not raw_invite_token:
-        raise ValueError("join_table messages require a non-empty 'invite_token'.")
-    record = SESSION_REGISTRY.get(raw_table_id)
-    if record is None or record.expires_at <= _now_utc():
-        raise ValueError("Table not found or expired.")
-    digest = record.watcher_invite_digest
-    if digest is None or not secrets.compare_digest(
-        digest, _invite_digest(raw_invite_token)
-    ):
-        raise ValueError("Invalid or consumed watcher invite.")
-    if len(record.participants) >= 2:
-        raise ValueError("This table already has its permitted watcher.")
-    viewer_id = f"viewer.{secrets.token_urlsafe(12)}"
-    participant = ParticipantLease(
-        viewer_id=viewer_id,
-        resume_token=secrets.token_urlsafe(24),
-        role=ViewerRole.WATCHER,
-    )
-    record.participants[viewer_id] = participant
-    record.watcher_invite_digest = None
-    record.table_revision += 1
-    record.touch()
-    return record, participant
+async def take_up_game(game_id: str) -> LiveGame:
+    """The live game `game_id`, rebuilt from its stored record when it is not
+    in memory. Raises ValueError where it is not an unfinished played game or
+    cannot be rebuilt (`GameSession.resume`)."""
+    async with _RESUMING.setdefault(game_id, asyncio.Lock()):
+        live = LIVE_GAMES.get(game_id)
+        if live is None:
+            game = _new_game_session()
+            await asyncio.to_thread(game.resume, game_id)
+            live = LIVE_GAMES[game_id] = LiveGame(game)
+    if live.game.watch_mode:
+        raise ValueError("resume_unavailable: A watched game has no seat of yours.")
+    return live
 
 
-def _parse_presentation_cursor(raw_cursor: Any) -> int | None:
-    if raw_cursor is None:
-        return None
-    if (
-        isinstance(raw_cursor, bool)
-        or not isinstance(raw_cursor, int)
-        or raw_cursor < 0
-        or raw_cursor > MAX_UINT64
-    ):
-        raise ValueError(
-            "resume presentation_cursor must be an unsigned 64-bit integer."
-        )
-    return raw_cursor
-
-
-def _visible_beliefs(
-    record: SessionRecord, participant: ParticipantLease
-) -> list[dict[str, Any]]:
-    visible = [deepcopy(value) for value in record.shared_beliefs.values()]
-    visible.extend(deepcopy(value) for value in participant.personal_beliefs.values())
-    return sorted(visible, key=lambda value: str(value["id"]))
-
-
-def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
-    committed = [
-        {
-            "address": DecisionAddressV2.from_row(
-                replay_id=f"replay.{record.game.match_id}",
-                match_id=record.game.match_id,
-                row=decision,
-            ).serialize(),
-            "ordinal": decision.ordinal,
-            "revision": decision.revision,
-            "prompt_id": decision.prompt_id,
-            "offer_id": decision.offer_id,
-        }
-        for decision in record.game.canonical_decisions
-        if decision.viewer == record.game.human_seat
-    ]
-    pending = record.game._pending_decision
-    if pending is None:
-        return committed
-    address = pending.address
-    return [
-        *committed,
-        {
-            "address": address.serialize(),
-            "ordinal": address.ordinal,
-            "revision": address.revision,
-            "prompt_id": address.prompt_id,
-            "offer_id": None,
-        },
-    ]
-
-
-def _table_opponent_label(record: SessionRecord) -> str | None:
+def _opponent_label(config: GameConfig) -> str:
     """The opponent's name and how it decides: "Search 64 · search",
     "Heuristic · scripted", "<checkpoint> · checkpoint w17"."""
-    trace = record.game.trace
-    if trace is None:
-        return None
-    config = trace.config
     if config.villain_type == "search":
         return f"Search {config.villain_sims} · search"
     if config.opponent is not None:
@@ -3597,455 +3237,98 @@ def _table_opponent_label(record: SessionRecord) -> str | None:
     return config.villain_type.capitalize()
 
 
-def _table_snapshot(
-    record: SessionRecord,
-    participant: ParticipantLease,
-    *,
-    watcher_invite: str | None = None,
-) -> dict[str, Any]:
-    capabilities = list(ROLE_CAPABILITIES[participant.role])
-    snapshot = TableSnapshot(
-        table_id=record.session_id,
-        table_revision=record.table_revision,
-        mode=(
-            "study"
-            if record.game.obs is not None and record.game.obs.game_over
-            else "live"
-        ),
-        access=ViewerAccess(
-            identity=ViewerIdentity(
-                viewer_id=participant.viewer_id,
-                table_id=record.session_id,
-                rules_viewer=record.game.human_seat,
-            ),
-            role=participant.role,
-            capabilities=capabilities,
-            grant_revision=participant.grant_revision,
-        ),
-        participants=[
-            {
-                "viewer_id": candidate.viewer_id,
-                "role": candidate.role,
-                "connected": candidate.websocket is not None,
-            }
-            for candidate in sorted(
-                record.participants.values(), key=lambda value: value.viewer_id
-            )
-        ],
-        beliefs=_visible_beliefs(record, participant),
-        decisions=_live_decision_summaries(record),
-        opponent_label=_table_opponent_label(record),
-        attempt_id=record.game.trace_id,
-        opponent=record.game.trace.config.opponent if record.game.trace else None,
-        watcher_invite=(
-            f"#table={record.session_id}&watch={watcher_invite}"
-            if watcher_invite is not None and participant.role == ViewerRole.PILOT
-            else None
-        ),
-    )
-    return snapshot.model_dump(mode="json")
-
-
-def _response_with_participant(
-    response: dict[str, Any],
-    record: SessionRecord,
-    participant: ParticipantLease,
-    *,
-    watcher_invite: str | None = None,
-) -> dict[str, Any]:
+def _reply(live: LiveGame, response: dict[str, Any]) -> dict[str, Any]:
+    """A response as the browser reads it: with the game's id, opponent and
+    setup, and the work in progress."""
+    game = live.game
     payload = deepcopy(response)
-    payload["work"] = record.game.work.payload()
-    payload["mirror_retry"] = record.game.mirror_retry
-    payload["mirror"] = (
-        asdict(record.game.trace.config).get("mirror") if record.game.trace else None
-    )
-    # Launch metadata belongs only to the browser that submitted the setup.
-    payload.pop("launch", None)
-    payload.pop("play_session", None)
-    membership = record.game.attempt_store.session_for_attempt(record.game.match_id)
-    if membership is not None:
-        try:
-            session = record.game.attempt_store.session(
-                membership["session_id"], {participant_id(participant.resume_token)}
-            )
-            payload["play_session"] = {
-                **session,
-                **membership,
-                "config": record.game.trace.config.to_record()
-                if record.game.trace
-                else {},
-            }
-            payload["play_session"]["config"]["seed"] = str(
-                payload["play_session"]["config"].get("seed")
-            )
-        except ValueError:
-            pass
-    payload["table"] = _table_snapshot(
-        record, participant, watcher_invite=watcher_invite
-    )
-    if response.get("type") in {"observation", "game_over", "table_snapshot"}:
-        payload["session_id"] = record.session_id
-        payload["resume_token"] = participant.resume_token
-        payload["participant_id"] = participant.viewer_id
+    payload["work"] = game.work.payload()
+    payload["mirror_retry"] = game.mirror_retry
+    trace = game.trace
+    payload["mirror"] = asdict(trace.config).get("mirror") if trace else None
+    if trace is not None:
+        payload["game"] = game.match_id
+        payload["opponent"] = trace.config.opponent
+        payload["opponent_label"] = _opponent_label(trace.config)
+        payload["mode"] = (
+            "study" if game.obs is not None and game.obs.game_over else "live"
+        )
+        # What Rematch, Swap sides and Play again start from.
+        payload["setup"] = setup_draft(trace.config)
     return payload
 
 
-async def _attach_participant_websocket(
-    record: SessionRecord,
-    participant: ParticipantLease,
-    websocket: WebSocket,
-) -> None:
-    previous_websocket = participant.websocket
-    participant.websocket = websocket
-    if participant.role == ViewerRole.PILOT:
-        record.resume_token = participant.resume_token
-        record.websocket = websocket
-    record.touch()
-    if previous_websocket is not None and previous_websocket is not websocket:
+async def _attach_websocket(live: LiveGame, websocket: WebSocket) -> None:
+    """Make `websocket` the game's one connection; the one it replaces closes."""
+    previous = live.websocket
+    live.websocket = websocket
+    live.touch()
+    if previous is not None and previous is not websocket:
         with suppress(Exception):
-            await previous_websocket.close(code=4000)
+            await previous.close(code=4000)
 
 
-async def _get_or_create_attached_participant(
-    attached_table_id: str | None,
-    attached_viewer_id: str | None,
-    websocket: WebSocket,
-) -> tuple[SessionRecord, ParticipantLease, str | None]:
-    if attached_table_id is not None and attached_viewer_id is not None:
-        existing = SESSION_REGISTRY.get(attached_table_id)
-        participant = (
-            None if existing is None else existing.participants.get(attached_viewer_id)
-        )
-        if existing is not None and participant is not None:
-            await _attach_participant_websocket(existing, participant, websocket)
-            return existing, participant, None
-
-    record, invite_token = _create_session_record()
-    participant = record.pilot()
-    await _attach_participant_websocket(record, participant, websocket)
-    return record, participant, invite_token
+def _detach_websocket(game_id: str | None, websocket: WebSocket) -> None:
+    live = LIVE_GAMES.get(game_id) if game_id is not None else None
+    if live is not None and live.websocket is websocket:
+        live.websocket = None
+        live.touch()
 
 
-def _detach_participant_websocket(
-    table_id: str,
-    viewer_id: str,
-    websocket: WebSocket,
-) -> None:
-    record = SESSION_REGISTRY.get(table_id)
-    if record is None:
-        return
-    participant = record.participants.get(viewer_id)
-    if participant is None:
-        return
-    if participant.websocket is websocket:
-        participant.websocket = None
-        if participant.role == ViewerRole.PILOT:
-            record.websocket = None
-        record.touch()
-
-
-DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
-    "new_game": TableCapability.CONFIGURE_MATCH,
-    "rematch": TableCapability.CONFIGURE_MATCH,
-    "command": TableCapability.SUBMIT_LIVE_COMMAND,
-    "action": TableCapability.SUBMIT_LIVE_COMMAND,
-    "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
-    "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
-    "set_stops": TableCapability.CONFIGURE_MATCH,
-    "show_analysis": TableCapability.SUBMIT_LIVE_COMMAND,
-    "transfer_pilot": TableCapability.TRANSFER_PILOT,
-    "author_belief": TableCapability.AUTHOR_BELIEF,
-    "share_belief": TableCapability.SHARE_BELIEF,
-    "restore_decision": TableCapability.EXPLORE_STUDY,
-    "retry_decision": TableCapability.EXPLORE_STUDY,
-    "branch_reveal": TableCapability.EXPLORE_STUDY,
-    "branch_preview": TableCapability.EXPLORE_STUDY,
-    "return_from_branch": TableCapability.EXPLORE_STUDY,
-    "return_to_live": TableCapability.EXPLORE_STUDY,
-}
-
-if set(DISPATCH_CAPABILITIES) | {"join_table", "resume"} != set(REQUEST_TYPES):
-    raise RuntimeError("shared-table request vocabulary and dispatch drifted")
-
-
-def _parse_table_request(raw: Any) -> Any:
+def _parse_request(raw: Any) -> Any:
     if not isinstance(raw, dict):
-        raise TableDispatchError(
+        raise PlayRequestError(
             "invalid_message", "WebSocket payload must be a JSON object."
         )
     message_type = raw.get("type")
     if not isinstance(message_type, str) or message_type not in REQUEST_TYPES:
-        raise TableDispatchError(
+        raise PlayRequestError(
             "unsupported_message", f"Unsupported message type: {message_type}"
         )
     try:
         return REQUEST_ADAPTER.validate_python(raw)
     except ValidationError as exc:
-        raise TableDispatchError(
+        raise PlayRequestError(
             "invalid_message", f"Invalid {message_type} message."
         ) from exc
 
 
-def _authorize_table_request(
-    record: SessionRecord,
-    participant: ParticipantLease,
+def _dispatch_request(
+    game: GameSession,
     request: Any,
-) -> None:
-    message_type = request.type
-    grant_revision = getattr(request, "grant_revision", None)
-    if not (grant_revision is None and len(record.participants) == 1) and (
-        grant_revision != participant.grant_revision
-    ):
-        raise TableDispatchError(
-            "stale_grant", "Participant role changed; recover current table access."
-        )
-    capability = DISPATCH_CAPABILITIES[message_type]
-    if capability not in ROLE_CAPABILITIES[participant.role]:
-        raise TableDispatchError(
-            "forbidden", f"{participant.role.value.capitalize()} cannot {message_type}."
-        )
-
-
-def _author_belief(
-    record: SessionRecord,
-    participant: ParticipantLease,
-    scenario_id: str,
+    committed: Callable[[dict[str, Any]], None],
+    publish_analysis: Callable[[dict[str, Any]], concurrent.futures.Future[bool]],
 ) -> dict[str, Any]:
-    try:
-        meta = advice_meta().model_dump(mode="json")
-    except AdvisorUnavailable as exc:
-        raise TableDispatchError(
-            "not_found", "Advice fixtures are unavailable."
-        ) from exc
-    scenarios = {
-        str(scenario["landmark_id"]): scenario for scenario in meta["scenarios"]
-    }
-    if scenario_id not in scenarios:
-        raise TableDispatchError("not_found", "Pinned belief scenario not found.")
-    record.table_revision += 1
-    belief_id = f"belief.{secrets.token_urlsafe(12)}"
-    belief = {
-        "id": belief_id,
-        "author_viewer_id": participant.viewer_id,
-        "source": {
-            "decision_address": meta["address"],
-            "gam6_scenario_id": scenario_id,
-            "advice_identity": meta["identity"],
-        },
-        "audience": {"kind": "personal"},
-        "provenance": {
-            "kind": "player_authored",
-            "created_at_table_revision": record.table_revision,
-            "shared_at_table_revision": None,
-        },
-    }
-    participant.personal_beliefs[belief_id] = belief
-    return deepcopy(belief)
+    """Run one request on its game, under the game's lock.
 
-
-def _share_belief(
-    record: SessionRecord,
-    participant: ParticipantLease,
-    belief_id: str,
-) -> dict[str, Any]:
-    belief = participant.personal_beliefs.pop(belief_id, None)
-    if belief is None:
-        raise TableDispatchError("not_found", "Personal belief not found.")
-    record.table_revision += 1
-    belief["audience"] = {"kind": "table", "table_id": record.session_id}
-    belief["provenance"]["shared_at_table_revision"] = record.table_revision
-    record.shared_beliefs[belief_id] = belief
-    return deepcopy(belief)
-
-
-def _dispatch_table_request(
-    record: SessionRecord,
-    participant: ParticipantLease,
-    request: Any,
-    committed: Callable[[dict[str, Any]], None] | None = None,
-    publish_analysis: Callable[[dict[str, Any]], concurrent.futures.Future[bool]]
-    | None = None,
-) -> tuple[dict[str, Any], bool]:
-    """Authorize and execute one closed operation under the table lock.
-
-    `publish_analysis` delivers a live analysis's readings to the pilot
-    without waiting (`_send_live_analysis`)."""
+    `committed` delivers an accepted Command before the opponent replies;
+    `publish_analysis` delivers a live analysis's readings without waiting."""
     if isinstance(request, CommandMessage):
-        command_id = request.command.command_id
-        if command_id in record.game.accepted_commands:
-            submitter = record.accepted_command_submitters.get(command_id)
-            if submitter is None and len(record.participants) == 1:
-                submitter = participant.viewer_id
-                record.accepted_command_submitters[command_id] = submitter
-            if submitter != participant.viewer_id:
-                raise TableDispatchError(
-                    "forbidden", "Command id belongs to another participant."
-                )
-            return record.game.hero_command(
-                request.command.model_dump(mode="json")
-            ), False
-
-    _authorize_table_request(record, participant, request)
-
-    if isinstance(request, (NewGameMessage, RematchMessage)):
-        owner = participant_id(participant.resume_token)
-        previous_match = record.game.match_id
-        if isinstance(request, RematchMessage):
-            response = record.game.continue_game(request, owner)
-        else:
-            if {"play_session_id", "setup_revision"}.intersection(request.config):
-                raise ValueError("Use continuation to join a session.")
-            record.game.attempt_owner = owner
-            response = record.game.new_game(dict(request.config))
-        if record.game.match_id == previous_match:
-            return response, False
-        record.accepted_command_submitters.clear()
-        record.shared_beliefs.clear()
-        for candidate in record.participants.values():
-            candidate.personal_beliefs.clear()
-            candidate.study_attempts.clear()
-        record.table_revision += 1
-        return response, True
-    if isinstance(request, CommandMessage):
-        command_id = request.command.command_id
-        record.accepted_command_submitters[command_id] = participant.viewer_id
-        try:
-            response = record.game.hero_command(
-                request.command.model_dump(mode="json"), committed=committed
-            )
-        finally:
-            # Keep retry ownership if policy/transport work failed after commit.
-            if command_id not in record.game.accepted_commands:
-                record.accepted_command_submitters.pop(command_id, None)
-        return response, True
+        return game.hero_command(
+            request.command.model_dump(mode="json"), committed=committed
+        )
     if isinstance(request, ActionMessage):
-        return record.game.hero_action(request.index), True
+        return game.hero_action(request.index)
     if isinstance(request, PassTurnMessage):
-        return record.game.pass_turn(), True
+        return game.pass_turn()
     if isinstance(request, RetryMirrorMessage):
-        return record.game.retry_mirror(
-            request.match_id, request.expected_revision
-        ), True
+        return game.retry_mirror(request.match_id, request.expected_revision)
     if isinstance(request, SetStopsMessage):
-        return (
-            record.game.set_stops(
-                request.stops,
-                request.stop_on_stack,
-                request.auto_pass,
-            ),
-            True,
-        )
+        return game.set_stops(request.stops, request.stop_on_stack, request.auto_pass)
     if isinstance(request, ShowAnalysisMessage):
-        if publish_analysis is None:
-            raise TableDispatchError("conflict", "Analysis needs a live connection.")
-        return record.game.show_analysis(
-            request.shown, request.policy, publish_analysis
-        ), False
-    if isinstance(request, TransferPilotMessage):
-        target = record.participants.get(request.target_viewer_id)
-        if target is None or target is participant:
-            raise TableDispatchError("not_found", "Watcher participant not found.")
-        if target.role != ViewerRole.WATCHER:
-            raise TableDispatchError("conflict", "Target is not the watcher.")
-        participant.role = ViewerRole.WATCHER
-        target.role = ViewerRole.PILOT
-        participant.grant_revision += 1
-        target.grant_revision += 1
-        record.resume_token = target.resume_token
-        record.websocket = target.websocket
-        record.table_revision += 1
-        return {"type": "role_changed"}, True
-    if isinstance(request, AuthorBeliefMessage):
-        belief = _author_belief(record, participant, request.scenario_id)
-        return {"type": "belief_changed", "belief": belief}, False
-    if isinstance(request, ShareBeliefMessage):
-        belief = _share_belief(record, participant, request.belief_id)
-        return {"type": "belief_changed", "belief": belief}, True
-    if isinstance(request, RestoreDecisionMessage):
-        replay = record.game.canonical_replay()
-        try:
-            restored = restore_decision(replay, request.address, record.game.human_seat)
-        except (InvalidAddressError, DecisionNotFoundError) as exc:
-            raise TableDispatchError("not_found", "Decision not found.") from exc
-        return {
-            "type": "decision_restored",
-            "address": request.address,
-            "restored": restored.model_dump(mode="json"),
-        }, False
-    if isinstance(request, RetryDecisionMessage):
-        replay = record.game.canonical_replay()
-        trace_id = record.game.trace_id or f"live.{record.game.match_id}"
-        try:
-            retry = record.game.retry_study(
-                trace_id=trace_id,
-                replay=replay,
-                raw_address=request.address,
-                raw_command=request.command.model_dump(mode="json"),
-                owner_viewer_id=participant.viewer_id,
-            )
-        except (ValueError, StudyBranchUnavailableError) as exc:
-            raise TableDispatchError("conflict", str(exc)) from exc
-        participant.study_attempts.add(str(retry["attempt_id"]))
-        return {
-            "type": "branch_updated",
-            "attempt_id": retry["attempt_id"],
-            "phase": "retry",
-            "payload": retry,
-        }, False
-    if isinstance(request, BranchRevealMessage):
-        if request.attempt_id not in participant.study_attempts:
-            raise TableDispatchError("not_found", "Study attempt not found.")
-        try:
-            reveal = record.game.reveal_study(request.attempt_id, participant.viewer_id)
-        except ValueError as exc:
-            raise TableDispatchError("conflict", str(exc)) from exc
-        return {
-            "type": "branch_updated",
-            "attempt_id": request.attempt_id,
-            "phase": "revealed",
-            "payload": reveal,
-        }, False
-    if isinstance(request, BranchPreviewMessage):
-        if request.attempt_id not in participant.study_attempts:
-            raise TableDispatchError("not_found", "Study attempt not found.")
-        try:
-            preview = record.game.preview_study_plan(
-                request.attempt_id, request.plan, participant.viewer_id
-            )
-        except ValueError as exc:
-            raise TableDispatchError("conflict", str(exc)) from exc
-        return {
-            "type": "branch_updated",
-            "attempt_id": request.attempt_id,
-            "phase": "preview",
-            "payload": preview,
-        }, False
-    if isinstance(request, ReturnFromBranchMessage):
-        if request.attempt_id not in participant.study_attempts:
-            raise TableDispatchError("not_found", "Study attempt not found.")
-        try:
-            restored = record.game.return_from_study(
-                request.attempt_id, participant.viewer_id
-            )
-        except ValueError as exc:
-            raise TableDispatchError("not_found", str(exc)) from exc
-        participant.study_attempts.discard(request.attempt_id)
-        return {"type": "branch_returned", "restored": restored}, False
-    if isinstance(request, ReturnToLiveMessage):
-        return {"type": "table_snapshot"}, False
+        return game.show_analysis(request.shown, request.policy, publish_analysis)
     raise RuntimeError(f"closed dispatch missing handler for {request.type}")
 
 
 def _launch_metadata(launch_id: object) -> dict[str, Any]:
     """Return setup to the requesting tab even when a known launch is refused."""
-    if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+    launch = LAUNCHES.get(launch_id) if isinstance(launch_id, str) else None
+    if launch is None:
         return {}
     return {
         "launch": launch_id,
         "launch_setup": {
-            key: value
-            for key, value in LAUNCH_CONFIGS[launch_id].items()
-            if key != "seed"
+            key: value for key, value in launch.config.items() if key != "seed"
         },
     }
 
@@ -4060,93 +3343,163 @@ def _request_error(request: object, message: str) -> dict[str, Any]:
     return error
 
 
-def _cache_table_recovery(record: SessionRecord) -> None:
-    # Project once at a safe worker boundary, then apply each viewer's access.
-    response: dict[str, Any]
-    if record.game.obs is None:
-        response = {"type": "table_snapshot"}
+def _start_config(request: NewGameMessage | RematchMessage) -> dict[str, Any]:
+    """The setup a start request asks for. A rematch reads the setup its game
+    was played with, as recorded (stops changed during play included)."""
+    if isinstance(request, NewGameMessage):
+        config = dict(request.config)
+        launch_id = config.pop("launch", None)
+        if launch_id is None:
+            return config
+        launch = LAUNCHES.get(launch_id) if isinstance(launch_id, str) else None
+        if launch is None:
+            raise ValueError(
+                "launch_unknown: This launch is unknown; run the launch command again or choose a new game."
+            )
+        if launch.mode != "play":
+            raise ValueError(
+                "launch_not_play: This launch opens Watch setup, not a game to play."
+            )
+        return {**config, **launch.config}
+    if {"launch", "demo", "played_from"}.intersection(request.config):
+        raise ValueError("Rematch setup contains reserved fields.")
+    live = LIVE_GAMES.get(request.game)
+    if live is not None and live.game.trace is not None:
+        played = live.game.trace.config
     else:
-        recovery = record.game.current_recovery("reconnect")
-        frame = recovery["frame"]
-        response = {
+        source = AttemptStore(trace_store.TRACES_DIR / "play.sqlite").load(request.game)
+        if source is None:
+            raise ValueError("rematch_unavailable: That game is not saved here.")
+        played = GameConfig(**source["config"])
+    if played.watch_players is not None:
+        raise ValueError("rematch_unavailable: A watched game has no seat of yours.")
+    return continuation_config(setup_draft(played), request.config, request.intent)
+
+
+def _cache_recovery(live: LiveGame) -> None:
+    """Project the game once at a safe worker boundary, for a connection that
+    arrives while its next request is still running."""
+    if live.game.obs is None:
+        live.published = None
+        return
+    recovery = live.game.current_recovery("reconnect")
+    frame = recovery["frame"]
+    live.published = _reply(
+        live,
+        {
             "type": "game_over" if frame["projection"]["game_over"] else "observation",
             "data": frame["projection"],
             "actions": [],
             "winner": frame["winner"],
             "frame": frame,
             "recovery": recovery,
-        }
-    for participant in list(record.participants.values()):
-        record.published[participant.viewer_id] = _response_with_participant(
-            response, record, participant
-        )
+        },
+    )
 
 
-async def _publish_work(record: SessionRecord, status: WorkStatus) -> None:
+async def _publish_work(live: LiveGame, status: WorkStatus) -> None:
     # Status has no projection path. Resume uses the last permitted publication.
-    for participant in list(record.participants.values()):
-        if participant.websocket is not None:
-            with suppress(Exception):
-                await participant.websocket.send_json(
-                    {
-                        "type": "work_status",
-                        "session_id": record.session_id,
-                        "work": asdict(status),
-                    }
-                )
+    if live.websocket is not None:
+        with suppress(Exception):
+            await live.websocket.send_json(
+                {
+                    "type": "work_status",
+                    "game": live.game.match_id if live.game.trace else None,
+                    "work": asdict(status),
+                }
+            )
 
 
-async def _send_live_analysis(record: SessionRecord, message: dict[str, Any]) -> bool:
-    """Send a live analysis reading to the pilot; true once it was sent."""
-    sent = False
-    for participant in list(record.participants.values()):
-        socket = participant.websocket
-        if participant.role != ViewerRole.PILOT or socket is None:
-            continue
+async def _send_live_analysis(live: LiveGame, message: dict[str, Any]) -> bool:
+    """Send a live analysis reading to the game's connection; true once sent."""
+    socket = live.websocket
+    if socket is None:
+        return False
+    try:
+        await socket.send_json(message)
+    except Exception:
+        if live.websocket is socket:
+            live.websocket = None
+        return False
+    return True
+
+
+async def _send_reply(live: LiveGame, response: dict[str, Any], **extra: Any) -> None:
+    _cache_recovery(live)
+    socket = live.websocket
+    if socket is None:
+        return
+    try:
+        await socket.send_json({**_reply(live, response), **extra})
+    except Exception:
+        if live.websocket is socket:
+            live.websocket = None
+
+
+async def _start_game(
+    request: NewGameMessage | RematchMessage, websocket: WebSocket
+) -> LiveGame:
+    """Start the game a request asks for and make `websocket` its connection.
+
+    A configured launch starts one game: sent again, it takes that game up.
+    A failure starts nothing and leaves every other game as it was."""
+    launch_id = (
+        request.config.get("launch") if isinstance(request, NewGameMessage) else None
+    )
+    config = _start_config(request)
+    started = LAUNCH_GAMES.get(launch_id) if isinstance(launch_id, str) else None
+    if started is not None:
         try:
-            await socket.send_json(message)
-            sent = True
-        except Exception:
-            if participant.websocket is socket:
-                participant.websocket = None
-    return sent
+            live = await take_up_game(started)
+        except ValueError as exc:
+            raise ValueError(
+                f"launch_played: This launch already played game {started}; open its replay or start a new game."
+            ) from exc
+        await _attach_websocket(live, websocket)
+        async with live.lock:
+            await _send_reply(
+                live, live.game.current_message(), **_launch_metadata(launch_id)
+            )
+        return live
 
+    game = _new_game_session()
+    live = LiveGame(game, websocket)
+    loop = asyncio.get_running_loop()
 
-async def _send_table_response(
-    record: SessionRecord,
-    initiator: ParticipantLease,
-    response: dict[str, Any],
-    *,
-    broadcast: bool,
-    watcher_invite: str | None = None,
-) -> None:
-    _cache_table_recovery(record)
-    recipients = list(record.participants.values()) if broadcast else [initiator]
-    for recipient in recipients:
-        socket = recipient.websocket
-        if socket is None:
-            continue
-        payload = _response_with_participant(
-            response,
-            record,
-            recipient,
-            watcher_invite=(watcher_invite if recipient is initiator else None),
-        )
-        if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
-            payload.update(_launch_metadata(response["launch"]))
-        try:
-            await socket.send_json(payload)
-        except Exception:
-            if recipient.websocket is socket:
-                recipient.websocket = None
+    def publish_work(status: WorkStatus) -> None:
+        # Called while the worker is paused at a safe boundary.
+        asyncio.run_coroutine_threadsafe(_publish_work(live, status), loop).result()
+
+    game.work.publish = publish_work
+    started_ok = False
+    try:
+        response = await asyncio.to_thread(game.new_game, config)
+        started_ok = True
+    finally:
+        game.work.publish = None
+        game.work.finish(failed=not started_ok or game.mirror_retry is not None)
+        if not started_ok:
+            # A game that failed after its first save is over, never unfinished.
+            if game.trace is not None:
+                with suppress(Exception):
+                    game.close("setup_failed")
+            else:
+                game.release()
+    LIVE_GAMES[game.match_id] = live
+    if isinstance(launch_id, str):
+        LAUNCH_GAMES[launch_id] = game.match_id
+    await _send_reply(live, response, **_launch_metadata(launch_id))
+    return live
 
 
 @app.websocket("/ws/play")
 async def play_socket(websocket: WebSocket) -> None:
-    _cleanup_expired_sessions()
+    _cleanup_expired_games()
     await websocket.accept()
-    attached_table_id: str | None = None
-    attached_viewer_id: str | None = None
+    # The game this connection last took up or started.
+    attached: str | None = None
+    # The game a request is running on: an unexpected failure there ends it.
+    running: str | None = None
     request: Any = None
 
     try:
@@ -4159,90 +3512,55 @@ async def play_socket(websocket: WebSocket) -> None:
                     raise WebSocketDisconnect(code=1006)
                 request = await websocket.receive_json()
             except WebSocketDisconnect:
-                if attached_table_id is not None and attached_viewer_id is not None:
-                    _detach_participant_websocket(
-                        attached_table_id, attached_viewer_id, websocket
-                    )
+                _detach_websocket(attached, websocket)
                 raise
 
-            _cleanup_expired_sessions()
+            _cleanup_expired_games()
             try:
-                if isinstance(request, dict) and request.get("type") in {
-                    "join_table",
-                    "resume",
-                }:
-                    _parse_presentation_cursor(request.get("presentation_cursor"))
-                parsed = _parse_table_request(request)
-                if isinstance(parsed, (JoinTableMessage, ResumeMessage)):
-                    presentation_cursor = _parse_presentation_cursor(
-                        parsed.presentation_cursor
-                    )
-                    if isinstance(parsed, JoinTableMessage):
-                        record, participant = _participant_from_invite(
-                            parsed.table_id, parsed.invite_token
+                parsed = _parse_request(request)
+                if isinstance(parsed, ResumeMessage):
+                    live = await take_up_game(parsed.game)
+                    if attached != parsed.game:
+                        _detach_websocket(attached, websocket)
+                    await _attach_websocket(live, websocket)
+                    attached = parsed.game
+                    if live.lock.locked() and live.published is not None:
+                        await websocket.send_json(
+                            {**live.published, "work": live.game.work.payload()}
                         )
-                    else:
-                        record, participant = _participant_from_resume(
-                            parsed.session_id,
-                            parsed.resume_token,
-                        )
-                    await _attach_participant_websocket(record, participant, websocket)
-                    attached_table_id = record.session_id
-                    attached_viewer_id = participant.viewer_id
-                    if record.lock.locked():
-                        cached = record.published.get(participant.viewer_id)
-                        if cached is not None:
-                            await websocket.send_json(
-                                {
-                                    **cached,
-                                    "work": record.game.work.payload(),
-                                }
-                            )
-                            continue
-                    async with record.lock:
-                        response = (
-                            record.game.current_message(presentation_cursor)
-                            if record.game.obs is not None
-                            else {"type": "table_snapshot"}
-                        )
-                        await _send_table_response(
-                            record, participant, response, broadcast=True
+                        continue
+                    async with live.lock:
+                        await _send_reply(
+                            live, live.game.current_message(parsed.presentation_cursor)
                         )
                     continue
 
-                invite_token: str | None = None
-                if isinstance(parsed, NewGameMessage) and attached_table_id is None:
-                    (
-                        record,
-                        participant,
-                        invite_token,
-                    ) = await _get_or_create_attached_participant(
-                        attached_table_id,
-                        attached_viewer_id,
-                        websocket,
-                    )
-                    attached_table_id = record.session_id
-                    attached_viewer_id = participant.viewer_id
-                else:
-                    if attached_table_id is None or attached_viewer_id is None:
-                        raise ValueError("No active game session. Send new_game first.")
-                    record = SESSION_REGISTRY.get(attached_table_id)
-                    participant = (
-                        None
-                        if record is None
-                        else record.participants.get(attached_viewer_id)
-                    )
-                    if record is None or participant is None:
-                        attached_table_id = None
-                        attached_viewer_id = None
-                        raise ValueError("Session expired. Start a new game.")
+                if isinstance(parsed, (NewGameMessage, RematchMessage)):
+                    try:
+                        live = await _start_game(parsed, websocket)
+                    except sqlite3.Error as exc:
+                        # Nothing started; the game in play is untouched.
+                        raise ValueError(
+                            "Game recording failed; this game may not have been saved."
+                        ) from exc
+                    previous, attached = attached, live.game.match_id
+                    if previous != attached:
+                        # The game left behind stays unfinished and resumable.
+                        _detach_websocket(previous, websocket)
+                        left = LIVE_GAMES.get(previous) if previous else None
+                        if left and left.websocket is None and not left.lock.locked():
+                            evict_game(previous, SESSION_EXPIRED_END_REASON)
+                    continue
 
-                game = record.game
-                if (
-                    isinstance(parsed, ShowAnalysisMessage)
-                    and game.trace is not None
-                    and not game.watch_mode
-                ):
+                if attached is None:
+                    raise ValueError("No active game session. Send new_game first.")
+                # A game dropped from memory while this connection idled is
+                # rebuilt from its record.
+                live = await take_up_game(attached)
+                if live.websocket is not websocket:
+                    await _attach_websocket(live, websocket)
+                game = live.game
+                if isinstance(parsed, ShowAnalysisMessage) and game.trace is not None:
                     # The first admission of a game's setups takes seconds;
                     # make it here, off the game lock, so play goes on while it
                     # runs and `show_analysis` then reads the cached answer.
@@ -4250,88 +3568,69 @@ async def play_socket(websocket: WebSocket) -> None:
                         await asyncio.to_thread(
                             policy_admissions().admitted, game.trace.config.to_rust()
                         )
-                async with record.lock:
+                running = attached
+                async with live.lock:
                     loop = asyncio.get_running_loop()
 
-                    def committed(outcome: dict[str, Any]) -> None:
+                    def committed(
+                        outcome: dict[str, Any], live: LiveGame = live
+                    ) -> None:
                         # Projection and delivery finish at the safe committed
                         # boundary before the worker may mutate the Env again.
                         asyncio.run_coroutine_threadsafe(
-                            _send_table_response(
-                                record, participant, outcome, broadcast=True
-                            ),
-                            loop,
+                            _send_reply(live, outcome), loop
                         ).result()
 
                     def publish_analysis(
-                        message: dict[str, Any],
-                        record: SessionRecord = record,
+                        message: dict[str, Any], live: LiveGame = live
                     ) -> concurrent.futures.Future[bool]:
                         # From the analysis worker: never waits for delivery.
                         return asyncio.run_coroutine_threadsafe(
-                            _send_live_analysis(record, message), loop
+                            _send_live_analysis(live, message), loop
                         )
 
-                    def publish_work(status: WorkStatus) -> None:
+                    def publish_work(status: WorkStatus, live: LiveGame = live) -> None:
                         # Called while the worker is paused at a safe boundary.
                         asyncio.run_coroutine_threadsafe(
-                            _publish_work(record, status), loop
+                            _publish_work(live, status), loop
                         ).result()
 
-                    record.game.work.stage(
+                    game.work.stage(
                         "advance",
-                        record.game.match_id if record.game.obs is not None else None,
-                        record.game.revision if record.game.obs is not None else None,
+                        game.match_id if game.obs is not None else None,
+                        game.revision if game.obs is not None else None,
                     )
-                    status = record.game.work.read()
+                    status = game.work.read()
                     assert status is not None
-                    _cache_table_recovery(record)
-                    await _publish_work(record, status)
-                    record.game.work.publish = publish_work
+                    _cache_recovery(live)
+                    await _publish_work(live, status)
+                    game.work.publish = publish_work
                     failed = True
                     dispatched = False
                     try:
-                        if isinstance(parsed, ShowAnalysisMessage):
-                            response, broadcast = await asyncio.to_thread(
-                                _dispatch_table_request,
-                                record,
-                                participant,
-                                parsed,
-                                committed,
-                                publish_analysis,
-                            )
-                        else:
-                            response, broadcast = await asyncio.to_thread(
-                                _dispatch_table_request,
-                                record,
-                                participant,
-                                parsed,
-                                committed,
-                            )
-                        failed = record.game.mirror_retry is not None
+                        response = await asyncio.to_thread(
+                            _dispatch_request, game, parsed, committed, publish_analysis
+                        )
+                        failed = game.mirror_retry is not None
                         dispatched = True
                     finally:
-                        record.game.work.publish = None
-                        record.game.work.finish(failed=failed)
+                        game.work.publish = None
+                        game.work.finish(failed=failed)
                         if not dispatched:
-                            # Request errors reply only to their sender. End
-                            # the broadcast wait for every other participant.
-                            status = record.game.work.read()
+                            # A refused request has no reply to end the wait.
+                            status = game.work.read()
                             assert status is not None
-                            await _publish_work(record, status)
-                    record.touch()
-                    await _send_table_response(
-                        record,
-                        participant,
-                        response,
-                        broadcast=broadcast,
-                        watcher_invite=invite_token,
-                    )
+                            await _publish_work(live, status)
+                    live.touch()
+                    await _send_reply(live, response)
+                running = None
                 continue
-            except TableDispatchError as exc:
+            except PlayRequestError as exc:
+                running = None
                 await websocket.send_json(_control_error(exc))
                 continue
             except ValueError as exc:
+                running = None
                 await websocket.send_json(_request_error(request, str(exc)))
                 continue
     except WebSocketDisconnect:
@@ -4341,11 +3640,11 @@ async def play_socket(websocket: WebSocket) -> None:
         if isinstance(exc, sqlite3.Error):
             message = "Game recording failed; this game may not have been saved."
         error = _request_error(request, message)
-        if attached_table_id is not None:
-            # The client must neither resume nor relaunch an ended game.
+        if running is not None:
+            # The game broke: it is over, and the client must not resume it.
             error["session_ended"] = True
             try:
-                _drop_session(attached_table_id, end_reason="error")
+                end_game(running, end_reason="error")
             except Exception:
                 logging.getLogger(__name__).exception("Failed to retain stopped game")
                 error["message"] = (
@@ -4407,10 +3706,10 @@ async def get_deck_pools() -> dict[str, Any]:
 @app.get("/api/launch/{launch_id}")
 def get_launch_setup(launch_id: str) -> dict[str, Any]:
     """Return a pre-configured launch setup without exposing server internals."""
-    config = LAUNCH_CONFIGS.get(launch_id)
-    if config is None:
+    launch = LAUNCHES.get(launch_id)
+    if launch is None:
         raise HTTPException(404, "launch_not_found")
-    return deepcopy(config)
+    return deepcopy(launch.config)
 
 
 @app.post("/api/policies/check")
@@ -4436,199 +3735,29 @@ def check_policy_setup(config: dict[str, Any]) -> dict[str, Any]:
     return {"compatible": True, "reason": None, "fit": fit}
 
 
-def _record_owners(tokens: str | None) -> set[str]:
-    return {participant_id(token) for token in (tokens or "").split(",") if token}
-
-
-@app.middleware("http")
-async def authorize_record(
-    request: Request, call_next: Callable[[Request], Awaitable[Response]]
-) -> Response:
-    parts = request.url.path.split("/")
-    if len(parts) >= 4 and parts[1:3] in (["api", "traces"], ["api", "watch"]):
-        store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
-        access = store.access(
-            parts[3],
-            _record_owners(
-                ",".join(
-                    filter(
-                        None,
-                        [
-                            request.headers.get("x-etude-participant-tokens"),
-                            request.headers.get("x-etude-participant-token"),
-                        ],
-                    )
-                )
-            ),
-            request.headers.get("x-etude-player-token"),
-        )
-        request.state.record_access = access
-        # Each reader applies the recording's permitted information projection.
-        # Feedback and every mutation remain participant-only.
-        public_read = request.method == "GET" and (
-            len(parts) == 4
-            or parts[4]
-            in {"decisions", "recording", "positions", "analyses", "numbers"}
-        )
-        if access is not None and not (
-            access["mine"] or (public_read and access["replay"])
-        ):
-            return JSONResponse(
-                {"detail": "participant_credential_required"}, status_code=403
-            )
-    return await call_next(request)
-
-
-@app.get("/api/player")
-async def get_player(x_etude_player_token: str = Header()) -> dict:
-    try:
-        return AttemptStore(trace_store.TRACES_DIR / "play.sqlite").profile(
-            x_etude_player_token
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/api/player")
-async def name_player(
-    payload: dict[str, Any], x_etude_player_token: str = Header()
-) -> dict:
-    try:
-        return AttemptStore(trace_store.TRACES_DIR / "play.sqlite").profile(
-            x_etude_player_token, payload.get("name")
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/traces/{trace_id}/feedback")
-async def record_feedback(
-    trace_id: str,
-    payload: dict[str, Any],
-    x_etude_player_token: str | None = Header(default=None),
-) -> dict[str, bool]:
-    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
-    if store.owner(trace_id) is None:
-        raise HTTPException(status_code=404, detail="attempt_not_found")
-    try:
-        request_id, note = payload.get("request_id"), payload.get("note")
-        if not isinstance(request_id, str) or not isinstance(note, str):
-            raise ValueError("Feedback requires a request id and note.")
-        address = payload.get("decision_address")
-        if address is not None:
-            if not isinstance(address, str):
-                raise ValueError("Invalid decision address.")
-            restore_decision(
-                _load_trace_replay(trace_id),
-                address,
-                trace_store.load_trace(trace_id)["config"].get("human_seat", 0),
-            )
-        author = (
-            store.profile(x_etude_player_token)["id"] if x_etude_player_token else None
-        )
-        store.feedback(
-            trace_id, request_id, note, author_id=author, decision_address=address
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"saved": True}
-
-
-@app.put("/api/play-sessions/{session_id}")
-async def update_play_session(
-    session_id: str,
-    update: SessionSetupUpdate,
-    x_etude_participant_token: str = Header(),
-) -> dict[str, Any]:
-    try:
-        record, participant = _participant_from_resume(
-            update.table_id, x_etude_participant_token
-        )
-        async with record.lock:
-            _authorize_table_request(
-                record,
-                participant,
-                NewGameMessage(type="new_game", grant_revision=update.grant_revision),
-            )
-            owner = participant_id(participant.resume_token)
-            session = record.game.attempt_store.session(session_id, {owner})
-            membership = record.game.attempt_store.session_for_attempt(
-                record.game.match_id
-            )
-            if membership is None or membership["session_id"] != session_id:
-                raise ValueError("Setup belongs to another table.")
-            if update.revision != session["revision"]:
-                raise ValueError("Session setup changed; recover before editing.")
-            parsed = _parse_game_config(
-                continuation_config(session["draft"], update.config, "rematch")
-            )
-            record.game.attempt_store.update_session(
-                session_id, owner, update.revision, setup_draft(parsed)
-            )
-            response = _response_with_participant(
-                {"type": "table_snapshot"}, record, participant
-            )
-            return response["play_session"]
-    except (ValueError, TableDispatchError) as exc:
-        raise HTTPException(409, str(exc)) from exc
-
-
-@app.get("/api/play-sessions/{session_id}")
-def get_play_session(
-    session_id: str,
-    result_offset: int = Query(default=0, ge=0),
-    x_etude_participant_tokens: str | None = Header(default=None),
-) -> dict[str, Any]:
-    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
-    owners = _record_owners(x_etude_participant_tokens)
-    try:
-        rows = store.session_results(session_id, owners, offset=result_offset)
-        return {
-            **store.session(session_id, owners),
-            "results": rows[:100],
-            "next_result_offset": result_offset + 100 if len(rows) > 100 else None,
-            "totals": store.session_totals(session_id, owners),
-        }
-    except ValueError as exc:
-        raise HTTPException(403, str(exc)) from exc
-
-
 @app.get("/api/traces")
 async def list_traces(
     response: Response,
-    x_etude_participant_tokens: str | None = Header(default=None),
-    x_etude_player_token: str | None = Header(default=None),
-    session: str | None = None,
-    scope: str = "all",
     q: str = "",
-    player: str | None = None,
-    other: str | None = None,
+    bot: str | None = None,
     pairing: str | None = None,
-    version: str | None = None,
     deck: str | None = None,
     status: str | None = None,
-    result: str | None = None,
     after: str | None = None,
     before: str | None = None,
     cursor: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
 ) -> list[dict[str, Any]]:
+    """Every game in the traces directory, newest first."""
     store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
     try:
         # One extra row tells the client whether another page exists.
         rows = store.summaries(
-            _record_owners(x_etude_participant_tokens),
-            token=x_etude_player_token,
-            scope=scope,
-            session=session,
             q=q,
-            player=player,
-            other=other,
+            bot=bot,
             pairing=pairing,
-            version=version,
             deck=deck,
             status=status,
-            result=result,
             after=after,
             before=before,
             cursor=cursor,
@@ -4639,11 +3768,7 @@ async def list_traces(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Frozen JSON history has no player identity. Keep it readable and label
     # missing provenance honestly; identity filters cannot match it.
-    if (
-        scope == "all"
-        and not session
-        and not any((player, other, pairing, version, deck, result))
-    ):
+    if not any((bot, pairing, deck)) and status != "active":
         for row in trace_store.list_trace_summaries():
             timestamp = row["timestamp"] or ""
             legacy_status = (
@@ -4667,9 +3792,7 @@ async def list_traces(
                     "players": [],
                     "record_version": 0,
                     "origin": "unknown",
-                    "mine": False,
-                    "replay_available": True,
-                    "feedback": [],
+                    "resumable": False,
                     "revision": None,
                     "ended_at": None,
                 }
@@ -4680,28 +3803,6 @@ async def list_traces(
         response.headers["X-Etude-Next-Cursor"] = page_cursor(page[-1])
     response.headers["Cache-Control"] = "private, no-store"
     return page
-
-
-@app.get("/api/traces/record")
-def get_record(
-    response: Response,
-    x_etude_participant_tokens: str | None = Header(default=None),
-    x_etude_player_token: str | None = Header(default=None),
-) -> dict[str, Any]:
-    """My games' record: wins, losses and draws over completed games against
-    each opponent identity with each pair of decks, with a 95% Wilson interval
-    on the win rate (draws count as games)."""
-    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
-    rows = store.record(
-        _record_owners(x_etude_participant_tokens), x_etude_player_token
-    )
-    response.headers["Cache-Control"] = "private, no-store"
-    return {
-        "rows": [
-            {**row, "interval": wilson_interval(row["wins"], row["games"])}
-            for row in rows
-        ]
-    }
 
 
 def save_game_numbers(
@@ -4754,56 +3855,25 @@ def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
         raise HTTPException(status_code=404, detail="decision_not_found") from exc
 
 
-def _live_record_for_trace(trace_id: str) -> SessionRecord:
-    _cleanup_expired_sessions()
-    matches = [
-        record
-        for record in SESSION_REGISTRY.values()
-        if record.game.trace_id == trace_id
-    ]
-    if len(matches) != 1:
+def _live_game_for_trace(trace_id: str) -> LiveGame:
+    """The game in memory, which holds the Study roots its forks start from."""
+    _cleanup_expired_games()
+    live = LIVE_GAMES.get(trace_id)
+    if live is None:
         raise HTTPException(status_code=409, detail="study_branch_unavailable")
-    record = matches[0]
-    record.touch()
-    return record
+    live.touch()
+    return live
 
 
-def _live_record_for_attempt(attempt_id: str) -> SessionRecord:
-    _cleanup_expired_sessions()
+def _live_game_for_attempt(attempt_id: str) -> LiveGame:
+    _cleanup_expired_games()
     matches = [
-        record
-        for record in SESSION_REGISTRY.values()
-        if record.game.has_study_attempt(attempt_id)
+        live for live in LIVE_GAMES.values() if live.game.has_study_attempt(attempt_id)
     ]
     if len(matches) != 1:
         raise HTTPException(status_code=404, detail="study_attempt_not_found")
-    record = matches[0]
-    record.touch()
-    return record
-
-
-def _rest_participant(
-    record: SessionRecord,
-    participant_token: str | None,
-) -> ParticipantLease:
-    """Authorize one exact participant, including single-player tables."""
-    if not participant_token or not participant_token.isascii():
-        raise HTTPException(status_code=403, detail="participant_credential_required")
-    matches = [
-        participant
-        for participant in record.participants.values()
-        if secrets.compare_digest(participant.resume_token, participant_token)
-    ]
-    if len(matches) != 1:
-        raise HTTPException(status_code=403, detail="participant_credential_invalid")
+    matches[0].touch()
     return matches[0]
-
-
-def _rest_study_owner(record: SessionRecord, participant_token: str | None) -> str:
-    participant = _rest_participant(record, participant_token)
-    if TableCapability.EXPLORE_STUDY not in ROLE_CAPABILITIES[participant.role]:
-        raise HTTPException(status_code=403, detail="participant_forbidden")
-    return participant.viewer_id
 
 
 def _recording_read(trace_id: str) -> tuple["Recording", dict[str, Any]]:
@@ -4863,37 +3933,21 @@ def _played_from_index(payload: dict[str, Any]) -> dict[str, Any] | None:
 @app.get("/api/traces/{trace_id}/recording")
 def get_recording_index(
     trace_id: str,
-    request: Request,
     offset: int = 0,
     limit: int = 200,
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     if offset < 0 or not 1 <= limit <= 200:
         raise HTTPException(400, "invalid_page")
-    _cleanup_expired_sessions()
+    _cleanup_expired_games()
     recording, metadata = _recording_read(trace_id)
     payload = recording.payload
-    producer = next(
-        (
-            record
-            for record in SESSION_REGISTRY.values()
-            if record.game.trace_id == trace_id
-        ),
-        None,
-    )
+    # Study forks and a watched game's next step need the game in memory.
+    producer = LIVE_GAMES.get(trace_id)
     finished = payload.get("end_reason") == "game_over" and bool(
         payload["final_observation"].get("game_over")
     )
-    study_available = False
-    if producer:
-        try:
-            _rest_study_owner(producer, x_etude_participant_token)
-            study_available = True
-        except HTTPException:
-            pass
     available = bool(
-        study_available
-        and producer
+        producer
         and not finished
         and producer.game.watch_mode
         and producer.game.watch_policies is not None
@@ -4930,15 +3984,17 @@ def get_recording_index(
         "revision": metadata.get("revision"),
         "started_at": metadata.get("started_at"),
         "ended_at": metadata.get("ended_at"),
+        # The stored status: a game dropped from memory is still in progress.
         "status": "finished"
         if finished
         else "waiting"
-        if producer and payload.get("end_reason") == "active"
+        if metadata.get("status") == "active" or metadata.get("resumable")
         else "interrupted",
+        "resumable": bool(metadata.get("resumable")),
         "can_produce": available,
         "mirror": _recorded_mirrors(players),
         "mirror_retry": producer.game.mirror_retry if available and producer else None,
-        "can_study": study_available,
+        "can_study": producer is not None,
         "winner": payload.get("winner") if finished else None,
         "players": players,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
@@ -4967,11 +4023,7 @@ def get_recording_index(
             "watch_mirrors": _recorded_mirrors(players),
         }
         if recording.watch
-        and (getattr(request.state, "record_access", None) or {}).get("mine")
         else None,
-        "can_feedback": bool(
-            (getattr(request.state, "record_access", None) or {}).get("mine")
-        ),
     }
 
 
@@ -4982,7 +4034,6 @@ def get_recording_position(
     reveal: bool = False,
     study: bool = False,
     before: int | None = None,
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     recording, _ = _recording_read(trace_id)
     if key not in recording.by_key:
@@ -5162,23 +4213,10 @@ async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")
-async def get_trace_decision(
-    trace_id: str,
-    address: str,
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
+async def get_trace_decision(trace_id: str, address: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
     payload = trace_store.load_trace(trace_id)
     watch_mode = bool(payload["config"].get("watch_players"))
-    if (
-        watch_mode
-        and payload["end_reason"] not in CLOSED_RECORD_ENDINGS
-        and not (
-            payload["end_reason"] == "game_over"
-            and payload["final_observation"]["game_over"]
-        )
-    ):
-        _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
         viewer = (
             int(parse_decision_address(address).viewer)
@@ -5198,21 +4236,15 @@ async def retry_trace_decision(
     trace_id: str,
     address: str,
     payload: dict[str, Any],
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
-    record = _live_record_for_trace(trace_id)
-    owner_viewer_id = _rest_study_owner(record, x_etude_participant_token)
+    live = _live_game_for_trace(trace_id)
     try:
-        kwargs: dict[str, Any] = {}
-        if owner_viewer_id is not None:
-            kwargs["owner_viewer_id"] = owner_viewer_id
-        return record.game.retry_study(
+        return live.game.retry_study(
             trace_id=trace_id,
             replay=replay,
             raw_address=address,
             raw_command=payload.get("command"),
-            **kwargs,
         )
     except InvalidAddressError as exc:
         raise HTTPException(status_code=400, detail="invalid_address") from exc
@@ -5227,14 +4259,10 @@ async def retry_trace_decision(
 
 
 @app.post("/api/study-attempts/{attempt_id}/reveal")
-async def reveal_study_attempt(
-    attempt_id: str,
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
-    record = _live_record_for_attempt(attempt_id)
-    owner_viewer_id = _rest_study_owner(record, x_etude_participant_token)
+async def reveal_study_attempt(attempt_id: str) -> dict[str, Any]:
+    live = _live_game_for_attempt(attempt_id)
     try:
-        return record.game.reveal_study(attempt_id, owner_viewer_id)
+        return live.game.reveal_study(attempt_id)
     except StudyEvidenceUnavailableError as exc:
         raise HTTPException(
             status_code=409,
@@ -5248,15 +4276,13 @@ async def reveal_study_attempt(
 async def preview_study_attempt(
     attempt_id: str,
     payload: dict[str, Any],
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     raw_plan = payload.get("plan")
     if raw_plan not in {"played", "policy", "search"}:
         raise HTTPException(status_code=400, detail="study_plan_invalid")
-    record = _live_record_for_attempt(attempt_id)
-    owner_viewer_id = _rest_study_owner(record, x_etude_participant_token)
+    live = _live_game_for_attempt(attempt_id)
     try:
-        return record.game.preview_study_plan(attempt_id, raw_plan, owner_viewer_id)
+        return live.game.preview_study_plan(attempt_id, raw_plan)
     except StudyEvidenceUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (StudyPlanUnavailableError, StudyCommandUnavailableError) as exc:
@@ -5264,22 +4290,16 @@ async def preview_study_attempt(
 
 
 @app.post("/api/study-attempts/{attempt_id}/return")
-async def return_from_study_attempt(
-    attempt_id: str,
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
-    record = _live_record_for_attempt(attempt_id)
-    owner_viewer_id = _rest_study_owner(record, x_etude_participant_token)
+async def return_from_study_attempt(attempt_id: str) -> dict[str, Any]:
+    live = _live_game_for_attempt(attempt_id)
     try:
-        return record.game.return_from_study(attempt_id, owner_viewer_id)
+        return live.game.return_from_study(attempt_id)
     except StudyAttemptNotFoundError as exc:
         raise HTTPException(status_code=404, detail="study_attempt_not_found") from exc
 
 
 @app.get("/api/traces/{trace_id}")
-async def get_trace(
-    trace_id: str, request: Request, reveal_hidden: bool = False
-) -> dict[str, Any]:
+async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any]:
     try:
         payload = trace_store.load_trace(trace_id)
     except ValueError as exc:
@@ -5289,9 +4309,6 @@ async def get_trace(
 
     payload = trace_store.prepare_trace_payload(payload, reveal_hidden=reveal_hidden)
     payload["id"] = trace_id
-    access = getattr(request.state, "record_access", None)
-    payload["can_feedback"] = bool(access and access["mine"])
-    payload["read_only"] = bool(access and not access["mine"])
     payload.update(
         AttemptStore(trace_store.TRACES_DIR / "play.sqlite").metadata(trace_id)
     )
@@ -5341,67 +4358,46 @@ def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/api/watch/setups/{handle}")
-def start_watch_setup(
-    handle: str,
-    payload: dict[str, Any],
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
+def start_watch_setup(handle: str, payload: dict[str, Any]) -> dict[str, Any]:
     from .watch import WatchRequest, start_setup
 
     try:
-        return start_setup(
-            handle, WatchRequest.model_validate(payload), x_etude_participant_token
-        )
+        return start_setup(handle, WatchRequest.model_validate(payload))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/watch/setups/{handle}")
-def read_watch_setup(
-    handle: str,
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
+def read_watch_setup(handle: str) -> dict[str, Any]:
     from .watch import setup_attempt
 
-    return setup_attempt(handle, x_etude_participant_token).payload()
+    return setup_attempt(handle).payload()
 
 
 @app.post("/api/watch/{trace_id}/step")
-async def advance_bot_watch(
-    trace_id: str,
-    payload: dict[str, Any],
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
-    from .watch import record_for_watch, step_watch
+async def advance_bot_watch(trace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import live_watch, step_watch
 
     revision = payload.get("revision")
     if type(revision) is not int:
         raise HTTPException(400, "revision_required")
-    record = record_for_watch(trace_id, x_etude_participant_token)
-    async with record.lock:
+    live = live_watch(trace_id)
+    async with live.lock:
         try:
             return await asyncio.to_thread(
-                step_watch,
-                trace_id,
-                x_etude_participant_token,
-                revision,
-                payload.get("retry") is True,
+                step_watch, trace_id, revision, payload.get("retry") is True
             )
         except SearchError as exc:
             raise HTTPException(409, {"code": exc.reason, "message": str(exc)}) from exc
         finally:
-            record.game.work.finish(failed=record.game.mirror_retry is not None)
+            live.game.work.finish(failed=live.game.mirror_retry is not None)
 
 
 @app.get("/api/watch/{trace_id}/work")
-def watch_work(
-    trace_id: str,
-    x_etude_participant_token: str | None = Header(default=None),
-) -> dict[str, Any]:
-    from .watch import record_for_watch
+def watch_work(trace_id: str) -> dict[str, Any]:
+    from .watch import live_watch
 
-    record = record_for_watch(trace_id, x_etude_participant_token)
-    return {"work": record.game.work.payload()}
+    return {"work": live_watch(trace_id).game.work.payload()}
 
 
 @app.get("/api/watch/{trace_id}/decisions/{ordinal}")
@@ -5409,14 +4405,13 @@ def inspect_bot_watch(
     trace_id: str,
     ordinal: int,
     reveal: bool = False,
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     from .watch import inspect_watch
 
     if ordinal < -1:
         raise HTTPException(400, "invalid_ordinal")
     try:
-        return inspect_watch(trace_id, ordinal, x_etude_participant_token, reveal)
+        return inspect_watch(trace_id, ordinal, reveal)
     except FileNotFoundError as exc:
         raise HTTPException(404, "watch_not_found") from exc
     except ValueError as exc:
@@ -5467,30 +4462,24 @@ class PaymentPreviewRequest(BaseModel):
     offer_id: int
 
 
-@app.post("/api/sessions/{session_id}/payment-preview")
+@app.post("/api/games/{game_id}/payment-preview")
 async def get_payment_preview(
-    session_id: str,
+    game_id: str,
     payload: PaymentPreviewRequest,
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    record = SESSION_REGISTRY.get(session_id)
-    if record is None:
-        raise HTTPException(404, "session_not_found")
-    async with record.lock:
-        participant = _rest_participant(record, x_etude_participant_token)
-        if (
-            TableCapability.SUBMIT_LIVE_COMMAND
-            not in ROLE_CAPABILITIES[participant.role]
-        ):
-            raise HTTPException(403, "payment_preview_forbidden")
-        game = record.game
+    live = LIVE_GAMES.get(game_id)
+    if live is None:
+        raise HTTPException(404, "game_not_found")
+    async with live.lock:
+        game = live.game
         context = game.published_prompt
         pending = game._pending_decision
         if context is None or pending is None or game.env is None:
             raise HTTPException(409, "payment_preview_stale")
         frame = pending.frame
+        # Only the person's own decision is previewed, never the opponent's.
         if context.viewer != game.human_seat:
-            raise HTTPException(403, "payment_preview_forbidden")
+            raise HTTPException(409, "payment_preview_stale")
         if (
             game.match_id != payload.match_id
             or frame.revision != payload.revision
@@ -5532,11 +4521,10 @@ class CombatPreviewRequest(BaseModel):
     plan: CombatPlan
 
 
-@app.post("/api/sessions/{session_id}/combat-preview")
+@app.post("/api/games/{game_id}/combat-preview")
 async def get_combat_preview(
-    session_id: str,
+    game_id: str,
     payload: CombatPreviewRequest,
-    x_etude_participant_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Preview a whole attack or block without committing any of it.
 
@@ -5544,24 +4532,19 @@ async def get_combat_preview(
     Academy offer ids enumerate the native actions in order
     (`_build_decision_context`), so a step's native action index is its offer.
     """
-    record = SESSION_REGISTRY.get(session_id)
-    if record is None:
-        raise HTTPException(404, "session_not_found")
-    async with record.lock:
-        participant = _rest_participant(record, x_etude_participant_token)
-        if (
-            TableCapability.SUBMIT_LIVE_COMMAND
-            not in ROLE_CAPABILITIES[participant.role]
-        ):
-            raise HTTPException(403, "combat_preview_forbidden")
-        game = record.game
+    live = LIVE_GAMES.get(game_id)
+    if live is None:
+        raise HTTPException(404, "game_not_found")
+    async with live.lock:
+        game = live.game
         context = game.published_prompt
         pending = game._pending_decision
         if context is None or pending is None or game.env is None:
             raise HTTPException(409, "combat_preview_stale")
         frame = pending.frame
+        # Only the person's own decision is previewed, never the opponent's.
         if context.viewer != game.human_seat:
-            raise HTTPException(403, "combat_preview_forbidden")
+            raise HTTPException(409, "combat_preview_stale")
         if (
             game.match_id != payload.match_id
             or frame.revision != payload.revision

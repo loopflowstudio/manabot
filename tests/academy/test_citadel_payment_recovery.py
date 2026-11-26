@@ -47,7 +47,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     seed = 286
     config = {
         "hero_deck": {"Forest": 32, "Tarnished Citadel": 4, "Sol Ring": 4},
@@ -60,7 +60,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
         with client.websocket_connect("/ws/play") as socket:
             socket.send_json({"type": "new_game", "config": config})
             initial = settled_message(socket)
-            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            game = server.LIVE_GAMES[initial["game"]].game
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             casting = False
             # Play real cards until Sol Ring's payment offers the colored ability.
@@ -130,8 +130,7 @@ def test_citadel_color_choice_reconnect_vector_fork_and_stale(
             socket.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                 }
             )
             recovered = ExperienceFrame.model_validate(

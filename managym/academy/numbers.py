@@ -1,4 +1,4 @@
-"""The game in numbers: what each seat of a played game did, and a record.
+"""The game in numbers: what each seat of a played game did.
 
 `game_numbers` re-executes a played game (`record_of`) once and reduces it
 with the engine's own reducers (`managym.statistics.Behaviour` and `Totals`),
@@ -7,11 +7,7 @@ a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) when it
 ends, so lists never re-execute; an unfinished or older game gets its numbers
 the first time they are read (`GET /api/traces/{id}/numbers`), and a step added
 to the game clears them.
-
-`wilson_interval` bounds a win rate for the My games record table.
 """
-
-import math
 
 from pydantic import BaseModel, ConfigDict
 
@@ -98,16 +94,3 @@ def seat_numbers(behaviour: BehaviourRow, totals: TotalsRow) -> SeatNumbers:
         damage_dealt=totals.damage_dealt,
         damage_taken=totals.damage_taken,
     )
-
-
-def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
-    """The Wilson score interval for a win rate (95% by default); draws count
-    as games that are not wins."""
-    if games <= 0:
-        return (0.0, 1.0)
-    rate = wins / games
-    denominator = 1 + z * z / games
-    centre = (rate + z * z / (2 * games)) / denominator
-    half = z * math.sqrt(rate * (1 - rate) / games + z * z / (4 * games * games))
-    half /= denominator
-    return (max(0.0, centre - half), min(1.0, centre + half))

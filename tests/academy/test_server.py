@@ -79,7 +79,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
         "villain_deck": {"Island": 20},
@@ -168,7 +168,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                         "answers",
                     ):
                         assert command[key] == fixture_command[key]
-                    record = next(iter(server.SESSION_REGISTRY.values()))
+                    record = next(iter(server.LIVE_GAMES.values()))
                     live_bundle = {
                         "recovery": record.game.current_recovery("explicit_resync"),
                         "command": command,
@@ -198,11 +198,11 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(
                 assert outcome["update"]["receipt"] == early["update"]["receipt"]
                 frame = outcome["update"]["frame"]
 
-    record = next(iter(server.SESSION_REGISTRY.values()))
+    record = next(iter(server.LIVE_GAMES.values()))
     assert frame["revision"] == len(record.game.trace.events)
     assert frame["revision"] > 4  # policy decisions now own intermediate revisions
     assert frame["projection"]["opponent"]["life"] == 17
-    record = next(iter(server.SESSION_REGISTRY.values()))
+    record = next(iter(server.LIVE_GAMES.values()))
     assert [
         event.action_description
         for event in record.game.trace.events
@@ -236,7 +236,7 @@ def test_protocol_v1_shared_fixture_matches_rust_generated_schema():
 
 def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
         "villain_deck": {"Island": 20},
@@ -299,13 +299,13 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
                 rejected["recovery"]["frame"]["revision"] == current_frame["revision"]
             )
 
-    record = next(iter(server.SESSION_REGISTRY.values()))
+    record = next(iter(server.LIVE_GAMES.values()))
     assert len(record.game.trace.events) == current_frame["revision"]
 
 
 def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     config = {
         "hero_deck": {"Mountain": 1, "Gray Ogre": 1},
@@ -319,8 +319,10 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
             payload = settled_message(websocket)
-            assert isinstance(payload.get("session_id"), str)
-            assert isinstance(payload.get("resume_token"), str)
+            assert isinstance(payload.get("game"), str)
+            assert payload["setup"]["villain_type"] == "passive"
+            assert payload["opponent_label"] == "Passive · scripted"
+            assert not {"session_id", "resume_token", "table"} & set(payload)
 
             max_steps = 300
             while payload["type"] != "game_over":
@@ -356,7 +358,7 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
 
 def test_websocket_rejects_action_without_active_game(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
@@ -368,7 +370,7 @@ def test_websocket_rejects_action_without_active_game(monkeypatch, tmp_path):
 
 def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
@@ -380,8 +382,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
             )
             payload = settled_message(websocket)
             assert payload["type"] == "observation"
-            session_id = payload["session_id"]
-            resume_token = payload["resume_token"]
+            game_id = payload["game"]
             presentation_cursor = payload["recovery"]["presentation_cursor"]
 
             first_action = _pick_action(payload["actions"])
@@ -394,15 +395,13 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
             resumed.send_json(
                 {
                     "type": "resume",
-                    "session_id": session_id,
-                    "resume_token": resume_token,
+                    "game": game_id,
                     "presentation_cursor": presentation_cursor,
                 }
             )
             resumed_payload = settled_message(resumed)
             assert resumed_payload["type"] == "observation"
-            assert resumed_payload["session_id"] == session_id
-            assert resumed_payload["resume_token"] == resume_token
+            assert resumed_payload["game"] == game_id
             assert resumed_payload["recovery"]["reason"] == "reconnect"
             assert (
                 resumed_payload["recovery"]["presentation_cursor"]
@@ -421,7 +420,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
     monkeypatch, tmp_path
 ):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     config = {
         "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
         "villain_deck": {"Island": 20},
@@ -444,7 +443,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
 
         # The authority accepts after the response channel is gone. Discarding
         # this return value models the lost receipt deterministically.
-        record = next(iter(server.SESSION_REGISTRY.values()))
+        record = next(iter(server.LIVE_GAMES.values()))
         accepted = record.game.hero_command(command)
         assert accepted["status"] == "accepted"
         accepted_receipt = accepted["update"]["receipt"]
@@ -454,8 +453,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
             resumed.send_json(
                 {
                     "type": "resume",
-                    "session_id": initial["session_id"],
-                    "resume_token": initial["resume_token"],
+                    "game": initial["game"],
                     "presentation_cursor": cursor,
                 }
             )
@@ -480,15 +478,15 @@ def test_reload_during_slow_command_reads_cached_frame_then_commit(
 ) -> None:
     """A reload reads a safe cached frame without waiting for a mutating worker."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     entered, release = threading.Event(), threading.Event()
-    dispatch = server._dispatch_table_request
+    dispatch = server._dispatch_request
 
     def slow_dispatch(
-        record: Any, participant: Any, request: Any, committed: Any = None
+        game: Any, request: Any, committed: Any, publish_analysis: Any
     ) -> Any:
         if request.type == "command":
-            old_socket = participant.websocket
+            old_socket = server.LIVE_GAMES[game.match_id].websocket
 
             async def lost_transport(message: Any) -> None:
                 raise OSError("client left")
@@ -496,9 +494,9 @@ def test_reload_during_slow_command_reads_cached_frame_then_commit(
             old_socket._send = lost_transport
             entered.set()
             assert release.wait(10)
-        return dispatch(record, participant, request, committed)
+        return dispatch(game, request, committed, publish_analysis)
 
-    monkeypatch.setattr(server, "_dispatch_table_request", slow_dispatch)
+    monkeypatch.setattr(server, "_dispatch_request", slow_dispatch)
     config = {
         "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
         "villain_deck": {"Island": 20},
@@ -520,8 +518,7 @@ def test_reload_during_slow_command_reads_cached_frame_then_commit(
                 resumed.send_json(
                     {
                         "type": "resume",
-                        "session_id": initial["session_id"],
-                        "resume_token": initial["resume_token"],
+                        "game": initial["game"],
                     }
                 )
                 message = settled_message(resumed)
@@ -529,16 +526,16 @@ def test_reload_during_slow_command_reads_cached_frame_then_commit(
                 assert message["work"]["state"] == "running"
                 release.set()
                 committed = settled_message(resumed)
-                record = server.SESSION_REGISTRY[initial["session_id"]]
+                record = server.LIVE_GAMES[initial["game"]]
                 assert committed["update"]["frame"]["revision"] == record.game.revision
                 assert record.game.revision > frame["revision"]
             websocket.close()
-        assert initial["session_id"] in server.SESSION_REGISTRY
+        assert initial["game"] in server.LIVE_GAMES
 
 
 def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
@@ -550,68 +547,71 @@ def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):
                 resumed.send_json(
                     {
                         "type": "resume",
-                        "session_id": payload["session_id"],
-                        "resume_token": payload["resume_token"],
+                        "game": payload["game"],
                         "presentation_cursor": invalid_cursor,
                     }
                 )
                 error_payload = settled_message(resumed)
-                assert error_payload["type"] == "error"
-                assert "unsigned 64-bit integer" in error_payload["message"]
+                assert error_payload == {
+                    "type": "control_error",
+                    "code": "invalid_message",
+                    "message": "Invalid resume message.",
+                }
 
 
-def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):
+def test_websocket_refuses_to_resume_a_game_it_has_no_record_of(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
 
     with TestClient(app) as client:
-        with client.websocket_connect("/ws/play") as websocket:
-            websocket.send_json({"type": "new_game"})
-            payload = settled_message(websocket)
-            session_id = payload["session_id"]
-
         with client.websocket_connect("/ws/play") as resumed:
-            resumed.send_json(
-                {
-                    "type": "resume",
-                    "session_id": session_id,
-                    "resume_token": "not-valid",
-                }
-            )
+            resumed.send_json({"type": "resume", "game": "no-such-game"})
             error_payload = settled_message(resumed)
             assert error_payload["type"] == "error"
-            assert "Invalid resume credentials" in error_payload["message"]
+            assert error_payload["message"].startswith("resume_unavailable")
+    assert not server.LIVE_GAMES
 
 
-def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
+def test_websocket_resumes_a_game_dropped_from_memory(monkeypatch, tmp_path):
+    """Idling out frees the game and ends nothing: named again, on a new
+    connection or by the next request on the old one, it is rebuilt."""
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     monkeypatch.setattr(server, "SESSION_TTL", timedelta(seconds=0))
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
+    config = {"seed": 5, "villain_type": "passive", "auto_pass": False}
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
-            websocket.send_json({"type": "new_game"})
+            websocket.send_json({"type": "new_game", "config": config})
             payload = settled_message(websocket)
-            session_id = payload["session_id"]
-            resume_token = payload["resume_token"]
+            frame = payload["recovery"]["frame"]
+            keep = _offer(frame, action_type="CHOOSE_MODE", label="Keep hand")
+            websocket.send_json(
+                {"type": "command", "command": _command(frame, keep, "keep")}
+            )
+            # The expired game was dropped before this Command and rebuilt for it.
+            kept = settled_message(websocket)
+            assert kept["status"] == "accepted"
+            assert kept["game"] == payload["game"]
 
         with client.websocket_connect("/ws/play") as resumed:
-            resumed.send_json(
-                {
-                    "type": "resume",
-                    "session_id": session_id,
-                    "resume_token": resume_token,
-                }
+            resumed.send_json({"type": "resume", "game": payload["game"]})
+            resumed_payload = settled_message(resumed)
+            assert resumed_payload["type"] == "observation"
+            assert resumed_payload["game"] == payload["game"]
+            assert (
+                resumed_payload["recovery"]["frame"]["frame_hash"]
+                == kept["update"]["frame"]["frame_hash"]
             )
-            error_payload = settled_message(resumed)
-            assert error_payload["type"] == "error"
-            assert "expired" in error_payload["message"].lower()
 
     trace_files = _recorded_traces(tmp_path)
     assert len(trace_files) == 1
-    trace_payload = trace_files[0][1]
-    # Idling out frees the game from memory and ends nothing.
-    assert trace_payload["end_reason"] == "active"
+    assert trace_files[0][1]["end_reason"] == "active"
+    assert [
+        event["action_description"]
+        for event in trace_files[0][1]["events"]
+        if event["actor"] == "hero"
+    ] == ["Keep hand"]
 
 
 def test_wire_message_omits_legacy_action_log(monkeypatch):

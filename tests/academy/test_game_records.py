@@ -55,7 +55,7 @@ def test_mixed_disclosure_record_replays_and_imports(
         assert game.end is not None
         assert replay.stop.status == game.end.status
         imported = import_game(record.model_dump(mode="json", by_alias=True))
-        assert imported["id"] not in server.SESSION_REGISTRY
+        assert imported["id"] not in server.LIVE_GAMES
 
 
 def test_interrupted_record_import_is_closed_and_readable(
@@ -86,14 +86,14 @@ def test_interrupted_record_import_is_closed_and_readable(
     retained = AttemptStore(trace.TRACES_DIR / "play.sqlite").load(imported["id"])
     assert retained["recording_import"]["stop"]["status"] == "interrupted"
     assert "stop" not in retained["config"]["opponent"]
-    assert imported["id"] not in server.SESSION_REGISTRY
-    shown = inspect_watch(imported["id"], 0, imported["token"])
+    assert imported["id"] not in server.LIVE_GAMES
+    shown = inspect_watch(imported["id"], 0)
     assert shown["count"] == 1
     assert shown["players"] == ["0", "1"]
     assert shown["source_kind"] == "training"
     assert shown["outputs"]["value"] == 0.31
     assert shown["winner"] is None
-    assert not server.SESSION_REGISTRY
+    assert imported["id"] not in server.LIVE_GAMES
     # The launcher opens the recording in a browser that holds no credential.
     from fastapi.testclient import TestClient
 
@@ -133,7 +133,7 @@ def test_retained_exposure_receipt_opens_without_export(
     path.write_text(json.dumps(receipt) + "\n")
     imported = import_game(read_games(path)[0]._record)
     assert imported["stop"] == "complete"
-    assert imported["id"] not in server.SESSION_REGISTRY
+    assert imported["id"] not in server.LIVE_GAMES
 
 
 def test_diverged_transition_never_persists_its_consequences(
@@ -158,10 +158,10 @@ def test_diverged_transition_never_persists_its_consequences(
     record.games[0].digests[2] = "edited-next-state"
     imported = import_record(record)
     assert imported["stop"] == "diverged"
-    shown = inspect_watch(imported["id"], 0, imported["token"])
+    shown = inspect_watch(imported["id"], 0)
     assert shown["count"] == 1
     assert shown["winner"] is None
-    assert imported["id"] not in server.SESSION_REGISTRY
+    assert imported["id"] not in server.LIVE_GAMES
 
 
 def test_original_command_import_and_stale_rejection(
@@ -187,7 +187,7 @@ def test_original_command_import_and_stale_rejection(
     record = read_record(path)
     imported = import_record(record)
     assert imported["stop"] == "interrupted"
-    shown = inspect_watch(imported["id"], ordinal, imported["token"])
+    shown = inspect_watch(imported["id"], ordinal)
     assert shown["count"] == ordinal + 1
     assert shown["outputs"]["value"] == 0.5
     retained = server.trace_store.load_trace(imported["id"])
@@ -209,7 +209,7 @@ def test_original_command_import_and_stale_rejection(
         )
         == ordinal
     )
-    assert rejected["id"] not in server.SESSION_REGISTRY
+    assert rejected["id"] not in server.LIVE_GAMES
 
 
 def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ def test_search_outputs_open_without_private_runner_metadata(
     )
     capture.close()
     imported = import_game(read_record(path).model_dump(mode="json", by_alias=True))
-    shown = inspect_watch(imported["id"], 0, imported["token"])
+    shown = inspect_watch(imported["id"], 0)
     assert shown["outputs"]["search_scores"] == [0.25] * count
     assert shown["outputs"]["belief"]["sampled_worlds"] == 2
     assert shown["source_kind"] == "evaluation"

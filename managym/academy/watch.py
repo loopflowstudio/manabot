@@ -34,7 +34,6 @@ from .work import Work
 
 class WatchCreated(TypedDict):
     id: str
-    token: str
     finished: bool
 
 
@@ -118,9 +117,7 @@ def create_watch(
             raise HTTPException(400, detail) from error
         if work is not None:
             work.stage("advance")
-        token = server.secrets.token_urlsafe(32)
         game = server.GameSession(watch_mode=True)
-        game.attempt_owner = server.participant_id(token)
         game.record_players = (
             recorded_players
             if recorded_players is not None
@@ -136,7 +133,6 @@ def create_watch(
             )
             game.watch_policies = (seats[0][0], seats[1][0])
             game._observe_policies()
-            record = server.SessionRecord(game.match_id, token, game)
             assert game.trace is not None
             game.trace.config.opponent = {
                 "name": " vs ".join(player.name for _, player in seats),
@@ -150,16 +146,16 @@ def create_watch(
             raise
         candidates.pop_all()
     game.work.finish()
-    server.SESSION_REGISTRY[game.match_id] = record
-    return {"id": game.match_id, "token": token, "finished": False}
+    server.LIVE_GAMES[game.match_id] = server.LiveGame(game)
+    return {"id": game.match_id, "finished": False}
 
 
 @dataclass
 class WatchSetupAttempt:
-    """One tab-owned start: status reads never load or recreate its policies."""
+    """One start, named by its handle: status reads never load or recreate
+    its policies."""
 
     request: WatchRequest
-    owner: str
     work: Work
     result: WatchCreated | None = None
     error: str | None = None
@@ -179,29 +175,17 @@ _SETUP_LOCK = Lock()
 _SETUP_ATTEMPTS: dict[str, WatchSetupAttempt] = {}
 
 
-def setup_attempt(handle: str, token: str | None) -> WatchSetupAttempt:
+def setup_attempt(handle: str) -> WatchSetupAttempt:
     with _SETUP_LOCK:
         attempt = _SETUP_ATTEMPTS.get(handle)
     if attempt is None:
         raise HTTPException(404, "Watch setup unavailable. Start again explicitly.")
-    _authorize_setup(attempt, token)
     return attempt
 
 
-def _authorize_setup(attempt: WatchSetupAttempt, token: str | None) -> None:
-    if token is None or not server.secrets.compare_digest(
-        attempt.owner, server.participant_id(token)
-    ):
-        raise HTTPException(403, "Watch setup credential required.")
-
-
-def start_setup(
-    handle: str, request: WatchRequest, token: str | None
-) -> dict[str, Any]:
-    # The public attempt ID scopes progress; the separate tab credential never
-    # appears in work metadata, URLs or public recordings.
-    if token is None or not 32 <= len(token) <= 512:
-        raise HTTPException(403, "Watch setup credential required.")
+def start_setup(handle: str, request: WatchRequest) -> dict[str, Any]:
+    """Start the Watch game `handle` names, once: the same request sent again
+    reads its progress."""
     if (
         len(handle) < 32
         or len(handle) > 128
@@ -212,7 +196,6 @@ def start_setup(
     with _SETUP_LOCK:
         previous = _SETUP_ATTEMPTS.get(handle)
         if previous is not None:
-            _authorize_setup(previous, token)
             if previous.request != request:
                 raise HTTPException(
                     409, "Watch setup already binds another configuration."
@@ -232,7 +215,7 @@ def start_setup(
                 del _SETUP_ATTEMPTS[key]
         if sum(item.finished_at is None for item in _SETUP_ATTEMPTS.values()) >= 16:
             raise HTTPException(429, "Watch setup capacity reached. Try again later.")
-        attempt = WatchSetupAttempt(request, server.participant_id(token), Work(handle))
+        attempt = WatchSetupAttempt(request, Work(handle))
         _SETUP_ATTEMPTS[handle] = attempt
     try:
         created = create_watch(request, work=attempt.work)
@@ -262,19 +245,16 @@ def start_setup(
     return attempt.payload()
 
 
-def record_for_watch(trace_id: str, token: str | None) -> server.SessionRecord:
-    record = server._live_record_for_trace(trace_id)
-    server._rest_study_owner(record, token)
-    if not record.game.watch_mode:
+def live_watch(trace_id: str) -> server.LiveGame:
+    """The watched game in memory; one dropped from memory is over."""
+    live = server._live_game_for_trace(trace_id)
+    if not live.game.watch_mode:
         raise HTTPException(409, "not_a_bot_watch")
-    return record
+    return live
 
 
-def step_watch(
-    trace_id: str, token: str | None, expected_revision: int, retry: bool = False
-) -> WatchStep:
-    record = record_for_watch(trace_id, token)
-    game = record.game
+def step_watch(trace_id: str, expected_revision: int, retry: bool = False) -> WatchStep:
+    game = live_watch(trace_id).game
     assert game.env is not None and game.obs is not None
     if expected_revision != game.revision:
         raise HTTPException(409, "stale_watch_revision")
@@ -310,14 +290,7 @@ def step_watch(
     return {"finished": bool(game.obs.game_over), "revision": game.revision}
 
 
-def inspect_watch(
-    trace_id: str, ordinal: int, token: str | None, reveal: bool = False
-) -> dict[str, Any]:
-    access = AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite").access(
-        trace_id, {server.participant_id(token)} if token else set()
-    )
-    if access is not None and not access["replay"]:
-        raise HTTPException(403, "participant_credential_required")
+def inspect_watch(trace_id: str, ordinal: int, reveal: bool = False) -> dict[str, Any]:
     recording, metadata = server._recording_read(trace_id)
     payload = recording.payload
     finished = payload.get("end_reason") == "game_over" and bool(
@@ -329,7 +302,7 @@ def inspect_watch(
         "record_interrupted",
         "record_diverged",
     }
-    record = None if closed else record_for_watch(trace_id, token)
+    live = None if closed else live_watch(trace_id)
     identities = metadata.get("players", [])
     mirrors = server._recorded_mirrors(identities)
     watched = payload["config"].get("watch_players")
@@ -337,8 +310,8 @@ def inspect_watch(
     if ordinal == -1:
         ordinal = max(0, len(replay.decisions) - 1) if replay else 0
     if replay is None or ordinal < 0 or ordinal >= len(replay.decisions):
-        if record is not None and (replay is None or not replay.decisions):
-            pending = record.game.mirror_retry
+        if live is not None and (replay is None or not replay.decisions):
+            pending = live.game.mirror_retry
             raise HTTPException(
                 409,
                 {
@@ -346,7 +319,7 @@ def inspect_watch(
                     "message": pending["message"]
                     if pending
                     else "No decision recorded yet. Continue the pending bot decision explicitly.",
-                    "revision": record.game.revision,
+                    "revision": live.game.revision,
                     "mirror": mirrors,
                 },
             )
@@ -369,7 +342,7 @@ def inspect_watch(
         "winner": payload.get("winner"),
         "players": watched or [identity["name"] for identity in identities],
         "mirror": mirrors,
-        "mirror_retry": record.game.mirror_retry if record is not None else None,
+        "mirror_retry": live.game.mirror_retry if live is not None else None,
         "source_kind": "play"
         if not watched
         else opponent.get(
@@ -431,7 +404,7 @@ def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
             for seat, name in enumerate(game_record["seat_players"])
         ],
     )
-    record = record_for_watch(created["id"], created["token"])
+    record = live_watch(created["id"])
     game = record.game
     try:
         configs = arena.configs
@@ -494,7 +467,7 @@ def import_game(game_record: dict[str, Any]) -> dict[str, Any]:
             "source_sha256": game_record["game_trace_sha256"],
         }
     except Exception:
-        server._drop_session(game.match_id, "import_failed")
+        server.end_game(game.match_id, "import_failed")
         raise
 
 
@@ -530,7 +503,7 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
             for seat, p in enumerate(setups)
         ],
     )
-    session = record_for_watch(created["id"], created["token"]).game
+    session = live_watch(created["id"]).game
     try:
         assert session.trace is not None
         session.env = replay.env
@@ -623,4 +596,4 @@ def import_record(record: "GameRecord") -> dict[str, Any]:
             "stop": stop.status,
         }
     finally:
-        server._drop_session(session.match_id, "record_import_closed")
+        server.end_game(session.match_id, "record_import_closed")

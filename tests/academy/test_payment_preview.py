@@ -37,7 +37,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json(
@@ -57,7 +57,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 }
             )
             initial = settled_message(websocket)
-            record = server.SESSION_REGISTRY[initial["session_id"]]
+            record = server.LIVE_GAMES[initial["game"]]
             frame = _root(record.game)
             assert frame.prompt is not None
             cast = next(
@@ -65,7 +65,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 for offer in frame.offers
                 if offer.label == "Cast Ancestral Recall"
             )
-            endpoint = f"/api/sessions/{record.session_id}/payment-preview"
+            endpoint = f"/api/games/{initial['game']}/payment-preview"
             request = {
                 "match_id": frame.match_id,
                 "revision": frame.revision,
@@ -73,35 +73,13 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 "frame_hash": frame.frame_hash,
                 "offer_id": cast.id,
             }
-            headers = {"x-etude-participant-token": initial["resume_token"]}
-            assert client.post(endpoint, json=request).status_code == 403
-            assert (
-                client.post(
-                    endpoint,
-                    json=request,
-                    headers={"x-etude-participant-token": "wrong"},
-                ).status_code
-                == 403
-            )
-            record.participants["watcher"] = server.ParticipantLease(
-                viewer_id="watcher",
-                resume_token="watcher-test-token",
-                role=server.ViewerRole.WATCHER,
-            )
-            assert (
-                client.post(
-                    endpoint,
-                    json=request,
-                    headers={"x-etude-participant-token": "watcher-test-token"},
-                ).status_code
-                == 403
-            )
-            del record.participants["watcher"]
+            unknown = "/api/games/no-such-game/payment-preview"
+            assert client.post(unknown, json=request).status_code == 404
             assert record.game.env is not None
             before = record.game.env.search_witness_json()
             prompt_count = record.game._next_prompt_id
             decisions = len(record.game.canonical_decisions)
-            response = client.post(endpoint, json=request, headers=headers)
+            response = client.post(endpoint, json=request)
             assert response.status_code == 200, response.text
             preview = response.json()["preview"]
             assert preview["state"] == "exact"
@@ -119,10 +97,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 {"offer_id": -1},
             ):
                 assert (
-                    client.post(
-                        endpoint, json={**request, **change}, headers=headers
-                    ).status_code
-                    == 409
+                    client.post(endpoint, json={**request, **change}).status_code == 409
                 )
             proposed = {
                 source["source"]["id"]["entity"] for source in preview["sources"]
@@ -153,17 +128,13 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
                 "frame_hash": payment.frame_hash,
                 "offer_id": pay.id,
             }
-            plan = client.post(endpoint, json=address, headers=headers).json()[
-                "preview"
-            ]
+            plan = client.post(endpoint, json=address).json()["preview"]
             assert proposed == {s["source"]["id"]["entity"] for s in plan["sources"]}
             paid = choose(payment, pay.id)
             assert {
                 p.id for p in paid.projection.agent.battlefield if p.tapped
             } == proposed
-            assert (
-                client.post(endpoint, json=address, headers=headers).status_code == 409
-            )
+            assert client.post(endpoint, json=address).status_code == 409
 
 
 def _native_preview(env: managym.Env, index: int) -> PaymentPreview:

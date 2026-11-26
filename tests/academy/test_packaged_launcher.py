@@ -95,7 +95,8 @@ def test_cli_bundled_decks_win_over_paths(
 
     def inspect_launch(running: Academy) -> None:
         configs.extend(
-            server._parse_game_config(c) for c in server.LAUNCH_CONFIGS.values()
+            server._parse_game_config(launch.config)
+            for launch in server.LAUNCHES.values()
         )
 
     monkeypatch.setattr(Academy, "wait", inspect_launch)

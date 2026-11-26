@@ -274,7 +274,7 @@ def test_launch_player_accepts_policy_spec_json_paths(
 
         # Two distinct specs sharing a filename must both register without alias collision.
         watched = academy.watch(players=(str(spec_a), str(spec_b)))
-        assert "watch=1" in watched.url
+        assert watched.url.startswith(f"{academy.url}/?watch=1&")
 
         with pytest.raises(launch.AcademyLaunchError) as exc_info:
             academy.new_game(opponent=str(tmp_path / "missing.policy.json"))
