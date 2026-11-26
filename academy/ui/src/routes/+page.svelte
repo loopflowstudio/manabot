@@ -318,8 +318,9 @@
   }
 
   function handleCycleStop(side: StopSide, step: string): void {
+    const hadStop = gameStore.stops[side].includes(step);
     gameStore.cycleStop(side, step);
-    syncStopsToServer();
+    if (gameStore.stops[side].includes(step) !== hadStop) syncStopsToServer();
   }
 
   // A stop set to hold once holds the game for you and is spent when you leave

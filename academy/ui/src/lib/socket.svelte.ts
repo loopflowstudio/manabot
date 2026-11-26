@@ -278,6 +278,7 @@ export class GameSocketController {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
+      gameStore.clearPendingStops();
       if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
@@ -291,6 +292,7 @@ export class GameSocketController {
 
   disconnect(): void {
     this.intentionallyClosed = true;
+    gameStore.clearPendingStops();
     if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -441,7 +443,6 @@ export class GameSocketController {
 
   sendSetStops(): void {
     const stops = gameStore.stops;
-    gameStore.noteStopsSent();
     this.send({
       type: 'set_stops',
       ...(gameStore.table
@@ -536,9 +537,26 @@ export class GameSocketController {
     this.send({ type: 'return_to_live', grant_revision: grantRevision });
   }
 
+  private transmit(message: SharedTableRequest): void {
+    if (
+      message.type === 'set_stops'
+      && message.stops
+      && typeof message.stop_on_stack === 'boolean'
+      && typeof message.auto_pass === 'boolean'
+    ) {
+      gameStore.noteStopsSent({
+        my: message.stops.my,
+        opponent: message.stops.opponent,
+        stop_on_stack: message.stop_on_stack,
+        auto_pass: message.auto_pass,
+      });
+    }
+    this.socket!.send(JSON.stringify(message));
+  }
+
   private send(message: SharedTableRequest): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
       return;
     }
 
@@ -556,7 +574,7 @@ export class GameSocketController {
       if (!message) {
         break;
       }
-      this.socket.send(JSON.stringify(message));
+      this.transmit(message);
     }
   }
 
@@ -677,6 +695,7 @@ export class GameSocketController {
         gameStore.swapError = message.message;
       }
       gameStore.endFastForward();
+      gameStore.clearPendingStops();
       this.clearPendingCommand();
       gameStore.endCommand();
       gameStore.setError(message.message);
@@ -811,6 +830,7 @@ export class GameSocketController {
 
     writeTabValue('academy.continuation', null);
     gameStore.endFastForward();
+    gameStore.clearPendingStops();
     gameStore.endCommand();
     gameStore.newGamePending = false;
     if (gameStore.swapPending) {

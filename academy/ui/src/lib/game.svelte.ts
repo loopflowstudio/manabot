@@ -403,24 +403,28 @@ export class GameStore {
   }
 
   /**
-   * The server echoes its stop config on every frame, and answers each
-   * `set_stops` with one frame, in order. While stop changes are in flight,
-   * an echo that is not the last config sent predates it and is dropped;
-   * after as many echoes as sends the server's config holds again.
+   * The server echoes its stop config on every frame — including frames that
+   * answer an earlier command (`action`, `pass_turn`, `swap_sides`) as well as
+   * `set_stops`. While stop changes are in flight, hold the FIFO queue of sent
+   * configs and drop any frame until every sent config has been echoed in order.
    */
-  private stopsInFlight: { config: string; echoes: number } | null = null;
+  private pendingStops: string[] = [];
 
-  noteStopsSent(): void {
-    this.stopsInFlight = { config: stopsKey(this.stops), echoes: (this.stopsInFlight?.echoes ?? 0) + 1 };
+  noteStopsSent(stops: StopsConfig = this.stops): void {
+    this.pendingStops.push(stopsKey(stops));
+  }
+
+  clearPendingStops(): void {
+    this.pendingStops = [];
   }
 
   applyServerStops(stops: StopsConfig | undefined): void {
     if (!stops) return;
-    const flight = this.stopsInFlight;
-    if (flight) {
-      const settled = stopsKey(stops) === flight.config || flight.echoes <= 1;
-      this.stopsInFlight = settled ? null : { ...flight, echoes: flight.echoes - 1 };
-      if (!settled) return;
+    if (this.pendingStops.length > 0) {
+      if (stopsKey(stops) === this.pendingStops[0]) {
+        this.pendingStops.shift();
+      }
+      if (this.pendingStops.length > 0) return;
     }
     this.updateStops(stops, false);
   }
@@ -566,6 +570,7 @@ export class GameStore {
     this.newGamePending = false;
     this.swapPending = false;
     this.swapError = null;
+    this.pendingStops = [];
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;
@@ -639,6 +644,7 @@ export class GameStore {
     this.commandPending = false;
     this.swapPending = false;
     this.swapError = null;
+    this.pendingStops = [];
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;
