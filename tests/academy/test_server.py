@@ -21,7 +21,11 @@ from managym import experience_projection
 from managym.academy import server, trace as trace_store
 from managym.academy.server import app
 from managym.experience import ProtocolV1ConformanceBundle
-from tests.academy.socket_messages import settled_message
+from tests.academy.socket_messages import (
+    find_offer as _offer,
+    make_command as _command,
+    settled_message,
+)
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(
@@ -53,26 +57,6 @@ def _pick_action(actions: list[dict]) -> int:
             return int(action["index"])
 
     return int(actions[0]["index"])
-
-
-def _command(frame: dict, offer: dict, command_id: str) -> dict:
-    return {
-        "command_id": command_id,
-        "match_id": frame["match_id"],
-        "expected_revision": frame["revision"],
-        "prompt_id": frame["prompt"]["id"],
-        "offer_id": offer["id"],
-        "answers": [],
-    }
-
-
-def _offer(frame: dict, *, action_type: str, label: str | None = None) -> dict:
-    return next(
-        offer
-        for offer in frame["offers"]
-        if offer["action_type"] == action_type
-        and (label is None or offer["label"] == label)
-    )
 
 
 def test_protocol_v1_bolt_and_pass_offers_round_trip(

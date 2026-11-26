@@ -160,8 +160,11 @@ def test_a_database_without_the_disclosure_column_learns_it_from_its_traces(
 def test_a_preview_never_rebuilds_a_game_that_left_memory(traces: Path) -> None:
     address = {"match_id": "m", "revision": 0, "prompt_id": 0, "frame_hash": "h"}
     requests = {
-        "payment": {**address, "offer_id": 0},
-        "combat": {**address, "plan": {"attackers": [], "blocks": []}},
+        ("payment-preview", "payment_preview_stale"): {**address, "offer_id": 0},
+        ("decision-group-preview", "decision_group_preview_stale"): {
+            **address,
+            "plan": {"kind": "declare_attackers", "attackers": []},
+        },
     }
     with TestClient(server.app) as client:
         with client.websocket_connect("/ws/play") as ws:
@@ -169,15 +172,10 @@ def test_a_preview_never_rebuilds_a_game_that_left_memory(traces: Path) -> None:
         server.evict_game(game, "session_expired")
         revision = stored_revision(traces, game)
 
-        for kind, request in requests.items():
-            stale = client.post(f"/api/games/{game}/{kind}-preview", json=request)
-            assert (stale.status_code, stale.json()["detail"]) == (
-                409,
-                f"{kind}_preview_stale",
-            )
-            unknown = client.post(
-                f"/api/games/no-such-game/{kind}-preview", json=request
-            )
+        for (endpoint, stale_code), request in requests.items():
+            stale = client.post(f"/api/games/{game}/{endpoint}", json=request)
+            assert (stale.status_code, stale.json()["detail"]) == (409, stale_code)
+            unknown = client.post(f"/api/games/no-such-game/{endpoint}", json=request)
             assert unknown.status_code == 404
         assert game not in server.LIVE_GAMES
         assert stored_revision(traces, game) == revision

@@ -103,7 +103,7 @@ test('an unfinished game stays in History, replays without a credential and resu
   expect(errors).toEqual([]);
 });
 
-test('a finished game offers Rematch and Swap sides, and its address opens its Replay', async ({ page }, testInfo) => {
+test('a finished game offers Rematch and Swap play/draw, and its address opens its Replay', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -128,7 +128,7 @@ test('a finished game offers Rematch and Swap sides, and its address opens its R
   const second = await gameOnBoard(page);
   await expect(page.getByTestId('game-result')).toHaveCount(0);
   await playToEnd(page);
-  await page.getByRole('button', { name: 'Swap sides', exact: true }).click();
+  await page.getByRole('button', { name: 'Swap play/draw', exact: true }).click();
   await expect(page.locator('main')).not.toHaveAttribute('data-game', second);
   const third = await gameOnBoard(page);
   // The swapped game is the one a reload returns to.

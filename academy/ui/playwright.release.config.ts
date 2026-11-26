@@ -31,7 +31,13 @@ export default defineConfig({
     {
       command: `uv run --active --no-sync python -m uvicorn trigger_order_server:app --app-dir tests/fixtures --host 127.0.0.1 --port ${apiPort}`,
       cwd: repoRoot,
-      env: { ACADEMY_TRACES_DIR: traceDir, ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation', ACADEMY_CARD_ART: 'off' },
+      env: {
+        ACADEMY_TRACES_DIR: traceDir,
+        ACADEMY_PLAY_RECORD_ORIGIN: 'automated_validation',
+        ACADEMY_CARD_ART: 'off',
+        ACADEMY_HOSTED_POLICIES: '0',
+        ACADEMY_HOSTED_POOLS: '0',
+      },
       url: `http://127.0.0.1:${apiPort}/api/traces`,
       reuseExistingServer: false,
       timeout: 180_000,
