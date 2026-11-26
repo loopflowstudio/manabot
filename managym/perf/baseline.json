@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "7d3ac1eb1c30488e4a54b9bb1b0213e44c5f6d55",
-    "date": "2026-11-25",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45532634475",
+    "commit": "b4fde79e8b23b69f191d9eb2a8aa5369d128a756",
+    "date": "2026-11-26",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45727575593",
     "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Battlefield forms, copiable snapshots and persistent ability sources (MTG-420): one effective characteristics projection per permanent costs 4-12% headless step throughput depending on runner CPU; digests unchanged"
+    "reason": "Auto-skip forced dual-land and interchangeable manual mana payments (MTG-439): reduces 512-game steps from 118,559 to 115,941 and changes search/step digests; same-runner search total 164.151s -> 151.023s (-8.0%), worst reply 3.933s -> 3.867s (-1.7%), steps 15,041.0 -> 15,915.5/s (+5.8%)"
   },
   "bench_search": {
-    "worst_s": 3.9820356529999996,
-    "total_s": 163.988,
+    "worst_s": 3.867353257,
+    "total_s": 151.023,
     "seeds": {
       "1": {
-        "worst_s": 3.9820356529999996,
-        "total_s": 52.033968216500014,
-        "digest": 13638875039089371439
+        "worst_s": 3.867353257,
+        "total_s": 69.16968853450001,
+        "digest": 18024496392822331241
       },
       "2": {
-        "worst_s": 3.8323289794999997,
-        "total_s": 63.374016876000006,
-        "digest": 5466143068363283977
+        "worst_s": 2.274743228,
+        "total_s": 44.10604908650001,
+        "digest": 3384997483956805958
       },
       "3": {
-        "worst_s": 3.554504098,
-        "total_s": 48.580169143000006,
-        "digest": 9998925852575961750
+        "worst_s": 3.2385342059999997,
+        "total_s": 37.747104007999994,
+        "digest": 13611476192356854111
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 15227.727781353018,
-    "steps": 118559,
+    "steps_per_s": 15915.505709824669,
+    "steps": 115941,
     "games": 512,
-    "digest": 10601622128491155944
+    "digest": 4186394851247720253
   }
 }

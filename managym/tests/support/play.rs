@@ -327,6 +327,36 @@ pub fn choose_mode(s: &mut Scenario, wanted: usize) {
     s.step_action(index);
 }
 
+/// Follow the published labels through a grouped name or creature-type decision.
+pub fn choose_entry_value(s: &mut Scenario, value: &str) {
+    loop {
+        let frame = s.game().semantic_decision_frame().unwrap();
+        let leaf = frame.offers.iter().position(|offer| {
+            ["Name ", "Choose "]
+                .iter()
+                .any(|prefix| offer.label.strip_prefix(prefix) == Some(value))
+        });
+        if let Some(index) = leaf {
+            s.step_action(index);
+            return;
+        }
+        let group = frame
+            .offers
+            .iter()
+            .position(|offer| {
+                let range = offer
+                    .label
+                    .strip_prefix("Names ")
+                    .or_else(|| offer.label.strip_prefix("Types "));
+                range
+                    .and_then(|r| r.split_once(" through "))
+                    .is_some_and(|(lo, hi)| lo <= value && value <= hi)
+            })
+            .unwrap_or_else(|| panic!("missing {value} in {:?}", frame.offers));
+        s.step_action(group);
+    }
+}
+
 /// Submit a native spending offer matching its public description. A color
 /// predicate must not accidentally select an "Add" offer during production.
 pub fn spend_named(s: &mut Scenario, predicate: impl Fn(&str) -> bool) {

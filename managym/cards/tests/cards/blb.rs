@@ -381,3 +381,77 @@ fn bakersbane_duo_triggers_once_per_listener_at_committed_spell_payment() {
         }
     }
 }
+
+#[test]
+fn three_tree_mascot_changeling_and_once_per_turn_mana() {
+    use crate::support::game::{five_color_unfunded_setup, move_to_hand};
+    use crate::support::inspect::{can_cast, permanent_of};
+    use crate::support::play::{
+        cast_card, choose_entry_value, choose_mode, offers_ability, pass_until, pay_rest, settle,
+    };
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::mana::{Mana, ManaRestriction};
+
+    let mut s = five_color_unfunded_setup(&[
+        "Three Tree Mascot",
+        "Adaptive Automaton",
+        "Secluded Courtyard",
+        "Ballyrush Banneret",
+    ]);
+    s.allow_priority_floats();
+
+    // Ballyrush Banneret discounts Three Tree Mascot by {1} (Kithkin/Soldier via Changeling).
+    s.force_permanent_on_battlefield(0, "Ballyrush Banneret");
+    // Secluded Courtyard naming Elf produces restricted Elf creature-spell / ability mana.
+    let courtyard_card = move_to_hand(&mut s, "Secluded Courtyard");
+    crate::support::play::choose(
+        &mut s,
+        |a| matches!(a, managym::agent::action::Action::PlayLand { object, .. } if *object == courtyard_card),
+    );
+    choose_entry_value(&mut s, "Elf");
+    settle(&mut s);
+    let courtyard = permanent_of(&s, courtyard_card).unwrap();
+
+    // Cast Three Tree Mascot for {1} using Courtyard's Elf-only mana!
+    let mascot_card = move_to_hand(&mut s, "Three Tree Mascot");
+    s.game_mut().state.players[0].mana_pool =
+        Mana::restricted_to(ManaRestriction::only(["Elf"], ["Elf"]), [0, 0, 0, 0, 1, 0]).into();
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, mascot_card));
+    cast_card(&mut s, mascot_card);
+    settle(&mut s);
+    let mascot = permanent_of(&s, mascot_card).unwrap();
+    assert!(s.game().characteristics(mascot).has_subtype("Elf"));
+    assert!(s.game().characteristics(mascot).has_subtype("Kithkin"));
+
+    // Adaptive Automaton naming Elf buffs Three Tree Mascot (+1/+1 -> 3/2).
+    s.set_player_mana_pool(0, "3");
+    let auto = move_to_hand(&mut s, "Adaptive Automaton");
+    cast_card(&mut s, auto);
+    pay_rest(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_entry_value(&mut s, "Elf");
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(mascot).pt(), (3, 2));
+
+    // Mana ability {1}: Add one mana of any color works once per turn.
+    let _ = courtyard;
+    s.set_player_mana_pool(0, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(offers_ability(&mut s, mascot, 0));
+    crate::support::play::activate(&mut s, mascot, 0);
+    choose_mode(&mut s, 0); // White
+    assert_eq!(
+        s.game().state.players[0].mana_pool.unrestricted_colors()[0],
+        1
+    );
+    assert!(!offers_ability(&mut s, mascot, 0));
+
+    // Available again next turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "1");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(offers_ability(&mut s, mascot, 0));
+}

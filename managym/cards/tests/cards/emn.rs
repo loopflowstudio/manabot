@@ -112,3 +112,49 @@ fn cemetery_recruitment_draws_only_for_a_zombie() {
             .any(|object| s.game().state[*object].name == returned));
     }
 }
+
+#[test]
+fn harmless_offering_requires_both_targets_to_remain_legal() {
+    use crate::support::{
+        game::move_card,
+        inspect::{card_of, offered_targets, permanent},
+        play::spend_colorless,
+    };
+    use managym::state::{
+        effect::{Affected, EffectDuration, Modification},
+        game_object::PlayerId,
+        zone::ZoneType,
+    };
+    let mut s = five_color_setup(&["Harmless Offering", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(0, "Island");
+    s.force_permanent_on_battlefield(1, "Forest");
+    cast(&mut s, "Harmless Offering");
+    assert_eq!(offered_targets(&s), [Target::Player(PlayerId(1))]);
+    target_opponent(&mut s);
+    assert_eq!(
+        offered_targets(&s),
+        [Target::Permanent(ogre), Target::Permanent(land)]
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    let mut gone = s.clone();
+    let card = card_of(&gone, ogre);
+    move_card(&mut gone, card, ZoneType::Graveyard);
+    settle(&mut gone);
+    assert_eq!(permanent(&gone, land).controller, PlayerId(0));
+
+    let mut protected = s.clone();
+    protected.game_mut().apply_continuous(
+        None,
+        PlayerId(1),
+        [Affected::Player(PlayerId(1))],
+        Modification::ProtectionFromEverything,
+        EffectDuration::EndOfTurn,
+    );
+    settle(&mut protected);
+    assert_eq!(permanent(&protected, ogre).controller, PlayerId(0));
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).controller, PlayerId(1));
+    assert_eq!(permanent(&s, land).controller, PlayerId(0));
+}

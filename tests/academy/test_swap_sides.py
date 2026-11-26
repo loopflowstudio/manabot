@@ -257,9 +257,11 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
         "hero": start_msg["deck_names"]["villain"],
         "villain": start_msg["deck_names"]["hero"],
     }
-    assert any(
-        entry["actor"] == "system" and entry["text"] == "Swapped sides"
-        for entry in swap_msg.get("log", [])
+    recovery = swap_msg["recovery"]
+    assert recovery["presentation_cursor"] == (
+        recovery["presentation_tail"][0]["seq"]
+        if recovery["presentation_tail"]
+        else game.presentation[1].next_seq
     )
     # When no immediate bot steps ran after the swap, life and seat 1's hand match exactly.
     if len(game.trace.events) == pre_swap_event_count:
@@ -834,9 +836,10 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                 assert early_pilot["frame"]["projection"]["agent"]["player_index"] == 1
                 assert (early_pilot.get("work") or {}).get("state") == "running"
                 assert early_pilot.get("analysis", {}).get("policy", {}).get("sha256") == reader_key
-                assert any(
-                    entry.get("actor") == "system" and entry.get("text") == "Swapped sides"
-                    for entry in early_pilot.get("log", [])
+                early_tail = early_pilot["recovery"]["presentation_tail"]
+                early_cursor = early_pilot["recovery"]["presentation_cursor"]
+                assert [event["seq"] for event in early_tail] == list(
+                    range(early_cursor, early_cursor + len(early_tail))
                 )
                 assert early_watcher["type"] == "observation"
                 assert early_watcher["table"]["access"]["identity"]["rules_viewer"] == 1
@@ -849,9 +852,9 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                 assert settled_pilot["type"] in {"observation", "game_over"}
                 assert (settled_pilot.get("work") or {}).get("state") != "running"
                 assert settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1
-                assert not any(
-                    entry.get("text") == "Swapped sides"
-                    for entry in settled_pilot.get("log", [])
+                assert (
+                    settled_pilot["recovery"]["presentation_cursor"]
+                    >= early_cursor + len(early_tail)
                 )
                 assert settled_watcher["type"] in {"observation", "game_over"}
                 assert (settled_watcher.get("work") or {}).get("state") != "running"

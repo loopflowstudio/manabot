@@ -23,7 +23,7 @@ fn pyromancers_goggles_copies_a_red_instant_its_mana_paid_for() {
     use crate::support::{
         game::{five_color_unfunded_setup, force_new_card_in_hand},
         inspect::card_of,
-        play::{cast_card, pay_rest, settle, tap_for_mana, target_opponent},
+        play::{cast_card, settle, tap_for_mana, target_opponent},
     };
     use managym::state::{
         game_object::PlayerId, mana::SpendEffect, player::ManaPayment, stack_object::StackObject,
@@ -42,12 +42,6 @@ fn pyromancers_goggles_copies_a_red_instant_its_mana_paid_for() {
         }
         cast_card(&mut s, bolt);
         target_opponent(&mut s);
-        if !auto && !floated {
-            tap_for_mana(&mut s, goggles);
-        }
-        if s.game().state.stack_objects.is_empty() {
-            pay_rest(&mut s);
-        }
         let case = format!("auto={auto} floated={floated}");
         // The trigger is the Goggles's, above the spell it will copy.
         let [StackObject::Spell(spell), StackObject::TriggeredAbility(trigger)] =
@@ -100,7 +94,7 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         }
         let reversal = force_new_card_in_hand(&mut s, 0, "Dramatic Reversal");
         cast_card(&mut s, reversal);
-        if !auto {
+        if !auto && s.game().state.stack_objects.is_empty() {
             tap_for_mana(&mut s, goggles);
             if s.game().state.stack_objects.is_empty() {
                 pay_rest(&mut s);
@@ -378,4 +372,179 @@ fn dwynens_elite_makes_an_elf_warrior_with_another_elf() {
     assert!(s.battlefield_permanents_named(0, "Elf Warrior").is_empty());
     enter_and_settle(&mut s, "Dwynen's Elite");
     assert_eq!(s.battlefield_permanents_named(0, "Elf Warrior").len(), 1);
+}
+
+/// Each offered prefix must extend to an optimum. With three attackers and
+/// two blockers every pair of distinct attackers is a possible declaration.
+#[test]
+fn joraga_invocation_offers_every_maximal_declaration() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{cast, choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+    };
+    let mut s = five_color_setup(&["Joraga Invocation", "Gray Ogre", "Vampire Soulcaller"]);
+    for _ in 0..3 {
+        let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        clear_summoning_sickness(&mut s, a);
+    }
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    let vampire = s.force_permanent_on_battlefield(1, "Vampire Soulcaller");
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    let attackers = s.battlefield_permanents_named(0, "Gray Ogre");
+    for &a in &attackers {
+        assert_eq!(s.game().characteristics(a).pt(), (5, 5));
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |action| {
+            matches!(action, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    assert_eq!(s.action_space().actions.len(), 3);
+    for first in &attackers {
+        let mut line = s.clone();
+        choose(
+            &mut line,
+            |a| matches!(a, Action::DeclareBlocker {attacker: Some(id), blocker,..} if id == first && *blocker != vampire),
+        );
+        assert_eq!(line.action_space().actions.len(), 2);
+        for second in attackers.iter().filter(|&id| id != first) {
+            let mut done = line.clone();
+            choose(
+                &mut done,
+                |a| matches!(a, Action::DeclareBlocker {attacker: Some(id), blocker,..} if id == second && *blocker != vampire),
+            );
+            assert_ne!(done.action_space().kind, ActionSpaceKind::DeclareBlocker);
+            let blocks = &done
+                .game()
+                .state
+                .combat
+                .as_ref()
+                .unwrap()
+                .attacker_to_blockers;
+            assert_eq!((blocks[first].len(), blocks[second].len()), (1, 1));
+        }
+    }
+}
+
+/// The Spider can block either attacker, but the Ogre can block only the Ogre.
+/// A lure on the ground attacker makes piling both blockers onto it equally good.
+#[test]
+fn joraga_invocation_counts_overlapping_lure_and_flying_requirements() {
+    use crate::support::{
+        game::{clear_summoning_sickness, until_end_of_turn},
+        play::{cast, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::effect::Modification,
+    };
+    let mut s = five_color_setup(&[
+        "Joraga Invocation",
+        "Wind Drake",
+        "Gray Ogre",
+        "Giant Spider",
+    ]);
+    let flier = s.force_permanent_on_battlefield(0, "Wind Drake");
+    let ground = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    for a in [flier, ground] {
+        clear_summoning_sickness(&mut s, a);
+    }
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let spider = s.force_permanent_on_battlefield(1, "Giant Spider");
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    for lure in [false, true] {
+        let mut line = s.clone();
+        if lure {
+            until_end_of_turn(&mut line, ground, Modification::MustBeBlockedByAllAble);
+        }
+        line.advance_to_active_step(0, StepKind::DeclareAttackers);
+        while line.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            line.declare_attack();
+        }
+        line.advance_to_active_step(0, StepKind::DeclareBlockers);
+        // In either declaration order the ground blocker has one assignment.
+        while line.action_space().kind == ActionSpaceKind::DeclareBlocker {
+            let actions = &line.action_space().actions;
+            if matches!(actions[0],Action::DeclareBlocker {blocker,..} if blocker==spider) {
+                assert!(actions.iter().any(
+                    |a| matches!(a,Action::DeclareBlocker{attacker:Some(id),..} if *id==flier)
+                ));
+                assert_eq!(
+                    actions.iter().any(
+                        |a| matches!(a,Action::DeclareBlocker{attacker:Some(id),..} if *id==ground)
+                    ),
+                    lure
+                );
+                assert_eq!(actions.len(), 1 + usize::from(lure));
+            } else {
+                assert!(
+                    matches!(actions.as_slice(), [Action::DeclareBlocker{attacker:Some(id),..}] if *id==ground)
+                );
+            }
+            line.step_action(0);
+        }
+    }
+}
+
+#[test]
+fn dwynen_counts_attacking_elves_including_a_changeling() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with_group, pass_until, settle},
+    };
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&["Dwynen, Gilt-Leaf Daen", "Taurean Mauler", "Llanowar Elves"]);
+    let dwynen = s.force_permanent_on_battlefield(0, "Dwynen, Gilt-Leaf Daen");
+    let mauler = s.force_permanent_on_battlefield(0, "Taurean Mauler");
+    s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    assert_eq!(s.game().characteristics(mauler).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(dwynen).pt(), (3, 4));
+    for id in [dwynen, mauler] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with_group(&mut s, &[dwynen, mauler]);
+    settle(&mut s);
+    s.assert_life(0, 22);
+}
+
+#[test]
+fn joraga_invocation_requires_crystal_barricade_to_block() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, zone_of},
+        play::{attack_with, cast, settle},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Joraga Invocation", "Gray Ogre", "Crystal Barricade"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wall = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    let card = card_of(&s, wall);
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    clear_summoning_sickness(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    assert!(
+        matches!(s.action_space().actions.as_slice(), [Action::DeclareBlocker {
+        blocker, attacker: Some(attacker), ..
+    }] if *blocker == wall && *attacker == ogre)
+    );
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 20);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
 }

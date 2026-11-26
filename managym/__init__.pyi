@@ -338,6 +338,9 @@ class Env:
     def permanent_details_json(self, viewer: int) -> str: ...
     def decision_context_json(self, viewer: int) -> str: ...
     def decision_offer_subjects_json(self, viewer: int) -> str: ...
+    def enable_presentation(self) -> None: ...
+    def presentation_facts_json(self, viewer: int) -> str: ...
+    def take_presentation_positions(self) -> list[Env]: ...
     def presentation_subjects_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
     def semantic_viewer_state_hash(self, viewer: int) -> str: ...
@@ -962,6 +965,7 @@ class Keywords:
     menace: bool
     hexproof: bool
     indestructible: bool
+    changeling: bool
 
 class Player:
     player_index: int
@@ -982,6 +986,7 @@ class Player:
     remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
     counters: dict[str, int]
+    hexproof: bool
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
@@ -1028,9 +1033,10 @@ class RestrictedMana:
     mana: tuple[int, int, int, int, int, int]
 
 class PooledManaClass:
-    """One pooled class with a spend effect or combat expiry."""
+    """One pooled class with a spend effect or non-step expiry."""
 
     combat: bool
+    expiry: str
     restriction: str | None
     effect: str | None
     mana: tuple[int, int, int, int, int, int]
@@ -1110,6 +1116,8 @@ class Card:
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
+    # A graveyard card put there from any zone this turn (input v11).
+    put_into_graveyard_this_turn: bool
     # Counters on the card off the battlefield ("with a stash counter on it").
     counters: dict[str, int]
 
@@ -1192,10 +1200,13 @@ class Permanent:
     has_exile_link: bool
     exile_if_dies_this_turn: bool
     attacking: bool
+    blocked: bool
+    entry_controller_id: int | None
     first_strike_participant: bool
     exhausted_abilities: int
     once_each_turn_used: int
     granted_firebending: int
+    chosen: str | None
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
@@ -1208,6 +1219,8 @@ class Permanent:
     creature_types: List[str] | None
     is_granted_land: bool
     blocking: int | None
+    hexproof_from: list[str]
+    protection_from: list[str]
     abilities_lost: bool
     # Face down (CR 708.2); a face-up copy of a manifest is nameless, not face down.
     face_down: bool

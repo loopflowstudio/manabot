@@ -182,7 +182,7 @@ fn encoded_to_dict<'py>(
         &encoded.opponent_player,
         &[1, config.player_dim()],
     )?;
-    let cards = [config.max_cards_per_player, enc::CARD_DIM];
+    let cards = [config.max_cards_per_player, config.card_dim()];
     put("agent_cards", &encoded.agent_cards, &cards)?;
     put("opponent_cards", &encoded.opponent_cards, &cards)?;
     let permanents = [config.max_permanents_per_player, config.permanent_dim()];
@@ -1150,6 +1150,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
+    pub hexproof: bool,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1335,14 +1337,16 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class with a spend effect or combat expiry: its qualifiers,
-/// amounts by W/U/B/R/G/C and learning-token program.
+/// Pooled mana of one class with a spend effect or non-step expiry: its
+/// qualifiers, amounts by W/U/B/R/G/C and learning-token program.
 #[cfg(feature = "python")]
 #[pyclass(name = "PooledManaClass")]
 #[derive(Clone)]
 pub struct PyPooledManaClass {
     #[pyo3(get)]
     pub combat: bool,
+    #[pyo3(get)]
+    pub expiry: String,
     #[pyo3(get)]
     pub restriction: Option<String>,
     #[pyo3(get)]
@@ -1358,6 +1362,7 @@ impl From<PooledManaClassData> for PyPooledManaClass {
     fn from(value: PooledManaClassData) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1371,6 +1376,7 @@ impl From<PyPooledManaClass> for PooledManaClassData {
     fn from(value: PyPooledManaClass) -> Self {
         Self {
             combat: value.combat,
+            expiry: value.expiry,
             restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
@@ -1426,6 +1432,7 @@ impl From<PlayerData> for PyPlayer {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1471,6 +1478,7 @@ impl From<PyPlayer> for PlayerData {
             spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
+            hexproof: value.hexproof,
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1636,6 +1644,8 @@ pub struct PyKeywords {
     pub hexproof: bool,
     #[pyo3(get, set)]
     pub indestructible: bool,
+    #[pyo3(get, set)]
+    pub changeling: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1656,6 +1666,7 @@ impl From<KeywordData> for PyKeywords {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -2030,6 +2041,14 @@ impl PyCard {
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
     }
+    #[getter]
+    fn put_into_graveyard_this_turn(&self) -> bool {
+        self.data.put_into_graveyard_this_turn
+    }
+    #[setter]
+    fn set_put_into_graveyard_this_turn(&mut self, value: bool) {
+        self.data.put_into_graveyard_this_turn = value;
+    }
     /// Counters on the card off the battlefield, by kind name.
     #[getter]
     fn counters(&self) -> BTreeMap<String, i32> {
@@ -2174,6 +2193,7 @@ impl From<PyKeywords> for KeywordData {
             menace: value.menace,
             hexproof: value.hexproof,
             indestructible: value.indestructible,
+            changeling: value.changeling,
         }
     }
 }
@@ -2326,6 +2346,14 @@ impl PyPermanent {
         self.data.exile_if_dies_this_turn = value;
     }
     #[getter]
+    fn blocked(&self) -> bool {
+        self.data.blocked
+    }
+    #[getter]
+    fn entry_controller_id(&self) -> Option<i32> {
+        self.data.entry_controller_id
+    }
+    #[getter]
     fn first_strike_participant(&self) -> bool {
         self.data.first_strike_participant
     }
@@ -2360,6 +2388,15 @@ impl PyPermanent {
     #[setter]
     fn set_granted_firebending(&mut self, value: i32) {
         self.data.granted_firebending = value;
+    }
+    #[getter]
+    fn chosen(&self) -> Option<String> {
+        use crate::state::permanent::EntryChoice;
+        self.data.chosen.as_ref().map(|choice| match choice {
+            EntryChoice::Color(c) => format!("color {c:?}"),
+            EntryChoice::CreatureType(s) => format!("creature type {s}"),
+            EntryChoice::CardName(s) => format!("card name {s}"),
+        })
     }
     #[getter]
     fn temp_subtypes(&self) -> Vec<String> {
@@ -2427,6 +2464,14 @@ impl PyPermanent {
     #[setter]
     fn set_blocking(&mut self, value: Option<i32>) {
         self.data.blocking = value;
+    }
+    #[getter]
+    fn hexproof_from(&self) -> Vec<String> {
+        self.data.hexproof_from.clone()
+    }
+    #[getter]
+    fn protection_from(&self) -> Vec<String> {
+        self.data.protection_from.clone()
     }
     #[getter]
     fn abilities_lost(&self) -> bool {
@@ -4492,6 +4537,45 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let frame = env.semantic_decision_frame().map_err(map_agent_err)?;
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Tell this game's facts from now on (Academy); see
+    /// `managym/src/flow/presentation.rs`.
+    fn enable_presentation(&self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_presentation()
+            .map_err(map_agent_err)
+    }
+
+    /// Read this viewer's committed lines without consuming the step.
+    fn presentation_facts_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let facts = env.presentation_facts(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&facts).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Clear the step and take its boards after reading both viewers.
+    fn take_presentation_positions(&self) -> PyResult<Vec<PyEnv>> {
+        let positions = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .take_presentation_positions()
+            .map_err(map_agent_err)?;
+        let positions = positions
+            .into_iter()
+            .map(|env| PyEnv {
+                inner: Arc::new(Mutex::new(env)),
+                selected_guard: false,
+                prepared_lease: None,
+            })
+            .collect();
+        Ok(positions)
     }
 
     /// Public event identities used to explain a committed transition.

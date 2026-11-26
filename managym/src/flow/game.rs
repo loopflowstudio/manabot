@@ -449,6 +449,11 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
+    /// CR 601.2d follows target selection and precedes determining the cost.
+    DivideAmongTargets {
+        player: PlayerId,
+        spell: Box<crate::flow::payment::AnnouncedSpell>,
+    },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
@@ -749,18 +754,6 @@ impl TrackedState {
         &mut self.state.players[player.0].mana_pool
     }
 
-    /// The ordinary and until-end-of-combat pools together.
-    pub(crate) fn mana_pools_mut(&mut self, player: PlayerId) -> (&mut ManaPool, &mut ManaPool) {
-        self.revisions.mana_pools += 1;
-        let player = &mut self.state.players[player.0];
-        (&mut player.mana_pool, &mut player.combat_mana_pool)
-    }
-
-    pub(crate) fn combat_mana_pool_mut(&mut self, player: PlayerId) -> &mut ManaPool {
-        self.revisions.mana_pools += 1;
-        &mut self.state.players[player.0].combat_mana_pool
-    }
-
     /// Name the stack appearance of the cast `player` recorded last. The
     /// cast was recorded (through `DerefMut`) before its spell moved, so
     /// derivations already saw it; only the entry's generation changes here,
@@ -850,6 +843,9 @@ pub struct Game {
         std::collections::BTreeMap<usize, crate::flow::card_capture::CardSnapshot>,
     pub(crate) capture_drawing: Option<ObjectId>,
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
+    /// Academy's told facts; like `statistics`, omitted by search clones,
+    /// kept by rollback snapshots, never hashed.
+    pub(crate) presentation: Option<Box<crate::flow::presentation::PresentationSink>>,
     pub state: TrackedState,
     /// Characteristics, static sources and trigger sources derived from
     /// `state` at its current revisions; cloned with it (its `Arc`s are
@@ -929,6 +925,7 @@ impl Clone for Game {
             skipped_priority_passes: self.skipped_priority_passes,
             card_capture: None,
             statistics: None,
+            presentation: None,
             capture_drawing: None,
             capture_originals: Default::default(),
         }

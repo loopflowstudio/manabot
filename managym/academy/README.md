@@ -33,9 +33,9 @@ pending choice with the same legal offers and permitted information.
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
   authoritative game loop, viewer-safe observation serialization
-- **`presentation.py`**: semantic presentation events (combat, turn
-  transitions, spell sequences, land plays, discards and reveals) derived from engine
-  events
+- **`presentation.py`**: per-viewer semantic presentation projection (moves,
+  consequences, causes, rules, and viewer-safe per-event labels) derived from
+  the engine's unhashed presentation sink
 - **`curated_pack.py`**: the frozen curated matchup asset pack
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
 - **`study_branch.py`**: source-bound historical forks, native structured
@@ -150,7 +150,7 @@ engine resolves sole legal actions for either seat, so no forced prompt reaches
 a person or a policy. Turn off **Auto-pass outside stops** to enter **Full
 control** and surface every priority window that offers a real choice
 (including empty combat and mana-only floats). Priority stop/F6 automation retains its
-Commands and is marked **auto** in the move list; traces from before native
+Commands and is marked **auto** in the history; traces from before native
 skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
@@ -192,14 +192,20 @@ offer on a retained isolated root, then **Return to recorded decision** restores
 its original address/frame/Command; **Return to live** is a separate destination.
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
-After resolving a spell, open **History and settings** to read its recorded
-consequences by turn. Earlier/later pages and **Latest** let you read older
-events without being pulled away by incoming or recovered rows. Gaps appear
-inline and turn context stays unknown until the next recorded turn change. Narration can be paused,
-accelerated or skipped while the pending choice remains usable. Reloaded active
-games label unavailable earlier history; older recordings without event data say
-**Consequences not recorded**. See
-[reading consequences and controlling narration](../../docs/academy.md#reading-consequences-and-controlling-narration)
+The rail's **History** lists everything that happened, in order: each move
+with what followed from it indented beneath, and the rule that did it ("died ·
+lethal damage"). Select a line, or step with ← and →, to see the board as it
+was after it; Esc or Space returns to now without acting while the rail's
+pending choice stays live. After a move (yours or the opponent's) the board walks its unread board stops
+one kept board at a time (lines noted inside one whole-state boundary,
+including simultaneous rules events or effects of one resolution, share a stop)
+with a caption, pace control and scrubber under the board (plus a breakdown
+table for combats with three or more creatures); clicking a tick or resting on
+the caption holds, and **Replay turn** replays the turn. Reloaded active games keep the lines with their card names intact
+and say **Board not kept for this step** for earlier ones; Play recordings retain
+per-line `boards` patches for Review (Watch stores none), and recordings made before moves were
+recorded as events read as a flat list. See
+[reading the history](../../docs/academy.md#reading-the-history)
 for controls, exact-subject inspection and Replay/Study behavior.
 
 Long action lists have an optional **Find an action** filter. See the

@@ -154,6 +154,7 @@ fn vanille() -> CardDefinition {
                         Effect::SelectCards {
                             from: ObjectSelector::Zone(ZoneType::Graveyard),
                             predicate: CardPredicate::permanent(),
+                            max_mana_value: None,
                             min: 1,
                             max: 1.into(),
                             effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -260,7 +261,10 @@ fn esper_origins() -> CardDefinition {
                 Effect::Surveil { count: 2 },
                 Effect::gain_life(2),
                 Effect::If {
-                    condition: Condition::CastFromGraveyard,
+                    condition: Condition::CastFrom {
+                        zone: Some(ZoneType::Graveyard),
+                        owner: None,
+                    },
                     then: Effect::exile_and_return_transformed(
                         Some(PlayerSelector::Owner),
                         Some(CounterKind::Finality),

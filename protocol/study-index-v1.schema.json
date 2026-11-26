@@ -1485,6 +1485,9 @@
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "blocked": {
+          "type": "boolean"
+        },
         "blocking": {
           "description": "The attacking permanent this one blocks.",
           "type": [
@@ -1493,6 +1496,12 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "chosen": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "combat_damage_to_players": {
           "type": "array",
@@ -1565,6 +1574,15 @@
           "description": "It entered the battlefield during this turn.",
           "type": "boolean"
         },
+        "entry_controller_id": {
+          "description": "Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
           "type": "integer",
@@ -1586,6 +1604,12 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "hexproof_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "id": {
           "type": "integer",
@@ -1640,6 +1664,12 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "protection_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "restrictions": {
           "type": "array",
@@ -1781,6 +1811,9 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "hexproof": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer",
@@ -2275,6 +2308,9 @@
             "string",
             "null"
           ]
+        },
+        "expiry": {
+          "type": "string"
         },
         "mana": {
           "type": "array",

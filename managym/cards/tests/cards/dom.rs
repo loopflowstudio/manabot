@@ -121,3 +121,156 @@ fn foundations_5e_adamant_will() {
     assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
     assert_eq!(keywords(&s, ogre), Keywords::default());
 }
+
+#[test]
+fn grow_from_the_ashes_fetches_one_or_two_untapped_basics_when_kicked() {
+    use crate::support::{
+        inspect::{library_card, permanent_of, tapped},
+        play::{cast, choose, select_card},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+
+    for kicked in [false, true] {
+        let mut s = five_color_setup(&["Grow from the Ashes"]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        cast(&mut s, "Grow from the Ashes");
+        if kicked {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let first = library_card(&s, 0, "Forest");
+        select_card(&mut s, first);
+        let second = if kicked {
+            let island = library_card(&s, 0, "Island");
+            select_card(&mut s, island);
+            Some(island)
+        } else {
+            None
+        };
+        settle(&mut s);
+        assert!(!tapped(&s, permanent_of(&s, first).unwrap()));
+        if let Some(island) = second {
+            assert!(!tapped(&s, permanent_of(&s, island).unwrap()));
+        }
+    }
+}
+
+#[test]
+fn knights_restrict_opposing_sources_and_count_either_battlefield() {
+    use crate::support::{game::five_color_setup, inspect::offered_targets, play::cast};
+    use managym::state::game_object::Target;
+    for (spell, protected, other) in [
+        ("Stab", "Knight of Grace", "Knight of Malice"),
+        ("Luminous Rebuke", "Knight of Malice", "Knight of Grace"),
+    ] {
+        let mut s = five_color_setup(&[spell, protected, other]);
+        let theirs = s.force_permanent_on_battlefield(1, protected);
+        assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
+        let mine = s.force_permanent_on_battlefield(0, protected);
+        let other = s.force_permanent_on_battlefield(0, other);
+        assert_eq!(s.game().characteristics(theirs).pt(), (3, 2));
+        assert_eq!(s.game().characteristics(other).pt(), (3, 2));
+        cast(&mut s, spell);
+        let targets = offered_targets(&s);
+        assert!(!targets.contains(&Target::Permanent(theirs)));
+        assert!(targets.contains(&Target::Permanent(mine)));
+        assert!(targets.contains(&Target::Permanent(other)));
+        let view = managym::agent::observation::Observation::for_player(
+            s.game(),
+            managym::state::game_object::PlayerId(0),
+        );
+        let quality = if spell == "Stab" { "black" } else { "white" };
+        assert_eq!(view.opponent_permanents[0].hexproof_from, [quality]);
+    }
+}
+
+#[test]
+fn knight_checks_activated_source_colors_on_the_battlefield_and_after_sacrifice() {
+    use crate::support::{
+        game::{five_color_setup, until_end_of_turn},
+        inspect::{offered_targets, permanent},
+        play::{activate, settle},
+    };
+    use managym::state::{
+        card::{SourceQuality, StaticAbility},
+        effect::Modification,
+        game_object::Target,
+        mana::Color,
+    };
+    let mut s = five_color_setup(&["Fanatical Firebrand", "Knight of Grace", "Gray Ogre"]);
+    let firebrand = s.force_permanent_on_battlefield(0, "Fanatical Firebrand");
+    let knight = s.force_permanent_on_battlefield(1, "Knight of Grace");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        firebrand,
+        Modification::SetColors([Color::Black].into()),
+    );
+    activate(&mut s, firebrand, 0);
+    assert!(!offered_targets(&s).contains(&Target::Permanent(knight)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.game().state.permanents[firebrand].is_none());
+    let mut unprotected = s.clone();
+    settle(&mut unprotected);
+    assert_eq!(permanent(&unprotected, ogre).damage, 1);
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::GrantStatic(Box::new(StaticAbility::HexproofFrom(SourceQuality::Color(
+            Color::Black,
+        )))),
+    );
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).damage, 0);
+}
+
+#[test]
+fn knights_check_the_announced_omen_face_and_live_spell_on_resolution() {
+    use crate::support::{
+        game::{five_color_setup, move_to_hand},
+        inspect::{now, offered_targets, permanent},
+        play::{cast, cast_profile, settle},
+    };
+    use managym::state::{card::SpellProfile, game_object::Target, mana::Color};
+    let mut s = five_color_setup(&[
+        "Twinmaw Stormbrood",
+        "Knight of Malice",
+        "Knight of Grace",
+        "Lightning Bolt",
+    ]);
+    let malice = s.force_permanent_on_battlefield(1, "Knight of Malice");
+    let grace = s.force_permanent_on_battlefield(1, "Knight of Grace");
+    let mut omen = s.clone();
+    let dragon = move_to_hand(&mut omen, "Twinmaw Stormbrood");
+    cast_profile(&mut omen, dragon, SpellProfile::Omen);
+    assert!(
+        offered_targets(&omen).contains(&Target::Permanent(malice)),
+        "Charring Bite is red although the Dragon is white"
+    );
+    let bolt = cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Permanent(grace)));
+    let stack_object = now(&s, bolt);
+    s.game_mut().state[stack_object].color_override = Some([Color::Black].into());
+    settle(&mut s);
+    assert_eq!(permanent(&s, grace).damage, 0);
+}
+
+#[test]
+fn tempest_djinn_counts_only_its_controllers_basic_islands() {
+    use crate::support::game::until_end_of_turn;
+    use managym::state::effect::Modification;
+    let mut s = five_color_setup(&["Tempest Djinn", "Soulstone Sanctuary"]);
+    let djinn = s.force_permanent_on_battlefield(0, "Tempest Djinn");
+    let nonbasic = s.force_permanent_on_battlefield(0, "Soulstone Sanctuary");
+    until_end_of_turn(
+        &mut s,
+        nonbasic,
+        Modification::AddSubtypes(vec!["Island".into()]),
+    );
+    s.force_permanent_on_battlefield(1, "Island");
+    assert_eq!(s.game().characteristics(djinn).pt(), (0, 4));
+    s.force_permanent_on_battlefield(0, "Island");
+    assert_eq!(s.game().characteristics(djinn).pt(), (1, 4));
+}

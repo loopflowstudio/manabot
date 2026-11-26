@@ -285,6 +285,7 @@ impl Game {
         snapshot.decision_memory_enabled = self.decision_memory_enabled;
         snapshot.card_capture = self.card_capture.clone();
         snapshot.statistics = self.statistics.clone();
+        snapshot.presentation = self.presentation.clone();
         snapshot.capture_originals = self.capture_originals.clone();
         snapshot.capture_drawing = self.capture_drawing;
         snapshot
@@ -614,9 +615,10 @@ mod tests {
             .unwrap();
         // This creature can convoke or waterbend but produces no mana.
         game.create_token("token.ally", payer, false).unwrap();
-        game.state
-            .combat_mana_pool_mut(payer)
-            .add(&Mana::parse("R"), None);
+        game.state.mana_pool_mut(payer).add(
+            &Mana::parse("R").with_expiry(crate::state::mana::ManaExpiry::EndOfCombat),
+            None,
+        );
         game.capture_priority_mana(payer);
         let hand = game.state.zones.zone_objects(ZoneType::Hand, payer);
         let card = game.state.card_id(hand[0]).unwrap();
@@ -802,7 +804,12 @@ mod tests {
             let source = game.state.live(object_id).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
-                game.counter_spell(object_id, None, ZoneType::Graveyard);
+                let batch = game.counter_spells([object_id], None, ZoneType::Graveyard);
+                game.run_frame(crate::flow::decision::EffectFrame {
+                    batch: Some(batch),
+                    completion: crate::flow::decision::FrameCompletion::Continue,
+                    ..crate::flow::decision::EffectFrame::new(PlayerId(0), vec![])
+                });
             }
             if outcome == "completed" {
                 game.resolve_top_of_stack();

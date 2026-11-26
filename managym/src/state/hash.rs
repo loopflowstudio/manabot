@@ -26,7 +26,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 31;
+pub const MATCH_STATE_HASH_VERSION: u32 = 33;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -158,6 +158,8 @@ struct CanonicalCombat {
     regular_damage_step: bool,
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    blocked: Vec<PermanentId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
@@ -170,6 +172,7 @@ impl From<&CombatState> for CanonicalCombat {
             first_strikers: combat.first_strikers.clone(),
             regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers.clone(),
+            blocked: combat.blocked.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
                 .iter()

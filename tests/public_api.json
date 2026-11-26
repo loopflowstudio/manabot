@@ -1512,6 +1512,9 @@
           "power": {
             "kind": "attribute"
           },
+          "put_into_graveyard_this_turn": {
+            "kind": "attribute"
+          },
           "registry_key": {
             "kind": "attribute"
           },
@@ -2147,6 +2150,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "enable_presentation": {
+            "kind": "method",
+            "signature": "(self)"
+          },
           "enable_profiler": {
             "kind": "method",
             "signature": "(self)"
@@ -2240,6 +2247,10 @@
           "prepare_possible_world_materializer": {
             "kind": "method",
             "signature": "(self, viewer, expected_space_identity, max_batch_size)"
+          },
+          "presentation_facts_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
           },
           "presentation_subjects_json": {
             "kind": "method",
@@ -2350,6 +2361,10 @@
             "signature": "(self)"
           },
           "structured_search_offers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "take_presentation_positions": {
             "kind": "method",
             "signature": "(self)"
           },
@@ -2570,6 +2585,9 @@
       "Keywords": {
         "kind": "class",
         "members": {
+          "changeling": {
+            "kind": "attribute"
+          },
           "deathtouch": {
             "kind": "attribute"
           },
@@ -3005,6 +3023,9 @@
           "attacking": {
             "kind": "attribute"
           },
+          "blocked": {
+            "kind": "attribute"
+          },
           "blocking": {
             "kind": "attribute"
           },
@@ -3016,6 +3037,9 @@
             "kind": "property"
           },
           "characteristics": {
+            "kind": "attribute"
+          },
+          "chosen": {
             "kind": "attribute"
           },
           "colors": {
@@ -3051,6 +3075,9 @@
           "entered_this_turn": {
             "kind": "attribute"
           },
+          "entry_controller_id": {
+            "kind": "attribute"
+          },
           "exhausted_abilities": {
             "kind": "attribute"
           },
@@ -3067,6 +3094,9 @@
             "kind": "attribute"
           },
           "has_exile_link": {
+            "kind": "attribute"
+          },
+          "hexproof_from": {
             "kind": "attribute"
           },
           "id": {
@@ -3109,6 +3139,9 @@
             "kind": "attribute"
           },
           "power": {
+            "kind": "attribute"
+          },
+          "protection_from": {
             "kind": "attribute"
           },
           "registry_key": {
@@ -3181,6 +3214,9 @@
             "kind": "attribute"
           },
           "hand_only_until": {
+            "kind": "attribute"
+          },
+          "hexproof": {
             "kind": "attribute"
           },
           "id": {
@@ -3356,6 +3392,9 @@
             "kind": "attribute"
           },
           "effect": {
+            "kind": "attribute"
+          },
+          "expiry": {
             "kind": "attribute"
           },
           "mana": {

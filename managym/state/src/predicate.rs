@@ -28,17 +28,21 @@ pub struct CardPredicate {
     /// card-only matching cannot answer it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub namesake: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chosen_color: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chosen_subtype: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub chosen_name: bool,
     /// "named [name]": the object's name as it is (or last was) equals this
     /// one (CR 201.2). An empty name names nothing (CR 201.2a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub named: Option<String>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub flying: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keyword: Option<Keyword>,
     /// "without flying", as the object's characteristics are now.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub not_flying: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub deathtouch: bool,
     /// "with no counters on it". Only battlefield permanents carry counters,
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -64,6 +68,10 @@ pub struct CardPredicate {
     /// and `Game::card_matches_predicate` answers it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub from_battlefield_this_turn: bool,
+    /// "card in a graveyard that was put there this turn" from any zone
+    /// (Abyssal Harvester): game history, answered by `Game::card_matches_predicate`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub put_into_graveyard_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     /// Has at least one of these colors ("white or blue"), as its
@@ -168,7 +176,26 @@ impl CardPredicate {
 
     /// Whether matching needs the asking ability's source permanent.
     pub fn reads_source(&self) -> bool {
-        self.namesake || self.any_of.iter().any(CardPredicate::reads_source)
+        self.namesake
+            || self.chosen_color
+            || self.chosen_subtype
+            || self.chosen_name
+            || self.any_of.iter().any(CardPredicate::reads_source)
+    }
+
+    /// Only a choice of the requested kind binds a source-relative predicate.
+    pub fn matches_choice(
+        &self,
+        choice: Option<&crate::permanent::EntryChoice>,
+        name: &str,
+        has_color: impl FnOnce(Color) -> bool,
+        has_subtype: impl FnOnce(&str) -> bool,
+    ) -> bool {
+        use crate::permanent::EntryChoice;
+        (!self.chosen_color || matches!(choice, Some(EntryChoice::Color(c)) if has_color(*c)))
+            && (!self.chosen_name || matches!(choice, Some(EntryChoice::CardName(n)) if n == name))
+            && (!self.chosen_subtype
+                || matches!(choice, Some(EntryChoice::CreatureType(s)) if has_subtype(s)))
     }
 
     /// Whether matching compares power, here or in an alternative.
@@ -209,14 +236,34 @@ impl CardPredicate {
         power: i32,
         added_types: &[CardType],
     ) -> bool {
+        self.matches_printing_with_choice(object, kind, mana_value, power, added_types, None)
+    }
+
+    pub fn matches_printing_with_choice(
+        &self,
+        object: &PrintedCharacteristics,
+        kind: ObjectKind,
+        mana_value: u8,
+        power: i32,
+        added_types: &[CardType],
+        choice: Option<&crate::permanent::EntryChoice>,
+    ) -> bool {
+        if !self.matches_choice(
+            choice,
+            &object.name,
+            |c| object.colors().contains(&c),
+            |s| object.has_subtype(s),
+        ) {
+            return false;
+        }
         let has_type = |ty| object.types.types.contains(&ty) || added_types.contains(&ty);
         if self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
-            || (self.deathtouch && !object.keywords.has(Keyword::Deathtouch))
-            || (self.flying && !object.keywords.has(Keyword::Flying))
+            || self.put_into_graveyard_this_turn
+            || self.keyword.is_some_and(|k| !object.keywords.has(k))
             || (self.not_flying && object.keywords.has(Keyword::Flying))
             || self
                 .min_toughness
@@ -233,32 +280,35 @@ impl CardPredicate {
         {
             return false;
         }
-        if !self.subtypes_any.is_empty()
-            && !self
-                .subtypes_any
-                .iter()
-                .any(|s| object.subtypes.iter().any(|value| value == s))
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
         {
             return false;
         }
         if !self.colors_any.is_empty() {
-            let colors = object.colors();
-            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+            let colors = object.color_bits();
+            if !self
+                .colors_any
+                .iter()
+                .any(|color| colors & color.bit() != 0)
+            {
                 return false;
             }
         }
         if !self.any_of.is_empty()
             && !self.any_of.iter().any(|alternative| {
-                alternative.matches_printing(object, kind, mana_value, power, added_types)
+                alternative.matches_printing_with_choice(
+                    object,
+                    kind,
+                    mana_value,
+                    power,
+                    added_types,
+                    choice,
+                )
             })
         {
             return false;
         }
-        if self
-            .not_subtypes
-            .iter()
-            .any(|s| object.subtypes.iter().any(|value| value == s))
-        {
+        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
             return false;
         }
         if self
@@ -299,7 +349,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !object.subtypes.contains(subtype) {
+            if !object.has_subtype(subtype) {
                 return false;
             }
         }

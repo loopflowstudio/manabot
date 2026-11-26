@@ -1,23 +1,23 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
-use managym_state::effect::CopyException;
 use managym_state::{
     ability::{
-        Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
-        DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
-        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
-        SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Ability, Actor, Aggregate, AttackSize, Condition, DelayedEvent, DelayedExpiry,
+        DelayedFrequency, DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction,
+        LinkedChooser, LinkedExile, LinkedGrant, ObjectProperty, ObjectSelector, PaymentCost, Per,
+        PlayWindow, PlayerSelector, Scope, SpellTargetFilter, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PowerCda,
-        PrintedCharacteristics, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
-        SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
-        StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost,
-        TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
+        CardDefinition, CardType, CardTypes, DamageRecipient, DamageSource, DamageTransform,
+        EntryScope, Keyword, Keywords, LayerCount, LayerValue, ManaAbility, PrintedCharacteristics,
+        ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
+        StaticAbility, StaticKeywordGrant, StaticLandType, StaticRestriction, StaticScope,
+        StaticTriggeredGrant, StaticTypeGrant, TapCost, TargetCostReduction, TriggeredManaAbility,
+        TriggeredManaOutput,
     },
-    effect::{EffectDuration, Modification},
+    effect::{CopyException, EffectDuration, Modification},
     mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -773,19 +773,15 @@ fn air_nomad_legacy() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens("token.clue", 1)],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate {
-                    flying: true,
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate {
+                    keyword: Some(Keyword::Flying),
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -839,6 +835,7 @@ fn airbender_ascension() -> CardDefinition {
                             Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                             Effect::Move {
                                 unrevealed: false,
+                                face_down: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -1200,6 +1197,10 @@ fn avatar_aang() -> CardDefinition {
 
 fn avatar_destiny() -> CardDefinition {
     let text_box = "Enchant creature you control\nEnchanted creature gets +1/+1 for each creature card in your graveyard and is an Avatar in addition to its other types.\nWhen enchanted creature dies, mill cards equal to its power. Return this card to its owner's hand and up to one creature card milled this way to the battlefield under your control.";
+    let bonus = LayerValue::count(LayerCount::Graveyard {
+        who: Actor::You,
+        predicate: CardPredicate::creature(),
+    });
 
     CardDefinition {
         key: "tla.avatar_destiny",
@@ -1210,15 +1211,14 @@ fn avatar_destiny() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: Some(CardPredicate::creature()),
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::ModifyPt {
+                        power: bonus.clone(),
+                        toughness: bonus,
+                    }],
+                ),
                 StaticAbility::TypeGrant(StaticTypeGrant {
                     scope: StaticScope::Attached,
                     types: Vec::new(),
@@ -1241,10 +1241,12 @@ fn avatar_destiny() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::Move {
                             unrevealed: false,
+                            face_down: false,
                             library_end: None,
                             what: ObjectSelector::Selected,
                             to: ZoneType::Battlefield,
@@ -2516,9 +2518,11 @@ fn cruel_administrator() -> CardDefinition {
             subtypes: vec!["Human".into(), "Soldier".into()],
             power: Some(5),
             toughness: Some(4),
-            replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
-                count: 1,
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                on: EntryScope::This,
+                count: 1.into(),
                 condition: Some(Condition::AttackedThisTurn),
+                kind: CounterKind::PlusOnePlusOne,
             }],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -2847,6 +2851,7 @@ fn destined_confrontation() -> CardDefinition {
 
 fn diligent_zookeeper() -> CardDefinition {
     let text_box = "Each non-Human creature you control gets +1/+1 for each of its creature types, to a maximum of 10.";
+    let bonus = LayerValue::count(LayerCount::CreatureTypes { max: 10 });
 
     CardDefinition {
         key: "tla.diligent_zookeeper",
@@ -2858,19 +2863,18 @@ fn diligent_zookeeper() -> CardDefinition {
             subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
             power: Some(4),
             toughness: Some(4),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate {
                     not_subtypes: vec!["Human".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: Some(10),
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                None,
+                vec![Modification::ModifyPt {
+                    power: bonus.clone(),
+                    toughness: bonus,
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -2908,12 +2912,16 @@ fn dragonfly_swarm() -> CardDefinition {
             }],
             statics: vec![
                 StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
-                StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(Box::new(
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature, CardType::Land],
-                        ..Default::default()
-                    },
-                ))),
+                StaticAbility::cda(vec![Modification::SetBasePt {
+                    power: Some(LayerValue::count(LayerCount::Graveyard {
+                        who: Actor::You,
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Creature, CardType::Land],
+                            ..Default::default()
+                        },
+                    })),
+                    toughness: None,
+                }]),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -3163,7 +3171,7 @@ fn earth_rumble() -> CardDefinition {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::fight_last_target()],
                         },
                     ],
                 },
@@ -3204,15 +3212,11 @@ fn earth_rumble_wrestlers() -> CardDefinition {
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Reach]),
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::This,
-                    condition: condition(),
-                    power: 1,
-                    toughness: 0,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    condition(),
+                    vec![Modification::pump(1, 0)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::This,
                     condition: condition(),
@@ -3373,18 +3377,17 @@ fn earthen_ally() -> CardDefinition {
                 }],
                 ..Default::default()
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: Some(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::ColorsAmong(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    })),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -3596,11 +3599,21 @@ fn fated_firepower() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             keywords: Keywords::of(&[Keyword::Flash]),
             replacement_effects: vec![
-                ReplacementEffect::EntersWithXCounters {
+                ReplacementEffect::EntersWithCounters {
+                    on: EntryScope::This,
                     kind: CounterKind::Fire,
+                    count: EffectValue::X,
+                    condition: None,
                 },
-                ReplacementEffect::OpponentDamagePlusCounters {
-                    kind: CounterKind::Fire,
+                ReplacementEffect::ModifyDamage {
+                    source: DamageSource::any(Actor::You),
+                    recipient: DamageRecipient::any(Actor::Opponent),
+                    combat: None,
+                    transform: DamageTransform::add(EffectValue::Property {
+                        of: Box::new(ObjectSelector::This),
+                        property: ObjectProperty::Counters(CounterKind::Fire),
+                        aggregate: Aggregate::Sum,
+                    }),
                 },
             ],
             text_box: text_box.into(),
@@ -4132,21 +4145,17 @@ fn first_time_flyer() -> CardDefinition {
             power: Some(1),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Flying]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(Condition::GraveyardAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::GraveyardAtLeast {
                     count: 1,
                     predicate: CardPredicate {
                         subtype: Some("Lesson".into()),
                         ..Default::default()
                     },
                 }),
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -4585,15 +4594,11 @@ fn glider_staff() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -5496,15 +5501,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 effects: vec![
                     Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                    Effect::CreateDelayedTrigger {
-                        remember: None,
-                        event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::subtype(
-                            "Lesson",
-                        ))),
-                        frequency: DelayedFrequency::Once,
-                        expiry: DelayedExpiry::ThisTurn,
-                        effects: vec![Effect::CopyTriggeringObject],
-                    },
+                    Effect::copy_next_spell_this_turn(CardPredicate::subtype("Lesson")),
                 ],
                 ..Default::default()
             }],
@@ -5949,6 +5946,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CreatedThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 1,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::AttachSourceTo {
@@ -5959,15 +5957,11 @@ fn kyoshi_battle_fan() -> CardDefinition {
                 ],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6506,15 +6500,11 @@ fn messenger_hawk() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens("token.clue", 1)],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-                power: 2,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                vec![Modification::pump(2, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6545,15 +6535,11 @@ fn meteor_sword() -> CardDefinition {
                 ))],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 3,
-                toughness: 3,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(3, 3)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6612,7 +6598,7 @@ fn momo_friendly_flier() -> CardDefinition {
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: true,
                 predicate: CardPredicate {
-                    flying: true,
+                    keyword: Some(Keyword::Flying),
                     not_subtypes: vec!["Lemur".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
@@ -6624,7 +6610,7 @@ fn momo_friendly_flier() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::another_you_control(CardPredicate {
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
@@ -7050,6 +7036,7 @@ fn ostrich_horse() -> CardDefinition {
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -8730,6 +8717,7 @@ fn sparring_dummy() -> CardDefinition {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -8798,15 +8786,11 @@ fn suki_courageous_rescuer() -> CardDefinition {
             subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
             power: Some(2),
             toughness: Some(4),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::OnceEachTurn {
                     condition: Box::new(TriggerCondition::ActiveIf {
@@ -8849,9 +8833,12 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                     tapped: false,
                 }],
             }],
-            statics: vec![StaticAbility::CharacteristicPower(
-                PowerCda::CreaturesYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::YouControl(
+                    CardPredicate::creature(),
+                ))),
+                toughness: None,
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -8944,21 +8931,17 @@ fn swampsnare_trap() -> CardDefinition {
             statics: vec![
                 StaticAbility::CostsLessIfTargets(TargetCostReduction {
                     predicate: CardPredicate {
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
                     generic: 1,
                 }),
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: -5,
-                    toughness: -3,
-                    per_creature_type_max: None,
-                    per_color_among: None,
-                    per_graveyard_matching: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(-5, -3)],
+                ),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -9047,7 +9030,7 @@ fn teo_spirited_glider() -> CardDefinition {
                 condition: TriggerCondition::attacks(
                     TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         ..Default::default()
                     }),
                     Per::Batch,
@@ -9288,7 +9271,7 @@ fn the_last_agni_kai() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![
-                Effect::FightLastTarget,
+                Effect::fight_last_target(),
                 Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::ExcessDamage,
@@ -9421,6 +9404,8 @@ fn the_legend_of_kyoshi() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestPowerYouControl {
                         predicate: CardPredicate::default(),
                     },
@@ -9448,10 +9433,7 @@ fn the_legend_of_roku() -> CardDefinition {
             abilities: vec![
                 Ability::chapter(
                     1,
-                    vec![Effect::exile_top_to_play(
-                        3,
-                        PlayWindow::ThroughYourNextTurn,
-                    )],
+                    Effect::exile_top_to_play(3, PlayWindow::ThroughYourNextTurn),
                 ),
                 Ability::chapter(2, vec![one_mana_of_any_color(None)]),
                 Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
@@ -10081,9 +10063,16 @@ fn toph_the_blind_bandit() -> CardDefinition {
                     what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 }],
             }],
-            statics: vec![StaticAbility::CharacteristicPower(
-                PowerCda::CountersOnLandsYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::CountersOn {
+                    kind: CounterKind::PlusOnePlusOne,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                })),
+                toughness: None,
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -10354,15 +10343,11 @@ fn twin_blades() -> CardDefinition {
                 ],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -10551,6 +10536,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                             vec![Effect::SelectCards {
                                 from: ObjectSelector::Zone(ZoneType::Library),
                                 predicate: CardPredicate::basic_land(),
+                                max_mana_value: None,
                                 min: 0,
                                 max: EffectValue::Fixed(1),
                                 effects: vec![
@@ -11120,18 +11106,14 @@ fn white_lotus_reinforcements() -> CardDefinition {
             power: Some(2),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Vigilance]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -11152,6 +11134,8 @@ fn white_lotus_tile() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestSharedCreatureType,
                 }],
                 ..Default::default()
@@ -11190,6 +11174,7 @@ fn wolfbat() -> CardDefinition {
                     cost: PaymentCost::Mana(ManaCost::parse("{B}")),
                     if_paid: vec![Effect::Move {
                         unrevealed: false,
+                        face_down: false,
                         library_end: None,
                         what: ObjectSelector::This,
                         to: ZoneType::Battlefield,
@@ -11439,6 +11424,7 @@ fn zuko_conflicted() -> CardDefinition {
                             Effect::exile(ObjectSelector::This),
                             Effect::Move {
                                 unrevealed: false,
+                                face_down: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -11484,7 +11470,7 @@ fn zuko_exiled_prince() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+                effects: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
                 ..Default::default()
             }],
             text_box: text_box.into(),

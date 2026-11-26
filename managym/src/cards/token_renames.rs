@@ -5,6 +5,60 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (
+        Variant,
+        "ReplacementEffect::PreventCombatDamageToOrFromSelf",
+        None,
+    ),
+    (
+        Variant,
+        "ReplacementEffect::OpponentDamagePlusCounters",
+        None,
+    ),
+    (
+        Structure,
+        "/ReplacementEffect::OpponentDamagePlusCounters",
+        None,
+    ),
+    (Field, "creature_source", None),
+    (Field, "source_by", None),
+    (Variant, "StaticAbility::PtBuff", None),
+    (Structure, "/StaticAbility::PtBuff", None),
+    (Structure, "StaticPtBuff", None),
+    (Structure, "/StaticPtBuff", None),
+    (Field, "per_creature_type_max", None),
+    (Field, "per_color_among", None),
+    (Field, "per_graveyard_matching", None),
+    (Variant, "StaticAbility::CharacteristicPower", None),
+    (Structure, "/StaticAbility::CharacteristicPower", None),
+    (Variant, "StaticAbility::CharacteristicPt", None),
+    (Structure, "/StaticAbility::CharacteristicPt", None),
+    (Variant, "PowerCda::CountersOnLandsYouControl", None),
+    (Variant, "PowerCda::CreaturesYouControl", None),
+    (Variant, "PowerCda::GraveyardMatching", None),
+    (Structure, "/PowerCda::GraveyardMatching", None),
+    (Variant, "PowerCda::GraveyardMatchingBy", None),
+    (Structure, "/PowerCda::GraveyardMatchingBy", None),
+    (Variant, "Condition::CastFromGraveyard", None),
+    (Variant, "ReplacementEffect::EntersWithXCounters", None),
+    (Structure, "/ReplacementEffect::EntersWithXCounters", None),
+    (
+        Variant,
+        "ReplacementEffect::EntersWithPlusOneCounters",
+        None,
+    ),
+    (
+        Structure,
+        "/ReplacementEffect::EntersWithPlusOneCounters",
+        None,
+    ),
+    (Variant, "ReplacementEffect::ExileInsteadOfGraveyard", None),
+    (
+        Structure,
+        "/ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
+    (Variant, "Modification::ControlChanged", None),
     (Variant, "AttackSize::WithAnother", None),
     (
         Variant,
@@ -104,19 +158,73 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     ),
     (Field, "abilities", None),
     (Field, "controller_only", None),
+    (Field, "if_cast", None),
+    (Field, "recipient_by", None),
     (Field, "opponent_picks", Some("picks")),
     (Field, "restricted", None),
     (Field, "spells", None),
+    (
+        Variant,
+        "Effect::EachPlayerSacrificesCreatures",
+        Some("Effect::EachPlayerSacrifices"),
+    ),
+    (Text, "creatures each player sacrifices", None),
+    (Text, "kept creature", None),
+    (Variant, "Effect::FightLastTarget", Some("Effect::Fight")),
+    (
+        Structure,
+        "/Effect::EachPlayerSacrificesCreatures",
+        Some("/Effect::EachPlayerSacrifices"),
+    ),
     (Text, "attached at activation", None),
     (Text, "land choices remaining", None),
     (Text, "selected lands", None),
     // Split into `contribution` facts naming how and toward what each paid.
     (Text, "waterbend contributions", None),
+    // GrantPlay replaces ExileTopCardsToPlay and GrantGraveyardCastThisTurn;
+    // CardPredicate.keyword replaces flying/deathtouch; ManaClass.expiry replaces combat.
+    (Variant, "Effect::ExileTopCardsToPlay", None),
+    (Structure, "/Effect::ExileTopCardsToPlay", None),
+    (
+        Variant,
+        "Effect::GrantGraveyardCastThisTurn",
+        Some("Effect::GrantPlay"),
+    ),
+    (
+        Structure,
+        "/Effect::GrantGraveyardCastThisTurn",
+        Some("/Effect::GrantPlay"),
+    ),
+    (Field, "flying", None),
+    (Field, "deathtouch", None),
+    (Field, "combat", None),
 ];
 
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    ("token", "execution/2/combat", None),
+    (
+        "token",
+        "execution/6/kept creature",
+        Some("execution/6/kept permanent"),
+    ),
+    (
+        "token",
+        "execution/6/creatures each player sacrifices",
+        Some("execution/6/permanents each player sacrifices"),
+    ),
+    (
+        "token",
+        "execution/1//ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
+    ("token", "Modification::ControlChanged", None),
     (
         "token",
         "execution/1//ReplacementEffect::DoubleDamageToController",

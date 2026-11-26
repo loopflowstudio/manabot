@@ -44,7 +44,6 @@ def _session(path: Path) -> GameSession:
     assert session.env is not None
     session.obs = configure_root(session.env)
     session.published_prompt = None
-    session.presentation.reset()
     return session
 
 
@@ -68,7 +67,6 @@ def test_order_reconnect_recovers_bound_choices_without_automatic_selection(
         assert self.env is not None
         self.obs = configure_root(self.env)
         self.published_prompt = None
-        self.presentation.reset()
         return self._wire_message()
 
     monkeypatch.setattr(GameSession, "new_game", prepared)

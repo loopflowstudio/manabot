@@ -297,29 +297,6 @@ describe('GameSocketController presentation seam', () => {
     expect(presentationPlayer.events.map(({ seq }) => seq)).toEqual([900, 901, 902, 903, 904]);
   });
 
-  it('keeps transient narration outside the canonical frame DTO', () => {
-    gameStore.prepareForNewGame();
-    presentationPlayer.clear();
-    gameStore.applyFrame(frameAt(42));
-    const controller = new GameSocketController();
-
-    deliver(controller, {
-      type: 'command_outcome',
-      status: 'accepted',
-      update: {
-        base_revision: 42,
-        frame: frameAt(43),
-        presentation: LIGHTNING_BOLT_PRESENTATION.events,
-        receipt: null,
-        log: [{ actor: 'villain', turn: 4, text: 'Pass priority' }],
-        auto_passed: 2,
-      },
-    });
-
-    expect(gameStore.actionLog.map(({ actor, turn, text }) => ({ actor, turn, text })))
-      .toContainEqual({ actor: 'villain', turn: 4, text: 'Pass priority' });
-  });
-
   it('commits the FrameUpdate before enqueueing its semantic events', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.clear();
@@ -338,8 +315,8 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent?.seq).toBe(902);
-    expect(presentationPlayer.currentEvent?.to_revision).toBe(
+    expect(presentationPlayer.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
+    expect(presentationPlayer.events.at(-1)?.to_revision).toBe(
       gameStore.protocolFrame?.revision,
     );
   });
@@ -363,13 +340,17 @@ describe('GameSocketController presentation seam', () => {
       },
     });
 
-    expect(gameStore.actionLog.map((entry) => entry.text).join('\n')).not.toContain(
-      'Hero life:',
-    );
-    expect(presentationPlayer.currentEvent?.kind.kind).toBe('resolved');
+    expect(gameStore.historyNotes).toEqual([]);
+    expect(presentationPlayer.events.map(event => event.kind.kind)).toEqual([
+      'cast',
+      'targeted',
+      'resolved',
+      'damage',
+      'died',
+    ]);
   });
 
-  it('same-match recovery merges unseen tail events and never repeats seen motion', () => {
+  it('same-match recovery merges unseen tail events without duplicating seen facts', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.clear();
     gameStore.applyFrame(frameAt(42));
@@ -385,10 +366,8 @@ describe('GameSocketController presentation seam', () => {
     deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(gameStore.protocolFrame?.revision).toBe(43);
     expect(presentationPlayer.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
-    expect(presentationPlayer.currentEvent?.seq).toBe(903);
     deliver(controller, { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
     expect(presentationPlayer.events).toHaveLength(5);
-    expect(presentationPlayer.currentEvent).toBeNull();
   });
 
   it('keeps a committed frame when optional theater is malformed', () => {
@@ -411,7 +390,7 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(presentationPlayer.incomplete).toBe(true);
     expect(gameStore.errorMessage).toMatch(/Presentation stream rejected/);
   });
 
@@ -434,7 +413,7 @@ describe('GameSocketController presentation seam', () => {
     });
 
     expect(gameStore.protocolFrame?.revision).toBe(43);
-    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(presentationPlayer.incomplete).toBe(true);
     expect(gameStore.errorMessage).toMatch(/Presentation cursor gap/);
   });
 

@@ -91,7 +91,8 @@ def test_animal_attendant_mana_and_cast_receipt_reach_input_and_text() -> None:
     activation = next(
         action
         for action in decision.actions
-        if "Activate" in action.description and "Animal Attendant" in action.description
+        if "Tap for mana" in action.description
+        and "Animal Attendant" in action.description
     )
     submit_response(env, decision, activation.reference)
     modes = capture_text_decision(env)
@@ -149,7 +150,7 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
         activate = next(
             a
             for a in decision.actions
-            if "Activate" in a.description and "Animal Attendant" in a.description
+            if "Tap for mana" in a.description and "Animal Attendant" in a.description
         )
         submit_response(env, decision, activate.reference)
         decision = capture_text_decision(env)

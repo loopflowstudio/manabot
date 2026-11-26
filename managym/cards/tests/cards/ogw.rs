@@ -144,3 +144,46 @@ fn foundations_grant_untamed_hunger() {
     use managym::state::card::Keyword;
     crate::check_attachment_grant("Untamed Hunger", None, (4, 3), &[Keyword::Menace]);
 }
+
+#[test]
+fn sphinx_keeps_its_controllers_instant_on_the_stack() {
+    use crate::support::{
+        inspect::now,
+        play::{cast, choose, target_opponent},
+    };
+    use managym::{agent::action::Action, state::game_object::Target};
+    for (shield, spell) in [
+        (false, "Lightning Bolt"),
+        (true, "Lightning Bolt"),
+        (false, "Sphinx of the Final Word"),
+    ] {
+        let mut s =
+            five_color_setup(&["Sphinx of the Final Word", "Lightning Bolt", "Counterspell"]);
+        s.game_mut().mana_payment = [managym::state::player::ManaPayment::Auto; 2];
+        if shield {
+            s.force_permanent_on_battlefield(0, "Sphinx of the Final Word");
+        }
+        s.force_card_in_hand(1, "Counterspell");
+        let object = cast(&mut s, spell);
+        if spell == "Lightning Bolt" {
+            target_opponent(&mut s);
+        }
+        s.pass_priority();
+        choose(&mut s, |a| {
+            matches!(
+                a,
+                Action::CastSpell {
+                    player: PlayerId(1),
+                    ..
+                }
+            )
+        });
+        assert!(s.choose_target(Target::StackSpell(now(&s, object))));
+        settle(&mut s);
+        if spell == "Lightning Bolt" {
+            s.assert_life(1, if shield { 17 } else { 20 });
+        } else {
+            assert_eq!(s.battlefield_permanents_named(0, spell).len(), 1);
+        }
+    }
+}

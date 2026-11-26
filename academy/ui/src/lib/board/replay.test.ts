@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
-import type { ExperienceFrame } from '$lib/types';
-import { moveList } from './moves';
+import type { ExperienceFrame, PresentationEvent } from '$lib/types';
 import { markText } from '$lib/analysis';
-import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, positionHeading, recordedFrame, replayLog, seatIdentity, sinceRevision, stripMarks, liveAnalysedMarks } from './replay';
+import { findBoard } from './boards';
+import { buildHistory, legacyMoveHistory } from './history';
+import {
+  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, withLiveAnalysisPoints, type StripMark,
+} from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -103,8 +106,11 @@ describe('the move list and strip read the index', () => {
     expect(entries.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
       ['c1', 'hero', 'Play Island'], ['a2', 'villain', 'Cast Shock, targeting you'], ['a3', 'auto', 'Pass priority'], ['c2', 'hero', 'Cast Shock, targeting Heuristic'],
     ]);
-    const turns = moveList(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
-    expect(turns.flatMap(turn => turn.moves.map(move => move.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+    const turns = legacyMoveHistory(entries, { you: 'Seat 1', opponent: 'Seat 2' }, new Map(), []);
+    expect(turns.flatMap(turn => turn.lines.map(line => line.id))).toEqual(['c1', 'a2', 'a3', 'c2']);
+    expect(positionKeyForEvent(positions, { from_revision: 3 }, true)).toBe('c1');
+    expect(positionKeyForEvent(positions, { from_revision: 3 }, false)).toBe('a1');
+    expect(historyKeyAt(new Set(['c1', 'a2']), positions, 3)).toBe('a2');
   });
 
   it('names your own multi-step move once, as narrated, at the decision where it began', () => {
@@ -201,6 +207,118 @@ describe('a position says what it is', () => {
   });
 });
 
+describe('Review transition boards and jumps', () => {
+  it('rebuilds transition boards via mergeBoards before orienting, preserves capped fallbacks, and surfaces patch errors', () => {
+    const baseObs = structuredClone(frame.projection);
+    const seat = baseObs.agent.player_index as 0 | 1;
+    const otherSeat = (1 - seat) as 0 | 1;
+    baseObs.turn.step = 'END_STEP';
+    const ev = (seq: number): PresentationEvent => ({
+      seq,
+      from_revision: 4,
+      to_revision: 5,
+      caused_by: null,
+      group: 10,
+      importance: 'normal',
+      suggested_ms: 0,
+      sound: null,
+      kind: { kind: 'drew', player: 1 },
+    });
+
+    const rebuilt = reviewTransitionBoards(
+      {
+        kind: 'consequences',
+        revision: 4,
+        observation: baseObs,
+        history: [ev(10), ev(11), ev(12), ev(13)],
+        // Capped before seq 12: seq 10..11 fall back to seq 12's board; seq 13 gets post-step observation.
+        boards: [{ first: 12, last: 12, patch: { o: { turn: { o: { step: { '=': 'COMBAT_DAMAGE_STEP' } } } } } }],
+      },
+      otherSeat,
+      null,
+    );
+    expect(rebuilt.error).toBeNull();
+    expect(findBoard(rebuilt.boards, 10)).toMatchObject({ first: 10, last: 11, fallback: true });
+    expect(findBoard(rebuilt.boards, 10)?.projection.turn.step).toBe('COMBAT_DAMAGE_STEP');
+    expect(findBoard(rebuilt.boards, 10)?.projection.agent.player_index).toBe(otherSeat);
+    expect(findBoard(rebuilt.boards, 12)?.fallback).toBeUndefined();
+    expect(findBoard(rebuilt.boards, 13)?.projection.turn.step).toBe('END_STEP');
+    expect(findBoard(rebuilt.boards, 13)?.projection.agent.player_index).toBe(otherSeat);
+
+    // Corrupt patch reports an explicit error rather than silently falling back.
+    const corrupt = reviewTransitionBoards(
+      {
+        kind: 'consequences',
+        revision: 4,
+        observation: baseObs,
+        history: [ev(10)],
+        boards: [{ first: 10, last: 10, patch: { o: { agent: { o: { battlefield: { a: [{ k: 999999 }] } } } } } }],
+      },
+      seat,
+      null,
+    );
+    expect(corrupt.boards).toEqual([]);
+    expect(corrupt.error).toMatch(/Board patch names no item/);
+  });
+
+  it('jumps to a player move choice even when already on its consequences transition', () => {
+    const list: Pick<Position, 'key' | 'kind'>[] = [
+      { key: 'choice:10', kind: 'choice' },
+      { key: 'after:10', kind: 'consequences' },
+      { key: 'after:11', kind: 'consequences' },
+    ];
+    // Already on `after:10`: clicking a player move whose key is `choice:10` must jump to `choice:10`.
+    expect(planReviewJump(list, 1, 'after:10', 'choice:10', 41)).toEqual({
+      kind: 'seek',
+      index: 0,
+      pendingSubCursor: null,
+    });
+    // Clicking another line belonging to `after:10` updates subCursor directly.
+    expect(planReviewJump(list, 1, 'after:10', 'after:10', 45)).toEqual({
+      kind: 'subcursor',
+      seq: 45,
+    });
+    // Clicking a consequence belonging to a different transition seeks there with pendingSubCursor.
+    expect(planReviewJump(list, 1, 'after:10', 'after:11', 52)).toEqual({
+      kind: 'seek',
+      index: 2,
+      pendingSubCursor: 52,
+    });
+  });
+
+  it('anchors a multi-step track cast move at its starting choice and groups its analysis marks', () => {
+    const steps: Position[] = [
+      position('choice', { key: 'cast', actor: 0, event: 3, label: 'Cast Shock', revision: 3 }),
+      position('consequences', { key: 'after-cast', actor: 0, event: 3, label: null, revision: 3 }),
+      position('choice', { key: 'target', actor: 0, event: 4, label: 'Target Villain', revision: 4, analysis_shown: true }),
+      position('consequences', { key: 'after-target', actor: 0, event: 4, label: 'Cast Shock, targeting Seat 2', revision: 4 }),
+    ];
+    expect(positionKeyForEvent(steps, { from_revision: 4 }, true)).toBe('cast');
+    const castEvent: PresentationEvent = {
+      seq: 1,
+      from_revision: 4,
+      to_revision: 5,
+      caused_by: 'cmd-1',
+      group: 1,
+      importance: 'normal',
+      suggested_ms: 0,
+      sound: null,
+      labels: { objects: { '10:1': 'Shock' }, stacks: { '10': 'Shock' } },
+      kind: { kind: 'cast', object: { entity: 10, incarnation: 1 }, controller: 0, stack: 10 },
+    };
+    const turns = buildHistory([castEvent], () => ({ objects: {}, players: {}, stacks: {} }), { youSeat: 0, you: 'You', opponent: 'Reader' }, {
+      jumpKeyFor: (event, isMove) => positionKeyForEvent(steps, event, isMove),
+    });
+    expect(turns[0].lines[0].jumpKey).toBe('cast');
+    const offers = frame.offers.length;
+    const probabilities = frame.offers.map((_, i) => (i === offers - 1 ? 0.6 : 0.4 / (offers - 1)));
+    const decision = { event: 3, played: 1, annotation: { probabilities, value: 0.2 }, semantic: 'signed_outcome', after: frame.offers.map((_, i) => i / offers) };
+    const marks = historyMoveMarks(turns, steps, 0, new Map([[3, decision], [4, { ...decision, event: 4, played: offers - 1 }]]));
+    expect(marks.get(turns[0].lines[0].id)).toMatchObject({ agreed: 1, of: 2 });
+    expect([...historyAnalysisShown(turns, steps, 0)]).toEqual([turns[0].lines[0].id]);
+  });
+});
+
 describe('an analysis read beside your choices', () => {
   const offers = frame.offers.length;
   // The policy prefers the last offer; you played the second.
@@ -252,16 +370,16 @@ describe('an analysis read beside your choices', () => {
   });
 });
 
-describe('liveAnalysedMarks', () => {
-  const log = [
-    { id: 'a', actor: 'villain' as const, turn: 1, text: 'Opponent plays Island' },
-    { id: 'b', actor: 'hero' as const, turn: 1, text: 'You play Mountain' },
-    { id: 'c', actor: 'auto' as const, turn: 2, text: 'Untap' },
-    { id: 'd', actor: 'hero' as const, turn: 2, text: 'You cast Shock' },
+describe('withLiveAnalysisPoints', () => {
+  const base: StripMark[] = [
+    { at: 0, key: 'a', turn: 1, turnStart: true, decision: true, side: 'opponent', value: null, label: 'Turn 1 · Opponent plays Island' },
+    { at: 1, key: 'b', turn: 1, turnStart: false, decision: true, side: 'you', value: null, label: 'Turn 1 · You play Mountain' },
+    { at: 2, key: 'c', turn: 2, turnStart: true, decision: false, side: null, value: null, label: 'Turn 2 · Untap' },
+    { at: 3, key: 'd', turn: 2, turnStart: false, decision: true, side: 'you', value: null, label: 'Turn 2 · You cast Shock' },
   ];
 
-  it('places each reading where the log stood, a pass that logs nothing included', () => {
-    const marks = liveAnalysedMarks(log, [
+  it('places each reading where the track stood, a pass that emits no move included', () => {
+    const marks = withLiveAnalysisPoints(base, [
       { event: 2, at: 1, score: 0.6, semantic: 'signed_outcome' },
       { event: 3, at: 1, score: 0.55, semantic: 'signed_outcome' },
       { event: 8, at: 4, score: 0.3, semantic: 'signed_outcome' },
@@ -273,7 +391,7 @@ describe('liveAnalysedMarks', () => {
   });
 
   it('places a decision read after the fact at its turn, named by the move you chose', () => {
-    const marks = liveAnalysedMarks(log, [
+    const marks = withLiveAnalysisPoints(base, [
       { event: 6, at: null, score: 0.4, semantic: 'signed_outcome', turn: 2, label: 'Cast Shock' },
       { event: 1, at: null, score: 0.7, semantic: 'signed_outcome', turn: 1, label: 'Play Mountain' },
       { event: 9, at: 4, score: 0.3, semantic: 'signed_outcome' },
@@ -376,5 +494,49 @@ describe('mid-game seat swaps in Review', () => {
     expect(perspectiveLabel(1, 'You', 'GW Allies', true)).toBe('Seat 2 at the bottom · GW Allies');
     expect(perspectiveLabel(1, 'You', null, true)).toBe('Seat 2 at the bottom');
     expect(perspectiveLabel(0, 'You', 'UR Lessons', false)).toBe('Seat 1 at the bottom · You');
+  });
+
+  it('inserts clickable swap dividers and preserves pilot attribution in track history', () => {
+    const swaps = [{ event: 1, turn: 2 }];
+    const positions: Position[] = [
+      position('choice', { key: 'c0', actor: 0, event: 0, turn: 1, revision: 0, label: 'Play Island' }),
+      position('consequences', { key: 'a0', actor: 0, event: 0, turn: 1, revision: 0, label: 'Play Island' }),
+      position('choice', { key: 'c1', actor: 1, event: 1, turn: 2, revision: 2, label: 'Play Mountain' }),
+      position('consequences', { key: 'a1', actor: 1, event: 1, turn: 2, revision: 2, label: 'Play Mountain' }),
+    ];
+    const events: PresentationEvent[] = [
+      {
+        seq: 0, from_revision: 0, to_revision: 1, caused_by: null, group: 0, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'land_played', player: 0, object: { entity: 10, incarnation: 1 } },
+        labels: { objects: { '10:1': 'Island' }, stacks: {} },
+      },
+      {
+        seq: 1, from_revision: 2, to_revision: 3, caused_by: 'cmd-2', group: 1, importance: 'normal', suggested_ms: 400, sound: null,
+        kind: { kind: 'land_played', player: 1, object: { entity: 20, incarnation: 1 } },
+        labels: { objects: { '20:1': 'Mountain' }, stacks: {} },
+      },
+    ];
+    const notes = swapHistoryNotes(swaps, positions, events);
+    expect(notes).toEqual([{
+      id: 'swap:0:c1',
+      actor: 'note',
+      turn: 2,
+      afterSeq: 0,
+      text: 'Swapped sides · Turn 2',
+      jumpKey: 'swap:0:c1',
+    }]);
+    const turns = buildHistory(events, () => ({ objects: {}, players: {}, stacks: {} }), { youSeat: 1, you: 'You', opponent: 'Passive' }, {
+      notes,
+      jumpKeyFor: (event, isMove) => positionKeyForEvent(positions, event, isMove),
+      playersFor: event => ({ youSeat: event.from_revision <= 0 ? 0 : 1, you: 'You', opponent: 'Passive' }),
+      isAutomatic: () => false,
+    });
+    const lines = turns.flatMap(turn => turn.lines);
+    expect(lines.map(line => [line.actor, line.who, line.jumpKey, line.sentence])).toEqual([
+      ['you', 'You', 'c0', 'You played Island'],
+      ['note', '', 'swap:0:c1', 'Swapped sides · Turn 2'],
+      ['you', 'You', 'c1', 'You played Mountain'],
+    ]);
+    expect(entryPosition(lines[1].jumpKey!)).toBe('c1');
   });
 });

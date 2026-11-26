@@ -28,11 +28,11 @@
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
-  import { moveList } from '$lib/board/moves';
+  import { buildHistory, hasTrackHistory, legacyMoveHistory, type HistoryTurn } from '$lib/board/history';
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, positionHeading, recordedFrame, replayLog, seatIdentity, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, humanSeatAt, moveAt, moveMarks, offerEvidence, perspectiveLabel, perspectiveOf, pilotSeatAt, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, seatIdentity, sinceRevision, stripMarks, swapHistoryNotes, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, seatColumnLabel, type GameNumbers } from '$lib/numbers';
@@ -57,6 +57,9 @@
   let stripOpen = $state(true);
   let loaded = '';
   let lastHistoryKey = '';
+  /** Sub-step cursor (event seq) inside a recorded `consequences` transition's kept `boards`. */
+  let subCursor = $state<number | null>(null);
+  let pendingSubCursor: number | null = null;
 
   const current = $derived(replayStore.current);
   const index = $derived(replayStore.index);
@@ -105,6 +108,11 @@
 
   // ———————————————— What the board draws
 
+  const transitionBoardsState = $derived(
+    !inStudy && current && index
+      ? reviewTransitionBoards(current, bottom, index.winner)
+      : { boards: [], error: null as string | null },
+  );
   const recorded = $derived(current && index ? recordedFrame(current, index, bottom) : null);
   // Study draws the restored decision live, then the branch it played, on the same board.
   const studyFrame = $derived.by<ExperienceFrame | null>(() => {
@@ -160,13 +168,84 @@
     } catch { /* Review stands without its numbers. */ }
   }
 
-  const entries = $derived(replayLog(positions, startingHeroSeat, saidAt, seatSwaps));
-  const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
-  const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
+  const EMPTY_LABELS = { objects: {}, players: {}, stacks: {} };
+  const useTrack = $derived(
+    !studying && (
+      (index?.watch
+        ? (index.track_history ?? hasTrackHistory(presentation.events))
+        : hasTrackHistory(index?.history ?? []))
+    ),
+  );
+  const entries = $derived(useTrack ? [] : replayLog(positions, startingHeroSeat, saidAt, seatSwaps));
+  const history = $derived.by<HistoryTurn[]>(() => {
+    const players = { youSeat: heroSeat, you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) };
+    if (studying) {
+      return buildHistory(presentation.events, i => presentation.labelsAt(i), {
+        youSeat: viewerSeat,
+        you: saidAt(viewerSeat),
+        opponent: saidAt(otherSeat(viewerSeat)),
+      });
+    }
+    if (useTrack) {
+      const trackEvents = index?.watch ? presentation.events : (index?.history ?? []);
+      const labelsFor = index?.watch
+        ? (i: number) => presentation.labelsAt(i)
+        : () => EMPTY_LABELS;
+      const swapOptions = seatSwaps.length > 0 && played
+        ? (() => {
+            const byRevision = new Map<number, { event: number | null; automatic: boolean }>();
+            for (const position of positions) {
+              if (position.revision == null) continue;
+              const prev = byRevision.get(position.revision);
+              byRevision.set(position.revision, {
+                event: position.event ?? prev?.event ?? null,
+                automatic: position.kind === 'consequences' ? position.automatic : (prev?.automatic ?? false),
+              });
+            }
+            const eventAtRevision = (revision: number): number | null => {
+              const exact = byRevision.get(revision);
+              if (exact) return exact.event;
+              for (const position of positions) {
+                if (position.revision != null && position.revision >= revision) return position.event ?? null;
+              }
+              return null;
+            };
+            return {
+              notes: swapHistoryNotes(seatSwaps, positions, trackEvents),
+              playersFor: (event: (typeof trackEvents)[number]) => ({
+                youSeat: humanSeatAt(startingHeroSeat, seatSwaps, eventAtRevision(event.from_revision)),
+                you: players.you,
+                opponent: players.opponent,
+              }),
+              isAutomatic: (event: (typeof trackEvents)[number]) => {
+                const info = byRevision.get(event.from_revision);
+                return info ? info.automatic : (event.caused_by === null || event.caused_by.startsWith('authority.auto.'));
+              },
+            };
+          })()
+        : {};
+      return buildHistory(trackEvents, labelsFor, players, {
+        jumpKeyFor: (event, isMove) => positionKeyForEvent(positions, event, isMove),
+        ...swapOptions,
+      });
+    }
+    return legacyMoveHistory(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []);
+  });
+  const currentMove = $derived.by<string | null>(() => {
+    if (!useTrack) return moveAt(entries, positions, replayStore.selected);
+    const keys = new Set<string>();
+    for (const turn of history) {
+      for (const item of turn.lines) {
+        if (item.jumpKey) keys.add(item.jumpKey);
+        for (const child of item.children) if (child.jumpKey) keys.add(child.jumpKey);
+      }
+    }
+    return historyKeyAt(keys, positions, replayStore.selected);
+  });
   const baseMarks = $derived(stripMarks(positions, startingHeroSeat, seatSwaps));
   const marks = $derived(analysis ? analysedMarks(baseMarks, positions, analysed) : baseMarks);
-  const marksByMove = $derived(moveMarks(entries, positions, analysed));
-  const shownMoves = $derived(analysisShownMoves(entries, positions));
+  const marksByMove = $derived(useTrack ? historyMoveMarks(history, positions, startingHeroSeat, analysed, seatSwaps) : moveMarks(entries, positions, analysed));
+  const shownMoves = $derived(useTrack ? historyAnalysisShown(history, positions, startingHeroSeat, seatSwaps) : analysisShownMoves(entries, positions));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
 
   // ———————————————— Key moments and its line
@@ -307,9 +386,15 @@
     untrack(() => {
       if (current.key === lastHistoryKey) return;
       lastHistoryKey = current.key;
+      if (current.kind === 'consequences' && pendingSubCursor !== null) {
+        subCursor = pendingSubCursor;
+        pendingSubCursor = null;
+      } else {
+        subCursor = null;
+        pendingSubCursor = null;
+      }
       const batches = current.history.map((event, i) => ({ events: [event], labels: current.history_labels[i] }));
-      presentation.loadPrefix(batches, `replay:${index.id}:viewer:${current.viewer}`, false);
-      presentation.playing = false;
+      presentation.loadPrefix(batches, `replay:${index.id}:viewer:${current.viewer}`);
     });
   });
 
@@ -337,12 +422,15 @@
   });
   $effect(() => () => replayStore.cancelReads());
 
-  function seek(selected: number): void {
+  function seek(selected: number, keepPending = false): void {
     if (inStudy || !positions.length) return;
+    if (!keepPending) { subCursor = null; pendingSubCursor = null; }
     void replayStore.seek(Math.max(0, Math.min(positions.length - 1, selected)));
   }
   function next(): void {
     replayStore.pause();
+    subCursor = null;
+    pendingSubCursor = null;
     if (atLiveEdge && index?.mirror_retry) void replayStore.produce(true);
     else void replayStore.next();
   }
@@ -355,12 +443,22 @@
   }
   function togglePlaying(): void {
     if (replayStore.playing) replayStore.pause();
-    else replayStore.playing = true;
+    else { subCursor = null; replayStore.playing = true; }
   }
-  function jump(id: string): void {
+  function jump(id: string, boardSeq: number | null = null): void {
     const key = entryPosition(id);
-    const at = positions.findIndex(position => position.key === key);
-    if (at >= 0) seek(at);
+    const plan = planReviewJump(positions, replayStore.selected, current?.key ?? null, key, boardSeq);
+    if (!plan) return;
+    if (plan.kind === 'subcursor') {
+      subCursor = plan.seq;
+      return;
+    }
+    if (plan.pendingSubCursor !== null) {
+      pendingSubCursor = plan.pendingSubCursor;
+      seek(plan.index, true);
+      return;
+    }
+    seek(plan.index);
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -726,7 +824,6 @@
     you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}
     stops={frame.stops}
-    log={[]}
     canPassTurn={false}
     {presentation}
     thinking={null}
@@ -737,10 +834,14 @@
     {since}
     recapTitle={studying ? 'This line' : line ? 'Its line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
     heading={branched || !current ? null : positionHeading(current, saidAt, frame.projection.game_over, index?.winner ?? null)}
-    {moves}
+    {history}
     onjump={locked ? undefined : jump}
     readOnly={!studying}
     {currentMove}
+    cursorSeq={studying ? null : subCursor}
+    stepBoards={transitionBoardsState.boards}
+    stepBoardsError={transitionBoardsState.error}
+    onclearcursor={() => { subCursor = null; }}
     {evidence}
     moveMarks={marksByMove}
     {shownMoves}

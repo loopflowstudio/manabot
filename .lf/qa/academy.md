@@ -10,6 +10,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   an opponent read-out only ends the read-out. If a click stalls while
   previewing an offer, check whether the rows move under the pointer.
 - Capture tapped lands with a `fullPage` screenshot.
+- Offer text starts with its shortcut number ("1 Play Forest"), so match
+  offers unanchored, never `/^Play/`. A game's presentation events are in
+  `<traces-dir>/play.sqlite`, `attempts.trace_json` → `events[].presentation`;
+  feed them to `walkStops`/`buildCombatTable` in a scratch Vitest to explain
+  a walk caption offline. Giant Spider (2/4) against Hill Giant + Lightning Bolt
+  (`--opponent search --sims 8 --seed 7`) gives surviving damaged creatures,
+  turn-boundary damage and 3–5-creature combats within 19 turns.
+  Gray Ogre + Lightning Bolt against Vengeful Bloodwitch + Lightning Bolt
+  (same opponent, `--seed 11`) gives signed +1/−1 plate deltas on trigger
+  stops and a "did not resolve · illegal targets" fizzle within 14 turns.
+  Under reduced motion nothing walks automatically, by design.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
@@ -110,8 +121,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
   `npm ci` there, about a minute; Chromium is cached; delete the script
-  afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a game. Triggered abilities
+  afterwards). Click only offers: `[data-testid=action-option]` rows (the
+  "All legal choices" list sits outside `action-panel`, so a selector scoped
+  to the panel misses discard and other list-only prompts) and the panel's
+  `primary-action`/`prompt-action` buttons; other buttons open the deck
+  picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   The configured-launch table (`managym academy play`) has no Rematch in its
@@ -275,6 +289,45 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Manual mana payments in a real game: `managym academy play --deck <f>
+  --opponent-deck <f> --opponent passive --seed 11` with `14 Kyoshi Village /
+  10 Plains / 16 Youthful Knight` against `40 Plains` reaches Village + Plains
+  (exact {1}{W}, no stop) on turn 5 and Village + 3 Plains on turn 9 when the
+  script plays Village first, then Plains. The rail's turn number (`li.turn`
+  `data-turn`) is the last log entry, not reliably the current turn; to cast
+  "the turn after the last land", drive `GameSession.new_game`/`hero_command`
+  by offer labels in Python and read `projection.turn.turn_number` and each
+  permanent's `entered_this_turn`. Plain non-creature, non-animating lands
+  played this turn are interchangeable with earlier copies; creatures,
+  non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
+  Mid-payment color choices are MODAL frames with
+  `decision_context.stage == "mana_color"`. The table's client Auto-tap
+  (on by default) submits "Pay the cost" at every mandatory payment, so the
+  browser never shows a native payment stop and Moves reads
+  `Auto-tapped {1}{W} for <spell>`. To turn it off, open
+  `[data-testid=game-menu]` (Settings) and click the switch
+  `[data-testid=auto-tap-toggle]` (a hidden-styled `input[role=switch]`:
+  wait for it `attached`, check `isChecked()`), close the menu and wait for
+  the header chip `[data-testid=chip-auto-tap]` to read "Manual tap".
+  "Pay the cost" renders as "Auto pay". A payment's taps fold into its
+  "Cast …" move. During attacks the per-creature offers sit in a closed
+  disclosure, so a driver waiting for a visible `action-option` stalls:
+  also accept `[data-testid=primary-action][data-draft-ready=true]` and click
+  it ("No attack"). A tapped land is drawn as a landscape box (`.turned`,
+  aria-label "… — Tapped"), not a rotated picture; count `.turned` rather
+  than judging a screenshot. Ward payments come from a real `GameSession` with
+  `villain_type: "random"`, `{"Island": 22, "Waterfall Aerialist": 18}` and a
+  Mountain/Kyoshi Village/Plains/Lightning Bolt hero (seeds 3, 5, 7 reach
+  Bolt → Ward {2} stops at `stage == "resolution_payment"`).
+  `14 Gruul Guildgate / 6 Mountain / 6 Forest / 14 Gray Ogre` (seed 11) reaches
+  Guildgate + Forest + Mountain (exact {2}{R}, no stop). Gruul Guildgate
+  enters tapped, so casting on the turn the second Guildgate is played is
+  again exact; cast on a later turn to reach the two-Guildgate stop, color
+  modal and second stop. To check a browser game's choices exactly, replay
+  the hero's recorded `action_description`s from `attempts.trace_json` through
+  `GameSession` with the recorded `config` (drop `hero_source`,
+  `villain_source`, `seed_was_requested`). Rebuild the static SPA
+  after any `academy/ui` change; a configured launch serves the stale build silently.
 - Board drags and combat drafts in a real game: import `22 Mountain / 30 Raging
   Goblin / 8 Burst Lightning` against `60 Plains` with Passive and Automatic
   payment; haste goblins give a multi-creature attack draft by turn 3 and

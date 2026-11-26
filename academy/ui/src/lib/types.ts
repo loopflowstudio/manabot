@@ -128,6 +128,7 @@ export interface PermanentState {
   restrictions?: RestrictionView[];
   types?: CardTypes;
   is_token?: boolean;
+  chosen?: string;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */
@@ -159,12 +160,17 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  blocked?: boolean;
+  /** Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged. */
+  entry_controller_id?: number;
   first_strike_participant?: boolean;
   attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  protection_from?: string[];
+  hexproof_from?: string[];
   /** Face down (CR 708.2). */
   face_down?: boolean;
   /** Keywords it has after continuous effects; absent when it has none. */
@@ -215,8 +221,10 @@ export interface PlayerTurnHistory {
   mana_spent_casting?: number;
 }
 
+export type ManaExpiry = 'step' | 'end_of_combat' | 'end_of_turn';
+
 export interface PlayerState {
-  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean }[];
+  pooled_mana_classes?: { mana: number[]; effect?: string | null; restriction?: string | null; combat: boolean; expiry?: ManaExpiry }[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */
@@ -224,6 +232,7 @@ export interface PlayerState {
   /** Player id whose next turn ends this player's hand-only casting. */
   spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
+  hexproof?: boolean;
   no_maximum_hand_size?: boolean;
   counters?: Record<string, number>;
   combat_mana?: number;
@@ -551,9 +560,44 @@ export const PRESENTATION_KIND_NAMES = [
   'blocked',
   'turn_started',
   'land_played',
+  'drew',
   'discarded',
   'revealed',
+  'activated',
+  'triggered',
+  'ability_resolved',
+  'countered',
+  'passed',
+  'counters',
+  'searched',
+  'looked',
+  'sacrificed',
+  'lost',
+  'life',
+  'exiled',
+  'token_created',
+  'pt_changed',
+  'control_changed',
 ] as const;
+
+export const PRESENTATION_RULES = [
+  'draw_step',
+  'cleanup',
+  'lethal_damage',
+  'zero_toughness',
+  'zero_loyalty',
+  'zero_defense',
+  'legend_rule',
+  'unattached_aura',
+  'zero_life',
+  'empty_library',
+  'poison',
+  'illegal_targets',
+] as const;
+/** The state-based, turn-based, or resolution rule (CR 704.5, 504, 514, 608.2b) that did what an event tells. */
+export type PresentationRule = (typeof PRESENTATION_RULES)[number];
+
+export type LookAction = 'scry' | 'surveil';
 
 /**
  * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
@@ -561,6 +605,7 @@ export const PRESENTATION_KIND_NAMES = [
  * spell leaving the stack must not be reconstructed from snapshot diffs.
  */
 export type PresentationKind =
+  | { kind: 'drew'; player: number; object?: ObjectRenderId }
   | {
       kind: 'cast';
       object: ObjectRenderId;
@@ -621,6 +666,88 @@ export type PresentationKind =
       kind: 'revealed';
       cards: string[];
       player: number;
+    }
+  | {
+      kind: 'activated';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      kind: 'triggered';
+      source: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      /** An activated or triggered ability began to resolve. */
+      kind: 'ability_resolved';
+      source: ObjectRenderId;
+      stack: number;
+    }
+  | {
+      /** A spell or ability left the stack without resolving. */
+      kind: 'countered';
+      stack: number;
+    }
+  | {
+      /** A player passed priority. */
+      kind: 'passed';
+      player: number;
+    }
+  | {
+      kind: 'counters';
+      object: ObjectRenderId;
+      counter: string;
+      count: number;
+      /** The permanent's count of that kind after. */
+      total: number;
+    }
+  | {
+      kind: 'searched';
+      player: number;
+    }
+  | {
+      kind: 'looked';
+      player: number;
+      action: LookAction;
+    }
+  | {
+      kind: 'sacrificed';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'lost';
+      player: number;
+    }
+  | {
+      /** Life gained (positive `amount`) or lost other than by damage; `total` after. */
+      kind: 'life';
+      player: number;
+      amount: number;
+      total: number;
+    }
+  | {
+      kind: 'exiled';
+      objects: ObjectRenderId[];
+    }
+  | {
+      kind: 'token_created';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'pt_changed';
+      objects: ObjectRenderId[];
+      power: number;
+      toughness: number;
+    }
+  | {
+      kind: 'control_changed';
+      object: ObjectRenderId;
+      controller: number;
+      returned: boolean;
     };
 
 export interface PresentationEvent {
@@ -633,6 +760,10 @@ export interface PresentationEvent {
   suggested_ms: number;
   sound: string | null;
   kind: PresentationKind;
+  /** The earlier event on this track this one follows from; absent for a root. */
+  cause?: number;
+  rule?: PresentationRule;
+  labels?: Partial<Pick<PresentationLabels, 'objects' | 'stacks'>>;
 }
 
 export interface FrameUpdate {

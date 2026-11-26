@@ -200,6 +200,17 @@ describe('where decisions land', () => {
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
+  it('separates lands with different entry choices', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 2)!.items;
+    for (const [i, { permanent }] of lands.entries()) {
+      permanent.name = 'Uncharted Haven';
+      permanent.chosen = i === 0 ? 'color Red' : 'color Blue';
+    }
+    const piles = boardView(frame, PLAYERS).you.support.filter(pile => pile.items[0].permanent.name === 'Uncharted Haven');
+    expect(piles.map(pile => pile.items.length).sort((a, b) => a - b)).toEqual([1, lands.length - 1]);
+  });
+
   it('piles only copies with the same effective abilities and state', () => {
     const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
     const copies: Partial<PermanentState>[] = [
@@ -237,6 +248,15 @@ describe('where decisions land', () => {
     const piles = [...view.you.support, ...view.you.creatures];
     expect(piles.some(pile => pile.items.length > 1)).toBe(true);
     expect(piles.flatMap(pile => pile.items).length).toBe(navigation.CHOOSE_TARGET.frame.projection.agent.battlefield.length);
+  });
+
+  it('keeps a land that entered under a different player’s control distinguishable', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 1)!;
+    const land = lands.items[0].permanent;
+    land.entry_controller_id = frame.projection.opponent.id;
+    const after = boardView(frame, PLAYERS).you.support.find(pile => pile.items.some(item => item.permanent.id === land.id))!;
+    expect(after.items.map(item => item.permanent.id)).toEqual([land.id]);
   });
 });
 
@@ -363,6 +383,52 @@ describe('the spell being cast', () => {
     const view = boardView(frame, PLAYERS);
     expect(view.stack[0]).toMatchObject({ announcing: 'activated_ability', card: null, entry: { source_permanent: land.id } });
     expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
+  });
+
+  it('keeps stack_objects in top-first authority order so index 0 truly resolves next', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    frame.projection.decision_context = undefined;
+    frame.projection.stack_objects = [
+      { id: 202, kind: 'triggered_ability', controller: 0, label: 'Momo, Friendly Flier — trigger' },
+      { id: 201, kind: 'triggered_ability', controller: 1, label: 'Jet, Freedom Fighter — trigger' },
+    ];
+    const view = boardView(frame, PLAYERS);
+    expect(view.stack.map(item => item.entry.id)).toEqual([202, 201]);
+  });
+
+  it('draws blockers opposite the attackers they block without reordering idle boards', () => {
+    const frame = structuredClone(navigation.DECLARE_BLOCKER.frame);
+    const makeCreature = (id: number, name: string, controller: number, extra: Record<string, unknown> = {}) => ({
+      id,
+      name,
+      controller_id: controller,
+      tapped: false,
+      damage: 0,
+      summoning_sick: false,
+      power: 2,
+      toughness: 2,
+      base_power: 2,
+      base_toughness: 2,
+      plus1_counters: 0,
+      types: { is_creature: true, is_land: false, is_spell: false, is_artifact: false, is_enchantment: false, is_planeswalker: false, is_battle: false },
+      ...extra,
+    });
+    // Opponent has an idle creature, an unblocked attacker, and two blocked attackers (in reverse order of our blockers).
+    frame.projection.opponent.battlefield = [
+      makeCreature(101, 'Idle Elf', 1),
+      makeCreature(102, 'Unblocked Goblin', 1, { attacking: true }),
+      makeCreature(103, 'First Blocked Ogre', 1, { attacking: true }),
+      makeCreature(104, 'Second Blocked Drake', 1, { attacking: true }),
+    ];
+    frame.projection.agent.battlefield = [
+      makeCreature(201, 'Idle Wall', 0),
+      makeCreature(202, 'Blocker B', 0, { blocking: 104 }),
+      makeCreature(203, 'Blocker A', 0, { blocking: 103 }),
+    ];
+    frame.offers = [];
+    const view = boardView(frame, PLAYERS);
+    expect(view.opponent.creatures.map(pile => pile.items[0].permanent.id)).toEqual([103, 104, 102, 101]);
+    expect(view.you.creatures.map(pile => pile.items[0].permanent.id)).toEqual([203, 202, 201]);
   });
 });
 

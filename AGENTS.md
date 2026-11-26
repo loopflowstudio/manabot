@@ -88,29 +88,29 @@ Academy makes the acting agent's viewer-safe observations and complete legal
 action space understandable to a human. Navigation, grouping and labels may
 clarify that shared contract; they must not hide strategic choices, silently
 select actions, reveal unavailable information or introduce human-only game
-semantics. Evaluate awkward decisions at the shared authority rather than
-disguising them in the browser. Preserve Command binding, stale rejection,
-actual pending decisions on reconnect, replay/fork identity and accessibility.
-Cancellation or undo requires an explicit shared action and cannot erase
-committed costs or revealed information. Priority-stop automation must stay
-identifiable as automation, separate from deliberate human decisions.
-Live combat is one joint board draft (click or drag) sent via the existing
-sequential per-creature Commands with no engine change: fold raw per-creature
-offers under a collapsed disclosure while drafting (not beside the draft), and
-keep them listed in Replay and Study where recorded policy probabilities attach.
-Play's retained `hero_*`/`villain_*` setup fields name human/opponent roles;
-`GameConfig.human_seat` orders them at the native boundary. Record and project
-actual native seats; Watch keeps its two-seat acting-view contract.
-Scope Academy resume credentials and the started-launch marker together in
-`sessionStorage` so a launch never resumes another tab's or launch's game.
+semantics. Fix awkward decisions at the shared authority rather than disguising
+them in the browser. Preserve Command binding, stale rejection, actual pending
+decisions on reconnect, replay/fork identity and accessibility. Cancellation or
+undo requires an explicit shared action and cannot erase committed costs or
+revealed information. Keep priority-stop automation distinct from deliberate
+human decisions. Keep multi-step choices (combat, pile partitions) as sequential
+Commands for agents while drafting them holistically in Academy over verified
+steps: fold raw step offers into a collapsed disclosure while drafting, and keep
+them listed in Replay and Study for recorded policy probabilities. Play's retained `hero_*`/`villain_*` setup fields name
+human/opponent roles; `GameConfig.human_seat` orders them at the native
+boundary. Record and project actual native seats; Watch keeps its two-seat
+acting-view contract. Scope resume credentials and the started-launch marker
+together in `sessionStorage` so a launch never resumes another tab's game.
 Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's
 `presentation_cursor`; spectator reveal never supplies history labels. Event
-emphasis stays separate from choice focus and lane navigation. Frame policy
-comparisons neutrally to explain the agent—never grade disagreements as
-mistakes. Default trained policies to `PolicyDescriptor.recommended` before the
-first eligible one. Reserve preview space so hover never shifts layout.
+emphasis stays separate from choice focus and lane navigation; board marks at
+now must be true now—show transient deltas (damage, life changes, touched
+outlines) on the stop and turn they happen, then clear them at now and across
+turn boundaries. Frame policy comparisons neutrally—never grade disagreements
+as mistakes. Default trained policies to `PolicyDescriptor.recommended` before
+the first eligible one. Reserve preview space so hover never shifts layout.
 
 ## Style
 
@@ -476,6 +476,11 @@ Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
 
+A `ForPlayer` instruction changes who performs its effects. The resolving
+spell or ability keeps its controller across that scope and any choice in
+it. Discard replacements use that controller to determine who caused the
+discard, including a discard paid during resolution.
+
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
 use action-aligned `structured_search_offers`: these offers have no choices
 and reject nonempty `Command.answers`. Compound submissions belong to the
@@ -624,8 +629,7 @@ function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
 shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
-the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
+`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged).
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -649,7 +653,10 @@ checks names, sets and token printings online, never in CI, and skips tokens
 without an id.
 
 Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
-table of their categories. Add a new subtype there (the cards crate's
+table of their categories. Its creature list follows CR 205.3m, including legal
+choices absent from the installed cards. Use the rules list for updates;
+Scryfall’s creature-type catalog also includes names outside that list.
+Add a new subtype there (the cards crate's
 `every_authored_subtype_has_a_category` fails otherwise), and read creature
 types through `is_creature_type`, never by excluding other subtypes.
 
@@ -709,6 +716,8 @@ then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
 apart on `cards/search`, and append its row to
 `managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
+Append the text: the fixture repeats some names, so loading and re-dumping
+the JSON silently drops rows.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve

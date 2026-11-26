@@ -10,9 +10,8 @@
 
 use managym::state::{
     ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
-    card::{
-        CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant,
-    },
+    card::{CardType, PrintedCharacteristics, StaticAbility, StaticScope, StaticTypeGrant},
+    effect::Modification,
     permanent::CounterKind,
     predicate::CardPredicate,
     subtype::subtype_category,
@@ -83,11 +82,21 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                             walk(inner, format!("{child}/{part}"), place, found);
                         }
                     }
+                    ("EntersWithCounters", Value::Object(entry)) => {
+                        if let Some(condition) = entry.get("condition") {
+                            walk(
+                                condition,
+                                format!("{child}/condition"),
+                                Place::SourceStatic,
+                                found,
+                            );
+                        }
+                    }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
                     // A state trigger (CR 603.8) asks its condition of its source.
                     ("State", _) => walk(field, child, Place::SourceStatic, found),
                     (
-                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant" | "Continuous",
+                        "TypeGrant" | "SetsLandType" | "KeywordGrant" | "Continuous",
                         Value::Object(ability),
                     ) => {
                         // Layers ask a battlefield grant's condition of its
@@ -215,15 +224,11 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     // Beastmaster Ascension: layers ask a buff's condition of its source.
     let source_buff = PrintedCharacteristics {
         name: "Witness".into(),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: Some(fire.clone()),
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
+        statics: vec![StaticAbility::continuous(
+            StaticScope::This,
+            Some(fire.clone()),
+            vec![Modification::pump(1, 1)],
+        )],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_buff).is_empty());

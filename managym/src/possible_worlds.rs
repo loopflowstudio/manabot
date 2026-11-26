@@ -697,15 +697,17 @@ impl HiddenHandConstraints {
                         .is_some_and(|suspended| {
                             matches!(
                                 suspended.decision,
-                                crate::flow::decision::Decision::OrderReplacement { .. }
+                                crate::flow::decision::Decision::OrderEntryChoices { .. }
+                                    | crate::flow::decision::Decision::ChooseEntryValue { .. }
+                                    | crate::flow::decision::Decision::NameCard { .. }
+                                    | crate::flow::decision::Decision::OrderReplacement { .. }
                                     | crate::flow::decision::Decision::AssignCombatDamage { .. }
                             )
                         }) =>
                 {
-                    // All prospective entrants and replacement sources, and
-                    // the attacker, blocker and damage already assigned, are
-                    // public battlefield state; the retained alternatives stay
-                    // valid.
+                    // The sampled discard satisfies the retained replacement
+                    // predicates. Its ordering choices keep their sources and
+                    // modes, as do choices over public battlefield objects.
                 }
                 ActionSpaceKind::Learn
                 | ActionSpaceKind::Scry

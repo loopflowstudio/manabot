@@ -43,10 +43,19 @@ from managym.experience_projection import decision_surface_view, redact_observat
 from managym.recording import GameEnd, GameInputs, GameRecord, PlayerSetup
 from managym.replay import ReplayStop, walk
 
-# Native decision-context stages that continue announcing a spell or ability
-# (`managym/src/decision_context.rs`): the move is named once it is on the stack.
+# Native decision-context stages that continue announcing a spell, ability, or
+# choice-of-color mana tap (`managym/src/decision_context.rs`): the move is
+# named once it completes.
 ANNOUNCING_STAGES = frozenset(
-    {"payment", "additional_cost", "targets", "mode", "announcement"}
+    {
+        "payment",
+        "additional_cost",
+        "targets",
+        "target_shares",
+        "mode",
+        "announcement",
+        "mana_color",
+    }
 )
 # Stages of a choice made while a spell or ability resolves, or while combat
 # damage is assigned (the suspended decisions of `decision_context.rs`). Mana
@@ -60,12 +69,15 @@ RESOLVING_STAGES = frozenset(
         "surveil",
         "order_library_bottom",
         "order_library_top",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
         "resolution_payment",
         "private_search",
         "name_card",
+        "choose_creature_type",
         "resolution_mode",
         "discard",
         "select_cards",
@@ -74,8 +86,11 @@ RESOLVING_STAGES = frozenset(
         "retarget",
         "choose_to_exile",
         "keep_creatures",
+        "keep_permanents",
         "linked_exile",
         "split_revealed",
+        "partition_piles",
+        "choose_pile",
     }
 )
 
@@ -93,10 +108,14 @@ class OwnStep:
     # What the choice is for: the resolving spell or ability, by its label.
     source: str | None = None
 
-    def groups_with(self, stage: str | None, source: str | None) -> bool:
-        """Whether another consecutive choice by this actor belongs to the same move."""
+    def continues_with(self, stage: str | None, source: str | None) -> bool:
+        """Whether a following choice by this actor belongs to the same move."""
         if self.stage == "order_triggers":
             return stage == self.stage
+        if self.stage == "mana_color":
+            return stage == "resolution_payment"
+        if stage == "mana_color":
+            return self.stage in {"priority", "payment", "resolution_payment"}
         return (
             self.stage in RESOLVING_STAGES
             and stage in RESOLVING_STAGES
@@ -149,9 +168,13 @@ def own_steps(
         ):
             break
         earlier = step(event)
-        if not last.groups_with(earlier.stage, earlier.source):
+        if not earlier.continues_with(run[-1].stage, run[-1].source):
             break
         run.append(earlier)
+        # A standalone mana_color choice only pairs with the single tap that
+        # opened it; resolution_payment continues grouping earlier taps/choices.
+        if last.stage == "mana_color":
+            break
     run.reverse()
     return run
 
@@ -476,6 +499,36 @@ class Recording:
             self.payload, None if position.kind == "state" else position.event_index
         )
 
+    # The 12 original pre-history presentation kinds; any other kind guarantees
+    # a recording carries modern track history (immune to drift as kinds grow).
+    _LEGACY_PRESENTATION_KINDS = frozenset(
+        {
+            "cast",
+            "targeted",
+            "resolved",
+            "damage",
+            "destroyed",
+            "died",
+            "attack_group",
+            "blocked",
+            "turn_started",
+            "land_played",
+            "discarded",
+            "revealed",
+        }
+    )
+
+    def has_track_history(self) -> bool:
+        """Whether this recording carries per-event labels, causes, rules or modern move kinds."""
+        return any(
+            event.labels is not None
+            or event.cause is not None
+            or event.rule is not None
+            or event.kind.kind not in self._LEGACY_PRESENTATION_KINDS
+            for events in self.tracks.values()
+            for event in events
+        )
+
     def can_reveal(self, position: Position) -> bool:
         """Both hands at `position`: a Watch spectator view where one was
         captured, or any position of an authoritatively complete played game."""
@@ -639,6 +692,12 @@ class Recording:
         # Names come from the event's own retained transition. A later board,
         # including spectator analysis, must never fill historical private facts.
         labels: dict[str, dict[str, str]] = {"objects": {}, "players": {}, "stacks": {}}
+        if event.labels is not None:
+            return {
+                "objects": dict(event.labels.objects),
+                "players": {"0": "Seat 1", "1": "Seat 2"},
+                "stacks": dict(event.labels.stacks),
+            }
         index = self.event_by_revision.get(event.from_revision)
         if index is None:
             return labels
@@ -753,8 +812,12 @@ class Recording:
             if row
             else deepcopy(replayed or self._board(position, viewer))
         )
-        event = self.payload["events"][position.event_index] if row else {}
-        analysis = event.get("analysis_observation") if self.watch else None
+        event = (
+            self.payload["events"][position.event_index]
+            if position.event_index < len(self.payload["events"])
+            else {}
+        )
+        analysis = event.get("analysis_observation") if (row and self.watch) else None
         other = (
             self.views.board(index, viewer=1 - viewer)
             if self.views and self.views.complete
@@ -783,13 +846,18 @@ class Recording:
             if position.kind == "consequences"
             else position.key
         )
+        boards = (
+            deepcopy(event.get("boards", []))
+            if position.kind == "consequences" and not self.watch
+            else []
+        )
         return {
             **self.metadata(position),
             "description": self._description(position),
             "note_key": note_key,
             "observation": deepcopy(analysis) if reveal else observation,
             "decision": decision,
-            "outputs": deepcopy(event.get("bot_decision")),
+            "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,
             "revealed": reveal,
             "can_reveal": other is not None
@@ -806,6 +874,7 @@ class Recording:
             "cursor": cursor,
             "transition_start": transition_start,
             "consequences_recorded": bool(self.replay) or bool(track),
+            "boards": boards,
         }
 
 
@@ -953,8 +1022,8 @@ def narrate_move(
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
         or (
-            own
-            and own[-1].groups_with(
+            bool(own)
+            and own[-1].continues_with(
                 following.get("stage"), (following.get("source") or {}).get("label")
             )
         )
@@ -964,13 +1033,89 @@ def narrate_move(
         # modes, the next trigger to place).
         return None
     if own:
-        return _own_move(context, own)
+        return _own_move(context, own, before=before, after=after, side=side)
     if context.get("stage") != "priority":
         return None
     return "Pass priority"
 
 
-def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
+_TAP_OFFER = re.compile(r"^Tap (.+) for (.+)$")
+_MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
+
+
+def _pool_delta_mana(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    side: str | None,
+) -> str | None:
+    """Mana symbols added to `side`'s pool between `before` and `after`, if any."""
+    if side is None:
+        return None
+    prev_player = before.get(side)
+    next_player = after.get(side)
+    if not isinstance(prev_player, Mapping) or not isinstance(next_player, Mapping):
+        return None
+    prev_mana = prev_player.get("mana")
+    next_mana = next_player.get("mana")
+    if (
+        not isinstance(prev_mana, Sequence)
+        or not isinstance(next_mana, Sequence)
+        or len(prev_mana) < len(_MANA_SYMBOLS)
+        or len(next_mana) < len(_MANA_SYMBOLS)
+    ):
+        return None
+    prev_lesson = prev_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
+    next_lesson = next_player.get("lesson_mana") or (0,) * len(_MANA_SYMBOLS)
+    symbols: list[str] = []
+    for index, symbol in enumerate(_MANA_SYMBOLS):
+        before_count = int(prev_mana[index]) + int(prev_lesson[index])
+        after_count = int(next_mana[index]) + int(next_lesson[index])
+        delta = after_count - before_count
+        if delta > 0:
+            symbols.append(f"{{{symbol}}}" * delta)
+    return "".join(symbols) or None
+
+
+def _resolved_mana_tap(
+    tap_chosen: str,
+    color_chosen: str | None,
+    source_label: str | None,
+    delta_mana: str | None = None,
+) -> str:
+    """Combine a choice-of-color mana tap with the mana actually added."""
+    added = (
+        color_chosen.removeprefix("Add ")
+        if color_chosen and color_chosen.startswith("Add ")
+        else delta_mana
+    )
+    match = _TAP_OFFER.fullmatch(tap_chosen)
+    if match:
+        name, offer = match.groups()
+        if added and (
+            color_chosen is not None
+            or "/" in offer
+            or "any color" in offer
+            or "mana" in offer
+        ):
+            return f"Tap {name} for {added}"
+        return tap_chosen
+    if color_chosen and added:
+        if tap_chosen.startswith("Activate ability: "):
+            name = tap_chosen.removeprefix("Activate ability: ")
+            return f"Activate {name} for {added}"
+        if source_label:
+            return f"Tap {source_label} for {added}"
+    return color_chosen or tap_chosen
+
+
+def _own_move(
+    context: dict[str, Any],
+    own: Sequence[OwnStep],
+    *,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    side: str | None = None,
+) -> str | None:
     """The person's own move that left nothing on the board to name it by."""
     last = own[-1]
     stage = context.get("stage")
@@ -983,6 +1128,10 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         if last.chosen == "Decline Learn":
             return "Declined to learn"
         return f"Learn: {last.chosen[:1].lower()}{last.chosen[1:]}"
+    if stage == "mana_color":
+        source = (context.get("source") or {}).get("label")
+        tap_chosen = own[-2].chosen if len(own) >= 2 else ""
+        return _resolved_mana_tap(tap_chosen, last.chosen, source)
     if last.stage in RESOLVING_STAGES:
         return _resolution(own)
     source = (context.get("source") or {}).get("label")
@@ -998,6 +1147,10 @@ def _own_move(context: dict[str, Any], own: Sequence[OwnStep]) -> str | None:
         return None
     if stage == "priority" and last.action_type == "PRIORITY_PASS_PRIORITY":
         return "Pass priority"
+    if _TAP_OFFER.fullmatch(last.chosen):
+        return _resolved_mana_tap(
+            last.chosen, None, source, _pool_delta_mana(before, after, side)
+        )
     # A choice while something resolves ("Put Island into your hand") is
     # named as the person made it.
     return last.chosen
@@ -1014,6 +1167,19 @@ def _resolution(own: Sequence[OwnStep]) -> str:
     index = 0
     while index < len(own):
         step = own[index]
+        if (
+            index + 1 < len(own)
+            and own[index + 1].stage == "mana_color"
+            and (
+                _TAP_OFFER.fullmatch(step.chosen) or step.chosen.startswith("Activate ")
+            )
+        ):
+            resolved = _resolved_mana_tap(
+                step.chosen, own[index + 1].chosen, own[index + 1].source
+            )
+            phrases.append(f"{resolved[:1].lower()}{resolved[1:]}")
+            index += 2
+            continue
         if step.stage in ("order_library_bottom", "order_library_top"):
             run = [step]
             while index + 1 < len(own) and own[index + 1].stage == step.stage:

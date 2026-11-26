@@ -8,6 +8,7 @@ import { sanitizeDeckSelection } from './decks';
 import { playerToken, rememberRecordCredential } from './records';
 import { policyChoice, gameStore } from './game.svelte';
 import { followShown, nextLiveAnalysis } from './analysis';
+import { isMoveEvent } from './board/history';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -25,7 +26,6 @@ import type {
 import type {
   ClientMessage,
   FrameUpdate,
-  LogLine,
   LaunchSetup,
   RecoveryEnvelope,
   ExperienceFrame,
@@ -206,7 +206,6 @@ export class GameSocketController {
   private outboundQueue: SharedTableRequest[] = [];
   private pendingCommand: PendingCommand | null = null;
   private presentationCursor: number | null = null;
-  private loadingHistory = false;
 
   connect(): void {
     if (!browser) {
@@ -251,7 +250,6 @@ export class GameSocketController {
           gameStore.recordingId = credentials.recording_id ?? gameStore.recordingId;
           this.pendingCommand = credentials.pending_command ?? this.pendingCommand;
           gameStore.beginCommand();
-          this.loadingHistory = this.presentationCursor === null;
           this.pendingResume = true;
           // A persisted cursor outlives the in-memory history. Only request a
           // delta while this controller still owns that history; reloads need
@@ -610,7 +608,11 @@ export class GameSocketController {
     }
 
     if (message.type === 'analysis_state' || message.type === 'analysis') {
-      gameStore.liveAnalysis = nextLiveAnalysis(gameStore.liveAnalysis, message, gameStore.actionLog.length);
+      gameStore.liveAnalysis = nextLiveAnalysis(
+        gameStore.liveAnalysis,
+        message,
+        presentationPlayer.events.filter(isMoveEvent).length,
+      );
       return;
     }
 
@@ -683,6 +685,7 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       gameStore.tableUnavailable = false;
+      const matchBefore = gameStore.protocolFrame?.match_id ?? null;
       const seatBefore = gameStore.observation?.agent.player_index ?? null;
       if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
       if (this.pendingResume) {
@@ -703,13 +706,32 @@ export class GameSocketController {
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
+        const sameMatch = matchBefore === message.recovery.frame.match_id;
+        const seatSwapped = sameMatch && seatBefore !== null && seatBefore !== message.recovery.frame.projection.agent.player_index;
+        const prevLastSeq = sameMatch && !seatSwapped ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
         this.applyRecovery(
           message.recovery,
           sessionId,
           resumeToken,
-          message.log ?? [],
         );
-        gameStore.applyStepBoards(message.recovery.frame, message.boards ?? []);
+        if (seatSwapped) gameStore.keptBoards = null;
+        const patches = message.boards ?? [];
+        // Recovery on reconnect/reload brings presentation_tail with no earlier
+        // boards; only span the frame board across freshly delivered non-pass
+        // events (never across missed pre-reconnect or pre-swap events).
+        const freshNonPass = seatSwapped
+          ? []
+          : message.recovery.presentation_tail.filter(
+              event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
+            );
+        const isReconnect = message.recovery.reason === 'reconnect';
+        const range = (!isReconnect || patches.length > 0) && freshNonPass.length > 0
+          ? {
+              first: isReconnect && patches.length > 0 ? patches[0].first : freshNonPass[0].seq,
+              last: freshNonPass.at(-1)!.seq,
+            }
+          : null;
+        gameStore.applyStepBoards(message.recovery.frame, patches, range);
         this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
@@ -717,7 +739,6 @@ export class GameSocketController {
           message.actions,
           message.session_id,
           message.resume_token,
-          message.log ?? [],
           message.stops,
           message.deck_names,
           message.action_space ?? '',
@@ -726,7 +747,6 @@ export class GameSocketController {
         gameStore.applyGameOver(
           message.data,
           message.winner,
-          message.log ?? [],
           message.stops,
           message.deck_names,
         );
@@ -740,10 +760,17 @@ export class GameSocketController {
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       // Live scores are read from one seat's view; after Swap sides the line
-      // starts again from the new seat, whose earlier decisions arrive as history.
+      // starts again from the new seat and live history marks the swap.
+      const matchAfter = gameStore.protocolFrame?.match_id ?? null;
       const seatAfter = gameStore.observation?.agent.player_index ?? null;
-      if (seatBefore !== null && seatAfter !== null && seatAfter !== seatBefore) {
+      if (matchBefore !== null && matchBefore === matchAfter && seatBefore !== null && seatAfter !== null && seatAfter !== seatBefore) {
         gameStore.liveAnalysis = { ...gameStore.liveAnalysis, points: [], reading: null };
+        gameStore.addHistoryNote(
+          'note',
+          gameStore.observation?.turn.turn_number ?? null,
+          presentationPlayer.events.at(-1)?.seq ?? -1,
+          'Swapped sides',
+        );
       }
       this.flushQueue();
       return;
@@ -865,12 +892,11 @@ export class GameSocketController {
   }
 
   private restoreStudyHistory(restored: RestoredReplayDecision): void {
-    presentationPlayer.finishSequence();
     studyPresentationPlayer.loadPrefix(presentationPlayer.events.flatMap((event, index) =>
       event.to_revision <= restored.frame.revision
         ? [{ events: [event], labels: presentationPlayer.labelsAt(index) }]
         : [],
-    ), `study:${restored.frame.match_id}:${restored.address}`, false);
+    ), `study:${restored.frame.match_id}:${restored.address}`);
   }
 
   private applyUpdate(update: FrameUpdate): void {
@@ -894,11 +920,12 @@ export class GameSocketController {
       ...(current?.match_id === update.frame.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(update.frame),
     );
-    gameStore.applyFrame({
-      ...update.frame,
-      ...(update.log ? { log: update.log } : {}),
-    });
-    gameStore.applyStepBoards(update.frame, update.boards ?? []);
+    gameStore.applyFrame(update.frame);
+    const nonPass = update.presentation.filter(event => event.kind.kind !== 'passed');
+    const range = nonPass.length > 0
+      ? { first: nonPass[0].seq, last: nonPass.at(-1)!.seq }
+      : null;
+    gameStore.applyStepBoards(update.frame, update.boards ?? [], range);
     try {
       validatePresentationUpdate(
         update.presentation,
@@ -927,7 +954,6 @@ export class GameSocketController {
     recovery: RecoveryEnvelope,
     sessionId?: string,
     resumeToken?: string,
-    log: LogLine[] = [],
   ): void {
     const current = gameStore.protocolFrame;
     const next = recovery.frame;
@@ -943,6 +969,15 @@ export class GameSocketController {
     ) {
       return;
     }
+    const seatChanged = Boolean(
+      current
+      && current.match_id === next.match_id
+      && current.projection.agent.player_index !== next.projection.agent.player_index,
+    );
+    if (seatChanged) {
+      this.presentationCursor = null;
+      presentationPlayer.clear();
+    }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
     presentationPlayer.setScope(`live:${next.match_id}`);
@@ -951,10 +986,7 @@ export class GameSocketController {
       presentationLabelsFromFrame(next),
     );
     gameStore.applyFrame(
-      {
-        ...next,
-        ...(log.length > 0 ? { log } : {}),
-      },
+      next,
       sessionId,
       resumeToken,
     );
@@ -968,10 +1000,6 @@ export class GameSocketController {
         presentationLabels,
         recovery.presentation_cursor,
       );
-      // Initial recovery loads recorded history, not live motion from before
-      // this page opened. Same-page reconnects animate only newly seen facts.
-      if (this.loadingHistory) presentationPlayer.finishSequence();
-      this.loadingHistory = false;
       this.persistResumeState(sessionId, resumeToken);
     } catch (error) {
       presentationPlayer.reject();

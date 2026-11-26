@@ -15,6 +15,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
+        card::EntryScope,
         game_object::{PlayerId, Target},
         zone::ZoneType,
     },
@@ -285,9 +286,10 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     s.game_mut().state[source].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithCounters {
-            if_cast: false,
+            on: EntryScope::This,
+            condition: None,
             kind: CounterKind::PlusOnePlusOne,
-            count: 2,
+            count: 2.into(),
         },
     ];
     let clone = crate::support::game::move_to_hand(&mut s, "Clone");

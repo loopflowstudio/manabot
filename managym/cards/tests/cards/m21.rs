@@ -268,3 +268,102 @@ fn heartfire_immolator_deals_its_sacrificed_appearances_pumped_power() {
     );
     assert!(s.game().state.permanents[returned].is_some());
 }
+
+#[test]
+fn primal_might_pumps_and_optionally_fights() {
+    use crate::support::play::{choose, choose_mode};
+    use managym::agent::action::Action;
+
+    // With fight target: +X/+X applies before the fight.
+    let mut s = five_color_setup(&["Primal Might", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let giant_card = card_of(&s, giant);
+    cast(&mut s, "Primal Might");
+    choose_mode(&mut s, 3);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(giant)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (5, 5));
+    assert_eq!(permanent(&s, ogre).damage, 3);
+    assert_eq!(zone_of(&s, giant_card), Some(ZoneType::Graveyard));
+
+    // Declining the optional opposing creature still pumps +X/+X.
+    let mut s = five_color_setup(&["Primal Might", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    cast(&mut s, "Primal Might");
+    choose_mode(&mut s, 2);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert_eq!(permanent(&s, ogre).damage, 0);
+    assert_eq!(permanent(&s, giant).damage, 0);
+}
+
+#[test]
+fn garruks_uprising_checks_power_on_entry_and_on_resolution() {
+    use crate::support::play::enter_and_settle;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Garruk's Uprising", "Goblin Boarders", "Hill Giant"]);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 0);
+    assert!(s
+        .game()
+        .characteristics(giant)
+        .keywords
+        .has(Keyword::Trample));
+    s.game_mut().state.turn.history[0].attacked = true;
+    let boarders = enter_and_settle(&mut s, "Goblin Boarders");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
+    enter_and_settle(&mut s, "Garruk's Uprising");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+    let third = crate::support::inspect::library_card(&s, 0, "Garruk's Uprising");
+    move_card(&mut s, third, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    move_card(&mut s, boarders, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 2);
+}
+
+#[test]
+fn wildwood_scourge_enters_with_x_and_grows_only_for_other_non_hydras() {
+    use crate::support::{
+        inspect::{counters, permanent_named},
+        play::{choose_mode, enter_and_settle},
+    };
+    let mut s = five_color_setup(&[
+        "Wildwood Scourge",
+        "Heroes' Bane",
+        "Giada, Font of Hope",
+        "Angel of Vitality",
+        "Rise of the Dark Realms",
+    ]);
+    cast(&mut s, "Wildwood Scourge");
+    choose_mode(&mut s, 2);
+    settle(&mut s);
+    let hydra = permanent_named(&s, "Wildwood Scourge");
+    assert_eq!(counters(&s, hydra), 2);
+    enter_and_settle(&mut s, "Heroes' Bane");
+    assert_eq!(counters(&s, hydra), 2);
+    s.force_permanent_on_battlefield(0, "Giada, Font of Hope");
+    for player in 0..2 {
+        crate::support::game::plant_in_graveyard(&mut s, player, "Angel of Vitality");
+    }
+    cast(&mut s, "Rise of the Dark Realms");
+    settle(&mut s);
+    let angels = s.battlefield_permanents_named(0, "Angel of Vitality");
+    assert_eq!(angels.len(), 2);
+    for angel in angels {
+        assert_eq!(
+            counters(&s, angel),
+            1,
+            "only Giada was already on the battlefield"
+        );
+    }
+    assert_eq!(counters(&s, hydra), 4);
+}

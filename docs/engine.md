@@ -225,6 +225,9 @@ life or high of poison for a player who can lose ends the game as
 `draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
 permanents never repeats a fingerprint, so it is never drawn; 10,000
 resolutions draw a loop that grows something without bound.
+Version 32 includes the last copiable face and casting choices of a departed
+spell when a trigger still refers to it. A suspended repeated instruction
+records the remaining count in its resolution frame.
 Destructuring the state without `..` makes every new field an explicit decision
 in the hash contract. The digest excludes pointers, capacities, timings and
 observation projections. It reads eight draws from a clone of the RNG.
@@ -292,6 +295,13 @@ into hand becomes a hand minimum. A shuffle or an unspecified private reorder
 forgets the affected order. Public and private maps independently retain ten
 positions: eight nearest the top and two nearest the bottom among known facts.
 The owner reads their union, so private retention cannot erase a public fact.
+
+Curator of Destinies lets its controller look at the top five cards and
+assign each one to a pile. Either pile can be empty. When the split is
+complete, the opponent sees the face-up cards and the size of the face-down
+pile. The opponent chooses which pile goes into the controller’s hand. Face-up
+cards remain known there and face-down cards stay hidden. The other pile goes into the graveyard, where both players can
+see it.
 
 Facts never claim several possible locations. After a secret hand departure,
 each independent hand minimum decreases by one (to a minimum of zero). Seeing
@@ -1363,6 +1373,28 @@ minting consumes those values in place. Without a new copy choice, minting
 uses the retained printing, including any fixture edits, and discards the old
 appearance's copy effect.
 
+When Zhao, the Moon Slayer has a conqueror counter, Dark Depths enters
+as a Mountain with zero ice counters. Zhao’s separate ability makes it
+enter tapped. If Zhao has also lost all abilities, the Mountain effect
+still applies in layer 4 and Dark Depths enters untapped.
+
+When several permanents enter together, the active player makes their entry
+choices first, then the other player makes theirs. Each player chooses which
+of their entrants to answer first. For example, Brought Back can return
+Sorcerous Spyglass and Heraldic Banner together. Their controller can look at
+the opponent’s hand and name a card before choosing Banner’s color, or choose
+the color first. Both artifacts enter after the last answer. Each viewer can
+see the name and color on the battlefield. Only the player using Spyglass
+gets the private look.
+
+A copy entering as Adaptive Automaton chooses its own creature type. The
+grouped prompt includes all 367 creature types in CR 205.3m. Secluded
+Courtyard’s colored mana keeps the chosen type until spent and can pay for an
+ability of a creature of that type, including cycling from hand. If Zhao turns
+Courtyard or Uncharted Haven into a Mountain as it enters, the land makes no
+choice. Removing Zhao restores its printed mana abilities, with no chosen
+type or color for that incarnation.
+
 CR 400.7a to c (effects and prevention applied to a permanent spell continuing
 on the permanent) carry nothing, because no supported effect applies to a
 spell. Madness and stickers (CR 400.7k, m) are not modeled.
@@ -1557,6 +1589,12 @@ discards and marked damage clears. If a player gets priority in cleanup,
 another cleanup step follows. Combat-only control ends when combat ends.
 Turn-long control applies to every cleanup discard that turn.
 
+When casting Biogenic Upgrade, choose one, two, or three creatures and announce
+how the three counters divide among them. Each target gets at least one.
+A copy keeps the amount assigned to each slot when its targets change.
+If a target becomes illegal, its share is lost. Each legal target receives its
+share, then doubles all its +1/+1 counters, including any it already had.
+
 The Dominion Bracelet locks its activation price using the equipped creature’s
 power. When several Bracelets grant that ability, each offer identifies the
 Bracelet it exiles. The payment receipt retains that object and the mana spent,
@@ -1568,14 +1606,14 @@ opponent’s next turn using that opponent’s resources.
 
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
-Replacement and prevention definitions from the immutable card definitions
-apply once each in `(source ObjectId, definition index)` order; the surviving
-event commits and emits the ordinary facts, so triggers, observations and
-presentation consume only committed events. Supported replacements are
-prevent N damage, double damage, enters tapped and enters with counters. The
-choice CR 616 gives a player among several replacements is not offered: the
-order is deterministic so replay, training and search stay exact, and a card
-that needs more stays unsupported rather than approximated.
+The affected player or object's controller chooses among competing applicable
+replacements (CR 616.1). The engine retains the batch and its caller through
+each choice, rechecks applicability, then commits the results together.
+Triggers and observations see the committed events. For example, a player
+chooses whether Crystal Barricade prevents a Bolt on another of their creatures
+before a damage doubler applies. Lifelink uses the damage actually dealt by
+each source. Angels of Vitality replace that source's gain before the damage
+batch commits.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
 with a `PaymentCost` (mana, waterbend taps against a generic obligation, or

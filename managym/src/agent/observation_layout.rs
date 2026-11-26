@@ -26,6 +26,13 @@ impl InputLayout {
     }
 }
 
+pub fn card_columns(layout: InputLayout) -> &'static [Column] {
+    match layout {
+        InputLayout::OneToken => card::COLUMNS,
+        InputLayout::Legacy => &card::COLUMNS[..super::legacy_input::CARD_DIM],
+    }
+}
+
 /// A permanent row's columns: input v11 writes every `permanent` column; the
 /// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
 /// (`legacy_input`).
@@ -288,6 +295,7 @@ columns! { player {
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
     74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
+    75: HEXPROOF => ("hexproof", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
@@ -373,6 +381,7 @@ columns! { card {
     53: HAS_X => ("has_x", ValueLayout::FLAG),
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
+    56: PUT_INTO_GRAVEYARD_THIS_TURN => ("put_into_graveyard_this_turn", ValueLayout::FLAG),
 } }
 
 columns! { permanent {
@@ -433,6 +442,8 @@ columns! { permanent {
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
     56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
+    57: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
+    58: BLOCKED => ("blocked", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -913,7 +924,11 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::ChosenColor => ("chosen_color","id: chosen color token; value: 1"),
+        FactKind::ChosenSubtype => ("chosen_subtype","id: chosen creature type token; value: 1"),
+        FactKind::ChosenName => ("chosen_name","id: chosen card name; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
+        FactKind::Keyword => ("keyword", "id: keyword token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
         FactKind::TriggeringAmount => ("triggering_amount", "object: controller; id: frame index + 1; value: the triggering event's amount (damage dealt or life lost)"),
         FactKind::AbilityResolution => ("ability_resolution","id: triggered ability index; value: resolutions this turn"),
@@ -922,7 +937,7 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
         FactKind::CopyException => ("copy_exception", "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance"),
         FactKind::Transforms => ("transforms", "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count"),
         FactKind::CombatRestriction => ("combat_restriction", "id: frame index + 1; detail: attacker-predicate token"),
-        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance) or Ward (a permanent's ward price that is not a mana value, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
+        FactKind::EffectProgram => ("effect_program", "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance), PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance), Ward (a permanent's ward price that is not a mana value, no provenance), or StaticAbility::HexproofFrom / StaticAbility::Protection (a permanent's source quality, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal"),
         FactKind::EffectiveColor => ("effective_color", "id: Color token (Colorless for empty colors); value: 1"),
         FactKind::KeywordCounterTimestamp => ("keyword_counter_timestamp", "id: CounterKind token; timestamp: counter timestamp rank"),
         FactKind::ContinuationProgram => ("continuation_program", "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0"),
@@ -1027,7 +1042,7 @@ pub fn observation_layout(
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
             ("player", "player", Some(1), layout_kind.player_columns()),
-            ("cards", "card", None, card::COLUMNS),
+            ("cards", "card", None, card_columns(layout_kind)),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
             layout.insert(
@@ -1144,7 +1159,12 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount
+                FactKind::AbilityResolution
+                    | FactKind::TriggeringAmount
+                    | FactKind::Keyword
+                    | FactKind::ChosenColor
+                    | FactKind::ChosenSubtype
+                    | FactKind::ChosenName
             )
     });
     facts.row_kinds = kinds
@@ -1259,13 +1279,17 @@ mod tests {
                 (
                     "agent_player",
                     config.player_dim(),
-                    if one_token { 75 } else { 74 },
+                    if one_token { 76 } else { 74 },
                 ),
-                ("agent_cards", card::WIDTH, 56),
+                (
+                    "agent_cards",
+                    config.card_dim(),
+                    if one_token { 57 } else { 56 },
+                ),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 57 } else { 38 },
+                    if one_token { 59 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1324,7 +1348,8 @@ mod tests {
                 layout["agent_permanents"].columns[permanent_valid].name,
                 "valid"
             );
-            for key in ["agent_cards", "facts", "effects"] {
+            assert_eq!(layout["agent_cards"].columns[card::VALID].name, "valid");
+            for key in ["facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

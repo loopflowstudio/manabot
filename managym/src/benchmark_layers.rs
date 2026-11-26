@@ -84,12 +84,51 @@ impl Drop for Timer {
     }
 }
 
-/// Recompute priority actions without observation construction or cache resets.
+/// Recompute block or priority offers without observation construction or cache resets.
 pub fn actions(
     game: &crate::Game,
     player: crate::state::game_object::PlayerId,
 ) -> Vec<crate::agent::action::Action> {
+    if let Some(crate::agent::action::Action::DeclareBlocker {
+        blocker,
+        player: defender,
+        ..
+    }) = game.action_space().and_then(|s| s.actions.first())
+    {
+        return game.block_actions(*defender, *blocker);
+    }
     game.compute_player_actions(player)
+}
+
+/// Re-enumerate the first target clause in the eight single-target casting fixtures.
+pub fn cast_targets(game: &crate::Game) -> Vec<crate::agent::action::Action> {
+    let Some(crate::flow::game::PendingChoice::ChooseTargets {
+        player,
+        object,
+        cast,
+        mode,
+        requirement_index,
+        ..
+    }) = &game.pending_choice
+    else {
+        panic!("quality-targets must be choosing targets");
+    };
+    let spell = cast.spell(&game.state[*object]);
+    let requirements = spell.target_requirements_for_mode(*mode);
+    let requirement = &requirements[*requirement_index];
+    assert_eq!(
+        (
+            requirement.min_for(cast.x, cast.kicked),
+            requirement.max_for(cast.x, cast.kicked),
+        ),
+        (1, 1)
+    );
+    game.legal_spell_targets(*player, *object, spell, requirement)
+        .map(|target| crate::agent::action::Action::ChooseTarget {
+            player: *player,
+            target,
+        })
+        .collect()
 }
 
 /// Read one object, then the complete board through the shared scan.
