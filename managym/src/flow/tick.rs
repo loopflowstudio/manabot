@@ -257,8 +257,9 @@ impl Game {
     }
 
     fn on_step_end(&mut self, step: StepKind) {
-        // CR 106.4 — Unspent mana empties at the end of each step and phase.
-        self.clear_mana_pools();
+        // CR 106.4 — Unspent mana empties at the end of each step and phase,
+        // respecting classes that survive until end of combat or end of turn.
+        self.clear_mana_pools(step);
         if step == StepKind::EndOfCombat {
             // CR 511.3 — Creatures stop being attacking as combat ends.
             for permanent in self.state.permanents.iter_mut().flatten() {
@@ -266,9 +267,6 @@ impl Game {
             }
             self.finish_combat_capture();
             self.state.combat = None;
-        }
-        if matches!(step, StepKind::EndOfCombat | StepKind::Cleanup) {
-            self.clear_combat_mana_pools();
         }
         self.remember_controlled_hands();
     }
@@ -282,6 +280,7 @@ impl Game {
                 let active = self.active_player();
                 self.end_until_your_next_turn_effects(active);
                 self.refresh_control();
+                self.presentation_cut();
                 self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
@@ -321,7 +320,7 @@ impl Game {
                 let is_first_player_first_turn =
                     self.state.turn.turn_number == 1 && active == PlayerId(0);
                 if !is_first_player_first_turn {
-                    self.draw_cards(active, 1);
+                    self.draw(active, 1, true);
                 }
                 None
             }
@@ -438,6 +437,7 @@ impl Game {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.end_turn_modifiers();
+                self.presentation_cut();
                 None
             }
             _ => None,
@@ -486,6 +486,7 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    self.presentation_cut();
                     if !self.state.turn.step_initialized || self.is_game_over() {
                         // A turn-ending resolution leaves this priority round.
                         return None;

@@ -12,6 +12,18 @@ describe('manaRuns', () => {
     expect(manaRuns('No blocks')).toEqual([{ text: 'No blocks', mana: false }]);
     expect(manaRuns('{G}')).toEqual([{ text: '{G}', mana: true }]);
   });
+  it('splits dual-land mana choices into separate mana runs around the slash', () => {
+    expect(manaRuns('Tap Kyoshi Village for {G}/{W}')).toEqual([
+      { text: 'Tap Kyoshi Village for ', mana: false },
+      { text: '{G}', mana: true },
+      { text: '/', mana: false },
+      { text: '{W}', mana: true },
+    ]);
+    expect(manaRuns('Tap Plains for {W}')).toEqual([
+      { text: 'Tap Plains for ', mana: false },
+      { text: '{W}', mana: true },
+    ]);
+  });
 });
 
 describe('restricted mana wording', () => {
@@ -20,5 +32,16 @@ describe('restricted mana wording', () => {
     expect(spendPhrase('anything but spells from hand')).toBe('for anything but spells from hand');
     expect(pooledManaTerms({ mana: [0, 0, 0, 0, 0, 1], restriction: 'anything but spells from hand', combat: false }))
       .toBe('for anything but spells from hand, normally expires at step end');
+  });
+
+  it('distinguishes step, end-of-combat, and end-of-turn mana expiry', () => {
+    expect(pooledManaTerms({ mana: [0, 0, 0, 3, 3, 0], combat: false, expiry: 'end_of_turn' }))
+      .toBe('normally expires at end of turn');
+    expect(pooledManaTerms({ mana: [0, 0, 0, 2, 0, 0], combat: true, expiry: 'end_of_combat' }))
+      .toBe('normally expires at end of combat');
+    expect(pooledManaTerms({ mana: [0, 0, 0, 2, 0, 0], combat: true }))
+      .toBe('normally expires at end of combat');
+    expect(pooledManaTerms({ mana: [0, 0, 0, 0, 1, 0], restriction: 'creature spells', combat: false, expiry: 'step' }))
+      .toBe('only for creature spells, normally expires at step end');
   });
 });

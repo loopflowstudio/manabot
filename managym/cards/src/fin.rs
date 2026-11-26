@@ -154,6 +154,7 @@ fn vanille() -> CardDefinition {
                         Effect::SelectCards {
                             from: ObjectSelector::Zone(ZoneType::Graveyard),
                             predicate: CardPredicate::permanent(),
+                            max_mana_value: None,
                             min: 1,
                             max: 1.into(),
                             effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],

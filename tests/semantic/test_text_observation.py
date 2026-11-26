@@ -41,6 +41,7 @@ from manabot.verify.text_observation import (
     run_demo,
 )
 import managym
+from managym.academy.server import GameSession
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 from managym.decision_memory import DecisionRecord, read_records
@@ -258,8 +259,9 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     tap = next(
         a
         for a in decision.actions
-        if "Activate" in a.description and "Jasmine" in a.description
+        if "Tap Jasmine Dragon Tea Shop for any color" in a.description
     )
+    assert "Activate ability" not in tap.description
     submit_response(env, decision, tap.reference)
     modes = capture_text_decision(env)
     green = next(a for a in modes.actions if "Add {G}" in a.description)
@@ -268,6 +270,33 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
     assert "Lesson-only" not in text and "Lesson spending" not in text
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
+
+
+def test_simple_choice_mana_taps_follow_native_description_in_text() -> None:
+    env = priority_root(
+        ("Youthful Knight",),
+        ("Kyoshi Village", "Plains", "Plains", "Plains"),
+    )
+    _choose(env, "Cast ")
+    payment = capture_text_decision(env)
+    # The dual reads exactly like the basics beside it.
+    assert [a.description for a in payment.actions[:2]] == [
+        "Tap for mana P1 (Kyoshi Village). Native description: "
+        "Tap Kyoshi Village for {G}/{W}",
+        "Tap for mana P2 (Plains). Native description: Tap Plains for {W}",
+    ]
+
+    any_color_env = priority_root(
+        ("Youthful Knight",),
+        ("Hermitic Herbalist", "Plains", "Plains"),
+    )
+    _choose(any_color_env, "Cast ")
+    herbalist = next(
+        a
+        for a in capture_text_decision(any_color_env).actions
+        if "Tap Hermitic Herbalist for any color" in a.description
+    )
+    assert herbalist.description.startswith("Tap for mana P1 (Hermitic Herbalist). ")
 
 
 def test_x_cost_definition_renders_its_x() -> None:
@@ -540,8 +569,6 @@ def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
     env = priority_root(("Esper Origins",), ("Forest",) * 6)
     for from_graveyard in (False, True):
         _choose(env, "Cast ")
-        if not from_graveyard:
-            _choose(env, "Pay the offered cost")
         stack, _ = _stack_and_continuation(env)
         assert ("; cast from graveyard" in stack) == from_graveyard
         assert ("; cast with flashback" in stack) == from_graveyard
@@ -613,8 +640,6 @@ def test_a_prepared_spell_is_told_apart_from_its_copy() -> None:
     _choose(env, "Pass priority")
     _choose(env, "Cast C1 (Soul Tether)")
     _choose(env, "Tap for mana P3 (Forest)")
-    _choose(env, "Tap for mana P4 (Mountain)")
-    _choose(env, "Tap for mana P5 (Mountain)")
     _choose(env, "Pass priority")
     _choose(env, "Pass priority")
     text = capture_text_decision(env).text
@@ -656,7 +681,7 @@ def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
 
 
 def test_a_chosen_sacrifice_is_committed_once_and_not_already_paid() -> None:
-    env = priority_root((), ("Hungry Ghoul", "Gray Ogre", "Swamp", "Swamp"))
+    env = priority_root((), ("Hungry Ghoul", "Gray Ogre", "Swamp", "Plains"))
     _choose(env, "Activate ability")
     _choose(env, "Sacrifice Gray Ogre")
     _, continuation = _stack_and_continuation(env)
@@ -675,19 +700,41 @@ def test_a_chosen_sacrifice_is_committed_once_and_not_already_paid() -> None:
     )
 
 
+def _single_changed_line(before: str, after: str) -> str:
+    before_lines = before.splitlines()
+    after_lines = after.splitlines()
+    assert len(before_lines) == len(after_lines)
+    changed = [new for old, new in zip(before_lines, after_lines) if old != new]
+    assert len(changed) == 1
+    return changed[0]
+
+
 def test_face_down_card_text_appears_only_when_present() -> None:
     env = priority_root(("Gray Ogre",), ())
     decision = capture_text_decision(env)
     assert "face down" not in decision.text
     payload = json.loads(decision.capture_json)
     payload["observation"]["viewer_state"]["agent_cards"][0]["face_down"] = True
-    text = render_decision(_redigest(payload)).text
-    changed = [
-        (old, new)
-        for old, new in zip(decision.text.splitlines(), text.splitlines())
-        if old != new
-    ]
-    assert len(changed) == 1 and "face down" in changed[0][1]
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "face down" in line
+
+
+def test_put_into_graveyard_this_turn_text_distinguishes_arrival_origin() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    decision = capture_text_decision(env)
+    assert "put into the graveyard" not in decision.text
+
+    payload = json.loads(decision.capture_json)
+    card = payload["observation"]["viewer_state"]["agent_cards"][0]
+    card["put_into_graveyard_this_turn"] = True
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "; put into the graveyard this turn;" in line
+    assert "from the battlefield" not in line
+
+    card["from_battlefield_this_turn"] = True
+    line = _single_changed_line(decision.text, render_decision(_redigest(payload)).text)
+    assert "; put into the graveyard from the battlefield this turn;" in line
+    assert "; put into the graveyard this turn;" not in line
 
 
 def test_a_transformed_cecil_token_copy_is_named_by_its_shown_face() -> None:
@@ -1022,6 +1069,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_animated": "animated",
         "has_exile_link": "holds exile link",
         "exile_if_dies_this_turn": "exile if dies this turn",
+        "chosen": "chosen color, creature type or card name",
         "temp_subtypes": "temporary subtypes",
         "keywords": "effective keywords",
         "counters": "<kind> counters",
@@ -1075,6 +1123,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
+        "put_into_graveyard_this_turn": "put into the graveyard this turn",
         "counters": "stash counters",
     },
     managym.StackObject: {
@@ -1157,6 +1206,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "mana": "amounts by color",
         "restriction": "only for",
         "combat": "expires at end of combat or at step end",
+        "expiry": "expires at end of",
         "program": "the same class stated by rider, restriction and expiry",
     },
     managym.ContinuousEffect: {
@@ -1335,6 +1385,12 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
     payload["observation"]["viewer_state"]["agent"]["pooled_mana_classes"] = [
         {"mana": [0, 0, 0, 2, 0, 0], "combat": True, "program": []},
         {
+            "mana": [0, 0, 0, 3, 3, 0],
+            "combat": False,
+            "expiry": "end_of_turn",
+            "program": [],
+        },
+        {
             "mana": [0, 0, 0, 0, 1, 0],
             "restriction": "creature spells",
             "effect": "a +1/+1 counter on a non-Human creature spell it casts",
@@ -1350,6 +1406,7 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
     ]
     text = render_decision(_redigest(payload)).text
     assert "Of the mana above: R 2; expires at end of combat." in text
+    assert "Of the mana above: R 3, G 3; expires at end of turn." in text
     assert (
         "Of the mana above: C 1; for anything but spells from hand; expires at step end."
         in text
@@ -1989,12 +2046,10 @@ def test_accumulate_wisdom_ordering_reaches_text_commands_and_policy_input() -> 
         _replay_text_choice(env, action.reference)
 
 
-def _lightshell_position(
-    library: tuple[str, ...], *, wisdom: bool = False
+def _inspection_position(
+    library: tuple[str, ...], spells: tuple[str, ...], lands: int
 ) -> managym.Env:
     env = managym.Env(seed=23)
-    lands = 6 if wisdom else 4
-    spells = ("Lightshell Duo", "Accumulate Wisdom") if wisdom else ("Lightshell Duo",)
     deck = dict.fromkeys((*spells, *library), 1)
     deck["Island"] = lands + 1
     raw, _ = env.reset(
@@ -2021,7 +2076,7 @@ def _lightshell_position(
 
 
 def _lightshell_surveil(first: str, second: str) -> managym.Env:
-    env = _lightshell_position((first, second))
+    env = _inspection_position((first, second), ("Lightshell Duo",), 4)
     _choose(env, "Cast ")
     return env
 
@@ -2100,7 +2155,7 @@ def _assert_private_library(env: managym.Env, expected: dict[int, str]) -> None:
 
 def test_lightshell_duo_reorders_only_the_inspected_prefix() -> None:
     library = ("Gray Ogre", "Hill Giant", "Forest", "Plains", "Mountain", "Swamp")
-    env = _lightshell_position(library, wisdom=True)
+    env = _inspection_position(library, ("Lightshell Duo", "Accumulate Wisdom"), 6)
     for wording in (
         "Accumulate Wisdom",
         "Gray Ogre",
@@ -2507,7 +2562,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
     )
     matchup = manifest["matchup"]
     # A seed whose uniformly random game is still live after 600 steps.
-    env = managym.Env(seed=208, decision_memory=True)
+    env = managym.Env(seed=379, decision_memory=True)
     raw, _ = env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
@@ -2515,13 +2570,13 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ]
     )
     keep_opening_hands(env, raw)
-    rng = random.Random(208)
+    rng = random.Random(379)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 357
+    assert len(memory) == 428
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
@@ -2543,7 +2598,7 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
 
 
 def test_manual_mana_sources_reach_text_commands_and_policy_input() -> None:
-    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Mountain", "Forest"))
+    env = priority_root(("Gray Ogre",), ("Mountain", "Mountain", "Forest", "Forest"))
     priority = capture_text_decision(env)
     cast = next(action for action in priority.actions if "Cast" in action.description)
     submit_response(env, priority, cast.reference)
@@ -2751,6 +2806,174 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
         assert "Gray Ogre" not in opponent["definition_names"].values()
 
 
+def test_entry_choice_replays_through_text_and_academy() -> None:
+    env = priority_root(("Uncharted Haven",), ("Forest",))
+    opening = capture_text_decision(env)
+    play = next(
+        a
+        for a in opening.actions
+        if "Play" in a.description and "Haven" in a.description
+    )
+    submit_response(env, opening, play.reference)
+    decision = capture_text_decision(env)
+    assert len(decision.actions) == 5
+    _assert_policy_input_holds_the_decision(env, decision)
+    blue = next(a for a in decision.actions if "Choose Blue" in a.description)
+    branch = _replay_text_choice(env, blue.reference)
+    assert "chosen color Blue" in capture_text_decision(branch).text
+    for viewer in (0, 1):
+        board = decision_surface_view(branch, viewer)
+        lands = board["agent"]["battlefield"] + board["opponent"]["battlefield"]
+        haven = next(p for p in lands if p["name"] == "Uncharted Haven")
+        assert haven["chosen"] == "color Blue"
+        assert haven["tapped"]
+
+
+def test_curator_pile_handoff_survives_viewer_reconnect_and_command_replay(
+    tmp_path: Path,
+) -> None:
+    names = ("Gray Ogre", "Hill Giant", "Forest", "Plains", "Swamp")
+    env = _inspection_position(names, ("Curator of Destinies",), 6)
+    _choose(env, "Cast ")
+    for i, name in enumerate(names):
+        decision = capture_text_decision(env)
+        assert len(decision.actions) == 2
+        assert all(name in action.description for action in decision.actions)
+        assert not decision_surface_view(env, 1)["agent"].get("inspected")
+        _assert_policy_input_holds_the_decision(env, decision)
+        _choose(env, "face-up pile" if i % 2 == 0 else "face-down pile")
+
+    face_up = set(names[::2])
+    face_down = set(names[1::2])
+    assert env.current_agent_index() == 1
+    for fork in (env, env.clone_env()):
+        decision = capture_text_decision(fork)
+        _assert_policy_input_holds_the_decision(fork, decision)
+        assert {
+            card["name"]
+            for card in decision_surface_view(fork, 1)["agent"]["inspected"]
+        } == face_up
+        for name in face_down:
+            assert name not in decision.text
+            assert name not in json.dumps(decision_surface_view(fork, 1))
+        session = GameSession(trace_dir=tmp_path)
+        session.human_seat = 1
+        session.env = fork
+        session.obs = fork.observation_for_player(1)
+        recovered = session.current_recovery("reconnect")
+        labels = [offer["label"] for offer in recovered["frame"]["offers"]]
+        assert len(labels) == 2 and all(name in labels[0] for name in face_up)
+        assert "face-down pile (2 cards)" in labels[1]
+        assert all(name not in json.dumps(recovered) for name in face_down)
+        choice = next(
+            a for a in decision.actions if "face-down pile (2 cards)" in a.description
+        )
+        branch = _replay_text_choice(fork, choice.reference)
+        opponent = decision_surface_view(branch, 1)
+        assert {c["name"] for c in opponent["opponent"]["graveyard"]} >= face_up
+        assert not branch.observation_for_player(1).opponent.known_hand
+        assert not opponent["opponent"].get("known_hand")
+        for name in face_down:
+            assert name not in json.dumps(opponent)
+
+
+def test_biogenic_shares_are_announced_in_text_and_visible_on_both_tables() -> None:
+    env = priority_root(
+        ("Biogenic Upgrade",),
+        ("Forest",) * 6 + ("Gray Ogre",),
+        opponent=("Hill Giant",),
+    )
+    _choose(env, "Cast ")
+    _choose(env, "(Gray Ogre)")
+    _choose(env, "(Hill Giant)")
+    decision = capture_text_decision(env)
+    assert "Stage: target shares." in decision.text
+    _assert_policy_input_holds_the_decision(env, decision)
+    share = next(
+        a for a in decision.actions if "Assign 2 to Gray Ogre" in a.description
+    )
+    branch = _replay_text_choice(env, share.reference)
+    assert "2 assigned to Gray Ogre" in capture_text_decision(branch).text
+    _choose(branch, "Assign 1 to Hill Giant")
+    if not branch.observation_for_player(0).stack_objects:
+        _choose(branch, "Pay the offered cost")
+    for viewer in (0, 1):
+        [spell] = decision_surface_view(branch, viewer)["stack_objects"]
+        assert "2 assigned to Gray Ogre" in spell["label"]
+        assert "1 assigned to Hill Giant" in spell["label"]
+
+
+def test_retarget_and_keep_permanents_surface_in_text_and_academy() -> None:
+    env = priority_root(
+        ("Deadly Brew",),
+        ("Swamp", "Forest", "Gray Ogre", "Hill Giant"),
+        opponent=("Gray Ogre",),
+    )
+    _choose(env, "Cast ")
+    while decision_surface_view(env, 0)["decision_context"]["stage"] != "keep_permanents":
+        _choose(env, "Pass")
+    decision = capture_text_decision(env)
+    assert "Stage: keep permanents." in decision.text
+    _assert_policy_input_holds_the_decision(env, decision)
+    assert decision_surface_view(env, 0)["decision_context"]["stage"] == "keep_permanents"
+
+    copy_env = priority_root(
+        ("Teach by Example", "Biogenic Upgrade"),
+        ("Island", "Mountain") + ("Forest",) * 6 + ("Gray Ogre", "Hill Giant"),
+        opponent=("Wind Drake", "Llanowar Elves"),
+    )
+    _choose(copy_env, "(Teach by Example)")
+    while not copy_env.is_game_over():
+        actions = capture_text_decision(copy_env).actions
+        if any("(Biogenic Upgrade)" in a.description for a in actions):
+            break
+        _choose(copy_env, "Pass")
+    _choose(copy_env, "(Biogenic Upgrade)")
+    _choose(copy_env, "(Gray Ogre)")
+    _choose(copy_env, "(Hill Giant)")
+    _choose(copy_env, "Decline")
+    _choose(copy_env, "Assign 2 to Gray Ogre")
+    _choose(copy_env, "Assign 1 to Hill Giant")
+    while decision_surface_view(copy_env, 0)["decision_context"]["stage"] != "retarget":
+        _choose(copy_env, "Pass")
+    fork_a = copy_env.clone_env()
+    fork_b = copy_env.clone_env()
+    _choose(fork_a, "(Wind Drake)")
+    _choose(fork_b, "(Llanowar Elves)")
+    text_a = capture_text_decision(fork_a)
+    text_b = capture_text_decision(fork_b)
+    assert "New targets chosen so far: Wind Drake." in text_a.text
+    assert "New targets chosen so far: Llanowar Elves." in text_b.text
+    assert "new target:" in text_a.text
+    assert text_a.text != text_b.text
+    _assert_policy_input_holds_the_decision(fork_a, text_a)
+    _assert_policy_input_holds_the_decision(fork_b, text_b)
+
+
+def test_savage_ventmaw_end_of_turn_mana_renders_in_text_and_academy() -> None:
+    env = priority_root((), ("Savage Ventmaw",), opponent=())
+    while not env.is_game_over() and not env.observation_for_player(0).agent.pooled_mana_classes:
+        decision = capture_text_decision(env)
+        action = next(
+            (a for a in decision.actions if "Attack with Savage Ventmaw" in a.description),
+            next(
+                (a for a in decision.actions if "Pass" in a.description or "Decline" in a.description),
+                decision.actions[0],
+            ),
+        )
+        submit_response(env, decision, action.reference)
+    decision = capture_text_decision(env)
+    assert "Of the mana above: R 3, G 3; expires at end of turn." in decision.text
+    view = decision_surface_view(env, 0)
+    assert view["agent"]["pooled_mana_classes"] == [
+        {
+            "mana": [0, 0, 0, 3, 3, 0],
+            "combat": False,
+            "expiry": "end_of_turn",
+        }
+    ]
+
+
 def _pending_militant_discard() -> managym.Env:
     env = priority_root(
         ("Seize the Spoils", "Lightning Bolt"),
@@ -2812,7 +3035,7 @@ def test_banner_replays_the_type_group_and_leaf_before_entry() -> None:
     _choose(env, "Banner of Kinship")
     for _ in range(4):
         groups = capture_text_decision(env)
-        if any("Creature types" in action.description for action in groups.actions):
+        if any("Types " in action.description for action in groups.actions):
             break
         _choose(env, "Pass priority")
     _assert_policy_input_holds_the_decision(env, groups)
@@ -2825,7 +3048,7 @@ def test_banner_replays_the_type_group_and_leaf_before_entry() -> None:
                 resolved = _replay_text_choice(leaf, name.reference)
                 for viewer in (0, 1):
                     assert (
-                        "chosen type: Elf"
+                        '"chosen":{"CreatureType":"Elf"}'
                         in resolved.observation_for_player(viewer).toJSON()
                     )
                 return

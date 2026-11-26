@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { committed, primaryLabel, promptHint, promptLine } from './prompt';
+import { committed, offerChoiceLabel, primaryLabel, promptHint, promptLine } from './prompt';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -59,16 +59,22 @@ describe('promptLine', () => {
     expect(committed(pay)).toEqual([]);
   });
 
-  it('names a tap-pays choice, combat damage and replacement order by what they ask, other modal choices as modes', () => {
+  it('names a tap-pays choice, a mana color, combat damage and replacement order by what they ask, other modal choices as modes', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
     const modal = (stage: string): ExperienceFrame => ({ ...pay, action_space: 'MODAL', projection: { ...pay.projection,
       decision_context: { ...pay.projection.decision_context!, stage, source: { ...pay.projection.decision_context!.source!, label: 'Appeal to Eirdu' } } } });
     const line = (frame: ExperienceFrame): string => promptLine(frame, boardView(frame, PLAYERS));
     expect(line(modal('payment'))).toBe('Choose what the tap pays for Appeal to Eirdu');
     expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
+    expect(line(modal('mana_color'))).toBe('Choose the mana to add');
     expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
     expect(line(modal('choose_creature_type'))).toBe('Choose a creature type');
     expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');
+    expect(line(modal('target_shares'))).toBe('Divide among targets for Appeal to Eirdu');
+    expect(line(modal('entry_choice'))).toBe('Choose as Appeal to Eirdu enters');
+    expect(line(modal('order_entry_choices'))).toBe('Choose which entering permanent to decide next');
+    expect(line(modal('partition_piles'))).toBe('Put each card into the face-up or face-down pile (Appeal to Eirdu)');
+    expect(line(modal('choose_pile'))).toBe('Choose which pile goes to hand (Appeal to Eirdu)');
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
@@ -166,5 +172,53 @@ describe('primaryLabel', () => {
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Auto pay ${cost}`);
+  });
+});
+
+describe('offerChoiceLabel', () => {
+  it('disambiguates identical target labels by board state or ordinal while leaving unique labels alone', () => {
+    const base = structuredClone(frames.find(f => f.action_space === 'CHOOSE_TARGET') ?? frames[0]);
+    base.projection.agent.battlefield = [
+      { id: 10, name: 'Ally', controller_id: 0, tapped: false, power: 1, toughness: 1, damage: 0, summoning_sick: false, plus1_counters: 0 },
+    ] as typeof base.projection.agent.battlefield;
+    base.projection.opponent.battlefield = [
+      { id: 20, name: 'Ally', controller_id: 1, tapped: true, power: 1, toughness: 1, damage: 0, summoning_sick: false, plus1_counters: 0 },
+      { id: 21, name: 'Ally', controller_id: 1, tapped: false, power: 1, toughness: 1, damage: 0, summoning_sick: false, plus1_counters: 0 },
+      { id: 30, name: 'Gray Ogre', controller_id: 1, tapped: false, power: 2, toughness: 2, damage: 0, summoning_sick: false, plus1_counters: 0 },
+    ] as typeof base.projection.opponent.battlefield;
+    const makeOffer = (id: number, label: string, displayId: number) => ({
+      offer: {
+        id,
+        actor: 0,
+        verb: 'choose' as const,
+        source: null,
+        label,
+        help: null,
+        choices: [],
+        confirm_label: label,
+        action_type: 'CHOOSE_TARGET',
+        focus: [displayId],
+      },
+      number: id + 1,
+      anchor: { kind: 'object' as const, id: displayId },
+    });
+    const list = [
+      makeOffer(0, 'Target Ally', 10),
+      makeOffer(1, 'Target Ally', 20),
+      makeOffer(2, 'Target Ally', 21),
+      makeOffer(3, 'Target Gray Ogre', 30),
+    ];
+    expect(offerChoiceLabel(list[0], list, base.projection)).toBe('Target Ally (yours)');
+    expect(offerChoiceLabel(list[1], list, base.projection)).toBe('Target Ally (theirs · tapped)');
+    expect(offerChoiceLabel(list[2], list, base.projection)).toBe('Target Ally (theirs)');
+    expect(offerChoiceLabel(list[3], list, base.projection)).toBe('Target Gray Ogre');
+
+    // Identical cards in hand (not on the battlefield) stay clean without (#1)/(#2) suffixes.
+    const handList = [
+      makeOffer(10, 'Play Island', 901),
+      makeOffer(11, 'Play Island', 902),
+    ];
+    expect(offerChoiceLabel(handList[0], handList, base.projection)).toBe('Play Island');
+    expect(offerChoiceLabel(handList[1], handList, base.projection)).toBe('Play Island');
   });
 });

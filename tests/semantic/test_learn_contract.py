@@ -310,13 +310,15 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
 
 
 def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_root):
-    from manabot.env.observation import ACTION_VALID_INDEX, ObservationSpace
+    from manabot.env.observation import ACTION_VALID_INDEX, ObservationSpace, column
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
     scalar = encode_observation(
         ObservationSpace(ObservationConfig(max_focus_objects=1)), obs
     )
+    outside = column("agent_cards", "outside")
+    valid = column("agent_cards", "valid")
     retrievals = 0
     for index, action in enumerate(obs.action_space.actions):
         kind = int(action.action_type)
@@ -332,11 +334,11 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
             candidate = obs.agent_sideboard[focus - 2 - len(obs.agent_cards)]
             assert candidate.candidate_id == action.focus[0]
             assert row[:7].sum() == 0  # outside is not an eighth game zone
-            assert row[37] == 1  # outside marker precedes indestructible
-            assert row[-1] == 1  # validity
+            assert row[outside] == 1  # outside marker precedes indestructible
+            assert row[valid] == 1  # validity
         else:
             assert row[1] == 1  # hand
-            assert row[-2] == 0
+            assert row[outside] == 0
     assert retrievals == 3
     for config in (
         ObservationConfig(max_actions=2),

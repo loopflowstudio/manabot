@@ -3,6 +3,7 @@
 
 use crate::{
     cards::content_pack::default_content_pack,
+    experience::PresentationRule,
     flow::{
         decision::Decision,
         event::GameEvent,
@@ -309,7 +310,7 @@ impl Game {
         }
     }
 
-    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) {
+    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) -> ObjectId {
         self.move_object_with_entry(
             object,
             ZoneType::Hand,
@@ -317,10 +318,14 @@ impl Game {
                 library_top_departure: true,
                 ..Default::default()
             },
-        );
+        )
     }
 
     pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
+        self.draw(player, amount, false);
+    }
+
+    pub(super) fn draw(&mut self, player: PlayerId, amount: usize, draw_step: bool) {
         for _ in 0..amount {
             let Some(object) = self.state.zones.top(ZoneType::Library, player) else {
                 self.state.players[player.0].drew_when_empty = true;
@@ -329,13 +334,14 @@ impl Game {
             if self.card_capture.is_some() || self.statistics.is_some() {
                 self.capture_drawing = Some(object);
             }
-            self.put_library_top_in_hand(object);
+            let drawn = self.put_library_top_in_hand(object);
             self.capture_drawing = None;
             self.state.turn.history[player.0].cards_drawn += 1;
             self.emit(GameEvent::CardDrawn {
                 player,
                 nth_this_turn: self.state.turn.history[player.0].cards_drawn,
             });
+            self.presentation_drawn(player, drawn, draw_step);
         }
     }
 
@@ -443,17 +449,7 @@ impl Game {
         exceptions: &[CopyException],
     ) -> ObjectId {
         let id = self.state.id_gen.next_id();
-        let copy = Object::token_with_copiable_values(
-            id,
-            controller,
-            (
-                values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
-                std::sync::Arc::clone(&values.definition.printed),
-            ),
-            values.faces.clone(),
-            values.copy.clone(),
-            exceptions,
-        );
+        let copy = Object::token_with_copiable_values(id, controller, values, exceptions);
         self.add_object(copy)
     }
 
@@ -469,11 +465,11 @@ impl Game {
     /// creation without emitting a rules zone-change event.
     pub(crate) fn create_spell_copy(
         &mut self,
-        source: ObjectId,
+        source: Object,
         id: PublicId,
         controller: PlayerId,
     ) -> ObjectId {
-        let copy = Object::spell_copy(self.state[source].clone(), id, controller);
+        let copy = Object::spell_copy(source, id, controller);
         let object = self.add_object(copy);
         self.state.place_object(object, controller, ZoneType::Stack);
         self.capture_object_move(object, None, Some(ZoneType::Stack), controller);
@@ -584,6 +580,7 @@ impl Game {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }
+        self.presentation_event(&event);
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);
@@ -601,6 +598,7 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
+        self.presentation_event(&event);
         self.state.observation_events_mut().push(event);
     }
 
@@ -639,6 +637,7 @@ impl Game {
                 exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
+                target_shares: Vec::new(),
                 target_req_indices,
                 kicked: cast.kicked,
                 x: cast.x,
@@ -944,7 +943,26 @@ impl Game {
             .map(|index| self.state.stack_objects_mut().remove(index))
         {
             Some(StackObject::Spell(spell)) => {
-                let lki = self.spell_lki(&spell);
+                let mut lki = self.spell_lki(&spell);
+                // Only triggers still referring to this stack appearance can copy it.
+                // Capture after any retargets, before the zone change restores its face.
+                let context = Some(Target::StackSpell(spell.object));
+                if self
+                    .unplaced_triggers()
+                    .any(|trigger| trigger.context == context)
+                    || self.state.stack_objects.iter().any(|item| {
+                        matches!(item,
+                        StackObject::TriggeredAbility(trigger) if trigger.context == context)
+                    })
+                {
+                    lki.copiable = Some(std::sync::Arc::new(
+                        crate::state::stack_object::CopiableSpell {
+                            spell: spell.clone(),
+                            values: default_content_pack()
+                                .copiable_values(&self.state[spell.object]),
+                        },
+                    ));
+                }
                 self.state.spell_lki_mut().insert(spell.object, lki);
                 (to_zone == ZoneType::Battlefield).then_some(SpellEntry {
                     x: spell.x,
@@ -990,8 +1008,10 @@ impl Game {
                 .entry(entered_definition)
                 .or_default() += 1;
         }
-        if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
-            self.state.turn.graveyard_from_battlefield.push(object_id);
+        if to_zone == ZoneType::Graveyard {
+            self.state
+                .turn
+                .record_graveyard_arrival(object_id, old_zone == Some(ZoneType::Battlefield));
         }
         if to_zone == ZoneType::Exile && !entry.counters.is_empty() {
             self.state
@@ -1029,6 +1049,7 @@ impl Game {
                 object_id,
                 &self.state[object_id],
             );
+            permanent.chosen = entry.chosen.map(std::sync::Arc::new);
             permanent.manifested = entry.face == EntryFace::Manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
@@ -1041,15 +1062,6 @@ impl Game {
                 self.state.turn.history[holder.0].land_entered = true;
             }
             self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
-            if let Some(name) = entry.chosen_creature_type {
-                self.apply_continuous(
-                    Some(object_id),
-                    holder,
-                    [crate::state::effect::Affected::Object(object_id)],
-                    crate::state::effect::Modification::ChosenCreatureType(name.into()),
-                    crate::state::effect::EffectDuration::Indefinite,
-                );
-            }
             if entry.prepared {
                 self.prepare_inset(object_id);
             }
@@ -1067,6 +1079,9 @@ impl Game {
             face_down: entry_face_down,
         };
         self.emit(event);
+        if entry.discard == Some(crate::flow::proposed_event::DiscardCause::Cleanup) {
+            self.presentation_cleanup_discard();
+        }
         if let Some(permanent) = entered_permanent {
             let counters = self.state.permanents[permanent]
                 .as_ref()
@@ -1096,7 +1111,9 @@ impl Game {
                     .insert_top(None, Some(definition));
             }
             if to_zone == ZoneType::Graveyard {
-                self.state.turn.graveyard_from_battlefield.push(arrival);
+                self.state
+                    .turn
+                    .record_graveyard_arrival(arrival, old_zone == Some(ZoneType::Battlefield));
             }
             self.capture_object_move(arrival, old_zone, Some(to_zone), event_controller);
             arrival
@@ -1174,6 +1191,8 @@ impl Game {
         &mut self,
         permanent_id: PermanentId,
         controller: PlayerId,
+        returned: Option<bool>,
+        rule: Option<PresentationRule>,
     ) {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
@@ -1182,6 +1201,7 @@ impl Game {
             return;
         }
         let object_id = permanent.object;
+        let returned = returned.unwrap_or(controller == permanent.entry_controller());
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;
@@ -1189,6 +1209,7 @@ impl Game {
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
         self.remove_permanent_from_combat(permanent_id);
+        self.presentation_control_changed(object_id, controller, returned, rule);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
         }
@@ -1321,6 +1342,7 @@ impl Game {
     fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
         let object = &self.state[spell.object];
         SpellLki {
+            copiable: None,
             object: spell.object,
             definition_id: object.definition_id,
             controller: spell.controller,

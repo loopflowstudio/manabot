@@ -242,3 +242,48 @@ fn foundations_5e_deadly_riposte() {
 fn foundations_5g_obliterating_bolt() {
     crate::assert_damage_exiles_creature_or_planeswalker("Obliterating Bolt", 4);
 }
+
+#[test]
+fn demolition_field_destroys_nonbasic_and_lets_both_players_search_untapped_basics() {
+    use crate::support::{
+        inspect::{card_of, library_card, tapped},
+        play::{activate, choose, select_card, settle},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+
+    let mut s = five_color_setup(&["Demolition Field", "Azorius Guildgate"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let field = s.force_permanent_on_battlefield(0, "Demolition Field");
+    let field_card = card_of(&s, field);
+    let basic = s.force_permanent_on_battlefield(1, "Plains");
+    let gate = s.force_permanent_on_battlefield(1, "Azorius Guildgate");
+    let gate_card = card_of(&s, gate);
+
+    activate(&mut s, field, 0);
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(gate)));
+    assert!(!offers.contains(&Target::Permanent(basic)));
+    assert!(s.choose_target(Target::Permanent(gate)));
+    assert_eq!(zone_of(&s, field_card), Some(ZoneType::Graveyard));
+
+    // Target's controller (player 1) may search for an untapped basic.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    let their_basic = library_card(&s, 1, "Island");
+    select_card(&mut s, their_basic);
+
+    // Controller (player 0) may search for an untapped basic.
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    let our_basic = library_card(&s, 0, "Forest");
+    select_card(&mut s, our_basic);
+    settle(&mut s);
+
+    assert_eq!(zone_of(&s, gate_card), Some(ZoneType::Graveyard));
+    let their_perm = crate::support::inspect::permanent_of(&s, their_basic).unwrap();
+    let our_perm = crate::support::inspect::permanent_of(&s, our_basic).unwrap();
+    assert!(!tapped(&s, their_perm));
+    assert!(!tapped(&s, our_perm));
+}

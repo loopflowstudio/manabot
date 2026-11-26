@@ -112,3 +112,8 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   base wheel unzipped to `.runs/base-site` with `PYTHONPATH` as the control:
   in MTG-486, 100 games took about 2 s per engine, with 625 self-exiles on base
   and 0 after the fix.
+- `tests/env/test_skip_forced_decisions.py::test_no_runner_turns_skipping_off`
+  greps every `.rs`/`.py` line under `managym/src`, `manabot`, `academy`,
+  `scripts` and `experiments` for `skip_trivial=false`/`False`, comments
+  included. Describe lockstep or debug paths in prose ("with and without
+  `skip_trivial`") rather than writing the assignment in a doc comment.

@@ -40,6 +40,7 @@ fn naming_game() -> Game {
     game.keep_opening_hands();
     game.run_frame(EffectFrame {
         targets: vec![ResolutionTarget {
+            share: 0,
             target: Target::Player(PlayerId(1)),
             requirement: 0,
             legal: true,
@@ -344,7 +345,7 @@ fn catalog_naming_cost_attribution() {
     let game = naming_game();
     measure("naming_decision", || Decision::NameCard {
         player: PlayerId(0),
-        count: 4,
+        after: crate::flow::decision::AfterNaming::Exile { count: 4 },
         scope: names.root(),
         names: Arc::clone(&names),
     });

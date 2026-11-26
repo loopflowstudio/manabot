@@ -73,7 +73,6 @@ def new_game(
             self.env.scenario_force_battlefield(0, name, ready=True)
         self.obs = self.env.scenario_refresh()
         self.published_prompt = None
-        self.presentation.reset()
         return self._wire_message()
     fixture = (
         isinstance(raw_config, dict) and raw_config.get("trigger_order_fixture") is True
@@ -95,7 +94,6 @@ def new_game(
     assert self.env is not None
     self.obs = configure_root(self.env)
     self.published_prompt = None
-    self.presentation.reset()
     return self._wire_message()
 
 

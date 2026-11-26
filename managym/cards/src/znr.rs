@@ -14,6 +14,8 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        felidar_retreat(),
+        gnarlid_colony(),
         feed_the_swarm(),
         spitfire_lagac(),
         crawling_barrens(),
@@ -40,6 +42,43 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         },
         nullpriest_of_oblivion(),
     ]
+}
+
+fn felidar_retreat() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, choose one —\n• Create a 2/2 white Cat Beast creature token.\n• Put a +1/+1 counter on each creature you control. Those creatures gain vigilance until end of turn.";
+    let your_creatures = || ObjectSelector::each_you_control(CardPredicate::creature());
+    CardDefinition {
+        key: "znr.felidar_retreat",
+        scryfall_id: "45340647-4d3e-4be1-b0e6-e40cc56a438b",
+        printed: PrintedCharacteristics {
+            name: "Felidar Retreat".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::TriggerModes {
+                    up_to: None,
+                    unchosen: false,
+                    modes: vec![
+                        vec![Effect::create_tokens("token.cat_beast_2_2_w", 1)],
+                        vec![
+                            Effect::put_counters(your_creatures(), CounterKind::PlusOnePlusOne, 1),
+                            Effect::until_end_of_turn(
+                                your_creatures(),
+                                Modification::AddKeywords(Keywords::of(&[Keyword::Vigilance])),
+                            ),
+                        ],
+                    ],
+                }],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn feed_the_swarm() -> CardDefinition {
@@ -108,7 +147,7 @@ fn broken_wings() -> CardDefinition {
                                 ..Default::default()
                             },
                             CardPredicate {
-                                flying: true,
+                                keyword: Some(Keyword::Flying),
                                 ..CardPredicate::creature()
                             },
                         ],
@@ -231,4 +270,31 @@ fn nullpriest_of_oblivion() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn gnarlid_colony() -> CardDefinition {
+    use managym_state::card::{
+        EntryScope, ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticScope,
+    };
+    CardDefinition {
+key: "znr.gnarlid_colony",
+scryfall_id: "7327289d-eed8-44b1-8495-7172e2b49d5f",
+printed: PrintedCharacteristics {
+name: "Gnarlid Colony".into(),
+mana_cost: Some(ManaCost::parse("{1}{G}")),
+types: CardTypes::new([CardType::Creature]),
+subtypes: vec!["Beast".into()],
+power: Some(2),
+toughness: Some(2),
+additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}{G}"))],
+replacement_effects: vec![ReplacementEffect::EntersWithCounters { on: EntryScope::This, kind: CounterKind::PlusOnePlusOne, count: 2.into(), condition: Some(Condition::Kicked) }],
+statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+scope: StaticScope::YouControl(CardPredicate { with_counter: true, ..CardPredicate::creature() }),
+keywords: Keywords::of(&[Keyword::Trample]), condition: None,
+})],
+text_box: "Kicker {2}{G} (You may pay an additional {2}{G} as you cast this spell.)\nIf this creature was kicked, it enters with two +1/+1 counters on it.\nEach creature you control with a +1/+1 counter on it has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)".into(),
+..Default::default()
+},
+..Default::default()
+}
 }

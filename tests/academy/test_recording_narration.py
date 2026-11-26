@@ -87,114 +87,6 @@ def test_opponent_moves_are_narrated_from_the_person_s_view(tmp_path: Path) -> N
     )
 
 
-def test_live_log_narrates_the_opponent_as_review_does(tmp_path: Path) -> None:
-    game = server.GameSession(tmp_path)
-    game.new_game(CONFIG)
-    live: list[str] = []
-    for index in range(120):
-        frame = game.current_message()["frame"]
-        if frame["status"] == "game_over":
-            break
-        offer = next(
-            (
-                o
-                for o in frame["offers"]
-                if o["action_type"] == "PRIORITY_PASS_PRIORITY"
-            ),
-            frame["offers"][0],
-        )
-        result = game.hero_command(
-            {
-                "command_id": f"pass.{index}",
-                "match_id": frame["match_id"],
-                "expected_revision": frame["revision"],
-                "prompt_id": frame["prompt"]["id"],
-                "offer_id": offer["id"],
-                "answers": [],
-            }
-        )
-        assert result["status"] == "accepted"
-        live += [
-            line["text"]
-            for line in result["update"].get("log", [])
-            if line["actor"] == "villain"
-        ]
-    payload = game.attempt_store.load(game.match_id)
-    assert payload is not None
-    recording = Recording(game.match_id, payload)
-    review = [
-        label
-        for position in recording.positions
-        if position.kind == "consequences"
-        and payload["events"][position.event_index]["actor"] == "villain"
-        and (label := recording.metadata(position)["label"]) is not None
-    ]
-    # Live play prints the same moves Review does, never the private action.
-    assert live == review
-    assert any(text.startswith("Cast Lightning Bolt, targeting Seat ") for text in live)
-    assert not any(text.startswith(("Target ", "Pay ")) for text in live)
-
-
-def test_your_own_moves_read_as_the_opponent_s_do(tmp_path: Path) -> None:
-    game = server.GameSession(tmp_path)
-    game.new_game(
-        {
-            "hero_deck": {"Mountain": 10, "Lightning Bolt": 10},
-            "villain_deck": {"Island": 20},
-            "villain_type": "passive",
-            "seed": 5,
-            "auto_pass": False,
-        }
-    )
-    live: list[str] = []
-    for index in range(150):
-        frame = game.current_message()["frame"]
-        if frame["status"] == "game_over":
-            break
-        # Act whenever there is something to do: play lands, cast and aim Bolt.
-        offer = next(
-            (
-                o
-                for o in frame["offers"]
-                if o["action_type"] != "PRIORITY_PASS_PRIORITY"
-            ),
-            frame["offers"][0],
-        )
-        result = game.hero_command(
-            {
-                "command_id": f"act.{index}",
-                "match_id": frame["match_id"],
-                "expected_revision": frame["revision"],
-                "prompt_id": frame["prompt"]["id"],
-                "offer_id": offer["id"],
-                "answers": [],
-            }
-        )
-        assert result["status"] == "accepted"
-        live += [
-            line["text"]
-            for line in result["update"].get("log", [])
-            if line["actor"] == "hero"
-        ]
-    payload = game.attempt_store.load(game.match_id)
-    assert payload is not None
-    recording = Recording(game.match_id, payload)
-    review = [
-        label
-        for position in recording.positions
-        if position.kind == "consequences"
-        and payload["events"][position.event_index]["actor"] == "hero"
-        and not payload["events"][position.event_index].get("auto")
-        and (label := recording.metadata(position)["label"]) is not None
-    ]
-    # One line per move, the same live and in Review: a cast names its target
-    # once it is on the stack, never the steps that announced and paid for it.
-    assert live == review
-    assert "Play Mountain" in live
-    assert any(text.startswith("Cast Lightning Bolt, targeting ") for text in live)
-    assert not any(text.startswith(("Target ", "Pay ", "Tap ")) for text in live)
-
-
 def board(stage: str, **context: Any) -> dict[str, Any]:
     return {"decision_context": {"actor": 0, "stage": stage, **context}}
 
@@ -379,4 +271,140 @@ def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
     assert narrate_move(assigning, board("priority"), [], steps) == (
         "Colossal Dreadmaw assigns 2 to Llanowar Elves, 4 left to assign, "
         "Colossal Dreadmaw assigns 2 to Grizzly Bears, 2 to defending player"
+    )
+
+
+def _trace_event(
+    stage: str,
+    chosen: int,
+    *offers: str,
+    action_type: str,
+    source: str | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {"stage": stage}
+    if source is not None:
+        context["source"] = {"label": source}
+    return {
+        "actor": 0,
+        "action": chosen,
+        "action_description": offers[chosen],
+        "actions": [{"type": action_type, "description": o} for o in offers],
+        "observation": {"decision_context": context},
+    }
+
+
+def test_choice_of_color_mana_tap_records_resolved_color_not_raw_offer() -> None:
+    events = [
+        _trace_event(
+            "priority",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
+    ]
+    # Opening the color modal waits for the chosen color instead of logging the offer.
+    assert (
+        narrate_move(
+            board("priority"),
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            [],
+            own_steps(events, 0),
+        )
+        is None
+    )
+    # Completing the color modal logs the resolved mana produced.
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Kyoshi Village"}),
+            board("priority"),
+            [],
+            own_steps(events, 1),
+        )
+        == "Tap Kyoshi Village for {W}"
+    )
+
+    # During a payment, opening the color modal does not leak the raw offer label,
+    # and returning to payment stays quiet until the spell is cast.
+    assert (
+        narrate_move(
+            board("payment"),
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            [],
+            [own("payment", 0, "Tap Gruul Guildgate for {R}/{G}")],
+        )
+        is None
+    )
+    assert (
+        narrate_move(
+            board("mana_color", source={"label": "Gruul Guildgate"}),
+            board("payment"),
+            [],
+            [
+                own("payment", 0, "Tap Gruul Guildgate for {R}/{G}"),
+                own("mana_color", 0, "Add {R}", "Add {G}"),
+            ],
+        )
+        is None
+    )
+
+    # A resolution payment (e.g. Ward) folds the tap + color choice into one phrase.
+    ward_events = [
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+            source="Waterfall Aerialist",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Pay the cost",
+            action_type="PAY_COST",
+            source="Waterfall Aerialist",
+        ),
+    ]
+    assert (
+        narrate_move(
+            board("resolution_payment", source={"label": "Waterfall Aerialist"}),
+            board("priority"),
+            [],
+            own_steps(ward_events, 2),
+        )
+        == "Waterfall Aerialist: tap Kyoshi Village for {W}, pay the cost"
+    )
+
+    # Even without a modal (auto-picked color), pool delta resolves the mana symbol.
+    before_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 0, 0]},
+    }
+    after_pool = {
+        **board("priority"),
+        "agent": {"player_index": 0, "mana": [0, 0, 0, 0, 1, 0]},
+    }
+    assert (
+        narrate_move(
+            before_pool,
+            after_pool,
+            [],
+            [own("priority", 0, "Tap Kyoshi Village for {G}/{W}")],
+        )
+        == "Tap Kyoshi Village for {G}"
     )

@@ -17,126 +17,111 @@
     {
       "label": "Keep hand",
       "offer_id": 0,
-      "before_digest": "69f118cd359624d7a48b0cb8171a5fbfcc4a6aed0c28b94289b96bafb0bab7df"
+      "before_digest": "d0371a604f7bba34ed54b1620a13fa4ee724ed2093fd7ab4173c019e28f3a7d0"
     },
     {
       "label": "Play Swamp",
       "offer_id": 0,
-      "before_digest": "38bfa6139ab25f4825d157cb64c370884dfa26c634fe6492f62fc65ef54c493d"
+      "before_digest": "8f6d1ba19e77698fe61c5e4cb9481412285a12d1f0e1d841ee501acf98519204"
     },
     {
       "label": "Cast Callous Inspector",
       "offer_id": 0,
-      "before_digest": "9f9ae9f0d69e32db4346650d61af6d616a44d5823e5060a09651d781262572e7"
+      "before_digest": "a615fcdcb351592d577a54565f8dcc0b18c1df390502b72ebe81a7bbd9add56d"
     },
     {
       "label": "Play Swamp",
       "offer_id": 3,
-      "before_digest": "bdcc0c14295a09714c5b7856edc12d909c381bc786555043cf7bbbd23cc97774"
+      "before_digest": "23c94591c51ac61d65f860a638acd21839299927f155633b77b944623587d42d"
     },
     {
       "label": "Cast Callous Inspector",
       "offer_id": 1,
-      "before_digest": "ab135329f021a42258f08d54e9274ff0d9fa516519bda364f63316b4b0ddaf52"
-    },
-    {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "f6cd25d1cce24eefe94a05161e658d0fd295f2b4faf3c7f6a5a353c299bfb61b"
+      "before_digest": "cda587b31744be75564f2fe283033a106ee9b0b6757027a5f63cbade1ff7f426"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "d097dd0a76d4ebd4a99bdfcabe9103cdf951a40737d9b6570a4b8ee208239581"
+      "before_digest": "1e1de4377104e3f3d69da614176cf1e7552be0f34ab9b046398d7e6a4ca01f44"
     },
     {
       "label": "Do not attack with Callous Inspector",
       "offer_id": 1,
-      "before_digest": "aa9d15c46485a596cf0d575e9b52c0c5c77dbf5e986344540aa6af9f0677cba4"
+      "before_digest": "d88925820d1d4a7348f060f03de35a8992885637d1e2c42ad8bfe245f3142941"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "38b9b791b64b97f2683a185a39a95668baa15f15175f4f37c4b051ef31c14bf1"
+      "before_digest": "9d4dc852a82c8c4f8842d022000b79f938b89c8804a3572fc694f68e3cd9c5c0"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "eee49c6b43d52b81003b9c37e4352e233713a508dbdc07e9d839bec20146edcf"
+      "before_digest": "a2c530816ed2a8d932fa069ed5a9fead9f2343c4b57c5474bb5ba0fcdec797eb"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "0dedbc70d899cbf4709260ffeb2aa146747cf18fca5113f662eb4d30fefdc8fa"
+      "before_digest": "d5507347331e05d6911f3aeea2feee18cde1f317121ed6d184924cc0e94eafc3"
     },
     {
       "label": "Cast Callous Inspector",
       "offer_id": 3,
-      "before_digest": "07428ec36950ca94a41e96700c86448cfd251d025a6e11f0774db58acdce2b67"
-    },
-    {
-      "label": "Pay the cost",
-      "offer_id": 2,
-      "before_digest": "0f936d5b9727c321319ce611cc26658d70f01900588d0d87292f52ad8fcf5915"
+      "before_digest": "5914709ea8f0966e90e851460f00c6e8f6299362169eed0d1864caae9577206d"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "e9462b167d468b570af384ce19d576936e737e83cc6c0187ec725046d7539229"
+      "before_digest": "26857b020aad1c91d433927b2e12082c1779ed8f6699fd79474f6bc255fe0c00"
     },
     {
       "label": "Do not attack with Callous Inspector",
       "offer_id": 1,
-      "before_digest": "aadeec4c942a3e5816f08c982f8a031a6bc0b344edf223b86720c5d89cd00922"
+      "before_digest": "debafbc49f5e8e2e605e232d55833eec9b974c0d7be00fc5ae63bd32812e00f1"
     },
     {
       "label": "Do not attack with Callous Inspector",
       "offer_id": 1,
-      "before_digest": "3c11d0a82be260f0dbb82e1e51b88226fdae5941f9c21485d99786249e6d486c"
+      "before_digest": "e63a9d799fc56dd3d1667f752e66adfb2fb9d3196d98a8c14ae12d342a43c5fa"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "ff4f9d21a665351d43545afd7494f871ecf0bd4e043a6f729445e353241f6177"
+      "before_digest": "c5a4c07a7312f55a86aafd25385d16997abf1ca6839cb0dd7a72ce71ac74e815"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "ad6397a17bdf651393e96f49e9536984d938c71620f7c750b901c8132576ee14"
+      "before_digest": "14f3fb3960f69d23db78b15b554ed02e21cb18dce239a99daaf35d657ed4c143"
     },
     {
       "label": "Pass priority",
       "offer_id": 2,
-      "before_digest": "82c3bd1e334c972ebf1b059800c8939d867d917d626d7977ef7d33550a09c27c"
+      "before_digest": "1d4014d70309b95af1e382e3f1ebb03a366dbf4427b266cd8cfebadf0dd9ab44"
     },
     {
       "label": "Play Swamp",
       "offer_id": 4,
-      "before_digest": "cfa0724a2f39c1b613a5dbab494720698783f9858f75b531ceecf5c1f0fcc9e4"
+      "before_digest": "45c1d4b81bd79af2da1d1c55926c8a59f87d51d6e908ec38bbf8eb41ad577a03"
     },
     {
       "label": "Cast Callous Inspector",
       "offer_id": 3,
-      "before_digest": "4d48af6f5f7a5efc551417dc4ff2d92d41b5cb97443f3a34918bba3510970768"
-    },
-    {
-      "label": "Pay the cost",
-      "offer_id": 3,
-      "before_digest": "c6992e9bfd46724a9b1b85fcd1f616449fdb38e274a62a7453ce880a333c73d1"
+      "before_digest": "c3d29ee86a1917e990029cc88393544cff771e4bda7df7f9c691dc3a4576b245"
     },
     {
       "label": "Cast Deadly Dispute",
       "offer_id": 0,
-      "before_digest": "cbc3323ee038c7e8834b36813eacec04ccabbd3ea54201a4c347ae296f0064c7"
+      "before_digest": "94ab057ce491fb0dd7a63f8a525c6cc3bb2a7a8e333d7592d6c540d97308655b"
     },
     {
       "label": "Sacrifice Callous Inspector",
       "offer_id": 0,
-      "before_digest": "c77de1f90e8d6778264d8d6bba60bb9e73523b57681f7de171d8d144a0d8d87d"
+      "before_digest": "4efe1cd4fae1cff8c0be60a92790b29464fcff8400ebbdf306f7a9078e7ded2f"
     }
   ],
-  "decision_digest": "f7c9cbd6ca19cb462522e2a65dc147b024e5d6def41dc85a554aa438ca457a6b",
-  "decision_revision": 34,
+  "decision_digest": "afca1eff596c06d8b378f0c9ebed4786405ffb7b8524b72f388b280d13b3b75e",
+  "decision_revision": 31,
   "decision_kind": "PRIORITY",
-  "manifest_digest": "2095a3c24076a1ce2d4daf26d1ffd7c8b800e9e6e438e970f23cf3d0affbcd85"
+  "manifest_digest": "75e78debb553f97a07fab0b646b4db9805f2c768104ac583d88c5eda4109d74f"
 }
