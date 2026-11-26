@@ -64,7 +64,6 @@ def test_bracelet_cost_labels_bind_the_selected_permanent(
         }
     )
     session.published_prompt = None
-    session.presentation.reset()
     session.env = env.clone_env()
     session.obs = session.env.observation_for_player(0)
     prompt = session._publish_current_prompt()

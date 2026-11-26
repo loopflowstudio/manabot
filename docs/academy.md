@@ -17,7 +17,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
 - [Playing a series against a model](#playing-a-series-against-a-model)
-- [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
+- [Reading the history](#reading-the-history)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
@@ -471,8 +471,8 @@ through **New game**. Check the matchup, decklist disclosure, priority stops
 and deal mode, then select **Start game**. When the game ends, a result card
 sits over the board, which stays visible around it (**Look at the board**
 folds the card to a corner). It says who won and how ("Heuristic · scripted
-went to −2 life on turn 9"), the final life totals, and one line from the move
-list: turns, and each player's spells cast and attacks. Select **Rematch** to
+went to −2 life on turn 9"), the final life totals, and one line from the
+history: turns, and each player's spells cast and attacks. Select **Rematch** to
 play again with that setup. After the next game, select **Swap sides**: you
 keep your deck and move from playing first to drawing first, or the reverse.
 **Change opponent** opens only the opponent settings, and **Review this game**
@@ -712,8 +712,8 @@ until the pointer leaves and returns; **Pin the card preview** in Settings keeps
 instead, showing the last card you inspected. Along
 the bottom of the screen runs the step bar: the turn number and whose turn it is,
 then one cell per step, a line between
-phases, the current step shaded in that side's colour, and in each cell the stop for your turn above
-the step's name and the stop for the opponent's turn below it. Press a stop to
+phases, the current step shaded in that side's colour, and in each cell the stop for the opponent's turn above
+the step's name and the stop for your turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
 strip has room; with 24 permanents or more on the battlefield the board may
@@ -727,18 +727,21 @@ label.
 The rail holds:
 
 - **Stack**, top first, each entry with its card and who controls it; a stack
-  entry an action applies to is outlined. A line joins a spell on the stack to
-  each of its targets. A spell you are casting, or an ability you are
-  activating, is on top of the stack with a dashed border (**casting**,
+  entry an action applies to is outlined. A line joins every spell or ability
+  on the stack to each of its targets. A spell you are casting, or an ability
+  you are activating, is on top of the stack with a dashed border (**casting**,
   **activating**) from the moment you choose it, through its targets and
   payment, with lines to the targets already chosen; the card leaves your hand.
-- **Since your last move**: what happened after your last choice, as the
-  server reports it: spells cast and what they targeted, attacks, blocks,
-  damage and deaths. The first three lines show; the rest open with **more**. A spell that already resolved keeps its card here, and its
-  line to a target that is still on the board, until your next move. Cards that
-  attacked, blocked, were targeted or were dealt damage are ringed on the board,
-  and damage dealt since your last move shows on the card or the player's plate
-  as it lands ("−2").
+- **Since your last move**: the unread tail of the history from your last
+  choice to now (hidden while walking or looking back so it never contradicts a
+  historical stack). Hovering a card name inspects it and clicking a line seeks
+  the board to it. The first three show; the rest open with **more**. A spell
+  that already resolved keeps its card here, and its line to a target that is
+  still on the board, until your next move or the turn ends. Cards that
+  attacked, blocked, were targeted or were dealt damage this turn are ringed on
+  the board at now, and damage dealt this turn shows in the card's corner (while
+  still marked on it) or on the player's plate ("−2"); transient board marks
+  clear when the turn ends.
 - **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
   Accumulate Wisdom"), and the buttons. For mana payments the hint below the
   prompt says how to pay. It stays steady as different previews appear.
@@ -757,21 +760,25 @@ The rail holds:
   count. It is the complete list; press a number key to choose one of the first
   nine. During a live combat draft the per-creature answers fold under a closed
   disclosure (see combat below).
-- **Moves**: the game's moves grouped by turn, each turn headed by whose turn
-  it was. Each move names the player who made it; priority-stop automation is
-  marked **auto** and never counts as your move. A run of the opponent's and
-  automation's priority passes folds into one quiet **passed** line that counts
-  each one's passes; your own passes stay moves. Hover or focus a card name to
-  see the card.
+- **History**: everything that happened, in the order it happened, grouped by
+  turn. A move names the player who made it, and what followed from it is
+  indented beneath it with the rule that did it. Select a line to see the
+  board as it was after it; see [Reading the history](#reading-the-history).
+  Priority-stop automation is marked **auto** and never counts as your move.
+  A run of the opponent's and automation's priority passes folds into one
+  quiet **passed** line that counts each one's passes; your own passes stay
+  moves. Hover or focus a card name to see the card.
 
 While the opponent decides, the rail and the opponent's plate say so, with
 the seconds it has taken ("Search 64 is searching · 3 s"), and the rail's
-choice list reads "Waiting for Search 64" until there is a decision of yours. An attacking creature steps toward the player it
-attacks, and a blocker is joined to the attacker it blocks by a line. Combat
+choice list reads "Waiting for Search 64" until there is a decision of yours.
+An attacking creature steps toward the player it attacks, and a blocker is
+joined to the attacker it blocks by a line. Combat
 usually ends before your next decision, so the line stays after it, until your
 next move, while both creatures are on the board. Cards
 move between zones (hand to stack, stack to battlefield, an opponent's new
-card from their plate) instead of appearing; with reduced motion they appear
+card from their plate) instead of appearing, and a triggered ability's stack
+entry leaves from the card it came from; with reduced motion they appear
 in place and every fact above stays.
 
 Choices with no card on the board, such as Lessons outside the game, appear in
@@ -817,16 +824,18 @@ disclosure and are not numbered keys. Replay and Study keep them listed, since
 recorded policy probabilities attach to them. **Pass turn** (F6) passes
 priority until the turn ends.
 
-Keys: `1`–`9` choose a numbered choice, Space presses the primary button
-(unless a control with its own action has focus), F6 passes the turn, `?` opens
-the shortcuts sheet (which also lists drag gestures) and Escape cancels an
-active drag or closes an open list — cancelling a drag does not also close a
-menu or clear a click-selected blocker. Dragging adds no actions a click or key
-cannot take: short clicks still act as clicks, floating card inspection stays
-closed mid-drag, a new frame, disconnect or opponent read-out cancels a drag
-with nothing sent, and read-only recordings and Watch never start a drag. With
-reduced motion, dragged cards, lines and selection boxes still follow the
-pointer directly, without the return-to-hand or post-drop travel transitions.
+Keys: `1`–`9` choose a numbered choice, Space presses the primary button (or
+returns the board to now while looking back, unless a control with its own
+action has focus), F6 passes the turn, ← and → step through the history, `?`
+opens the shortcuts sheet (which also lists drag gestures), and Escape cancels
+an active drag, closes an open list or, with none open, returns the board to
+now — cancelling a drag does not also close a menu or clear a click-selected
+blocker. Dragging adds no actions a click or key cannot take: short clicks
+still act as clicks, floating card inspection stays closed mid-drag, a new
+frame, disconnect or looking back cancels a drag with nothing sent, and
+read-only recordings and Watch never start a drag. With reduced motion, dragged
+cards, lines and selection boxes still follow the pointer directly, without the
+return-to-hand or post-drop travel transitions.
 **Menu** holds the session controls, priority stops, the sharing and Study
 tools and feedback.
 
@@ -968,9 +977,9 @@ details show its printed text and current state, not a reason.
 action, searching and advancing the live game. When a wait lasts more than a
 second, elapsed time shows how long that operation has been running; it is
 not a completion estimate. Recorded playback shows saved choices and
-consequences without running a bot. Pausing narration affects presentation
-only. **Disconnected** or **Reconnecting** takes precedence when the connection
-cannot confirm the live state. The last board remains readable, with submission
+consequences without running a bot. Looking at an earlier line of the history
+changes only what the board draws. **Disconnected** or **Reconnecting** takes
+precedence when the connection cannot confirm the live state. The last board remains readable, with submission
 disabled until recovery confirms the current decision.
 
 **Retrying a bot.** An unsuccessful bot proposal leaves its native decision
@@ -1028,10 +1037,10 @@ with default stops, Academy pauses in **Declare attackers** (and again in
 offers **Cast Razor Rings**. The step bar along the bottom shows filled squares
 on **Attackers** and **Blockers** for both turns. On a turn where nobody
 attacks, or when you have no legal non-mana play, combat runs straight through
-and each automated pass is marked **auto** in the move list.
+and each automated pass is marked **auto** in the history.
 
 To hold up a response at another step — such as the opponent's upkeep — press
-the lower stop in the **Upkeep** cell of the step bar, or open **Menu**, keep
+the upper stop in the **Upkeep** cell of the step bar, or open **Menu**, keep
 **Auto-pass outside stops** checked, and check **Upkeep** under **Opponent
 turn**; the two are the same setting. Press an active stop such as **Attackers**
 or **Blockers** on the step bar to change it to **Once** or **Off**.
@@ -1039,7 +1048,7 @@ or **Blockers** on the step bar to change it to **Once** or **Off**.
 Each stop on the step bar has three states, and a press moves to the next:
 **Off** (a hollow square), **Every time** (filled) and **Once** (a dot inside).
 A once stop pauses the next time the game arrives at an eligible window for that
-step on that turn and then turns itself off; the moves list says so ("Stopped
+step on that turn and then turns itself off; the history says so ("Stopped
 once at Upkeep on the opponent's turn; that stop is now off"), marked as
 automation like the passes Academy makes for you. A once stop on **Attackers**
 or **Blockers** waits for a combat with attacking creatures before spending
@@ -1079,57 +1088,178 @@ When **Pass Turn (F6)** is available, activating it yields through priority
 windows, including checked stops and stack responses, until the turn ends or
 a non-priority decision needs you. In **Full control** (with **Auto-pass
 outside stops** off), priority windows continue to appear. Automatic passes are
-marked **auto** in the move list and recording. Pausing narration does not
-change these settings.
+marked **auto** in the history and recording. The move pace does not change
+these settings.
 
-### Reading consequences
+### Reading the history
 
-The rail tells what happened in prose. In live play it is **Since
-your last move**: spells cast and their targets, lands played, discards,
-reveals, attacks, blocks, damage and deaths, read from the authority's presentation
-events after your last commit, with the move list beneath grouped by turn.
-When the opponent moved, those facts are read out one at a time before your
-decision, with the cards each is about outlined on the
-board. The fact being read heads the decision block, above your dimmed prompt.
-Each fact is shown on the board after the engine step it happened in: the
-server sends your view of the board after each step with the frame, so an
-attacker that died is usually seen attacking before it leaves, and cards travel
-from one board to the next. One step can run from an attack through damage into
-the next turn, when nobody had a choice between; such a fact is shown on the
-board at that next turn. A past board outlines nothing. While the reading lasts,
-the top bar names the turn the fact happened in, and the step bar marks that
-turn's step when the board shows it and no step when the board is a later
-turn's. Your decision's buttons and numbered choices stay in place
-but wait. They are announced as unavailable and still take focus. Clicking
-the board or rail, activating a control, or pressing a key such as Space,
-Enter, Escape or a number key ends the reading. Focus keys still move and
-`?` opens keyboard help. The current board and your live decision answer the
-next press. So when
-Heuristic attacks, you watch the attack land before you are asked to block, and
-pressing `1` early shows the blocking board rather than declaring a block.
-Damage marks ("−2") and a finished game's result card wait with the decision,
-so a past board never shows damage it has not yet taken. A
-new frame or a reconnect ends the reading and shows the actual pending
-decision. **Opponent's moves** in **Menu** sets the pace: **Quick** (under a
-second a fact), **Slow** or **Off**. With **Off** or reduced motion nothing is
-read out and the current board shows at once; the recap lists every fact. Sentences name a player
-shortly ("Heuristic cast…"); the top bar keeps how it decides
-("Heuristic · scripted"). In Replay the same recap
-covers **This move** at a consequences position and **Since the last
-decision** at a choice (from the same chooser's previous decision); the move
-list jumps to any move.
+The opponent casts Lightning Strike at your Earth Kingdom Jailer, and its
+Vengeful Bloodwitch drains you when another of its creatures dies later in
+the turn. When the decision comes back to you, the rail's **History** reads:
 
-Consequences describe recorded game events. The move list separately
-identifies submitted choices and **Auto** passes. An action alone is not
-evidence that a spell resolved or a creature died.
+```
+Turn 6 · Heuristic
+Cast Lightning Strike, targeting Earth Kingdom Jailer
+  3 damage to Earth Kingdom Jailer
+  Earth Kingdom Jailer died · lethal damage
+Attack with Gray Ogre
+  South Pole Voyager blocked Gray Ogre
+  Gray Ogre died · lethal damage
+  Trigger · Vengeful Bloodwitch, targeting you
+Vengeful Bloodwitch's trigger resolved
+  You lost 1 life (now 17)
+  Heuristic gained 1 life (now 21)
+```
 
-Reconnect preserves the history already held in this page. A fresh reload can
-recover only the latest 256 events of an active match. Replay reads the
-selected perspective's recorded history; a choice shows only events preceding
-that choice, and spectator reveal never adds names to it. **Try another line**
-has its own recap, and **Return to recorded decision** restores the
-recording's. Older recordings without event data say **Consequences not
-recorded**; missing events do not mean that nothing happened.
+For anything that changed on the board, the history says what happened, in
+what order and why.
+
+**What happened.** A move is something a player chose to do (cast, activate,
+play a land, attack, block, pass) and sits at the left edge. Turn-based
+actions, state-based losses, and triggers with no recent cause also appear at
+the left edge, naming their rule or source instead of a player move. The lines
+indented under a line are what followed from it: damage, deaths, destruction,
+exile, token creation, power/toughness changes, control changes (and their
+cleanup return), counters, triggers reaching the stack, abilities resolving or
+being countered, cards drawn, discarded, revealed or sacrificed, a library
+searched, a scry or surveil, life gained or lost other than by damage, a player
+losing. An
+ability names its targets as a spell does. A fact about a card you may not
+see names it by role ("a card", "a permanent"). Tapping for mana is never a line.
+
+**In what order.** The list is strictly the order things happened and is never
+rearranged. A spell that resolves with nothing in between (ignoring priority
+passes) reads as one folded line with its consequences beneath, as Lightning
+Strike does above. When something happened in between, such as your response,
+the resolution is its own line in its own place:
+
+```
+Cast Lightning Strike, targeting Earth Kingdom Jailer
+You cast Accumulate Wisdom
+  You drew a card
+Lightning Strike resolved
+  3 damage to Earth Kingdom Jailer
+  Earth Kingdom Jailer died · lethal damage
+```
+
+Selecting "Lightning Strike resolved" marks its cast above. A triggered
+ability whose event is long past, such as one at the beginning of upkeep, is
+a line at the left edge that names its source and no player.
+
+**Why.** A line is indented under the line that caused it. When no player
+chose it, it ends with the rule that did:
+
+| The line says | The rule |
+|---|---|
+| lethal damage | A creature with damage at least its toughness dies. |
+| toughness 0 | A creature with toughness 0 or less dies. |
+| loyalty 0 | A planeswalker with no loyalty dies. |
+| legend rule | Of two legendary permanents with one name under one player's control, one stays. |
+| Aura had nothing to enchant | An Aura attached to nothing legal goes to the graveyard. |
+| 0 life | A player at 0 life or less loses. |
+| drew from an empty library | A player who drew from an empty library loses. |
+| 10 poison counters | A player with 10 or more poison counters loses. |
+| illegal targets | Every target of a spell or ability was illegal when it tried to resolve, so it left the stack without resolving. |
+| draw step, cleanup | The turn itself did it: the draw for the turn, the discard to hand size. |
+
+The history says why something happened in the game. Why a creature is a 4/4
+is answered by [inspecting the card](#playing-on-the-board), which lists where its power and
+toughness come from.
+
+On a turn with more than four consequences, each move shows a count ("3
+consequences") in place of its indented lines; press it to open them.
+
+#### Looking back
+
+Select "Earth Kingdom Jailer died". Any active walk stops and the board
+becomes the board as it was after that line, with what the line is about
+raised. The Jailer is gone, and the top bar reads
+
+```
+Turn 6 · Heuristic's Lightning Strike · Earth Kingdom Jailer died · lethal damage · Esc for now
+```
+
+When a folded spell has consequences under it (like Lightning Strike above),
+selecting the cast line shows the spell on the stack with its target lines
+before its effects land on the next line; when a folded spell has no
+consequences (such as a creature resolving cleanly), selecting it shows the
+resolved permanent on the board. Lines that happened at once in the rules (two
+creatures dying in one state-based check, a spell's cast and target, a
+sweeper's deaths, or multiple effects of a single resolution) share one board.
+
+← and → move the cursor one line at a time when no control has focus. Esc
+returns to now, and `?` opens keyboard help. The step bar follows the board
+you are looking at. Damage window totals and the result card wait until the
+cursor reaches now. The decision in the rail stays live throughout: pressing
+one of its buttons or a number key (`1`–`9`) returns to now and commits that
+choice. A click on an earlier board, or Space, only returns to now and never
+acts. History lines, scrubber ticks, ← →, caption hover and **Replay turn**
+always respond directly. Reconnecting or reloading returns the cursor
+to now and shows the actual pending decision; turns already told are not
+walked again.
+
+**Every move lands on the table.** After any move—yours or the opponent's—the
+board starts at the first unread board stop and walks forward one kept board at
+a time: first Lightning Strike on the stack targeting Earth Kingdom Jailer, then
+Jailer on the battlefield with 3 damage, then Jailer gone with a dashed slot
+reading **lethal damage** where it died, then a death trigger on the stack.
+Passes are never a stop, bare turn-start draw steps alone do not walk, and lines
+that happened at once share one stop. When a combat involves three or more
+creatures, the combat damage stop also opens a compact breakdown table
+(Attacker, Blocked by, Dealt, Took, Result) whose rows raise their combatants on
+hover and pause the walk while you read it; smaller combats keep the single-line
+caption. Under the board, in a steady-height bar that never shifts the board or
+your hand once a move has occurred, sits one caption telling that stop's line or
+lines with any rule, a pace control (**1.4s** Study default, **Quick** 0.7 s, or
+**Off**, also in **Game → Move pace**), **Replay turn** to replay from that
+turn's first stop, and a scrubber with a tick for each stop of the turn (heavier
+at the first stop of each move). Click a tick to put the cursor on that stop and
+hold; rest the pointer on the caption or combat table to hold the walk while you
+read it. The rail highlights the matching history line throughout. With **Off**
+or reduced motion the board stays on now and nothing walks automatically, while
+the scrubber, captions, **Replay turn**, the combat table and **Since your last
+move** all still work by hand.
+
+**Motion** is the drawn difference between one board stop and the next,
+180 ms at most, and never holds a choice:
+
+| Fact | On the board | With reduced motion |
+|---|---|---|
+| A trigger or activation | Its stack entry leaves from its source card | The entry appears; the line names its source |
+| A death | The card goes to its owner's graveyard count; its rule reads on the card as it leaves | The rule reads as a chip where the card was |
+| Damage, counters | The number on the card changes ("−3", "+1/+1 · 2") | The same number, without the count |
+| A block | The blocker stands opposite its attacker, joined by a line | The same line |
+
+Every fact is a line of the history whatever the motion setting.
+
+Sentences name a player shortly ("Heuristic drew a card"); the plate and top
+bar keep how it decides ("Heuristic · scripted"). A move alone is not
+evidence that a spell resolved or a creature died; the lines beneath it are.
+
+#### What is kept
+
+| Situation | What you see |
+|---|---|
+| Earlier in this page's session | Every line and its board, for the latest 512 boards. Lines that happened at once share one board; lines past one Command's position cap share the nearest later board and say **shared with N later lines**. |
+| Before that, or before a reconnect or reload | Every line with its exact card names intact; selecting it raises its subjects on the current board where they still are, and says **Board not kept for this step**. |
+| A fresh reload | The latest 256 events of the active match, with their card names intact; an earlier part is labelled unavailable. |
+| After the game | Every line and its per-line board, in [Review](#inspect-a-replay). |
+
+In Replay the same history is read from the recording. For a recorded game you
+played, the rail holds your full history across the game and selecting any
+line jumps to its transition and its per-line board inside that transition (a
+recording without kept per-line boards falls back to the transition's board
+and says which lines share it; a board patch that cannot be reconstructed says
+**Board unavailable for this step**). For a watched bot game, history stays strictly
+the selected acting viewer's track before that decision's cursor, and
+spectator reveal never adds names to it. **Try another line** has its own
+history, and **Return to recorded decision** restores the recording's.
+
+A recording made before moves were recorded as events has no causes: its
+history is a flat list of moves and facts in their recorded wording, with no
+indentation and no rules. Older recordings without event data say
+**Consequences not recorded**; missing events do not mean that nothing
+happened.
 
 ### Card art
 
@@ -1193,7 +1323,7 @@ recent recordings.
 | Position | What the board shows |
 |---|---|
 | Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
-| Consequences | The board after the action, with what it did in the rail's recap. In a game you played this is your own view, your hand included, whoever acts next. |
+| Consequences | The board after the action, with what it did, and why, in the rail's history; selecting a line inside the transition shows its per-line board. In a game you played this is your own view, your hand included, whoever acts next. |
 | Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
 The transport bar sits where live play has your hand's input:
@@ -1209,12 +1339,13 @@ The transport bar sits where live play has your hand's input:
 Under it, the **Decisions** strip draws the game as one line: each choice is a
 tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It is
-open in Replay and folded in live play, where it counts decisions but past
-positions open only in Review after the game. Moves in the rail jump to their
-positions too; there each move is one line, numbered by turn, with the whole
-move in its tooltip, and the moves take the rail's remaining height. The rail
-draws the stack only while something is on it, and the answers only in the
-choices list. Keys never act while you type in a field.
+open in Replay and folded in live play, where it counts decisions; positions
+from before a reload open only in Review after the game. A line of the rail's
+history jumps to its transition position and per-line board, with what it is
+about raised; in Review each move is numbered by turn in its gutter, with the
+whole move in its tooltip, and the history takes the rail's remaining height.
+The rail draws the stack only while something is on it in Review, and the
+answers only in the choices list. Keys never act while you type in a field.
 
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
@@ -1851,51 +1982,134 @@ scripted prefixes and do not count as human completions.
 
 ## Presentation runtime
 
-Presentation is theater over committed authority, never a source of game
-facts. `managym/academy/presentation.py`'s match-local `PresentationProjector` stages
-exact identities from server-authored offers (casting and targeting can resolve
-in one engine step) and emits `PresentationEvent`s only when the engine's
-committed `recent_events` confirm them: `cast`, `targeted`, `resolved`,
-`damage`, `died` for spells, and `attack_group`, `blocked`, `damage`, `died`,
-`turn_started` for combat and turns. It never diffs observations; a zone change
-without the corresponding domain events emits nothing, and lethal damage yields
-`died`, never the rules-distinct `destroyed`. The Rust and Python learning
-encoders filter these presentation-only event types, so policy inputs are
-unchanged.
+The presentation track is the one record of what happened in a game as one
+viewer may read it. The rail's history, the recap, the move walk
+(caption, scrubber and large-combat table), board marks, game-over summary
+counts, the live decision strip count, and motion are all views of it; none of
+them is a source of game facts, and none can alter or delay the committed frame.
 
-Ordering on the live socket: sequence-gate the `FrameUpdate`, commit its
+```json
+[
+  {"seq": 41, "kind": "cast",      "group": 41, "labels": {"objects": {"12:0": "Lightning Strike"}}},
+  {"seq": 42, "kind": "targeted",  "cause": 41, "group": 41, "labels": {"objects": {"19:0": "Earth Kingdom Jailer"}}},
+  {"seq": 43, "kind": "resolved",  "cause": 41, "group": 41, "labels": {"objects": {"12:0": "Lightning Strike"}}},
+  {"seq": 44, "kind": "damage",    "cause": 43, "group": 41, "labels": {"objects": {"19:0": "Earth Kingdom Jailer"}}},
+  {"seq": 45, "kind": "died",      "cause": 43, "group": 41, "rule": "lethal_damage", "labels": {"objects": {"19:0": "Earth Kingdom Jailer"}}},
+  {"seq": 46, "kind": "triggered", "cause": 45, "group": 41, "labels": {"objects": {"24:0": "Tiger-Seal"}}}
+]
+```
+
+(Subjects, revisions, amounts, passes and `caused_by` are omitted here;
+`cause`, `rule` and `labels` are optional fields omitted when absent.)
+
+| Field | Meaning |
+|---|---|
+| `seq` | Position on this viewer's track. |
+| `kind` | `cast`, `targeted`, `resolved`, `activated`, `triggered`, `ability_resolved`, `countered`, `passed`, `damage`, `destroyed`, `died`, `exiled`, `token_created`, `pt_changed`, `control_changed`, `counters`, `searched`, `looked` (scry, surveil), `sacrificed`, `drew`, `discarded`, `revealed`, `land_played`, `attack_group`, `blocked`, `turn_started`, `lost`, `life` (gained or lost other than by damage; damage to a player is told only as `damage`). State-based deaths are told as `died` (with `rule`); spell/ability destruction is told as `destroyed`. |
+| `cause` | Optional; omitted when root. The `seq` of the earlier event this one follows from. A move is one of the player-choice kinds (`cast`, `activated`, `land_played`, `attack_group`, `blocked`, `passed`) with no `cause` and no `rule`. |
+| `rule` | Optional; omitted when chosen by a player. The state-based, turn-based, or resolution rule (`illegal_targets`) that did it. |
+| `labels` | Optional; omitted on older recordings or when no object or stack entry is cited. Viewer-safe `PresentationLabels` (`objects`, `stacks`) naming only the objects and stack entries this event mentions, at exact incarnation. |
+| `group` | The `seq` of the event's root, its move. It is not a turn identifier; `turn_started` events establish turn headings. |
+| `caused_by` | The Command that committed the step, or null. A move by the viewer's seat with a null `caused_by` is automation. |
+| `from_revision`, `to_revision` | The frame revisions the event lies between. |
+
+**Source.** The engine keeps an optional, boxed presentation sink on `Game`,
+beside its statistics and card-capture sinks and under their rule: search
+clones omit it, rollback snapshots preserve it, and it is never hashed or
+exposed to a policy. Academy turns it on at setup; with it off the read
+returns nothing. Every committed `GameEvent` is mirrored into it, and the
+engine notes directly what has no event: an activated ability reaching the
+stack, an ability resolving or leaving the stack, a priority pass, and each
+state-based or turn-based action with its rule. Mana abilities are never
+noted. During stack resolution the sink holds the resolution as its active
+cause and carries it across stabilization until state-based actions finish, so
+state-based actions following a resolution or combat damage inherit that cause
+beside their `rule`; triggers carry the triggering event (or nothing for
+upkeep/delayed triggers).
+
+One non-destructive native read per viewer returns a step's facts with the
+per-event `labels` that viewer may read; a hidden-zone move names no card to
+another seat. This is the only place viewer privacy is applied to the track.
+A separate `take_presentation_positions()` hands Python the step's cloned
+positions and clears the sink after both seats have read it.
+`managym/academy/server.py` keeps one `PresentationProjector`
+(`managym/academy/presentation.py`) per viewer seat (`0` and `1`); each reads
+its own filtered stream, assigns its own monotonic `seq`, resolves each `cause`
+to a `seq` on that viewer's track (climbing to the nearest told ancestor, or
+omitting it), sets `group` to the root ancestor's `seq`, and attaches `labels`
+directly to the event. The projector never diffs observations or boards. The
+sink is not observation state: the policy input, the LLM text observation,
+learning tokens, state hashes and a recording's replay identity do not include
+it.
+
+**Boards.** With the sink enabled, the engine clones a read-only position
+(with no sink and no pending decision context) at each whole-state boundary
+inside a step where at least one non-pass fact was noted: before and after a
+non-pass action, after a stack object resolves, when stabilization begins
+(separating combat damage or a turn-based action from the state-based check
+after it), after a state-based batch, and after a trigger round reaches the
+stack. Priority passes never cut a position. Each fact records the index of the
+position cut after it, so lines noted inside one boundary (including multiple
+effects of a single resolution) share a board. Python projects each position
+for the recorded person's seat through the same `decision_surface_view` used
+for frames and chains `boards` patches (`first`, `last`, `patch`) back from the
+final frame, deduplicating equal boards. Play traces retain each transition's
+mid-step `boards` patches beside `presentation` (outside replay identity) so
+Review draws per-line boards with the same patcher; Watch keeps its own
+acting-viewer transport and stores no person-seat `boards`.
+
+**Names.** Each event's `labels` carry the viewer-safe names for every object
+and stack entry it mentions, at exact incarnation, across live updates,
+reconnect `presentation_tail`, Review and Study. No reader recovers a name
+from text or from a neighbouring frame (frame labels remain only as a fallback
+for older recordings); an object the viewer may not name stays unnamed.
+
+**Ordering on the live socket.** Sequence-gate the `FrameUpdate`, commit its
 complete `ExperienceFrame`, validate every event against the update's base and
-resulting revisions, then enqueue events into the `PresentationPlayer`. The
-same event list is returned live, persisted on the transition's final trace
-step and replayed through a separate instance of the same player; traces
-without the field replay with no events rather than inferred ones.
+resulting revisions, then append the events to the track. The same event list
+is returned live and persisted on the transition's final trace step; Replay
+reads it back, and traces without the field replay with no events rather than
+inferred ones.
 
-Retained semantic history is separate from the narration cursor. Validated live
-events append once, scoped by match, canonical or Study branch, and sequence.
-The live narration backlog, including the current beat's remaining duration, is
-bounded to 12 beats and 2,000ms of scheduled duration, even while paused. Older
-optional motion finishes as needed to admit new events; history remains readable.
-Replay plays its selected recorded sequence in order without this live cap.
+**In the browser.** `board/tell.ts` words an event for every view;
+`board/history.ts` turns the track (plus client-local automation notes, such
+as a spent browser-only "once" stop) into turns, lines with depth, and board
+stops (seq order, indented under a cause that is the nearest line above, an
+immediate resolution folded into its cast with the cast board when
+consequences follow and the resolved board otherwise, runs of passes folded,
+and one walk stop per kept board). One cursor (`selection: { seq: number;
+scope: 'stop' | 'line' } | null` plus timer state `walking: boolean`) selects
+what the board draws in both live play and Review sub-step inspection: in live
+play `null` is now, walks and scrubber ticks select `scope: 'stop'` (keeping
+multi-line stops intact when paused) with the caption and scrubber in the bottom
+bar, and selecting a history line or pressing ← → selects `scope: 'line'`;
+`board/result.ts` and the live decision strip also read the track.
+`board/boards.ts` answers `boardAt(seq)` from the frames and per-line boards
+this page was sent, up to 512; the server serves no past board to a live
+session. Review rebuilds each `consequences` transition's retained `boards`
+patches through the same `mergeBoards` / `findBoard` path before orienting and
+feeds `cursorSeq` into `Board.svelte`.
 
-Recovery commits the complete frame, cancels stale theater and merges validated
-`presentation_tail` events with same-match in-memory history. Only unseen events
-can animate. The server retains the latest 256 events
-(`MAX_PRESENTATION_EVENTS`), so a fresh page labels any unavailable prefix.
-Sequence gaps are explicit. Malformed presentation clears theater and reports an
-error without touching the committed frame; valid retained history is marked
-incomplete. Skip, Fast-forward, Finish, Pause, reduced motion and unmount cannot
-alter or delay canonical state.
+**Recovery** commits the complete frame, returns the cursor to now and merges
+validated `presentation_tail` events (with each event's `labels` intact) with
+same-match in-memory history. The tail brings events and no boards. The server
+retains the latest 256 events (`MAX_PRESENTATION_EVENTS`), so a fresh page
+labels any unavailable prefix. Sequence gaps are explicit. A malformed track
+reports an error without touching the committed frame, and valid retained
+history is marked incomplete. A fact the projector does not know fails tests;
+in a live session it is dropped with a logged warning.
 
-Labels come only from viewer-safe frames. The current projection certifies
-incarnation zero and reuses the spell card's ID as the stack render ID;
-references it cannot name stay unnamed.
+**Older recordings** have no move events, no `cause`/`rule`, and no per-event
+`labels`. Because those fields are optional on `PresentationEvent`, older
+recordings validate unchanged. Their moves are worded by
+`managym/academy/recording.py`'s `narrate_move`, which remains frozen for that
+use alone and is not extended. The `log` field of protocol v1 frames is no
+longer filled.
 
-History retains the active match's available events and renders a 100-row page.
-Recorded `turn_started` events establish turn headings; `group` is not a turn or
-spell-chain identifier. Canonical Replay history uses the prefix at its selected
-frame; Study has an isolated scope. See
-[Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
-for reading, inspection and recovery behavior.
+Watch history is the acting viewer's track strictly before that decision's
+`presentation_cursor`. Recorded Play review exposes the recorded person's full
+track across the game; Study has an isolated scope. See
+[Reading the history](#reading-the-history) for what a person reads.
 
 ## Playing a trained challenger
 

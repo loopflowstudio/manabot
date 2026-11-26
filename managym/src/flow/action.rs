@@ -1225,10 +1225,16 @@ impl Game {
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
         self.clear_staged_announced_actions();
+        // What came before this action is a whole state (turn-based
+        // actions, the last resolution); so is what the action leaves.
+        self.presentation_cut();
         if self.state.opening().is_some() {
-            return self.choose_opening(action);
+            self.choose_opening(action)?;
+            self.presentation_cut();
+            return Ok(());
         }
         self.dispatch_action(action)?;
+        self.presentation_cut();
         if matches!(
             action,
             Action::PlayLand { .. }
@@ -1352,6 +1358,7 @@ impl Game {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
                 }
+                self.presentation_passed(*player);
                 let next = self.next_player(*player);
                 self.state.priority_mut().on_pass(next);
                 Ok(())

@@ -1562,9 +1562,10 @@ impl Game {
                             Target::StackAbility(ability.id),
                             ability.controller,
                         );
-                        self.push_to_stack(
-                            crate::state::stack_object::StackObject::ActivatedAbility(ability),
-                        );
+                        let ability =
+                            crate::state::stack_object::StackObject::ActivatedAbility(ability);
+                        self.presentation_activated(&ability);
+                        self.push_to_stack(ability);
                     }
                     FrameCompletion::TurnFaceUp(object) => {
                         if self.state.permanent_of(object).is_some() {

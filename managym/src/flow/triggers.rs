@@ -736,6 +736,7 @@ impl Game {
             chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
         }));
+        self.presentation_placing(trigger.id);
         self.emit(GameEvent::AbilityTriggered {
             source_object: trigger.source_identity.object(),
             controller: trigger.controller,
@@ -935,12 +936,14 @@ impl Game {
                         } | GameEvent::PermanentSacrificed { .. }
                     )
                 });
+                let waiting = self.state.pending_triggers.len();
                 if let Some(sources) = use_before {
                     self.check_triggers_for_event(&event, sources);
                 } else {
                     let sources = self.trigger_ability_sources(&event);
                     self.check_triggers_for_event(&event, &sources);
                 }
+                self.presentation_triggers(&event, waiting);
             }
         }
     }

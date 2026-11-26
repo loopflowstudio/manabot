@@ -10,6 +10,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   an opponent read-out only ends the read-out. If a click stalls while
   previewing an offer, check whether the rows move under the pointer.
 - Capture tapped lands with a `fullPage` screenshot.
+- Offer text starts with its shortcut number ("1 Play Forest"), so match
+  offers unanchored, never `/^Play/`. A game's presentation events are in
+  `<traces-dir>/play.sqlite`, `attempts.trace_json` → `events[].presentation`;
+  feed them to `walkStops`/`buildCombatTable` in a scratch Vitest to explain
+  a walk caption offline. Giant Spider (2/4) against Hill Giant + Lightning Bolt
+  (`--opponent search --sims 8 --seed 7`) gives surviving damaged creatures,
+  turn-boundary damage and 3–5-creature combats within 19 turns.
+  Gray Ogre + Lightning Bolt against Vengeful Bloodwitch + Lightning Bolt
+  (same opponent, `--seed 11`) gives signed +1/−1 plate deltas on trigger
+  stops and a "did not resolve · illegal targets" fizzle within 14 turns.
+  Under reduced motion nothing walks automatically, by design.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
@@ -110,8 +121,11 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (`import { chromium } from '@playwright/test'`; a fresh worktree first needs
   `npm ci` there, about a minute; Chromium is cached; delete the script
-  afterwards). Click only `[data-testid=action-panel] button` offers:
-  other buttons open the deck picker or start a game. Triggered abilities
+  afterwards). Click only offers: `[data-testid=action-option]` rows (the
+  "All legal choices" list sits outside `action-panel`, so a selector scoped
+  to the panel misses discard and other list-only prompts) and the panel's
+  `primary-action`/`prompt-action` buttons; other buttons open the deck
+  picker or start a game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
   The configured-launch table (`managym academy play`) has no Rematch in its
