@@ -565,12 +565,12 @@
           "label": "Pay the cost"
         }
       ],
-      "digest": "fac689624c68a787dfcf94b7a49b4a3ad5a1d0533e1e0720238b8bf06e358a6b",
+      "digest": "1678b180015fe6b6426d2eed4c7970f8f07060e00e63455e3fb21f7ad66c5920",
       "frame": {
         "protocol": 1,
-        "match_id": "QZ0D4OY4p_lc1Zc81RV5Bg",
+        "match_id": "U4WcZfYxcLktY61Ge_YTcA",
         "revision": 198,
-        "frame_hash": "e332f3f5a3ecef182e331ab9989d2f60f1acc142351ef9216182c8596f36e439",
+        "frame_hash": "d7f401c610d11e0f452b60908b3412a5862f26296f8c0f3ff5ec5faa66ec1fd8",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3117,9 +3117,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -3244,12 +3248,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "3cdad7b5cdba9d9742824aced5f0ee634495136e96f52ccd001933fe0f4c3176",
+      "digest": "ce20d28694edd9bf3646c5353a20e4dd304e68534c1f74fec23ae4134c9d7562",
       "frame": {
         "protocol": 1,
-        "match_id": "2wlGfvYYtNVgH5DTMQYSBQ",
+        "match_id": "gxSvtX75BwcYgMOQG-eHag",
         "revision": 58,
-        "frame_hash": "bdc7bb57131d4275c222157d486421dcbc152e7aaf652d13fdeb5f612daac57d",
+        "frame_hash": "9e40510a0f5b117e0c81c2e5b1bec049debe5af7eab544aeeedbca72fcb89e19",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5191,9 +5195,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -5240,12 +5248,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "e19a8802e59de76a8ddb0b5bc1e4aeaca66c14761a3d016983a982dfe17a03b6",
+      "digest": "98e9607b99732eb20b679646798bd61049fb6fdc5df0e1f61b414cf7658aaab1",
       "frame": {
         "protocol": 1,
-        "match_id": "afN3XhekUcrUJdYR1BVUeA",
+        "match_id": "Lkot9gZVNlndNRYFYL6MqA",
         "revision": 9,
-        "frame_hash": "c1f1fe3deaa00747d26a16e3152c99130c9251d6b26c0c34f0f007664b7579f8",
+        "frame_hash": "86d8a6f076d13f16412221328f926d8a83c6a6e097265aea330886030778ef6b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -6968,9 +6976,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -7015,12 +7027,12 @@
           "label": "Cast Callous Inspector"
         }
       ],
-      "digest": "436532b89223e3b98dadaf1f0805a51685f9474313f4b1cff807264cde601370",
+      "digest": "24d6e1a0f39d6446260b5943006b73d2bea371ba461da922b985184fb5164ff0",
       "frame": {
         "protocol": 1,
-        "match_id": "dMcn83lgRIXE95UOENrUWg",
+        "match_id": "sHqIK-fUeFluvrzQhl72YA",
         "revision": 7,
-        "frame_hash": "5fd669c9fbdbb5c3b82023a5fd6da2dcbf31d26764fe14112b230d24007ce5eb",
+        "frame_hash": "8bef350d0a0bbfe0a272c3200b35232055c132690f8b1fec126b66f0d018bdc0",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -8527,9 +8539,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
@@ -8893,12 +8909,12 @@
           "label": "Cast Savannah Lions"
         }
       ],
-      "digest": "56d8887080ff44a4bd396837e95ba1b5c03b0315396e3862d3068887f30aca2a",
+      "digest": "8dbaa98b620ecae1a527c6589c4a73f2e863190b2ab29c271d1dfa50fde49ad9",
       "frame": {
         "protocol": 1,
-        "match_id": "nwpO9V_UAK0J4_YIRWSs8Q",
+        "match_id": "yBTvs-L3Hoqin536WwsblA",
         "revision": 98,
-        "frame_hash": "fb560c1345082d598bf85fc13c09e3722f2dc3b938419d382d10985f1d0de917",
+        "frame_hash": "748563b08679f020cc055879446ee6c3245db571732f9a0bfa8f06698ec660b5",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -10605,9 +10621,13 @@
         "stops": {
           "my": [
             "main1",
+            "declare_attackers",
+            "declare_blockers",
             "main2"
           ],
           "opponent": [
+            "declare_attackers",
+            "declare_blockers",
             "end_step"
           ],
           "stop_on_stack": true,
