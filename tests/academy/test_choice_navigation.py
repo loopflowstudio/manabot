@@ -164,4 +164,4 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
             assert settled_message(socket)["status"] == "duplicate"
             assert game.env.state_digest() == committed_digest
     game.close(end_reason="test_complete")
-    server.SESSION_REGISTRY.clear()
+    server.LIVE_GAMES.clear()
