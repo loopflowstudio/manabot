@@ -123,6 +123,41 @@ fn foundations_5e_adamant_will() {
 }
 
 #[test]
+fn grow_from_the_ashes_fetches_one_or_two_untapped_basics_when_kicked() {
+    use crate::support::{
+        inspect::{library_card, permanent_of, tapped},
+        play::{cast, choose, select_card},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+
+    for kicked in [false, true] {
+        let mut s = five_color_setup(&["Grow from the Ashes"]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        cast(&mut s, "Grow from the Ashes");
+        if kicked {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let first = library_card(&s, 0, "Forest");
+        select_card(&mut s, first);
+        let second = if kicked {
+            let island = library_card(&s, 0, "Island");
+            select_card(&mut s, island);
+            Some(island)
+        } else {
+            None
+        };
+        settle(&mut s);
+        assert!(!tapped(&s, permanent_of(&s, first).unwrap()));
+        if let Some(island) = second {
+            assert!(!tapped(&s, permanent_of(&s, island).unwrap()));
+        }
+    }
+}
+
+#[test]
 fn knights_restrict_opposing_sources_and_count_either_battlefield() {
     use crate::support::{game::five_color_setup, inspect::offered_targets, play::cast};
     use managym::state::game_object::Target;

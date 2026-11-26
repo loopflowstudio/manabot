@@ -297,6 +297,7 @@ fn laketown_mariners() -> CardDefinition {
                 Effect::exile(ObjectSelector::Targets(controlled)),
                 Effect::Move {
                     unrevealed: false,
+                    face_down: false,
                     what: ObjectSelector::Moved,
                     to: ZoneType::Battlefield,
                     library_end: None,
@@ -514,6 +515,7 @@ fn mill_then_recover(count: i32, predicate: CardPredicate, min: usize, max: i32)
         },
         Effect::SelectCards {
             from: ObjectSelector::CardsThisWay,
+            max_mana_value: None,
             min,
             max: EffectValue::Fixed(max),
             predicate,
@@ -758,16 +760,32 @@ fn gandalf_goblins_bane() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Adventure".into()],
-        spell_effects: vec![Effect::ExileTopCardsToPlay {
-            count: 2,
-            until: PlayWindow::WhileExiled,
-            face_down: true,
-            condition: Some(Condition::ControlsAtLeast {
-                distinct_names: false,
-                count: 1,
-                predicate: CardPredicate::subtype("Wizard"),
-            }),
-        }],
+        spell_effects: vec![
+            Effect::Move {
+                unrevealed: false,
+                face_down: true,
+                library_end: None,
+                what: ObjectSelector::LibraryTop(Box::new(EffectValue::Fixed(2))),
+                to: ZoneType::Exile,
+                tapped: false,
+                transformed: false,
+                under: None,
+                with_counter: None,
+                linked: None,
+            },
+            Effect::GrantPlay {
+                what: ObjectSelector::Moved,
+                until: PlayWindow::WhileExiled,
+                play_lands: true,
+                flashback: false,
+                face_down: true,
+                condition: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
+                    count: 1,
+                    predicate: CardPredicate::subtype("Wizard"),
+                }),
+            },
+        ],
         text_box: adventure_text.into(),
         ..Default::default()
     };

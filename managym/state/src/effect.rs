@@ -149,7 +149,6 @@ pub enum Modification<N = i32> {
     /// Layer 2 (CR 613.1b): the source's controller (static ability) or
     /// the player specified at resolution controls the affected permanent.
     Control,
-    ChosenCreatureType(String),
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
     ModeChosen {
@@ -243,7 +242,6 @@ impl<N> Modification<N> {
             Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
             Self::PhasedOut => Modification::PhasedOut,
             Self::Control => Modification::Control,
-            Self::ChosenCreatureType(name) => Modification::ChosenCreatureType(name.clone()),
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
             Self::AllCreatureTypes => Modification::AllCreatureTypes,

@@ -158,6 +158,8 @@ impl Game {
                 && l.definition_id == r.definition_id
                 && l.form == r.form
                 && left.controller == right.controller
+                && left.control_differs_from_entry == right.control_differs_from_entry
+                && left.chosen == right.chosen
                 && left.spell_entry == right.spell_entry
         })
     }

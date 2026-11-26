@@ -284,3 +284,70 @@ fn foundations_5f_kargan_dragonrider() {
     move_card(&mut s, card, ZoneType::Graveyard);
     assert!(!keywords(&s, rider).has(Keyword::Flying));
 }
+
+#[test]
+fn entry_choice_diamond_mare() {
+    use crate::support::{
+        game::five_color_setup,
+        play::{cast, choose_entry_value, resolve_top, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&["Diamond Mare", "Gray Ogre", "Llanowar Elves"]);
+    cast(&mut s, "Diamond Mare");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    choose_entry_value(&mut s, "Green");
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    s.assert_life(0, 20);
+    cast(&mut s, "Llanowar Elves");
+    settle(&mut s);
+    s.assert_life(0, 21);
+}
+
+#[test]
+fn entry_choice_each_controller_answers_in_apnap_order() {
+    use crate::support::{
+        game::{move_from_library, plant_in_graveyard},
+        play::{cast_card, choose_entry_value, resolve_top},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{
+            ability::{Effect, PlayerSelector},
+            game_object::PlayerId,
+            mana::Color,
+            zone::ZoneType,
+        },
+    };
+    let mut s =
+        crate::support::game::five_color_setup(&["Diamond Mare", "Rise of the Dark Realms"]);
+    s.advance_to_active_step(1, StepKind::Main);
+    for owner in 0..2 {
+        plant_in_graveyard(&mut s, owner, "Diamond Mare");
+    }
+    // A simultaneous return under the owners' control, with seat one active.
+    let spell = move_from_library(&mut s, 1, "Rise of the Dark Realms", ZoneType::Hand);
+    let Effect::Move { under, .. } = &mut s.game_mut().state[spell].spell_effects[0] else {
+        unreachable!()
+    };
+    *under = Some(PlayerSelector::Owner);
+    s.set_player_mana_pool(1, "7BB");
+    cast_card(&mut s, spell);
+    resolve_top(&mut s);
+    for (owner, color) in [(1, "Blue"), (0, "Green")] {
+        assert_eq!(s.action_space().player, Some(PlayerId(owner)));
+        assert!(s.battlefield_permanents_named(1, "Diamond Mare").is_empty());
+        choose_entry_value(&mut s, color);
+    }
+    for (owner, color) in [(1, Color::Blue), (0, Color::Green)] {
+        let id = s.battlefield_permanents_named(owner, "Diamond Mare")[0];
+        assert_eq!(
+            s.game().state.permanents[id]
+                .as_ref()
+                .unwrap()
+                .chosen
+                .as_deref(),
+            Some(&managym::state::permanent::EntryChoice::Color(color))
+        );
+    }
+}

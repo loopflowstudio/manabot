@@ -808,8 +808,14 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
     for spend_combat in [false, true] {
         let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
         only_pool(&mut s, "1W");
-        s.game_mut().state.players[0].combat_mana_pool =
-            Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]).into();
+        let combat_attendant = ManaClass {
+            expiry: managym::state::mana::ManaExpiry::EndOfCombat,
+            ..attendant_class()
+        };
+        s.game_mut().state.players[0].mana_pool.add(
+            &Mana::of_class(combat_attendant.clone(), [0, 0, 0, 0, 1, 0]),
+            None,
+        );
         s.game_mut().state.players[0]
             .mana_pool
             .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]), None);
@@ -818,6 +824,10 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         let pools = &obs.agent.pooled_mana_classes;
         assert_eq!(pools.len(), 2);
         assert_eq!((pools[0].combat, pools[1].combat), (false, true));
+        assert_eq!(
+            (pools[0].expiry.as_str(), pools[1].expiry.as_str()),
+            ("step", "end_of_combat")
+        );
         assert_ne!(pools[0].program, pools[1].program);
         assert_choice_contract(&s);
         spend_named(&mut s, |label| {
@@ -826,20 +836,32 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         spend_named(&mut s, |label| label.contains("{C}"));
         assert_eq!(spell_spent(&s, sheep).entry_counters(), 1);
         let player = &s.game().state.players[0];
-        assert_eq!(player.combat_mana_pool.total(), u16::from(!spend_combat));
+        assert_eq!(
+            player
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat),
+            u16::from(!spend_combat)
+        );
         assert_eq!(
             player.mana_pool.class_of(&attendant_class())[4],
             u8::from(spend_combat)
         );
         settle(&mut s);
         s.advance_to_step(StepKind::BeginningOfCombat);
-        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         assert_eq!(
-            s.game().state.players[0].combat_mana_pool.total(),
+            s.game().state.players[0]
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::Step),
+            0
+        );
+        assert_eq!(
+            s.game().state.players[0]
+                .mana_pool
+                .expiry_total(managym::state::mana::ManaExpiry::EndOfCombat),
             u16::from(!spend_combat)
         );
         s.advance_to_step(StepKind::PostcombatMain);
-        assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     }
 }
 
