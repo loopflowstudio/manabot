@@ -1502,9 +1502,8 @@ class GameSession:
         def apply_due_swaps() -> None:
             nonlocal swap_pos
             assert self.trace is not None
-            while (
-                swap_pos < len(pending_swaps)
-                and pending_swaps[swap_pos] == len(self.trace.events)
+            while swap_pos < len(pending_swaps) and pending_swaps[swap_pos] == len(
+                self.trace.events
             ):
                 event_index = len(self.trace.events)
                 while (
@@ -1655,7 +1654,9 @@ class GameSession:
         }
         if self.trace.seat_swaps:
             trace_record["seat_swaps"] = list(self.trace.seat_swaps)
-        return RetainedAttempt(trace_record, json.dumps(self.env.content_pack_manifest()))
+        return RetainedAttempt(
+            trace_record, json.dumps(self.env.content_pack_manifest())
+        )
 
     def _warm_up_recurrent_policy(self, policy: PolicyRunner, seat: int) -> None:
         """Replay the live game's actions into a recurrent policy for `seat`."""
@@ -1720,7 +1721,9 @@ class GameSession:
         except (SearchError, ValueError) as exc:
             raise ValueError(f"swap_unavailable: {exc}") from exc
         except Exception as exc:
-            logging.getLogger(__name__).exception("Failed to prepare swap opponent policy")
+            logging.getLogger(__name__).exception(
+                "Failed to prepare swap opponent policy"
+            )
             raise ValueError(
                 f"swap_unavailable: Failed to prepare opponent policy ({type(exc).__name__}); see the server log."
             ) from exc

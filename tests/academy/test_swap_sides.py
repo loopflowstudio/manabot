@@ -168,7 +168,9 @@ def _wait_for_reading(
             if msg.get("revision") == revision:
                 return msg
         time.sleep(0.01)
-    raise AssertionError(f"Live analysis reading for revision {revision} did not arrive")
+    raise AssertionError(
+        f"Live analysis reading for revision {revision} did not arrive"
+    )
 
 
 def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
@@ -399,7 +401,9 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     # authorizes pre-swap and post-swap human decisions and refuses bot decisions.
     client = TestClient(server.app)
     headers = {"x-etude-participant-token": TOKEN}
-    index_res = client.get(f"/api/traces/{original_match_id}/recording", headers=headers)
+    index_res = client.get(
+        f"/api/traces/{original_match_id}/recording", headers=headers
+    )
     assert index_res.status_code == 200
     index_body = index_res.json()
     assert index_body["starting_human_seat"] == 0
@@ -425,11 +429,13 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
         assert restored_res.json()["viewer"] == row["viewer"]
 
     pre_choice = next(
-        pos for pos in recording.positions
+        pos
+        for pos in recording.positions
         if pos.kind == "choice" and pos.decision and pos.decision.viewer == 0
     )
     post_choice = next(
-        pos for pos in recording.positions
+        pos
+        for pos in recording.positions
         if pos.kind == "choice" and pos.decision and pos.decision.viewer == 1
     )
     assert (
@@ -633,7 +639,9 @@ def test_played_from_game_that_swaps_sides_stays_out_of_my_record(
     source = game.attempt_store.load(source_id)
     assert source is not None
     first_hero_event = next(
-        i for i, e in enumerate(source["events"]) if e["actor"] == "hero" and not e.get("auto")
+        i
+        for i, e in enumerate(source["events"])
+        if e["actor"] == "hero" and not e.get("auto")
     )
 
     game.new_game({"played_from": {"trace_id": source_id, "event": first_hero_event}})
@@ -691,7 +699,9 @@ def test_websocket_swap_sides_broadcasts_and_forbids_watcher(
             watcher_ws.send_json(
                 {
                     "type": "swap_sides",
-                    "grant_revision": watcher_joined["table"]["access"]["grant_revision"],
+                    "grant_revision": watcher_joined["table"]["access"][
+                        "grant_revision"
+                    ],
                     "request_id": "watcher-swap",
                     "match_id": started["frame"]["match_id"],
                     "expected_revision": started["frame"]["revision"],
@@ -766,7 +776,9 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
 ) -> None:
     entering = threading.Event()
     release = threading.Event()
-    slow_key = registry.register(BlockingSwapFactory(entering=entering, release=release))
+    slow_key = registry.register(
+        BlockingSwapFactory(entering=entering, release=release)
+    )
     reader_key = registry.register(ReadingFactory(name="LiveReader"))
 
     client = TestClient(server.app)
@@ -835,7 +847,10 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                 assert early_pilot["table"]["access"]["identity"]["rules_viewer"] == 1
                 assert early_pilot["frame"]["projection"]["agent"]["player_index"] == 1
                 assert (early_pilot.get("work") or {}).get("state") == "running"
-                assert early_pilot.get("analysis", {}).get("policy", {}).get("sha256") == reader_key
+                assert (
+                    early_pilot.get("analysis", {}).get("policy", {}).get("sha256")
+                    == reader_key
+                )
                 early_tail = early_pilot["recovery"]["presentation_tail"]
                 early_cursor = early_pilot["recovery"]["presentation_cursor"]
                 assert [event["seq"] for event in early_tail] == list(
@@ -851,11 +866,12 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                 settled_watcher = _next_message(watcher_ws)
                 assert settled_pilot["type"] in {"observation", "game_over"}
                 assert (settled_pilot.get("work") or {}).get("state") != "running"
-                assert settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1
                 assert (
-                    settled_pilot["recovery"]["presentation_cursor"]
-                    >= early_cursor + len(early_tail)
+                    settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1
                 )
+                assert settled_pilot["recovery"][
+                    "presentation_cursor"
+                ] >= early_cursor + len(early_tail)
                 assert settled_watcher["type"] in {"observation", "game_over"}
                 assert (settled_watcher.get("work") or {}).get("state") != "running"
     finally:

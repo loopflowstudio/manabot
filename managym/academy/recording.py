@@ -541,9 +541,7 @@ class Recording:
             and self.payload["events"][position.event_index].get("analysis_observation")
         )
 
-    def _board(
-        self, position: Position, viewer: int | None = None
-    ) -> dict[str, Any]:
+    def _board(self, position: Position, viewer: int | None = None) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")
         seat = self._seat_for(position) if viewer is None else viewer
@@ -643,25 +641,19 @@ class Recording:
             seat = human_seat_at(self.payload, index)
             revision = self.revisions.get(index)
             events = (
-                self._transition_events(revision, seat)
-                if revision is not None
-                else []
+                self._transition_events(revision, seat) if revision is not None else []
             )
             self._narrations[index] = narrate_move(
                 self._board(Position("", "choice", index), seat),
                 self._board(Position("", "consequences", index), seat),
                 [event.kind.model_dump(mode="json") for event in events],
-                own_steps(
-                    self.payload["events"], index, seat_swaps=self.seat_swaps
-                )
+                own_steps(self.payload["events"], index, seat_swaps=self.seat_swaps)
                 if self.payload["events"][index].get("actor") == "hero"
                 else (),
             )
         return self._narrations[index]
 
-    def _transition_events(
-        self, revision: int, viewer: int
-    ) -> list[PresentationEvent]:
+    def _transition_events(self, revision: int, viewer: int) -> list[PresentationEvent]:
         by_revision = self._events_by_revision.get(viewer)
         if by_revision is None:
             by_revision = {}

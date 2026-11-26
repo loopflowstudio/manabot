@@ -96,8 +96,7 @@ def analysed_events(trace: dict[str, Any], seat: int | None = None) -> list[int]
     return [
         i
         for i, event in enumerate(trace["events"])
-        if acting_seat(event, human_seat_at(trace, i)) == seat
-        and not event.get("auto")
+        if acting_seat(event, human_seat_at(trace, i)) == seat and not event.get("auto")
     ]
 
 
@@ -413,9 +412,7 @@ def run_analysis(
 ) -> None:
     """Walk the game, saving each decision as it is read, then close all runners."""
     reason: str | None = None
-    runners = (
-        list(runner.values()) if isinstance(runner, Mapping) else [runner]
-    )
+    runners = list(runner.values()) if isinstance(runner, Mapping) else [runner]
     try:
         seed = int(attempt.trace["config"]["seed"])
         for decision in analyse_game(attempt, seat, runner, seed=seed):
