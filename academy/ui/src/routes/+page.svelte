@@ -541,7 +541,7 @@
       <p class="type-label text-ink-2">This game</p>
       <div class="swap-control">
         <button class="btn btn-secondary btn-sm" data-testid="swap-sides" disabled={!canSwapSides} onclick={sendSwapSides}>{gameStore.swapPending ? 'Swapping sides…' : 'Swap sides'}</button>
-        <p class="type-caption text-ink-3">Take the opponent's seat and hand; the bot plays yours from here.</p>
+        <p class="type-caption text-ink-3">{!inputReady && !gameStore.swapPending ? 'Available when you have a decision to make.' : "Take the opponent's seat and hand; the bot plays yours from here."}</p>
         {#if gameStore.swapError}
           <p role="alert" class="type-caption swap-error" data-testid="swap-sides-error">{gameStore.swapError}</p>
         {/if}
