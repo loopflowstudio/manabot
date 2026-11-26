@@ -160,9 +160,9 @@ and "block token B" fold.
 
 Declines are not recorded today (`declare_attacker(_, false)` is a
 no-op), so `CombatState` gains `declined_attackers` / `declined_blockers`,
-hashed in `CanonicalCombat` (`state/hash.rs:154`) with
-`MATCH_STATE_HASH_VERSION` 31 → 32. That bump also adds the missing
-`TurnState.graveyard_from_battlefield` to `CanonicalTurn`. The census
+hashed in `CanonicalCombat` with `MATCH_STATE_HASH_VERSION` 33 → 34
+(over `origin/main`'s v33). That bump also adds the missing
+`TurnState.graveyard_arrivals` to `CanonicalTurn`. The census
 vouches the decline lists as non-names. Compound
 `AtomicCommand::DeclareAttackers` and `structured_blocker_offers`
 (`agent/structured_offer.rs:1519-1590`) lower by exact creature id; they
@@ -307,10 +307,18 @@ aligned:
 
 1. **Predicate, oracle, permanents** — done (`e698958617`). Oracle: 133 folded pairs, zero divergences; fold share 10.30%.
 2. **Cards and selections** — done (`c440b0d8a4`). Fold share 24.07%, mean actions 3.300 → 2.819.
-3. **Combat** — done (`4c9a00ae9b`). `declined_attackers`/`declined_blockers`, hash v31 → v32 (adds `graveyard_from_battlefield`). Fold share 25.07%, 3.332 → 2.832.
+3. **Combat** — done (`4c9a00ae9b`). `declined_attackers`/`declined_blockers`, hash bump (now v33 → v34 after main merges; adds `graveyard_arrivals`). Fold share 25.07%, 3.332 → 2.832.
 4. **Academy and records** — done (`2111195908`). `InteractionOffer.aliases` on all wire/schema copies, drawn-object anchors, conformance `evidence-interchangeable-v1.json` (14 cases / 3,077 commands, zero divergence), pinned pilot games re-recorded. Local release `bench_steps` 118,308 steps / 7.02s, digest `4443070906626209330`.
 5. **Concept-review fixes** — done (`cd1b497671`). Coupled decline-pruning into `block_requirements.rs`, shared `AttackPlanNormalizer`/`BlockPlanNormalizer` between `combat_preview.rs` and `structured_offer.rs`, paired `PublishedDecision` (`space` + `aliases`) on `Game` and `GameSnapshot`, added pre-census cheap filtering and shared post-census equivalence helpers in `interchangeable.rs`, made `select_card_decision_allows_fold` exhaustive over `PendingChoice` and `Decision`, and removed dead `TurnFaceUp` arms. Zero conformance action-space hash changes (20/20 pass); local release `bench_steps` unchanged at 118,308 steps / 7.87s (`15,038.7 steps/s`), digest `4443070906626209330` (noisy shared local host; CI Engine Budget baseline adoption deferred to gate/CI).
 6. **Ship-review follow-up (PR #623 alignment + CI fixes)** — done (`7143d7b212`, on merge `3a0b82bf88`). Aligned `DecisionOffer.aliases` / `managym.decision_group.Offer.aliases` (`list[DecisionObjectView]`, omitted when empty), removed `Env.decision_offer_aliases_json` so `tests/public_api.json` stays clean vs `origin/main`, wired `managym/academy/server.py` through `Env.decision`, verified `AttackPlanNormalizer`/`BlockPlanNormalizer` in `flow/decision_group/combat.rs`, added London mulligan + `Offer.aliases` + grouped combat submit tests in `managym/tests/interchangeable.rs` and `tests/env/test_decision_group.py`, and updated all ~22 pre-folding CI assertions across Rust, Academy UI, model, sim, semantic, training, and buffer-capacity suites (`Engine Budget` baseline adoption deferred to CI/gate).
+
+7. **Offer alias contract and mid-declaration describe** (post-Pass 6 concept review, `57d30649fe`). Not built.
+   - **Alias shape (1a, made for review).** `DecisionOffer.aliases` (`flow/decision_group/mod.rs:126`, `managym/decision_group.py`) and experience `InteractionOffer.aliases` (`agent/experience.rs`) become `Vec<SubjectRef>` (or `ObjectRenderId`; pick whichever `view.ts` and `SubjectRef` already render, one type on both), dropping `DecisionObjectView`'s unused `entity_id`/`display_id`/`label`. Patch the six `protocol/*.schema.json` copies, `managym/experience.py`, `academy/ui/src/lib/types.ts`, `view.ts:397-403`, then `scripts/public_api.py check` (record non-breaking only; the field is unreleased). Passed over: 1b keep `DecisionObjectView` (no schema churn, bakes three dead fields into a new contract); 1c ship as is.
+   - **Offer subject names the folded class.** On `DeclareBlocker`, `primary_subject` (`decision_group/mod.rs:548`, source-first) returns the blocker while `aliases` hold folded attackers. Make the offer name the object its aliases are copies of (review suggests target → source → choice precedence, as `view.ts` uses); if that changes `source` for other verbs PR #623 defined, name the folded object explicitly instead. Test: two identical attackers, one blocker → `source` is attacker A, `aliases == [attacker B]`.
+   - **One projection per step in `server.py`.** `_build_decision_context` (`managym/academy/server.py` ~2008, 2555, 2851-2868) calls `decision_offer_subjects_json` and `env.decision()` every step, villain autoplay included, then `_live_decision_group` calls `env.decision()` again. Compute one `ActiveDecision` per hero prompt and reuse it; skip it during villain autoplay.
+   - **Committed declines in `CombatGroup::describe` (2a, bug).** `decision_group/combat.rs:70-125` passes `respect_declines=false`, so after a raw `Decline(Token1)` the suppressed `Token2` stays in `declarable` and counts as blocker capacity (wrong `must_block`, illegal `can_block` beside offers forbidding them). Filter creatures suppressed by `combat.declined_attackers`/`declined_blockers` out of `declarable` and the `others` slice; return `None` when none remain. Keep uncommitted copies symmetric. Repro test: attackers A1, A2 (MustBeBlocked), A3; blockers asked `[Token1, Ogre1, Ogre2, Token2]`; raw-decline Token1; `env.decision()` must report Ogre1 `must_block=true`, `can_block=[A1, A2]`, Token2 absent. Same for attackers.
+   - **Docs (3a).** State on `Offer.aliases` / `InteractionOffer.aliases` and in `managym/README.md` that aliases list live in-zone copies only; folded sideboard `LearnTakeLesson` copies stay in `Game::action_aliases` for lowering.
+   - Validate: `binary(interchangeable)` nextest, `tests/env/test_decision_group.py`, `tests/academy/test_interchangeable_offers.py`, schema byte tests, Vitest for `view.ts`.
 
 ## Concept reviews — choices made for review
 
@@ -326,6 +334,8 @@ Post-implementation (40cbc3f260), all into Pass 5 except 5a:
 - **5a** keep kickoff rulings; compound candidates and `autotapper` tiebreak deferred (below). Passed over: 5b pull autotapper in; 5c compare incarnation.
 
 Post-Pass 5 (27088fb760): no conceptual defects found; every concept lines up at `2a05a0b9a5`. Its confirmation questions were taken as recommended, headless and unconfirmed: **1a** ship `InteractionOffer.aliases` (omitted when empty, `SEMANTIC_DECISION_VERSION` 8), `Env::decision_offer_aliases_json` and `MATCH_STATE_HASH_VERSION` 32 as built (passed over: 1b hold to revise a boundary); **2a** keep kickoff equivalence rulings (passed over: 2b compare incarnation, 2c relax timestamps); **3a** compound candidates and `autotapper` stay deferred below (passed over: 3b pull autotapper in). These are the irreversible boundaries `ship-review` should surface.
+
+Post-Pass 6 (`57d30649fe`), headless, recommended options taken, unconfirmed: **1a** and **2a** into Pass 7; **3a** ship hash v34 and document live-zone-only aliases (Pass 7 docs); **4a** keep kickoff rulings (incarnation, order, face-down, timestamps, plain labels; autotapper in MTG-495). The alias wire shape is the boundary `ship-review` should surface before merge.
 
 ## Deferred findings
 

@@ -19,7 +19,10 @@ questions are in that Task's branch history.
   to the creature the engine asks. Alternative passed over: exposing forced
   declines to the browser and normalizing the draft there.
 - **Aliases ride beside `current_action_space`, not inside `ActionSpace`**,
-  and reach Academy as an optional `aliases` list on the experience offer.
+  and reach Academy as an optional `aliases` list on the experience offer
+  and `managym.decision_group.Offer`. Post-Pass 6 review 1a (headless):
+  their element type becomes `SubjectRef`/`ObjectRenderId` instead of
+  `DecisionObjectView` before merge.
   `SEMANTIC_DECISION_VERSION` stays 8.
 - **Compound offers keep duplicate candidates**; only lowering resolves
   aliases.
@@ -27,9 +30,6 @@ questions are in that Task's branch history.
 - **Not measured at kickoff:** how often real games offer interchangeable
   duplicates. No build cache existed in this checkout; Pass 1 reports the
   share of decisions folded and mean actions per decision.
-- **`TurnState.graveyard_from_battlefield`** is read by rules but absent from
-  `CanonicalTurn` (`managym/src/state/hash.rs:79-151`). Bundled into Pass 3's
-  hash bump; becomes its own fix if Pass 3 is split off (concept-review 4b).
 - **Concept review options 1a–5a** were taken headless as recommended; see
   the plan's concept-review section. 4a (combat in this Task, hash v32) is
   the one with the largest cost.
