@@ -607,6 +607,7 @@
   // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
   let shownMatch = untrack(() => frame.match_id);
+  let shownSeat = untrack(() => frame.projection.agent.player_index);
   let shownRevision = untrack(() => frame.revision);
   let wasConnected = untrack(() => connection === 'connected');
   let selection = $state<CursorSelection | null>(null);
@@ -681,11 +682,12 @@
     const currentStops = stopsAll;
     const lastSeq = presentation.events.at(-1)?.seq ?? -1;
     const { match_id, revision } = frame;
+    const seat = frame.projection.agent.player_index;
     const connected = connection === 'connected';
     const ms = activePaceMs;
     if (connection === null) return;
     untrack(() => {
-      if (!connected || !wasConnected || match_id !== shownMatch || revision < shownRevision) {
+      if (!connected || !wasConnected || match_id !== shownMatch || seat !== shownSeat || revision < shownRevision) {
         returnToNow();
         shownSeq = lastSeq;
       } else if (revision === shownRevision) {
@@ -706,6 +708,7 @@
         shownSeq = Math.max(shownSeq, lastSeq);
       }
       shownMatch = match_id;
+      shownSeat = seat;
       shownRevision = revision;
       wasConnected = connected;
     });

@@ -25,6 +25,7 @@ from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
+    DecisionSource,
     ReplayDecision,
     canonical_projection_sha256,
     load_canonical_replay,
@@ -33,6 +34,7 @@ from managym.academy.replay_index import (
 from managym.academy.trace import (
     GameConfig,
     academy_actions,
+    human_seat_at,
     load_legacy_trace,
     normalize_observation_to_hero,
 )
@@ -121,7 +123,12 @@ class OwnStep:
         )
 
 
-def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
+def own_steps(
+    events: Sequence[Mapping[str, Any]],
+    index: int,
+    *,
+    seat_swaps: Sequence[int] = (),
+) -> list[OwnStep]:
     """The person's own steps of the move that `events[index]` (theirs) ends.
 
     Trigger ordering takes one step per trigger placed, and a resolving spell's
@@ -147,9 +154,12 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
     current = events[index]
     if "actions" not in current or "action" not in current:
         return []
+    swaps = frozenset(seat_swaps)
     last = step(current)
     run = [last]
     for previous in reversed(range(len(events))[:index]):
+        if (previous + 1) in swaps:
+            break
         event = events[previous]
         if (
             "actions" not in event
@@ -185,6 +195,7 @@ def record_of(attempt: RetainedAttempt) -> GameRecord:
         raise ValueError("Expected a played game with a retained deal seed")
     world = json.loads(attempt.world_json)
     ending = trace["end_reason"]
+    setup = config.to_rust()
     return GameRecord(
         mode="scalar",
         operation="step",
@@ -192,8 +203,10 @@ def record_of(attempt: RetainedAttempt) -> GameRecord:
             GameInputs(
                 seed=config.seed,
                 players=[
-                    PlayerSetup.retain(player, config.decklists)
-                    for player in config.to_rust()
+                    PlayerSetup.retain(player, config.decklists, taps, payment)
+                    for player, taps, payment in zip(
+                        setup, setup.mana_floats, setup.mana_payment, strict=True
+                    )
                 ],
                 actions=[event["action"] for event in trace["events"]],
                 end=GameEnd(status="complete", winner=trace["winner"])
@@ -260,13 +273,17 @@ class ReplayedViews:
     """
 
     def __init__(self, attempt: RetainedAttempt, human_seat: int) -> None:
+        self.trace = attempt.trace
         self.events: list[dict[str, Any]] = attempt.trace["events"]
         self.final = attempt.trace["final_observation"]
         self.human_seat = human_seat
+        self.seat_swaps: tuple[int, ...] = tuple(attempt.trace.get("seat_swaps") or ())
+        self._swap_set = frozenset(self.seat_swaps)
         self.complete = attempt.trace["end_reason"] == "game_over"
         self.build = recorded_build(attempt.world_json)
         self.person: list[dict[str, Any]] = []
         self.opponent: list[dict[str, Any]] = []
+        self._pre_swap: dict[int, dict[str, Any]] = {}
         self.stop: ReplayStop | None = None
         self._lock = RLock()
         try:
@@ -276,13 +293,31 @@ class ReplayedViews:
         else:
             self._decisions = iter(self._walker)
 
-    def board(self, index: int, *, opponent: bool = False) -> dict[str, Any] | None:
+    def _seat_at(self, index: int | None) -> int:
+        if self.seat_swaps:
+            return human_seat_at(self.trace, index)
+        return self.human_seat
+
+    def board(
+        self,
+        index: int,
+        *,
+        viewer: int | None = None,
+    ) -> dict[str, Any] | None:
         """The verified board before event `index`, or None where none verified."""
-        boards = self.opponent if opponent else self.person
         with self._lock:
             while len(self.person) <= index and self._advance():
                 pass
-            return boards[index] if index < len(boards) else None
+            if index >= len(self.person):
+                return None
+            if viewer is None:
+                return self.person[index]
+            seat = self._seat_at(None if index == len(self.events) else index)
+            if viewer == seat:
+                return self.person[index]
+            if self.complete:
+                return self.opponent[index]
+            return self._pre_swap.get(index)
 
     def _advance(self) -> bool:
         """Verify and keep one more position; False once the walk has stopped."""
@@ -296,23 +331,25 @@ class ReplayedViews:
                     return self._diverge("the game continues past its stored track")
                 if self._walker.stop.status == "diverged":
                     return self._diverge(self._walker.stop.reason or "diverged")
-                final = decision_surface_view(env, self.human_seat)
+                seat = self._seat_at(None)
+                final = decision_surface_view(env, seat)
                 if final != self.final:
                     return self._diverge("the final board differs")
-                self._keep(final, None, env)
+                self._keep(final, None, env, seat, index)
                 self.stop = self._walker.stop
                 return False
             event = self.events[index]
             observation = self._walker.observation
-            actor = acting_seat(event, self.human_seat)
+            seat = self._seat_at(index)
+            actor = acting_seat(event, seat)
             if observation.game_over or int(observation.agent.player_index) != actor:
                 return self._diverge("another player acts")
             acting = decision_surface_view(env, actor)
             if acting != event["observation"]:
                 return self._diverge("the board differs")
             # The board before this step is verified whatever its action does.
-            self._keep(acting if actor == self.human_seat else None, acting, env)
-            if not step_matches(observation, event, self.human_seat):
+            self._keep(acting if actor == seat else None, acting, env, seat, index)
+            if not step_matches(observation, event, seat):
                 return self._diverge("the action differs")
             if next(self._decisions, None) is None:
                 stop = self._walker.stop
@@ -327,16 +364,17 @@ class ReplayedViews:
         person: dict[str, Any] | None,
         acting: dict[str, Any] | None,
         env: managym.Env,
+        seat: int,
+        index: int,
     ) -> None:
         """Append this position's boards, projecting only those not yet known."""
-        self.person.append(person or decision_surface_view(env, self.human_seat))
+        self.person.append(person or decision_surface_view(env, seat))
+        other = acting if acting is not None and person is None else None
         if self.complete:
-            opponent = 1 - self.human_seat
-            self.opponent.append(
-                acting
-                if acting is not None and person is None
-                else decision_surface_view(env, opponent)
-            )
+            self.opponent.append(other or decision_surface_view(env, 1 - seat))
+        elif index in self._swap_set and index > 0 and self._seat_at(index - 1) != seat:
+            # Consequences of the last pre-swap event belong to the previous seat.
+            self._pre_swap[index] = other or decision_surface_view(env, 1 - seat)
 
     def _diverge(self, reason: str) -> bool:
         verified = len(self.person)
@@ -358,11 +396,13 @@ class Recording:
     ) -> None:
         self.id = trace_id
         self.payload = payload
-        self.human_seat = payload["config"].get("human_seat", 0)
+        self.starting_human_seat = int(payload["config"].get("human_seat", 0))
+        self.seat_swaps: list[int] = list(payload.get("seat_swaps") or ())
+        self.human_seat = human_seat_at(payload, None)
         self.watch = bool(payload["config"].get("watch_players"))
         # A played game re-executes to each seat's own view at every position.
         self.views = (
-            ReplayedViews(attempt, self.human_seat)
+            ReplayedViews(attempt, self.starting_human_seat)
             if attempt is not None and not self.watch
             else None
         )
@@ -424,7 +464,10 @@ class Recording:
         for i, event in enumerate(payload["events"]):
             row = decisions.get(i)
             if row and (
-                self.watch or self.completed_mirror or row.viewer == self.human_seat
+                self.watch
+                or self.completed_mirror
+                or row.source == DecisionSource.CLIENT
+                or (not self.seat_swaps and row.viewer == self.human_seat)
             ):
                 self.positions.append(
                     Position(
@@ -448,8 +491,13 @@ class Recording:
 
         self.event_by_revision = {revision: i for i, revision in self.revisions.items()}
         self._narrations: dict[int, str | None] = {}
-        self._boards: dict[int, dict[str, Any]] = {}
-        self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
+        self._boards: dict[tuple[int, int], dict[str, Any]] = {}
+        self._events_by_revision: dict[int, dict[int, list[PresentationEvent]]] = {}
+
+    def _seat_for(self, position: Position) -> int:
+        return human_seat_at(
+            self.payload, None if position.kind == "state" else position.event_index
+        )
 
     # The 12 original pre-history presentation kinds; any other kind guarantees
     # a recording carries modern track history (immune to drift as kinds grow).
@@ -493,16 +541,18 @@ class Recording:
             and self.payload["events"][position.event_index].get("analysis_observation")
         )
 
-    def _board(self, position: Position) -> dict[str, Any]:
+    def _board(self, position: Position, viewer: int | None = None) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")
-        if index not in self._boards:
-            self._boards[index] = person_board(
+        seat = self._seat_for(position) if viewer is None else viewer
+        key = (index, seat)
+        if key not in self._boards:
+            self._boards[key] = person_board(
                 self._raw_board(position),
-                self.human_seat,
+                seat,
                 winner=self.payload.get("winner"),
             )
-        return self._boards[index]
+        return self._boards[key]
 
     def _cursor(self, position: Position, viewer: int) -> int:
         if position.kind == "choice" and position.decision:
@@ -588,26 +638,29 @@ class Recording:
     def _narration(self, index: int) -> str | None:
         """The move at event `index`, as the recorded person saw it (`narrate_move`)."""
         if index not in self._narrations:
+            seat = human_seat_at(self.payload, index)
             revision = self.revisions.get(index)
-            events = self._transition_events(revision) if revision is not None else []
+            events = (
+                self._transition_events(revision, seat) if revision is not None else []
+            )
             self._narrations[index] = narrate_move(
-                self._board(Position("", "choice", index)),
-                self._board(Position("", "consequences", index)),
+                self._board(Position("", "choice", index), seat),
+                self._board(Position("", "consequences", index), seat),
                 [event.kind.model_dump(mode="json") for event in events],
-                own_steps(self.payload["events"], index)
+                own_steps(self.payload["events"], index, seat_swaps=self.seat_swaps)
                 if self.payload["events"][index].get("actor") == "hero"
                 else (),
             )
         return self._narrations[index]
 
-    def _transition_events(self, revision: int) -> list[PresentationEvent]:
-        if self._events_by_revision is None:
-            self._events_by_revision = {}
-            for event in self.tracks.get(self.human_seat, []):
-                self._events_by_revision.setdefault(event.from_revision, []).append(
-                    event
-                )
-        return self._events_by_revision.get(revision, [])
+    def _transition_events(self, revision: int, viewer: int) -> list[PresentationEvent]:
+        by_revision = self._events_by_revision.get(viewer)
+        if by_revision is None:
+            by_revision = {}
+            for event in self.tracks.get(viewer, []):
+                by_revision.setdefault(event.from_revision, []).append(event)
+            self._events_by_revision[viewer] = by_revision
+        return by_revision.get(revision, [])
 
     def _value(self, position: Position) -> float | None:
         """The chooser's recorded value at a choice, as `read` returns it in `outputs`."""
@@ -645,9 +698,9 @@ class Recording:
         before = (
             row.frame.projection.model_dump(mode="json")
             if row and row.viewer == viewer
-            else self._board(Position("", "choice", index))
+            else self._board(Position("", "choice", index), viewer)
         )
-        after = self._board(Position("", "consequences", index))
+        after = self._board(Position("", "consequences", index), viewer)
         names: dict[str, str] = {}
         stacks: dict[str, str] = {}
         for observation, private in (
@@ -731,7 +784,7 @@ class Recording:
     ) -> dict[str, Any]:
         position = self.by_key[key]
         row = position.decision if position.kind == "choice" else None
-        viewer = row.viewer if row else self.human_seat
+        viewer = row.viewer if row else self._seat_for(position)
         cursor = self._cursor(position, viewer)
         end = min(cursor, before) if before is not None else cursor
         start = max(0, end - history_limit)
@@ -743,11 +796,13 @@ class Recording:
         index = position.event_index + (position.kind == "consequences")
         # Your own view after any step comes from the replayed game; the stored
         # track holds the next actor's view, which hides your hand.
-        replayed = self.views.board(index) if self.views and not row else None
+        replayed = (
+            self.views.board(index, viewer=viewer) if self.views and not row else None
+        )
         observation = (
             row.frame.projection.model_dump(mode="json")
             if row
-            else deepcopy(replayed or self._board(position))
+            else deepcopy(replayed or self._board(position, viewer))
         )
         event = (
             self.payload["events"][position.event_index]
@@ -756,7 +811,7 @@ class Recording:
         )
         analysis = event.get("analysis_observation") if (row and self.watch) else None
         other = (
-            self.views.board(index, opponent=True)
+            self.views.board(index, viewer=1 - viewer)
             if self.views and self.views.complete
             else None
         )

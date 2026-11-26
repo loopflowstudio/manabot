@@ -61,7 +61,7 @@
   const label = $derived(`${name}, ${player.life} life${player.hexproof ? ', hexproof' : ''}${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
-<section class="plate" aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
+<section class="plate" aria-label={name === 'You' ? 'Your plate' : `${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
   <button
     type="button"
     class="who"
