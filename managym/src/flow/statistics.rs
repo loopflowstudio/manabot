@@ -254,12 +254,12 @@ mod tests {
     }
     #[test]
     fn statistics_command_counts_once_and_rejects_stale_binding() {
-        use crate::agent::structured_offer::OfferSubmission;
+        use crate::agent::decision_surface::DecisionSubmission;
         let mut command_game = game(None);
         let mut indexed = game(None);
-        let offers = command_game.structured_search_offers().unwrap();
+        let offers = command_game.decision_surface().unwrap();
         let command = offers
-            .decode(&OfferSubmission {
+            .decode(&DecisionSubmission {
                 offer_id: offers.projection().offers[0].id,
                 answers: Vec::new(),
             })
@@ -277,7 +277,7 @@ mod tests {
         assert!(command_game
             .apply_legacy_offer_submission(
                 &offers,
-                &OfferSubmission {
+                &DecisionSubmission {
                     offer_id: offers.projection().offers[0].id,
                     answers: Vec::new(),
                 },

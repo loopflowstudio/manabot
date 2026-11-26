@@ -1,29 +1,14 @@
 /**
- * A whole pile-partition decision (e.g., Curator of Destinies), drafted before
- * any per-card choice is sent.
+ * Pure drafting helpers for a live `partition_piles` group (e.g., Curator of
+ * Destinies).
  *
- * The engine asks about one inspected card at a time (face-up or face-down).
- * Academy shows all remaining inspected cards together so a human can split
- * them holistically, then on confirm sends the engine's exact per-card offers
- * one by one. `partitionOffer` verifies each subsequent frame asks about the
- * expected card in `partition_piles`; any other frame stops the sequence.
+ * The authority supplies the `PartitionPilesDecisionGroup` descriptor (`items`,
+ * `committed_face_up`, `committed_face_down`), validates the drafted split via
+ * `/decision-group-preview`, and executes all sequential steps atomically on one
+ * `decision_group_command`. Draft persistence uses the unified `academy.table.decision-group-draft`
+ * store in `decision-group.ts`.
  */
-import type { CardState, ExperienceFrame, InteractionOffer } from '$lib/types';
-
-export type PileSide = 'face_up' | 'face_down';
-
-export interface PartitionStep {
-  cardId: number;
-  pile: PileSide;
-}
-
-export interface PartitionContext {
-  sourceName: string;
-  /** Cards already committed to the engine (before the current cursor). */
-  committed: CardState[];
-  /** Undecided cards starting at the current cursor, in engine ask order. */
-  remaining: CardState[];
-}
+import { sanitizeEntityIds, type DecisionCard, type PartitionPilesDecisionGroup, type PartitionPilesPlan } from '$lib/decision-group';
 
 export interface PartitionWords {
   /** Primary button label: "Confirm split (2 up, 3 down)". */
@@ -32,44 +17,12 @@ export interface PartitionWords {
   plan: string;
 }
 
-const FACE_UP_RE = /\bin the face-up pile\b/i;
-const FACE_DOWN_RE = /\bin the face-down pile\b/i;
-
-function focusedCardId(offer: InteractionOffer): number | null {
-  const fromSubject = offer.subjects?.[0]?.object.display_id;
-  if (typeof fromSubject === 'number') return fromSubject;
-  return typeof offer.focus[0] === 'number' ? offer.focus[0] : null;
-}
-
-function pileOffers(frame: ExperienceFrame): { faceUp: InteractionOffer; faceDown: InteractionOffer; cardId: number } | null {
-  if (frame.action_space !== 'MODAL' || frame.projection.decision_context?.stage !== 'partition_piles') return null;
-  const faceUp = frame.offers.find(offer => FACE_UP_RE.test(offer.label));
-  const faceDown = frame.offers.find(offer => FACE_DOWN_RE.test(offer.label));
-  if (!faceUp || !faceDown) return null;
-  const upId = focusedCardId(faceUp);
-  const downId = focusedCardId(faceDown);
-  if (upId === null || upId !== downId) return null;
-  return { faceUp, faceDown, cardId: upId };
-}
-
-/**
- * Derive the holistic partition state from one authority frame, or null when
- * the frame is not a valid `partition_piles` decision with inspected cards.
- */
-export function partitionContext(frame: ExperienceFrame): PartitionContext | null {
-  const offers = pileOffers(frame);
-  if (!offers) return null;
-  const inspected = frame.projection.agent.inspected ?? [];
-  const current = inspected.find(card => card.id === offers.cardId);
-  if (!current) return null;
-  const cards = inspected.filter(card => card.owner_id === current.owner_id);
-  const cursor = cards.findIndex(card => card.id === offers.cardId);
-  if (cursor < 0) return null;
-  return {
-    sourceName: frame.projection.decision_context?.source?.label ?? 'Split into two piles',
-    committed: cards.slice(0, cursor),
-    remaining: cards.slice(cursor),
-  };
+/** Keep only valid, distinct remaining entity ids from a restored draft. */
+export function sanitizePartitionDraft(
+  saved: readonly number[] | null | undefined,
+  group: PartitionPilesDecisionGroup,
+): number[] {
+  return sanitizeEntityIds(saved, new Set(group.items.map(card => card.item.entity)));
 }
 
 /** Toggle one card between the face-up and face-down piles in the draft. */
@@ -78,28 +31,21 @@ export function toggleCardPile(faceUp: readonly number[], cardId: number): numbe
 }
 
 /** Swap every undecided card between the face-up and face-down piles. */
-export function swapPiles(remaining: readonly CardState[], faceUp: readonly number[]): number[] {
+export function swapPiles(items: readonly DecisionCard[], faceUp: readonly number[]): number[] {
   const up = new Set(faceUp);
-  return remaining.filter(card => !up.has(card.id)).map(card => card.id);
+  return items.filter(card => !up.has(card.item.entity)).map(card => card.item.entity);
 }
 
-/** Ordered per-card offers to submit on confirm, matching the engine's cursor order. */
-export function partitionSteps(remaining: readonly CardState[], faceUp: readonly number[]): PartitionStep[] {
+/** Convert the drafted face-up entity ids into a wire `PartitionPilesPlan`. */
+export function partitionPlanOf(
+  faceUp: readonly number[],
+  group: PartitionPilesDecisionGroup,
+): PartitionPilesPlan {
   const up = new Set(faceUp);
-  return remaining.map(card => ({
-    cardId: card.id,
-    pile: up.has(card.id) ? 'face_up' : 'face_down',
-  }));
-}
-
-/**
- * The authority offer answering `step` in `frame`, or null when `frame` is not
- * the expected `partition_piles` prompt for `step.cardId`.
- */
-export function partitionOffer(frame: ExperienceFrame, step: PartitionStep): InteractionOffer | null {
-  const offers = pileOffers(frame);
-  if (!offers || offers.cardId !== step.cardId) return null;
-  return step.pile === 'face_up' ? offers.faceUp : offers.faceDown;
+  return {
+    kind: 'partition_piles',
+    face_up: group.items.filter(card => up.has(card.item.entity)).map(card => card.item),
+  };
 }
 
 function counted(names: string[]): string[] {
@@ -108,39 +54,20 @@ function counted(names: string[]): string[] {
   return [...counts].map(([name, count]) => (count > 1 ? `${name} ×${count}` : name));
 }
 
-export function partitionWords(remaining: readonly CardState[], faceUp: readonly number[], committedCount: number): PartitionWords {
+export function partitionWords(
+  group: PartitionPilesDecisionGroup,
+  faceUp: readonly number[],
+): PartitionWords {
   const upSet = new Set(faceUp);
-  const upCards = remaining.filter(card => upSet.has(card.id));
+  const upCards = group.items.filter(card => upSet.has(card.item.entity));
   const upCount = upCards.length;
-  const downCount = remaining.length - upCount;
+  const downCount = group.items.length - upCount;
+  const committedCount = group.committed_face_up.length + group.committed_face_down.length;
   const verb = committedCount > 0 ? 'Confirm rest' : 'Confirm split';
   const text = `${verb} (${upCount} up, ${downCount} down)`;
   if (upCount === 0) return { text, plan: `0 face-up · ${downCount} face-down` };
   if (downCount === 0) return { text, plan: `All ${upCount} face-up · 0 face-down` };
-  const upNames = counted(upCards.map(card => card.name));
+  const upNames = counted(upCards.map(card => card.label));
   const summary = upNames.length <= 3 ? ` (${upNames.join(', ')})` : '';
   return { text, plan: `${upCount} face-up${summary} · ${downCount} face-down` };
-}
-
-// ———————————————————————————————————————— Reload
-
-const DRAFT_KEY = 'academy.table.partition-draft';
-
-/** A draft survives a reload of the same decision in this tab, and no other. */
-export function savePartitionDraft(frame: ExperienceFrame, faceUp: readonly number[]): void {
-  try {
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ match_id: frame.match_id, frame_hash: frame.frame_hash, faceUp }));
-  } catch { /* A draft is presentation; losing it loses nothing committed. */ }
-}
-
-export function loadPartitionDraft(frame: ExperienceFrame, validIds: ReadonlySet<number>): number[] | null {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null');
-    if (!saved || saved.match_id !== frame.match_id || saved.frame_hash !== frame.frame_hash || !Array.isArray(saved.faceUp)) {
-      return null;
-    }
-    return (saved.faceUp as unknown[]).filter((id): id is number => typeof id === 'number' && validIds.has(id));
-  } catch {
-    return null;
-  }
 }

@@ -1275,50 +1275,118 @@ spells and excludes an opponent’s black spells and abilities from black
 sources. Academy and the text observation show effective protection and
 qualified hexproof on permanents and hexproof on players.
 
-### Previewing a whole combat declaration
+### Interactive decisions (single and grouped)
 
-The engine declares attackers and blockers one creature at a time. Ask how a
-whole drafted declaration would be declared, without declaring any of it:
+Multi-part decisions such as combat declarations and library arrangements still
+execute as sequential native `Action`s (`Game::step`, `Env.step(action: int)`),
+keeping RL/search action spaces, observations and replay digests unchanged.
+Above `Env.step`, `Env` exposes one unified interactive decision surface
+(`managym/src/flow/decision_group/`, typed models in `managym.decision_group`):
 
 ```python
-from managym.combat import CombatPlan, PlannedBlock, preview_combat
+from managym.decision_group import DeclareAttackersChoice, ScryChoice
 
-frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
-ask = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                     fingerprint=frame.fingerprint, plan=CombatPlan())
-ask.declarable          # every creature the declaration will ask about, in order
-plan = CombatPlan(attackers=[c.creature for c in ask.declarable[:2]])
-preview = preview_combat(env, viewer=frame.actor, revision=frame.revision,
-                         fingerprint=frame.fingerprint, plan=plan)
-preview.refused         # None, or the first creature refused and why
-[(s.action_index, s.revision) for s in preview.steps]
+decision = env.decision()  # defaults to current actor; None if terminal
+if decision is not None:
+    if decision.kind == "declare_attackers":
+        choice = DeclareAttackersChoice(
+            attackers=[c.item for c in decision.declarable[:2]]
+        )
+        preview = env.preview(choice, at=decision.address)
+        # preview.complete is True, preview.refused is None
+        # preview.outcome.attackers lists the declared attackers
+        # [(s.action_index, s.revision) for s in preview.steps] are the sequential steps
+        obs, reward, done, trunc, info = env.submit(choice, at=decision.address)
+    elif decision.kind == "scry":
+        choice = ScryChoice(
+            top=[decision.items[0].item],
+            bottom=[c.item for c in decision.items[1:]],  # top-most of bottom group first
+        )
+        obs, reward, done, trunc, info = env.submit(choice)
+    else:
+        # SingleDecision (or any single raw step via decision.offers):
+        obs, reward, done, trunc, info = env.submit(decision.offers[0].id)
 ```
 
-`Game::combat_preview` replays the engine's own per-creature answers to the
-plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
-ordinary action at the decision it will be asked at, with that decision's
-revision and fingerprint; stepping them in order declares exactly the plan.
-Each declarable creature’s `can_attack` lists its permanent defenders. Supply
-a `PlannedAttack(entity=..., incarnation=..., defender=...)` to attack one.
-Omitting the defender attacks the player. The preview returns that same
-defender on the step to confirm.
-Creatures with a single legal answer are answered by the engine without a
-step, as in play. When [indistinguishable](#indistinguishable-objects)
-creatures are declared, after one declines to attack or block later identical
-copies are not offered that choice; `preview_combat` normalizes a plan onto the
-copies the engine asks and resolves folded attacker targets, so drafting any
-subset of identical creatures (such as the second and third of three identical
-tokens) succeeds and `declared_attackers` / `declared_blocks` report the
-canonical copies declared. A block plan names blocker → attacker pairs
-(`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
-from here. The plan is refused, with a reason, when a planned creature is
-never asked, a planned answer is not offered (a required block) or the
-finished declaration differs from the plan through a forced answer.
-Each offered block or decline can still complete a
-legal declaration satisfying the greatest possible number of requirements
-(CR 509.1b–c). Blocking a creature with menace commits at least two blockers.
-`declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. During attacker selection both viewers can see the attackers
+Supported `Decision` kinds and grouped activation thresholds:
+
+| `kind` | Active when | Descriptor fields (besides `address`, `offers`) | `Choice` model and fields | `Outcome` fields |
+| --- | --- | --- | --- | --- |
+| `single` | any other decision, or below threshold | — | `int` (raw offer id) | `offer_id` |
+| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `can_attack`, `must_attack`), `committed` (`PlannedAttack`) | `DeclareAttackersChoice(attackers)` (`PlannedAttack`: `entity`, `incarnation`, optional `defender`) | `attackers` (`PlannedAttack`) |
+| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` (`PlannedBlock`) | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
+| `scry` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_top` (`DecisionCard`), `committed_bottom` (`DecisionCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
+| `surveil` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_graveyard` (`DecisionCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
+| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`DecisionCard`), `committed` (`DecisionCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
+| `partition_piles` | `>= 2` remaining cards | `items` (`DecisionCard`), `committed_face_up` (`DecisionCard`), `committed_face_down` (`DecisionCard`) | `PartitionPilesChoice(face_up)` | `face_up`, `face_down` |
+
+- **`env.decision(viewer=None)`** returns the active `Decision` for `viewer`
+  (defaulting to the current acting player), or `None` when the game is over or
+  `viewer` is not the chooser. Every `Decision` carries its optimistic-concurrency
+  `address` (`DecisionAddress(viewer, revision, fingerprint)`) and the raw
+  single-step legal `offers` (`list[Offer]`), where each `Offer` carries a
+  human-readable `label` (such as `"Play Mountain"`, `"Cast Gray Ogre"`,
+  `"Pass priority"`) and its viewer-safe `source: SubjectRef | None` without
+  changing `semantic_decision_frame()` fingerprints. Halfway through raw
+  stepping a grouped decision, `env.decision()` returns the remaining undecided
+  items plus immutable `committed*` state (and drops to `SingleDecision` below
+  threshold).
+- **`env.preview(choice, *, at=None)`** is read-only: the live game's state
+  digest, RNG, revision, trace and pending decision do not change. `choice` is
+  either a single `int` offer id or a grouped `Choice`; `at` defaults to the
+  current decision's address and accepts an explicit `DecisionAddress` for
+  optimistic concurrency (raising `managym.AgentError` on stale/non-actor
+  address or mismatched choice kind). For attackers, each `AttackerItem.can_attack`
+  lists permanent defenders (planeswalkers); supply a
+  `PlannedAttack(entity=..., incarnation=..., defender=...)` to attack one, or
+  omit `defender` to attack the defending player. When
+  [indistinguishable](#indistinguishable-objects) creatures are declared, after
+  one declines to attack or block later identical copies are not offered that
+  choice; `env.preview` normalizes a combat choice onto the copies the engine
+  asks and resolves folded attacker targets, so drafting any subset of identical
+  creatures (such as the second and third of three identical tokens) succeeds
+  and `outcome.attackers` / `outcome.blocks` report the canonical copies
+  declared. A structurally incomplete
+  choice (for example, unplaced cards in `scry` or `order_library`) returns
+  `complete=False, refused=None, steps=[], outcome=None` without cloning.
+  Otherwise it clones the game with its `skip_trivial` setting, compiles each
+  step from the clone's own legal action space, and returns `DecisionPreview`
+  with `steps`, `complete`, `outcome` and optional `refused` (`DecisionRefusal`
+  carrying `item`, `label` and the engine's `reason`, such as a lone blocker on
+  a creature with menace or a skipped required attack/block).
+- **`env.submit(choice, *, at=None)`** commits the whole decision atomically
+  (all-or-nothing): it previews first, raises `managym.AgentError` without
+  mutating the live game if the choice is refused, incomplete or stale, and
+  otherwise steps all compiled sequential actions, drains `observation_events`,
+  and settles any built-in opponent policies so mixed-policy envs match manual
+  `env.step` identically. It returns `(obs, reward, done, trunc, info)`.
+- **Scry bottom order:** `ScryChoice.bottom` uses top-to-bottom reading order
+  (`bottom[0]` is drawn first among bottomed cards and `bottom[-1]` sits on the
+  very bottom of the library), matching `OrderLibraryChoice` with `end="bottom"`.
+- **Purity boundary:** A grouped choice covers consecutive steps of one decision
+  by one player. Between step `i` and step `i+1` (while the group is still
+  active), the compiler verifies that no `CardDrawn` or `CardRevealed` event
+  occurred, the RNG did not advance (catching any shuffle), and no unseen
+  hidden-zone object became visible to `viewer`. If a boundary trips mid-group,
+  preview stops with `complete=False, outcome=None` and `submit` refuses it.
+  Effects that fire after the final step exits the group — such as drawing a
+  card after Scry 2 resolves or revealing the face-up pile when `PartitionPiles`
+  transitions to `ChoosePile` — complete cleanly. Surveil finishes when its
+  graveyard picks commit; any following `order_library` is its own decision.
+- **Deprecations (`0.3.0`):** `Env.compound_offers`,
+  `Env.compound_commands_json`, `Env.structured_offers`, `Env.step_structured`,
+  `Env.step_legacy_submission`, `Env.structured_search_offers`,
+  `StructuredOfferSet`, `Env.combat_preview_json`, and
+  `managym.combat.preview_combat` emit `DeprecationWarning` and are scheduled
+  for removal in `0.3.0` in favor of `Env.decision` / `Env.preview` /
+  `Env.submit` and `Env.decision_surface` (`DecisionSurface`).
+
+### Combat declaration and damage rules
+
+Each offered block or decline can still complete a legal declaration satisfying
+the greatest possible number of requirements (CR 509.1b–c). Blocking a creature
+with menace commits at least two blockers. During attacker selection both
+viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty
 declaration finishes and lasts through the turn, even if those creatures leave.
 Linden triggers for each white attacker her controller declares. With two white attackers
@@ -1327,8 +1395,6 @@ occurrences. A creature that enters attacking can deal combat damage. Its
 first declaration in a later combat still counts as its first attack for
 Aurelia. Leaving and returning starts a new attack history for that creature.
 Extra combats preserve raid and each creature’s history until the turn ends.
-The same address rules as payment previews apply, and the
-call is read-only in the same way.
 
 At the combat damage step, the attacking player assigns damage among the
 remaining blockers. Each choice names the attacker, the current blocker and

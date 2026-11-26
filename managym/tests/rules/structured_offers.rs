@@ -3,13 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
-        observation::Observation,
-        structured_offer::{
+        decision_surface::{
             AtomicCommand, BoundTarget, Candidate, CandidateId, CandidateSource, CandidateSourceId,
-            CandidateValue, ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId,
-            OfferSubmission, OfferVerb, PromptKind, RoleId, StructuredOfferError,
-            StructuredOfferProjection, SubjectRef,
+            CandidateValue, ChoiceAnswer, ChoiceStep, DecisionOption, DecisionOptionId,
+            DecisionProjection, DecisionSubmission, DecisionSurfaceError, DecisionVerb,
+            ObjectRenderId, PromptKind, RoleId, SubjectRef,
         },
+        observation::Observation,
     },
     flow::turn::StepKind,
     state::{
@@ -41,23 +41,23 @@ fn bolt_priority_scenario() -> Scenario {
     scenario
 }
 
-fn cast_offer(set: &managym::agent::structured_offer::StructuredOfferSet) -> &InteractionOffer {
+fn cast_offer(set: &managym::agent::decision_surface::DecisionSurface) -> &DecisionOption {
     set.projection()
         .offers
         .iter()
-        .find(|offer| offer.verb == OfferVerb::Cast)
+        .find(|offer| offer.verb == DecisionVerb::Cast)
         .expect("Bolt cast offer")
 }
 
-fn pass_offer(set: &managym::agent::structured_offer::StructuredOfferSet) -> &InteractionOffer {
+fn pass_offer(set: &managym::agent::decision_surface::DecisionSurface) -> &DecisionOption {
     set.projection()
         .offers
         .iter()
-        .find(|offer| offer.verb == OfferVerb::PassPriority)
+        .find(|offer| offer.verb == DecisionVerb::PassPriority)
         .expect("pass-priority offer")
 }
 
-fn select_step(offer: &InteractionOffer) -> (RoleId, &[Candidate]) {
+fn select_step(offer: &DecisionOption) -> (RoleId, &[Candidate]) {
     let [ChoiceStep::Select {
         role,
         candidates,
@@ -170,7 +170,7 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
         1
     );
 
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role,
@@ -223,7 +223,7 @@ fn structured_offer_pass_is_legacy_equivalent() {
     let set = root
         .structured_priority_offers()
         .expect("structured priority offers");
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: pass_offer(&set).id,
         answers: Vec::new(),
     };
@@ -283,24 +283,24 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
     let (role, candidates) = select_step(offer);
 
     assert_eq!(
-        set.decode(&OfferSubmission {
-            offer_id: OfferId(999),
+        set.decode(&DecisionSubmission {
+            offer_id: DecisionOptionId(999),
             answers: Vec::new(),
         }),
-        Err(StructuredOfferError::UnknownOffer(OfferId(999)))
+        Err(DecisionSurfaceError::UnknownOffer(DecisionOptionId(999)))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role,
                 candidates: vec![CandidateId(999)],
             }],
         }),
-        Err(StructuredOfferError::UnknownCandidate(CandidateId(999)))
+        Err(DecisionSurfaceError::UnknownCandidate(CandidateId(999)))
     );
     assert_eq!(
-        set.decode(&OfferSubmission {
+        set.decode(&DecisionSubmission {
             offer_id: offer.id,
             answers: vec![
                 ChoiceAnswer::Candidates {
@@ -313,10 +313,10 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
                 },
             ],
         }),
-        Err(StructuredOfferError::DuplicateRole(role))
+        Err(DecisionSurfaceError::DuplicateRole(role))
     );
 
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role,
@@ -336,21 +336,21 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
     let before = format!("{root:?}");
     assert!(matches!(
         root.apply_offer_submission(&set, &submission),
-        Err(StructuredOfferError::StaleOrIllegal(_))
+        Err(DecisionSurfaceError::StaleOrIllegal(_))
     ));
     assert_eq!(format!("{root:?}"), before);
 }
 
 #[test]
 fn structured_offer_game_fixture_matches_typed_wire_shape() {
-    let projection = StructuredOfferProjection {
+    let projection = DecisionProjection {
         actor: 0,
         kind: PromptKind::Priority,
         offers: vec![
-            InteractionOffer {
-                id: OfferId(0),
+            DecisionOption {
+                id: DecisionOptionId(0),
                 actor: 0,
-                verb: OfferVerb::Cast,
+                verb: DecisionVerb::Cast,
                 public_commitment: None,
                 source: Some(SubjectRef::Object {
                     id: ObjectRenderId {
@@ -388,10 +388,10 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 }],
                 confirm_label: "Cast".to_string(),
             },
-            InteractionOffer {
-                id: OfferId(1),
+            DecisionOption {
+                id: DecisionOptionId(1),
                 actor: 0,
-                verb: OfferVerb::PassPriority,
+                verb: DecisionVerb::PassPriority,
                 public_commitment: None,
                 source: None,
                 label: "Pass priority".to_string(),
@@ -410,8 +410,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
         fixture_value
     );
     assert_eq!(
-        serde_json::from_str::<StructuredOfferProjection>(fixture)
-            .expect("fixture should deserialize"),
+        serde_json::from_str::<DecisionProjection>(fixture).expect("fixture should deserialize"),
         projection
     );
 }
@@ -448,7 +447,7 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     let root = scenario.game().clone();
     let offers = root.compound_offers().unwrap();
     let offer = &offers.projection().offers[0];
-    assert_eq!(offer.verb, OfferVerb::DeclareBlockers);
+    assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
     assert_eq!(offer.choices.len(), 3);
     let mut answers = Vec::new();
     for ChoiceStep::Select {
@@ -460,7 +459,7 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
             candidates: vec![candidates.initial.as_ref().unwrap()[0].id],
         });
     }
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: offer.id,
         answers,
     };
@@ -480,13 +479,13 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     );
     assert!(matches!(
         applied.apply_offer_submission(&offers, &submission),
-        Err(StructuredOfferError::StaleOrIllegal(_))
+        Err(DecisionSurfaceError::StaleOrIllegal(_))
     ));
     let mut invalid = submission.clone();
     invalid.answers.push(invalid.answers[0].clone());
     assert!(matches!(
         offers.decode(&invalid),
-        Err(StructuredOfferError::DuplicateRole(_))
+        Err(DecisionSurfaceError::DuplicateRole(_))
     ));
     invalid.answers = vec![ChoiceAnswer::Candidates {
         role: RoleId(0),
@@ -494,7 +493,7 @@ fn compound_blockers_bind_roles_and_stop_at_priority() {
     }];
     assert_eq!(
         offers.decode(&invalid),
-        Err(StructuredOfferError::UnknownCandidate(CandidateId(999)))
+        Err(DecisionSurfaceError::UnknownCandidate(CandidateId(999)))
     );
 }
 
@@ -522,7 +521,7 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
         let root = scenario.game().clone();
         let offers = root.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
-        assert_eq!(offer.verb, OfferVerb::PayWaterbend);
+        assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
         let ChoiceStep::Select {
             role,
             min,
@@ -538,7 +537,7 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
             .iter()
             .map(|candidate| candidate.id)
             .collect();
-        let submission = OfferSubmission {
+        let submission = DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role: *role,
@@ -550,7 +549,7 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
         // Ogres whose folded 1-action prompts auto-complete as forced suffix taps.
         assert_eq!(commands.len(), if skip_trivial { 1 } else { 5 });
         selected.reverse();
-        let reversed = OfferSubmission {
+        let reversed = DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role: *role,
@@ -611,12 +610,12 @@ fn structured_compound_menace_retains_sequential_support() {
         .projection()
         .offers
         .iter()
-        .all(|offer| offer.verb == OfferVerb::DeclareBlocker && offer.choices.is_empty()));
+        .all(|offer| offer.verb == DecisionVerb::DeclareBlocker && offer.choices.is_empty()));
     for offer in &offers.projection().offers {
         assert_eq!(
             root.compound_commands(
                 &offers,
-                &OfferSubmission {
+                &DecisionSubmission {
                     offer_id: offer.id,
                     answers: vec![]
                 }
@@ -650,7 +649,7 @@ fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     let root = scenario.game();
     let offers = root.compound_offers().unwrap();
     let offer = &offers.projection().offers[0];
-    assert_eq!(offer.verb, OfferVerb::DeclareBlockers);
+    assert_eq!(offer.verb, DecisionVerb::DeclareBlockers);
     let mut answers = Vec::new();
     for ChoiceStep::Select {
         role,
@@ -670,7 +669,7 @@ fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     assert_eq!(
         root.compound_commands(
             &offers,
-            &OfferSubmission {
+            &DecisionSubmission {
                 offer_id: offer.id,
                 answers
             }
@@ -713,6 +712,6 @@ fn structured_compound_waterbend_effects_or_competing_mana_stay_sequential() {
             .projection()
             .offers
             .iter()
-            .all(|offer| offer.verb != OfferVerb::PayWaterbend && offer.choices.is_empty()));
+            .all(|offer| offer.verb != DecisionVerb::PayWaterbend && offer.choices.is_empty()));
     }
 }

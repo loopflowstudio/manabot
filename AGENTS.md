@@ -45,10 +45,11 @@ domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
 terms (`recipe` for training recipes, `manifest` for content packs, `replay`
 for seed-and-action replays) for unrelated concepts, even internally, and avoid
 duplicating module filenames across packages. When renaming or replacing a
-published API, convert remaining callers, emit a `DeprecationWarning` targeting
-the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
-compatibility graph with that version so rollover finds it; serialized keys,
-checkpoint fields and frozen evidence keep their spelling.
+published API, rename surviving core modules and functions into the new
+vocabulary, convert callers, and keep the old names only on thin compatibility
+wrappers emitting a `DeprecationWarning` targeting the next minor release (e.g.
+`0.3.0` on `0.2.x`), tagged as one deletable compatibility graph; serialized
+keys, checkpoint fields and frozen evidence keep their spelling.
 
 Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
@@ -93,14 +94,18 @@ them in the browser. Preserve Command binding, stale rejection, actual pending
 decisions on reconnect, replay/fork identity and accessibility. Cancellation or
 undo requires an explicit shared action and cannot erase committed costs or
 revealed information. Keep priority-stop automation distinct from deliberate
-human decisions. Keep multi-step choices (combat, pile partitions) as sequential
-Commands for agents while drafting them holistically in Academy over verified
-steps: fold raw step offers into a collapsed disclosure while drafting, and keep
-them listed in Replay and Study for recorded policy probabilities. Play's retained `hero_*`/`villain_*` setup fields name
-human/opponent roles; `GameConfig.human_seat` orders them at the native
-boundary. Record and project actual native seats; Watch keeps its two-seat
-acting-view contract. Scope resume credentials and the started-launch marker
-together in `sessionStorage` so a launch never resumes another tab's game.
+human decisions. Live grouped decisions (combat declarations on the board,
+Scry, Surveil, and OrderLibrary in `ArrangePanel`, and `PartitionPiles` in the
+two-pile partition panel) are drafted whole and committed in one `decision_group_command`
+compiled to sequential native `Action`s with no engine action-space change:
+fold raw single-step offers under a collapsed disclosure while drafting (not
+beside the draft), and keep them listed in Replay and Study where recorded
+policy probabilities attach. Play's retained `hero_*`/`villain_*` setup
+fields name human/opponent roles; `GameConfig.human_seat` orders them at the
+native boundary. Record and project actual native seats; Watch keeps its
+two-seat acting-view contract. Scope Academy resume credentials and the
+started-launch marker together in `sessionStorage` so a launch never resumes
+another tab's or launch's game.
 Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's
@@ -482,13 +487,14 @@ it. Discard replacements use that controller to determine who caused the
 discard, including a discard paid during resolution.
 
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
-use action-aligned `structured_search_offers`: these offers have no choices
-and reject nonempty `Command.answers`. Compound submissions belong to the
-separate `compound_offers` / `step_structured` API. Do not infer supported
-atomic answers from the `Command` field alone, or pass compound offer ids to
-the semantic executor. Recording preserves the original native Command and
-its object preconditions; Academy's presentation Command has a separate
-revision scope.
+project the action-aligned `decision_surface` (no choices; rejects nonempty
+`Command.answers`; prefer `decision` / `decision_group` vocabulary over `offer`
+in new core engine code). Grouped input (`flow/decision_group/`,
+`managym.decision_group`, Academy `decision_group_command`) compiles a typed
+choice to sequential native `Action`s on a clone before stepping the live game
+without widening action spaces, observations or digests. Recording preserves
+the original native Command and its object preconditions; Academy's
+presentation Command has a separate revision scope.
 
 Native snapshot v1 cold replay reads action indices or Commands. Issued object
 candidates bind the entire action-aligned offer projection, and the final state

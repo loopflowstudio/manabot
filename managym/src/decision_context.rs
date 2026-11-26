@@ -58,7 +58,7 @@ impl Game {
         self.decision_object(now)
     }
 
-    fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
+    pub(crate) fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
         match target {
             Target::Player(player) => Some(DecisionObjectView {
                 entity_id: self.state.players[player.0].id.0,

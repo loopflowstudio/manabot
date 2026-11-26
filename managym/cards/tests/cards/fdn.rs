@@ -2003,7 +2003,7 @@ fn power_batch_ashroot_and_partners_read_live_or_departed_source() {
             .iter()
             .find(|o| o.label == "Cast Lightning Bolt")
             .unwrap();
-        let managym::agent::structured_offer::ChoiceStep::Select { candidates, .. } =
+        let managym::agent::decision_surface::ChoiceStep::Select { candidates, .. } =
             &cast.choices[0];
         let candidate = candidates
             .initial

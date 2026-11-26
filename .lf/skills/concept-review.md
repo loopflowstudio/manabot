@@ -3,16 +3,18 @@ extends: builtin
 ---
 ## In this repository
 
-For engine, RL and training code (`managym` and `manabot` outside Academy and
-CLI surfaces), judge concepts, APIs and data layouts by throughput, memory and
-cache ownership, thread safety, statistical validity and composability rather
-than human UX. Still challenge opaque wrapper names, derived consequence or
-interpretation flags where direct Comprehensive Rules state belongs, and
-arbitrary caps or tested-grid `Literal` sets lacking a structural invariant.
+Judge internal engine, RL and training layouts and hot paths by throughput,
+memory and cache ownership, thread safety, statistical validity and
+composability rather than human UX—while still challenging opaque wrappers,
+derived flags where Comprehensive Rules state belongs, and caps without a
+structural invariant. Judge caller-facing `managym`/`manabot` APIs by caller
+clarity: prefer one surface with unambiguous verbs over side-channel polling,
+and check parallel or unused APIs in the area to harvest what worked and
+replace or deprecate them instead of leaving two surfaces side by side.
 
 **Skip a pass that adds no concept.** In a headless run, when the work since
-the last review only authored cards or moved callers onto types, records and
-APIs that `scratch/concept-review.html` already covers, report "nothing to
-change" in one line and leave the page alone. Review, and rewrite the whole
-page to match `HEAD`, when the work added or changed a rules type, an
-observation or token kind, a Command or an offer shape.
+the last review only authored cards or moved callers onto already-reviewed
+types, records and APIs, report "nothing to change" in one line and leave
+`scratch/concept-review.html` alone. Review, and rewrite the page to match
+`HEAD`, when the work added or changed a rules type, an observation or token
+kind, a Command or a decision shape.

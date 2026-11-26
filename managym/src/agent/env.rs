@@ -4,6 +4,7 @@ use crate::state::player::{ManaFloats, ManaPayment};
 use crate::{
     agent::{
         action::AgentError,
+        decision_surface::{DecisionSubmission, DecisionSurface},
         heuristic::Heuristic,
         observation::{EventData, Observation},
         observation_encoder::{
@@ -11,7 +12,6 @@ use crate::{
             ObservationEncoderConfig,
         },
         player_policy::PlayerPolicy,
-        structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cards::{
         content_pack::{default_content_pack, ContentPackManifest},
@@ -637,7 +637,15 @@ impl Env {
         chooser: usize,
         action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
-        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
+        let result = self.step_once(action)?;
+        self.finish_and_settle(chooser, result)
+    }
+
+    fn finish_and_settle(
+        &mut self,
+        chooser: usize,
+        (obs, mut reward, terminated, truncated, info): (Observation, f64, bool, bool, InfoDict),
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         // A mixed game's rewards belong to its external seat.
         if self.external_seat().is_some_and(|seat| seat != chooser) {
             reward = -reward;
@@ -746,7 +754,7 @@ impl Env {
     }
 
     /// Project the exact currently supported structured decision.
-    pub fn structured_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn structured_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env.structured_offers called before reset".to_string()))?
@@ -755,7 +763,7 @@ impl Env {
     }
 
     /// Project the complete action-aligned structured surface used by search.
-    pub fn compound_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    pub fn compound_offers(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("env not reset".into()))?
@@ -765,8 +773,8 @@ impl Env {
 
     pub fn compound_commands(
         &self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<Vec<SemanticCommand>, AgentError> {
         self.game
             .as_ref()
@@ -775,21 +783,25 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
-    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+    /// Project the action-aligned decision surface for the current prompt.
+    pub fn decision_surface(&self) -> Result<DecisionSurface, AgentError> {
         self.game
             .as_ref()
-            .ok_or_else(|| {
-                AgentError("env.structured_search_offers called before reset".to_string())
-            })?
-            .structured_search_offers()
+            .ok_or_else(|| AgentError("env.decision_surface called before reset".to_string()))?
+            .decision_surface()
             .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Deprecated compatibility alias for [`Self::decision_surface`] (removed in 0.3.0).
+    pub fn structured_search_offers(&self) -> Result<DecisionSurface, AgentError> {
+        self.decision_surface()
     }
 
     /// Apply one prompt-bound structured submission through the atomic path.
     pub fn step_structured(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let mut result = {
@@ -816,8 +828,8 @@ impl Env {
     /// adapter. The final count is the number of legacy actions consumed.
     pub fn step_legacy_submission(
         &mut self,
-        offers: &StructuredOfferSet,
-        submission: &OfferSubmission,
+        offers: &DecisionSurface,
+        submission: &DecisionSubmission,
     ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
         self.require_external_chooser()?;
         let (mut result, legacy_actions) = {
@@ -872,6 +884,7 @@ impl Env {
     }
 
     /// Read-only whole-declaration preview; see [`Game::combat_preview`].
+    /// Deprecated wrapper over [`Env::preview`], removed in 0.3.0.
     pub fn combat_preview(
         &self,
         viewer: usize,
@@ -883,6 +896,67 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
             .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
+    }
+
+    /// Active decision for `viewer` (defaults to the current actor); see [`Game::decision`].
+    pub fn decision(
+        &self,
+        viewer: Option<usize>,
+    ) -> Result<Option<crate::flow::decision_group::ActiveDecision>, AgentError> {
+        if let Some(seat) = viewer {
+            if seat >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision(viewer.map(PlayerId)))
+    }
+
+    /// Read-only preview of a single or grouped choice; see [`Game::preview`].
+    pub fn preview(
+        &self,
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
+    ) -> Result<crate::flow::decision_group::DecisionPreview, AgentError> {
+        if let Some(address) = at {
+            if address.viewer >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
+        }
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .preview(at, choice)
+    }
+
+    /// Validate `choice` on a clone, execute all compiled sequential steps
+    /// atomically, drain observation events, and settle any built-in opponent
+    /// policies so mixed-policy envs match manual `Env::step` identically.
+    pub fn submit(
+        &mut self,
+        at: Option<&crate::flow::decision_group::DecisionAddress>,
+        choice: &crate::flow::decision_group::DecisionChoice,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        self.require_external_chooser()?;
+        let preview = self.preview(at, choice)?;
+        preview.require_submittable()?;
+        let chooser = preview.decision.address.viewer;
+        let mut last_result = None;
+        for step in &preview.steps {
+            self.game
+                .as_ref()
+                .ok_or_else(|| AgentError("no active game".into()))?
+                .verify_step(step)?;
+            let result = self.step_once(step.action_index as i64)?;
+            if let Some(trace) = &mut self.provenance {
+                trace.push(RecordedAction::Index(step.action_index as i64));
+            }
+            last_result = Some(result);
+        }
+        self.finish_and_settle(chooser, last_result.expect("preview.steps is non-empty"))
     }
 
     /// Tell the current game's facts until it ends; see

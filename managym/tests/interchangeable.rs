@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
+        decision_surface::{ChoiceAnswer, ChoiceStep, DecisionSubmission, DecisionVerb},
         env::{Env, RestoreOptions},
-        structured_offer::{ChoiceAnswer, ChoiceStep, OfferSubmission, OfferVerb},
     },
     flow::{
         cast_permission::PlayGrant,
@@ -595,7 +595,7 @@ fn target_three_identical_opponent_tokens_folds_to_one_and_compound_lowers_alias
         .collect();
     assert_eq!(token_candidates.len(), 3);
     // Pick the 3rd Ally token (which is folded into the 1st Ally token at ChooseTarget).
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: bolt_offer.id,
         answers: vec![ChoiceAnswer::Candidates {
             role: *role,
@@ -1253,7 +1253,7 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
 
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
-        assert_eq!(offer.verb, OfferVerb::PayWaterbend);
+        assert_eq!(offer.verb, DecisionVerb::PayWaterbend);
         let ChoiceStep::Select {
             role,
             min,
@@ -1267,7 +1267,7 @@ fn compound_waterbend_lowers_folded_aliases_under_both_skip_trivial_modes() {
 
         // Select Rallier (0) + the 2nd and 3rd Gray Ogres (2, 3), skipping the canonical 1st Ogre (1),
         // plus paying remaining {2} mana via PayCost.
-        let submission = OfferSubmission {
+        let submission = DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role: *role,
@@ -2163,11 +2163,11 @@ fn published_decision_seam_clears_aliases_with_action_space() {
         .projection()
         .offers
         .iter()
-        .find(|o| o.verb == OfferVerb::PlayLand)
+        .find(|o| o.verb == DecisionVerb::PlayLand)
         .unwrap();
     game.apply_offer_submission(
         &offers,
-        &OfferSubmission {
+        &DecisionSubmission {
             offer_id: play_offer.id,
             answers: Vec::new(),
         },
@@ -2245,12 +2245,12 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         // Compound DeclareAttackers lowering with non-canonical subset [last-asked].
         let offers = game.compound_offers().unwrap();
         let offer = &offers.projection().offers[0];
-        assert_eq!(offer.verb, OfferVerb::DeclareAttackers);
+        assert_eq!(offer.verb, DecisionVerb::DeclareAttackers);
         let ChoiceStep::Select {
             role, candidates, ..
         } = &offer.choices[0];
         let last_cand = candidates.initial.as_ref().unwrap().last().unwrap().id;
-        let submission = OfferSubmission {
+        let submission = DecisionSubmission {
             offer_id: offer.id,
             answers: vec![ChoiceAnswer::Candidates {
                 role: *role,
@@ -2351,7 +2351,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         // attacker #2, role 2 blocks attacker #1 -> preserves split block [1, 1].
         let boffers = bgame.compound_offers().unwrap();
         let boffer = &boffers.projection().offers[0];
-        assert_eq!(boffer.verb, OfferVerb::DeclareBlockers);
+        assert_eq!(boffer.verb, DecisionVerb::DeclareBlockers);
         assert_eq!(boffer.choices.len(), 3);
         let ChoiceStep::Select { role: r0, .. } = &boffer.choices[0];
         let ChoiceStep::Select {
@@ -2366,7 +2366,7 @@ fn combat_preview_and_compound_lowering_normalize_combat_plans() {
         } = &boffer.choices[2];
         let c1_list = c1.initial.as_ref().unwrap();
         let c2_list = c2.initial.as_ref().unwrap();
-        let split_sub = OfferSubmission {
+        let split_sub = DecisionSubmission {
             offer_id: boffer.id,
             answers: vec![
                 ChoiceAnswer::Candidates {

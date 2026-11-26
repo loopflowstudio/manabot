@@ -343,7 +343,7 @@ fn compound_spew_flame_keeps_its_profile_and_target() {
         inspect::{top_spell, zone_of},
     };
     use managym::{
-        agent::structured_offer::{ChoiceAnswer, ChoiceStep, OfferSubmission},
+        agent::decision_surface::{ChoiceAnswer, ChoiceStep, DecisionSubmission},
         state::zone::ZoneType,
     };
     let mut s = five_color_setup(&["Smaug, the Great Calamity", "Gray Ogre", "Hungry Ghoul"]);
@@ -357,7 +357,7 @@ fn compound_spew_flame_keeps_its_profile_and_target() {
         .projection()
         .offers
         .iter()
-        .find(|offer| matches!(&offer.public_commitment, Some(managym::agent::structured_offer::PublicCommitment::Cast { card }) if card == "Smaug, the Great Calamity"))
+        .find(|offer| matches!(&offer.public_commitment, Some(managym::agent::decision_surface::PublicCommitment::Cast { card }) if card == "Smaug, the Great Calamity"))
         .unwrap();
     assert!(front.choices.is_empty());
     let inset = offers
@@ -379,7 +379,7 @@ fn compound_spew_flame_keeps_its_profile_and_target() {
         .iter()
         .find(|target| target.label == "Gray Ogre")
         .unwrap();
-    let submission = OfferSubmission {
+    let submission = DecisionSubmission {
         offer_id: inset.id,
         answers: vec![ChoiceAnswer::Candidates {
             role: *role,
