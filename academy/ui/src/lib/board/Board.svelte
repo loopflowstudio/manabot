@@ -125,6 +125,8 @@
     ribbonSeat?: 0 | 1 | null;
     /** The opponent's hand at this frame, while live play has open hands on; null otherwise. */
     openHand?: readonly CardState[] | null;
+    /** Live play has open hands on, whether or not this frame's hand has arrived; turning it on again shows a tucked hand. */
+    openHands?: boolean;
     /** When the work the game waits on started, epoch seconds; null when nothing runs. */
     workStarted: number | null;
     /** The live session is gone; offers are the last recorded decision's. */
@@ -199,7 +201,7 @@
 
   let {
     frame, interaction, handLayout, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
-    presentation, thinking, choosingSeat, ribbonSeat = null, openHand = null, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
+    presentation, thinking, choosingSeat, ribbonSeat = null, openHand = null, openHands = false, workStarted, interrupted, payment = null, onpreview = () => {}, onact, pending = false, onpassturn = () => {},
     since: sinceGiven, history: historyGiven, onjump, readOnly = onjump !== undefined, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, moveMarks, shownMoves, heading = null, bottom, strip, notices, result, menu, bar, chips = [], historyHref = '/games',
     group = null, groupPreview, ongroupact, groupRejection = null, ondismissgrouprejection, stepBoards = [],
@@ -1244,22 +1246,31 @@
   /**
    * Each plate's Show hand / Tuck hand, for its own seat and this game only.
    * A recording's tuck lasts for the position it was made at; live play has
-   * one open hand to tuck, and it stays tucked until shown again.
+   * one open hand to tuck, and it stays tucked until shown again or open hands
+   * is turned off.
    */
   let ribbonSay = $state.raw<{ match: string; overrides: RibbonOverrides }>({ match: '', overrides: NO_RIBBON_OVERRIDES });
   const ribbonOverrides = $derived(ribbonSay.match === frame.match_id ? ribbonSay.overrides : NO_RIBBON_OVERRIDES);
-  const ribbonAt = $derived<unknown>(ribbons ? boardProjection : 'play');
+  // Live play's tuck lasts while open hands stays on: each time it is turned on is a new key.
+  let openHandsTimes = 0;
+  let openHandsWas = false;
+  const ribbonAt = $derived.by<unknown>(() => {
+    if (ribbons) return boardProjection;
+    if (openHands && !openHandsWas) openHandsTimes += 1;
+    openHandsWas = openHands;
+    return openHandsTimes;
+  });
   /** What the position asks by itself: the acting seat's hand on a recording, the open hand in play. */
   function ribbonAsked(side: 'you' | 'opponent'): boolean {
     return (ribbons && ribbonSide === side) || (side === 'opponent' && openShown);
   }
-  /** A ribbon is out for the seat acting, while open hands shows it, as its plate last said, and whenever an offer sits on one of its cards. */
+  /** A ribbon is out for the seat acting, while open hands shows it, as its plate last said, and whenever a live offer sits on one of its cards. A recording's pills never hold a hand out: the rail lists them too. */
   function ribbonOut(side: 'you' | 'opponent', hand: HandItem[]): boolean {
-    return ribbonIsOut(ribbonOverrides, side, ribbonAt, { position: ribbonAsked(side), offered: hand.some(item => item.offers.length > 0) });
+    return ribbonIsOut(ribbonOverrides, side, ribbonAt, { position: ribbonAsked(side), offered: live && hand.some(item => item.offers.length > 0) });
   }
-  /** The plate's Show hand / Tuck hand for its own seat: a recording's hand, or play's open hand, unless an offer holds it out. */
+  /** The plate's Show hand / Tuck hand for its own seat: a recording's hand, or play's open hand, unless a live offer holds it out. */
   function handToggle(side: 'you' | 'opponent', sideView: SideView): { out: boolean; ontoggle: () => void } | null {
-    if (sideView.hand.length === 0 || sideView.hand.some(item => item.offers.length > 0)) return null;
+    if (sideView.hand.length === 0 || (live && sideView.hand.some(item => item.offers.length > 0))) return null;
     if (!ribbons && !(side === 'opponent' && openShown)) return null;
     return {
       out: ribbonOut(side, sideView.hand),

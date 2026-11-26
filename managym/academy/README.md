@@ -535,8 +535,9 @@ game played on from another starts with it off while each prefix event keeps
 its source's `open_hands` mark. The client has no separate flag: the switch and the top-bar chip
 are on while `gameStore.openHand` is not null, and the opponent's plate then
 offers Show hand / Tuck hand over the face-up ribbon (tucked, it sits at a
-card back's depth). Each plate's toggle acts on its own seat
-(`RibbonOverrides` in `board/view.ts`). The
+card back's depth; turning open hands on again brings it out). Each plate's
+toggle acts on its own seat (`RibbonOverrides` in `board/view.ts`); only a live
+offer on a hand card holds a ribbon out. The
 client draws `open_hand` in place of top-ribbon card backs only at now
 (`activeCursor === null`) when `open_hand.revision` matches the current frame
 revision; beat playback and history lookback draw that historical board's own

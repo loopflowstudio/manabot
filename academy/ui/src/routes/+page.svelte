@@ -641,6 +641,7 @@
       {thinking}
       choosingSeat={opponentChoosing && heroSeat !== null ? (heroSeat === 0 ? 1 : 0) : null}
       {openHand}
+      openHands={openHandsOn}
       evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.stopped}

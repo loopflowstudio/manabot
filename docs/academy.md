@@ -1540,7 +1540,8 @@ alone out and open Inspect without moving neighbouring cards or the
 battlefield. **Show hand / Tuck hand** on a plate acts on that seat's hand
 alone: a hand you show stays out as you step until you tuck it, and the
 choosing seat's hand can be tucked to read the lands under it until you step
-to another position. A hand with an offer on one of its cards stays out. At
+to another position, even when policy percentages sit on its cards (the rail
+lists every one). At
 game over neither ribbon is extended, and each plate shows its own.
 
 The **Perspective** control in the top bar chooses who sits at the bottom:
@@ -1711,8 +1712,8 @@ row. While **Open hands** is on, the **Hand** line on the opponent's plate is a
 **Tuck hand / Show hand** button: tuck the hand back to the depth of a card
 back to see the whole land row under it (hover or focus a tucked card to bring
 that card alone out), and show it again when you want the whole cards. It stays
-tucked for the rest of that game until you show it. Nothing on the battlefield
-moves either way.
+tucked until you show it or turn **Open hands** off; turned on again, the hand
+comes out in full. Nothing on the battlefield moves either way.
 
 - **Works with closed decklists.** Open hands is available in both open- and
   closed-decklist Play games (including the default TLA Trophies setup). It
