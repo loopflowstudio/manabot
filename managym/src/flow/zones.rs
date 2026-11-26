@@ -449,17 +449,7 @@ impl Game {
         exceptions: &[CopyException],
     ) -> ObjectId {
         let id = self.state.id_gen.next_id();
-        let copy = Object::token_with_copiable_values(
-            id,
-            controller,
-            (
-                values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
-                std::sync::Arc::clone(&values.definition.printed),
-            ),
-            values.faces.clone(),
-            values.copy.clone(),
-            exceptions,
-        );
+        let copy = Object::token_with_copiable_values(id, controller, values, exceptions);
         self.add_object(copy)
     }
 
@@ -475,11 +465,11 @@ impl Game {
     /// creation without emitting a rules zone-change event.
     pub(crate) fn create_spell_copy(
         &mut self,
-        source: ObjectId,
+        source: Object,
         id: PublicId,
         controller: PlayerId,
     ) -> ObjectId {
-        let copy = Object::spell_copy(self.state[source].clone(), id, controller);
+        let copy = Object::spell_copy(source, id, controller);
         let object = self.add_object(copy);
         self.state.place_object(object, controller, ZoneType::Stack);
         self.capture_object_move(object, None, Some(ZoneType::Stack), controller);
@@ -647,6 +637,7 @@ impl Game {
                 exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
+                target_shares: Vec::new(),
                 target_req_indices,
                 kicked: cast.kicked,
                 x: cast.x,
@@ -952,7 +943,26 @@ impl Game {
             .map(|index| self.state.stack_objects_mut().remove(index))
         {
             Some(StackObject::Spell(spell)) => {
-                let lki = self.spell_lki(&spell);
+                let mut lki = self.spell_lki(&spell);
+                // Only triggers still referring to this stack appearance can copy it.
+                // Capture after any retargets, before the zone change restores its face.
+                let context = Some(Target::StackSpell(spell.object));
+                if self
+                    .unplaced_triggers()
+                    .any(|trigger| trigger.context == context)
+                    || self.state.stack_objects.iter().any(|item| {
+                        matches!(item,
+                        StackObject::TriggeredAbility(trigger) if trigger.context == context)
+                    })
+                {
+                    lki.copiable = Some(std::sync::Arc::new(
+                        crate::state::stack_object::CopiableSpell {
+                            spell: spell.clone(),
+                            values: default_content_pack()
+                                .copiable_values(&self.state[spell.object]),
+                        },
+                    ));
+                }
                 self.state.spell_lki_mut().insert(spell.object, lki);
                 (to_zone == ZoneType::Battlefield).then_some(SpellEntry {
                     x: spell.x,
@@ -998,8 +1008,10 @@ impl Game {
                 .entry(entered_definition)
                 .or_default() += 1;
         }
-        if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
-            self.state.turn.graveyard_from_battlefield.push(object_id);
+        if to_zone == ZoneType::Graveyard {
+            self.state
+                .turn
+                .record_graveyard_arrival(object_id, old_zone == Some(ZoneType::Battlefield));
         }
         if to_zone == ZoneType::Exile && !entry.counters.is_empty() {
             self.state
@@ -1037,6 +1049,7 @@ impl Game {
                 object_id,
                 &self.state[object_id],
             );
+            permanent.chosen = entry.chosen.map(std::sync::Arc::new);
             permanent.manifested = entry.face == EntryFace::Manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;
@@ -1049,15 +1062,6 @@ impl Game {
                 self.state.turn.history[holder.0].land_entered = true;
             }
             self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
-            if let Some(name) = entry.chosen_creature_type {
-                self.apply_continuous(
-                    Some(object_id),
-                    holder,
-                    [crate::state::effect::Affected::Object(object_id)],
-                    crate::state::effect::Modification::ChosenCreatureType(name.into()),
-                    crate::state::effect::EffectDuration::Indefinite,
-                );
-            }
             if entry.prepared {
                 self.prepare_inset(object_id);
             }
@@ -1107,7 +1111,9 @@ impl Game {
                     .insert_top(None, Some(definition));
             }
             if to_zone == ZoneType::Graveyard {
-                self.state.turn.graveyard_from_battlefield.push(arrival);
+                self.state
+                    .turn
+                    .record_graveyard_arrival(arrival, old_zone == Some(ZoneType::Battlefield));
             }
             self.capture_object_move(arrival, old_zone, Some(to_zone), event_controller);
             arrival
@@ -1336,6 +1342,7 @@ impl Game {
     fn spell_lki(&self, spell: &SpellOnStack) -> SpellLki {
         let object = &self.state[spell.object];
         SpellLki {
+            copiable: None,
             object: spell.object,
             definition_id: object.definition_id,
             controller: spell.controller,

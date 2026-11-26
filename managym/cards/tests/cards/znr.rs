@@ -184,3 +184,72 @@ fn crawling_barrens_keeps_its_counters_and_animates_only_when_chosen() {
     assert!(!s.game().characteristics(barrens).is_creature());
     assert_eq!(counters(&s, barrens), 4);
 }
+
+#[test]
+fn gnarlid_colony_kicker_counters_and_trample() {
+    use crate::support::game::{five_color_setup, set_counters};
+    use crate::support::inspect::{counters, keywords, permanent_of};
+    use crate::support::play::{cast_card, choose, settle, spend_colorless};
+    use managym::agent::action::Action;
+    use managym::state::card::Keyword;
+    use managym::state::permanent::CounterKind;
+
+    for kicked in [false, true] {
+        let mut s = five_color_setup(&["Gnarlid Colony", "Gray Ogre", "Hill Giant"]);
+        let bare = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let countered = s.force_permanent_on_battlefield(0, "Hill Giant");
+        set_counters(&mut s, countered, CounterKind::PlusOnePlusOne, 1);
+
+        let card = crate::support::game::move_to_hand(&mut s, "Gnarlid Colony");
+        cast_card(&mut s, card);
+        if kicked {
+            choose(&mut s, |action| matches!(action, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+        }
+        spend_colorless(&mut s);
+        settle(&mut s);
+
+        let colony = permanent_of(&s, card).unwrap();
+        assert_eq!(counters(&s, colony), if kicked { 2 } else { 0 });
+        assert_eq!(keywords(&s, colony).has(Keyword::Trample), kicked);
+        assert!(keywords(&s, countered).has(Keyword::Trample));
+        assert!(!keywords(&s, bare).has(Keyword::Trample));
+    }
+}
+
+#[test]
+fn felidar_retreat_landfall_creates_cat_beast_or_counters_and_vigilance() {
+    use crate::support::{
+        inspect::{counters, keywords, library_card},
+        play::{choose_mode, move_and_settle},
+    };
+    use managym::state::{mana::Color, zone::ZoneType};
+
+    let mut s = five_color_setup(&["Felidar Retreat"]);
+    s.force_permanent_on_battlefield(0, "Felidar Retreat");
+    let first_land = library_card(&s, 0, "Plains");
+    crate::support::game::move_card(&mut s, first_land, ZoneType::Battlefield);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    let tokens = s.battlefield_permanents_named(0, "Cat Beast");
+    assert_eq!(tokens.len(), 1);
+    let token = tokens[0];
+    let view = s.game().characteristics(token);
+    assert_eq!(view.pt(), (2, 2));
+    assert!(view.has_subtype("Cat") && view.has_subtype("Beast"));
+    assert!(view.colors.contains(&Color::White));
+    let second_land = library_card(&s, 0, "Plains");
+    crate::support::game::move_card(&mut s, second_land, ZoneType::Battlefield);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(counters(&s, token), 1);
+    assert!(keywords(&s, token).has(Keyword::Vigilance));
+
+    // Opponent's land does not trigger.
+    let their_land = library_card(&s, 1, "Plains");
+    move_and_settle(&mut s, their_land, ZoneType::Battlefield);
+    assert_eq!(counters(&s, token), 1);
+}

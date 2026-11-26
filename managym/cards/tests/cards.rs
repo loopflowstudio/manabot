@@ -195,6 +195,8 @@ mod mrd;
 mod msh;
 #[path = "cards/nec.rs"]
 mod nec;
+#[path = "cards/neo.rs"]
+mod neo;
 #[path = "cards/observability.rs"]
 mod observability;
 #[path = "cards/ody.rs"]

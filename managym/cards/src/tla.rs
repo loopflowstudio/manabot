@@ -775,7 +775,7 @@ fn air_nomad_legacy() -> CardDefinition {
             }],
             statics: vec![StaticAbility::continuous(
                 StaticScope::YouControl(CardPredicate {
-                    flying: true,
+                    keyword: Some(Keyword::Flying),
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -835,6 +835,7 @@ fn airbender_ascension() -> CardDefinition {
                             Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                             Effect::Move {
                                 unrevealed: false,
+                                face_down: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -1240,10 +1241,12 @@ fn avatar_destiny() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::Move {
                             unrevealed: false,
+                            face_down: false,
                             library_end: None,
                             what: ObjectSelector::Selected,
                             to: ZoneType::Battlefield,
@@ -3168,7 +3171,7 @@ fn earth_rumble() -> CardDefinition {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::fight_last_target()],
                         },
                     ],
                 },
@@ -5498,15 +5501,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 effects: vec![
                     Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                    Effect::CreateDelayedTrigger {
-                        remember: None,
-                        event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::subtype(
-                            "Lesson",
-                        ))),
-                        frequency: DelayedFrequency::Once,
-                        expiry: DelayedExpiry::ThisTurn,
-                        effects: vec![Effect::CopyTriggeringObject],
-                    },
+                    Effect::copy_next_spell_this_turn(CardPredicate::subtype("Lesson")),
                 ],
                 ..Default::default()
             }],
@@ -5951,6 +5946,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
                     Effect::SelectCards {
                         from: ObjectSelector::CreatedThisWay,
                         predicate: CardPredicate::creature(),
+                        max_mana_value: None,
                         min: 1,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::AttachSourceTo {
@@ -6602,7 +6598,7 @@ fn momo_friendly_flier() -> CardDefinition {
             statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
                 first_on_own_turn: true,
                 predicate: CardPredicate {
-                    flying: true,
+                    keyword: Some(Keyword::Flying),
                     not_subtypes: vec!["Lemur".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
@@ -6614,7 +6610,7 @@ fn momo_friendly_flier() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::another_you_control(CardPredicate {
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),
@@ -7040,6 +7036,7 @@ fn ostrich_horse() -> CardDefinition {
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -8720,6 +8717,7 @@ fn sparring_dummy() -> CardDefinition {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
+                        max_mana_value: None,
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
@@ -8933,7 +8931,7 @@ fn swampsnare_trap() -> CardDefinition {
             statics: vec![
                 StaticAbility::CostsLessIfTargets(TargetCostReduction {
                     predicate: CardPredicate {
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
@@ -9032,7 +9030,7 @@ fn teo_spirited_glider() -> CardDefinition {
                 condition: TriggerCondition::attacks(
                     TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
-                        flying: true,
+                        keyword: Some(Keyword::Flying),
                         ..Default::default()
                     }),
                     Per::Batch,
@@ -9273,7 +9271,7 @@ fn the_last_agni_kai() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![
-                Effect::FightLastTarget,
+                Effect::fight_last_target(),
                 Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::ExcessDamage,
@@ -9406,6 +9404,8 @@ fn the_legend_of_kyoshi() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestPowerYouControl {
                         predicate: CardPredicate::default(),
                     },
@@ -9433,10 +9433,7 @@ fn the_legend_of_roku() -> CardDefinition {
             abilities: vec![
                 Ability::chapter(
                     1,
-                    vec![Effect::exile_top_to_play(
-                        3,
-                        PlayWindow::ThroughYourNextTurn,
-                    )],
+                    Effect::exile_top_to_play(3, PlayWindow::ThroughYourNextTurn),
                 ),
                 Ability::chapter(2, vec![one_mana_of_any_color(None)]),
                 Ability::chapter(3, Effect::exile_and_return_transformed(None, None)),
@@ -10539,6 +10536,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                             vec![Effect::SelectCards {
                                 from: ObjectSelector::Zone(ZoneType::Library),
                                 predicate: CardPredicate::basic_land(),
+                                max_mana_value: None,
                                 min: 0,
                                 max: EffectValue::Fixed(1),
                                 effects: vec![
@@ -11136,6 +11134,8 @@ fn white_lotus_tile() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestSharedCreatureType,
                 }],
                 ..Default::default()
@@ -11174,6 +11174,7 @@ fn wolfbat() -> CardDefinition {
                     cost: PaymentCost::Mana(ManaCost::parse("{B}")),
                     if_paid: vec![Effect::Move {
                         unrevealed: false,
+                        face_down: false,
                         library_end: None,
                         what: ObjectSelector::This,
                         to: ZoneType::Battlefield,
@@ -11423,6 +11424,7 @@ fn zuko_conflicted() -> CardDefinition {
                             Effect::exile(ObjectSelector::This),
                             Effect::Move {
                                 unrevealed: false,
+                                face_down: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -11468,7 +11470,7 @@ fn zuko_exiled_prince() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+                effects: Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
                 ..Default::default()
             }],
             text_box: text_box.into(),

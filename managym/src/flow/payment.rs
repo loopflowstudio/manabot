@@ -29,18 +29,40 @@ use crate::{
     },
 };
 
+/// A spell's choices through targeting, division and payment (CR 601.2b–h).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AnnouncedSpell {
+    #[serde(rename = "card")]
+    pub object: ObjectId,
+    #[serde(flatten)]
+    pub cast: CastChoices,
+    pub mode: Option<usize>,
+    pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_shares: Vec<u8>,
+}
+
+impl AnnouncedSpell {
+    /// Each target gets at least one. The last gets the remaining amount.
+    pub fn shares(&self, total: u8) -> std::ops::RangeInclusive<usize> {
+        let remaining = usize::from(total)
+            - self
+                .target_shares
+                .iter()
+                .copied()
+                .map(usize::from)
+                .sum::<usize>();
+        let later = self.targets.len() - self.target_shares.len() - 1;
+        let minimum = if later == 0 { remaining } else { 1 };
+        minimum..=remaining - later
+    }
+}
+
 /// A fully announced spell or activation (CR 601.2a-e, 602.2).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Operation {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    },
+    Spell(AnnouncedSpell),
     Activation {
         source: ActivationSource,
         ability_index: usize,
@@ -55,7 +77,7 @@ impl Operation {
     /// The spell being cast, if this is a cast.
     pub fn spell(&self) -> Option<ObjectId> {
         match self {
-            Self::Spell { object, .. } => Some(*object),
+            Self::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Self::Activation { .. } => None,
         }
     }
@@ -138,20 +160,28 @@ impl CostComponent {
     }
 
     /// What a resolving effect's `cost` owes as its payment decision is
-    /// made: the one place a definition's `PaymentCost` becomes a component.
+    /// made: the one place a definition's `PaymentCost` becomes components.
     /// A waterbend cost is its generic mana, all of which taps may pay.
-    pub fn resolving(cost: &PaymentCost) -> Self {
+    pub fn resolving(cost: &PaymentCost) -> Vec<Self> {
         match cost {
-            PaymentCost::Mana(cost) => Self::mana(cost.clone()),
-            PaymentCost::Waterbend { generic } => Self::Mana {
+            PaymentCost::Mana(cost) => vec![Self::mana(cost.clone())],
+            PaymentCost::Waterbend { generic } => vec![Self::Mana {
                 cost: ManaCost::default().with_generic(*generic),
                 help: Help {
                     waterbend: *generic,
                     ..Help::default()
                 },
-            },
-            PaymentCost::Discard => Self::Discard,
-            PaymentCost::Life(life) => Self::Life(*life),
+            }],
+            PaymentCost::Discard => vec![Self::Discard],
+            PaymentCost::Life(life) => vec![Self::Life(*life)],
+            PaymentCost::All(parts) => {
+                let components: Vec<_> = parts.iter().flat_map(Self::resolving).collect();
+                if components.is_empty() {
+                    vec![Self::mana(ManaCost::default())]
+                } else {
+                    components
+                }
+            }
         }
     }
 }
@@ -208,6 +238,46 @@ impl Help {
     }
 }
 
+/// Copyable permission bundle for paying one mana cost with non-mana help:
+/// which help rules apply, how much generic remains payable by waterbend taps,
+/// and an optional permanent already tapped by the operation itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CostPermissionContext {
+    pub help: Help,
+    pub waterbend: u8,
+    pub reserved_tap: Option<PermanentId>,
+}
+
+impl CostPermissionContext {
+    pub fn from_help(help: Help) -> Self {
+        Self {
+            help,
+            waterbend: help.waterbend,
+            reserved_tap: None,
+        }
+    }
+
+    pub fn for_receipt(help: Help, cost: &ManaCost, receipt: &PaymentReceipt) -> Self {
+        Self {
+            help,
+            waterbend: help.waterbend_left(cost, receipt),
+            reserved_tap: None,
+        }
+    }
+
+    pub fn with_reserved_tap(mut self, reserved_tap: Option<PermanentId>) -> Self {
+        self.reserved_tap = reserved_tap;
+        self
+    }
+
+    pub fn after_tap(mut self, payment: TapPayment) -> Self {
+        if payment.toward == Toward::Waterbend {
+            self.waterbend = self.waterbend.saturating_sub(1);
+        }
+        self
+    }
+}
+
 /// What one direct tap of an artifact or creature pays of a mana cost: one
 /// pip of `color`, or {1} for `Color::Generic`, under `toward` (convoke,
 /// improvise or waterbend), which the receipt keeps.
@@ -253,12 +323,12 @@ pub struct Payment {
 impl Payment {
     pub(super) fn names_mana_source(&self, id: PermanentId, object: ObjectId) -> bool {
         let targets = match &self.operation {
-            Operation::Spell { cast, targets, .. } => {
-                if matches!(cast.route, Some(PlayRoute::GraveyardType { source, .. }) if source == object)
+            Operation::Spell(spell) => {
+                if matches!(spell.cast.route, Some(PlayRoute::GraveyardType { source, .. }) if source == object)
                 {
                     return true;
                 }
-                targets
+                &spell.targets
             }
             Operation::Activation {
                 source, targets, ..
@@ -316,6 +386,12 @@ impl Payment {
         self.mana_component().1
     }
 
+    /// The copyable help/waterbend permission bundle for the mana still owed.
+    pub(crate) fn mana_permissions(&self) -> CostPermissionContext {
+        let (cost, help) = self.mana_component();
+        CostPermissionContext::for_receipt(help, cost, &self.receipt)
+    }
+
     /// Whether the cost being paid is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
         self.help().waterbend > 0
@@ -351,18 +427,23 @@ impl Payment {
 
 /// What one payment made during resolution still owes, what has paid toward
 /// it and the branches its outcome selects. Mana activation costs commit
-/// immediately through the mana authority. Only a waterbend contribution
-/// closes the decline branch (the existing contract). The receipt names the
-/// exact objects that paid, as evidence; they are never followed or untapped.
+/// immediately through the mana authority. Only a waterbend contribution or a
+/// paid component closes the decline branch (the existing contract). The
+/// receipt names the exact objects that paid, as evidence; they are never
+/// followed or untapped.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PaymentProgress {
     /// Acceptance of an optional payment precedes choosing its sources in auto mode.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub committed: bool,
+    /// Set once a waterbend mana component has been paid, so finishing a
+    /// composite payment still records waterbending even without taps.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
     pub player: PlayerId,
-    /// `Mana`, whose help allows waterbend taps for a waterbend cost, or
-    /// `Life` or `Discard` (`CostComponent::resolving`).
-    pub owed: CostComponent,
+    /// Remaining components in payment order: `Mana` (whose help allows
+    /// waterbend taps), `Life`, or `Discard` (`CostComponent::resolving`).
+    pub owed: Vec<CostComponent>,
     #[serde(skip_serializing_if = "PaymentReceipt::is_empty")]
     pub receipt: PaymentReceipt,
     pub if_paid: Vec<Effect>,
@@ -381,7 +462,7 @@ pub struct PaymentProgress {
 impl PaymentProgress {
     pub fn new(
         player: PlayerId,
-        owed: CostComponent,
+        owed: Vec<CostComponent>,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     ) -> Self {
@@ -390,6 +471,7 @@ impl PaymentProgress {
             owed,
             receipt: PaymentReceipt::default(),
             committed: false,
+            waterbend: false,
             if_paid,
             if_declined,
             spends: None,
@@ -397,17 +479,68 @@ impl PaymentProgress {
         }
     }
 
+    pub fn current(&self) -> Option<&CostComponent> {
+        self.owed.first()
+    }
+
     pub fn can_decline(&self) -> bool {
         !self.committed && self.receipt.contributions().is_empty()
     }
 
-    /// Whether the cost is a waterbend cost, however it is paid.
+    /// Whether the current cost is a waterbend cost, however it is paid.
     pub fn waterbends(&self) -> bool {
-        matches!(self.owed, CostComponent::Mana { help, .. } if help.waterbend > 0)
+        matches!(self.current(), Some(CostComponent::Mana { help, .. }) if help.waterbend > 0)
     }
 }
 
 impl Game {
+    /// Whether `payment.player` can pay every remaining component after the
+    /// front one (e.g. a composite ward's life component after its mana).
+    pub(crate) fn can_pay_remaining_tail(&self, payment: &PaymentProgress) -> bool {
+        let mut life = 0u32;
+        let mut discards = 0usize;
+        for component in payment.owed.get(1..).unwrap_or(&[]) {
+            match component {
+                CostComponent::Life(amount) => life = life.saturating_add(*amount),
+                CostComponent::Discard => discards += 1,
+                CostComponent::Mana { cost, .. } => {
+                    if !self.can_pay_mana_cost(payment.player, cost) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        (life == 0 || self.can_pay_life(payment.player, life))
+            && (discards == 0 || self.discard_candidates(payment.player, None).len() >= discards)
+    }
+
+    /// Record that `payment`'s front component was paid and advance.
+    /// Once committed, trailing no-choice life components pay immediately.
+    pub(crate) fn advance_resolution_payment(
+        &mut self,
+        mut payment: PaymentProgress,
+        frame: EffectFrame,
+    ) {
+        if payment.waterbends() {
+            payment.waterbend = true;
+        }
+        payment.owed.remove(0);
+        payment.committed = true;
+        while !payment.can_decline() {
+            let Some(&CostComponent::Life(life)) = payment.owed.first() else {
+                break;
+            };
+            payment.owed.remove(0);
+            self.pay_life_cost(payment.player, life, &mut payment.receipt);
+        }
+        if payment.owed.is_empty() {
+            self.finish_resolution_payment(payment, frame);
+        } else {
+            self.continue_resolution(frame, Some(Decision::Payment(payment)));
+        }
+    }
+
     /// The cost of a resolution payment is paid: spend its once-each-turn
     /// option, then run the "if paid" branch before the rest of `frame`.
     pub(crate) fn finish_resolution_payment(
@@ -418,7 +551,7 @@ impl Game {
         if let Some(key) = payment.spends {
             self.spend_once_each_turn(key);
         }
-        if payment.waterbends() {
+        if payment.waterbend || payment.waterbends() {
             self.record_bending(payment.player, crate::flow::turn::Bending::Water);
         }
         frame.prepend_effects(payment.if_paid.into_iter());
@@ -447,7 +580,7 @@ impl Game {
         player: PlayerId,
         payment: &Payment,
     ) -> Vec<ObjectId> {
-        let Operation::Spell { object, cast, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object, cast, .. }) = payment.operation else {
             unreachable!("an exile alternative pays for a spell")
         };
         self.exile_alternative_objects(player, object, cast)
@@ -471,7 +604,7 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id)),
             );
         }
-        let Operation::Spell { object: spell, .. } = payment.operation else {
+        let Operation::Spell(AnnouncedSpell { object: spell, .. }) = payment.operation else {
             unreachable!("forage pays for a spell")
         };
         let mut graveyard = self.graveyard_payers(player, spell);
@@ -619,12 +752,12 @@ impl Game {
     ) -> Vec<CostComponent> {
         let mut owed = Vec::new();
         match operation {
-            Operation::Spell {
+            Operation::Spell(AnnouncedSpell {
                 object,
                 cast,
                 targets,
                 ..
-            } => {
+            }) => {
                 if self.uses_exile_alternative(*object, *cast) {
                     owed.push(CostComponent::ExileFromHand);
                 }
@@ -1178,11 +1311,10 @@ impl Game {
         if unit.spendable_units(cost) == 0 {
             return None;
         }
+        let permissions = payment.mana_permissions();
         cost.paid_with(color)
             .into_iter()
-            .find(|rest| {
-                self.payable_with_help(player, left, rest, payment.help(), payment.mana().1, None)
-            })
+            .find(|rest| self.payable_with_help(player, left, rest, permissions))
             .filter(|rest| left.other_than(unit).spendable_units(&cost.less(rest)) == 0)
     }
 
@@ -1246,7 +1378,7 @@ impl Game {
         // The source's own discard or exile; its sacrifice is on the receipt.
         let mut source_costs = Vec::new();
         let activated = match &payment.operation {
-            Operation::Spell { .. } => None,
+            Operation::Spell(_) => None,
             Operation::Activation {
                 source,
                 ability_index,
@@ -1415,7 +1547,7 @@ impl Game {
     /// The card whose spell or ability `payment` pays for.
     pub(crate) fn payment_source_object(&self, operation: &Operation) -> Option<ObjectId> {
         match operation {
-            Operation::Spell { object, .. } => Some(*object),
+            Operation::Spell(AnnouncedSpell { object, .. }) => Some(*object),
             Operation::Activation {
                 source: ActivationSource::Card(card),
                 ..
@@ -1487,18 +1619,13 @@ impl Game {
         {
             return Vec::new();
         }
-        let (cost, waterbend) = payment.mana();
-        let also_tapped = self.payment_tapped_source(&payment.operation);
-        self.help_taps(
-            player,
-            cost,
-            payment.help(),
-            waterbend,
-            &[tapped],
-            also_tapped,
-        )
-        .pop()
-        .map_or_else(Vec::new, |(_, options)| options)
+        let (cost, _) = payment.mana();
+        let permissions = payment
+            .mana_permissions()
+            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
+        self.help_taps(player, cost, permissions, &[tapped])
+            .pop()
+            .map_or_else(Vec::new, |(_, options)| options)
     }
 
     /// The taps and exiles that may pay part of the pending mana cost by
@@ -1511,15 +1638,15 @@ impl Game {
             return Vec::new();
         }
         let _scan = self.board_scan();
-        let (_, waterbend) = payment.mana();
+        let permissions = payment
+            .mana_permissions()
+            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
         let mut actions: Vec<Action> = self
             .help_taps(
                 player,
                 cost,
-                *help,
-                waterbend,
+                permissions,
                 &self.help_tap_candidates(player, &payment.operation),
-                self.payment_tapped_source(&payment.operation),
             )
             .into_iter()
             .map(|(permanent, _)| Action::WaterbendTap { player, permanent })
@@ -1602,11 +1729,11 @@ impl Game {
         help: Help,
         receipt: &mut PaymentReceipt,
     ) -> Result<(), AgentError> {
-        let waterbend = help.waterbend_left(cost, receipt);
+        let permissions = CostPermissionContext::for_receipt(help, cost, receipt);
         let paid = self
             .waterbend_candidates(player)
             .contains(&tapped)
-            .then(|| self.help_taps(player, cost, help, waterbend, &[tapped], None))
+            .then(|| self.help_taps(player, cost, permissions, &[tapped]))
             .and_then(|mut found| found.pop())
             .and_then(|(_, options)| options.first().copied());
         let (Some(paid), Some(object)) = (paid, self.permanent_object(tapped)) else {

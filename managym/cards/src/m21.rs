@@ -18,9 +18,42 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         garruks_uprising(),
         heartfire_immolator(),
         mazemind_tome(),
+        primal_might(),
         sanguine_indulgence(),
         shipwreck_dowser(),
     ]
+}
+
+fn primal_might() -> CardDefinition {
+    let text_box = "Target creature you control gets +X/+X until end of turn. Then it fights up to one target creature you don't control. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "m21.primal_might",
+        scryfall_id: "1cd8cee8-7ea0-4037-8a3b-39334dc064fb",
+        printed: PrintedCharacteristics {
+            name: "Primal Might".into(),
+            mana_cost: Some(ManaCost::parse("{X}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::ClauseTarget(0),
+                        Modification::ModifyPt {
+                            power: EffectValue::X,
+                            toughness: EffectValue::X,
+                        },
+                    )],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::CreatureOpponentControls),
+                    effects: vec![Effect::fight_last_target()],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn mazemind_tome() -> CardDefinition {
