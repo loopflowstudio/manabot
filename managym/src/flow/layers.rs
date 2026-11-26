@@ -2228,8 +2228,7 @@ impl Eval<'_, '_, '_> {
                             Scope::Battlefield => true,
                             _ => false,
                         }
-                        && !(source.permanent == Some(id)
-                            && matches!(except, Some(Except::This)))
+                        && !(source.permanent == Some(id) && matches!(except, Some(Except::This)))
                         && !matches!(
                             except,
                             Some(Except::Matching {
@@ -2259,9 +2258,7 @@ impl Eval<'_, '_, '_> {
             EffectValue::Scaled { factor, value } => {
                 factor.saturating_mul(self.comparison_value(value, source))
             }
-            EffectValue::SourcePower => source
-                .permanent
-                .map_or(0, |id| self.view(id).power),
+            EffectValue::SourcePower => source.permanent.map_or(0, |id| self.view(id).power),
             EffectValue::Property {
                 of,
                 property,
@@ -2541,15 +2538,12 @@ impl Eval<'_, '_, '_> {
                     details.added_subtypes.push(subtype.clone());
                 }
                 self.lose_all_abilities(id);
-                self.view_mut(id)
-                    .details_mut()
-                    .activated_abilities
-                    .extend(
-                        intrinsic_mana_ability(|name| name == subtype).map(|mut ability| {
-                            ability.acquired = acquired;
-                            ability
-                        }),
-                    );
+                self.view_mut(id).details_mut().activated_abilities.extend(
+                    intrinsic_mana_ability(|name| name == subtype).map(|mut ability| {
+                        ability.acquired = acquired;
+                        ability
+                    }),
+                );
                 self.object_mut(id).dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS;
             }
             Operation::Inherit => {
@@ -2569,18 +2563,15 @@ impl Eval<'_, '_, '_> {
                         );
                     }
                     details.triggered_abilities.extend(
-                        definition
-                            .abilities
-                            .iter()
-                            .cloned()
-                            .enumerate()
-                            .map(|(ability_index, ability)| EffectiveTrigger {
+                        definition.abilities.iter().cloned().enumerate().map(
+                            |(ability_index, ability)| EffectiveTrigger {
                                 origin,
                                 acquired,
                                 ability_index,
                                 ability,
                                 program: false,
-                            }),
+                            },
+                        ),
                     );
                     if has_activated {
                         self.object_mut(id).dirty |= DIRTY_ACTIVATIONS;
@@ -3065,11 +3056,7 @@ fn build_seed_node(game: &Game, source: NodeSource, entry: &StaticEntry) -> Opti
     })
 }
 
-fn build_dynamic_node(
-    game: &Game,
-    source: NodeSource,
-    entry: &StaticEntry,
-) -> Option<DynamicNode> {
+fn build_dynamic_node(game: &Game, source: NodeSource, entry: &StaticEntry) -> Option<DynamicNode> {
     let plan = build_source_plan(game, source, entry)?;
     Some(DynamicNode {
         origin: entry.origin,

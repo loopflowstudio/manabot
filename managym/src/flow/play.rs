@@ -2085,7 +2085,8 @@ impl Game {
             .all(|(index, requirement)| {
                 let min = requirement.min_for(x, false);
                 min == 0
-                    || (self.effective_clause_max(requirement, player, source_object, x, false) >= min
+                    || (self.effective_clause_max(requirement, player, source_object, x, false)
+                        >= min
                         && self
                             .activated_ability_targets(&ActivatedTargeting {
                                 player,

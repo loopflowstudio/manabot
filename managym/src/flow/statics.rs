@@ -475,9 +475,7 @@ impl Game {
                         .graveyard_type_sources
                         .push((object_id, public_id)),
                     StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
-                    StaticAbility::CastFromHandWithoutManaCost => {
-                        permissions.free_from_hand = true
-                    }
+                    StaticAbility::CastFromHandWithoutManaCost => permissions.free_from_hand = true,
                     StaticAbility::OpponentsCastOnlyFromHand => {
                         permissions.opponents_hand_only = true
                     }

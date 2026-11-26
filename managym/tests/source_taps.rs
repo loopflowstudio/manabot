@@ -602,8 +602,7 @@ fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
         let target = game
             .scenario_force_battlefield(PlayerId(1), "Waterfall Aerialist", true)
             .unwrap();
-        let treasure =
-            with_treasure.then(|| game.create_token("token.treasure", player).unwrap());
+        let treasure = with_treasure.then(|| game.create_token("token.treasure", player).unwrap());
         game.state.players[0].mana_pool = Mana::parse("R").into();
         game.scenario_refresh_priority().unwrap();
         cast(&mut game);

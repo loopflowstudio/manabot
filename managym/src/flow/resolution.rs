@@ -3387,13 +3387,10 @@ impl Game {
         else {
             return false;
         };
-        self.state.permanents[id].as_ref().is_some_and(|permanent| {
-            controlled_by.includes(frame.controller, permanent.controller)
-        }) && self.permanent_matches_with_source(
-            id,
-            predicate,
-            self.source_permanent_id(frame),
-        )
+        self.state.permanents[id]
+            .as_ref()
+            .is_some_and(|permanent| controlled_by.includes(frame.controller, permanent.controller))
+            && self.permanent_matches_with_source(id, predicate, self.source_permanent_id(frame))
     }
 
     /// A battlefield permanent's mana value (CR 202.3): that of its card;

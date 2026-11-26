@@ -317,3 +317,27 @@ G6). For deliver/gate: `tests/belief/test_belief_agent.py::test_keystone_demo_ch
 (0.070 vs 0.1) fail on this branch only (CI `Integration (sim)` at
 `095c3a4cdf`, reproduced locally at `bcf0ffc381`); main passes. Diagnose
 cause before touching thresholds.
+
+## Gate (2026-11-25, headless)
+
+- CI on `042b05b5db`: 25/26 suites passed (`Rust Tests`, `Engine Budget`,
+  `Academy UI`, `Academy Integration (contracts/play)`, `Clean-machine Play`,
+  `Protocol v1 Conformance`, `Semantic Kernel Conformance`, `Python Unit Tests`,
+  `Integration (evaluation/evaluation-long/experiment/model/training)`,
+  `preflight`, `package` ×4, `install` ×4, `artifacts`); only `Integration (sim)`
+  failed (2 failed / 491 passed / 10 skipped) on the two belief tests above.
+- Diagnosed both failures to catalog growth (1,145 non-token/non-emblem card
+  definitions → 2,290 belief rows):
+  - `manabot/belief/demo.py`: untrained 1-layer 8-dim `ActorCritic` with PPO's
+    `0.01` policy-head gain produced `-1.32e-8` raw logit delta on `seed=19`
+    (4/10 random seeds quantize below float32 softmax ULP `2.98e-8` at `1/3`,
+    while value delta is `-2.3e-4`). Raised demo config to `hidden_dim=16,
+    attention_layers=2` (0/10 zeros across seeds 19–28, min `3.28e-7`).
+  - `manabot/belief/population.py`: `nn.Linear(card_count, 4)` default init
+    shrinks as `1/sqrt(1145)` while only a hand's cards are nonzero, leaving
+    `seed=197` at `0.070` nats in 16 steps (`lr=0.01`); setting
+    `train_bounded_population` default `learning_rate=0.02` clears `0.117–0.140`
+    nats across all 5 tested seeds (`seed=197`: `0.140`) with unchanged step
+    count and cost.
+- Verified locally: `tests/belief/` 97 passed / 4 skipped, `scripts/public_api.py check`,
+  and `ruff check` / `ruff format --check` green.

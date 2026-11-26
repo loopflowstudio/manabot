@@ -243,8 +243,7 @@ impl Game {
                 combat.attack_targets.iter().any(|&(attacker, target)| {
                     attacker == id
                         || target == Some(crate::flow::combat::AttackTarget::Permanent(object))
-                })
-                    || combat.blockers_to_declare.contains(&id)
+                }) || combat.blockers_to_declare.contains(&id)
                     || combat.attackers_to_declare.contains(&id)
                     || combat.first_strikers.contains(&id)
                     || combat

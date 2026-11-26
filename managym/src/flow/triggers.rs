@@ -18,8 +18,7 @@ use crate::{
         ability::{
             Ability, Actor, AttackedKind, DamageRecipientFilter, DelayedFrequency, Effect,
             EffectiveTrigger, KeywordAction, Per, SpellTargetFilter, TargetRelation,
-            TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject, TurnStep,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         binding::ObjectBinding,
         card::{CardDefId, PrintedCharacteristics},
@@ -56,11 +55,7 @@ struct FiredDelayedTrigger {
 }
 
 impl FiredDelayedTrigger {
-    fn simple(
-        trigger: DelayedTrigger,
-        context: Option<Target>,
-        player: Option<PlayerId>,
-    ) -> Self {
+    fn simple(trigger: DelayedTrigger, context: Option<Target>, player: Option<PlayerId>) -> Self {
         Self {
             trigger,
             context,
@@ -2545,18 +2540,14 @@ impl Game {
                         }
                     }
                     && nth.is_none_or(|n| {
-                        self.state
-                            .turn
-                            .casts_before(caster, *object)
-                            .map(|before| {
-                                before
-                                    .iter()
-                                    .filter(|&&cast| {
-                                        self.recorded_cast_matches_predicate(cast, predicate)
-                                    })
-                                    .count()
-                            })
-                            == Some(n as usize - 1)
+                        self.state.turn.casts_before(caster, *object).map(|before| {
+                            before
+                                .iter()
+                                .filter(|&&cast| {
+                                    self.recorded_cast_matches_predicate(cast, predicate)
+                                })
+                                .count()
+                        }) == Some(n as usize - 1)
                     })
             }
             (

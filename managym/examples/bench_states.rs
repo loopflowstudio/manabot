@@ -1411,7 +1411,13 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 let index = offered
                     .iter()
                     .position(|a| {
-                        matches!(a, Action::DeclareAttacker { attack: Some(_), .. })
+                        matches!(
+                            a,
+                            Action::DeclareAttacker {
+                                attack: Some(_),
+                                ..
+                            }
+                        )
                     })
                     .or_else(|| {
                         offered
