@@ -829,26 +829,28 @@ class Recording:
             if position.event_index < len(self.payload["events"])
             else {}
         )
-        # A Watch choice keeps its own stored spectator board; every other
-        # revealed board is this position's redacted board with only the hands
-        # filled in by seat, so it keeps this position's orientation and never
-        # takes another step's decision context or inspected cards.
-        analysis = event.get("analysis_observation") if (row and self.watch) else None
         other = (
             self.views.board(index, viewer=1 - viewer)
             if self.views and self.views.complete
             else None
         )
-        if reveal and other is not None:
-            analysis = with_both_hands(
-                observation, {1 - viewer: other["agent"]["hand"]}
-            )
-        elif reveal and self.watch and analysis is None:
-            hands = self._watch_hands(position)
-            if hands is not None:
-                analysis = with_both_hands(observation, hands)
-        if reveal and analysis is None:
-            raise ValueError("spectator_view_unavailable")
+        revealed_board: dict[str, Any] | None = None
+        if reveal:
+            if other is not None:
+                revealed_board = with_both_hands(
+                    observation, {1 - viewer: other["agent"]["hand"]}
+                )
+            elif self.watch:
+                # A Watch choice keeps its own stored spectator board; every
+                # other revealed board patches only the hands onto this
+                # position's redacted board so it keeps its orientation and
+                # never takes another step's decision context or inspected cards.
+                if row:
+                    revealed_board = event.get("analysis_observation")
+                elif (hands := self._watch_hands(position)) is not None:
+                    revealed_board = with_both_hands(observation, hands)
+            if revealed_board is None:
+                raise ValueError("spectator_view_unavailable")
         transition_start = cursor
         if position.kind == "consequences":
             revision = self.revisions.get(position.event_index)
@@ -864,7 +866,9 @@ class Recording:
         return {
             **self.metadata(position),
             "description": self._description(position),
-            "observation": deepcopy(analysis) if reveal else observation,
+            "observation": deepcopy(revealed_board)
+            if revealed_board is not None
+            else observation,
             "decision": decision,
             "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,

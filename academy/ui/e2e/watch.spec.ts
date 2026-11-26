@@ -42,10 +42,11 @@ test('watch reads choices and consequences on the board, then returns from Study
   expect(await topSeat()).toBe(top);
   // Stepping moved hands, never the battlefield under them.
   expect(await page.locator('.half.opponent .rows').boundingBox()).toEqual(rowsTop);
-  // Show hand on the waiting plate brings both hands out.
-  await page.getByTestId('hand-toggle').first().click();
+  // Show hand on the waiting plate brings its hand out beside the active one.
+  await page.getByTestId('hand-toggle').filter({ hasText: 'Show hand' }).click();
   await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(2);
-  await page.getByTestId('hand-toggle').first().click();
+  await page.getByTestId('hand-toggle').filter({ hasText: 'Tuck hand' }).first().click();
+  await expect(page.locator('[data-testid="hand-ribbon"][data-out="true"]')).toHaveCount(1);
   await page.getByRole('button', {name: 'Previous', exact: true}).click();
   await expect(page.getByTestId('position-counter')).toHaveText('Position 2 / 3');
   await expect(rows).toHaveCount(0);

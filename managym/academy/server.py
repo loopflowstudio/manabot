@@ -2286,10 +2286,9 @@ class GameSession:
         analysis_observation = None
         if self.watch_mode:
             analysis_observation = deepcopy(observation)
-            other = serialize_observation(
-                self.env.observation_for_player(1 - int(self.obs.agent.player_index))
+            analysis_observation["opponent"]["hand"] = self._seat_hand(
+                1 - int(self.obs.agent.player_index)
             )
-            analysis_observation["opponent"]["hand"] = other["agent"]["hand"]
             analysis_observation["opponent"]["hand_hidden_count"] = 0
         before_observation = self.obs
         state_before = (
@@ -3144,9 +3143,7 @@ class GameSession:
         retained = replace(
             self.trace,
             final_observation=decision_surface_view(self.env, self.human_seat),
-            final_opponent_hand=serialize_observation(
-                self.env.observation_for_player(1 - self.human_seat)
-            )["agent"]["hand"]
+            final_opponent_hand=self._seat_hand(1 - self.human_seat)
             if self.watch_mode
             else None,
             winner=self.env.winner_index() if self.obs.game_over else None,
@@ -3588,16 +3585,20 @@ class GameSession:
             self._persist_attempt(config_changed=True)
         return {"type": "open_hands_state"}
 
+    def _seat_hand(self, seat: int) -> list[dict[str, Any]]:
+        """`seat`'s hand directly from the live engine, without touching the other seat's view."""
+        assert self.env is not None
+        return serialize_observation(self.env.observation_for_player(seat))["agent"][
+            "hand"
+        ]
+
     def open_hand(self) -> dict[str, Any] | None:
         """The bot's hand as it holds it now, with the revision it belongs to,
         while open hands is on. Read from the game, so no frame, recording or
         bot observation carries it."""
         if not self.open_hands or self.env is None or self.watch_mode:
             return None
-        hand = serialize_observation(
-            self.env.observation_for_player(1 - self.human_seat)
-        )["agent"]["hand"]
-        return {"revision": self.revision, "hand": hand}
+        return {"revision": self.revision, "hand": self._seat_hand(1 - self.human_seat)}
 
     def close(self, end_reason: str) -> None:
         """End the game with `end_reason` and release it."""

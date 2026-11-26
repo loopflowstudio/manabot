@@ -1251,14 +1251,15 @@
    */
   let ribbonSay = $state.raw<{ match: string; overrides: RibbonOverrides }>({ match: '', overrides: NO_RIBBON_OVERRIDES });
   const ribbonOverrides = $derived(ribbonSay.match === frame.match_id ? ribbonSay.overrides : NO_RIBBON_OVERRIDES);
-  // Live play's tuck lasts while open hands stays on: each time it is turned on is a new key.
-  let openHandsTimes = 0;
-  let openHandsWas = false;
-  const ribbonAt = $derived.by<unknown>(() => {
-    if (ribbons) return boardProjection;
-    if (openHands && !openHandsWas) openHandsTimes += 1;
-    openHandsWas = openHands;
-    return openHandsTimes;
+  const ribbonAt = $derived<unknown>(ribbons ? boardProjection : 'play');
+  // Live play's tuck lasts while open hands stays on; turning it off clears it so on again brings the hand out.
+  $effect(() => {
+    if (openHands) return;
+    untrack(() => {
+      if (!ribbons && ribbonSay.overrides !== NO_RIBBON_OVERRIDES) {
+        ribbonSay = { match: '', overrides: NO_RIBBON_OVERRIDES };
+      }
+    });
   });
   /** What the position asks by itself: the acting seat's hand on a recording, the open hand in play. */
   function ribbonAsked(side: 'you' | 'opponent'): boolean {

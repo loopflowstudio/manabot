@@ -129,8 +129,9 @@
   const seatChoosing = $derived(branched || gameOver ? null : choosingSeat(positions, replayStore.selected));
   // On a policy's line the hand out is its own while the move shown is its own.
   const seatActing = $derived(
-    lineFrame !== null && !studying ? (line?.line.steps[lineAt]?.actor === 'agent' ? viewerSeat : null)
-      : branched ? null : activeRibbonSeat(positions, replayStore.selected, gameOver));
+    studying ? null
+      : lineFrame !== null ? (line?.line.steps[lineAt]?.actor === 'agent' ? viewerSeat : null)
+      : activeRibbonSeat(positions, replayStore.selected, gameOver));
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);
