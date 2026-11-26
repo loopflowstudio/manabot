@@ -32,6 +32,8 @@
   let watchSeat1Edited = false;
   let deckEdited = false;
   let decklistsEdited = false;
+  // What Start sends as `deck_import`, so the policy check admits kept decks too.
+  const resolvedImport = $derived(setup.resolveDeckImport());
 
   function resolveCatalogChoice(id: string | null | undefined, list: TrainedOpponent[]): PlayerChoice | null {
     if (!id) return null;
@@ -196,7 +198,7 @@
         {#if setup.watchMode}
           <PlayerPicker label="Seat 1 bot" value={setup.watchPlayerChoice} {trained} {extension} {catalogError} {disabled}
             decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
-            setup={{ human_seat: 0, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
+            setup={{ human_seat: 0, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(resolvedImport ? { deck_import: resolvedImport } : {}) }}
             onChange={value => { watchSeat1Edited = true; setup.watchPlayerChoice = value; }}
             search={setup.watchSearchConfig}
             onSearchChange={value => { setup.watchSearchConfig = value; }} />
@@ -251,7 +253,7 @@
         </label>
       <PlayerPicker label="Seat 2 bot" value={setup.opponentChoice} {trained} {extension} {catalogError} {disabled}
         decklists={setup.decklists} manaPayment={setup.manaPayment} manaFloats={setup.manaFloats}
-        setup={{ human_seat: setup.watchMode ? 0 : setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(setup.deckImport ? { deck_import: setup.deckImport } : {}) }}
+        setup={{ human_seat: setup.watchMode ? 0 : setup.humanSeat, hero_deck: setup.decks.hero, villain_deck: setup.decks.villain, ...(resolvedImport ? { deck_import: resolvedImport } : {}) }}
         onChange={value => { opponentEdited = true; setup.setOpponentChoice(value); }}
         search={setup.searchConfig}
         onSearchChange={value => { setup.searchConfig = value; }} />
