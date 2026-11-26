@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 import manifest from '../../../managym/academy/packs/elemental-world/v2/manifest.json' with { type: 'json' };
 import type { ExperienceFrame } from '../src/lib/types';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg', 'elemental_ug'], ['elemental_ug', 'elemental_ug']]) {
   test(`${hero} vs ${villain}: selectors preserve Lesson pools and execute Commands`, async ({ page }) => {
     test.setTimeout(90_000);
@@ -15,7 +18,7 @@ for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg'
     page.on('websocket', socket => {
       socket.on('framereceived', event => observeFrame(JSON.parse(String(event.payload))));
     });
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByText('Browse bundled decks and cards', { exact: true }).click();
     for (const deck of manifest.roster) {

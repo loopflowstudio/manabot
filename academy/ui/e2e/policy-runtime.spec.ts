@@ -20,7 +20,6 @@ for (const theme of ['light', 'dark'] as const) {
     }));
     await page.goto(addresses.refused);
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();
-    await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
     await expect(page.getByTestId('checkpoint-select')).toHaveValue(`policy:${addresses.ids['refused-config']}`);
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByText(/restore the pinned artifact and runner/).first()).toBeVisible();

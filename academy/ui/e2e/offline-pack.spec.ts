@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 const MAX_ACTIONS = 1500;
 const PUBLIC_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -83,7 +86,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   });
 
   const startedAt = Date.now();
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -106,8 +109,8 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   await expect(board.getByTestId('board-card').first()).toBeVisible();
 
   await finishGame(page);
-  await page.goto('/replay');
-  const newest = page.getByTestId('recording-link').first();
+  await page.goto('/games');
+  const newest = page.getByTestId('game-history-replay').first();
   await expect(newest).toBeVisible({ timeout: 15_000 });
   await newest.click();
   await expect(board).toBeVisible({ timeout: 15_000 });

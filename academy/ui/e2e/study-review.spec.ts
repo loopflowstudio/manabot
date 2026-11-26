@@ -132,10 +132,8 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await expect(page.getByTestId('shown-hand').first()).toBeVisible();
 
   // Games: the row's turns, and the record's one game.
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText(/\d+ turns?/);
-  await expect(page.getByTestId('my-record-row')).toHaveCount(1);
-  await expect(page.getByTestId('my-record-row')).toContainText('1');
   await page.getByTestId('game-history-row').first().getByRole('link', { name: /^Replay game/ }).click();
   await expect(marks.first()).toBeVisible({ timeout: 30_000 });
 
@@ -154,9 +152,8 @@ test('a game reviewed against the policy, counted in Games, and played on', asyn
   await playToEnd(page);
   await page.getByTestId('game-result-recording').click();
   await expect(page.getByTestId('played-from')).toContainText('Played on from');
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText('played on from another game');
-  await expect(page.getByTestId('my-record-row')).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
@@ -200,7 +197,6 @@ test('a decision made with analysis shown says so in Review and Games', async ({
 
   await page.getByTestId('game-result-recording').click();
   await expect(page.getByTestId('analysis-shown')).toHaveCount(1, { timeout: 30_000 });
-  await page.goto('/games?scope=mine');
+  await page.goto('/games');
   await expect(page.getByTestId('game-history-numbers').first()).toContainText('analysis shown at 1 decision');
-  await expect(page.getByTestId('my-record-with-analysis')).toHaveText('1');
 });

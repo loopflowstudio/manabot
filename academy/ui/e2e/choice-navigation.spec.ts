@@ -1,8 +1,11 @@
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
 import { expect, test, type Page } from '@playwright/test';
 import positionsJson from '../../../managym/academy/fixtures/choice-navigation-opening-v1.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 // Retained openings pay by hand; Auto-tap would submit their payments before the test reads them.
 test.beforeEach(async ({ page }) => {
@@ -35,12 +38,13 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
     accepted_commands: [],
     replay_cursor: frame.revision,
   };
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw));
       if (message.type === 'new_game' || message.type === 'resume') {
-        socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: frame.projection,
-          actions: [], recovery, session_id: 'navigation', resume_token: 'navigation' }));
+        socket.send(JSON.stringify({ type: 'observation', ...game, data: frame.projection,
+          actions: [], recovery }));
       } else if (message.type === 'command') {
         commands.push(message.command);
         // Exercise the existing recovery path without claiming mocked acceptance.
@@ -51,7 +55,7 @@ async function installPosition(page: Page, family: Family): Promise<Command[]> {
       }
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', family);
@@ -150,7 +154,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
       window.__choiceNavigation = state;
       window.WebSocket = TrackedSocket;
     }, position.config);
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
     await expect(page.getByTestId('game')).toBeVisible();

@@ -11,6 +11,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { showEachCreaturesChoice } from './fixtures/combat';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 /**
  * Start a seeded game against the random opponent, counting the commands sent.
  * Seed 1 reaches a past board (an opponent window of several moves) at the
@@ -28,7 +31,7 @@ async function startAgainstRandom(page: Page, seed = 1): Promise<{ count: number
       server.send(JSON.stringify(payload));
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

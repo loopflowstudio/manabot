@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { tableSnapshot } from './table';
+import { gameReply } from './game';
 import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
   Command,
@@ -10,6 +10,9 @@ import type {
   PresentationEvent,
   RecoveryEnvelope,
 } from '../../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
@@ -148,7 +151,7 @@ interface CombatScenario {
 export async function startCombat(page: Page, { after = {}, moreTigers = 0, rejectOnceAt, finishWork }: CombatScenario = {}): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
   let current = frameAt('otter', moreTigers);
-  await page.route('**/api/sessions/*/combat-preview', async route => {
+  await page.route('**/api/games/*/combat-preview', async route => {
     const request = route.request().postDataJSON() as { match_id: string; revision: number; prompt_id: number; frame_hash: string; plan: Authority['previews'][number]['plan'] };
     authority.previews.push({ revision: request.revision, plan: request.plan });
     const attacks = new Set(request.plan.attackers.map(attacker => attacker.entity));
@@ -173,13 +176,13 @@ export async function startCombat(page: Page, { after = {}, moreTigers = 0, reje
         };
     await route.fulfill({ json: { ...request, viewer: 0, preview } });
   });
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', (socket) => {
     socket.onMessage(async raw => {
       const message = JSON.parse(String(raw)) as { type?: string; command?: Command };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
-          type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
-          session_id: 'combat-session', resume_token: 'combat-resume-token',
+          type: 'observation', ...game, data: current.projection, actions: [],
           recovery: { ...structuredClone(boltFixture.recovery), reason: 'initial_connect', frame: current, presentation_tail: [],
             presentation_cursor: 0, accepted_commands: [], replay_cursor: current.revision },
         }));
@@ -213,7 +216,7 @@ export async function startCombat(page: Page, { after = {}, moreTigers = 0, reje
       socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update, work: work('complete') }));
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'DECLARE_ATTACKER');

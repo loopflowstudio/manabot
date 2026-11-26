@@ -1,6 +1,9 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Milestone-1 two-deck slice e2e: select UR Lessons vs GW Allies in the UI,
 // play a full game to terminal against the random villain with the default
 // main-phase stops on, and assert the new-card UI moments render — the deck
@@ -48,7 +51,7 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
   test.setTimeout(600_000);
   const consoleErrors = collectConsoleErrors(page);
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });

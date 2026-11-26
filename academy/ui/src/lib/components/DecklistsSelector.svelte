@@ -20,10 +20,10 @@
   const closedUnavailable = $derived(isSearchChoice(opponent));
 </script>
 
-<label class="type-caption flex items-center gap-2 text-ink-2" data-testid="decklists-choice">
+<label class="type-caption flex min-w-0 max-w-full items-center gap-2 text-ink-2" data-testid="decklists-choice">
   Decklists
   <select
-    class="rounded border border-line bg-panel px-2 py-1"
+    class="min-w-0 flex-1 rounded border border-line bg-panel px-2 py-1"
     {value}
     {disabled}
     onchange={(event) => onChange?.((event.currentTarget as HTMLSelectElement).value as Decklists)}

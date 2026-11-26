@@ -9,9 +9,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { selectDeck } from './deck-selection';
 import { showEachCreaturesChoice } from './fixtures/combat';
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { PresentationEvent, RecoveryEnvelope } from '../src/lib/types';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
@@ -49,7 +52,7 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
     });
   });
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await selectDeck(page, 'hero', 'interactive');
@@ -104,11 +107,8 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('turn-number')).not.toContainText('Esc for now');
 
-  // Grab the saved recording id from sessionStorage and open it in Review.
-  const recordingId = await page.evaluate(() => {
-    const raw = sessionStorage.getItem('etude.gui.resume');
-    return raw ? (JSON.parse(raw) as { recording_id?: string }).recording_id ?? null : null;
-  });
+  // The address names the game on the board; open it in Review.
+  const recordingId = new URL(page.url()).searchParams.get('game');
   expect(recordingId).toBeTruthy();
 
   await page.goto(`/replay?trace=${encodeURIComponent(recordingId!)}&review=1`);
@@ -158,7 +158,7 @@ test('normal motion animates a death travelling to the graveyard within 180 ms w
     });
   });
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await selectDeck(page, 'hero', 'interactive');
@@ -282,24 +282,23 @@ test('triggered ability on the stack draws its target arrow and names itself in 
   ];
   recovery.presentation_cursor = 0;
 
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw)) as { type?: string };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
-          table: tableSnapshot(),
+          ...game,
           data: recovery.frame.projection,
           actions: [],
-          session_id: 'ability-arrow-session',
-          resume_token: 'ability-arrow-token',
           recovery,
         }));
       }
     });
   });
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toBeVisible();
@@ -432,24 +431,23 @@ test('a combat with three or more creatures shows the structured combat table on
   ];
   recovery.presentation_cursor = 0;
 
+  const game = gameReply();
   await page.routeWebSocket('**/ws/play', socket => {
     socket.onMessage(raw => {
       const message = JSON.parse(String(raw)) as { type?: string };
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({
           type: 'observation',
-          table: tableSnapshot(),
+          ...game,
           data: recovery.frame.projection,
           actions: [],
-          session_id: 'combat-table-session',
-          resume_token: 'combat-table-token',
           recovery,
         }));
       }
     });
   });
 
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game' }).first().click();
   await expect(page.getByTestId('game')).toBeVisible();

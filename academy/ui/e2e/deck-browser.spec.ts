@@ -2,8 +2,11 @@ import { expect, test } from '@playwright/test';
 import manifest from '../../../managym/academy/packs/elemental-world/v2/manifest.json' with { type: 'json' };
 import { selectDeck } from './deck-selection';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 test('Watch uses the same browser to assign both bot seats', async ({ page }) => {
-  await page.goto('/replay?watch=1');
+  await page.goto('/?watch=1');
   await expect(page.getByTestId('deck-browser')).toHaveCount(1);
   await selectDeck(page, 'hero', 'elemental_bg');
   await selectDeck(page, 'villain', 'elemental_ug');
@@ -16,8 +19,8 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
 });
 
-test('browse every exact deck and Lesson pool, choose both seats, and keep a running game intact', async ({ page }, testInfo) => {
-  await page.goto('/?setup=1');
+test('browse every exact deck and Lesson pool, choose both seats, and change one for the next game', async ({ page }, testInfo) => {
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByText('Browse bundled decks and cards',{exact:true}).click();
   const browser = page.getByTestId('deck-browser');
@@ -46,28 +49,17 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('action-option').first()).toBeVisible();
-  const revision = await page.locator('main').getAttribute('data-frame-revision');
-  // On the board, the session controls are in the top bar's Menu.
+  const first = await page.locator('main').getAttribute('data-game');
+  // New game opens setup with the matchup just played; the browser changes one seat for the next game.
   await page.getByTestId('game-menu').click();
-  await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
-  await page.getByText('Browse bundled decks and cards',{exact:true}).click();
-  await browser.getByTestId('browse-elemental_bg').click();
-  await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
-  await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
-  await page.getByRole('button', { name: 'Back to the game', exact: true }).click();
-  await expect(browser).not.toBeVisible();
-  // Editing the next game leaves the running game's matchup unchanged.
-  await expect(page.getByTestId('deck-names')).toContainText('Temur Lessons');
-  // On the board, the session controls are in the top bar's Menu.
-  await page.getByTestId('game-menu').click();
-  await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
+  await page.getByTestId('new-game').click();
   await page.getByText('Browse bundled decks and cards',{exact:true}).click();
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id','elemental_ug');
   await browser.getByTestId('browse-elemental_bg').click();
   await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
-  page.on('dialog',dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Start next game', exact: true }).click();
+  await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   await expect(page.getByTestId('deck-names')).toContainText('Landfall and sacrifice');
+  await expect(page.locator('main')).not.toHaveAttribute('data-game', first!);
 });
 
 test('cached artwork covers the Elemental lists and opens a readable printed card', async ({ page }, testInfo) => {

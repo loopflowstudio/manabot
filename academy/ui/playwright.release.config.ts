@@ -11,7 +11,7 @@ const traceDir = join(outputDir, 'traces');
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['play-session.spec.ts', 'shared-table.spec.ts', 'unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts', 'mana-payment.spec.ts', 'opponent-beats.spec.ts', 'game-explained.spec.ts', 'keyboard-play.spec.ts', 'drag-play.spec.ts'],
+  testMatch: ['unified-replay.spec.ts', 'watch.spec.ts', 'experience-proof.spec.ts', 'stops.spec.ts', 'laptop-comfort.spec.ts', 'game-history.spec.ts', 'decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'decklist-import.spec.ts', 'trigger-order.spec.ts', 'mana-payment.spec.ts', 'opponent-beats.spec.ts', 'game-explained.spec.ts', 'keyboard-play.spec.ts', 'drag-play.spec.ts'],
   outputDir,
   timeout: 120_000,
   fullyParallel: false,

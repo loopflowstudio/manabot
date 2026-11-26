@@ -75,26 +75,31 @@ Final proof requires repeated corrected-world executions after ETU-75 with exact
 source capture, both deck assignments and legality/replay witnesses. Nearly zero
 new spend remains the bound; no paid compute or public deployment is implied.
 
-The User explicitly requested a global game log “across everyone,” both players
-identified as Human/Bot, and easy filtering. My games is a filter on shared
-history. Preserve two symmetric seat snapshots with stable public player IDs,
-recorded names/decks and exact bot versions. Names, producer and loading path
-are not identity; group bot versions only with declared lineage. Future graphs
-and training datasets consume these structured records, not scraped UI text.
+History is every game in the traces directory, newest first, each seat
+identified as Human or Bot with easy filtering. Preserve two symmetric seat
+snapshots with stable public player IDs, recorded names/decks and exact bot
+versions. Names, producer and loading path are not identity; group bot versions
+only with declared lineage. Future graphs and training datasets consume these
+structured records, not scraped UI text.
 
 GameSession writes the existing Trace, attempt metadata and seats in one SQLite
-transaction. Legacy JSON is read-only. Retain incomplete attempts and real ending
-reasons; restart interruption does not invent a winner or human abandonment.
-Resolve a generated deal seed before both policy and environment construction.
-Validate replacements before closing the playable match and pin rematch identity.
-Recorder failures must reach the player even if cleanup also fails.
+transaction. Legacy JSON is read-only. A game is unfinished until the rules end
+it or its record diverges: closing the tab, idling out and a server restart end
+nothing, and none invents a winner. Resolve a generated deal seed before both
+policy and environment construction. Recorder failures must reach the player
+even if cleanup also fails.
 
-New attempts have shared listings; completed shared replays use the established
-seat-0 projection. Unfinished prefixes and feedback remain participant-only,
-and historical private SQLite games remain private. Listing never grants Retry,
-feedback or hidden live-state access. Keep public IDs separate from credentials,
-filter permissions in SQL before pagination, and label automated validation by
-origin rather than inferring human play from a Human seat.
+Academy is a local tool with no player identity, private games, sessions or
+feedback (MTG-488, 2026-11-25, replacing the earlier shared-history design with
+participant-only prefixes and "My games"). A game is named by its id: every
+saved game, finished or not, replays, analyses and plays on with no credential,
+and every unfinished played game resumes from History or `/` with its id and
+record intact. Resume steps the engine through the stored steps without
+recording them again; a missing policy refuses without marking the game
+diverged. Existing databases keep the old identity, session and feedback tables
+unread. Label automated validation by origin rather than inferring human play
+from a Human seat. Unfinished Watch games and Study roots of games nobody
+resumed are still memory-only.
 
 The 2026-09-25 review proves built-browser integration, both trained-opponent
 assignments, history/replay permissions and exact replay reconstruction. Human

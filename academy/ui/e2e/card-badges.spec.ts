@@ -2,7 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import bolt from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { ExperienceFrame, PermanentState, RecoveryEnvelope } from '../src/lib/types';
 import { denseFrame } from './fixtures/laptop-board';
-import { tableSnapshot } from './fixtures/table';
+import { gameReply } from './fixtures/game';
+
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
 
 function badgeFrame(): ExperienceFrame {
   const frame = denseFrame();
@@ -38,18 +41,18 @@ function badgeFrame(): ExperienceFrame {
 }
 
 async function show(page: Page, frame: ExperienceFrame) {
-  const table = tableSnapshot();
+  const game = gameReply();
   let publish = () => {};
   await page.routeWebSocket('**/ws/play', socket => {
     publish = () => socket.send(JSON.stringify({
-      type: 'observation', data: frame.projection, actions: [], table, session_id: 'badges', resume_token: 'badges',
+      type: 'observation', data: frame.projection, actions: [], ...game,
       recovery: { ...bolt.recovery as RecoveryEnvelope, frame, accepted_commands: [], presentation_tail: [], replay_cursor: frame.revision },
     }));
     socket.onMessage(raw => {
       if (['new_game', 'resume'].includes(JSON.parse(String(raw)).type)) publish();
     });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
   await expect(page.getByTestId('game')).toBeVisible();
@@ -209,7 +212,7 @@ test('recorded Watch badges leave the policy percentage visible', async ({ page 
     actor: 0, automatic: false, can_reveal: false, revision: frame.revision };
   await page.route('**/api/traces/badges/recording', route => route.fulfill({ json: {
     id: 'badges', positions: [choice], total: 1, next_offset: null, revision: frame.revision, status: 'finished',
-    can_produce: false, can_study: false, winner: null, players: [], source_kind: null, watch: true, can_feedback: false,
+    can_produce: false, can_study: false, winner: null, players: [], source_kind: null, watch: true,
   } }));
   await page.route('**/api/traces/badges/positions/**', route => route.fulfill({ json: {
     ...choice, observation: frame.projection, decision: { frame, viewer: 0, offer_id: frame.offers[0].id },

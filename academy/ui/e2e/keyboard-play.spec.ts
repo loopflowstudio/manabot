@@ -8,6 +8,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { CONTROLS } from '../src/lib/board/region';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 /**
  * The region holding focus, by its accessible name, and the focused control:
  * its name and its position among the region's visible controls (the set the
@@ -75,7 +78,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   page.on('websocket', socket => socket.on('framesent', frame => {
     if (String(frame.payload).includes('"type":"command"')) sent.push(String(frame.payload));
   }));
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
   await page.getByTestId('opponent-select').selectOption('random');
@@ -155,7 +158,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
 
 test('? opens the sheet of the board\'s keys, and Esc returns to the hint', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

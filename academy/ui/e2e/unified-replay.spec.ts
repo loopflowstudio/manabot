@@ -7,7 +7,7 @@ test('live Watch resumes the same timeline after Study and reload', async ({ pag
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({width: 1280, height: 800});
   await page.emulateMedia({reducedMotion: 'reduce', colorScheme: 'light'});
-  await page.goto('/replay?watch=1');
+  await page.goto('/?watch=1');
   await page.getByRole('combobox', {name: 'Deal mode', exact: true}).selectOption('repeat');
   await page.getByLabel('Seed', {exact: true}).fill('0');
   await page.getByRole('combobox', {name: 'Seat 2 bot', exact: true}).selectOption('random');
@@ -16,8 +16,7 @@ test('live Watch resumes the same timeline after Study and reload', async ({ pag
   await expect(page.getByTestId('position-counter')).toHaveText('Position 1 / 3');
   await expect(page.getByRole('checkbox', {name: 'Show both hands'})).not.toBeChecked();
   const id = new URL(page.url()).searchParams.get('trace')!;
-  await expect.poll(() => page.evaluate(id => sessionStorage.getItem(`etude.watch.${id}`) !== null, id)).toBe(true);
-  await expect.poll(() => page.evaluate(id => localStorage.getItem(`etude.watch.${id}`), id)).toBeNull();
+  expect(id).toBeTruthy();
 
   // Earlier reads cannot produce. Study retries have a separate rules authority.
   const produced: string[] = [];
@@ -51,7 +50,8 @@ test('verified evaluation import reads the same timeline without producing a pol
   const source = await sourceResponse.text();
   const steps: string[] = [];
   page.on('request', request => { if (request.url().endsWith('/step')) steps.push(request.url()); });
-  await page.goto('/replay?watch=1');
+  await page.goto('/games');
+  await page.getByText('Open a recorded game file', {exact: true}).click();
   await page.getByLabel('Open a game file').setInputFiles({name: 'evaluation.json', mimeType: 'application/json', buffer: Buffer.from(source)});
   await expect(page.getByTestId('game-board')).toBeVisible({timeout: 60_000});
   await expect(page.getByTestId('recording-heading')).toHaveText('Evaluation game');

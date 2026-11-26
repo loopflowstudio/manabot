@@ -6,7 +6,9 @@ import path from 'node:path';
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-const RESUME_STORAGE_KEY = 'etude.gui.resume';
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 const PUBLIC_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const RECEIPT_PATH = process.env.ACADEMY_CLEAN_RECEIPT;
@@ -115,20 +117,10 @@ async function updateSequence(page: Page): Promise<number> {
   return Number(await page.locator('main').getAttribute('data-update-seq'));
 }
 
-async function resumeIdentity(page: Page): Promise<string | null> {
-  const identity = await page.evaluate((key) => {
-    const stored = sessionStorage.getItem(key);
-    if (!stored) return null;
-    const record = JSON.parse(stored);
-    const fields = [record.session_id, record.resume_token, record.play_session_id];
-    if (!fields.every((field) => typeof field === 'string' && field.length > 0)) {
-      throw new Error('Incomplete resume identity');
-    }
-    return JSON.stringify(fields);
-  }, RESUME_STORAGE_KEY);
-  // Compare credentials without printing them in a failing assertion. The saved
-  // frame and presentation cursor are recovery state, not session identity.
-  return identity === null ? null : sha256(identity);
+/** The game this page plays, as its board and its address name it. */
+async function gameOnBoard(page: Page): Promise<string | null> {
+  const game = await page.locator('main').getAttribute('data-game');
+  return game && new URL(page.url()).searchParams.get('game') === game ? game : null;
 }
 
 async function chooseDeterministicAction(page: Page): Promise<void> {
@@ -258,7 +250,7 @@ test('clean command reaches pinned play and reloads without public network', asy
       .poll(launcherReadyRecord, { timeout: READY_LIMIT_MS, intervals: [100] })
       .not.toBeNull();
   }
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -282,8 +274,8 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect.poll(() => latestBrowserPack(page), { timeout: 15_000 }).toEqual(expected);
 
   await chooseDeterministicAction(page);
-  const credentialsBefore = await resumeIdentity(page);
-  expect(credentialsBefore, 'resume credentials were not installed').not.toBeNull();
+  const gameBefore = await gameOnBoard(page);
+  expect(gameBefore, 'the address does not name the game on the board').not.toBeNull();
   const signatureBefore = await visibleSignature(page);
 
   await page.reload();
@@ -292,9 +284,9 @@ test('clean command reaches pinned play and reloads without public network', asy
   });
   await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
-  const credentialsAfter = await resumeIdentity(page);
+  const gameAfter = await gameOnBoard(page);
   const signatureAfter = await visibleSignature(page);
-  expect(credentialsAfter).toBe(credentialsBefore);
+  expect(gameAfter).toBe(gameBefore);
   expect(signatureAfter).toBe(signatureBefore);
   await expect.poll(() => latestBrowserPack(page), { timeout: 15_000 }).toEqual(expected);
 

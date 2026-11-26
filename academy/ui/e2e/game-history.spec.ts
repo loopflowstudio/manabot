@@ -1,206 +1,184 @@
-import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
-import { showEachCreaturesChoice } from './fixtures/combat';
 
-test('unauthorized session history explains access and offers to leave the session filter', async ({ page }) => {
-  await page.route('**/api/play-sessions/private-session', route => route.fulfill({ status: 403, json: { detail: 'Session not owned' } }));
-  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
-  await page.goto('/games?session=private-session&q=Passive');
-  const alert = page.getByRole('alert');
-  await expect(alert).toContainText('browser and address (including port) where you played');
-  await expect(alert).toContainText('credentials were cleared');
-  await expect(alert.getByRole('button', { name: 'Try again' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
-  await alert.getByRole('link', { name: 'Browse games outside this session' }).click();
-  await expect(page).toHaveURL(/\/games\?q=Passive$/);
-  await expect(alert).toHaveCount(0);
-});
+test.use({ actionTimeout: 10_000 });
 
-test('temporary session history failure retains retry and recovers authorized results', async ({ page }) => {
-  let unavailable = true;
-  await page.route('**/api/play-sessions/retry-session', route => route.fulfill(unavailable
-    ? { status: 503, json: { detail: 'Unavailable' } }
-    : { json: { results: [], totals: [{ origin: 'automated_validation', status: 'completed', count: 2 }], next_result_offset: null } }));
-  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
-  await page.goto('/games?session=retry-session');
-  await expect(page.getByRole('alert')).toContainText('Session history could not be loaded.');
-  await expect(page.getByRole('alert')).not.toContainText('credentials');
-  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
-  unavailable = false;
-  await page.getByRole('button', { name: 'Try again', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('2 completed');
-  await expect(page.getByRole('alert')).toHaveCount(0);
-});
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+const listing = (url: URL): boolean => url.pathname === '/api/traces';
 
-test('session history pagination denial gives the same access guidance', async ({ page }) => {
-  await page.route('**/api/play-sessions/paged-session*', route => route.fulfill(new URL(route.request().url()).searchParams.has('result_offset')
-    ? { status: 403, json: { detail: 'Session not owned' } }
-    : { json: { results: [], totals: [{ origin: 'human', status: 'completed', count: 3 }], next_result_offset: 100 } }));
-  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
-  await page.goto('/games?session=paged-session');
-  await page.getByRole('button', { name: 'More result configurations' }).click();
-  await expect(page.getByRole('alert')).toContainText('Copying the link does not copy access');
-  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('human: 3 completed');
-  await expect(page.getByRole('alert').getByRole('button', { name: 'Try again' })).toHaveCount(0);
-});
+/** The game on the board, as the page names it. */
+async function gameOnBoard(page: Page): Promise<string> {
+  await expect(page.locator('main')).not.toHaveAttribute('data-game', '');
+  return (await page.locator('main').getAttribute('data-game'))!;
+}
 
-test('session result pagination ignores responses from a prior history view', async ({ page }) => {
-  let releasePage!: () => void;
-  let requestedPage!: () => void;
-  const released = new Promise<void>(resolve => { releasePage = resolve; });
-  const requested = new Promise<void>(resolve => { requestedPage = resolve; });
-  const result = (name: string) => ({
-    opponent_name: name, opponent_id: 'control:passive', version: null,
-    origin: 'automated_validation', human_seat: 0, human_deck: 'ur_lessons',
-    opponent_deck: 'gw_allies', decklists: 'open', completed: 1, wins: 1,
-    draws: 0, losses: 0, active: 0, stopped: 0, interrupted: 0,
-    wall_elapsed_seconds: null, elapsed_samples: 0,
-  });
-  await page.route('**/api/traces?**', route => route.fulfill({ json: [] }));
-  await page.route('**/api/play-sessions/session-a*', async route => {
-    const more = new URL(route.request().url()).searchParams.has('result_offset');
-    if (more) { requestedPage(); await released; }
-    await route.fulfill({ json: {
-      results: [result(more ? 'Stale opponent' : 'Current opponent')],
-      totals: [], next_result_offset: more ? null : 100,
-    } });
-  });
-  await page.goto('/games?session=session-a');
-  await expect(page.getByRole('region', { name: 'Session results' })).toContainText('Current opponent');
-  await page.getByRole('button', { name: 'More result configurations' }).click();
-  await requested;
-  await page.getByRole('link', { name: 'Remove Session filter' }).click();
-  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
-  await page.goBack();
-  const results = page.getByRole('region', { name: 'Session results' });
-  await expect(results).toContainText('Current opponent');
-  const response = page.waitForResponse('**/api/play-sessions/session-a?result_offset=100');
-  releasePage();
-  await (await response).finished();
-  // Let the browser apply the delivered fetch before inspecting the current view.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await expect(results).not.toContainText('Stale opponent');
-  await expect(page.getByRole('button', { name: 'More result configurations' })).toBeEnabled();
-});
+/** Make one choice (a pass when one is offered) and wait for the board to move. */
+async function decide(page: Page): Promise<void> {
+  const offers = page.getByTestId('action-option');
+  await expect(page.locator('[data-testid="action-option"]:enabled').first()).toBeVisible({ timeout: 30_000 });
+  const seq = await page.locator('main').getAttribute('data-update-seq');
+  const pass = page.locator('[data-testid="action-option"][data-action-type="PRIORITY_PASS_PRIORITY"]');
+  await (await pass.count() ? pass.first() : offers.first()).click();
+  await expect(page.locator('main')).not.toHaveAttribute('data-update-seq', seq!);
+}
 
-test('shared history identifies both players and preserves private prefixes and notes', async ({ browser }) => {
+/** Eight-card land decks end by native deck-out in a few turns of passing. */
+async function playToEnd(page: Page): Promise<void> {
+  for (let decision = 0; decision < 100; decision++) {
+    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(page.getByTestId('game-result'))).toBeVisible({ timeout: 30_000 });
+    if (await page.getByTestId('game-result').count()) return;
+    await decide(page);
+  }
+  throw new Error('Bounded native game did not complete');
+}
+
+async function openSettings(page: Page): Promise<void> {
+  const menu = page.locator('details.game-menu');
+  if (!await menu.evaluate((node: HTMLDetailsElement) => node.open)) await page.getByTestId('game-menu').click();
+}
+
+const historyRow = (page: Page, game: string) =>
+  page.getByTestId('game-history-row').filter({ has: page.locator(`a[aria-label="Replay game ${game}"]`) });
+
+test('an unfinished game stays in History, replays without a credential and resumes where it stood', async ({ page, browser }) => {
   test.setTimeout(180_000);
-  const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
-  const [alice, bob, visitor] = await Promise.all(contexts.map((context) => context.newPage()));
-  const failures: string[] = [];
-  for (const page of [alice, bob, visitor]) {
-    page.on('pageerror', (error) => failures.push(error.message));
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    // Keep this history/privacy proof on one ordinary, reproducible deal.
-    await page.routeWebSocket('**/ws/play', socket => {
-      const server = socket.connectToServer();
-      socket.onMessage(message => {
-        if (typeof message !== 'string') { server.send(message); return; }
-        const payload = JSON.parse(message);
-        if (payload.type === 'new_game') payload.config.seed = 1255757736;
-        server.send(JSON.stringify(payload));
-      });
-    });
-  }
-  const suffix = Date.now();
-  const aliceName = `History Alice ${suffix}`;
-  const bobName = `History Bob ${suffix}`;
-  async function start(page: Page, name: string) {
-    await page.goto('/games');
-    await page.getByText('Your player name', { exact: true }).click();
-    await expect(page.getByLabel('Display name')).not.toHaveValue('');
-    await page.getByLabel('Display name').fill(name);
-    await page.getByRole('button', { name: 'Save name', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Saved for your next game.' })).toBeVisible();
-    await page.getByRole('link', { name: 'Play a game', exact: true }).click();
-    await page.getByTestId('home-setup').click();
-    await page.getByTestId('opponent-select').selectOption('passive');
-    await selectDeck(page, 'hero', 'gw_allies');
-    await selectDeck(page, 'villain', 'ur_lessons');
-    await page.getByRole('button', { name: 'Start game', exact: true }).click();
-    await expect(page.getByTestId('game-board')).toBeVisible();
-  }
+  const errors: string[] = [];
+  const refused: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('response', response => { if (response.status() === 403) refused.push(response.url()); });
+  await page.goto(SETUP);
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('passive');
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  await decide(page);
+  await decide(page);
+  const game = await gameOnBoard(page);
+  // The address names the game on the board.
+  expect(new URL(page.url()).searchParams.get('game')).toBe(game);
+  const revision = await page.locator('main').getAttribute('data-frame-revision');
+
+  // New game opens setup in place and ends nothing.
+  await openSettings(page);
+  await page.getByTestId('new-game').click();
+  await expect(page.getByTestId('home')).toBeVisible();
+  expect(new URL(page.url()).search).toBe('');
+  await expect(page.getByTestId('opponent-select')).toHaveValue('passive');
+
+  await page.getByRole('banner').getByRole('link', { name: 'History', exact: true }).click();
+  const row = historyRow(page, game);
+  await expect(row.getByTestId('game-history-status')).toHaveText('In progress');
+  await expect(row.getByTestId('game-history-resume')).toHaveAttribute('href', `/?game=${encodeURIComponent(game)}`);
+  // The status filter finds it among unfinished games and not among finished ones.
+  await page.goto('/games?status=active');
+  await expect(row).toHaveCount(1);
+  await page.goto('/games?status=completed');
+  await expect(page.getByRole('status').filter({ hasText: /on this page/ })).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  // Replay reads the recorded prefix of an unfinished game, in a browser that never played it.
+  const visitor = await browser.newContext();
   try {
-    await start(alice, aliceName);
-    const over = alice.getByTestId('result-card');
-    const actions = alice.getByTestId('action-option');
-    for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
-      await expect(actions.first().or(over).or(alice.getByTestId('per-creature-choices')).first()).toBeVisible();
-      if (await over.isVisible()) break;
-      await showEachCreaturesChoice(alice);
-      await expect(actions.first()).toBeEnabled();
-      const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
-      const labels = await actions.allTextContents();
-      let pick = labels.findIndex((label) => /^Play |^Cast |^Attack with/.test(label));
-      if (pick < 0) pick = labels.findIndex((label) => /^Pass priority/.test(label));
-      if (pick < 0) pick = 0;
-      await actions.nth(pick).focus();
-      await alice.keyboard.press('Enter');
-      await expect.poll(async () => Number(await alice.locator('main').getAttribute('data-update-seq'))).toBeGreaterThan(before);
-    }
-    await expect(over).toBeVisible();
-    await alice.getByTestId('game-menu').click();
-    await alice.getByRole('textbox', { name: /How did this game feel/ }).fill('Automated history check: private note, not human feedback.');
-    await alice.getByRole('button', { name: 'Save note', exact: true }).click();
-    await expect(alice.getByRole('status').filter({ hasText: 'Feedback saved.' })).toBeVisible();
-    await start(bob, bobName);
-    await visitor.goto('/games');
-    await expect(visitor.getByLabel('Display name')).not.toHaveValue('');
-    await visitor.getByLabel('Search games').fill(String(suffix));
-    await visitor.getByRole('button', { name: 'Find games' }).focus();
-    await visitor.keyboard.press('Enter');
-    const aliceRow = visitor.getByTestId('game-history-row').filter({ hasText: aliceName });
-    const bobRow = visitor.getByTestId('game-history-row').filter({ hasText: bobName });
-    await expect(aliceRow).toContainText('Human');
-    await expect(aliceRow).toContainText('Bot');
-    await expect(aliceRow).toContainText('Passive');
-    await expect(bobRow).toContainText('In progress');
-    await expect(bobRow.getByRole('link', { name: /^Replay game/ })).toHaveCount(0);
-    await expect(visitor.getByText('Automated history check:', { exact: false })).toHaveCount(0);
-    const filtered = visitor.url();
-    await aliceRow.getByRole('link', { name: /^Replay game/ }).click();
-    await expect(visitor.getByTestId('game-board')).toBeVisible();
-    // Trivial opening windows are skipped natively; the first frame is a real decision.
-    await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
-    await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
-    await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
-    await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
-    await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByTestId('game').getByRole('link', { name: 'History', exact: true }).focus();
-    await visitor.keyboard.press('Enter');
-    expect(failures).toEqual([]);
-    await expect(visitor).toHaveURL(filtered);
-    await aliceRow.getByRole('link', { name: 'Passive', exact: true }).click();
-    await expect(visitor).toHaveURL(/player=control%3Apassive/);
-    await expect(aliceRow).toBeVisible();
-    await expect(bobRow).toBeVisible();
-    await bobRow.getByRole('link', { name: 'Filter this pairing' }).click();
-    await expect(visitor.getByTestId('game-history-row')).toHaveCount(1);
-    await expect(visitor.getByTestId('game-history-row')).toContainText(bobName);
-    await visitor.reload();
-    await expect(visitor.getByTestId('game-history-row')).toHaveCount(1);
-    await alice.goto('/games?scope=mine');
-    await expect(alice.getByTestId('game-history-row')).toHaveCount(1);
-    await expect(alice.getByTestId('game-history-row')).toContainText(aliceName);
-    await expect(alice.getByTestId('game-history-row')).toContainText('private note');
-    await bob.goto('/games?scope=mine');
-    await expect(bob.getByTestId('game-history-row')).toHaveCount(1);
-    await expect(bob.getByTestId('game-history-row')).toContainText(bobName);
-    await bob.getByTestId('game-history-row').getByRole('link', { name: /^Replay game/ }).click();
-    await expect(bob.getByTestId('game-board')).toBeVisible();
-    expect(failures).toEqual([]);
-  } finally {
-    await Promise.all(contexts.map((context) => context.close()));
-  }
+    const reader = await visitor.newPage();
+    reader.on('response', response => { if (response.status() === 403) refused.push(response.url()); });
+    await reader.goto(new URL(`/replay?trace=${encodeURIComponent(game)}`, page.url()).href);
+    await expect(reader.getByTestId('game-board')).toBeVisible({ timeout: 30_000 });
+    await expect(reader.getByTestId('position-counter')).toHaveText(/Position \d+ \/ \d+/);
+    await expect(reader.getByRole('alert')).toHaveCount(0);
+  } finally { await visitor.close(); }
+
+  // Resume is a link: the same game, at the decision that was pending.
+  await page.goto('/games?status=active');
+  await row.getByTestId('game-history-resume').click();
+  await expect(page.locator('[data-testid="action-option"]:enabled').first()).toBeVisible({ timeout: 30_000 });
+  expect(await gameOnBoard(page)).toBe(game);
+  await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
+  await decide(page);
+  // Play alone returns to it, and so does a reload.
+  await page.goto('/');
+  expect(await gameOnBoard(page)).toBe(game);
+  await page.reload();
+  expect(await gameOnBoard(page)).toBe(game);
+  await expect(page.locator('[data-testid="action-option"]:enabled').first()).toBeVisible({ timeout: 30_000 });
+  expect(refused).toEqual([]);
+  expect(errors).toEqual([]);
 });
 
-test('long recorded identities fit Games and preserve full filter values', async ({ page }) => {
+test('a finished game offers Rematch and Swap sides, and its address opens its Replay', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(SETUP);
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('passive');
+  await page.getByText('Import decklist files', { exact: true }).click();
+  await page.getByLabel('Use imported decks for the next game').check();
+  await page.getByLabel('Your deck source', { exact: true }).fill('8 Island');
+  await page.getByLabel('Opponent deck source', { exact: true }).fill('8 Mountain');
+  await page.getByRole('combobox', { name: 'Deal mode', exact: true }).selectOption('repeat');
+  await page.getByLabel('Seed', { exact: true }).fill('18446744073709551615');
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  const first = await gameOnBoard(page);
+  await playToEnd(page);
+  await page.screenshot({ path: testInfo.outputPath('result.png') });
+
+  // Rematch plays the same setup again as a new game.
+  await page.getByRole('button', { name: 'Rematch', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).not.toHaveAttribute('data-game', first);
+  const second = await gameOnBoard(page);
+  await expect(page.getByTestId('game-result')).toHaveCount(0);
+  await playToEnd(page);
+  await page.getByRole('button', { name: 'Swap sides', exact: true }).click();
+  await expect(page.locator('main')).not.toHaveAttribute('data-game', second);
+  const third = await gameOnBoard(page);
+  // The swapped game is the one a reload returns to.
+  await page.reload();
+  expect(await gameOnBoard(page)).toBe(third);
+  await expect(page.locator('[data-testid="action-option"]:enabled').first()).toBeVisible({ timeout: 30_000 });
+
+  await page.goto('/games');
+  await expect(historyRow(page, first).getByTestId('game-history-resume')).toHaveCount(0);
+  await expect(historyRow(page, first).getByTestId('game-history-status')).not.toHaveText('In progress');
+  await expect(historyRow(page, third).getByTestId('game-history-resume')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath('history.png') });
+  // A finished game's Play address opens its Replay.
+  await page.goto(`/?game=${encodeURIComponent(first)}`);
+  await expect(page).toHaveURL(new RegExp(`/replay\\?trace=${first}`));
+  await expect(page.getByTestId('game-board')).toBeVisible({ timeout: 30_000 });
+  // An unknown game opens setup, silently.
+  await page.goto('/?game=no-such-game');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByTestId('resume-refused')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('History sends its filters and says when nothing matches', async ({ page }) => {
+  const queries: URLSearchParams[] = [];
+  await page.route(listing, route => {
+    queries.push(new URL(route.request().url()).searchParams);
+    return route.fulfill({ json: [] });
+  });
+  await page.goto('/games?status=active&pairing=human-bot&q=Passive');
+  await expect(page.getByTestId('history-empty')).toHaveText('No games match these filters.');
+  const sent = queries.at(-1)!;
+  expect([sent.get('status'), sent.get('pairing'), sent.get('q')]).toEqual(['active', 'human-bot', 'Passive']);
+  await expect(page.getByRole('combobox', { name: 'Status' })).toHaveValue('active');
+  await expect(page.getByRole('combobox', { name: 'Status' }).locator('option')).toHaveText(['Any status', 'In progress', 'Completed', 'Stopped']);
+  await expect(page.getByRole('combobox', { name: 'Players' }).locator('option')).toHaveText(['Any pairing', 'Human vs Bot', 'Bot vs Bot']);
+  await page.getByRole('link', { name: 'Clear all', exact: true }).click();
+  await expect(page.getByTestId('history-empty')).toHaveText('No games yet. Play one, or open a recorded game file above.');
+  // No name, scope or record: History is the list.
+  await expect(page.getByLabel('Display name')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Session results' })).toHaveCount(0);
+});
+
+test('long recorded identities fit History and preserve full filter values', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const name = 'ci-fix-528/consumer/release-smoke/checkpoints/learner_transitions-8';
   const version = 'a'.repeat(64);
-  await page.route('**/api/traces?**', route => route.fulfill({ json: [{ id: 'long-identity', timestamp: '2026-11-14T00:00:00Z',
+  await page.route(listing, route => route.fulfill({ json: [{ id: 'long-identity', timestamp: '2026-11-14T00:00:00Z',
     status: 'completed', winner: 1, end_reason: 'game_over', origin: 'automated_validation', num_events: 5,
-    replay_available: true, feedback: [], players: [
+    resumable: false, players: [
       { seat: 0, name: 'H'.repeat(60), kind: 'human', player_id: 'human-identity', deck: 'ur_lessons', version: null },
       { seat: 1, name, kind: 'bot', player_id: `checkpoint:${version}`, deck: 'gw_allies', version },
     ] }] }));
@@ -214,6 +192,8 @@ test('long recorded identities fit Games and preserve full filter values', async
   expect(await modelName.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
   expect(await row.locator('..').evaluate(el => el.scrollWidth)).toBeLessThanOrEqual(1280);
-  await expect(row.getByRole('link', { name: 'aaaaaaaaaa', exact: true })).toHaveAttribute('href', `/games?version=${version}`);
+  await expect(row.locator('a[href^="/games?bot="]')).toHaveAttribute('href', `/games?bot=${encodeURIComponent(`checkpoint:${version}`)}`);
   await expect(row.locator(`[title="${name} · ${version}"]`)).toHaveCount(1);
+  await expect(row.getByTestId('game-history-resume')).toHaveCount(0);
+  await expect(row.getByTestId('game-history-replay')).toHaveAttribute('href', /^\/replay\?trace=long-identity/);
 });

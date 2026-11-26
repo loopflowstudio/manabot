@@ -457,9 +457,14 @@ pending decision. Otherwise `/` shows the setup screen:
 - Choose **Play vs Bot** or **Watch Bot vs Bot**, pick decks, an opponent,
   decklist disclosure, deal mode and priority stops, then click **Start**.
 
-From a live board, clicking **New game** opens setup in place with no
-confirmation dialog; the game you left stays unfinished in **History** with a
-**Resume** link.
+Before a first matchup, setup proposes the default opponent and, where a deck
+pool is installed, a dealt held-out deck for each seat. A matchup named by the
+address, or the one just played, is never replaced by those defaults.
+
+From a live board, clicking **New game** opens setup in place, with the matchup
+just played selected and no confirmation dialog; the game you left stays
+unfinished in **History** with a **Resume** link. Until it is resumed, `/`
+opens setup rather than that game.
 
 To use your own decks, open setup, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or

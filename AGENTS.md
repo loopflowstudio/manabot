@@ -99,8 +99,14 @@ while drafting, and keep them listed in Replay and Study for recorded policy
 probabilities. Play's retained `hero_*`/`villain_*` setup fields name
 human/opponent roles; `GameConfig.human_seat` orders them at the native
 boundary. Record and project actual native seats; Watch keeps its two-seat
-acting-view contract. Scope resume credentials and the started-launch marker
-together in `sessionStorage` so a launch never resumes another tab's game.
+acting-view contract. A game is named by its id and nothing else identifies a
+player or grants access: `/?game=<id>` resumes it, the server rebuilds one that
+left memory from its stored record, and a launch starts one game however often
+its address is opened. `localStorage['academy.game']` holds only the unfinished
+game `/` returns to; each tab keeps its Command in flight and last frame in
+`sessionStorage['academy.tab.<game>']`, so two tabs never overwrite each
+other's submission. First-visit setup defaults never replace a matchup the
+address or the game just played chose.
 Game-file imports send original JSON source spans: JS numeric re-encoding can
 round u64 identities and invalidate digests. Watch history is the selected
 acting viewer's recorded track strictly before that decision's

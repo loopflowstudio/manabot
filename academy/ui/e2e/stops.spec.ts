@@ -1,6 +1,9 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Priority stops e2e: the same deal (seed 0, seeded random villain,
 // scripted deterministic hero) is played twice —
 // first with auto-pass disabled (the old surface-every-window behavior),
@@ -34,7 +37,7 @@ async function setCheckbox(page: Page, testId: string, checked: boolean): Promis
   }
 }
 
-/** On the board, the stops panel and the session live in the top bar's Game popover. */
+/** On the board, the stops panel lives in the top bar's Settings. */
 async function openMenu(page: Page): Promise<void> {
   const menu = page.locator('details.game-menu');
   if (await menu.count() && !await menu.evaluate((node: HTMLDetailsElement) => node.open)) {
@@ -45,6 +48,11 @@ async function openMenu(page: Page): Promise<void> {
 async function openStopsPanel(page: Page): Promise<void> {
   await openMenu(page);
   const panel = page.getByTestId('stops-panel');
+  // On the setup screen the panel sits under a Priority stops disclosure.
+  const disclosure = page.locator('details', { has: panel }).filter({ has: page.locator('summary', { hasText: /^Priority stops$/ }) });
+  if (await disclosure.count() && !await disclosure.first().evaluate((node: HTMLDetailsElement) => node.open)) {
+    await disclosure.locator('summary', { hasText: /^Priority stops$/ }).click();
+  }
   if ((await panel.getAttribute('open')) === null) {
     await panel.locator('summary').first().click();
   }
@@ -101,7 +109,7 @@ async function playUntilComparisonTurn(page: Page): Promise<number> {
 }
 
 test('stops cut inputs to the same turn boundary, log keeps narrating', async ({ page }) => {
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -129,10 +137,11 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
   await setCheckbox(page, 'stop-my-main2', true);
   await setCheckbox(page, 'stop-opponent-end_step', false);
 
-  page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Rematch', exact: true }).first().click();
-  // The unfinished baseline remains mounted until the replacement is accepted.
-  await expect(page.getByRole('region', { name: 'Play session' })).toContainText('Game 2');
+  // New game opens setup with the matchup just played; the baseline stays unfinished in History.
+  const baseline = await page.locator('main').getAttribute('data-game');
+  await page.getByTestId('new-game').click();
+  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await expect(page.locator('main')).not.toHaveAttribute('data-game', baseline!);
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
   const stopsInputs = await playUntilComparisonTurn(page);
 
@@ -154,7 +163,7 @@ test('stops cut inputs to the same turn boundary, log keeps narrating', async ({
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
@@ -180,7 +189,7 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
 });
 
 test('the stop bar sets the same stops as the Menu, for either turn, and a once stop is spent', async ({ page }) => {
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game' }).first().click();

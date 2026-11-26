@@ -3,6 +3,9 @@ import { writeFile } from 'node:fs/promises';
 import { expect, test, type Request } from '@playwright/test';
 import { showEachCreaturesChoice } from './fixtures/combat';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 interface Sample {
   match: string; revision: number; input: number; sent: number | null;
   message: number | null; applied: number | null; dom: number | null;
@@ -100,7 +103,7 @@ for (const [seed, width, height, motion] of [
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     await cdp.send('Tracing.start', { categories: 'devtools.timeline', transferMode: 'ReturnAsStream' });
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByTestId('opponent-select').selectOption('random');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
@@ -178,7 +181,7 @@ test('cold visible-art delivery receipt', async ({ page, browser }, info) => {
     const start = started.get(request);
     if (start !== undefined) delivered.push({ url: request.url(), ms: performance.now() - start, status: request.failure()?.errorText ?? 'unknown' });
   });
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();

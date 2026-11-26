@@ -64,6 +64,8 @@
   /** A configured launch was sent and has not started or been refused yet. */
   let launching = $state(false);
   let setupNotice = $state('');
+  /** The address chose the matchup, so first-visit defaults must not replace it. */
+  let addressed = $state(false);
   let routed: string | null = null;
 
   /** Fill Watch setup from a launcher's address; no game starts until Start. */
@@ -101,6 +103,7 @@
     const launch = params.get('launch');
     const watch = params.get('watch') === '1';
     const explicit = demoName !== null || playedFrom !== null || watch || launch !== null || decks !== null || opponent !== null;
+    addressed = explicit;
     if (askedGame) { resumeGame(askedGame); return; }
     if (!explicit) {
       if (stored) resumeGame(stored);
@@ -125,14 +128,15 @@
     untrack(() => route(new URLSearchParams(search)));
   });
 
-  // The address names the game on the board, so a reload returns to it.
+  // The address names the game on the board, so a reload returns to it. A demo keeps its name beside the game.
+  const demoAddress = (): string => (demoName ? `/?demo=${encodeURIComponent(demoName)}` : '/');
   $effect(() => {
     const game = gameStore.gameId;
-    if (!game || !gameStore.observation || demoName) return;
+    if (!game || !gameStore.observation) return;
     launching = false;
     untrack(() => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('game') !== game || [...params.keys()].length > 1) replaceState(`/?game=${encodeURIComponent(game)}`, {});
+      const address = `${demoAddress()}${demoName ? '&' : '?'}game=${encodeURIComponent(game)}`;
+      if (window.location.pathname + window.location.search !== address) replaceState(address, {});
     });
   });
   // A launch that was refused starts nothing: ordinary setup, at the ordinary address.
@@ -152,7 +156,7 @@
     const refusal = gameStore.resumeRefused;
     if (!refusal) { refused = null; return; }
     untrack(() => {
-      replaceState('/', {});
+      replaceState(demoAddress(), {});
       void fetch(`/api/traces?q=${encodeURIComponent(refusal.game)}&limit=20`)
         .then(async response => (response.ok ? await response.json() as GameSummary[] : []))
         .catch(() => [] as GameSummary[])
@@ -173,7 +177,7 @@
       gameStore.applySetupDraft(gameStore.setup);
     }
     leaveGame();
-    replaceState(demoName ? `/?demo=${encodeURIComponent(demoName)}` : '/', {});
+    replaceState(demoAddress(), {});
   }
 
   let stopsPending = $state<number | null>(null);
@@ -266,7 +270,10 @@
     const config = gameStore.setup;
     if (!config || demoName || !gameStore.observation) return;
     const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
-    untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
+    untrack(() => {
+      lastMatchup = { config, opponent: opponentName, decks };
+      saveLastMatchup(lastMatchup);
+    });
   });
   const deckLabel = (key: unknown): string => {
     const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
@@ -605,7 +612,7 @@
           <button class="btn btn-primary" data-testid="play-again" disabled={gameStore.newGamePending}
             onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>
         </div>
-        <GameSetup setup={gameStore} onStart={startGame} disabled={gameStore.newGamePending} applySmartDefaults={!lastMatchup} />
+        <GameSetup setup={gameStore} onStart={startGame} disabled={gameStore.newGamePending} applySmartDefaults={!lastMatchup && !addressed} />
         <details>
           <summary class="type-caption cursor-pointer text-ink-2">Priority stops</summary>
           <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
@@ -629,10 +636,12 @@
   .result h2 { line-height: 1.1; }
   .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .result-links { color: var(--text-secondary); }
-  .home-table { max-width: 960px; margin: 16px auto 0; display: grid; gap: 10px;
+  /* One shrinkable column: a wide control inside never widens the page. */
+  .home-table { max-width: 960px; margin: 16px auto 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
     padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
   .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-  .home-matchup { line-height: 1.35; }
+  .last-strip > div { min-width: 0; }
+  .home-matchup { line-height: 1.35; overflow-wrap: anywhere; }
   .pace-setting { display: grid; gap: 6px; }
   .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
   .live-analysis { display: grid; gap: 6px; }

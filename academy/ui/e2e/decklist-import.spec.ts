@@ -1,8 +1,11 @@
 import { expect, test } from '@playwright/test';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 // Real native admission; no mocked card registry or setup service.
 test('correct a file, start a novel deck and reconnect to its pending decision', async ({ page }) => {
-  await page.goto('/?setup=1');
+  await page.goto(SETUP);
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByText('Import decklist files', { exact: true }).click();
   await page.getByLabel('Use imported decks for the next game').check();

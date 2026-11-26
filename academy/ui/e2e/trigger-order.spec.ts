@@ -2,6 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import type { ExperienceFrame } from '../src/lib/types';
 import { finishBoardNarration } from './presentation-readiness';
 
+/** Setup with the matchup named, so first-visit defaults do not choose one. */
+const SETUP = '/?hero=ur_lessons&villain=gw_allies';
+
 declare global {
   interface Window { __triggerFrame: ExperienceFrame | null }
 }
@@ -48,7 +51,7 @@ async function choose(page: Page, label: string): Promise<void> {
 for (const first of ['Callous Inspector', 'Bastion of Remembrance']) {
   test(`controller chooses ${first} first and recovers the actual order decision`, async ({ page }) => {
     await track(page);
-    await page.goto('/?setup=1');
+    await page.goto(SETUP);
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
     await page.getByRole('button', { name: 'Start game', exact: true }).click();
     await expect(page.getByTestId('game')).toBeVisible();
