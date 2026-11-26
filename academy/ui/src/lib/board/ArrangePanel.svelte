@@ -6,7 +6,6 @@
    * response; nothing commits until the user presses Confirm once.
    */
   import type { ArrangeGroup, GroupCard, GroupRefusal } from '$lib/group';
-  import type { ObjectRenderId } from '$lib/types';
   import Thumb from './Thumb.svelte';
   import {
     arrangeHasChanges,
@@ -23,8 +22,6 @@
   interface Props {
     group: ArrangeGroup;
     draft: ArrangeDraft;
-    /** Known card names by display id, for committed summaries and inspection. */
-    cardNames: ReadonlyMap<number, string>;
     live: boolean;
     pending: boolean;
     readingOut: boolean;
@@ -38,7 +35,6 @@
   let {
     group,
     draft,
-    cardNames,
     live,
     pending,
     readingOut,
@@ -53,9 +49,6 @@
   const words = $derived(arrangeWords(draft, group));
   const disabled = $derived(!live || pending);
   const hasChanges = $derived(arrangeHasChanges(draft));
-
-  const cardLabel = (id: ObjectRenderId): string =>
-    byId.get(id.entity)?.label ?? cardNames.get(id.entity) ?? `Card #${id.entity}`;
 
   const unplaced = $derived.by((): GroupCard[] => {
     if (draft.kind === 'scry') {
@@ -78,17 +71,17 @@
   const committedSummary = $derived.by((): { heading: string; parts: string[] } | null => {
     if (group.kind === 'scry') {
       const parts: string[] = [];
-      if (group.committed_top.length) parts.push(`Top: ${group.committed_top.map(cardLabel).join(', ')}`);
-      if (group.committed_bottom.length) parts.push(`Bottom: ${group.committed_bottom.map(cardLabel).join(', ')}`);
+      if (group.committed_top.length) parts.push(`Top: ${group.committed_top.map(c => c.label).join(', ')}`);
+      if (group.committed_bottom.length) parts.push(`Bottom: ${group.committed_bottom.map(c => c.label).join(', ')}`);
       return parts.length ? { heading: 'Already placed', parts } : null;
     }
     if (group.kind === 'surveil') {
       return group.committed_graveyard.length
-        ? { heading: 'Already in graveyard', parts: [group.committed_graveyard.map(cardLabel).join(', ')] }
+        ? { heading: 'Already in graveyard', parts: [group.committed_graveyard.map(c => c.label).join(', ')] }
         : null;
     }
     return group.committed.length
-      ? { heading: 'Already ordered', parts: [group.committed.map(cardLabel).join(' → ')] }
+      ? { heading: 'Already ordered', parts: [group.committed.map(c => c.label).join(' → ')] }
       : null;
   });
 

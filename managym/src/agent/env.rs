@@ -870,7 +870,7 @@ impl Env {
     }
 
     /// Read-only whole-declaration preview; see [`Game::combat_preview`].
-    /// Deprecated wrapper over [`Env::preview_group`], removed in 0.3.0.
+    /// Deprecated wrapper over [`Env::preview`], removed in 0.3.0.
     pub fn combat_preview(
         &self,
         viewer: usize,
@@ -884,65 +884,80 @@ impl Env {
             .combat_preview(PlayerId(viewer), revision, fingerprint, plan)
     }
 
-    /// Active grouped decision for `viewer`; see [`Game::group`].
-    pub fn group(&self, viewer: usize) -> Result<Option<crate::flow::group::Group>, AgentError> {
-        if viewer >= 2 {
-            return Err(AgentError("viewer out of bounds".into()));
+    /// Active decision for `viewer` (defaults to the current actor); see [`Game::decision`].
+    pub fn decision(
+        &self,
+        viewer: Option<usize>,
+    ) -> Result<Option<crate::flow::group::ActiveDecision>, AgentError> {
+        if let Some(seat) = viewer {
+            if seat >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
         }
         Ok(self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
-            .group(PlayerId(viewer)))
+            .decision(viewer.map(PlayerId)))
     }
 
-    /// Read-only preview of a grouped plan; see [`Game::preview_group`].
-    pub fn preview_group(
+    /// Read-only preview of a single or grouped choice; see [`Game::preview`].
+    pub fn preview(
         &self,
-        viewer: usize,
-        revision: u64,
-        fingerprint: &str,
-        plan: &crate::flow::group::GroupPlan,
-    ) -> Result<crate::flow::group::GroupPreview, AgentError> {
+        at: Option<&crate::flow::group::DecisionAddress>,
+        choice: &crate::flow::group::DecisionChoice,
+    ) -> Result<crate::flow::group::DecisionPreview, AgentError> {
+        if let Some(address) = at {
+            if address.viewer >= 2 {
+                return Err(AgentError("viewer out of bounds".into()));
+            }
+        }
         self.game
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
-            .preview_group(PlayerId(viewer), revision, fingerprint, plan)
+            .preview(at, choice)
     }
 
-    /// Validate and atomically apply a grouped plan; see [`Game::apply_group`].
-    pub fn apply_group(
+    /// Validate `choice` on a clone, execute all compiled sequential steps
+    /// atomically, drain observation events, and settle any built-in opponent
+    /// policies so mixed-policy envs match manual `Env::step` identically.
+    pub fn submit(
         &mut self,
-        viewer: usize,
-        revision: u64,
-        fingerprint: &str,
-        plan: &crate::flow::group::GroupPlan,
-    ) -> Result<crate::flow::group::GroupPreview, AgentError> {
+        at: Option<&crate::flow::group::DecisionAddress>,
+        choice: &crate::flow::group::DecisionChoice,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         self.require_external_chooser()?;
-        let (preview, recent_events) = {
-            let game = self
-                .game
-                .as_mut()
-                .ok_or_else(|| AgentError("no active game".into()))?;
-            let preview = game.apply_group(PlayerId(viewer), revision, fingerprint, plan)?;
-            // Drain observation_events as `Env::step` does so `state_digest`
-            // matches stepping `preview.steps` through `Env::step` by hand.
-            let events = game.take_observation_events();
-            let recent_events = self
-                .player_policies
-                .contains(&PlayerPolicy::Heuristic)
-                .then(|| Observation::new(game, &events).recent_events);
-            (preview, recent_events)
-        };
-        if let Some(events) = recent_events {
-            self.heuristic_events = events;
+        let preview = self.preview(at, choice)?;
+        if let Some(refusal) = &preview.refused {
+            return Err(AgentError(format!("decision refused: {}", refusal.reason)));
         }
-        if let Some(trace) = &mut self.provenance {
-            for step in &preview.steps {
+        if !preview.complete || preview.steps.is_empty() {
+            return Err(AgentError("decision choice is incomplete".into()));
+        }
+        let chooser = preview.decision.address.viewer;
+        let mut last_result = None;
+        for step in &preview.steps {
+            let frame = self
+                .game
+                .as_ref()
+                .ok_or_else(|| AgentError("no active game".into()))?
+                .semantic_decision_frame()
+                .map_err(|error| AgentError(error.to_string()))?;
+            if frame.revision != step.revision || frame.fingerprint != step.fingerprint {
+                return Err(AgentError("decision execution diverged from preview".into()));
+            }
+            let result = self.step_once(step.action_index as i64)?;
+            if let Some(trace) = &mut self.provenance {
                 trace.push(RecordedAction::Index(step.action_index as i64));
             }
+            last_result = Some(result);
         }
-        Ok(preview)
+        let (obs, mut reward, terminated, truncated, info) =
+            last_result.expect("preview.steps is non-empty");
+        if self.external_seat().is_some_and(|seat| seat != chooser) {
+            reward = -reward;
+        }
+        self.settle_players(obs, reward, terminated, truncated, info)
     }
 
     /// Public event identities used to explain a committed transition.

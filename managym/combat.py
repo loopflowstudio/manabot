@@ -1,8 +1,8 @@
 """Typed, read-only previews of a whole combat declaration.
 
-Deprecated wrapper over :mod:`managym.group` (scheduled for removal in 0.3.0).
-New callers should use :func:`managym.group.group`,
-:func:`managym.group.preview_group`, and :func:`managym.group.apply_group`.
+Deprecated wrapper over :meth:`managym.Env.preview` (scheduled for removal in
+0.3.0). New callers should use ``env.decision()``, ``env.preview(choice)``, and
+``env.submit(choice)``.
 """
 
 from typing import Literal
@@ -72,7 +72,7 @@ def preview_combat(
     """Reject stale/non-actor requests without advancing the native game."""
     warnings.warn(
         "managym.combat.preview_combat is deprecated and removed in 0.3.0; "
-        "use managym.group.preview_group",
+        "use env.preview(choice, at=...)",
         DeprecationWarning,
         stacklevel=2,
     )

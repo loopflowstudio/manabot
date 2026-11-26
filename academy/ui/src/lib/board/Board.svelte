@@ -829,7 +829,6 @@
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
   const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
-  const cardNames = $derived(new Map([...cards.values()].map(card => [card.id, card.name])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
@@ -1417,7 +1416,6 @@
       <ArrangePanel
         group={arrangeGroup}
         draft={activeArrangeDraft}
-        {cardNames}
         {live}
         {pending}
         {readingOut}

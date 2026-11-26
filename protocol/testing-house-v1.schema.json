@@ -898,7 +898,7 @@
       "title": "DecisionRestoredEvent",
       "type": "object"
     },
-    "DeclareAttackersPlan": {
+    "DeclareAttackersChoice": {
       "additionalProperties": false,
       "properties": {
         "attackers": {
@@ -915,10 +915,10 @@
           "type": "string"
         }
       },
-      "title": "DeclareAttackersPlan",
+      "title": "DeclareAttackersChoice",
       "type": "object"
     },
-    "DeclareBlockersPlan": {
+    "DeclareBlockersChoice": {
       "additionalProperties": false,
       "properties": {
         "blocks": {
@@ -935,8 +935,37 @@
           "type": "string"
         }
       },
-      "title": "DeclareBlockersPlan",
+      "title": "DeclareBlockersChoice",
       "type": "object"
+    },
+    "GroupChoice": {
+      "discriminator": {
+        "mapping": {
+          "declare_attackers": "#/$defs/DeclareAttackersChoice",
+          "declare_blockers": "#/$defs/DeclareBlockersChoice",
+          "order_library": "#/$defs/OrderLibraryChoice",
+          "scry": "#/$defs/ScryChoice",
+          "surveil": "#/$defs/SurveilChoice"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DeclareAttackersChoice"
+        },
+        {
+          "$ref": "#/$defs/DeclareBlockersChoice"
+        },
+        {
+          "$ref": "#/$defs/ScryChoice"
+        },
+        {
+          "$ref": "#/$defs/SurveilChoice"
+        },
+        {
+          "$ref": "#/$defs/OrderLibraryChoice"
+        }
+      ]
     },
     "GroupCommand": {
       "additionalProperties": false,
@@ -960,7 +989,7 @@
           "type": "string"
         },
         "plan": {
-          "$ref": "#/$defs/GroupPlan"
+          "$ref": "#/$defs/GroupChoice"
         },
         "prompt_id": {
           "maximum": 18446744073709551615,
@@ -1012,35 +1041,6 @@
       ],
       "title": "GroupCommandMessage",
       "type": "object"
-    },
-    "GroupPlan": {
-      "discriminator": {
-        "mapping": {
-          "declare_attackers": "#/$defs/DeclareAttackersPlan",
-          "declare_blockers": "#/$defs/DeclareBlockersPlan",
-          "order_library": "#/$defs/OrderLibraryPlan",
-          "scry": "#/$defs/ScryPlan",
-          "surveil": "#/$defs/SurveilPlan"
-        },
-        "propertyName": "kind"
-      },
-      "oneOf": [
-        {
-          "$ref": "#/$defs/DeclareAttackersPlan"
-        },
-        {
-          "$ref": "#/$defs/DeclareBlockersPlan"
-        },
-        {
-          "$ref": "#/$defs/ScryPlan"
-        },
-        {
-          "$ref": "#/$defs/SurveilPlan"
-        },
-        {
-          "$ref": "#/$defs/OrderLibraryPlan"
-        }
-      ]
     },
     "JoinTableMessage": {
       "additionalProperties": false,
@@ -1289,7 +1289,7 @@
       "title": "OrderChoiceAnswer",
       "type": "object"
     },
-    "OrderLibraryPlan": {
+    "OrderLibraryChoice": {
       "additionalProperties": false,
       "description": "Remaining cards in desired order, drawn-first at index 0.",
       "properties": {
@@ -1307,7 +1307,7 @@
           "type": "array"
         }
       },
-      "title": "OrderLibraryPlan",
+      "title": "OrderLibraryChoice",
       "type": "object"
     },
     "ParticipantPresence": {
@@ -1752,7 +1752,7 @@
       "title": "RoleChangedEvent",
       "type": "object"
     },
-    "ScryPlan": {
+    "ScryChoice": {
       "additionalProperties": false,
       "description": "`top` is drawn-first; `bottom` is top-to-bottom of the bottom group.",
       "properties": {
@@ -1777,7 +1777,7 @@
           "type": "array"
         }
       },
-      "title": "ScryPlan",
+      "title": "ScryChoice",
       "type": "object"
     },
     "SetStopsMessage": {
@@ -1925,7 +1925,7 @@
       "title": "ShowAnalysisMessage",
       "type": "object"
     },
-    "SurveilPlan": {
+    "SurveilChoice": {
       "additionalProperties": false,
       "description": "Cards to put into the graveyard; all remaining looked-at cards stay on top.",
       "properties": {
@@ -1943,7 +1943,7 @@
           "type": "string"
         }
       },
-      "title": "SurveilPlan",
+      "title": "SurveilChoice",
       "type": "object"
     },
     "TableAudience": {

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from managym.academy import server, trace as trace_store
+from managym.academy.site import SpaStaticFiles
 from managym.experience import ExperienceFrame
 from tests.academy.socket_messages import settled_message
 
@@ -222,15 +223,27 @@ def test_group_preview_is_read_only_hides_steps_and_enforces_auth_and_staleness(
             headers = {"x-etude-participant-token": initial["resume_token"]}
             endpoint = f"/api/sessions/{record.session_id}/group-preview"
 
-            # Legacy /combat-preview endpoint is removed.
-            assert (
-                client.post(
-                    f"/api/sessions/{record.session_id}/combat-preview",
-                    json={},
-                    headers=headers,
-                ).status_code
-                == 404
-            )
+            # Legacy /combat-preview endpoint is removed and returns 404 even with SPA mounted.
+            static_dir = tmp_path / "spa"
+            static_dir.mkdir()
+            (static_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+            original_routes = list(server.app.router.routes)
+            try:
+                server.app.mount(
+                    "/",
+                    SpaStaticFiles(directory=static_dir, html=True),
+                    name="frontend-test",
+                )
+                assert (
+                    client.post(
+                        f"/api/sessions/{record.session_id}/combat-preview",
+                        json={},
+                        headers=headers,
+                    ).status_code
+                    == 404
+                )
+            finally:
+                server.app.router.routes[:] = original_routes
 
             # On a non-group prompt (mulligan / priority), live_group is None and preview returns 409 no_group.
             assert initial["group"] is None

@@ -2087,10 +2087,6 @@
             "kind": "method",
             "signature": "(self)"
           },
-          "apply_group_json": {
-            "kind": "method",
-            "signature": "(self, viewer, revision, fingerprint, plan_json)"
-          },
           "capture_decision": {
             "kind": "method",
             "signature": "(self, viewer, history_capacity=...)"
@@ -2104,6 +2100,7 @@
             "signature": "(self)"
           },
           "combat_preview_json": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, viewer, revision, fingerprint, plan_json)"
           },
@@ -2112,10 +2109,12 @@
             "signature": "(self, baseline)"
           },
           "compound_commands_json": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
           "compound_offers": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
@@ -2126,6 +2125,10 @@
           "current_agent_index": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "decision": {
+            "kind": "method",
+            "signature": "(self, viewer=...)"
           },
           "decision_context_json": {
             "kind": "method",
@@ -2189,10 +2192,6 @@
             "kind": "method",
             "signature": "(self, viewer, space_identity, world_indexes, world_seeds, rollouts, max_steps=...)"
           },
-          "group_json": {
-            "kind": "method",
-            "signature": "(self, viewer)"
-          },
           "hand_snapshot": {
             "kind": "method",
             "signature": "(self, player)"
@@ -2253,9 +2252,9 @@
             "kind": "method",
             "signature": "(self)"
           },
-          "preview_group_json": {
+          "preview": {
             "kind": "method",
-            "signature": "(self, viewer, revision, fingerprint, plan_json)"
+            "signature": "(self, choice, *, at=...)"
           },
           "public_schedule_json": {
             "kind": "method",
@@ -2354,16 +2353,22 @@
             "signature": "(self, offers, submission_json)"
           },
           "step_structured": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self, offers, submission_json)"
           },
           "structured_offers": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
           "structured_search_offers": {
             "kind": "method",
             "signature": "(self)"
+          },
+          "submit": {
+            "kind": "method",
+            "signature": "(self, choice, *, at=...)"
           },
           "take_statistics": {
             "kind": "method",

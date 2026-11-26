@@ -375,7 +375,7 @@ test('opening the rail disclosure lets a player take one raw Scry step and updat
     frame_hash: step1.frame_hash,
     kind: 'scry',
     items: [{ item: rid(72), label: 'Island' }, { item: rid(73), label: 'Bolt' }],
-    committed_top: [rid(71)],
+    committed_top: [{ item: rid(71), label: 'Opt' }],
     committed_bottom: [],
   };
 

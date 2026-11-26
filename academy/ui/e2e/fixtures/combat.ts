@@ -312,15 +312,14 @@ export async function startCombat(
 }
 
 /**
- * A live combat draft folds each creature's own answer under a closed
- * disclosure. Scripted players that pick those answers open it once the draft
- * is drawn; a declaration without a draft (no live group) lists them already.
+ * A live group folds each per-step raw offer under a closed disclosure.
+ * Scripted players that pick raw offers open it whenever the disclosure is
+ * attached (combat declarations and library arrangements alike); prompts
+ * without a live group already list raw offers directly.
  */
 export async function showEachCreaturesChoice(page: Page): Promise<void> {
-  const kind = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');
-  if (kind !== 'DECLARE_ATTACKER' && kind !== 'DECLARE_BLOCKER') return;
   const raw = page.getByTestId('per-creature-choices');
-  try { await raw.waitFor({ state: 'attached', timeout: 10_000 }); } catch { return; }
+  if (await raw.count() === 0) return;
   // A first click during an opponent read-out ends the read-out; click again until the disclosure opens.
   await expect(async () => {
     if (await raw.count() === 0) return;

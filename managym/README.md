@@ -1101,113 +1101,94 @@ spells and excludes an opponent’s black spells and abilities from black
 sources. Academy and the text observation show effective protection and
 qualified hexproof on permanents and hexproof on players.
 
-### Grouped input
+### Interactive decisions (single and grouped)
 
 Multi-part decisions such as combat declarations and library arrangements still
-execute as sequential native `Action`s (`Game::step`). The grouped-input layer
-(`managym/src/flow/group/`, Python module `managym.group`) describes an active
-multi-part decision, previews a whole drafted plan on a clone, and applies a
-valid plan in one call without adding any `Action`, observation column or
-digest input:
+execute as sequential native `Action`s (`Game::step`, `Env.step(action: int)`),
+keeping RL/search action spaces, observations and replay digests unchanged.
+Above `Env.step`, `Env` exposes one unified interactive decision surface
+(`managym/src/flow/group/`, typed models in `managym.group`):
 
 ```python
-from managym.group import (
-    DeclareAttackersPlan,
-    ScryPlan,
-    apply_group,
-    group,
-    preview_group,
-)
+from managym.group import DeclareAttackersChoice, ScryChoice
 
-viewer = env.current_agent_index()
-active = group(env, viewer=viewer)
-if active is not None and active.kind == "declare_attackers":
-    plan = DeclareAttackersPlan(attackers=[c.item for c in active.declarable[:2]])
-    preview = preview_group(
-        env,
-        viewer=viewer,
-        revision=active.revision,
-        fingerprint=active.fingerprint,
-        plan=plan,
-    )
-    # preview.complete is True, preview.refused is None
-    # preview.outcome.attackers lists the declared attackers
-    # [(s.action_index, s.revision) for s in preview.steps] are the sequential steps
-    applied = apply_group(
-        env,
-        viewer=viewer,
-        revision=active.revision,
-        fingerprint=active.fingerprint,
-        plan=plan,
-    )
+decision = env.decision()  # defaults to current actor; None if terminal
+if decision is not None:
+    if decision.kind == "declare_attackers":
+        choice = DeclareAttackersChoice(
+            attackers=[c.item for c in decision.declarable[:2]]
+        )
+        preview = env.preview(choice, at=decision.address)
+        # preview.complete is True, preview.refused is None
+        # preview.outcome.attackers lists the declared attackers
+        # [(s.action_index, s.revision) for s in preview.steps] are the sequential steps
+        obs, reward, done, trunc, info = env.submit(choice, at=decision.address)
+    elif decision.kind == "scry":
+        choice = ScryChoice(
+            top=[decision.items[0].item],
+            bottom=[c.item for c in decision.items[1:]],  # top-most of bottom group first
+        )
+        obs, reward, done, trunc, info = env.submit(choice)
+    else:
+        # SingleDecision (or any single raw step via decision.offers):
+        obs, reward, done, trunc, info = env.submit(decision.offers[0].id)
 ```
 
-Library arrangements use the same three calls:
+Supported `Decision` kinds and grouped activation thresholds:
 
-```python
-active = group(env, viewer=viewer)
-if active is not None and active.kind == "scry":
-    top = [active.items[0].item]
-    bottom = [c.item for c in active.items[1:]]  # top-most of bottom group first
-    apply_group(
-        env,
-        viewer=viewer,
-        revision=active.revision,
-        fingerprint=active.fingerprint,
-        plan=ScryPlan(top=top, bottom=bottom),
-    )
-```
-
-Supported kinds and activation thresholds:
-
-| `kind` | Active when | Descriptor fields | Plan model and fields | Outcome fields |
+| `kind` | Active when | Descriptor fields (besides `address`, `offers`) | `Choice` model and fields | `Outcome` fields |
 | --- | --- | --- | --- | --- |
-| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `must_attack`), `committed` | `DeclareAttackersPlan(attackers)` | `attackers` |
-| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` | `DeclareBlockersPlan(blocks)` (`PlannedBlock`) | `blocks` |
-| `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top`, `committed_bottom` | `ScryPlan(top, bottom)` | `top`, `bottom` |
-| `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` | `SurveilPlan(graveyard)` | `graveyard`, `kept` |
-| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` | `OrderLibraryPlan(order)` | `end`, `order` |
+| `single` | any other decision, or below threshold | — | `int` (raw offer id) | `offer_id` |
+| `declare_attackers` | `>= 1` declarable creature | `declarable` (`AttackerItem`: `item`, `label`, `must_attack`), `committed` | `DeclareAttackersChoice(attackers)` | `attackers` |
+| `declare_blockers` | `>= 1` declarable creature | `declarable` (`BlockerItem`: `item`, `label`, `can_block`, `must_block`), `committed` | `DeclareBlockersChoice(blocks)` (`PlannedBlock`) | `blocks` |
+| `scry` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_top` (`GroupCard`), `committed_bottom` (`GroupCard`) | `ScryChoice(top, bottom)` | `top`, `bottom` |
+| `surveil` | `>= 2` remaining cards | `items` (`GroupCard`), `committed_graveyard` (`GroupCard`) | `SurveilChoice(graveyard)` | `graveyard`, `kept` |
+| `order_library` | `>= 2` remaining cards | `end` (`"top"` or `"bottom"`), `items` (`GroupCard`), `committed` (`GroupCard`) | `OrderLibraryChoice(order)` | `end`, `order` |
 
-- **`group(env, *, viewer)`** (`Env.group_json(viewer)`) returns the active
-  `Group` bound to `(revision, fingerprint)`, or `None` when the game is over,
-  `viewer` is not the chooser, or the pending decision is outside the table
-  above. Already-taken raw steps appear in `committed*` alongside the remaining
-  items.
-- **`preview_group(env, *, viewer, revision, fingerprint, plan)`**
-  (`Env.preview_group_json(...)`) is read-only: the live game's state digest,
-  RNG, revision, trace and pending decision do not change. It raises
-  `managym.AgentError` on a stale or non-actor address, no active group, or a
-  plan whose `kind` does not match the active group. A structurally incomplete
-  plan (for example, unplaced cards in `scry` or `order_library`) returns
+- **`env.decision(viewer=None)`** returns the active `Decision` for `viewer`
+  (defaulting to the current acting player), or `None` when the game is over or
+  `viewer` is not the chooser. Every `Decision` carries its optimistic-concurrency
+  `address` (`DecisionAddress(viewer, revision, fingerprint)`) and the raw
+  single-step legal `offers` (`list[Offer]`). Halfway through raw stepping a
+  grouped decision, `env.decision()` returns the remaining undecided items plus
+  immutable `committed*` state (and drops to `SingleDecision` below threshold).
+- **`env.preview(choice, *, at=None)`** is read-only: the live game's state
+  digest, RNG, revision, trace and pending decision do not change. `choice` is
+  either a single `int` offer id or a grouped `Choice`; `at` defaults to the
+  current decision's address and accepts an explicit `DecisionAddress` for
+  optimistic concurrency (raising `managym.AgentError` on stale/non-actor
+  address or mismatched choice kind). A structurally incomplete choice (for
+  example, unplaced cards in `scry` or `order_library`) returns
   `complete=False, refused=None, steps=[], outcome=None` without cloning.
   Otherwise it clones the game with its `skip_trivial` setting, compiles each
-  step from the clone's own legal action space, and returns `GroupPreview` with
-  `steps`, `complete`, `outcome` and optional `refused` (a `GroupRefusal`
+  step from the clone's own legal action space, and returns `DecisionPreview`
+  with `steps`, `complete`, `outcome` and optional `refused` (`DecisionRefusal`
   carrying `item`, `label` and the engine's `reason`, such as a lone blocker on
   a creature with menace or a skipped required attack/block).
-- **`apply_group(env, *, viewer, revision, fingerprint, plan)`**
-  (`Env.apply_group_json(...)`) previews first, raises `managym.AgentError`
-  without mutating the live game if the plan is refused or incomplete, and
-  otherwise steps the live game through each compiled step after verifying its
-  `(revision, fingerprint)`. Stepping `preview.steps` by hand reaches the same
-  state digest.
-- **Scry bottom order:** `ScryPlan.bottom` uses top-to-bottom reading order
+- **`env.submit(choice, *, at=None)`** commits the whole decision atomically
+  (all-or-nothing): it previews first, raises `managym.AgentError` without
+  mutating the live game if the choice is refused, incomplete or stale, and
+  otherwise steps all compiled sequential actions, drains `observation_events`,
+  and settles any built-in opponent policies so mixed-policy envs match manual
+  `env.step` identically. It returns `(obs, reward, done, trunc, info)`.
+- **Scry bottom order:** `ScryChoice.bottom` uses top-to-bottom reading order
   (`bottom[0]` is drawn first among bottomed cards and `bottom[-1]` sits on the
-  very bottom of the library), matching `OrderLibraryPlan` with `end="bottom"`.
-- **Purity boundary:** A group covers consecutive steps of one decision by one
-  player. Between step `i` and step `i+1` (while the group is still active),
-  the compiler verifies that no `CardDrawn` or `CardRevealed` event occurred,
-  the RNG did not advance (catching any shuffle), and no unseen hidden-zone
-  object became visible to `viewer`. If a boundary trips mid-group, preview
-  stops with `complete=False, outcome=None` and `apply_group` refuses it.
+  very bottom of the library), matching `OrderLibraryChoice` with `end="bottom"`.
+- **Purity boundary:** A grouped choice covers consecutive steps of one decision
+  by one player. Between step `i` and step `i+1` (while the group is still
+  active), the compiler verifies that no `CardDrawn` or `CardRevealed` event
+  occurred, the RNG did not advance (catching any shuffle), and no unseen
+  hidden-zone object became visible to `viewer`. If a boundary trips mid-group,
+  preview stops with `complete=False, outcome=None` and `submit` refuses it.
   Effects that fire after the final step exits the group — such as drawing a
   card after Scry 2 resolves — complete cleanly. Surveil finishes when its
-  graveyard picks commit; any following `order_library` is its own group.
-- **Separate from `compound_offers`:** This layer sits above `Game::step` for
-  human/tool submission and leaves `compound_offers` / `step_structured`
-  unchanged. `Env.combat_preview_json` and `managym.combat.preview_combat`
-  remain as deprecated wrappers over `preview_group` (scheduled for removal in
-  `0.3.0`).
+  graveyard picks commit; any following `order_library` is its own decision.
+- **Deprecations (`0.3.0`):** `Env.compound_offers`,
+  `Env.compound_commands_json`, `Env.structured_offers`, `Env.step_structured`,
+  `Env.combat_preview_json`, and `managym.combat.preview_combat` emit
+  `DeprecationWarning` and are scheduled for removal in `0.3.0` in favor of
+  `Env.decision` / `Env.preview` / `Env.submit`. `Env.structured_search_offers`
+  remains unchanged for the search backend.
 
 ### Combat declaration and damage rules
 

@@ -1,22 +1,25 @@
-//! First-class grouped-input compiler over sequential native `Action`s.
+//! Unified interactive decision API over sequential native `Action`s.
 //!
 //! Multi-part decisions (combat declarations, Scry, Surveil, OrderLibrary)
 //! stay flat and sequential in the core engine (`Game::step`) so RL policies,
-//! search, observations and replay digests never change. This module reads an
-//! active multi-part decision (`Game::group`), previews a whole drafted plan
-//! on a clone (`Game::preview_group`), and applies a valid plan atomically
-//! (`Game::apply_group`) by stepping those exact sequential actions.
+//! search, observations and replay digests never change. This module reads the
+//! current decision (`Game::decision`, returning either `Single` or a grouped
+//! variant above its domain threshold), previews a single or grouped choice on
+//! a clone (`Game::preview`), and applies a valid choice atomically
+//! (`Game::submit`) by stepping those exact sequential actions.
 //!
-//! Every kind shares one clone-and-step driver and one inter-step purity
-//! boundary: between step `i` and step `i+1` (while the same group continues),
-//! the clone must not draw or reveal cards, advance the RNG, or expose any
-//! hidden-zone object that was not already visible to the viewer at step 0.
+//! Every grouped kind shares one clone-and-step driver and one inter-step
+//! purity boundary: between step `i` and step `i+1` (while the same group
+//! continues), the clone must not draw or reveal cards, advance the RNG, or
+//! expose any hidden-zone object that was not already visible to the viewer at
+//! step 0.
 use std::collections::BTreeSet;
 
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::action::{ActionSpaceKind, AgentError};
+use crate::agent::structured_offer::{OfferVerb, SubjectRef};
 use crate::experience::ObjectRenderId;
 use crate::flow::decision::Decision;
 use crate::flow::event::GameEvent;
@@ -56,7 +59,7 @@ pub struct PlannedBlock {
     pub attacker: ObjectRenderId,
 }
 
-/// A card item in a library arrangement group.
+/// A card item in a library arrangement group (remaining or already committed).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct GroupCard {
     pub item: ObjectRenderId,
@@ -80,18 +83,38 @@ pub struct BlockerItem {
     pub must_block: bool,
 }
 
-/// The grouped decision `viewer` faces now, bound to its native semantic address.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct Group {
+/// Optimistic-concurrency address binding a decision to `(viewer, revision, fingerprint)`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionAddress {
+    pub viewer: usize,
     pub revision: u64,
     pub fingerprint: String,
+}
+
+/// One raw single-step legal offer available at the current decision.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct DecisionOffer {
+    pub id: usize,
+    pub verb: OfferVerb,
+    pub label: String,
+    pub source: Option<SubjectRef>,
+}
+
+/// The active decision a viewer faces now, carrying its bound address, raw
+/// single-step legal offers, and either `Single` or a grouped descriptor.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ActiveDecision {
+    pub address: DecisionAddress,
+    pub offers: Vec<DecisionOffer>,
     #[serde(flatten)]
-    pub spec: GroupSpec,
+    pub spec: DecisionSpec,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum GroupSpec {
+pub enum DecisionSpec {
+    Single,
     DeclareAttackers {
         declarable: Vec<AttackerItem>,
         committed: Vec<ObjectRenderId>,
@@ -102,24 +125,27 @@ pub enum GroupSpec {
     },
     Scry {
         items: Vec<GroupCard>,
-        committed_top: Vec<ObjectRenderId>,
-        committed_bottom: Vec<ObjectRenderId>,
+        committed_top: Vec<GroupCard>,
+        committed_bottom: Vec<GroupCard>,
     },
     Surveil {
         items: Vec<GroupCard>,
-        committed_graveyard: Vec<ObjectRenderId>,
+        committed_graveyard: Vec<GroupCard>,
     },
     OrderLibrary {
         end: LibraryEnd,
         items: Vec<GroupCard>,
-        committed: Vec<ObjectRenderId>,
+        committed: Vec<GroupCard>,
     },
 }
 
-/// The whole plan a caller drafts for the current group.
+/// Either a single-step offer id or a complete grouped choice.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum GroupPlan {
+pub enum DecisionChoice {
+    Single {
+        offer_id: usize,
+    },
     DeclareAttackers {
         #[serde(default)]
         attackers: Vec<ObjectRenderId>,
@@ -149,19 +175,20 @@ pub enum GroupPlan {
     },
 }
 
-/// One sequential native step compiled from a grouped plan.
+/// One sequential native step compiled from a decision choice.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct GroupStep {
+pub struct DecisionStep {
     pub revision: u64,
     pub fingerprint: String,
     pub action_index: usize,
-    /// The object answered at this step, or `None` for a group-ending `Decline` (Surveil).
+    /// The object answered at this step, or `None` for a single offer or
+    /// group-ending `Decline` (Surveil).
     pub item: Option<ObjectRenderId>,
 }
 
-/// Why the engine refused a drafted plan.
+/// Why the engine refused a choice.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct GroupRefusal {
+pub struct DecisionRefusal {
     pub item: Option<ObjectRenderId>,
     pub label: String,
     pub reason: String,
@@ -169,7 +196,10 @@ pub struct GroupRefusal {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum GroupOutcome {
+pub enum DecisionOutcome {
+    Single {
+        offer_id: usize,
+    },
     DeclareAttackers {
         attackers: Vec<ObjectRenderId>,
     },
@@ -191,18 +221,18 @@ pub enum GroupOutcome {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct GroupPreview {
-    pub group: Group,
-    pub steps: Vec<GroupStep>,
-    pub refused: Option<GroupRefusal>,
+pub struct DecisionPreview {
+    pub decision: ActiveDecision,
+    pub steps: Vec<DecisionStep>,
+    pub refused: Option<DecisionRefusal>,
     pub complete: bool,
-    pub outcome: Option<GroupOutcome>,
+    pub outcome: Option<DecisionOutcome>,
 }
 
-impl GroupPreview {
-    fn incomplete(group: Group, steps: Vec<GroupStep>) -> Self {
+impl DecisionPreview {
+    fn incomplete(decision: ActiveDecision, steps: Vec<DecisionStep>) -> Self {
         Self {
-            group,
+            decision,
             steps,
             refused: None,
             complete: false,
@@ -210,9 +240,13 @@ impl GroupPreview {
         }
     }
 
-    fn refused(group: Group, steps: Vec<GroupStep>, refusal: GroupRefusal) -> Self {
+    fn refused(
+        decision: ActiveDecision,
+        steps: Vec<DecisionStep>,
+        refusal: DecisionRefusal,
+    ) -> Self {
         Self {
-            group,
+            decision,
             steps,
             refused: Some(refusal),
             complete: false,
@@ -221,10 +255,10 @@ impl GroupPreview {
     }
 }
 
-pub(crate) enum PlanCheck {
+pub(crate) enum ChoiceCheck {
     Ready,
     Incomplete,
-    Refused(GroupRefusal),
+    Refused(DecisionRefusal),
 }
 
 pub(crate) enum NextStep {
@@ -233,21 +267,21 @@ pub(crate) enum NextStep {
         item: Option<ObjectRenderId>,
     },
     Done,
-    Refuse(GroupRefusal),
+    Refuse(DecisionRefusal),
 }
 
 pub(crate) trait GroupKind {
     type Progress;
 
-    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<GroupSpec>;
-    fn matches_plan(&self, plan: &GroupPlan) -> bool;
-    fn validate(&self, game: &Game, spec: &GroupSpec, plan: &GroupPlan) -> PlanCheck;
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec>;
+    fn matches_choice(&self, choice: &DecisionChoice) -> bool;
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck;
     fn start(
         &self,
         game: &Game,
         viewer: PlayerId,
-        spec: &GroupSpec,
-        plan: &GroupPlan,
+        spec: &DecisionSpec,
+        choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError>;
     fn continues(&self, position: &Game, viewer: PlayerId, progress: &Self::Progress) -> bool;
     fn next_step(
@@ -255,7 +289,7 @@ pub(crate) trait GroupKind {
         live: &Game,
         position: &Game,
         viewer: PlayerId,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep;
     fn finish(
@@ -263,9 +297,9 @@ pub(crate) trait GroupKind {
         live: &Game,
         position: &Game,
         obs_events_from: usize,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &Self::Progress,
-    ) -> (GroupOutcome, Option<GroupRefusal>);
+    ) -> (DecisionOutcome, Option<DecisionRefusal>);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -278,7 +312,7 @@ enum ActiveKind {
 }
 
 impl ActiveKind {
-    fn describe(self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+    fn describe(self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         match self {
             Self::DeclareAttackers => CombatGroup::attackers().describe(game, viewer),
             Self::DeclareBlockers => CombatGroup::blockers().describe(game, viewer),
@@ -292,33 +326,31 @@ impl ActiveKind {
         self,
         live: &Game,
         viewer: PlayerId,
-        revision: u64,
-        fingerprint: String,
-        plan: &GroupPlan,
-    ) -> Result<GroupPreview, AgentError> {
+        address: DecisionAddress,
+        offers: Vec<DecisionOffer>,
+        choice: &DecisionChoice,
+    ) -> Result<DecisionPreview, AgentError> {
         match self {
             Self::DeclareAttackers => drive_preview(
                 live,
                 &CombatGroup::attackers(),
                 viewer,
-                revision,
-                fingerprint,
-                plan,
+                address,
+                offers,
+                choice,
             ),
             Self::DeclareBlockers => drive_preview(
                 live,
                 &CombatGroup::blockers(),
                 viewer,
-                revision,
-                fingerprint,
-                plan,
+                address,
+                offers,
+                choice,
             ),
-            Self::Scry => drive_preview(live, &ScryGroup, viewer, revision, fingerprint, plan),
-            Self::Surveil => {
-                drive_preview(live, &SurveilGroup, viewer, revision, fingerprint, plan)
-            }
+            Self::Scry => drive_preview(live, &ScryGroup, viewer, address, offers, choice),
+            Self::Surveil => drive_preview(live, &SurveilGroup, viewer, address, offers, choice),
             Self::OrderLibrary => {
-                drive_preview(live, &OrderLibraryGroup, viewer, revision, fingerprint, plan)
+                drive_preview(live, &OrderLibraryGroup, viewer, address, offers, choice)
             }
         }
     }
@@ -402,46 +434,50 @@ fn drive_preview<K: GroupKind>(
     live: &Game,
     kind: &K,
     viewer: PlayerId,
-    revision: u64,
-    fingerprint: String,
-    plan: &GroupPlan,
-) -> Result<GroupPreview, AgentError> {
+    address: DecisionAddress,
+    offers: Vec<DecisionOffer>,
+    choice: &DecisionChoice,
+) -> Result<DecisionPreview, AgentError> {
     let spec = kind
         .describe(live, viewer)
-        .ok_or_else(|| AgentError("no active group".into()))?;
-    if !kind.matches_plan(plan) {
-        return Err(AgentError("plan kind does not match active group".into()));
+        .ok_or_else(|| AgentError("no active grouped decision".into()))?;
+    if !kind.matches_choice(choice) {
+        return Err(AgentError(
+            "choice kind does not match active decision".into(),
+        ));
     }
-    let group = Group {
-        revision,
-        fingerprint,
+    let decision = ActiveDecision {
+        address,
+        offers,
         spec,
     };
-    match kind.validate(live, &group.spec, plan) {
-        PlanCheck::Incomplete => return Ok(GroupPreview::incomplete(group, Vec::new())),
-        PlanCheck::Refused(refusal) => {
-            return Ok(GroupPreview::refused(group, Vec::new(), refusal));
+    match kind.validate(live, &decision.spec, choice) {
+        ChoiceCheck::Incomplete => return Ok(DecisionPreview::incomplete(decision, Vec::new())),
+        ChoiceCheck::Refused(refusal) => {
+            return Ok(DecisionPreview::refused(decision, Vec::new(), refusal));
         }
-        PlanCheck::Ready => {}
+        ChoiceCheck::Ready => {}
     }
 
-    let mut progress = kind.start(live, viewer, &group.spec, plan)?;
+    let mut progress = kind.start(live, viewer, &decision.spec, choice)?;
     let mut position = live.clone();
     let obs_events_from = position.state.observation_events.len();
     let visible_at_start = visible_hidden_objects(&position, viewer);
     let mut steps = Vec::new();
 
     while !position.is_game_over() && kind.continues(&position, viewer, &progress) {
-        match kind.next_step(live, &position, viewer, plan, &mut progress) {
+        match kind.next_step(live, &position, viewer, choice, &mut progress) {
             NextStep::Done => break,
-            NextStep::Refuse(refusal) => return Ok(GroupPreview::refused(group, steps, refusal)),
+            NextStep::Refuse(refusal) => {
+                return Ok(DecisionPreview::refused(decision, steps, refusal));
+            }
             NextStep::Step { action_index, item } => {
                 let frame = position
                     .semantic_decision_frame()
                     .map_err(|error| AgentError(error.to_string()))?;
                 let events_before = position.state.events.len();
                 let rng_before = position.state.rng.clone();
-                steps.push(GroupStep {
+                steps.push(DecisionStep {
                     revision: frame.revision,
                     fingerprint: frame.fingerprint,
                     action_index,
@@ -458,16 +494,16 @@ fn drive_preview<K: GroupKind>(
                         &visible_at_start,
                     )
                 {
-                    return Ok(GroupPreview::incomplete(group, steps));
+                    return Ok(DecisionPreview::incomplete(decision, steps));
                 }
             }
         }
     }
 
-    let (outcome, refused) = kind.finish(live, &position, obs_events_from, plan, &progress);
+    let (outcome, refused) = kind.finish(live, &position, obs_events_from, choice, &progress);
     let complete = refused.is_none();
-    Ok(GroupPreview {
-        group,
+    Ok(DecisionPreview {
+        decision,
         steps,
         refused,
         complete,
@@ -475,72 +511,138 @@ fn drive_preview<K: GroupKind>(
     })
 }
 
+fn project_offers(frame: &crate::decision::DecisionFrame) -> Vec<DecisionOffer> {
+    frame
+        .offers
+        .iter()
+        .map(|offer| DecisionOffer {
+            id: offer.id.0 as usize,
+            verb: offer.verb,
+            label: offer.label.clone(),
+            source: offer.source,
+        })
+        .collect()
+}
+
 impl Game {
-    /// Describe the grouped decision `viewer` faces now, or `None` when the
-    /// game is over, `viewer` is not the chooser, or the pending decision is
-    /// not a supported group above its domain activation threshold.
-    pub fn group(&self, viewer: PlayerId) -> Option<Group> {
-        let spec = active_kind(self, viewer)?.describe(self, viewer)?;
-        let frame = self.semantic_decision_frame().ok()?;
-        if frame.actor as usize != viewer.0 {
+    /// Describe the active decision for `viewer` (defaults to the current
+    /// acting player). Returns `None` when the game is over, there is no
+    /// active chooser, or `viewer` is specified and is not the current actor.
+    pub fn decision(&self, viewer: Option<PlayerId>) -> Option<ActiveDecision> {
+        if self.is_game_over() {
             return None;
         }
-        Some(Group {
+        let frame = self.semantic_decision_frame().ok()?;
+        let actor = PlayerId(frame.actor as usize);
+        if let Some(requested) = viewer {
+            if requested != actor {
+                return None;
+            }
+        }
+        let offers = project_offers(&frame);
+        let address = DecisionAddress {
+            viewer: actor.0,
             revision: frame.revision,
             fingerprint: frame.fingerprint,
+        };
+        let spec = active_kind(self, actor)
+            .and_then(|kind| kind.describe(self, actor))
+            .unwrap_or(DecisionSpec::Single);
+        Some(ActiveDecision {
+            address,
+            offers,
             spec,
         })
     }
 
-    /// Read-only preview of `plan` bound to `(viewer, revision, fingerprint)`.
-    /// Errors on a stale/non-actor address, no active group, or a plan whose
-    /// `kind` does not match the active group. A plan refused by engine rules
-    /// returns `refused: Some(...)`, and a structurally incomplete plan returns
-    /// `complete: false, refused: None` without cloning.
-    pub fn preview_group(
+    /// Read-only preview of `choice`, optionally bound to `at` for optimistic
+    /// concurrency. Accepts either a single offer id (`DecisionChoice::Single`)
+    /// or a grouped choice matching the active decision.
+    pub fn preview(
         &self,
-        viewer: PlayerId,
-        revision: u64,
-        fingerprint: &str,
-        plan: &GroupPlan,
-    ) -> Result<GroupPreview, AgentError> {
+        at: Option<&DecisionAddress>,
+        choice: &DecisionChoice,
+    ) -> Result<DecisionPreview, AgentError> {
         let frame = self
             .semantic_decision_frame()
             .map_err(|error| AgentError(error.to_string()))?;
-        if frame.actor as usize != viewer.0
-            || frame.revision != revision
-            || frame.fingerprint != fingerprint
-        {
-            return Err(AgentError("stale or unauthorized group preview".into()));
+        let actor = PlayerId(frame.actor as usize);
+        if let Some(expected) = at {
+            if expected.viewer != actor.0
+                || expected.revision != frame.revision
+                || expected.fingerprint != frame.fingerprint
+            {
+                return Err(AgentError("stale or unauthorized decision".into()));
+            }
         }
-        let active =
-            active_kind(self, viewer).ok_or_else(|| AgentError("no active group".into()))?;
-        active.preview(self, viewer, frame.revision, frame.fingerprint, plan)
+        let offers = project_offers(&frame);
+        let address = DecisionAddress {
+            viewer: actor.0,
+            revision: frame.revision,
+            fingerprint: frame.fingerprint,
+        };
+        if let DecisionChoice::Single { offer_id } = choice {
+            let spec = active_kind(self, actor)
+                .and_then(|kind| kind.describe(self, actor))
+                .unwrap_or(DecisionSpec::Single);
+            let offer_count = offers.len();
+            let decision = ActiveDecision {
+                address: address.clone(),
+                offers,
+                spec,
+            };
+            if *offer_id >= offer_count {
+                return Ok(DecisionPreview::refused(
+                    decision,
+                    Vec::new(),
+                    DecisionRefusal {
+                        item: None,
+                        label: format!("Offer {offer_id}"),
+                        reason: format!("Offer {offer_id} is not legal here."),
+                    },
+                ));
+            }
+            return Ok(DecisionPreview {
+                decision,
+                steps: vec![DecisionStep {
+                    revision: address.revision,
+                    fingerprint: address.fingerprint,
+                    action_index: *offer_id,
+                    item: None,
+                }],
+                refused: None,
+                complete: true,
+                outcome: Some(DecisionOutcome::Single {
+                    offer_id: *offer_id,
+                }),
+            });
+        }
+        let active = active_kind(self, actor)
+            .ok_or_else(|| AgentError("no active grouped decision".into()))?;
+        active.preview(self, actor, address, offers, choice)
     }
 
-    /// Validate `plan` on a clone, then execute its compiled sequential steps
-    /// atomically against the live game. Refused or incomplete plans return an
-    /// error without mutating the live game.
-    pub fn apply_group(
+    /// Validate `choice` on a clone, then execute all compiled sequential steps
+    /// atomically against the live game. Refused, incomplete, or stale choices
+    /// return an error without mutating the live game.
+    pub fn submit(
         &mut self,
-        viewer: PlayerId,
-        revision: u64,
-        fingerprint: &str,
-        plan: &GroupPlan,
-    ) -> Result<GroupPreview, AgentError> {
-        let preview = self.preview_group(viewer, revision, fingerprint, plan)?;
+        at: Option<&DecisionAddress>,
+        choice: &DecisionChoice,
+    ) -> Result<DecisionPreview, AgentError> {
+        let preview = self.preview(at, choice)?;
         if let Some(refusal) = &preview.refused {
-            return Err(AgentError(format!("group refused: {}", refusal.reason)));
+            return Err(AgentError(format!("decision refused: {}", refusal.reason)));
         }
-        if !preview.complete {
-            return Err(AgentError("group plan is incomplete".into()));
+        if !preview.complete || preview.steps.is_empty() {
+            return Err(AgentError("decision choice is incomplete".into()));
         }
         for step in &preview.steps {
             let frame = self
                 .semantic_decision_frame()
                 .map_err(|error| AgentError(error.to_string()))?;
             if frame.revision != step.revision || frame.fingerprint != step.fingerprint {
-                return Err(AgentError("group execution diverged from preview".into()));
+                return Err(AgentError("decision execution diverged from preview".into()));
             }
             self.step(step.action_index)?;
         }

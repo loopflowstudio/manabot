@@ -55,21 +55,21 @@ export interface DeclareBlockersGroup extends GroupAddress {
 export interface ScryGroup extends GroupAddress {
   kind: 'scry';
   items: GroupCard[];
-  committed_top: ObjectRenderId[];
-  committed_bottom: ObjectRenderId[];
+  committed_top: GroupCard[];
+  committed_bottom: GroupCard[];
 }
 
 export interface SurveilGroup extends GroupAddress {
   kind: 'surveil';
   items: GroupCard[];
-  committed_graveyard: ObjectRenderId[];
+  committed_graveyard: GroupCard[];
 }
 
 export interface OrderLibraryGroup extends GroupAddress {
   kind: 'order_library';
   end: LibraryEnd;
   items: GroupCard[];
-  committed: ObjectRenderId[];
+  committed: GroupCard[];
 }
 
 export type CombatGroup = DeclareAttackersGroup | DeclareBlockersGroup;

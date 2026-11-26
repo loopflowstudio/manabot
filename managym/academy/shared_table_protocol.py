@@ -15,7 +15,7 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import ConfigDict, Field, TypeAdapter
 
 from managym.experience import Command, ProtocolModel, UInt64
-from managym.group import GroupPlan
+from managym.group import GroupChoice
 
 from .advice_identity import AdviceIdentity
 
@@ -194,7 +194,7 @@ class GroupCommand(ProtocolModel):
     expected_revision: UInt64
     prompt_id: UInt64
     frame_hash: str
-    plan: GroupPlan
+    plan: GroupChoice
 
 
 class GroupCommandMessage(ProtocolModel):

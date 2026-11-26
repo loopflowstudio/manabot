@@ -4175,8 +4175,12 @@ impl PyEnv {
     }
 
     /// Return the exact structured projection for the current supported
-    /// priority or attacker decision.
-    fn structured_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// priority or attacker decision. Deprecated; removed in 0.3.0.
+    fn structured_offers(&self, py: Python<'_>) -> PyResult<PyStructuredOfferSet> {
+        warn_deprecated(
+            py,
+            "Env.structured_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
@@ -4186,7 +4190,12 @@ impl PyEnv {
         })
     }
 
-    fn compound_offers(&self) -> PyResult<PyStructuredOfferSet> {
+    /// Deprecated; removed in 0.3.0.
+    fn compound_offers(&self, py: Python<'_>) -> PyResult<PyStructuredOfferSet> {
+        warn_deprecated(
+            py,
+            "Env.compound_offers is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let env = self
             .inner
             .lock()
@@ -4196,11 +4205,17 @@ impl PyEnv {
         })
     }
 
+    /// Deprecated; removed in 0.3.0.
     fn compound_commands_json(
         &self,
+        py: Python<'_>,
         offers: &PyStructuredOfferSet,
         submission_json: &str,
     ) -> PyResult<String> {
+        warn_deprecated(
+            py,
+            "Env.compound_commands_json is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         let submission: OfferSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(error.to_string()))?;
         let env = self
@@ -4260,12 +4275,17 @@ impl PyEnv {
     }
 
     /// Apply an ID-only submission through the atomic structured path.
+    /// Deprecated; removed in 0.3.0.
     fn step_structured(
         &self,
         py: Python<'_>,
         offers: &PyStructuredOfferSet,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        warn_deprecated(
+            py,
+            "Env.step_structured is deprecated and removed in 0.3.0; use Env.decision / Env.preview / Env.submit",
+        )?;
         self.reject_guarded_mutation("direct Env.step_structured")?;
         let submission: OfferSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
@@ -4487,7 +4507,7 @@ impl PyEnv {
     }
 
     /// Read-only whole combat declaration preview for a JSON plan; see
-    /// `managym.combat`. Deprecated in favor of `preview_group_json` (removed in 0.3.0).
+    /// `managym.combat`. Deprecated in favor of `Env.preview` (removed in 0.3.0).
     fn combat_preview_json(
         &self,
         py: Python<'_>,
@@ -4498,7 +4518,7 @@ impl PyEnv {
     ) -> PyResult<String> {
         warn_deprecated(
             py,
-            "Env.combat_preview_json is deprecated and removed in 0.3.0; use Env.preview_group_json",
+            "Env.combat_preview_json is deprecated and removed in 0.3.0; use Env.preview",
         )?;
         let plan: crate::flow::combat_preview::CombatPlan = serde_json::from_str(plan_json)
             .map_err(|error| PyValueError::new_err(error.to_string()))?;
@@ -4512,59 +4532,83 @@ impl PyEnv {
         serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    /// Active grouped decision for `viewer` as JSON, or `None`; see `managym.group`.
-    fn group_json(&self, viewer: usize) -> PyResult<Option<String>> {
-        let env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        let Some(group) = env.group(viewer).map_err(map_agent_err)? else {
-            return Ok(None);
+    /// Active decision for `viewer` (defaults to the current actor), or `None`
+    /// if the game is over or `viewer` is not the acting player. See `managym.group`.
+    #[pyo3(signature = (viewer=None))]
+    fn decision(&self, py: Python<'_>, viewer: Option<usize>) -> PyResult<PyObject> {
+        let decision = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.decision(viewer).map_err(map_agent_err)?
         };
-        serde_json::to_string(&group)
-            .map(Some)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        let Some(decision) = decision else {
+            return Ok(py.None());
+        };
+        let raw = serde_json::to_string(&decision)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(py
+            .import_bound("managym.group")?
+            .getattr("_parse_decision")?
+            .call1((raw,))?
+            .unbind())
     }
 
-    /// Read-only preview of a grouped plan; see `managym.group`.
-    fn preview_group_json(
+    /// Read-only preview of a single offer id (`int`) or grouped `Choice`.
+    /// Pass `at=decision.address` for optimistic concurrency. See `managym.group`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn preview(
         &self,
-        viewer: usize,
-        revision: u64,
-        fingerprint: &str,
-        plan_json: &str,
-    ) -> PyResult<String> {
-        let plan: crate::flow::group::GroupPlan = serde_json::from_str(plan_json)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        let env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        let preview = env
-            .preview_group(viewer, revision, fingerprint, &plan)
-            .map_err(map_agent_err)?;
-        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let preview = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.preview(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        let raw = serde_json::to_string(&preview)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(py
+            .import_bound("managym.group")?
+            .getattr("_parse_preview")?
+            .call1((raw,))?
+            .unbind())
     }
 
-    /// Validate and atomically apply a grouped plan; see `managym.group`.
-    fn apply_group_json(
+    /// Validate on a clone and commit a single offer id (`int`) or complete
+    /// grouped `Choice` atomically, returning `(obs, reward, done, trunc, info)`.
+    #[pyo3(signature = (choice, *, at=None))]
+    fn submit(
         &self,
-        viewer: usize,
-        revision: u64,
-        fingerprint: &str,
-        plan_json: &str,
-    ) -> PyResult<String> {
-        self.reject_guarded_mutation("Env.apply_group_json")?;
-        let plan: crate::flow::group::GroupPlan = serde_json::from_str(plan_json)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        let preview = env
-            .apply_group(viewer, revision, fingerprint, &plan)
-            .map_err(map_agent_err)?;
-        serde_json::to_string(&preview).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        py: Python<'_>,
+        choice: Bound<'_, PyAny>,
+        at: Option<Bound<'_, PyAny>>,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
+        self.reject_guarded_mutation("Env.submit")?;
+        let (parsed_choice, parsed_at) = parse_choice_and_address(py, choice, at)?;
+        let (obs, reward, terminated, truncated, info) = {
+            let mut env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.submit(parsed_at.as_ref(), &parsed_choice)
+                .map_err(map_agent_err)?
+        };
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(obs),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+        ))
     }
 
     /// Shared semantic DecisionFrame for the current revision, as canonical
@@ -5835,6 +5879,38 @@ pub(crate) fn python_game_setup(
         .getattr("GameSetup")?
         .call((players,), Some(&kwargs))?
         .unbind())
+}
+
+#[cfg(feature = "python")]
+fn parse_choice_and_address(
+    py: Python<'_>,
+    choice: Bound<'_, PyAny>,
+    at: Option<Bound<'_, PyAny>>,
+) -> PyResult<(
+    crate::flow::group::DecisionChoice,
+    Option<crate::flow::group::DecisionAddress>,
+)> {
+    let group_mod = py.import_bound("managym.group")?;
+    let choice_json: String = group_mod
+        .getattr("_dump_choice")?
+        .call1((choice,))?
+        .extract()?;
+    let parsed_choice: crate::flow::group::DecisionChoice = serde_json::from_str(&choice_json)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let parsed_at: Option<crate::flow::group::DecisionAddress> = match at {
+        Some(value) if !value.is_none() => {
+            let addr_json: String = group_mod
+                .getattr("_dump_address")?
+                .call1((value,))?
+                .extract()?;
+            Some(
+                serde_json::from_str(&addr_json)
+                    .map_err(|error| PyValueError::new_err(error.to_string()))?,
+            )
+        }
+        _ => None,
+    };
+    Ok((parsed_choice, parsed_at))
 }
 
 #[cfg(feature = "python")]

@@ -1,14 +1,14 @@
 //! Deprecated combat-preview wrapper over `flow::group` (removed in 0.3.0).
 //!
 //! Preserves the `0.2.6` `CombatPlan` / `CombatPreview` surface by delegating
-//! to [`Game::preview_group`]. New callers should use [`Game::group`],
-//! [`Game::preview_group`] and [`Game::apply_group`].
+//! to [`Game::preview`]. New callers should use [`Game::decision`],
+//! [`Game::preview`] and [`Game::submit`].
 use serde::{Deserialize, Serialize};
 
 use crate::agent::action::{ActionSpaceKind, AgentError};
 use crate::experience::ObjectRenderId;
 use crate::flow::game::Game;
-use crate::flow::group::{GroupOutcome, GroupPlan, GroupSpec};
+use crate::flow::group::{DecisionAddress, DecisionChoice, DecisionOutcome, DecisionSpec};
 use crate::state::game_object::PlayerId;
 
 pub use crate::flow::group::PlannedBlock;
@@ -79,9 +79,9 @@ pub struct CombatPreview {
     pub declared_blocks: Vec<PlannedBlock>,
 }
 
-fn declarable_from_spec(spec: &GroupSpec) -> Vec<DeclarableCreature> {
+fn declarable_from_spec(spec: &DecisionSpec) -> Vec<DeclarableCreature> {
     match spec {
-        GroupSpec::DeclareAttackers { declarable, .. } => declarable
+        DecisionSpec::DeclareAttackers { declarable, .. } => declarable
             .iter()
             .map(|item| DeclarableCreature {
                 creature: item.item,
@@ -91,7 +91,7 @@ fn declarable_from_spec(spec: &GroupSpec) -> Vec<DeclarableCreature> {
                 must_attack: item.must_attack,
             })
             .collect(),
-        GroupSpec::DeclareBlockers { declarable, .. } => declarable
+        DecisionSpec::DeclareBlockers { declarable, .. } => declarable
             .iter()
             .map(|item| DeclarableCreature {
                 creature: item.item,
@@ -107,7 +107,7 @@ fn declarable_from_spec(spec: &GroupSpec) -> Vec<DeclarableCreature> {
 
 impl Game {
     /// Preview `plan` at the current declaration, bound to its exact semantic
-    /// address. Deprecated wrapper over [`Game::preview_group`] (removed in 0.3.0).
+    /// address. Deprecated wrapper over [`Game::preview`] (removed in 0.3.0).
     pub fn combat_preview(
         &self,
         viewer: PlayerId,
@@ -144,13 +144,13 @@ impl Game {
                 .map(|&id| (id, "is not attacking now: this is a block.")),
         };
         if let Some((id, suffix)) = wrong_field {
-            let group = self
-                .group(viewer)
+            let decision = self
+                .decision(Some(viewer))
                 .ok_or_else(|| AgentError("not a combat declaration".into()))?;
             let label = self.permanent_render_label(id);
             return Ok(CombatPreview {
                 kind,
-                declarable: declarable_from_spec(&group.spec),
+                declarable: declarable_from_spec(&decision.spec),
                 steps: Vec::new(),
                 refused: Some(DeclarationRefusal {
                     creature: id,
@@ -162,16 +162,21 @@ impl Game {
             });
         }
 
-        let group_plan = match kind {
-            DeclarationKind::Attackers => GroupPlan::DeclareAttackers {
+        let choice = match kind {
+            DeclarationKind::Attackers => DecisionChoice::DeclareAttackers {
                 attackers: plan.attackers.clone(),
             },
-            DeclarationKind::Blockers => GroupPlan::DeclareBlockers {
+            DeclarationKind::Blockers => DecisionChoice::DeclareBlockers {
                 blocks: plan.blocks.clone(),
             },
         };
-        let preview = self.preview_group(viewer, revision, fingerprint, &group_plan)?;
-        let declarable = declarable_from_spec(&preview.group.spec);
+        let address = DecisionAddress {
+            viewer: viewer.0,
+            revision,
+            fingerprint: fingerprint.to_string(),
+        };
+        let preview = self.preview(Some(&address), &choice)?;
+        let declarable = declarable_from_spec(&preview.decision.spec);
         let steps = preview
             .steps
             .into_iter()
@@ -201,8 +206,8 @@ impl Game {
             reason: refusal.reason,
         });
         let (declared_attackers, declared_blocks) = match preview.outcome {
-            Some(GroupOutcome::DeclareAttackers { attackers }) => (attackers, Vec::new()),
-            Some(GroupOutcome::DeclareBlockers { blocks }) => (Vec::new(), blocks),
+            Some(DecisionOutcome::DeclareAttackers { attackers }) => (attackers, Vec::new()),
+            Some(DecisionOutcome::DeclareBlockers { blocks }) => (Vec::new(), blocks),
             _ => (Vec::new(), Vec::new()),
         };
         Ok(CombatPreview {

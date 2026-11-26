@@ -7,8 +7,8 @@ use crate::experience::ObjectRenderId;
 use crate::flow::event::GameEvent;
 use crate::flow::game::Game;
 use crate::flow::group::{
-    AttackerItem, BlockerItem, GroupKind, GroupOutcome, GroupPlan, GroupRefusal, GroupSpec,
-    NextStep, PlanCheck, PlannedBlock,
+    AttackerItem, BlockerItem, ChoiceCheck, DecisionChoice, DecisionOutcome, DecisionRefusal,
+    DecisionSpec, GroupKind, NextStep, PlannedBlock,
 };
 use crate::state::game_object::{PermanentId, PlayerId};
 
@@ -51,13 +51,13 @@ enum Answer {
 impl GroupKind for CombatGroup {
     type Progress = CombatProgress;
 
-    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let order = game.declaration_order(self.role, viewer).ok()?;
         if order.is_empty() {
             return None;
         }
         match self.role {
-            CombatRole::Attackers => Some(GroupSpec::DeclareAttackers {
+            CombatRole::Attackers => Some(DecisionSpec::DeclareAttackers {
                 declarable: order
                     .iter()
                     .map(|creature| AttackerItem {
@@ -68,7 +68,7 @@ impl GroupKind for CombatGroup {
                     .collect(),
                 committed: game.declared_attackers(),
             }),
-            CombatRole::Blockers => Some(GroupSpec::DeclareBlockers {
+            CombatRole::Blockers => Some(DecisionSpec::DeclareBlockers {
                 declarable: order
                     .iter()
                     .map(|creature| {
@@ -93,30 +93,30 @@ impl GroupKind for CombatGroup {
         }
     }
 
-    fn matches_plan(&self, plan: &GroupPlan) -> bool {
+    fn matches_choice(&self, choice: &DecisionChoice) -> bool {
         matches!(
-            (self.role, plan),
-            (CombatRole::Attackers, GroupPlan::DeclareAttackers { .. })
-                | (CombatRole::Blockers, GroupPlan::DeclareBlockers { .. })
+            (self.role, choice),
+            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { .. })
+                | (CombatRole::Blockers, DecisionChoice::DeclareBlockers { .. })
         )
     }
 
-    fn validate(&self, game: &Game, spec: &GroupSpec, plan: &GroupPlan) -> PlanCheck {
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
         let refuse = |id: ObjectRenderId, reason: &str| {
             let label = game.permanent_render_label(id);
-            PlanCheck::Refused(GroupRefusal {
+            ChoiceCheck::Refused(DecisionRefusal {
                 item: Some(id),
                 reason: format!("{label} {reason}"),
                 label,
             })
         };
-        match (spec, plan) {
+        match (spec, choice) {
             (
-                GroupSpec::DeclareAttackers {
+                DecisionSpec::DeclareAttackers {
                     declarable,
                     committed,
                 },
-                GroupPlan::DeclareAttackers { attackers },
+                DecisionChoice::DeclareAttackers { attackers },
             ) => {
                 let asked: HashSet<_> = declarable.iter().map(|c| c.item).collect();
                 let mut seen = HashSet::new();
@@ -128,14 +128,14 @@ impl GroupKind for CombatGroup {
                         return refuse(id, "can only attack once.");
                     }
                 }
-                PlanCheck::Ready
+                ChoiceCheck::Ready
             }
             (
-                GroupSpec::DeclareBlockers {
+                DecisionSpec::DeclareBlockers {
                     declarable,
                     committed,
                 },
-                GroupPlan::DeclareBlockers { blocks },
+                DecisionChoice::DeclareBlockers { blocks },
             ) => {
                 let asked: HashSet<_> = declarable.iter().map(|c| c.item).collect();
                 let mut seen = HashSet::new();
@@ -159,9 +159,9 @@ impl GroupKind for CombatGroup {
                         return refuse(block.blocker, "can block only one attacker.");
                     }
                 }
-                PlanCheck::Ready
+                ChoiceCheck::Ready
             }
-            _ => unreachable!("matches_plan already verified variant"),
+            _ => unreachable!("matches_choice already verified variant"),
         }
     }
 
@@ -169,8 +169,8 @@ impl GroupKind for CombatGroup {
         &self,
         game: &Game,
         viewer: PlayerId,
-        _spec: &GroupSpec,
-        _plan: &GroupPlan,
+        _spec: &DecisionSpec,
+        _choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
         let remaining = game.declaration_order(self.role, viewer)?;
         Ok(CombatProgress {
@@ -190,7 +190,7 @@ impl GroupKind for CombatGroup {
         live: &Game,
         position: &Game,
         viewer: PlayerId,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep {
         let Some(asked) = position.asked_creature(self.role, viewer) else {
@@ -203,7 +203,7 @@ impl GroupKind for CombatGroup {
             return NextStep::Done;
         };
         progress.offset += at + 1;
-        let wanted = live.planned_combat_answer(self.role, asked, plan);
+        let wanted = live.planned_combat_answer(self.role, asked, choice);
         let space = position.action_space().expect("asked decision");
         let index = space
             .actions
@@ -227,11 +227,11 @@ impl GroupKind for CombatGroup {
         live: &Game,
         position: &Game,
         obs_events_from: usize,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         _progress: &Self::Progress,
-    ) -> (GroupOutcome, Option<GroupRefusal>) {
+    ) -> (DecisionOutcome, Option<DecisionRefusal>) {
         let outcome = live.read_combat_outcome(self.role, position, obs_events_from);
-        let refused = live.combat_undeclared(self.role, plan, &outcome);
+        let refused = live.combat_undeclared(self.role, choice, &outcome);
         (outcome, refused)
     }
 }
@@ -339,20 +339,20 @@ impl Game {
         &self,
         role: CombatRole,
         creature: PermanentId,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
     ) -> Answer {
         let id = self.permanent_render_id(creature);
-        match (role, plan) {
-            (CombatRole::Attackers, GroupPlan::DeclareAttackers { attackers }) => {
+        match (role, choice) {
+            (CombatRole::Attackers, DecisionChoice::DeclareAttackers { attackers }) => {
                 Answer::Attack(attackers.contains(&id))
             }
-            (CombatRole::Blockers, GroupPlan::DeclareBlockers { blocks }) => Answer::Block(
+            (CombatRole::Blockers, DecisionChoice::DeclareBlockers { blocks }) => Answer::Block(
                 blocks
                     .iter()
                     .find(|block| block.blocker == id)
                     .and_then(|block| self.permanent_by_render_id(block.attacker)),
             ),
-            _ => unreachable!("matches_plan already verified variant"),
+            _ => unreachable!("matches_choice already verified variant"),
         }
     }
 
@@ -361,7 +361,7 @@ impl Game {
         creature: PermanentId,
         wanted: Answer,
         space: &ActionSpace,
-    ) -> GroupRefusal {
+    ) -> DecisionRefusal {
         let label = self.permanent_label(creature);
         let offered: Vec<_> = space
             .actions
@@ -385,7 +385,7 @@ impl Game {
             Answer::Attack(false) => format!("{label} must attack."),
             Answer::Attack(true) => format!("{label} can't attack now."),
         };
-        GroupRefusal {
+        DecisionRefusal {
             item: Some(self.permanent_render_id(creature)),
             label,
             reason,
@@ -394,14 +394,14 @@ impl Game {
 
     /// Read the completed declaration from the clone's own declaration event,
     /// before any later turn could declare again.
-    fn read_combat_outcome(&self, role: CombatRole, position: &Game, from: usize) -> GroupOutcome {
+    fn read_combat_outcome(&self, role: CombatRole, position: &Game, from: usize) -> DecisionOutcome {
         for event in &position.state.observation_events[from..] {
             match event {
                 GameEvent::TurnStarted { .. } => break,
                 GameEvent::CombatAttackersDeclared { attackers, .. }
                     if role == CombatRole::Attackers =>
                 {
-                    return GroupOutcome::DeclareAttackers {
+                    return DecisionOutcome::DeclareAttackers {
                         attackers: attackers
                             .iter()
                             .map(|event| ObjectRenderId::from(*event))
@@ -409,7 +409,7 @@ impl Game {
                     };
                 }
                 GameEvent::BlockersDeclared { assignments } if role == CombatRole::Blockers => {
-                    return GroupOutcome::DeclareBlockers {
+                    return DecisionOutcome::DeclareBlockers {
                         blocks: assignments
                             .iter()
                             .flat_map(|(attacker, blockers)| {
@@ -425,10 +425,10 @@ impl Game {
             }
         }
         match role {
-            CombatRole::Attackers => GroupOutcome::DeclareAttackers {
+            CombatRole::Attackers => DecisionOutcome::DeclareAttackers {
                 attackers: Vec::new(),
             },
-            CombatRole::Blockers => GroupOutcome::DeclareBlockers { blocks: Vec::new() },
+            CombatRole::Blockers => DecisionOutcome::DeclareBlockers { blocks: Vec::new() },
         }
     }
 
@@ -437,15 +437,15 @@ impl Game {
     fn combat_undeclared(
         &self,
         role: CombatRole,
-        plan: &GroupPlan,
-        outcome: &GroupOutcome,
-    ) -> Option<GroupRefusal> {
+        choice: &DecisionChoice,
+        outcome: &DecisionOutcome,
+    ) -> Option<DecisionRefusal> {
         let named = |id: ObjectRenderId| self.permanent_render_label(id);
-        match (role, plan, outcome) {
+        match (role, choice, outcome) {
             (
                 CombatRole::Attackers,
-                GroupPlan::DeclareAttackers { attackers },
-                GroupOutcome::DeclareAttackers {
+                DecisionChoice::DeclareAttackers { attackers },
+                DecisionOutcome::DeclareAttackers {
                     attackers: declared_attackers,
                 },
             ) => {
@@ -474,7 +474,7 @@ impl Game {
                     } else {
                         format!("The engine would not declare {label} as planned.")
                     };
-                    GroupRefusal {
+                    DecisionRefusal {
                         item: Some(creature),
                         reason,
                         label,
@@ -483,8 +483,8 @@ impl Game {
             }
             (
                 CombatRole::Blockers,
-                GroupPlan::DeclareBlockers { blocks },
-                GroupOutcome::DeclareBlockers {
+                DecisionChoice::DeclareBlockers { blocks },
+                DecisionOutcome::DeclareBlockers {
                     blocks: declared_blocks,
                 },
             ) => {
@@ -500,7 +500,7 @@ impl Game {
                 if let Some(block) = missing {
                     let label = named(block.blocker);
                     let attacker = named(block.attacker);
-                    return Some(GroupRefusal {
+                    return Some(DecisionRefusal {
                         item: Some(block.blocker),
                         reason: format!("{label} can't block {attacker} in this declaration."),
                         label,
@@ -511,14 +511,14 @@ impl Game {
                     .find(|block| !planned.contains(block))
                     .map(|block| {
                         let label = named(block.blocker);
-                        GroupRefusal {
+                        DecisionRefusal {
                             item: Some(block.blocker),
                             reason: format!("{label} must block {}.", named(block.attacker)),
                             label,
                         }
                     })
             }
-            _ => unreachable!("matching combat role, plan, and outcome"),
+            _ => unreachable!("matching combat role, choice, and outcome"),
         }
     }
 }

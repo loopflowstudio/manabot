@@ -1,5 +1,5 @@
 //! Library arrangement kinds (`Scry`, `Surveil`, `OrderLibrary`) under the
-//! shared grouped-input driver.
+//! unified interactive decision driver.
 use std::collections::{HashMap, HashSet};
 
 use crate::agent::action::{Action, AgentError};
@@ -7,8 +7,8 @@ use crate::experience::ObjectRenderId;
 use crate::flow::decision::Decision;
 use crate::flow::game::Game;
 use crate::flow::group::{
-    GroupCard, GroupKind, GroupOutcome, GroupPlan, GroupRefusal, GroupSpec, LibraryEnd, NextStep,
-    PlanCheck,
+    ChoiceCheck, DecisionChoice, DecisionOutcome, DecisionRefusal, DecisionSpec, GroupCard,
+    GroupKind, LibraryEnd, NextStep,
 };
 use crate::state::game_object::{ObjectId, PlayerId};
 
@@ -18,20 +18,13 @@ fn card_render_id(game: &Game, object: ObjectId) -> ObjectRenderId {
         .into()
 }
 
-fn group_cards(game: &Game, objects: &[ObjectId]) -> Vec<GroupCard> {
+fn group_cards(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> Vec<GroupCard> {
     objects
-        .iter()
-        .map(|&object| GroupCard {
+        .into_iter()
+        .map(|object| GroupCard {
             item: card_render_id(game, object),
             label: game.observed_object_name(object),
         })
-        .collect()
-}
-
-fn render_ids(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> Vec<ObjectRenderId> {
-    objects
-        .into_iter()
-        .map(|object| card_render_id(game, object))
         .collect()
 }
 
@@ -54,32 +47,32 @@ fn resolve_card(
         .ok_or_else(|| AgentError(missing_err.into()))
 }
 
-struct CardPlanReasons {
+struct CardChoiceReasons {
     committed: &'static str,
     missing: &'static str,
     duplicate: &'static str,
 }
 
-fn validate_card_plan<'a>(
+fn validate_card_choice<'a>(
     game: &Game,
     items: &[GroupCard],
-    committed: impl IntoIterator<Item = &'a ObjectRenderId>,
-    planned: impl IntoIterator<Item = &'a ObjectRenderId>,
+    committed: impl IntoIterator<Item = &'a GroupCard>,
+    chosen: impl IntoIterator<Item = &'a ObjectRenderId>,
     require_all: bool,
-    reasons: CardPlanReasons,
-) -> PlanCheck {
+    reasons: CardChoiceReasons,
+) -> ChoiceCheck {
     let remaining: HashSet<_> = items.iter().map(|card| card.item).collect();
-    let committed_set: HashSet<_> = committed.into_iter().copied().collect();
+    let committed_set: HashSet<_> = committed.into_iter().map(|card| card.item).collect();
     let mut seen = HashSet::new();
     let refuse = |id: ObjectRenderId, suffix: &str| {
         let label = game.render_card_label(id);
-        PlanCheck::Refused(GroupRefusal {
+        ChoiceCheck::Refused(DecisionRefusal {
             item: Some(id),
             reason: format!("{label} {suffix}"),
             label,
         })
     };
-    for &id in planned {
+    for &id in chosen {
         if !remaining.contains(&id) {
             let reason = if committed_set.contains(&id) {
                 reasons.committed
@@ -93,9 +86,9 @@ fn validate_card_plan<'a>(
         }
     }
     if require_all && seen.len() < remaining.len() {
-        return PlanCheck::Incomplete;
+        return ChoiceCheck::Incomplete;
     }
-    PlanCheck::Ready
+    ChoiceCheck::Ready
 }
 
 #[derive(Clone, Copy)]
@@ -147,7 +140,7 @@ fn step_library(
             },
             None => {
                 let label = live.observed_object_name(object);
-                NextStep::Refuse(GroupRefusal {
+                NextStep::Refuse(DecisionRefusal {
                     item: Some(render_id),
                     reason: format!("{label} cannot be placed there."),
                     label,
@@ -167,7 +160,7 @@ fn step_library(
             },
             None => {
                 let label = live.observed_object_name(object);
-                NextStep::Refuse(GroupRefusal {
+                NextStep::Refuse(DecisionRefusal {
                     item: Some(render_id),
                     reason: format!("{label} {refusal_suffix}"),
                     label,
@@ -183,7 +176,7 @@ fn step_library(
                 action_index,
                 item: None,
             },
-            None => NextStep::Refuse(GroupRefusal {
+            None => NextStep::Refuse(DecisionRefusal {
                 item: None,
                 label: "Surveil".to_string(),
                 reason: "Cannot finish surveil now.".to_string(),
@@ -208,7 +201,7 @@ pub(crate) struct ScryProgress {
 impl GroupKind for ScryGroup {
     type Progress = ScryProgress;
 
-    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let Decision::Scry {
             player,
             remaining,
@@ -222,38 +215,38 @@ impl GroupKind for ScryGroup {
         if *player != viewer || remaining.len() < 2 {
             return None;
         }
-        Some(GroupSpec::Scry {
-            items: group_cards(game, remaining),
-            committed_top: render_ids(game, top.iter().copied()),
+        Some(DecisionSpec::Scry {
+            items: group_cards(game, remaining.iter().copied()),
+            committed_top: group_cards(game, top.iter().copied()),
             // `Decision::Scry` commits `bottom.iter().rev()` to index 0, so
             // `bottom.last()` sits above `bottom[0]`. Expose top-of-bottom first.
-            committed_bottom: render_ids(game, bottom.iter().rev().copied()),
+            committed_bottom: group_cards(game, bottom.iter().rev().copied()),
         })
     }
 
-    fn matches_plan(&self, plan: &GroupPlan) -> bool {
-        matches!(plan, GroupPlan::Scry { .. })
+    fn matches_choice(&self, choice: &DecisionChoice) -> bool {
+        matches!(choice, DecisionChoice::Scry { .. })
     }
 
-    fn validate(&self, game: &Game, spec: &GroupSpec, plan: &GroupPlan) -> PlanCheck {
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
         let (
-            GroupSpec::Scry {
+            DecisionSpec::Scry {
                 items,
                 committed_top,
                 committed_bottom,
             },
-            GroupPlan::Scry { top, bottom },
-        ) = (spec, plan)
+            DecisionChoice::Scry { top, bottom },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
-        validate_card_plan(
+        validate_card_choice(
             game,
             items,
             committed_top.iter().chain(committed_bottom.iter()),
             top.iter().chain(bottom.iter()),
             true,
-            CardPlanReasons {
+            CardChoiceReasons {
                 committed: "has already been placed.",
                 missing: "is not in the pending scry.",
                 duplicate: "can only be placed once.",
@@ -265,19 +258,19 @@ impl GroupKind for ScryGroup {
         &self,
         game: &Game,
         _viewer: PlayerId,
-        spec: &GroupSpec,
-        plan: &GroupPlan,
+        spec: &DecisionSpec,
+        choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
         let (
-            GroupSpec::Scry {
+            DecisionSpec::Scry {
                 committed_top,
                 committed_bottom,
                 ..
             },
-            GroupPlan::Scry { top, bottom },
-        ) = (spec, plan)
+            DecisionChoice::Scry { top, bottom },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
         let Some(Decision::Scry { remaining, .. }) =
             game.state.suspended_decision.as_ref().map(|s| &s.decision)
@@ -295,8 +288,8 @@ impl GroupKind for ScryGroup {
             });
         }
         // `Decision::Scry` repositions `bottom.iter().rev()` to index 0, so
-        // emitting `plan.bottom` in reverse commits `plan.bottom[0]` above
-        // `plan.bottom.last()`, matching `OrderLibrary { end: Bottom }`.
+        // emitting `choice.bottom` in reverse commits `choice.bottom[0]` above
+        // `choice.bottom.last()`, matching `OrderLibrary { end: Bottom }`.
         for &render_id in bottom.iter().rev() {
             let object = resolve_card(&lookup, render_id, "card is not in the pending scry")?;
             planned.push(LibraryStep::Scry {
@@ -308,8 +301,8 @@ impl GroupKind for ScryGroup {
         Ok(ScryProgress {
             planned,
             next_index: 0,
-            committed_top: committed_top.clone(),
-            committed_bottom: committed_bottom.clone(),
+            committed_top: committed_top.iter().map(|c| c.item).collect(),
+            committed_bottom: committed_bottom.iter().map(|c| c.item).collect(),
         })
     }
 
@@ -326,7 +319,7 @@ impl GroupKind for ScryGroup {
         live: &Game,
         position: &Game,
         _viewer: PlayerId,
-        _plan: &GroupPlan,
+        _choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep {
         step_library(&progress.planned, &mut progress.next_index, live, position)
@@ -337,21 +330,21 @@ impl GroupKind for ScryGroup {
         _live: &Game,
         _position: &Game,
         _obs_events_from: usize,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &Self::Progress,
-    ) -> (GroupOutcome, Option<GroupRefusal>) {
-        let GroupPlan::Scry { top, bottom } = plan else {
-            unreachable!("matches_plan already verified variant");
+    ) -> (DecisionOutcome, Option<DecisionRefusal>) {
+        let DecisionChoice::Scry { top, bottom } = choice else {
+            unreachable!("matches_choice already verified variant");
         };
         let mut final_top = progress.committed_top.clone();
         final_top.extend_from_slice(top);
         // Earlier raw bottom picks sit underneath later bottom picks once
-        // `Decision::Scry` reverses its bottom vec, so `plan.bottom` sits
+        // `Decision::Scry` reverses its bottom vec, so `choice.bottom` sits
         // above `committed_bottom` in top-of-bottom-first reading order.
         let mut final_bottom = bottom.clone();
         final_bottom.extend_from_slice(&progress.committed_bottom);
         (
-            GroupOutcome::Scry {
+            DecisionOutcome::Scry {
                 top: final_top,
                 bottom: final_bottom,
             },
@@ -376,7 +369,7 @@ pub(crate) struct SurveilProgress {
 impl GroupKind for SurveilGroup {
     type Progress = SurveilProgress;
 
-    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let Decision::Surveil {
             player,
             looked,
@@ -396,34 +389,34 @@ impl GroupKind for SurveilGroup {
         if remaining.len() < 2 {
             return None;
         }
-        Some(GroupSpec::Surveil {
-            items: group_cards(game, &remaining),
-            committed_graveyard: render_ids(game, graveyard.iter().copied()),
+        Some(DecisionSpec::Surveil {
+            items: group_cards(game, remaining),
+            committed_graveyard: group_cards(game, graveyard.iter().copied()),
         })
     }
 
-    fn matches_plan(&self, plan: &GroupPlan) -> bool {
-        matches!(plan, GroupPlan::Surveil { .. })
+    fn matches_choice(&self, choice: &DecisionChoice) -> bool {
+        matches!(choice, DecisionChoice::Surveil { .. })
     }
 
-    fn validate(&self, game: &Game, spec: &GroupSpec, plan: &GroupPlan) -> PlanCheck {
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
         let (
-            GroupSpec::Surveil {
+            DecisionSpec::Surveil {
                 items,
                 committed_graveyard,
             },
-            GroupPlan::Surveil { graveyard },
-        ) = (spec, plan)
+            DecisionChoice::Surveil { graveyard },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
-        validate_card_plan(
+        validate_card_choice(
             game,
             items,
             committed_graveyard,
             graveyard,
             false,
-            CardPlanReasons {
+            CardChoiceReasons {
                 committed: "is already marked for the graveyard.",
                 missing: "is not in the pending surveil.",
                 duplicate: "can only be chosen once.",
@@ -435,18 +428,18 @@ impl GroupKind for SurveilGroup {
         &self,
         game: &Game,
         _viewer: PlayerId,
-        spec: &GroupSpec,
-        plan: &GroupPlan,
+        spec: &DecisionSpec,
+        choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
         let (
-            GroupSpec::Surveil {
+            DecisionSpec::Surveil {
                 items,
                 committed_graveyard,
             },
-            GroupPlan::Surveil { graveyard },
-        ) = (spec, plan)
+            DecisionChoice::Surveil { graveyard },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
         let Some(Decision::Surveil {
             looked,
@@ -479,7 +472,7 @@ impl GroupKind for SurveilGroup {
         Ok(SurveilProgress {
             planned,
             next_index: 0,
-            committed_graveyard: committed_graveyard.clone(),
+            committed_graveyard: committed_graveyard.iter().map(|c| c.item).collect(),
             remaining: items.iter().map(|card| card.item).collect(),
         })
     }
@@ -497,7 +490,7 @@ impl GroupKind for SurveilGroup {
         live: &Game,
         position: &Game,
         _viewer: PlayerId,
-        _plan: &GroupPlan,
+        _choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep {
         step_library(&progress.planned, &mut progress.next_index, live, position)
@@ -508,11 +501,11 @@ impl GroupKind for SurveilGroup {
         _live: &Game,
         _position: &Game,
         _obs_events_from: usize,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &Self::Progress,
-    ) -> (GroupOutcome, Option<GroupRefusal>) {
-        let GroupPlan::Surveil { graveyard } = plan else {
-            unreachable!("matches_plan already verified variant");
+    ) -> (DecisionOutcome, Option<DecisionRefusal>) {
+        let DecisionChoice::Surveil { graveyard } = choice else {
+            unreachable!("matches_choice already verified variant");
         };
         let mut final_graveyard = progress.committed_graveyard.clone();
         final_graveyard.extend_from_slice(graveyard);
@@ -523,7 +516,7 @@ impl GroupKind for SurveilGroup {
             .filter(|id| !graveyard.contains(id))
             .collect();
         (
-            GroupOutcome::Surveil {
+            DecisionOutcome::Surveil {
                 graveyard: final_graveyard,
                 kept,
             },
@@ -548,7 +541,7 @@ pub(crate) struct OrderLibraryProgress {
 impl GroupKind for OrderLibraryGroup {
     type Progress = OrderLibraryProgress;
 
-    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+    fn describe(&self, game: &Game, viewer: PlayerId) -> Option<DecisionSpec> {
         let Decision::OrderLibrary {
             player,
             object_ids,
@@ -562,34 +555,34 @@ impl GroupKind for OrderLibraryGroup {
         if *player != viewer || remaining.len() < 2 {
             return None;
         }
-        Some(GroupSpec::OrderLibrary {
+        Some(DecisionSpec::OrderLibrary {
             end: (*end).into(),
-            items: group_cards(game, remaining),
-            committed: render_ids(game, object_ids[..*next].iter().copied()),
+            items: group_cards(game, remaining.iter().copied()),
+            committed: group_cards(game, object_ids[..*next].iter().copied()),
         })
     }
 
-    fn matches_plan(&self, plan: &GroupPlan) -> bool {
-        matches!(plan, GroupPlan::OrderLibrary { .. })
+    fn matches_choice(&self, choice: &DecisionChoice) -> bool {
+        matches!(choice, DecisionChoice::OrderLibrary { .. })
     }
 
-    fn validate(&self, game: &Game, spec: &GroupSpec, plan: &GroupPlan) -> PlanCheck {
+    fn validate(&self, game: &Game, spec: &DecisionSpec, choice: &DecisionChoice) -> ChoiceCheck {
         let (
-            GroupSpec::OrderLibrary {
+            DecisionSpec::OrderLibrary {
                 items, committed, ..
             },
-            GroupPlan::OrderLibrary { order },
-        ) = (spec, plan)
+            DecisionChoice::OrderLibrary { order },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
-        validate_card_plan(
+        validate_card_choice(
             game,
             items,
             committed,
             order,
             true,
-            CardPlanReasons {
+            CardChoiceReasons {
                 committed: "has already been ordered.",
                 missing: "is not in the pending library order.",
                 duplicate: "can only be ordered once.",
@@ -601,13 +594,15 @@ impl GroupKind for OrderLibraryGroup {
         &self,
         game: &Game,
         _viewer: PlayerId,
-        spec: &GroupSpec,
-        plan: &GroupPlan,
+        spec: &DecisionSpec,
+        choice: &DecisionChoice,
     ) -> Result<Self::Progress, AgentError> {
-        let (GroupSpec::OrderLibrary { end, committed, .. }, GroupPlan::OrderLibrary { order }) =
-            (spec, plan)
+        let (
+            DecisionSpec::OrderLibrary { end, committed, .. },
+            DecisionChoice::OrderLibrary { order },
+        ) = (spec, choice)
         else {
-            unreachable!("matches_plan already verified variant");
+            unreachable!("matches_choice already verified variant");
         };
         let Some(Decision::OrderLibrary {
             object_ids, next, ..
@@ -633,7 +628,7 @@ impl GroupKind for OrderLibraryGroup {
             end: *end,
             planned,
             next_index: 0,
-            committed: committed.clone(),
+            committed: committed.iter().map(|c| c.item).collect(),
         })
     }
 
@@ -653,7 +648,7 @@ impl GroupKind for OrderLibraryGroup {
         live: &Game,
         position: &Game,
         _viewer: PlayerId,
-        _plan: &GroupPlan,
+        _choice: &DecisionChoice,
         progress: &mut Self::Progress,
     ) -> NextStep {
         step_library(&progress.planned, &mut progress.next_index, live, position)
@@ -664,16 +659,16 @@ impl GroupKind for OrderLibraryGroup {
         _live: &Game,
         _position: &Game,
         _obs_events_from: usize,
-        plan: &GroupPlan,
+        choice: &DecisionChoice,
         progress: &Self::Progress,
-    ) -> (GroupOutcome, Option<GroupRefusal>) {
-        let GroupPlan::OrderLibrary { order } = plan else {
-            unreachable!("matches_plan already verified variant");
+    ) -> (DecisionOutcome, Option<DecisionRefusal>) {
+        let DecisionChoice::OrderLibrary { order } = choice else {
+            unreachable!("matches_choice already verified variant");
         };
         let mut final_order = progress.committed.clone();
         final_order.extend_from_slice(order);
         (
-            GroupOutcome::OrderLibrary {
+            DecisionOutcome::OrderLibrary {
                 end: progress.end,
                 order: final_order,
             },

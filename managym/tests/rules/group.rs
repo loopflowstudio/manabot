@@ -1,14 +1,21 @@
-//! Native grouped-input tests covering combat declarations and library
-//! arrangements (Scry, Surveil, OrderLibrary Top/Bottom), purity boundary
-//! behavior, mid-group raw steps, and digest parity between `apply_group`
-//! and step-by-step execution.
+//! Native unified decision API tests covering `Game::decision` / `preview` /
+//! `submit` across single offers, combat declarations, and library arrangements
+//! (Scry, Surveil, OrderLibrary Top/Bottom), `GroupCard` committed labels,
+//! purity boundary behavior, mid-group raw steps, and digest parity between
+//! `submit` and step-by-step execution (including mixed `[Agent, Heuristic]` `Env`).
 use managym::{
-    agent::action::{Action, ActionSpaceKind},
+    agent::{
+        action::{Action, ActionSpaceKind},
+        env::Env,
+        player_policy::PlayerPolicy,
+        structured_offer::OfferVerb,
+    },
     experience::ObjectRenderId,
     flow::{
         decision::Decision,
         group::{
-            Group, GroupOutcome, GroupPlan, GroupPreview, GroupSpec, LibraryEnd, PlannedBlock,
+            ActiveDecision, DecisionAddress, DecisionChoice, DecisionOutcome, DecisionPreview,
+            DecisionSpec, GroupCard, LibraryEnd, PlannedBlock,
         },
         turn::StepKind,
     },
@@ -17,6 +24,7 @@ use managym::{
         ability::{Effect, EffectValue},
         card::ActivatedAbilityDefinition,
         game_object::{ObjectId, PermanentId, PlayerId},
+        player::PlayerConfig,
         predicate::CardPredicate,
         target::Target,
         zone::ZoneType,
@@ -47,7 +55,7 @@ fn card_render(game: &Game, object: ObjectId) -> ObjectRenderId {
     }
 }
 
-fn follow_steps(game: &mut Game, preview: &GroupPreview) {
+fn follow_steps(game: &mut Game, preview: &DecisionPreview) {
     for step in &preview.steps {
         let frame = game.semantic_decision_frame().unwrap();
         assert_eq!(
@@ -58,16 +66,22 @@ fn follow_steps(game: &mut Game, preview: &GroupPreview) {
     }
 }
 
-/// Assert that `preview_group` is read-only and that `apply_group` reaches the
-/// exact same canonical state digest as stepping `preview.steps` manually.
-fn assert_apply_matches_manual(game: &mut Game, viewer: usize, plan: &GroupPlan) -> GroupPreview {
+/// Assert that `preview` is read-only and that `submit` reaches the exact same
+/// canonical state digest as stepping `preview.steps` manually.
+fn assert_submit_matches_manual(
+    game: &mut Game,
+    viewer: usize,
+    choice: &DecisionChoice,
+) -> DecisionPreview {
     let before_witness = witness(game);
     let before_digest = game.state.deterministic_hash();
-    let frame = game.semantic_decision_frame().unwrap();
+    let active = game.decision(Some(PlayerId(viewer))).unwrap();
+    assert_eq!(active.address.viewer, viewer);
+    assert!(!active.offers.is_empty());
 
-    let preview = game
-        .preview_group(PlayerId(viewer), frame.revision, &frame.fingerprint, plan)
-        .unwrap();
+    // Default `at=None` and explicit `at=Some(&active.address)` produce identical previews.
+    let preview = game.preview(Some(&active.address), choice).unwrap();
+    assert_eq!(game.preview(None, choice).unwrap(), preview);
     assert_eq!(witness(game), before_witness, "preview must be read-only");
     assert_eq!(game.state.deterministic_hash(), before_digest);
     assert!(preview.complete, "expected complete preview: {preview:?}");
@@ -76,16 +90,14 @@ fn assert_apply_matches_manual(game: &mut Game, viewer: usize, plan: &GroupPlan)
     let mut manual = game.clone();
     follow_steps(&mut manual, &preview);
 
-    let applied = game
-        .apply_group(PlayerId(viewer), frame.revision, &frame.fingerprint, plan)
-        .unwrap();
-    assert_eq!(applied, preview);
+    let submitted = game.submit(Some(&active.address), choice).unwrap();
+    assert_eq!(submitted, preview);
     assert_eq!(
         game.state.deterministic_hash(),
         manual.state.deterministic_hash(),
-        "apply_group and manual step execution must produce identical digests"
+        "submit and manual step execution must produce identical digests"
     );
-    applied
+    submitted
 }
 
 fn combat_three_vs_three() -> (Scenario, Vec<PermanentId>, Vec<PermanentId>) {
@@ -112,13 +124,72 @@ fn combat_three_vs_three() -> (Scenario, Vec<PermanentId>, Vec<PermanentId>) {
 }
 
 #[test]
+fn single_decision_preview_and_submit_match_manual_step() {
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 30), ("Gray Ogre", 10)]),
+        deck(&[("Forest", 40)]),
+        7,
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+
+    let d = s.game().decision(None).expect("priority decision active");
+    assert_eq!(d.address.viewer, 0);
+    assert_eq!(d.spec, DecisionSpec::Single);
+    assert!(s.game().decision(Some(PlayerId(1))).is_none());
+    assert!(!d.offers.is_empty());
+
+    // Grouped choice against a Single decision errors without mutating.
+    let before = witness(s.game());
+    assert!(s
+        .game()
+        .preview(None, &DecisionChoice::DeclareAttackers { attackers: vec![] })
+        .is_err());
+    // Out-of-bounds single offer id returns refused without mutating.
+    let oob = s
+        .game()
+        .preview(None, &DecisionChoice::Single { offer_id: 999 })
+        .unwrap();
+    assert!(!oob.complete);
+    assert!(oob.refused.is_some());
+    assert!(s
+        .game_mut()
+        .submit(None, &DecisionChoice::Single { offer_id: 999 })
+        .is_err());
+    assert_eq!(witness(s.game()), before);
+
+    // Legal single offer submits atomically and matches manual step.
+    let pass_id = d
+        .offers
+        .iter()
+        .find(|o| o.label.contains("Pass"))
+        .map(|o| o.id)
+        .unwrap_or(d.offers[0].id);
+    let submitted = assert_submit_matches_manual(
+        s.game_mut(),
+        0,
+        &DecisionChoice::Single { offer_id: pass_id },
+    );
+    assert_eq!(
+        submitted.outcome,
+        Some(DecisionOutcome::Single { offer_id: pass_id })
+    );
+}
+
+#[test]
 fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
     // 1. Three-creature attack + multi-block + menace refusal.
     let (mut s, attackers, blockers) = combat_three_vs_three();
-    let active = s.game().group(PlayerId(0)).expect("attack group active");
-    assert!(s.game().group(PlayerId(1)).is_none(), "non-actor gets None");
+    let active = s
+        .game()
+        .decision(Some(PlayerId(0)))
+        .expect("attack decision active");
+    assert_eq!(s.game().decision(None), Some(active.clone()));
+    assert!(
+        s.game().decision(Some(PlayerId(1))).is_none(),
+        "non-actor gets None"
+    );
     match &active.spec {
-        GroupSpec::DeclareAttackers {
+        DecisionSpec::DeclareAttackers {
             declarable,
             committed,
         } => {
@@ -128,44 +199,74 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
         other => panic!("expected DeclareAttackers, got {other:?}"),
     }
 
-    // Wrong plan kind errors and leaves state untouched.
+    // Wrong choice kind and stale revision error without mutating.
     let before = witness(s.game());
     assert!(s
         .game()
-        .preview_group(
-            PlayerId(0),
-            active.revision,
-            &active.fingerprint,
-            &GroupPlan::Scry {
+        .preview(
+            Some(&active.address),
+            &DecisionChoice::Scry {
                 top: vec![],
                 bottom: vec![],
             },
         )
         .is_err());
+    let stale_addr = DecisionAddress {
+        viewer: active.address.viewer,
+        revision: active.address.revision + 1,
+        fingerprint: active.address.fingerprint.clone(),
+    };
     assert!(s
         .game_mut()
-        .apply_group(
-            PlayerId(0),
-            active.revision + 1,
-            &active.fingerprint,
-            &GroupPlan::DeclareAttackers { attackers: vec![] },
+        .submit(
+            Some(&stale_addr),
+            &DecisionChoice::DeclareAttackers { attackers: vec![] },
         )
         .is_err());
     assert_eq!(witness(s.game()), before);
+
+    // Mid-combat raw step: submit one attack offer id, verify decision() shows remaining + committed.
+    let mut mid_combat = s.game().clone();
+    let first_attack_offer = mid_combat
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+        .unwrap();
+    mid_combat
+        .submit(
+            None,
+            &DecisionChoice::Single {
+                offer_id: first_attack_offer,
+            },
+        )
+        .unwrap();
+    let mid_decision = mid_combat.decision(None).expect("2 attackers remain");
+    match &mid_decision.spec {
+        DecisionSpec::DeclareAttackers {
+            declarable,
+            committed,
+        } => {
+            assert_eq!(declarable.len(), 2);
+            assert_eq!(committed.len(), 1);
+        }
+        other => panic!("expected DeclareAttackers mid-combat, got {other:?}"),
+    }
 
     // Attack with all three so we can test blockers next.
     let all_attackers: Vec<_> = attackers
         .iter()
         .map(|&id| perm_render(s.game(), id))
         .collect();
-    let attack_plan = GroupPlan::DeclareAttackers {
+    let attack_choice = DecisionChoice::DeclareAttackers {
         attackers: all_attackers.clone(),
     };
-    let attack_result = assert_apply_matches_manual(s.game_mut(), 0, &attack_plan);
+    let attack_result = assert_submit_matches_manual(s.game_mut(), 0, &attack_choice);
     assert_eq!(attack_result.steps.len(), 3);
     assert!(matches!(
         attack_result.outcome,
-        Some(GroupOutcome::DeclareAttackers { ref attackers }) if attackers.len() == 3
+        Some(DecisionOutcome::DeclareAttackers { ref attackers }) if attackers.len() == 3
     ));
 
     // Advance to blockers.
@@ -173,14 +274,17 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
         |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
         "failed to reach blockers".into(),
     );
-    let blocker_group = s.game().group(PlayerId(1)).expect("blocker group active");
+    let blocker_decision = s
+        .game()
+        .decision(Some(PlayerId(1)))
+        .expect("blocker decision active");
     assert!(matches!(
-        blocker_group.spec,
-        GroupSpec::DeclareBlockers { ref declarable, .. } if declarable.len() == 3
+        blocker_decision.spec,
+        DecisionSpec::DeclareBlockers { ref declarable, .. } if declarable.len() == 3
     ));
 
     // Menace refusal: lone Elf on Boggart Brute refuses without mutating.
-    let lone_menace = GroupPlan::DeclareBlockers {
+    let lone_menace = DecisionChoice::DeclareBlockers {
         blocks: vec![PlannedBlock {
             blocker: perm_render(s.game(), blockers[0]),
             attacker: perm_render(s.game(), attackers[0]),
@@ -189,12 +293,7 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
     let before_menace = witness(s.game());
     let menace_preview = s
         .game()
-        .preview_group(
-            PlayerId(1),
-            blocker_group.revision,
-            &blocker_group.fingerprint,
-            &lone_menace,
-        )
+        .preview(Some(&blocker_decision.address), &lone_menace)
         .unwrap();
     assert!(!menace_preview.complete);
     let refusal = menace_preview.refused.as_ref().expect("menace refusal");
@@ -206,17 +305,12 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
     assert!(menace_preview.outcome.is_none());
     assert!(s
         .game_mut()
-        .apply_group(
-            PlayerId(1),
-            blocker_group.revision,
-            &blocker_group.fingerprint,
-            &lone_menace,
-        )
+        .submit(Some(&blocker_decision.address), &lone_menace)
         .is_err());
     assert_eq!(witness(s.game()), before_menace);
 
     // Legal multi-block: two Elves on Brute, third on Ogre.
-    let multi_block = GroupPlan::DeclareBlockers {
+    let multi_block = DecisionChoice::DeclareBlockers {
         blocks: vec![
             PlannedBlock {
                 blocker: perm_render(s.game(), blockers[0]),
@@ -232,7 +326,7 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
             },
         ],
     };
-    assert_apply_matches_manual(s.game_mut(), 1, &multi_block);
+    assert_submit_matches_manual(s.game_mut(), 1, &multi_block);
 
     // 2. Single-creature attack still activates the combat group (>= 1 threshold).
     let mut single = Scenario::new(
@@ -244,16 +338,19 @@ fn combat_three_attackers_one_attacker_multi_block_and_refusals() {
     let ogre = single.force_permanent_on_battlefield(0, "Gray Ogre");
     clear_summoning_sickness(&mut single, ogre);
     single.advance_to_active_step(0, StepKind::DeclareAttackers);
-    let single_group = single.game().group(PlayerId(0)).expect("1-creature group");
+    let single_decision = single
+        .game()
+        .decision(Some(PlayerId(0)))
+        .expect("1-creature decision");
     assert!(matches!(
-        single_group.spec,
-        GroupSpec::DeclareAttackers { ref declarable, .. } if declarable.len() == 1
+        single_decision.spec,
+        DecisionSpec::DeclareAttackers { ref declarable, .. } if declarable.len() == 1
     ));
-    let single_plan = GroupPlan::DeclareAttackers {
+    let single_choice = DecisionChoice::DeclareAttackers {
         attackers: vec![perm_render(single.game(), ogre)],
     };
-    let applied = assert_apply_matches_manual(single.game_mut(), 0, &single_plan);
-    assert_eq!(applied.steps.len(), 1);
+    let submitted = assert_submit_matches_manual(single.game_mut(), 0, &single_choice);
+    assert_eq!(submitted.steps.len(), 1);
 }
 
 #[test]
@@ -272,30 +369,24 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
     s.game_mut().skip_trivial = false;
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
 
-    let g = s.game().group(PlayerId(0)).expect("attackers group");
+    let d = s.game().decision(Some(PlayerId(0))).expect("attackers");
     let before = witness(s.game());
-    let omit_jugg = GroupPlan::DeclareAttackers {
+    let omit_jugg = DecisionChoice::DeclareAttackers {
         attackers: vec![perm_render(s.game(), ogre)],
     };
-    let preview = s
-        .game()
-        .preview_group(PlayerId(0), g.revision, &g.fingerprint, &omit_jugg)
-        .unwrap();
+    let preview = s.game().preview(Some(&d.address), &omit_jugg).unwrap();
     assert!(!preview.complete);
     assert_eq!(
         preview.refused.as_ref().unwrap().reason,
         "Juggernaut must attack."
     );
-    assert!(s
-        .game_mut()
-        .apply_group(PlayerId(0), g.revision, &g.fingerprint, &omit_jugg)
-        .is_err());
+    assert!(s.game_mut().submit(Some(&d.address), &omit_jugg).is_err());
     assert_eq!(witness(s.game()), before);
 
-    let both = GroupPlan::DeclareAttackers {
+    let both = DecisionChoice::DeclareAttackers {
         attackers: vec![perm_render(s.game(), jugg), perm_render(s.game(), ogre)],
     };
-    assert_apply_matches_manual(s.game_mut(), 0, &both);
+    assert_submit_matches_manual(s.game_mut(), 0, &both);
 
     // Must-block refusal (Taunting Challenge).
     let mut b = five_color_setup(&[
@@ -316,38 +407,32 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
     settle(&mut b);
     b.game_mut().skip_trivial = false;
     b.advance_to_active_step(0, StepKind::DeclareAttackers);
-    let atk_plan = GroupPlan::DeclareAttackers {
+    let atk_choice = DecisionChoice::DeclareAttackers {
         attackers: vec![perm_render(b.game(), drake), perm_render(b.game(), ogre2)],
     };
-    assert_apply_matches_manual(b.game_mut(), 0, &atk_plan);
+    assert_submit_matches_manual(b.game_mut(), 0, &atk_choice);
     b.advance_until(
         |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
         "reach blockers".into(),
     );
-    let bg = b.game().group(PlayerId(1)).expect("blockers group");
-    let bad_blocks = GroupPlan::DeclareBlockers {
+    let bd = b.game().decision(Some(PlayerId(1))).expect("blockers");
+    let bad_blocks = DecisionChoice::DeclareBlockers {
         blocks: vec![PlannedBlock {
             blocker: perm_render(b.game(), elves),
             attacker: perm_render(b.game(), ogre2),
         }],
     };
     let before_block = witness(b.game());
-    let bad_preview = b
-        .game()
-        .preview_group(PlayerId(1), bg.revision, &bg.fingerprint, &bad_blocks)
-        .unwrap();
+    let bad_preview = b.game().preview(Some(&bd.address), &bad_blocks).unwrap();
     assert!(!bad_preview.complete);
     assert_eq!(
         bad_preview.refused.as_ref().unwrap().reason,
         "Giant Spider must block Wind Drake."
     );
-    assert!(b
-        .game_mut()
-        .apply_group(PlayerId(1), bg.revision, &bg.fingerprint, &bad_blocks)
-        .is_err());
+    assert!(b.game_mut().submit(Some(&bd.address), &bad_blocks).is_err());
     assert_eq!(witness(b.game()), before_block);
 
-    let good_blocks = GroupPlan::DeclareBlockers {
+    let good_blocks = DecisionChoice::DeclareBlockers {
         blocks: vec![
             PlannedBlock {
                 blocker: perm_render(b.game(), spider),
@@ -359,7 +444,7 @@ fn combat_must_attack_and_must_block_refusals_preserve_digest() {
             },
         ],
     };
-    assert_apply_matches_manual(b.game_mut(), 1, &good_blocks);
+    assert_submit_matches_manual(b.game_mut(), 1, &good_blocks);
 }
 
 /// Set up a creature with a `{0}: <effects>` activated ability, pin the top of
@@ -397,14 +482,14 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         vec![Effect::Scry { count: 3 }],
         true,
     );
-    let g = s.game().group(PlayerId(0)).expect("Scry 3 group");
+    let d = s.game().decision(Some(PlayerId(0))).expect("Scry 3");
     let (c0, c1, c2) = (
         card_render(s.game(), pinned[0]),
         card_render(s.game(), pinned[1]),
         card_render(s.game(), pinned[2]),
     );
-    match &g.spec {
-        GroupSpec::Scry {
+    match &d.spec {
+        DecisionSpec::Scry {
             items,
             committed_top,
             committed_bottom,
@@ -416,35 +501,26 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         other => panic!("expected Scry, got {other:?}"),
     }
 
-    // Incomplete plan returns complete=false, refused=None, steps=[], outcome=None without mutating.
+    // Incomplete choice returns complete=false, refused=None, steps=[], outcome=None without mutating.
     let before = witness(s.game());
-    let incomplete = GroupPlan::Scry {
+    let incomplete = DecisionChoice::Scry {
         top: vec![c2],
         bottom: vec![c0],
     };
-    let inc_preview = s
-        .game()
-        .preview_group(PlayerId(0), g.revision, &g.fingerprint, &incomplete)
-        .unwrap();
+    let inc_preview = s.game().preview(Some(&d.address), &incomplete).unwrap();
     assert!(!inc_preview.complete);
     assert!(inc_preview.refused.is_none());
     assert!(inc_preview.steps.is_empty());
     assert!(inc_preview.outcome.is_none());
-    assert!(s
-        .game_mut()
-        .apply_group(PlayerId(0), g.revision, &g.fingerprint, &incomplete)
-        .is_err());
+    assert!(s.game_mut().submit(Some(&d.address), &incomplete).is_err());
     assert_eq!(witness(s.game()), before);
 
     // Duplicate card is refused.
-    let dup = GroupPlan::Scry {
+    let dup = DecisionChoice::Scry {
         top: vec![c0, c0],
         bottom: vec![c1],
     };
-    let dup_preview = s
-        .game()
-        .preview_group(PlayerId(0), g.revision, &g.fingerprint, &dup)
-        .unwrap();
+    let dup_preview = s.game().preview(Some(&d.address), &dup).unwrap();
     assert!(!dup_preview.complete);
     assert!(dup_preview
         .refused
@@ -453,18 +529,18 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         .reason
         .contains("only be placed once"));
 
-    // Plan: top=[c2 (Island)], bottom=[c0 (Forest), c1 (Mountain)].
+    // Choice: top=[c2 (Island)], bottom=[c0 (Forest), c1 (Mountain)].
     // Reading order for bottom: c0 sits ABOVE c1, and c1 sits on the VERY bottom (index 0).
     let mut mid_raw = s.game().clone();
-    let plan = GroupPlan::Scry {
+    let choice = DecisionChoice::Scry {
         top: vec![c2],
         bottom: vec![c0, c1],
     };
-    let applied = assert_apply_matches_manual(s.game_mut(), 0, &plan);
-    assert_eq!(applied.steps.len(), 3);
+    let submitted = assert_submit_matches_manual(s.game_mut(), 0, &choice);
+    assert_eq!(submitted.steps.len(), 3);
     assert_eq!(
-        applied.outcome,
-        Some(GroupOutcome::Scry {
+        submitted.outcome,
+        Some(DecisionOutcome::Scry {
             top: vec![c2],
             bottom: vec![c0, c1],
         })
@@ -488,7 +564,7 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         "c0 (Forest) must sit directly above c1 on the bottom"
     );
 
-    // Mid-group raw step: put c1 on bottom via raw step, verify committed_bottom, then finish with apply_group.
+    // Mid-group raw step: put c1 on bottom via raw step, verify committed_bottom carries GroupCard label.
     let raw_idx = mid_raw
         .action_space()
         .unwrap()
@@ -506,33 +582,38 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
         })
         .unwrap();
     mid_raw.step(raw_idx).unwrap();
-    let after_one = mid_raw.group(PlayerId(0)).expect("2 cards still remain");
+    let after_one = mid_raw
+        .decision(Some(PlayerId(0)))
+        .expect("2 cards still remain");
     assert_eq!(
         after_one.spec,
-        GroupSpec::Scry {
+        DecisionSpec::Scry {
             items: vec![
-                managym::flow::group::GroupCard {
+                GroupCard {
                     item: c0,
                     label: "Forest".into()
                 },
-                managym::flow::group::GroupCard {
+                GroupCard {
                     item: c2,
                     label: "Island".into()
                 },
             ],
             committed_top: vec![],
-            committed_bottom: vec![c1],
+            committed_bottom: vec![GroupCard {
+                item: c1,
+                label: "Mountain".into()
+            }],
         }
     );
-    // Finish the remaining two cards via apply_group: c2 on top, c0 on bottom (above c1!).
-    let rest_plan = GroupPlan::Scry {
+    // Finish the remaining two cards via submit: c2 on top, c0 on bottom (above c1!).
+    let rest_choice = DecisionChoice::Scry {
         top: vec![c2],
         bottom: vec![c0],
     };
-    let rest_applied = assert_apply_matches_manual(&mut mid_raw, 0, &rest_plan);
+    let rest_submitted = assert_submit_matches_manual(&mut mid_raw, 0, &rest_choice);
     assert_eq!(
-        rest_applied.outcome,
-        Some(GroupOutcome::Scry {
+        rest_submitted.outcome,
+        Some(DecisionOutcome::Scry {
             top: vec![c2],
             bottom: vec![c0, c1],
         })
@@ -547,7 +628,7 @@ fn scry_three_bottom_order_incomplete_refusal_and_mid_group_raw_step() {
     assert_eq!(
         mid_raw.state.deterministic_hash(),
         s.game().state.deterministic_hash(),
-        "mid-group raw step + apply_group must match full apply_group"
+        "mid-group raw step + submit must match full submit"
     );
 }
 
@@ -562,29 +643,31 @@ fn scry_two_then_draw_completes_cleanly_past_post_group_draw() {
         |s| s.action_space().kind == ActionSpaceKind::Scry,
         "reach Legend of Kuruk scry 2".into(),
     );
-    let g = s.game().group(PlayerId(0)).expect("Scry 2 group");
+    let d = s.game().decision(Some(PlayerId(0))).expect("Scry 2");
     let (c0, c1) = (
         card_render(s.game(), pinned[0]),
         card_render(s.game(), pinned[1]),
     );
-    assert!(matches!(g.spec, GroupSpec::Scry { ref items, .. } if items.len() == 2));
+    assert!(matches!(d.spec, DecisionSpec::Scry { ref items, .. } if items.len() == 2));
 
-    // Take 1 raw step on a clone to verify domain threshold: 1 remaining card -> group() is None.
+    // Take 1 raw step on a clone to verify domain threshold: 1 remaining card drops to Single.
     let mut one_left = s.game().clone();
     one_left.step(0).unwrap();
-    assert!(
-        one_left.group(PlayerId(0)).is_none(),
-        "1 remaining Scry card is below the >= 2 threshold"
+    let dropped = one_left.decision(Some(PlayerId(0))).expect("1 card left");
+    assert_eq!(
+        dropped.spec,
+        DecisionSpec::Single,
+        "1 remaining Scry card is below the >= 2 threshold and drops to Single"
     );
 
     // Put Mountain (c1) on top to draw it, Forest (c0) on bottom.
     // The post-group draw fires after Scry finishes and must NOT trip the purity boundary.
-    let plan = GroupPlan::Scry {
+    let choice = DecisionChoice::Scry {
         top: vec![c1],
         bottom: vec![c0],
     };
-    let applied = assert_apply_matches_manual(s.game_mut(), 0, &plan);
-    assert_eq!(applied.steps.len(), 2);
+    let submitted = assert_submit_matches_manual(s.game_mut(), 0, &choice);
+    assert_eq!(submitted.steps.len(), 2);
     assert!(
         s.game()
             .state
@@ -622,68 +705,63 @@ fn surveil_two_to_order_library_top_under_both_skip_trivial_settings() {
             "reach Esper Origins surveil".into(),
         );
 
-        let surveil_group = s.game().group(PlayerId(0)).expect("Surveil 2 group");
+        let surveil_decision = s.game().decision(Some(PlayerId(0))).expect("Surveil 2");
         let (c0, c1) = (
             card_render(s.game(), pinned[0]),
             card_render(s.game(), pinned[1]),
         );
         assert!(matches!(
-            surveil_group.spec,
-            GroupSpec::Surveil { ref items, ref committed_graveyard }
+            surveil_decision.spec,
+            DecisionSpec::Surveil { ref items, ref committed_graveyard }
                 if items.len() == 2 && committed_graveyard.is_empty()
         ));
 
         // Keep both on top (graveyard = []) -> emits 1 Decline step with item=None.
-        let keep_all = GroupPlan::Surveil { graveyard: vec![] };
-        let surveil_applied = assert_apply_matches_manual(s.game_mut(), 0, &keep_all);
-        assert_eq!(surveil_applied.steps.len(), 1);
-        assert_eq!(surveil_applied.steps[0].item, None);
+        let keep_all = DecisionChoice::Surveil { graveyard: vec![] };
+        let surveil_submitted = assert_submit_matches_manual(s.game_mut(), 0, &keep_all);
+        assert_eq!(surveil_submitted.steps.len(), 1);
+        assert_eq!(surveil_submitted.steps[0].item, None);
         assert_eq!(
-            surveil_applied.outcome,
-            Some(GroupOutcome::Surveil {
+            surveil_submitted.outcome,
+            Some(DecisionOutcome::Surveil {
                 graveyard: vec![],
                 kept: vec![c0, c1],
             })
         );
 
         // Immediately opens OrderLibrary { end: Top } with 2 cards even when skip_trivial=true.
-        let order_group: Group = s
+        let order_decision: ActiveDecision = s
             .game()
-            .group(PlayerId(0))
-            .expect("OrderLibrary Top group after keeping 2 on Surveil");
+            .decision(Some(PlayerId(0)))
+            .expect("OrderLibrary Top after keeping 2 on Surveil");
         assert!(matches!(
-            order_group.spec,
-            GroupSpec::OrderLibrary {
+            order_decision.spec,
+            DecisionSpec::OrderLibrary {
                 end: LibraryEnd::Top,
                 ref items,
                 ref committed,
             } if items.len() == 2 && committed.is_empty()
         ));
 
-        // Incomplete OrderLibrary plan returns complete=false without cloning.
-        let incomplete = GroupPlan::OrderLibrary { order: vec![c1] };
+        // Incomplete OrderLibrary choice returns complete=false without cloning.
+        let incomplete = DecisionChoice::OrderLibrary { order: vec![c1] };
         let inc_preview = s
             .game()
-            .preview_group(
-                PlayerId(0),
-                order_group.revision,
-                &order_group.fingerprint,
-                &incomplete,
-            )
+            .preview(Some(&order_decision.address), &incomplete)
             .unwrap();
         assert!(!inc_preview.complete);
         assert!(inc_preview.refused.is_none());
         assert!(inc_preview.steps.is_empty());
 
         // Order Mountain (c1) on very top, Forest (c0) second.
-        let order_plan = GroupPlan::OrderLibrary {
+        let order_choice = DecisionChoice::OrderLibrary {
             order: vec![c1, c0],
         };
-        let order_applied = assert_apply_matches_manual(s.game_mut(), 0, &order_plan);
-        assert_eq!(order_applied.steps.len(), if skip_trivial { 1 } else { 2 });
+        let order_submitted = assert_submit_matches_manual(s.game_mut(), 0, &order_choice);
+        assert_eq!(order_submitted.steps.len(), if skip_trivial { 1 } else { 2 });
         assert_eq!(
-            order_applied.outcome,
-            Some(GroupOutcome::OrderLibrary {
+            order_submitted.outcome,
+            Some(DecisionOutcome::OrderLibrary {
                 end: LibraryEnd::Top,
                 order: vec![c1, c0],
             })
@@ -719,24 +797,27 @@ fn surveil_two_to_order_library_top_under_both_skip_trivial_settings() {
         card_render(s_all.game(), pinned[0]),
         card_render(s_all.game(), pinned[1]),
     );
-    let bin_all = GroupPlan::Surveil {
+    let bin_all = DecisionChoice::Surveil {
         graveyard: vec![c0, c1],
     };
-    let applied = assert_apply_matches_manual(s_all.game_mut(), 0, &bin_all);
+    let submitted = assert_submit_matches_manual(s_all.game_mut(), 0, &bin_all);
     assert_eq!(
-        applied.steps.len(),
+        submitted.steps.len(),
         2,
         "no trailing Decline when binning all"
     );
-    assert!(applied.steps.iter().all(|step| step.item.is_some()));
+    assert!(submitted.steps.iter().all(|step| step.item.is_some()));
     assert_eq!(
-        applied.outcome,
-        Some(GroupOutcome::Surveil {
+        submitted.outcome,
+        Some(DecisionOutcome::Surveil {
             graveyard: vec![c0, c1],
             kept: vec![],
         })
     );
-    assert!(s_all.game().group(PlayerId(0)).is_none());
+    assert!(matches!(
+        s_all.game().decision(Some(PlayerId(0))).map(|d| d.spec),
+        None | Some(DecisionSpec::Single)
+    ));
 }
 
 #[test]
@@ -761,32 +842,38 @@ fn surveil_three_mid_group_raw_step_exposes_committed_graveyard() {
         .unwrap();
     s.step_action(raw_idx);
 
-    let g = s
+    let d = s
         .game()
-        .group(PlayerId(0))
+        .decision(Some(PlayerId(0)))
         .expect("2 cards remain in Surveil");
-    match &g.spec {
-        GroupSpec::Surveil {
+    match &d.spec {
+        DecisionSpec::Surveil {
             items,
             committed_graveyard,
         } => {
             assert_eq!(items.len(), 2);
-            assert_eq!(committed_graveyard, &vec![c0]);
+            assert_eq!(
+                committed_graveyard,
+                &vec![GroupCard {
+                    item: c0,
+                    label: "Forest".into(),
+                }]
+            );
         }
         other => panic!("expected Surveil, got {other:?}"),
     }
 
     // Put Island (c2) in graveyard and keep Mountain (c1) on top.
-    let plan = GroupPlan::Surveil {
+    let choice = DecisionChoice::Surveil {
         graveyard: vec![c2],
     };
-    let applied = assert_apply_matches_manual(s.game_mut(), 0, &plan);
-    assert_eq!(applied.steps.len(), 2);
-    assert_eq!(applied.steps[0].item, Some(c2));
-    assert_eq!(applied.steps[1].item, None);
+    let submitted = assert_submit_matches_manual(s.game_mut(), 0, &choice);
+    assert_eq!(submitted.steps.len(), 2);
+    assert_eq!(submitted.steps[0].item, Some(c2));
+    assert_eq!(submitted.steps[1].item, None);
     assert_eq!(
-        applied.outcome,
-        Some(GroupOutcome::Surveil {
+        submitted.outcome,
+        Some(DecisionOutcome::Surveil {
             graveyard: vec![c0, c2],
             kept: vec![c1],
         })
@@ -823,17 +910,17 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
             .unwrap();
         s.step_action(pick_forest);
 
-        let g = s
+        let d = s
             .game()
-            .group(PlayerId(0))
+            .decision(Some(PlayerId(0)))
             .expect("OrderLibrary Bottom (2 cards)");
         let (c1, c2) = (
             card_render(s.game(), pinned[1]),
             card_render(s.game(), pinned[2]),
         );
         assert!(matches!(
-            g.spec,
-            GroupSpec::OrderLibrary {
+            d.spec,
+            DecisionSpec::OrderLibrary {
                 end: LibraryEnd::Bottom,
                 ref items,
                 ref committed,
@@ -841,14 +928,14 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
         ));
 
         // Order Island (c2) above Mountain (c1) on the bottom (c1 at index 0).
-        let plan = GroupPlan::OrderLibrary {
+        let choice = DecisionChoice::OrderLibrary {
             order: vec![c2, c1],
         };
-        let applied = assert_apply_matches_manual(s.game_mut(), 0, &plan);
-        assert_eq!(applied.steps.len(), if skip_trivial { 1 } else { 2 });
+        let submitted = assert_submit_matches_manual(s.game_mut(), 0, &choice);
+        assert_eq!(submitted.steps.len(), if skip_trivial { 1 } else { 2 });
         assert_eq!(
-            applied.outcome,
-            Some(GroupOutcome::OrderLibrary {
+            submitted.outcome,
+            Some(DecisionOutcome::OrderLibrary {
                 end: LibraryEnd::Bottom,
                 order: vec![c2, c1],
             })
@@ -862,7 +949,7 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
         assert_eq!(lib[1], pinned[2], "Island must sit directly above Mountain");
     }
 
-    // 2. 3-card OrderLibrary Bottom with mid-group raw step.
+    // 2. 3-card OrderLibrary Bottom with mid-group raw step -> committed carries GroupCard label.
     let (mut s, pinned) = setup_library_effect(
         &["Forest", "Mountain", "Island", "Swamp"],
         vec![Effect::LookAndSelect {
@@ -900,29 +987,35 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
         .unwrap();
     s.step_action(pick_island);
 
-    let g = s
+    let d = s
         .game()
-        .group(PlayerId(0))
+        .decision(Some(PlayerId(0)))
         .expect("2 cards remain in OrderLibrary Bottom");
-    match &g.spec {
-        GroupSpec::OrderLibrary {
+    match &d.spec {
+        DecisionSpec::OrderLibrary {
             end,
             items,
             committed,
         } => {
             assert_eq!(*end, LibraryEnd::Bottom);
             assert_eq!(items.len(), 2);
-            assert_eq!(committed, &vec![i]);
+            assert_eq!(
+                committed,
+                &vec![GroupCard {
+                    item: i,
+                    label: "Island".into(),
+                }]
+            );
         }
         other => panic!("expected OrderLibrary, got {other:?}"),
     }
 
     // Finish remaining two: Swamp above Mountain (so bottom is Mountain, Swamp, Island from index 0 up).
-    let plan = GroupPlan::OrderLibrary { order: vec![sw, m] };
-    let applied = assert_apply_matches_manual(s.game_mut(), 0, &plan);
+    let choice = DecisionChoice::OrderLibrary { order: vec![sw, m] };
+    let submitted = assert_submit_matches_manual(s.game_mut(), 0, &choice);
     assert_eq!(
-        applied.outcome,
-        Some(GroupOutcome::OrderLibrary {
+        submitted.outcome,
+        Some(DecisionOutcome::OrderLibrary {
             end: LibraryEnd::Bottom,
             order: vec![i, sw, m],
         })
@@ -935,4 +1028,70 @@ fn order_library_bottom_two_and_three_cards_including_mid_group_raw_step() {
     assert_eq!(lib[0], pinned[1], "Mountain at very bottom (index 0)");
     assert_eq!(lib[1], pinned[3], "Swamp above Mountain (index 1)");
     assert_eq!(lib[2], pinned[2], "Island above Swamp (index 2)");
+}
+
+#[test]
+fn env_submit_settles_mixed_policy_identically_to_env_step() {
+    let setup = vec![
+        PlayerConfig::new("Hero", deck(&[("Mountain", 20), ("Gray Ogre", 20)])),
+        PlayerConfig::new("Bot", deck(&[("Forest", 20), ("Llanowar Elves", 20)])),
+    ];
+    let mut env = Env::new(19, true, false, false)
+        .with_player_policies([PlayerPolicy::Agent, PlayerPolicy::Heuristic]);
+    env.reset(setup).unwrap();
+
+    // Keep opening hand, then put ready attackers and heuristic blockers on the board.
+    while let Some(d) = env.decision(None).unwrap() {
+        let Some(keep) = d.offers.iter().find(|o| o.label.contains("Keep")) else {
+            break;
+        };
+        env.submit(None, &DecisionChoice::Single { offer_id: keep.id })
+            .unwrap();
+    }
+    env.scenario_force_battlefield(0, "Gray Ogre", true).unwrap();
+    env.scenario_force_battlefield(0, "Gray Ogre", true).unwrap();
+    env.scenario_force_battlefield(1, "Llanowar Elves", true)
+        .unwrap();
+    env.scenario_force_battlefield(1, "Llanowar Elves", true)
+        .unwrap();
+    env.scenario_refresh().unwrap();
+
+    // Advance until player 0 reaches DeclareAttackers with both Gray Ogres.
+    for _ in 0..80 {
+        let d = env.decision(None).unwrap().expect("active decision");
+        assert_eq!(d.address.viewer, 0, "mixed env must settle back to seat 0");
+        if let DecisionSpec::DeclareAttackers { ref declarable, .. } = d.spec {
+            assert_eq!(declarable.len(), 2);
+            let choice = DecisionChoice::DeclareAttackers {
+                attackers: declarable.iter().map(|c| c.item).collect(),
+            };
+            let preview = env.preview(None, &choice).unwrap();
+            assert!(preview.complete);
+            assert_eq!(preview.steps.len(), 2);
+
+            let mut manual = env.fork().unwrap();
+            let mut manual_out = None;
+            for step in &preview.steps {
+                manual_out = Some(manual.step(step.action_index as i64).unwrap());
+            }
+            let (m_obs, m_reward, m_done, m_trunc, _) = manual_out.unwrap();
+            let (s_obs, s_reward, s_done, s_trunc, _) = env.submit(None, &choice).unwrap();
+
+            assert_eq!(env.state_digest().unwrap(), manual.state_digest().unwrap());
+            assert_eq!(s_obs.agent.player_index, m_obs.agent.player_index);
+            assert_eq!(s_reward, m_reward);
+            assert_eq!(s_done, m_done);
+            assert_eq!(s_trunc, m_trunc);
+            return;
+        }
+        let offer_id = d
+            .offers
+            .iter()
+            .find(|o| o.verb == OfferVerb::PassPriority)
+            .unwrap_or(&d.offers[0])
+            .id;
+        env.submit(None, &DecisionChoice::Single { offer_id })
+            .unwrap();
+    }
+    panic!("did not reach DeclareAttackers in mixed-policy env");
 }

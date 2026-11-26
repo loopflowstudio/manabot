@@ -72,14 +72,14 @@ from managym.experience_projection import (
     serialize_observation,
 )
 from managym.group import (
-    GroupPlan,
-    GroupPreview,
-    OrderLibraryGroup,
-    OrderLibraryPlan,
-    ScryGroup,
-    ScryPlan,
-    group as read_native_group,
-    preview_group,
+    DecisionAddress,
+    DecisionPreview,
+    GroupChoice,
+    OrderLibraryChoice,
+    OrderLibraryDecision,
+    ScryChoice,
+    ScryDecision,
+    SingleDecision,
 )
 from managym.payment import preview_payment
 from managym.policy import PolicyRunner
@@ -1796,8 +1796,8 @@ class GameSession:
             and self._live_group_cache[0] == cache_key
         ):
             return deepcopy(self._live_group_cache[1])
-        native_group = read_native_group(self.env, viewer=self.human_seat)
-        if native_group is None:
+        active = self.env.decision(viewer=self.human_seat)
+        if active is None or isinstance(active, SingleDecision):
             self._live_group_cache = (cache_key, None)
             return None
         descriptor: dict[str, Any] = {
@@ -1805,7 +1805,7 @@ class GameSession:
             "revision": context.revision,
             "prompt_id": context.prompt_id,
             "frame_hash": context.frame["frame_hash"],
-            **native_group.model_dump(mode="json", exclude={"revision", "fingerprint"}),
+            **active.model_dump(mode="json", exclude={"address", "offers"}),
         }
         self._live_group_cache = (cache_key, descriptor)
         return deepcopy(descriptor)
@@ -1841,14 +1841,13 @@ class GameSession:
         native = SemanticDecisionFrame.from_json(
             pending.root.semantic_decision_frame_json()
         )
+        address = DecisionAddress(
+            viewer=context.viewer,
+            revision=native.revision,
+            fingerprint=native.fingerprint,
+        )
         try:
-            preview = preview_group(
-                self.env,
-                viewer=context.viewer,
-                revision=native.revision,
-                fingerprint=native.fingerprint,
-                plan=group_command.plan,
-            )
+            preview = self.env.preview(group_command.plan, at=address)
         except managym.AgentError:
             return self._reject_command(raw, "stale_revision", recover=True)
 
@@ -5587,22 +5586,22 @@ async def get_payment_preview(
         }
 
 
-def _incomplete_group_message(preview: GroupPreview, plan: GroupPlan) -> str:
+def _incomplete_group_message(preview: DecisionPreview, plan: GroupChoice) -> str:
     """Describe what remains unplaced when a grouped preview is incomplete."""
-    group_spec = preview.group
+    decision = preview.decision
     placed_items: tuple[Any, ...] | list[Any] | None = None
-    if isinstance(group_spec, ScryGroup) and isinstance(plan, ScryPlan):
+    if isinstance(decision, ScryDecision) and isinstance(plan, ScryChoice):
         placed_items = (*plan.top, *plan.bottom)
-    elif isinstance(group_spec, OrderLibraryGroup) and isinstance(
-        plan, OrderLibraryPlan
+    elif isinstance(decision, OrderLibraryDecision) and isinstance(
+        plan, OrderLibraryChoice
     ):
         placed_items = plan.order
     if placed_items is not None:
-        assert isinstance(group_spec, (ScryGroup, OrderLibraryGroup))
+        assert isinstance(decision, (ScryDecision, OrderLibraryDecision))
         placed = {(item.entity, item.incarnation) for item in placed_items}
         missing = [
             card.label
-            for card in group_spec.items
+            for card in decision.items
             if (card.item.entity, card.item.incarnation) not in placed
         ]
         if missing:
@@ -5611,14 +5610,14 @@ def _incomplete_group_message(preview: GroupPreview, plan: GroupPlan) -> str:
 
 
 class GroupPreviewRequest(BaseModel):
-    """A drafted grouped plan at the current prompt's authority address."""
+    """A drafted grouped choice at the current prompt's authority address."""
 
     model_config = ConfigDict(extra="forbid")
     match_id: str
     revision: int
     prompt_id: int
     frame_hash: str
-    plan: GroupPlan
+    plan: GroupChoice
 
 
 @app.post("/api/sessions/{session_id}/group-preview")
@@ -5663,14 +5662,13 @@ async def get_group_preview(
         native = SemanticDecisionFrame.from_json(
             pending.root.semantic_decision_frame_json()
         )
+        address = DecisionAddress(
+            viewer=context.viewer,
+            revision=native.revision,
+            fingerprint=native.fingerprint,
+        )
         try:
-            preview = preview_group(
-                game.env,
-                viewer=context.viewer,
-                revision=native.revision,
-                fingerprint=native.fingerprint,
-                plan=payload.plan,
-            )
+            preview = game.env.preview(payload.plan, at=address)
         except managym.AgentError as exc:
             raise HTTPException(409, "group_preview_stale") from exc
         if preview.steps and (

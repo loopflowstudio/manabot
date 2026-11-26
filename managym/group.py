@@ -1,18 +1,19 @@
-"""Typed grouped-input descriptors, read-only previews and atomic application.
+"""Unified interactive decision, preview, and atomic submission types.
 
 Multi-part decisions (combat declarations, Scry, Surveil and OrderLibrary) keep
-their flat sequential native ``Action``s. These models wrap ``Env.group_json``,
-``Env.preview_group_json`` and ``Env.apply_group_json`` so callers describe the
-active group, preview a whole drafted plan on a native clone, and apply a valid
-plan atomically without touching the action space or observation contract.
+their flat sequential native ``Action``s. Callers inspect the active decision
+through ``env.decision()``, preview a single offer id or grouped ``Choice`` on
+a native clone via ``env.preview(choice, at=...)``, and commit atomically via
+``env.submit(choice, at=...)`` without touching ``env.step(action)`` or the
+observation contract.
 """
 
+import json
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
 
-import managym
-from managym.experience import ObjectRenderId, ProtocolModel
+from managym.experience import ObjectRenderId, ProtocolModel, SubjectRef
 
 LibraryEnd = Literal["top", "bottom"]
 
@@ -40,64 +41,95 @@ class BlockerItem(ProtocolModel):
     must_block: bool
 
 
-class _GroupAddress(ProtocolModel):
+class DecisionAddress(ProtocolModel):
+    """Optimistic-concurrency address binding a decision to `(viewer, revision, fingerprint)`."""
+
+    viewer: int
     revision: int
     fingerprint: str
 
 
-class DeclareAttackersGroup(_GroupAddress):
+class Offer(ProtocolModel):
+    """One raw single-step legal offer available at the current decision."""
+
+    id: int
+    verb: str
+    label: str
+    source: SubjectRef | None = None
+
+
+class _DecisionBase(ProtocolModel):
+    address: DecisionAddress
+    offers: list[Offer]
+
+
+class SingleDecision(_DecisionBase):
+    kind: Literal["single"] = "single"
+
+
+class DeclareAttackersDecision(_DecisionBase):
     kind: Literal["declare_attackers"] = "declare_attackers"
     declarable: list[AttackerItem]
     committed: list[ObjectRenderId]
 
 
-class DeclareBlockersGroup(_GroupAddress):
+class DeclareBlockersDecision(_DecisionBase):
     kind: Literal["declare_blockers"] = "declare_blockers"
     declarable: list[BlockerItem]
     committed: list[PlannedBlock]
 
 
-class ScryGroup(_GroupAddress):
+class ScryDecision(_DecisionBase):
     kind: Literal["scry"] = "scry"
     items: list[GroupCard]
-    committed_top: list[ObjectRenderId]
-    committed_bottom: list[ObjectRenderId]
+    committed_top: list[GroupCard]
+    committed_bottom: list[GroupCard]
 
 
-class SurveilGroup(_GroupAddress):
+class SurveilDecision(_DecisionBase):
     kind: Literal["surveil"] = "surveil"
     items: list[GroupCard]
-    committed_graveyard: list[ObjectRenderId]
+    committed_graveyard: list[GroupCard]
 
 
-class OrderLibraryGroup(_GroupAddress):
+class OrderLibraryDecision(_DecisionBase):
     kind: Literal["order_library"] = "order_library"
     end: LibraryEnd
     items: list[GroupCard]
-    committed: list[ObjectRenderId]
+    committed: list[GroupCard]
 
 
-type Group = Annotated[
-    DeclareAttackersGroup
-    | DeclareBlockersGroup
-    | ScryGroup
-    | SurveilGroup
-    | OrderLibraryGroup,
+type GroupedDecision = Annotated[
+    DeclareAttackersDecision
+    | DeclareBlockersDecision
+    | ScryDecision
+    | SurveilDecision
+    | OrderLibraryDecision,
+    Field(discriminator="kind"),
+]
+
+type Decision = Annotated[
+    SingleDecision
+    | DeclareAttackersDecision
+    | DeclareBlockersDecision
+    | ScryDecision
+    | SurveilDecision
+    | OrderLibraryDecision,
     Field(discriminator="kind"),
 ]
 
 
-class DeclareAttackersPlan(ProtocolModel):
+class DeclareAttackersChoice(ProtocolModel):
     kind: Literal["declare_attackers"] = "declare_attackers"
     attackers: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class DeclareBlockersPlan(ProtocolModel):
+class DeclareBlockersChoice(ProtocolModel):
     kind: Literal["declare_blockers"] = "declare_blockers"
     blocks: list[PlannedBlock] = Field(default_factory=list)
 
 
-class ScryPlan(ProtocolModel):
+class ScryChoice(ProtocolModel):
     """`top` is drawn-first; `bottom` is top-to-bottom of the bottom group."""
 
     kind: Literal["scry"] = "scry"
@@ -105,32 +137,34 @@ class ScryPlan(ProtocolModel):
     bottom: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class SurveilPlan(ProtocolModel):
+class SurveilChoice(ProtocolModel):
     """Cards to put into the graveyard; all remaining looked-at cards stay on top."""
 
     kind: Literal["surveil"] = "surveil"
     graveyard: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class OrderLibraryPlan(ProtocolModel):
+class OrderLibraryChoice(ProtocolModel):
     """Remaining cards in desired order, drawn-first at index 0."""
 
     kind: Literal["order_library"] = "order_library"
     order: list[ObjectRenderId] = Field(default_factory=list)
 
 
-type GroupPlan = Annotated[
-    DeclareAttackersPlan
-    | DeclareBlockersPlan
-    | ScryPlan
-    | SurveilPlan
-    | OrderLibraryPlan,
+type GroupChoice = Annotated[
+    DeclareAttackersChoice
+    | DeclareBlockersChoice
+    | ScryChoice
+    | SurveilChoice
+    | OrderLibraryChoice,
     Field(discriminator="kind"),
 ]
 
+type Choice = int | GroupChoice
 
-class GroupStep(ProtocolModel):
-    """One sequential native step compiled from a grouped plan."""
+
+class DecisionStep(ProtocolModel):
+    """One sequential native step compiled from a decision choice."""
 
     revision: int
     fingerprint: str
@@ -138,10 +172,15 @@ class GroupStep(ProtocolModel):
     item: ObjectRenderId | None
 
 
-class GroupRefusal(ProtocolModel):
+class DecisionRefusal(ProtocolModel):
     item: ObjectRenderId | None
     label: str
     reason: str
+
+
+class SingleOutcome(ProtocolModel):
+    kind: Literal["single"] = "single"
+    offer_id: int
 
 
 class DeclareAttackersOutcome(ProtocolModel):
@@ -172,8 +211,9 @@ class OrderLibraryOutcome(ProtocolModel):
     order: list[ObjectRenderId]
 
 
-type GroupOutcome = Annotated[
-    DeclareAttackersOutcome
+type DecisionOutcome = Annotated[
+    SingleOutcome
+    | DeclareAttackersOutcome
     | DeclareBlockersOutcome
     | ScryOutcome
     | SurveilOutcome
@@ -182,51 +222,36 @@ type GroupOutcome = Annotated[
 ]
 
 
-class GroupPreview(ProtocolModel):
-    group: Group
-    steps: list[GroupStep]
-    refused: GroupRefusal | None
+class DecisionPreview(ProtocolModel):
+    decision: Decision
+    steps: list[DecisionStep]
+    refused: DecisionRefusal | None
     complete: bool
-    outcome: GroupOutcome | None
+    outcome: DecisionOutcome | None
 
 
-_GROUP_ADAPTER: TypeAdapter[Group] = TypeAdapter(Group)
-_PLAN_ADAPTER: TypeAdapter[GroupPlan] = TypeAdapter(GroupPlan)
+_DECISION_ADAPTER: TypeAdapter[Decision] = TypeAdapter(Decision)
+_GROUP_CHOICE_ADAPTER: TypeAdapter[GroupChoice] = TypeAdapter(GroupChoice)
 
 
-def group(env: managym.Env, *, viewer: int) -> Group | None:
-    """Return the active grouped decision for `viewer`, or `None`."""
-    raw = env.group_json(viewer)
-    if raw is None:
-        return None
-    return _GROUP_ADAPTER.validate_json(raw)
+def _parse_decision(raw: str) -> Decision:
+    return _DECISION_ADAPTER.validate_json(raw)
 
 
-def preview_group(
-    env: managym.Env,
-    *,
-    viewer: int,
-    revision: int,
-    fingerprint: str,
-    plan: GroupPlan,
-) -> GroupPreview:
-    """Read-only preview bound to `(viewer, revision, fingerprint)`."""
-    plan_json = _PLAN_ADAPTER.dump_json(plan).decode()
-    return GroupPreview.model_validate_json(
-        env.preview_group_json(viewer, revision, fingerprint, plan_json)
-    )
+def _parse_preview(raw: str) -> DecisionPreview:
+    return DecisionPreview.model_validate_json(raw)
 
 
-def apply_group(
-    env: managym.Env,
-    *,
-    viewer: int,
-    revision: int,
-    fingerprint: str,
-    plan: GroupPlan,
-) -> GroupPreview:
-    """Validate on a clone and execute all compiled steps atomically."""
-    plan_json = _PLAN_ADAPTER.dump_json(plan).decode()
-    return GroupPreview.model_validate_json(
-        env.apply_group_json(viewer, revision, fingerprint, plan_json)
-    )
+def _dump_choice(choice: Choice) -> str:
+    if isinstance(choice, bool):
+        raise TypeError("choice must be an int offer id or a grouped Choice, not bool")
+    if isinstance(choice, int):
+        if choice < 0:
+            raise ValueError(f"offer id must be non-negative, got {choice}")
+        return json.dumps({"kind": "single", "offer_id": choice})
+    validated = _GROUP_CHOICE_ADAPTER.validate_python(choice)
+    return _GROUP_CHOICE_ADAPTER.dump_json(validated).decode()
+
+
+def _dump_address(at: DecisionAddress) -> str:
+    return DecisionAddress.model_validate(at).model_dump_json()
