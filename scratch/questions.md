@@ -102,3 +102,9 @@
 - Coverage decomposition: no general zone-change replacement yet. Every death
   replacement in the batch is "would die → exile"; Overwrite's
   battlefield-to-exile diversion is the first card needing another axis.
+
+- Adopted for review (R3 concept review G3): accept that `ExileLink.ability_set`
+  moves state-hash bytes for any state holding an exile link (new CR 607.5
+  state main never recorded); note it in the PR. Passed over: auditing retained
+  TLA receipts for mid-game exile links first, since no checked-in receipt
+  failed for it.

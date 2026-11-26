@@ -128,12 +128,51 @@ batch `DeclareAttackers`.
   debug workspace nextest 2,205 passed / 3 skipped at `e4a02d45cb`; no v11
   column, token, Command or offer shape changed in R1–R2. Findings F1–F6 are
   Slice R3; F7 is deferred.
-- Slice R3 (`00151c7d69`): replaced `AbilityProvenance` and
-  `characteristic_set: Option<CardDefId>` with compact `AbilitySet { Printed(CardDefId), Acquired(GrantKey) }` (12-byte `GrantKey` preserving `size_of::<Game>() <= 5248`) and single `linked_ability_source` pairing by equality (CR 607.5); guarded `Operation::Inherit` to the latest `HasAbilitiesOfSource` record so Koh re-choices replace without duplicating and sever old links; deleted `source_census.rs`, `FunctionZones::Command`, `emblems_linked_to`, and `ObjectForm.emblem_source` (`CanonicalCard.emblem_source`); routed printed static reads through `functioning_object_statics*` and tightened `StaticSources` visibility; renamed `FunctionZones::Default` and `StaticSources` with seat-bucket invariant doc. Added Koh/Boiling Rock Rioter CR 607.5 test in `tla.rs` and rewrote `functioning_abilities::tests`. Verified: `cargo fmt --all`, debug nextest (`managym --lib`, `rules_tests`, `match_state_hash_tests`, `tla`/`fdn`/`fra` card tests), cp313 rebuild, `test_pinned_pilot.py` (2 passed, 1 skipped, zero drift), release `bench_steps` digest `10601622128491155944` unchanged.
+- Slice R3 (`00151c7d69`): `AbilitySet { Printed(CardDefId), Acquired(GrantKey) }`
+  and equality pairing in `linked_ability_source` (CR 607.5); Koh/Boiling Rock
+  Rioter test in `tla.rs`; deleted `source_census.rs`, `FunctionZones::Command`,
+  `emblems_linked_to`, `ObjectForm.emblem_source`. Focused debug suites and
+  pinned pilot green.
+- Concept review of R3 (`14a7fb0306`, `scratch/concept-review.html`): groups
+  A (planeswalkers) and B (functioning gate) line up. At `bc0486e957`
+  `tests/academy/test_authored_match_authority.py` fails (33 digest fields at
+  stack-holding decisions 8–9, 30–33; offers/commands/labels identical) and
+  debug workspace nextest is 2,243 passed / 14 failed / 3 skipped — all 14 are
+  `semantic_conformance_tests frozen_*` trace hashes. Cause: printed abilities
+  now serialize `ability_set: Printed(def)` into the state hash.
+  Dispositions: G1, G2 → Slice R4; G3 adopted for review (accept the
+  `ExileLink.ability_set` hash move, say so in the PR; passed over: auditing
+  retained TLA receipts first, since no checked-in receipt failed for it);
+  G4 (was F7) stays deferred.
+
+## Next pass — Slice R4: printed abilities stop writing their set
+
+- **G1.** Replace `ability_set: Option<AbilitySet>` / `AbilitySet` on every
+  carrier (`ActivatedAbilityDefinition` `state/src/card.rs:1096`,
+  `ActivatedAbilityOnStack` / `TriggeredAbilityOnStack`
+  `state/src/stack_object.rs:113,180`, `EffectFrame` `flow/decision.rs:239`,
+  `PendingTrigger` `flow/trigger.rs`, `EffectiveTrigger`) with
+  `acquired: Option<GrantKey>`, `#[serde(skip_serializing_if = "Option::is_none")]`.
+  `AbilitySet` survives only in `LinkedAbilitySource` and `ExileLink`, built in
+  one derivation in `linked_ability_source` (`Some(key)` → `Acquired`, `None` →
+  `Printed(ability_face …)`); delete the three fallbacks and `play.rs`
+  `unwrap_or(Printed(..))`. Sites: `flow/triggers.rs:1148–1172,1715`,
+  `flow/layers.rs:964,974,1851–2089`, `flow/play.rs:2270–2340`,
+  `flow/resolution.rs:678–695,754,806,2298`.
+- **G2.** Drop `EffectiveTrigger.clock`; derive `GrantClock` from
+  `(acquired, ability_index)` where once-each-turn applies
+  (`flow/layers.rs` clock closure, `flow/triggers.rs` `used_trigger_grants`).
+- Acceptance, on unmodified evidence: `uv run --extra dev python -m pytest
+  tests/academy/test_authored_match_authority.py` and debug
+  `cargo nextest run --profile ci -p managym --test semantic_conformance_tests`
+  pass; Koh CR 607.5 test in `tla.rs` still passes; debug workspace nextest,
+  `size_of::<Game>() <= 5248`, cp313 rebuild, pinned pilot zero drift, release
+  `bench_steps` digest `10601622128491155944`.
+- Teaches: whether any digest still moves beyond exile links (G3), before ship.
 
 ## Deferred findings
 
-- **F7 replacement source order.** `ReplacementSourceOrder::{BySeat,
+- **G4 (was F7) replacement source order.** `ReplacementSourceOrder::{BySeat,
   SlotOrder, ControlledBy}` (`flow/proposed_event.rs` 4 sites,
   `flow/mana.rs:3449`) keeps three call-site traversal orders; CR 616.1 makes
   order the affected player's choice. Collapsing could change which
