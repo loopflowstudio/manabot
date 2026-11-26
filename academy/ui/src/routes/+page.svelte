@@ -288,7 +288,8 @@
       villain: matchupDeckLabel(config.villain_deck_pool, villainName, gameStore.decks.villain),
     };
     untrack(() => {
-      lastMatchup = { config, opponent: opponentName, decks };
+      // Open hands belongs to the game it was turned on in: Rematch and Swap play/draw keep it, Play again starts blind.
+      lastMatchup = { config: { ...config, open_hands: false }, opponent: opponentName, decks };
       saveLastMatchup(lastMatchup);
     });
   });

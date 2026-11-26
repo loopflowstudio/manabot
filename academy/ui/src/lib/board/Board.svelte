@@ -24,7 +24,7 @@
    * this viewer may see face-up. Live play with open hands on passes the
    * bot's hand (`openHand`), drawn face-up and out in place of the backs at
    * the position being played, never on a past board. A ribbon is tucked to its cards' name bars
-   * or out in full, and moves only by `translateY`, so the battlefield never
+   * (play's open hand to a back's edge) or out in full, each seat's by its own plate, and moves only by `translateY`, so the battlefield never
    * shifts under it.
    *
    * Live play also takes pointer drags (`drag.ts`): each drop goes where a
@@ -93,7 +93,7 @@
   import Strip from './Strip.svelte';
   import type { DecisionMark } from '$lib/analysis';
   import { decidesBy, shortName } from '$lib/opponent-name';
-  import { CARD_RATIO, fieldItems, footprint, handFan, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type HandItem, type PermanentItem, type PlacedOffer, type RowLimits, type SideView, type StackItem, type TrayItem } from './view';
+  import { CARD_RATIO, fieldItems, footprint, handFan, handStrip, inspectableCards, pileShapes, NO_RIBBON_OVERRIDES, possessive, ribbonIsOut, splitHalf, toggleRibbon, boardView, type HalfSplit, type HandItem, type PermanentItem, type PlacedOffer, type RibbonOverrides, type RowLimits, type SideView, type StackItem, type TrayItem } from './view';
 
   interface Props {
     frame: ExperienceFrame;
@@ -824,6 +824,26 @@
   const drawn = $derived(activeCursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
   const board = $derived(activeCursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
+  /**
+   * The top ribbon's side. With open hands on, at the position being played,
+   * the bot's whole hand in its own order: a card the rules already revealed
+   * keeps its offers, and the rest take the place of the backs. A past board
+   * (beat playback, lookback) draws only what it held. This is the one
+   * opponent hand the board knows: the ribbon, Inspect and the trackers'
+   * faces all read it.
+   */
+  const openShown = $derived(openHand !== null && activeCursor === null);
+  const topSide = $derived.by<SideView>(() => {
+    const theirs = board.opponent;
+    if (!openHand || !openShown) return theirs;
+    const revealed = new Map(theirs.hand.map(item => [item.card.id, item]));
+    const held = new Set(openHand.map(card => card.id));
+    const hand = [
+      ...openHand.map(card => revealed.get(card.id) ?? { card, offers: [] }),
+      ...theirs.hand.filter(item => !held.has(item.card.id)),
+    ];
+    return { ...theirs, hand, hiddenHand: Math.max(0, theirs.hand.length + theirs.hiddenHand - hand.length) };
+  });
   const priorBoardProjection = $derived.by(() => {
     if (activeCursor === null) return null;
     const minSeq = Math.min(...active.seqs, activeCursor.seq);
@@ -1111,7 +1131,7 @@
   // The inspected object as it is in this frame, by id; a name alone when it has left.
   const permanents = $derived(new Map([...boardProjection.agent.battlefield, ...boardProjection.opponent.battlefield].map(permanent => [permanent.id, permanent])));
   const boardNames = $derived(new Map([...permanents].map(([id, permanent]) => [id, permanent.name ?? 'permanent'])));
-  const cards = $derived(new Map(inspectableCards([boardProjection.agent, boardProjection.opponent]).map(card => [card.id, card])));
+  const cards = $derived(new Map([...inspectableCards([boardProjection.agent, boardProjection.opponent]), ...topSide.hand.map(item => item.card)].map(card => [card.id, card])));
   const shown = $derived(inspectMode === 'dock' ? docked : hovered?.subject ?? null);
   const shownPermanent = $derived(shown?.permanent != null ? permanents.get(shown.permanent) ?? null : null);
   const shownCard = $derived(shown?.card != null ? cards.get(shown.card) ?? null : null);
@@ -1142,7 +1162,7 @@
     show(item ? { name: item.permanent.name ?? 'Permanent', text: item.permanent.text_box ?? null, permanent: item.permanent.id, card: null } : null, element);
   }
   function previewCard(card: CardState | null, element: HTMLElement | null): void {
-    point(card ? [...board.you.hand, ...board.opponent.hand].find(item => item.card.id === card.id)?.offers ?? null : null);
+    point(card ? [...board.you.hand, ...topSide.hand].find(item => item.card.id === card.id)?.offers ?? null : null);
     show(card ? { name: card.name, text: card.text_box ?? null, permanent: null, card: card.id } : null, element);
   }
   /** A tray card inspects as itself: its rules text, counters and permissions. */
@@ -1160,9 +1180,8 @@
 
   /** Rules text for a name in the log, from any card of that name this viewer can see. */
   function textOf(name: string): string | null {
-    const players = [boardProjection.agent, boardProjection.opponent];
-    const card = inspectableCards(players).find(candidate => candidate.name === name);
-    const permanent = players.flatMap(player => player.battlefield).find(candidate => candidate.name === name);
+    const card = [...cards.values()].find(candidate => candidate.name === name);
+    const permanent = [...permanents.values()].find(candidate => candidate.name === name);
     return card?.text_box ?? permanent?.text_box ?? null;
   }
   function openZone(title: string, cards: CardState[], element: HTMLElement): void {
@@ -1221,38 +1240,31 @@
   const ribbons = $derived(handLayout === 'ribbons');
   const topReserve = $derived(ribbons ? PEEK_FACE : PEEK_BACK);
   const bottomReserve = $derived(ribbons ? PEEK_FACE : 0);
-  /** Show hand on a plate brings both ribbons out, to compare the hands. */
-  let bothOut = $state(false);
   const ribbonSide = $derived(ribbonSeat === null ? null : ribbonSeat === boardProjection.agent.player_index ? 'you' : 'opponent');
   /**
-   * The top ribbon's side. With open hands on, at the position being played,
-   * the bot's whole hand in its own order: a card the rules already revealed
-   * keeps its offers, and the rest take the place of the backs. A past board
-   * (beat playback, lookback) draws only what it held.
+   * Each plate's Show hand / Tuck hand, for its own seat and this game only.
+   * A recording's tuck lasts for the position it was made at; live play has
+   * one open hand to tuck, and it stays tucked until shown again.
    */
-  const openShown = $derived(openHand !== null && activeCursor === null);
-  const topSide = $derived.by<SideView>(() => {
-    const theirs = board.opponent;
-    if (!openHand || !openShown) return theirs;
-    const revealed = new Map(theirs.hand.map(item => [item.card.id, item]));
-    const held = new Set(openHand.map(card => card.id));
-    const hand = [
-      ...openHand.map(card => revealed.get(card.id) ?? { card, offers: [] }),
-      ...theirs.hand.filter(item => !held.has(item.card.id)),
-    ];
-    return { ...theirs, hand, hiddenHand: Math.max(0, theirs.hand.length + theirs.hiddenHand - hand.length) };
-  });
-  /** Tuck hand on the opponent's plate: the open hand goes back to its name bars, clear of the lands under it. */
-  let openTucked = $state(false);
-  /** A ribbon is out for the seat acting, when asked, while open hands shows it, and whenever an offer sits on one of its cards. */
-  function ribbonOut(side: 'you' | 'opponent', hand: HandItem[]): boolean {
-    return (ribbons && (bothOut || ribbonSide === side)) || (side === 'opponent' && openShown && !openTucked) || hand.some(item => item.offers.length > 0);
+  let ribbonSay = $state.raw<{ match: string; overrides: RibbonOverrides }>({ match: '', overrides: NO_RIBBON_OVERRIDES });
+  const ribbonOverrides = $derived(ribbonSay.match === frame.match_id ? ribbonSay.overrides : NO_RIBBON_OVERRIDES);
+  const ribbonAt = $derived<unknown>(ribbons ? boardProjection : 'play');
+  /** What the position asks by itself: the acting seat's hand on a recording, the open hand in play. */
+  function ribbonAsked(side: 'you' | 'opponent'): boolean {
+    return (ribbons && ribbonSide === side) || (side === 'opponent' && openShown);
   }
-  /** The plate's Show hand / Tuck hand: on a recording, for a hand that is not already out by itself; in play, for the open hand. */
+  /** A ribbon is out for the seat acting, while open hands shows it, as its plate last said, and whenever an offer sits on one of its cards. */
+  function ribbonOut(side: 'you' | 'opponent', hand: HandItem[]): boolean {
+    return ribbonIsOut(ribbonOverrides, side, ribbonAt, { position: ribbonAsked(side), offered: hand.some(item => item.offers.length > 0) });
+  }
+  /** The plate's Show hand / Tuck hand for its own seat: a recording's hand, or play's open hand, unless an offer holds it out. */
   function handToggle(side: 'you' | 'opponent', sideView: SideView): { out: boolean; ontoggle: () => void } | null {
-    if (side === 'opponent' && openShown && sideView.hand.length > 0) return { out: !openTucked, ontoggle: () => { openTucked = !openTucked; } };
-    if (!ribbons || sideView.hand.length === 0 || (!bothOut && ribbonOut(side, sideView.hand))) return null;
-    return { out: bothOut, ontoggle: () => { bothOut = !bothOut; } };
+    if (sideView.hand.length === 0 || sideView.hand.some(item => item.offers.length > 0)) return null;
+    if (!ribbons && !(side === 'opponent' && openShown)) return null;
+    return {
+      out: ribbonOut(side, sideView.hand),
+      ontoggle: () => { ribbonSay = { match: frame.match_id, overrides: toggleRibbon(ribbonOverrides, side, ribbonAt, ribbonAsked(side)) }; },
+    };
   }
 
   // ———————————————— Pointer gestures
@@ -1498,7 +1510,7 @@
       ...boardProjection.opponent.battlefield.map(p => p.name ?? ''),
       ...boardProjection.opponent.graveyard.map(c => c.name ?? ''),
       ...boardProjection.opponent.exile.map(c => c.name ?? ''),
-      ...boardProjection.opponent.hand.map(c => c.name ?? ''),
+      ...topSide.hand.map(item => item.card.name ?? ''),
     ].filter(Boolean);
     if (!names.length) return;
     void loadTrackerCardFaces(names).then(faces => { trackerFaces = faces; });
@@ -2272,6 +2284,8 @@
   .ribbon.at-top .ribbon-card { top: 0; transform: translateY(calc(var(--peek) - var(--card-height))); }
   .ribbon.at-bottom .ribbon-card { bottom: 0; transform: translateY(calc(var(--card-height) - var(--peek))); }
   .ribbon-card.face { --peek: var(--peek-face); }
+  /* Play's open hand tucks to a back's depth, clear of the row under it. */
+  .ribbon.open .ribbon-card.face { --peek: var(--peek-back); }
   .ribbon-card.back {
     --peek: var(--peek-back); pointer-events: none; border: 1px solid var(--border-strong); border-radius: var(--radius-card);
     background: repeating-linear-gradient(45deg, var(--bg-field) 0 6px, var(--bg-muted) 6px 12px);

@@ -539,7 +539,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'open_hands_state') {
-      // The reply carries the game's setup as it now is, for Rematch and Play again.
+      // The reply carries the game's setup as it now is, for Rematch and Swap play/draw.
       gameStore.applyGame(message);
       gameStore.openHand = message.open_hand ?? null;
       return;

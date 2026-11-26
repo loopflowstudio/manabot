@@ -529,10 +529,14 @@ Every frame-bearing `/ws/play` reply (`observation`, `game_over` and
 by a top-level `frame` key: an accepted Command's frame is nested in
 `command_outcome.update.frame`. `set_stops` answers an `observation`, so it
 carries the hand; `analysis_state` does not. The `open_hands_state` reply also
-carries `setup`, like every reply, so Play again and Rematch read the setting
-as last left. The client has no separate flag: the switch and the top-bar chip
+carries `setup`, like every reply, so Rematch and Swap play/draw read the
+setting as last left; the client's saved Play again matchup drops it, and a
+game played on from another starts with it off while each prefix event keeps
+its source's `open_hands` mark. The client has no separate flag: the switch and the top-bar chip
 are on while `gameStore.openHand` is not null, and the opponent's plate then
-offers Show hand / Tuck hand over the face-up ribbon. The
+offers Show hand / Tuck hand over the face-up ribbon (tucked, it sits at a
+card back's depth). Each plate's toggle acts on its own seat
+(`RibbonOverrides` in `board/view.ts`). The
 client draws `open_hand` in place of top-ribbon card backs only at now
 (`activeCursor === null`) when `open_hand.revision` matches the current frame
 revision; beat playback and history lookback draw that historical board's own

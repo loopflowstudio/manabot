@@ -652,3 +652,40 @@ export function handFan(count: number, width: number, card: { min: number; max: 
   if (size * count + gap * (count - 1) <= width) return { card: size, step: size + gap, covered: false };
   return { card: size, step: Math.max(HAND_MIN_SLICE, (width - size) / (count - 1)), covered: true };
 }
+
+// ———————————————— Hand ribbons: the person's say
+
+type RibbonSide = 'you' | 'opponent';
+
+/**
+ * What a person asked of each hand ribbon, beside what the position asks.
+ * `pinned` keeps a seat's hand out until it is tucked. `tucked` is the
+ * position a hand was tucked at (compared by identity) and lapses when the
+ * position shown is another one. Each seat has its own; neither moves the other.
+ */
+export interface RibbonOverrides {
+  pinned: Readonly<Record<RibbonSide, boolean>>;
+  tucked: Readonly<Record<RibbonSide, unknown>>;
+}
+
+export const NO_RIBBON_OVERRIDES: RibbonOverrides = { pinned: { you: false, opponent: false }, tucked: { you: null, opponent: null } };
+
+/**
+ * Whether `side`'s hand is out at position `at`. `position` is what the
+ * position asks by itself (its seat is acting, or open hands shows it);
+ * `offered` is an offer sitting on one of its cards, which no tuck hides.
+ */
+export function ribbonIsOut(overrides: RibbonOverrides, side: RibbonSide, at: unknown, by: { position: boolean; offered: boolean }): boolean {
+  if (by.offered) return true;
+  if (overrides.tucked[side] !== null && overrides.tucked[side] === at) return false;
+  return overrides.pinned[side] || by.position;
+}
+
+/** Show hand / Tuck hand on `side`'s plate at position `at`: only that seat changes. */
+export function toggleRibbon(overrides: RibbonOverrides, side: RibbonSide, at: unknown, position: boolean): RibbonOverrides {
+  const out = ribbonIsOut(overrides, side, at, { position, offered: false });
+  return {
+    pinned: { ...overrides.pinned, [side]: !out && (overrides.pinned[side] || !position) },
+    tucked: { ...overrides.tucked, [side]: out && position ? at : null },
+  };
+}

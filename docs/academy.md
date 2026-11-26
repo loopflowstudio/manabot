@@ -263,7 +263,7 @@ and **Show both hands** on across choices, consequences and the final board.
 Both hands sit as upright card ribbons along the top and bottom edges of a
 fixed battlefield: the active seat's ribbon glides open while the waiting
 seat's stays tucked showing each card's name bar (hover or focus a tucked card
-to peek and inspect it, or use **Show hand / Tuck hand** on its plate).
+to peek and inspect it, or use **Show hand / Tuck hand** on that seat's plate).
 Unchecking **Show both hands** switches to the acting view, which draws the
 non-acting seat's hidden cards as backs while keeping any rules-revealed cards
 face-up. Where the record
@@ -457,9 +457,10 @@ Open Academy (`/`): if this browser remembers an unfinished played game
 (`localStorage['academy.game']`), `/` opens straight onto its board at the
 pending decision. Otherwise `/` shows the setup screen:
 
-- **Play again** starts the same opponent, decks, play/draw seat, deal mode,
-  stops and **Open hands** setting as your last matchup in one click (or **Play** with the default matchup
-  the first time). The last matchup is a browser preference
+- **Play again** starts the same opponent, decks, play/draw seat, deal mode
+  and stops as your last matchup in one click (or **Play** with the default matchup
+  the first time). It starts with **Open hands** off, whatever the last game
+  ended with. The last matchup is a browser preference
   (`academy.last-matchup` in local storage).
 - Choose **Play vs Bot** or **Watch Bot vs Bot**, pick decks, an opponent,
   decklist disclosure, **Open hands** (Play only, off by default), deal mode
@@ -1536,8 +1537,11 @@ those cards — staying extended through that choice's consequences until the
 other seat acts. The waiting seat's ribbon stays tucked along its edge showing
 each card's name bar: hover or focus any face-up tucked card to glide that card
 alone out and open Inspect without moving neighbouring cards or the
-battlefield, or press **Show hand / Tuck hand** on the waiting plate to expand
-or tuck both hands together. At game over, neither ribbon stays extended.
+battlefield. **Show hand / Tuck hand** on a plate acts on that seat's hand
+alone: a hand you show stays out as you step until you tuck it, and the
+choosing seat's hand can be tucked to read the lands under it until you step
+to another position. A hand with an offer on one of its cards stays out. At
+game over neither ribbon is extended, and each plate shows its own.
 
 The **Perspective** control in the top bar chooses who sits at the bottom:
 fixed seats (**Seat 1 at the bottom** is the default for Watch and imported
@@ -1632,7 +1636,10 @@ opponent and replays its moves up to the decision; **Play on** starts it, and
 from there you choose and the opponent plays as in any game. It is a new game
 in History: Replay names the game it came from and its row in History reads
 **played on from another game**. The moves before the decision are not listed
-in the new game's live move list; its Replay lists them all. If this build no
+in the new game's live move list; its Replay lists them all. The new game
+starts with [Open hands](#open-hands-while-you-play) off, and each move before
+the decision keeps the mark it had in the game it came from, so Review counts
+only the decisions actually made seeing the bot's hand. If this build no
 longer plays the old game the same way, Play says which step differs and
 nothing starts.
 
@@ -1701,10 +1708,11 @@ Click the chip or switch **Open hands** off to glide them back into card backs
 
 The face-up hand is out in full and lies over the middle of the opponent's back
 row. While **Open hands** is on, the **Hand** line on the opponent's plate is a
-**Tuck hand / Show hand** button: tuck the hand to its name bars to see the
-lands under it (hover or focus a tucked card to bring that card alone out), and
-show it again when you want the whole cards. Nothing on the battlefield moves
-either way.
+**Tuck hand / Show hand** button: tuck the hand back to the depth of a card
+back to see the whole land row under it (hover or focus a tucked card to bring
+that card alone out), and show it again when you want the whole cards. It stays
+tucked for the rest of that game until you show it. Nothing on the battlefield
+moves either way.
 
 - **Works with closed decklists.** Open hands is available in both open- and
   closed-decklist Play games (including the default TLA Trophies setup). It
@@ -1719,8 +1727,9 @@ either way.
   were drawn or cast. Returning to now restores the live open hand.
 - **Resume, rematch and game over.** Toggling **Open hands** during an active
   game saves it on the game's configuration, so reloading, reconnecting,
-  resuming from **History**, **Rematch**, **Swap sides** and the next **Play
-  again** keep the setting as you last left it. After game over, **Settings →
+  resuming from **History**, **Rematch** and **Swap sides** keep the setting as
+  you last left it. **Play again** and **Play on from here** start a new game
+  with it off. After game over, **Settings →
   Analysis** holds only **Open hands**: toggling it lets you peek at the bot's
   remaining hand without changing the finished game's saved configuration.
 - **Counted in Review.** Every deliberate decision you commit while **Open

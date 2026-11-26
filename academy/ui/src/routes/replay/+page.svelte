@@ -124,10 +124,13 @@
   const studying = $derived(studyFrame !== null);
   const branched = $derived(studying || lineFrame !== null);
   const viewerSeat = $derived<0 | 1>(branched ? (frame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
-  // Who is marked as choosing, and whose hand is out, at the recorded position; a branch off the record marks nobody.
+  // Who is marked as choosing, and whose hand is out, at the recorded position; Study marks nobody.
   const gameOver = $derived(frame?.projection.game_over ?? false);
   const seatChoosing = $derived(branched || gameOver ? null : choosingSeat(positions, replayStore.selected));
-  const seatActing = $derived(branched ? null : activeRibbonSeat(positions, replayStore.selected, gameOver));
+  // On a policy's line the hand out is its own while the move shown is its own.
+  const seatActing = $derived(
+    lineFrame !== null && !studying ? (line?.line.steps[lineAt]?.actor === 'agent' ? viewerSeat : null)
+      : branched ? null : activeRibbonSeat(positions, replayStore.selected, gameOver));
   // ———————————————— Analysis: a policy's reading of your decisions
 
   let analyses = $state.raw<Analysis[] | null>(null);

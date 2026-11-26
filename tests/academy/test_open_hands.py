@@ -208,3 +208,37 @@ def test_the_play_socket_carries_the_hand_beside_its_frame(
             bot = board["opponent" if board["agent"]["player_index"] == 0 else "agent"]
             assert bot["hand"] == [] and bot["hand_hidden_count"] > 0
     server.LIVE_GAMES.clear()
+
+
+def test_playing_on_keeps_each_prefix_mark_and_starts_blind(tmp_path: Path) -> None:
+    game = started(tmp_path)
+    play(game, random.Random(3), commands=3)
+    game.set_open_hands(True)
+    play(game, random.Random(4), commands=3, tag="open")
+    source_id = game.match_id
+    source = game.attempt_store.load_attempt(source_id)
+    assert source is not None
+    events = source.trace["events"]
+    marks = [bool(event.get("open_hands")) for event in events]
+    decisions = [
+        index
+        for index, event in enumerate(events)
+        if event["actor"] == "hero" and not event.get("auto")
+    ]
+    # Blind decisions, then decisions made seeing the hand, both in the prefix.
+    upto = decisions[-1]
+    assert True in marks[:upto] and marks[decisions[0]] is False
+
+    game.new_game({"played_from": {"trace_id": source_id, "event": upto}})
+
+    assert game.trace is not None and not game.open_hands
+    assert game.open_hand() is None
+    assert [event.open_hands for event in game.trace.events] == marks[:upto]
+    assert "open_hands" not in stored_config(tmp_path, game)
+    stored = game.attempt_store.load_attempt(game.match_id)
+    assert stored is not None
+    assert [
+        bool(event.get("open_hands")) for event in stored.trace["events"]
+    ] == marks[:upto]
+    play(game, random.Random(5), commands=1)
+    assert not game.trace.events[upto].open_hands

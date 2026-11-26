@@ -1182,9 +1182,12 @@ class GameSession:
             source_events = source["events"]
             source_swaps = list(source.get("seat_swaps") or ())
             # The source's own setup and seed; only identity travels with the request.
+            # The new game starts blind whatever the source ended with: what it
+            # shows from here on is its own person's choice.
             raw_config = {
                 **setup_draft(GameConfig(**source["config"])),
                 "seed": str(source["config"]["seed"]),
+                "open_hands": False,
             }
 
         config = _parse_game_config(raw_config)
@@ -1563,7 +1566,8 @@ class GameSession:
 
         The opponent's recorded choices go through the offer-policy hook (a
         recurrent opponent is still asked at each, so it has the history it
-        would have had) and the person's through `hero_command`. Every window
+        would have had) and the person's through `hero_command`. Each step
+        keeps its source's `open_hands` mark. Every window
         surfaces meanwhile, so the steps automation took replay as recorded,
         now as Commands. Any mid-game seat swaps recorded at or before `upto`
         are applied at their recorded step indices so the person lands in
@@ -1646,6 +1650,10 @@ class GameSession:
         self.published_prompt = None
         if len(self.trace.events) != upto or self._publish_current_prompt() is None:
             raise ValueError("played_from_diverged: The decision was not reached.")
+        # A prefix decision was made as its source records it, with the bot's
+        # hand in view or not, however this game is set now.
+        for mine, theirs in zip(self.trace.events, events):
+            mine.open_hands = bool(theirs.get("open_hands"))
 
     def _build_swap_policy(self, seat: int) -> BotPolicy:
         """Build and initialize the replacement bot policy for `seat` without mutating the session."""
