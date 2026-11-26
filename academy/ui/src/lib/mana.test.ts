@@ -12,6 +12,18 @@ describe('manaRuns', () => {
     expect(manaRuns('No blocks')).toEqual([{ text: 'No blocks', mana: false }]);
     expect(manaRuns('{G}')).toEqual([{ text: '{G}', mana: true }]);
   });
+  it('splits dual-land mana choices into separate mana runs around the slash', () => {
+    expect(manaRuns('Tap Kyoshi Village for {G}/{W}')).toEqual([
+      { text: 'Tap Kyoshi Village for ', mana: false },
+      { text: '{G}', mana: true },
+      { text: '/', mana: false },
+      { text: '{W}', mana: true },
+    ]);
+    expect(manaRuns('Tap Plains for {W}')).toEqual([
+      { text: 'Tap Plains for ', mana: false },
+      { text: '{W}', mana: true },
+    ]);
+  });
 });
 
 describe('restricted mana wording', () => {

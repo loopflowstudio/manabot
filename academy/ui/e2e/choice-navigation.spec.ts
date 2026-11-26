@@ -64,6 +64,7 @@ const FAMILIES = ['CHOOSE_TARGET', 'DISCARD', 'LEARN', 'DECLARE_BLOCKER', 'PAY_O
 function drawn(page: Page, offer: { id: number; label: string }, number: number) {
   return page.locator([
     `[data-testid=board-card][aria-label*="${offer.label} (${number})"]`,
+    `[data-testid=board-card][data-offer-count]:not([data-offer-count="1"])[aria-label*="${offer.label}"]`,
     `[data-testid=player-target][aria-label*="${offer.label} (${number})"]`,
     `[data-testid=primary-action][data-offer-id="${offer.id}"]`,
     `[data-testid=prompt-action][data-offer-id="${offer.id}"]`,

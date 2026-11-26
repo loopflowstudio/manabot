@@ -65,6 +65,8 @@ export function promptLine(frame: ExperienceFrame, view: BoardView, keys = true)
     case 'MODAL':
       // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
       if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
+      // A mana ability's color choice belongs to the tapped source, not the spell being paid.
+      if (context?.stage === 'mana_color') return 'Choose the mana to add';
       if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
       if (context?.stage === 'choose_creature_type') return 'Choose a creature type';
       if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';

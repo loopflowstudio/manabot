@@ -44,12 +44,12 @@ fn archons_glory_gains_flying_and_lifelink_only_when_bargained() {
         },
     };
     for (treasure, bargain) in [(false, false), (true, false), (true, true)] {
-        let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre"]);
+        let mut s = five_color_unfunded_setup(&["Archon's Glory", "Gray Ogre", "Kyoshi Village"]);
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-        // Two lands, so the mana is a choice and the payment stays pending
-        // after the sacrifice is chosen.
+        // Two distinct white sources, so the mana is a choice and the payment
+        // stays pending after the sacrifice is chosen.
         s.force_permanent_on_battlefield(0, "Plains");
-        s.force_permanent_on_battlefield(0, "Plains");
+        s.force_permanent_on_battlefield(0, "Kyoshi Village");
         let token = treasure.then(|| {
             let token = s
                 .game_mut()
