@@ -14,7 +14,7 @@ use crate::{
     },
     decision::Command,
     flow::{
-        decision::{Decision, EffectFrame},
+        decision::{Decision, EffectFrame, ResolutionTarget},
         game::Game,
         scenario::naming_fixture_vocabulary,
     },
@@ -39,7 +39,12 @@ fn naming_game() -> Game {
     );
     game.keep_opening_hands();
     game.run_frame(EffectFrame {
-        context_target: Some(Target::Player(PlayerId(1))),
+        targets: vec![ResolutionTarget {
+            share: 0,
+            target: Target::Player(PlayerId(1)),
+            requirement: 0,
+            legal: true,
+        }],
         ..EffectFrame::new(
             PlayerId(0),
             vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],

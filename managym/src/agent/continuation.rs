@@ -948,9 +948,7 @@ impl Game {
                 })
                 .collect(),
             remembered: self.remembered_references(&effect.remembered, viewer),
-            context: effect
-                .context_target
-                .map(|t| self.target_reference(t, viewer)),
+            context: effect.context.map(|t| self.target_reference(t, viewer)),
             ..ContinuationFrame::default()
         };
         frame.program(&effect.program);

@@ -337,7 +337,7 @@ impl Game {
                     .source_ref()
                     .and_then(|source| self.object_property_or_lki(source, *property))
                     .unwrap_or(0),
-                ObjectSelector::Triggering => self.target_property(frame.context_target, *property),
+                ObjectSelector::Triggering => self.target_property(frame.context, *property),
                 ObjectSelector::Target(_) => self.target_property(primary(), *property),
                 ObjectSelector::Paid(how) => aggregate.evaluate(paid_properties(*how, *property)),
                 ObjectSelector::Moved => aggregate.evaluate(
@@ -425,7 +425,7 @@ impl Game {
                     ObjectSelector::Target(_) => slot
                         .or_else(|| frame.active_targets().next())
                         .and_then(|t| stack_spell(t.target)),
-                    ObjectSelector::Triggering => frame.context_target.and_then(stack_spell),
+                    ObjectSelector::Triggering => frame.context.and_then(stack_spell),
                     _ => self.select(of, frame).first().copied(),
                 };
                 object
@@ -448,10 +448,10 @@ impl Game {
                 .map_or(0, |slot| i32::from(slot.share)),
             EffectValue::TargetPower => self.target_property(primary(), ObjectProperty::Power),
             EffectValue::TriggeringPower => {
-                self.target_property(frame.context_target, ObjectProperty::Power)
+                self.target_property(frame.context, ObjectProperty::Power)
             }
             EffectValue::TriggeringManaValue => {
-                self.target_property(frame.context_target, ObjectProperty::ManaValue)
+                self.target_property(frame.context, ObjectProperty::ManaValue)
             }
             EffectValue::TargetToughness => {
                 self.target_property(primary(), ObjectProperty::Toughness)
@@ -527,7 +527,7 @@ impl Game {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
             EffectValue::SpellsCastBeforeTriggering(predicate) => {
-                let Some(Target::StackSpell(spell)) = frame.context_target else {
+                let Some(Target::StackSpell(spell)) = frame.context else {
                     return 0;
                 };
                 self.state
@@ -803,7 +803,7 @@ impl Game {
             x: triggered.x,
             spent: triggered.spent,
             targets,
-            context_target: triggered.context,
+            context: triggered.context,
             triggering_player: triggered.player,
             ability,
             ability_face: ability.map(|_| triggered.source_definition_id),
@@ -1675,7 +1675,7 @@ impl Game {
                     })
             }
             Effect::CopyTriggeringObject => {
-                let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
+                let copy = self.copy_stack_object(frame.context?, frame.controller)?;
                 self.next_retarget(frame.controller, copy, Vec::new(), true)
             }
             Effect::ChangeTarget { .. } => {
@@ -1696,7 +1696,7 @@ impl Game {
                 None
             }
             Effect::CopyTriggeringSpellForEach { each } => {
-                let spell = frame.context_target?;
+                let spell = frame.context?;
                 let legal = self.retarget_candidates(spell, 0);
                 let onto: Vec<Target> = self
                     .selected_permanents(each, frame)
@@ -2349,7 +2349,7 @@ impl Game {
                     frame.source_identity?,
                     frame.controller,
                     effects.clone(),
-                    frame.context_target,
+                    frame.context,
                 );
                 trigger.remembered = frame.remembered.clone();
                 trigger.kicked = frame.kicked;
@@ -2782,9 +2782,16 @@ impl Game {
                 })
             }
             Effect::CounterUnlessPays { cost } => {
+                // CounterUnlessPays serves both chosen-target spells (It'll
+                // Quench Ya!) and ward's triggering spell or ability. No
+                // triggered ability with an optional spell target may use it,
+                // or declining would counter the triggering spell.
                 // The spell or ability may already have left the stack (e.g.
                 // it was countered in response) — the effect does nothing.
-                let index = self.stack_index_of(frame.primary_target()?)?;
+                let target = frame
+                    .primary_target()
+                    .or_else(|| frame.context.filter(|_| frame.targets.is_empty()))?;
+                let index = self.stack_index_of(target)?;
                 let spell_controller = self.state.stack_objects[index].controller();
                 let mut payment = PaymentProgress::new(
                     spell_controller,
@@ -2792,7 +2799,7 @@ impl Game {
                     Vec::new(),
                     Vec::new(),
                 );
-                payment.counters_on_decline = frame.primary_target();
+                payment.counters_on_decline = Some(target);
                 Some(Decision::Payment(payment))
             }
             Effect::TargetCreaturesDealPowerDamageToLastTarget => {
@@ -2985,9 +2992,7 @@ impl Game {
     /// exact current object, else a departed triggering permanent through its
     /// last known information (CR 608.2h).
     fn damage_source(&self, by: &ObjectSelector, frame: &EffectFrame) -> Option<ObjectId> {
-        if let (ObjectSelector::Triggering, Some(Target::Permanent(id))) =
-            (by, frame.context_target)
-        {
+        if let (ObjectSelector::Triggering, Some(Target::Permanent(id))) = (by, frame.context) {
             return self
                 .permanent_object(id)
                 .or_else(|| self.departed_permanent_lki(id).map(|lki| lki.object));
@@ -3052,7 +3057,7 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id))
                     .collect()
             }
-            ObjectSelector::Triggering => match frame.context_target {
+            ObjectSelector::Triggering => match frame.context {
                 Some(Target::Permanent(id)) => self.permanent_object(id).map_or_else(
                     || {
                         self.departed_permanent_lki(id)
@@ -3271,7 +3276,7 @@ impl Game {
                         Err(_) => departed(source),
                     })
             }
-            ObjectSelector::Triggering => match frame.context_target {
+            ObjectSelector::Triggering => match frame.context {
                 Some(Target::Permanent(id)) => self.with_permanent_or_lki(
                     id,
                     |p| p.counters.clone(),

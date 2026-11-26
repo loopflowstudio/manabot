@@ -1522,6 +1522,9 @@ impl Game {
     /// the exact object's battlefield departure instead.
     /// One-shot triggers are removed as they fire (CR 603.7c).
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
+        if self.state.delayed_triggers.is_empty() {
+            return;
+        }
         let dead_creature = match event {
             GameEvent::CardMoved {
                 from: Some(ZoneType::Battlefield),
@@ -1531,26 +1534,33 @@ impl Game {
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
                 .filter(|lki| lki.battlefield.types.is_creature())
-                .map(|lki| Target::Permanent(lki.permanent)),
+                .map(|lki| (Target::Permanent(lki.permanent), lki.controller)),
             _ => None,
         };
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
-            let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => dead_creature,
+            let (context, player) = match (&trigger.event, event) {
+                (DelayedTriggerEvent::CreatureDies, _) => {
+                    let Some((target, controller)) = dead_creature else {
+                        continue;
+                    };
+                    (Some(target), Some(controller))
+                }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
                         step: StepKind::End,
                     },
-                ) if !your_turn || self.active_player() == trigger.controller => None,
+                ) if !your_turn || self.active_player() == trigger.controller => {
+                    (None, Some(self.active_player()))
+                }
                 (
                     DelayedTriggerEvent::Upkeep,
                     GameEvent::StepStarted {
                         step: StepKind::Upkeep,
                     },
-                ) => None,
+                ) => (None, Some(self.active_player())),
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast {
@@ -1561,20 +1571,20 @@ impl Game {
                 ) if *caster == trigger.controller
                     && self.object_matches_predicate(*object, predicate) =>
                 {
-                    Some(Target::StackSpell(*object))
+                    (Some(Target::StackSpell(*object)), Some(*caster))
                 }
                 _ => continue,
             };
             if trigger.frequency == DelayedFrequency::Once {
                 spent.push(index);
             }
-            fired.push((trigger.clone(), context));
+            fired.push((trigger.clone(), context, player));
         }
         for index in spent.into_iter().rev() {
             self.state.delayed_triggers_mut().remove(index);
         }
-        for (trigger, context) in fired {
-            self.fire_delayed_trigger(&trigger, context);
+        for (trigger, context, player) in fired {
+            self.fire_delayed_trigger(&trigger, context, player);
         }
     }
 
@@ -1583,6 +1593,7 @@ impl Game {
         &mut self,
         trigger: &DelayedTrigger,
         context: Option<Target>,
+        player: Option<PlayerId>,
     ) {
         let pending = self.enqueue_inline_trigger(
             trigger.source_identity,
@@ -1590,6 +1601,7 @@ impl Game {
             trigger.effects.effects().to_vec(),
             context,
         );
+        pending.player = player;
         pending.remembered = trigger.remembered.clone();
         pending.program = true;
     }
@@ -1920,26 +1932,27 @@ impl Game {
     fn build_trigger_index(&self) -> TriggerIndex {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
-        let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views(
-                (0..self.state.permanents.len())
-                    .map(PermanentId)
-                    .filter(|&id| !self.is_phased_out(id)),
-            )
-            .map(|(id, view)| {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                TriggerSourceEntry {
-                    object: permanent.object,
-                    kinds: view.triggered_abilities.iter().fold(
-                        EventKinds::NONE,
-                        |kinds, grant| {
-                            let Ability::Triggered { condition, .. } = &grant.ability;
-                            kinds | condition_event_kinds(condition)
-                        },
-                    ),
-                }
-            })
-            .collect();
+        let mut sources: Vec<TriggerSourceEntry> = self.with_layer_board(|board| {
+            board
+                .iter()
+                .filter_map(|(id, view)| {
+                    if self.is_phased_out(id) {
+                        return None;
+                    }
+                    let permanent = self.state.permanents[id].as_ref().unwrap();
+                    Some(TriggerSourceEntry {
+                        object: permanent.object,
+                        kinds: view.triggered_abilities.iter().fold(
+                            EventKinds::NONE,
+                            |kinds, grant| {
+                                let Ability::Triggered { condition, .. } = &grant.ability;
+                                kinds | condition_event_kinds(condition)
+                            },
+                        ),
+                    })
+                })
+                .collect()
+        });
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
         sources.sort_by_key(|entry| entry.object);
